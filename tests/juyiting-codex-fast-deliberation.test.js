@@ -122,8 +122,31 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     expect(statusDuringPost).to.equal('正在提交，等待受理')
     expect(statusDuringPost).not.to.match(/Fast|read-only/i)
     expect(stateDuringPost).to.deep.equal({ submitting: true, streaming: false, awaiting: false, deliveries: 0 })
-    expect(deliveries).to.have.length(1)
+    expect(deliveries).to.have.length(0)
     expect(conversation.deliberationStatus.value).to.equal('CHAT · 排队中')
+    conversation.disposeHallConversation()
+  })
+
+  it('emits a scene receipt only after delivered or DISPATCHED, never for accepted QUEUED', async () => {
+    const deliveries = []; let queuedDeliveryCount = -1
+    const conversation = base({ onDelivery: delivery => deliveries.push(delivery), chatApi: {
+      get: async () => ({ data: { data: capabilityV2 } }),
+      create: async (_path, body, options) => {
+        const common = { conversationId: '9007199254740993', requestId: body.requestId, turnId: 'turn-delivery' }
+        options.onStream(JSON.stringify({ ...common, state: 'QUEUED', agentDelivery: { agentId: 'a', accepted: true, delivered: false, state: 'QUEUED', turnId: 'turn-delivery' } }))
+        queuedDeliveryCount = deliveries.length
+        options.onStream(JSON.stringify({ ...common, state: 'DISPATCHED', agentDelivery: { agentId: 'a', accepted: true, delivered: false, state: 'DISPATCHED', turnId: 'turn-delivery' } }))
+        options.onStream(JSON.stringify({ ...common, turnId: 'turn-delivered', state: 'QUEUED', agentDelivery: { agentId: 'b', accepted: true, delivered: true, state: 'QUEUED', turnId: 'turn-delivered' } }))
+        options.onStreamEnd()
+      }
+    } })
+    conversation.setDraft('delivery truth')
+    await conversation.sendHallMessage()
+    expect(queuedDeliveryCount).to.equal(0)
+    expect(deliveries).to.deep.equal([
+      { agentId: 'a', requestId: conversation.activeRequest.value.requestId, turnId: 'turn-delivery' },
+      { agentId: 'b', requestId: conversation.activeRequest.value.requestId, turnId: 'turn-delivered' }
+    ])
     conversation.disposeHallConversation()
   })
 
@@ -201,6 +224,36 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     conversation.disposeHallConversation()
   })
 
+  it('rejects null, incomplete, and mismatched single-turn cancel views without changing state', async () => {
+    let requestId; const responses = [null, {},
+      { requestId: 'wrong-request', turnId: 'turn-a' },
+      { requestId: '', turnId: 'wrong-turn' },
+      { requestId: '', turnId: 'turn-a', state: 'CANCELLED', stateVersion: '1' }]
+    const conversation = base({ chatApi: {
+      get: async () => ({ data: { data: capabilityV2 } }),
+      create: async (_path, body, options) => {
+        requestId = body.requestId
+        responses[3].requestId = requestId
+        responses[4].requestId = requestId
+        options.onStream(JSON.stringify({ type: 'chat_request_replay', requestId, turnId: 'turn-a', conversationId: '9007199254740993',
+          state: 'QUEUED', stateVersion: '0' }))
+        options.onStreamEnd()
+      },
+      post: async () => ({ data: { data: responses.shift() } })
+    } })
+    conversation.setDraft('strict cancel')
+    await conversation.sendHallMessage()
+    await Promise.resolve()
+    const originalRequest = JSON.parse(JSON.stringify(conversation.activeRequest.value))
+    const originalTurns = JSON.parse(JSON.stringify(conversation.activeTurns.value))
+    for (let index = 0; index < 5; index += 1) {
+      expect(await conversation.cancelDeliberation({ turnId: 'turn-a' })).to.equal(false)
+      expect(JSON.parse(JSON.stringify(conversation.activeRequest.value))).to.deep.equal(originalRequest)
+      expect(JSON.parse(JSON.stringify(conversation.activeTurns.value))).to.deep.equal(originalTurns)
+    }
+    conversation.disposeHallConversation()
+  })
+
   it('cancels an exact durable turn with a canonical state version and is terminal-idempotent', async () => {
     const posts = []
     let requestId
@@ -221,7 +274,9 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
       post: async (path, body) => {
         posts.push({ path, body })
         return { data: { data: { turnId: 'turn-a', requestId, requestRevision: '1', conversationId: '9007199254740993',
-          state: 'CANCELLED', stateVersion: '1', lastDeltaSeq: '0' } } }
+          conversationGeneration: '1', targetAgentId: 'a', contextSnapshotId: 'snapshot-a', dispatchId: 'dispatch-a', route: 'CHAT',
+          state: 'CANCELLED', stateVersion: '1', lastDeltaSeq: '0', terminalReason: 'user_cancelled', finalMessageId: null,
+          createdAt: '100', updatedAt: '101' } } }
       }
     } })
     conversation.setDraft('cancel me')
@@ -230,7 +285,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     expect(conversation.durableCancelTarget.value).to.deep.equal({ turnId: 'turn-a' })
     expect(await conversation.cancelDeliberation({ turnId: 'turn-a' })).to.equal(true)
     expect(posts).to.deep.equal([{ path: '/turns/turn-a/cancel', body: { expectedStateVersion: '0' } }])
-    expect(conversation.deliberationStatus.value).to.equal('已取消')
+    expect(conversation.deliberationStatus.value).to.equal('CHAT · 已取消')
     expect(await conversation.cancelDeliberation({ turnId: 'turn-a' })).to.equal(true)
     expect(posts).to.have.length(1)
     conversation.disposeHallConversation()
@@ -248,12 +303,22 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     expect(isTerminalTurnState('PUBLISHED')).to.equal(true)
   })
 
-  it('ignores stale live stateVersion while allowing a future higher version', () => {
-    let state = reduceDeliberationEvent({ request: { requestId: 'req' }, turns: [] }, { requestId: 'req', turnId: 'turn', state: 'GENERATING', stateVersion: '10' })
-    state = reduceDeliberationEvent(state, { requestId: 'req', turnId: 'turn', state: 'QUEUED', stateVersion: '9' })
-    expect(state.turns[0]).to.include({ state: 'GENERATING', stateVersion: '10' })
-    state = reduceDeliberationEvent(state, { requestId: 'req', turnId: 'turn', state: 'FINAL_PERSISTED', stateVersion: '11' })
-    expect(state.turns[0]).to.include({ state: 'FINAL_PERSISTED', stateVersion: '11' })
+  it('allows only higher live stateVersion to advance authoritative turn fields', () => {
+    let state = reduceDeliberationEvent({ request: { requestId: 'req' }, turns: [] }, {
+      requestId: 'req', turnId: 'turn', state: 'GENERATING', stateVersion: '10', route: 'CHAT', engine: 'fast-engine'
+    })
+    const versioned = structuredClone(state)
+    for (const event of [
+      { requestId: 'req', turnId: 'turn', state: 'QUEUED', stateVersion: '9', route: 'EXECUTE' },
+      { requestId: 'req', turnId: 'turn', state: 'FAILED', stateVersion: '10', route: 'EXECUTE' },
+      { requestId: 'req', turnId: 'turn', state: 'QUEUED', route: 'EXECUTE', engine: 'other' },
+      { requestId: 'req', turnId: 'turn', state: 'GENERATING', stateVersion: '10', route: 'CHAT', engine: 'fast-engine' }
+    ]) {
+      state = reduceDeliberationEvent(state, event)
+      expect(state).to.deep.equal(versioned)
+    }
+    state = reduceDeliberationEvent(state, { requestId: 'req', turnId: 'turn', state: 'FINAL_PERSISTED', stateVersion: '11', route: 'CHAT' })
+    expect(state.turns[0]).to.include({ state: 'FINAL_PERSISTED', stateVersion: '11', route: 'CHAT' })
   })
 
   it('merges replay final into an existing persisted message and removes its placeholder', () => {
@@ -285,7 +350,10 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     expect(hall).to.include('@cancel-deliberation="cancelDeliberation"')
     expect(hall).not.to.include('@cancel-deliberation="cancelDeliberation()"')
     const sendHandler = hall.slice(hall.indexOf('const handleSendHallMessage'), hall.indexOf('const handleMentionAgent'))
+    const mentionHandler = hall.slice(hall.indexOf('const handleMentionAgent'), hall.indexOf('const handleClearChatTarget'))
     expect(sendHandler).not.to.include('收到传令')
+    expect(mentionHandler).not.to.include('markAgentSpeaking')
+    expect(mentionHandler).not.to.include('收到传令')
     expect(hall).to.include("onDelivery: ({ agentId }) =>")
   })
 })

@@ -1049,11 +1049,15 @@ export const useHallConversation = ({
       }
       if (event.agentDelivery || event.type === 'chat_request_replay' || (event.requestId && !['agent_message_delta', 'agent_message', 'resync_required'].includes(event.type))) {
         const handled = applyDeliberationEvent(event)
-        if (event.agentDelivery && (event.agentDelivery.accepted === true || event.agentDelivery.delivered === true)) {
+        const deliveryState = String(event.agentDelivery?.state || event.state || '').toUpperCase()
+        const actuallyDelivered = event.agentDelivery?.delivered === true || deliveryState === 'DISPATCHED'
+        if (event.agentDelivery && (event.agentDelivery.accepted === true || actuallyDelivered)) {
           isSubmitting.value = false
-          onDelivery?.({ agentId: event.agentDelivery.agentId || event.agentId || '', requestId: event.requestId || '', turnId: event.turnId || event.agentDelivery.turnId || '' })
+          if (actuallyDelivered) {
+            onDelivery?.({ agentId: event.agentDelivery.agentId || event.agentId || '', requestId: event.requestId || '', turnId: event.turnId || event.agentDelivery.turnId || '' })
+          }
         }
-        if (event.agentDelivery && event.agentDelivery.accepted !== true) {
+        if (event.agentDelivery && event.agentDelivery.accepted !== true && !actuallyDelivered) {
           const state = { conversationId: conversationId.value, messages: messages.value, isAwaitingReply: isAwaitingReply.value, isStreaming: isStreaming.value, turnStates, manageTurnBusy: true }
           const result = appendStreamPayload(state, JSON.stringify(event))
           conversationId.value = state.conversationId
@@ -1412,6 +1416,26 @@ export const useHallConversation = ({
     return authoritativeResyncPromise
   }
 
+  const authoritativeTurnView = (view, expectedRequestId, expectedTurnId) => {
+    if (!view || Array.isArray(view) || typeof view !== 'object' ||
+        view.requestId !== expectedRequestId || view.turnId !== expectedTurnId) return null
+    const requiredStrings = ['targetAgentId', 'contextSnapshotId', 'dispatchId', 'route', 'state']
+    if (requiredStrings.some(key => typeof view[key] !== 'string' || !view[key])) return null
+    const requestRevision = canonicalWireString(view.requestRevision)
+    const conversationId = exactRuntimeId(view.conversationId)
+    const conversationGeneration = canonicalWireString(view.conversationGeneration, { allowZero: true })
+    const stateVersion = canonicalWireString(view.stateVersion, { allowZero: true })
+    const lastDeltaSeq = canonicalWireString(view.lastDeltaSeq, { allowZero: true })
+    const createdAt = canonicalWireString(view.createdAt, { allowZero: true })
+    const updatedAt = canonicalWireString(view.updatedAt, { allowZero: true })
+    const finalMessageId = view.finalMessageId == null ? null : exactRuntimeId(view.finalMessageId)
+    if (!requestRevision || !conversationId || !conversationGeneration || !stateVersion || !lastDeltaSeq ||
+        !createdAt || !updatedAt || (view.finalMessageId != null && !finalMessageId)) return null
+    if (view.terminalReason != null && typeof view.terminalReason !== 'string') return null
+    return { ...view, requestRevision, conversationId, conversationGeneration, stateVersion, lastDeltaSeq,
+      finalMessageId, createdAt, updatedAt }
+  }
+
   const cancelDeliberation = async target => {
     const request = activeRequest.value
     const selectedTarget = target && typeof target === 'object' ? target : durableCancelTarget.value
@@ -1426,8 +1450,18 @@ export const useHallConversation = ({
         if (!expectedStateVersion) return false
         response = await chatApi.post(`/turns/${turn.turnId}/cancel`, { expectedStateVersion }, { autoLoading: false, signal: lifecycleController.signal })
         abortIfStale(guard)
-        const view = apiData(response)
-        if (!applyDeliberationEvent({ ...(view || {}), requestId: request.requestId, turnId: turn.turnId })) return false
+        const view = authoritativeTurnView(apiData(response), request.requestId, turn.turnId)
+        if (!view) return false
+        if (BigInt(view.stateVersion) <= BigInt(expectedStateVersion)) return false
+        if (!applyDeliberationEvent(view)) return false
+        const applied = activeTurns.value.find(item => item.turnId === turn.turnId)
+        if (applied?.stateVersion !== view.stateVersion || applied?.state !== view.state) return false
+        activeTurns.value = activeTurns.value.map(item => item.turnId === turn.turnId ? view : item)
+        const tracker = turnStates.get(turn.turnId) || { lastDeltaSeq: '0', waitingFinal: false, terminal: false }
+        tracker.lastDeltaSeq = view.lastDeltaSeq
+        tracker.waitingFinal = view.state === 'RECOVERY_REQUIRED'
+        tracker.terminal = isTerminalTurnState(view.state)
+        turnStates.set(turn.turnId, tracker)
       } else if (selectedTarget.allPending === true) {
         response = await chatApi.post(`/requests/${request.requestId}/cancel?allPending=true`, { allPending: true }, { autoLoading: false, signal: lifecycleController.signal })
         abortIfStale(guard)

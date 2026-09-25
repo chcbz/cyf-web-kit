@@ -26,7 +26,15 @@ const upsertTurn = (turns, patch) => {
   const previous = index >= 0 ? turns[index] : {}
   const previousVersion = canonicalWireString(previous.stateVersion, { allowZero: true })
   const patchVersion = canonicalWireString(patch.stateVersion, { allowZero: true })
-  if (previousVersion && patchVersion && BigInt(patchVersion) < BigInt(previousVersion)) return turns
+  if (previousVersion) {
+    if (!patchVersion || BigInt(patchVersion) < BigInt(previousVersion)) return turns
+    if (patchVersion === previousVersion) {
+      const idempotentReplay = Object.entries(patch).every(([key, value]) => previous[key] === value)
+      // Exact replays are harmless; conflicting same-version fields are rejected as the same no-op.
+      if (!idempotentReplay) return turns
+      return turns
+    }
+  }
   if (isTerminalTurnState(previous.state)) {
     const previousState = normalizeDeliberationState(previous.state)
     const nextState = normalizeDeliberationState(patch.state)
@@ -69,7 +77,9 @@ export const reduceDeliberationEvent = ({ request, turns }, event) => {
     const stateVersion = canonicalWireString(event.stateVersion ?? delivery?.stateVersion, { allowZero: true })
     if (stateVersion) patch.stateVersion = stateVersion
   }
-  const nextTurns = patch ? upsertTurn(turns || [], patch) : (turns || [])
+  const sourceTurns = turns || []
+  const nextTurns = patch ? upsertTurn(sourceTurns, patch) : sourceTurns
+  if (patch && nextTurns === sourceTurns) return { request, turns: sourceTurns, handled: true }
   const explicitRequestState = normalizeDeliberationState(event.requestState || event.aggregateState)
   const pending = nextTurns.some(isPendingTurn)
   const anyTerminal = nextTurns.some(turn => isTerminalTurnState(turn.state))

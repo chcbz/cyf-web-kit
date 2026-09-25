@@ -2134,7 +2134,6 @@ const handleMentionAgent = (agent) => {
   playTap()
   setMentionAgent(agent)
   mentionAgent(agent)
-  markAgentSpeaking(agent, '收到传令', 'system')
 }
 
 const handleClearChatTarget = () => {
