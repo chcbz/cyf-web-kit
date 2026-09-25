@@ -17,7 +17,7 @@ const controller = (overrides = {}) => {
   const rent = useHostingRent({ enabled: true, storage: memoryHostingStorage(), now: () => 2000,
     createKey: () => `00000000-0000-4000-8000-${String(++key).padStart(12, '0')}`,
     loadCapability: async () => ({ economyPreviewEnabled: true, principalScopeFingerprint: 'ui-test-scope' }),
-    economyApi: { get: async () => ok({ currency: 'SILVER', availableMicro: '9999999999', heldMicro: '0' }) },
+    economyApi: { get: async () => ok({ currency: 'SILVER', availableMicro: '9999999999', heldMicro: '0' }), create: async () => ok({ transactionId: 'etx-welcome', status: 'POSTED', amountMicro: '1000000000', campaignRef: 'hosting-welcome-v1' }) },
     agentApi: {
       create: async (url, body) => { requests.push({ url, body }); return ok(url.endsWith('/quotes') ? hostingQuote() : hostingReceipt()) },
       get: async () => ok(hostingLookup())
