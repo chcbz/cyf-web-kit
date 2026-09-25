@@ -4,6 +4,7 @@
       <span>{{ personas.length }} 位待请豪杰</span>
       <span>{{ boundToMeCount }} 位已入伙</span>
     </div>
+    <p v-if="hostedPointFlow" class="catalog-flow-note" role="status">先为原榜文请一位山寨安顿的好汉；安顿确认后仍须等点将册显示本人可操作且在线，才会回到原榜文供你明确点将。</p>
     <p v-if="loading" class="catalog-data-state" role="status">招贤令读取中…</p>
     <p v-else-if="errorMessage" class="catalog-data-state is-error" role="alert">{{ errorMessage }}</p>
 
@@ -71,6 +72,7 @@
       :resolve-persona="resolveHostingPersona"
       @close="hostingPersonaCode = null"
       @hosting-changed="$emit('hosting-changed')"
+      @hosting-confirmed="handleHostingConfirmed"
     />
 
     <div class="catalog-grid">
@@ -118,6 +120,7 @@
               山寨安顿
             </button>
             <button
+              v-if="!hostedPointFlow"
               class="catalog-action"
               type="button"
               @click="selectAccess(persona, 'local')"
@@ -161,10 +164,11 @@ const props = defineProps({
   errorMessage: { type: String, default: '' },
   portraitName: { type: Function, required: true },
   portraitStyle: { type: Function, required: true },
-  setupResult: { type: Object, default: null }
+  setupResult: { type: Object, default: null },
+  hostedPointFlow: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['bind-persona', 'unbind-persona', 'clear-setup-result', 'hosting-changed'])
+const emit = defineEmits(['bind-persona', 'unbind-persona', 'clear-setup-result', 'hosting-changed', 'hosting-confirmed'])
 
 const activePersonaCode = ref(null)
 const hostingPersonaCode = ref(null)
@@ -308,6 +312,10 @@ const copySetupResult = async () => {
   }, 1800)
 }
 
+const handleHostingConfirmed = receipt => {
+  emit('hosting-confirmed', receipt)
+}
+
 const selectAccess = (persona, mode) => {
   activePersonaCode.value = null
   if (mode === 'server') {
@@ -358,6 +366,7 @@ onUnmounted(() => {
 }
 
 .catalog-data-state.is-error { color: #b3261e; }
+.catalog-flow-note { flex: 0 0 auto; margin: 0 16px 12px; padding: 10px; border: 1px solid #d4bd97; border-radius: 8px; color: #6f493f; background: #fff8e7; font-size: 13px; }
 
 .setup-result {
   flex: 0 0 auto;

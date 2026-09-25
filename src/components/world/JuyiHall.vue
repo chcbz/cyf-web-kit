@@ -346,6 +346,7 @@
             @confirm-funded-quote="settleFundedQuote(true)"
             @cancel-funded-quote="settleFundedQuote(false)"
             @refresh-funded-claim="refreshFundedClaim"
+            @recruit-agent="beginHostedPointFlow"
             @auto-assign-task="autoAssignTask"
             @assign-task="assignTask"
             @archive-task="archiveTask"
@@ -490,11 +491,13 @@
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
             :setup-result="personaSetupResult"
+            :hosted-point-flow="Boolean(hostedPointFlow)"
             :loading="catalogLoading"
             :error-message="catalogError"
             @bind-persona="handleBindPersona"
             @clear-setup-result="personaSetupResult = null"
             @hosting-changed="refreshHall({ silent: true })"
+            @hosting-confirmed="waitForHostedPointAgent"
             @unbind-persona="handleUnbindPersona"
           />
 
@@ -770,6 +773,10 @@ const {
   retry: retryTaskWorkspace
 } = useTaskWorkspaceView(taskWorkspace)
 const personaSetupResult = ref(null)
+// CTA-originated recruitment keeps the exact task snapshot until a roster read proves
+// the newly hosted agent is actually selectable. It is never an assignment authority.
+const hostedPointFlow = ref(null)
+let hostedPointWaitTimer = null
 const toast = ref('')
 const panelWhitelist = new Set(['agents', 'catalog', 'tasks', 'workspace', 'treasure', 'chat', 'library', 'messages', 'mine', 'item', 'formalDraft', 'draft'])
 const activePanel = ref('')
@@ -871,7 +878,10 @@ const workbenchMenuOpen = ref(false)
 const workbenchCurrentPage = computed(() => isOverviewHome.value ? (activePanel.value && workbenchPrimaryPanelSet.has(renderedPanel.value) ? renderedPanel.value : 'overview') : '')
 const workbenchCurrentLabel = computed(() => workbenchPrimaryTabs.find(tab => tab.panel === workbenchCurrentPage.value)?.label || '办事')
 watch(homeMode, () => { workbenchMenuOpen.value = false })
-watch(activePanel, () => { workbenchMenuOpen.value = false })
+watch(activePanel, panel => {
+  workbenchMenuOpen.value = false
+  if (panel !== 'catalog') cancelHostedPointWait()
+})
 
 const {
   experienceMode,
@@ -1278,6 +1288,86 @@ const selectAgent = (agent) => {
   return agent || null
 }
 
+const exactHostedAgentId = value => typeof value === 'string' && value.trim() === value && value.length > 0 ? value : ''
+const taskSnapshot = task => Object.freeze({ ...task })
+const cancelHostedPointWait = ({ clear = true } = {}) => {
+  if (hostedPointWaitTimer !== null) window.clearTimeout(hostedPointWaitTimer)
+  hostedPointWaitTimer = null
+  if (clear) hostedPointFlow.value = null
+}
+const isCurrentHostedPointFlow = context => (
+  !panelDisposed &&
+  hostedPointFlow.value === context &&
+  context.identityScope === hallIdentityScope.value &&
+  context.authorizationGeneration === apiStore.authorizationGeneration
+)
+const isHostedPointAgentOnline = (agent, context) => (
+  agent?.agentId === context.agentId &&
+  agent.boundToMe === true &&
+  agent.canOperate === true &&
+  !agent.systemAgent &&
+  normalizeStatus(agent.status) === 'online'
+)
+const returnToHostedPointTask = async (context, agent) => {
+  if (!isCurrentHostedPointFlow(context)) return false
+  // This is only a selection. Assignment remains the user's explicit button click.
+  selectedAgent.value = agent
+  taskWorkspaceBinding.selectExplicitActor(agent)
+  selectedTask.value = context.task
+  cancelHostedPointWait()
+  if (!openPanel('tasks', { silent: true, restore: true })) return false
+  await nextTick()
+  bountyPanelRef.value?.openTask(context.task)
+  showToast(`${portraitShortName(agent)} 已在线；请在原榜文中明确点将`)
+  return true
+}
+const pollHostedPointRoster = async context => {
+  if (!isCurrentHostedPointFlow(context)) return
+  await loadAgents()
+  if (!isCurrentHostedPointFlow(context)) return
+  const agent = operableRosterAgents.value.find(item => isHostedPointAgentOnline(item, context))
+  if (agent) {
+    await returnToHostedPointTask(context, agent)
+    return
+  }
+  // There is deliberately no total wait deadline: only scope changes, unmount, or
+  // leaving the recruitment flow cancels this readback loop.
+  hostedPointWaitTimer = window.setTimeout(() => {
+    hostedPointWaitTimer = null
+    void pollHostedPointRoster(context)
+  }, 2000)
+}
+const beginHostedPointFlow = task => {
+  if (!task?.id || normalizeStatus(task.status) !== 'open') return false
+  const context = Object.freeze({
+    taskId: task.id,
+    taskVersion: task.taskVersion ?? task.version ?? null,
+    task: taskSnapshot(task),
+    identityScope: hallIdentityScope.value,
+    authorizationGeneration: apiStore.authorizationGeneration,
+    personaCode: '',
+    agentId: ''
+  })
+  cancelHostedPointWait()
+  hostedPointFlow.value = context
+  if (!openPanel('catalog')) {
+    cancelHostedPointWait()
+    return false
+  }
+  return true
+}
+const waitForHostedPointAgent = receipt => {
+  const current = hostedPointFlow.value
+  const agentId = exactHostedAgentId(receipt?.agentId)
+  if (!current || !agentId || !isCurrentHostedPointFlow(current)) return false
+  const context = Object.freeze({ ...current, personaCode: String(receipt?.personaCode || ''), agentId })
+  cancelHostedPointWait({ clear: false })
+  hostedPointFlow.value = context
+  showToast('山寨安顿已确认；正在等待点将册显示该好汉在线')
+  void pollHostedPointRoster(context)
+  return true
+}
+
 const cancelPanelChatLoad = () => {
   if (panelChatLoadTimer !== null) window.clearTimeout(panelChatLoadTimer)
   panelChatLoadTimer = null
@@ -1679,6 +1769,7 @@ const handlePanelAfterLeave = async (element) => {
 }
 
 watch([() => apiStore.authorizationGeneration, hallIdentityScope], () => {
+  cancelHostedPointWait()
   cancelPanelChatLoad()
   panelSessionGeneration.value += 1
   panelClosingGeneration.value = 0
@@ -2219,6 +2310,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  cancelHostedPointWait()
   document.removeEventListener?.('visibilitychange', handleDocumentVisibility)
   panelDisposed = true
   panelSessionGeneration.value += 1

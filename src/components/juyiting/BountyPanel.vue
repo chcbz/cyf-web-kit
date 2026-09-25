@@ -382,8 +382,11 @@
                   </button>
                 </div>
               </div>
-              <p v-if="!recommendedAgents.length">暂未寻得可领令的好汉。</p>
             </div>
+            <section v-if="detailTask.status === 'open' && !assignableRecommendedAgents.length" class="no-agent-recruitment" role="status">
+              <p>暂未寻得可领令的好汉。</p>
+              <button type="button" @click="$emit('recruit-agent', detailTask)">去招贤令</button>
+            </section>
           </div>
         </section>
       </div>
@@ -445,6 +448,7 @@ const emit = defineEmits([
   'confirm-funded-quote',
   'cancel-funded-quote',
   'refresh-funded-claim',
+  'recruit-agent',
   'create-task',
   'start-formal-draft',
   'start-private-draft',
@@ -485,6 +489,7 @@ const assignedAgentForTask = task => {
   return props.operableAgents.find(agent => agent.agentId === assignedIds[0]) || null
 }
 const preferredAgents = computed(() => props.recommendedAgents.filter(agent => ['吴用', '林冲'].some(name => `${agent.name || ''}${agent.displayName || ''}${agent.personaName || ''}`.includes(name))).slice(0, 2))
+const assignableRecommendedAgents = computed(() => props.recommendedAgents.filter(agent => props.canAssign(detailTask.value, agent)))
 const preferredAgentName = computed(() => {
   const assignedId = taskAssigneeIds(detailTask.value)[0]
   const assigned = props.operableAgents.find(agent => agent.agentId === assignedId)
@@ -1006,6 +1011,9 @@ button:disabled {
   line-height: 1;
 }
 
+.no-agent-recruitment { display: grid; gap: 8px; margin: 12px 0; padding: 12px; border: 1px solid #d4bd97; border-radius: 6px; background: #fff8e7; }
+.no-agent-recruitment p { margin: 0; }
+.no-agent-recruitment button { justify-self: start; }
 .recommended-agent-actions button:nth-child(2) {
   background: #7c1f1b;
   color: #fff8e8;

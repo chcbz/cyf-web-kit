@@ -75,7 +75,7 @@ import { loadEconomyPreviewCapability } from '../../utils/economyPreviewCapabili
 import { formatSilverMicro, isCanonicalDecimalString, isEconomyPreviewBuildEnabled } from '../../utils/silverAmount.js'
 
 const props = defineProps({ persona: { type: Object, required: true }, resolvePersona: { type: Function, required: true } })
-const emit = defineEmits(['close', 'hosting-changed'])
+const emit = defineEmits(['close', 'hosting-changed', 'hosting-confirmed'])
 const apiStore = useApiStore()
 const rent = useHostingRent({ agentApi, economyApi, loadCapability: loadEconomyPreviewCapability,
   enabled: isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED),
@@ -106,7 +106,14 @@ const openPersona = async () => {
 }
 const acceptedAction = async action => {
   if (await action()) {
-    if (rent.state.value.accepted && !rent.state.value.operation) emit('hosting-changed')
+    const receipt = rent.state.value.accepted?.receipt
+    if (receipt && !rent.state.value.operation) {
+      emit('hosting-changed')
+      emit('hosting-confirmed', {
+        personaCode: props.persona.personaCode,
+        agentId: receipt.agentId || quote.value?.agentId || ''
+      })
+    }
   }
 }
 watch(() => [props.persona.personaCode, props.persona.agentId, props.persona.boundToMe, props.persona.bound,

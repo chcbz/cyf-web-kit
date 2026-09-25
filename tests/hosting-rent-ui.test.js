@@ -75,6 +75,9 @@ describe('hosting rent actual quote/lease UI', () => {
     expect(wrapper.text()).to.include('PENDING')
     expect(wrapper.text()).to.include('安顿待确认 / 待就绪')
     expect(wrapper.text()).not.to.include('已在山寨安顿')
+    expect(wrapper.emitted('hosting-confirmed')).to.deep.equal([[{
+      personaCode: 'linchong', agentId: 'agt_server_proposal'
+    }]])
   })
 
   it('cancel click never sends a bind; readback failure displays confirmed not failed payment', async () => {
