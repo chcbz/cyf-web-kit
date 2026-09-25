@@ -519,6 +519,7 @@
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
             :conversation-busy="isConversationBusy"
+            :deliberation-status="deliberationStatus"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -529,6 +530,7 @@
             :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
+            @cancel-deliberation="cancelDeliberation()"
             @clear-target="handleClearChatTarget"
             @delete-conversation="deleteHallConversation"
             @load-history="loadHallConversationHistory({ force: true })"
@@ -563,6 +565,7 @@
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
             :conversation-busy="isConversationBusy"
+            :deliberation-status="deliberationStatus"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -573,6 +576,7 @@
             :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
+            @cancel-deliberation="cancelDeliberation()"
             @clear-target="handleClearChatTarget"
             @delete-conversation="deleteHallConversation"
             @load-history="loadHallConversationHistory({ force: true })"
@@ -607,6 +611,7 @@
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
             :conversation-busy="isConversationBusy"
+            :deliberation-status="deliberationStatus"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -617,6 +622,7 @@
             :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
+            @cancel-deliberation="cancelDeliberation()"
             @clear-target="handleClearChatTarget"
             @delete-conversation="deleteHallConversation"
             @load-history="loadHallConversationHistory({ force: true })"
@@ -1858,7 +1864,9 @@ const loadSettlement = async (task) => runLoadSettlement(task)
 
 const {
   cancelHallReplyTurn,
+  cancelDeliberation,
   chatConnectionStatus,
+  deliberationStatus,
   conversationHistory,
   conversationHistoryDeletingId,
   conversationHistoryError,
