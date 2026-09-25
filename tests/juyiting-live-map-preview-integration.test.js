@@ -4,6 +4,8 @@ import { compileScript, parse } from '@vue/compiler-sfc'
 import { mount } from '@vue/test-utils'
 import * as Vue from 'vue'
 import { resolveLiveMapPreviewActivation } from '../src/composables/juyiting/liveMapPreviewPolicy.js'
+import { resolveHallNavigationPresentation } from '../src/composables/juyiting/useHallPanels.js'
+import { useFormalTaskExecutionScope } from '../src/composables/useFormalTaskExecutionScope.js'
 import { JuyitingGame } from '../src/game/JuyitingGame.js'
 
 global.Element = global.window?.Element
@@ -156,13 +158,13 @@ const makeHallPageMocks = ({ mode, counters, voiceLocked = Vue.ref(false) }) => 
     taskAbilityFilter: text, taskAbilityOptions: list, taskKeyword: text, tasks: list, taskStatusCount: Vue.ref({}), taskStatusFilter: text, unbindPersona: asyncNoop, visibleAgents: list
   }
   return {
-    resolveLiveMapPreviewActivation,
+    resolveLiveMapPreviewActivation, resolveHallNavigationPresentation, useFormalTaskExecutionScope,
     isEconomyPreviewBuildEnabled: () => false,
     isEconomyPreviewCapability: () => false,
     loadEconomyPreviewCapability: async () => null,
     env: {}, agentApi: {}, chatApi: {}, juyitingGame: {}, log: { warn: noop }, roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
     useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({}), useRouter: () => ({ push: noop }), onBeforeRouteLeave: noop,
-    useHallData: () => data, useHallBackendSceneState: () => ({ start: asyncNoop, stop: noop, dispose: noop, reportPhase: noop }),
+    useHallData: () => data, useHallQuickMatter: () => ({ busy: Vue.ref(false), message: Vue.ref(''), submit: asyncNoop }), useHallBackendSceneState: () => ({ start: asyncNoop, stop: noop, dispose: noop, reportPhase: noop }),
     useHallSceneDebugBridge: () => ({ republish: noop, stop: noop }), useHallExperienceMode: () => ({ experienceMode: mode, isMobileCoarse: Vue.ref(true), isVirtualLandscape: Vue.ref(false), orientationHint: text, orientationRequestPending: Vue.ref(false), hallViewportHeight: Vue.ref(0), requestLandscape: asyncNoop, requestPortrait: asyncNoop }),
     useHallHomeMode: () => ({ homeMode: Vue.ref('map'), isOverviewHome: Vue.ref(false), setHomeMode: noop }),
     capturePanelReturnTarget: noop, focusHallPanel: noop, isCurrentPanelGeneration: () => false, isSafePanelFocusTarget: () => false, resolvePanelReturnTarget: noop, restorePanelFocus: noop, trapPanelFocus: noop, useHallPanels: () => ({ panelLayout: Vue.ref('bottom-drawer') }),
@@ -260,7 +262,7 @@ describe('live map preview Hall page bridge', () => {
       expect(wrapper.find('.panel-overlay').exists()).to.equal(true)
       expect(wrapper.find('.panel-overlay').classes()).not.to.include('is-chat-overlay')
       expect(document.body.querySelector('.preview-stage')?.dataset.visible).to.equal('true')
-      await wrapper.find('.panel-close').trigger('click')
+      await wrapper.find('.panel-return').trigger('click')
       await flush(); await pump()
       expect(wrapper.find('.panel-overlay').exists()).to.equal(false)
       expect(document.body.querySelector('.preview-stage')?.dataset.visible).to.equal('true')
@@ -269,7 +271,7 @@ describe('live map preview Hall page bridge', () => {
       await flush(); await pump()
       expect(wrapper.find('.panel-overlay').classes()).to.include('is-chat-overlay')
       expect(document.body.querySelector('.preview-stage')?.dataset.visible).to.equal('false')
-      await wrapper.find('.panel-close').trigger('click')
+      await wrapper.find('.panel-return').trigger('click')
       await flush(); await pump()
       expect(wrapper.find('.panel-overlay').exists()).to.equal(false)
       expect(document.body.querySelector('.preview-stage')?.dataset.visible).to.equal('true')

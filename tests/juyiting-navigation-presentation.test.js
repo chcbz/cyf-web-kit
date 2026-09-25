@@ -44,17 +44,26 @@ describe('Juyi Hall navigation presentation', () => {
   })
 
 
-  it('closes agents/catalog and other non-primary roots while leaving primary roots chrome-free', () => {
+  it('uses one portrait return for non-primary roots while retaining desktop close', () => {
+    for (const renderedPanel of ['agents', 'catalog', 'messages', 'chat', 'draft']) {
+      const mobileRoot = portrait({ renderedPanel })
+      expect(mobileRoot.returnOwner, renderedPanel).to.equal('none')
+      expect(mobileRoot.showRootReturn, renderedPanel).to.equal(true)
+      expect(mobileRoot.showHallReturn, renderedPanel).to.equal(true)
+      expect(mobileRoot.showHallClose, renderedPanel).to.equal(false)
+      expect(mobileRoot.showWorkbenchDock, renderedPanel).to.equal(false)
+
+      const desktopRoot = desktop({ renderedPanel })
+      expect(desktopRoot.returnOwner, renderedPanel).to.equal('none')
+      expect(desktopRoot.showRootReturn, renderedPanel).to.equal(false)
+      expect(desktopRoot.showHallReturn, renderedPanel).to.equal(false)
+      expect(desktopRoot.showHallClose, renderedPanel).to.equal(true)
+      expect(desktopRoot.showWorkbenchDock, renderedPanel).to.equal(false)
+    }
     for (const present of [portrait, desktop]) {
-      for (const renderedPanel of ['agents', 'catalog', 'messages', 'chat', 'draft']) {
-        const root = present({ renderedPanel })
-        expect(root.returnOwner, renderedPanel).to.equal('none')
-        expect(root.showHallReturn, renderedPanel).to.equal(false)
-        expect(root.showHallClose, renderedPanel).to.equal(true)
-        expect(root.showWorkbenchDock, renderedPanel).to.equal(false)
-      }
       for (const renderedPanel of ['', 'tasks', 'treasure', 'mine']) {
         const root = present({ renderedPanel })
+        expect(root.showRootReturn, renderedPanel || 'overview').to.equal(false)
         expect(root.showHallReturn, renderedPanel || 'overview').to.equal(false)
         expect(root.showHallClose, renderedPanel || 'overview').to.equal(false)
         expect(root.showPrimaryChildHeader, renderedPanel || 'overview').to.equal(false)
@@ -94,7 +103,8 @@ describe('Juyi Hall navigation presentation', () => {
     expect(source).to.include("'has-workbench-dock': showWorkbenchDock && (Boolean(activePanel) || !renderedPanel)")
     expect(source).to.include('v-if="navigationPresentation.showHallReturn"')
     expect(source).to.include('v-if="navigationPresentation.showHallClose"')
-    expect(source).to.include('@click="returnPanel"')
+    expect(source).to.include('@click="handleHallReturn"')
+    expect(source).to.include("navigationPresentation.showRootReturn ? '返回聚义厅' : '返回上一层'")
     expect(source).to.include('>← 返回</button>')
     expect(source).to.include('.panel-title .panel-return')
     expect(source).to.include('@click="closePanel"')
@@ -117,7 +127,10 @@ describe('Juyi Hall navigation presentation', () => {
     const mobileChild = portrait({ renderedPanel: 'treasure', treasureCanGoBack: true })
     expect(mobileChild.showHallReturn).to.equal(true)
     expect(mobileChild.showHallClose).to.equal(false)
-    expect(portrait({ renderedPanel: 'messages' }).showHallClose).to.equal(true)
+    const mobileRoot = portrait({ renderedPanel: 'messages' })
+    expect(mobileRoot.showRootReturn).to.equal(true)
+    expect(mobileRoot.showHallReturn).to.equal(true)
+    expect(mobileRoot.showHallClose).to.equal(false)
 
     const desktopChild = resolveHallNavigationPresentation({
       isMobileCoarse: false,

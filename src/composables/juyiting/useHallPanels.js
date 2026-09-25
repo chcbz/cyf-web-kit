@@ -175,10 +175,12 @@ export const resolveHallNavigationPresentation = ({
   const showWorkbenchDock = Boolean(
     isOverviewHome && isPrimarySurface && !hasChildDetail && !hasFrameParent && !isKeyboardActive && !externalRootModalOpen
   )
-  const showHallReturn = returnOwner === 'hall'
-  // Root workbench pages remain regions, not closeable dialogs. On mobile the
-  // single leading action is either return or close, never both.
-  const showHallClose = Boolean(!isPrimarySurface && (!hasChildDetail || !isPortraitMobile))
+  // Portrait root dialogs use the same single leading return treatment as
+  // nested pages. The action closes the root panel because there is no frame
+  // parent, while desktop/landscape roots retain the explicit close control.
+  const showRootReturn = Boolean(isPortraitMobile && !isPrimarySurface && !hasChildDetail)
+  const showHallReturn = Boolean(returnOwner === 'hall' || showRootReturn)
+  const showHallClose = Boolean(!isPrimarySurface && !showRootReturn && (!hasChildDetail || !isPortraitMobile))
   const showPrimaryChildHeader = Boolean(isPrimarySurface && showHallReturn)
 
   return Object.freeze({
@@ -188,6 +190,7 @@ export const resolveHallNavigationPresentation = ({
     hasFrameParent,
     returnOwner,
     showWorkbenchDock,
+    showRootReturn,
     showHallReturn,
     showHallClose,
     showPrimaryChildHeader

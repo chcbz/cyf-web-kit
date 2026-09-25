@@ -248,9 +248,9 @@
               v-if="navigationPresentation.showHallReturn"
               class="panel-return"
               type="button"
-              aria-label="返回上一层"
+              :aria-label="navigationPresentation.showRootReturn ? '返回聚义厅' : '返回上一层'"
               :disabled="voiceInteractionLocked"
-              @click="returnPanel"
+              @click="handleHallReturn"
             >← 返回</button>
             <span :id="panelTitleId">{{ activePanelTitle }}</span>
             <button
@@ -1631,6 +1631,11 @@ const closePanel = () => {
   activePanel.value = ''
   playTap()
   return true
+}
+
+const handleHallReturn = () => {
+  if (navigationPresentation.value.showRootReturn) return closePanel()
+  return returnPanel()
 }
 
 const handlePanelKeydown = (event) => {

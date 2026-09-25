@@ -12,6 +12,7 @@ import {
 import { useHallConversation } from '../src/composables/juyiting/useHallConversation.js'
 import { identityCleanupHandlerCount, stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 import { resolveLiveMapPreviewActivation } from '../src/composables/juyiting/liveMapPreviewPolicy.js'
+import { resolveHallNavigationPresentation } from '../src/composables/juyiting/useHallPanels.js'
 import { isEconomyPreviewBuildEnabled } from '../src/utils/silverAmount.js'
 
 const flush = async () => { await Promise.resolve(); await Promise.resolve(); await Vue.nextTick() }
@@ -202,7 +203,7 @@ const createActualHallVoiceMocks = ({
   }
   return {
     env: { VITE_JUYITING_VOICE_ENABLED: 'true' },
-    resolveLiveMapPreviewActivation, isEconomyPreviewBuildEnabled,
+    resolveLiveMapPreviewActivation, resolveHallNavigationPresentation, isEconomyPreviewBuildEnabled,
     isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: async () => null,
     capturePanelReturnTarget: () => null, focusHallPanel: noop, isCurrentPanelGeneration: () => true, isSafePanelFocusTarget: () => false,
     resolvePanelReturnTarget: () => null, restorePanelFocus: noop, trapPanelFocus: noop,
@@ -213,7 +214,8 @@ const createActualHallVoiceMocks = ({
     useFormalTaskExecutionScope,
     useHallHomeMode: () => { const homeMode = Vue.ref('map'); return { homeMode, isOverviewHome: Vue.computed(() => homeMode.value === 'overview'), setHomeMode: mode => { homeMode.value = mode } } },
     useHallData: ({ selectedAgent }) => { selectedAgent.value = selectedAgentFixture; return hallData },
-    useHallExperienceMode: () => ({ experienceMode: Vue.ref(experienceMode), isMobileCoarse: Vue.ref(false), orientationHint: text, orientationRequestPending: Vue.ref(false), requestLandscape: requestLandscape || asyncNoop }),
+    useHallQuickMatter: () => ({ busy: Vue.ref(false), message: Vue.ref(''), submit: asyncNoop }),
+    useHallExperienceMode: () => ({ experienceMode: Vue.ref(experienceMode), isMobileCoarse: Vue.ref(experienceMode === 'portrait-command'), orientationHint: text, orientationRequestPending: Vue.ref(false), requestLandscape: requestLandscape || asyncNoop }),
     useHallPanels: () => ({ panelLayout: Vue.ref('center-modal') }),
     useHallSceneState: () => ({ setMapRuntime: noop, reset: noop, forwardPhaseEvents: asyncNoop }),
     useHallCommandQueue: () => ({ ready: Vue.ref(false), setSimulation: noop }),
@@ -751,10 +753,10 @@ describe('Juyi Hall portrait voice lock', () => {
       const requesting = voiceRef.value.startRecording()
       expect(voiceRef.value.state).to.equal('requesting_permission')
       await flush()
-      expect(wrapper.get('.panel-close').attributes('disabled')).to.equal('')
+      expect(wrapper.get('.panel-return').attributes('disabled')).to.equal('')
       expect(wrapper.get('.portrait-home-probe').attributes('inert')).to.equal('')
       expect(wrapper.find('.panel-chat .voice-cancel').exists()).to.equal(true)
-      await wrapper.get('.panel-close').trigger('click')
+      await wrapper.get('.panel-return').trigger('click')
       await wrapper.get('.panel-overlay').trigger('pointerdown')
       await wrapper.get('.floating-panel').trigger('keydown', { key: 'Escape' })
       await wrapper.get('.portrait-switch-panel').trigger('click')
@@ -779,7 +781,7 @@ describe('Juyi Hall portrait voice lock', () => {
       voiceRef.value.stopRecording()
       await flush()
       expect(voiceRef.value.state).to.equal('transcribing')
-      expect(wrapper.get('.panel-close').attributes('disabled')).to.equal('')
+      expect(wrapper.get('.panel-return').attributes('disabled')).to.equal('')
       expect(wrapper.find('.panel-chat .voice-cancel').exists()).to.equal(true)
       await wrapper.get('.panel-overlay').trigger('pointerdown')
       await wrapper.get('.floating-panel').trigger('keydown', { key: 'Escape' })
@@ -791,7 +793,7 @@ describe('Juyi Hall portrait voice lock', () => {
       expect(voiceRef.value.state).to.equal('idle')
       expect(voiceRef.value.transcript).to.equal('')
 
-      await wrapper.get('.panel-close').trigger('click')
+      await wrapper.get('.panel-return').trigger('click')
       await flush()
       expect(wrapper.find('.panel-overlay').exists()).to.equal(false)
       await voiceRef.value.startRecording()

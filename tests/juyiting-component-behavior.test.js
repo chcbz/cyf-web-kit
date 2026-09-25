@@ -2639,9 +2639,13 @@ describe('lightweight workbench real panel navigation', () => {
       expect(state.panelFrames).to.deep.equal(['draft'])
       expect(state.panelReturnPanel).to.equal('')
       expect(state.navigationPresentation.returnOwner).to.equal('none')
-      expect(state.navigationPresentation.showHallClose).to.equal(true)
+      expect(state.navigationPresentation.showRootReturn).to.equal(true)
+      expect(state.navigationPresentation.showHallReturn).to.equal(true)
+      expect(state.navigationPresentation.showHallClose).to.equal(false)
       const rootOverlay = wrapper.find('.panel-overlay').element
-      state.closePanel()
+      expect(wrapper.find('.panel-return').attributes('aria-label')).to.equal('返回聚义厅')
+      await wrapper.find('.panel-return').trigger('click')
+      expect(state.activePanel).to.equal('')
       await state.handlePanelAfterLeave(rootOverlay)
       await Vue.nextTick()
 
@@ -2761,7 +2765,9 @@ describe('lightweight workbench real panel navigation', () => {
       expect(document.activeElement).to.equal(taskTab.element)
       await wrapper.find('.hall-header-tools [aria-label="查看消息"]').trigger('click'); await Vue.nextTick()
       expect(wrapper.vm.$.setupState.panelFrames).to.deep.equal(['messages'])
-      expect(wrapper.find('.panel-return').exists()).to.equal(false)
+      expect(wrapper.find('.panel-return').text()).to.equal('← 返回')
+      expect(wrapper.find('.panel-return').attributes('aria-label')).to.equal('返回聚义厅')
+      expect(wrapper.find('.panel-close').exists()).to.equal(false)
       await wrapper.find('.hall-header-tools > button:first-child').trigger('click'); await Vue.nextTick()
       expect(wrapper.vm.$.setupState.panelFrames).to.deep.equal(['agents'])
       await wrapper.find('.hall-header-tools [aria-label="查看消息"]').trigger('click'); await Vue.nextTick()
@@ -3132,7 +3138,7 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
       const floatingPanel = wrapper.find('.floating-panel').element
       const library = wrapper.find('.library-panel-instance').element
       const archive = wrapper.find('.archive-reader-instance').element
-      expect(document.activeElement).to.equal(wrapper.find('.panel-close').element)
+      expect(document.activeElement).to.equal(wrapper.find('.panel-return').element)
       expect(wrapper.find('.portrait-shell').attributes('inert')).to.equal('')
       expect(wrapper.find('.portrait-shell').attributes('aria-hidden')).to.equal('true')
       expect(counters.owners).to.deep.equal({ data: 1, conversation: 1, debug: 1 })
@@ -3219,7 +3225,7 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
       const last = wrapper.find('.library-last').element
       last.focus()
       await wrapper.find('.floating-panel').trigger('keydown', { key: 'Tab' })
-      expect(document.activeElement).to.equal(wrapper.find('.panel-close').element)
+      expect(document.activeElement).to.equal(wrapper.find('.panel-return').element)
       await wrapper.find('.floating-panel').trigger('keydown', { key: 'Tab', shiftKey: true })
       expect(document.activeElement).to.equal(last)
 
