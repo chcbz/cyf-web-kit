@@ -17,6 +17,21 @@ const base = ({ chatApi, apiStore = { authorizationGeneration: 1, token: async (
   portraitShortName: agent => agent?.name || '', selectedAgent: ref({ agentId: 'a' }), selectedTask: ref(null), showToast () {}, onDelivery
 })
 
+const durableTurnView = ({ requestId, turnId, state, stateVersion, targetAgentId = 'a', lastDeltaSeq = '0' }) => ({
+  turnId, requestId, requestRevision: '1', conversationId: '9007199254740993', conversationGeneration: '1',
+  targetAgentId, contextSnapshotId: `snapshot-${turnId}`, dispatchId: `dispatch-${turnId}`, route: 'CHAT', state,
+  stateVersion, lastDeltaSeq, terminalReason: state === 'PUBLISHED' ? 'completed' : null,
+  finalMessageId: state === 'PUBLISHED' ? `9${turnId === 'turn-a' ? '1' : '2'}` : null,
+  createdAt: '100', updatedAt: '200'
+})
+const durableRequestView = ({ requestId, state, stateVersion, turns }) => ({
+  requestId, requestRevision: '1', conversationId: '9007199254740993', conversationGeneration: '1',
+  userMessageId: '90', state, stateVersion, turns
+})
+const flushReadbacks = async (count = 8) => {
+  for (let index = 0; index < count; index += 1) await Promise.resolve()
+}
+
 describe('Juyi Hall Codex durable deliberation web contract', () => {
   it('negotiates v2 before sending and keeps body requestId equal to Idempotency-Key', async () => {
     const sent = []
@@ -181,6 +196,155 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     expect(creates).to.equal(1); expect(requestLookups).to.equal(1)
     expect(conversation.activeTurns.value[0].turnId).to.equal('9007199254740995')
     conversation.disposeHallConversation()
+  })
+
+  it('readbacks an API-shaped unversioned final and converges a versioned queued turn to PUBLISHED', async () => {
+    let requestId; let requestLookups = 0
+    const conversation = base({ chatApi: {
+      get: async path => {
+        if (path === '/capabilities') return { data: { data: capabilityV2 } }
+        requestLookups += 1
+        return { data: { data: durableRequestView({ requestId, state: 'COMPLETED', stateVersion: '2',
+          turns: [durableTurnView({ requestId, turnId: 'turn-a', state: 'PUBLISHED', stateVersion: '2', lastDeltaSeq: '1' })] }) } }
+      },
+      create: async (_path, body, options) => {
+        requestId = body.requestId
+        options.onStream(JSON.stringify({ type: 'chat_request_replay', requestId, requestRevision: '1', turnId: 'turn-a',
+          conversationId: '9007199254740993', state: 'QUEUED', stateVersion: '1', targetAgentId: 'a', route: 'CHAT' }))
+        options.onStream(JSON.stringify({ type: 'agent_message', requestId, requestRevision: '1', turnId: 'turn-a',
+          dispatchId: 'dispatch-turn-a', targetAgentId: 'a', contextSnapshotId: 'snapshot-turn-a',
+          conversationId: '9007199254740993', conversationGeneration: '1', messageId: '91', finalSeq: '1',
+          content: '权威终稿', senderType: 'agent', senderName: 'Agent A', occurredAt: '200' }))
+        options.onStreamEnd()
+      }
+    } })
+    conversation.conversationId.value = '9007199254740993'
+    conversation.setDraft('unversioned final')
+    await conversation.sendHallMessage()
+    await flushReadbacks()
+    expect(requestLookups).to.equal(1)
+    expect(conversation.activeTurns.value[0]).to.include({ turnId: 'turn-a', state: 'PUBLISHED', stateVersion: '2' })
+    expect(conversation.isConversationBusy.value).to.equal(false)
+    expect(conversation.isAwaitingReply.value).to.equal(false)
+    expect(conversation.messages.value.filter(message => message.localId === '91')).to.have.length(1)
+    conversation.disposeHallConversation()
+  })
+
+  it('coalesces group final readbacks, stays busy after failure, then converges on one pending rerun', async () => {
+    const first = deferred(); const second = deferred(); let requestId; let requestLookups = 0
+    const conversation = base({ chatApi: {
+      get: async path => {
+        if (path === '/capabilities') return { data: { data: capabilityV2 } }
+        requestLookups += 1
+        return requestLookups === 1 ? first.promise : second.promise
+      },
+      create: async (_path, body, options) => {
+        requestId = body.requestId
+        for (const [turnId, agentId] of [['turn-a', 'a'], ['turn-b', 'b']]) {
+          options.onStream(JSON.stringify({ type: 'chat_request_replay', requestId, requestRevision: '1', turnId,
+            conversationId: '9007199254740993', state: 'QUEUED', stateVersion: '1', targetAgentId: agentId, route: 'CHAT' }))
+        }
+        const final = (turnId, agentId, messageId) => options.onStream(JSON.stringify({ type: 'agent_message', requestId,
+          requestRevision: '1', turnId, dispatchId: `dispatch-${turnId}`, targetAgentId: agentId,
+          contextSnapshotId: `snapshot-${turnId}`, conversationId: '9007199254740993', conversationGeneration: '1',
+          messageId, finalSeq: '1', content: `final-${turnId}`, senderType: 'agent', senderName: agentId, occurredAt: '200' }))
+        final('turn-a', 'a', '91')
+        final('turn-a', 'a', '91')
+        final('turn-b', 'b', '92')
+        options.onStreamEnd()
+      }
+    } })
+    conversation.conversationId.value = '9007199254740993'
+    conversation.setDraft('group finals')
+    await conversation.sendHallMessage()
+    expect(requestLookups).to.equal(1)
+    expect(conversation.isConversationBusy.value).to.equal(true)
+    first.reject(new Error('readback unavailable'))
+    await flushReadbacks(12)
+    expect(requestLookups).to.equal(2)
+    expect(conversation.isConversationBusy.value).to.equal(true)
+    second.resolve({ data: { data: durableRequestView({ requestId, state: 'COMPLETED', stateVersion: '2', turns: [
+      durableTurnView({ requestId, turnId: 'turn-a', state: 'PUBLISHED', stateVersion: '2', lastDeltaSeq: '1' }),
+      durableTurnView({ requestId, turnId: 'turn-b', state: 'PUBLISHED', stateVersion: '2', targetAgentId: 'b', lastDeltaSeq: '1' })
+    ] }) } })
+    await flushReadbacks(12)
+    expect(requestLookups).to.equal(2)
+    expect(conversation.activeTurns.value.map(turn => turn.state)).to.deep.equal(['PUBLISHED', 'PUBLISHED'])
+    expect(conversation.isConversationBusy.value).to.equal(false)
+    conversation.disposeHallConversation()
+  })
+
+  it('ignores a late unversioned-final readback after identity lifecycle reset', async () => {
+    const gate = deferred(); let requestId; let requestLookups = 0
+    const conversation = base({ chatApi: {
+      get: async path => {
+        if (path === '/capabilities') return { data: { data: capabilityV2 } }
+        requestLookups += 1
+        return gate.promise
+      },
+      create: async (_path, body, options) => {
+        requestId = body.requestId
+        options.onStream(JSON.stringify({ type: 'chat_request_replay', requestId, requestRevision: '1', turnId: 'turn-a',
+          conversationId: '9007199254740993', state: 'QUEUED', stateVersion: '1', targetAgentId: 'a', route: 'CHAT' }))
+        options.onStream(JSON.stringify({ type: 'agent_message', requestId, requestRevision: '1', turnId: 'turn-a',
+          dispatchId: 'dispatch-turn-a', targetAgentId: 'a', contextSnapshotId: 'snapshot-turn-a',
+          conversationId: '9007199254740993', conversationGeneration: '1', messageId: '91', finalSeq: '1',
+          content: 'late final', senderType: 'agent', senderName: 'Agent A', occurredAt: '200' }))
+        options.onStreamEnd()
+      }
+    } })
+    conversation.conversationId.value = '9007199254740993'
+    conversation.setDraft('identity fence')
+    await conversation.sendHallMessage()
+    expect(requestLookups).to.equal(1)
+    stopIdentityBoundWork()
+    gate.resolve({ data: { data: durableRequestView({ requestId, state: 'COMPLETED', stateVersion: '2',
+      turns: [durableTurnView({ requestId, turnId: 'turn-a', state: 'PUBLISHED', stateVersion: '2' })] }) } })
+    await flushReadbacks(12)
+    expect(conversation.activeRequest.value).to.equal(null)
+    expect(conversation.activeTurns.value).to.deep.equal([])
+    expect(conversation.messages.value).to.deep.equal([])
+    conversation.disposeHallConversation()
+  })
+
+  it('debounces repeated unversioned deltas to one request readback', async () => {
+    const originalSetTimeout = window.setTimeout; const originalClearTimeout = window.clearTimeout
+    const timers = []; let requestId; let requestLookups = 0
+    window.setTimeout = (callback, delay) => { const timer = { callback, delay, cleared: false }; timers.push(timer); return timer }
+    window.clearTimeout = timer => { if (timer) timer.cleared = true }
+    let conversation
+    try {
+      conversation = base({ chatApi: {
+        get: async path => {
+          if (path === '/capabilities') return { data: { data: capabilityV2 } }
+          requestLookups += 1
+          return { data: { data: durableRequestView({ requestId, state: 'RUNNING', stateVersion: '1',
+            turns: [durableTurnView({ requestId, turnId: 'turn-a', state: 'QUEUED', stateVersion: '1', lastDeltaSeq: '3' })] }) } }
+        },
+        create: async (_path, body, options) => {
+          requestId = body.requestId
+          options.onStream(JSON.stringify({ type: 'chat_request_replay', requestId, requestRevision: '1', turnId: 'turn-a',
+            conversationId: '9007199254740993', state: 'QUEUED', stateVersion: '1', targetAgentId: 'a', route: 'CHAT' }))
+          for (const deltaSeq of ['1', '2', '3']) options.onStream(JSON.stringify({ type: 'agent_message_delta', requestId,
+            requestRevision: '1', turnId: 'turn-a', dispatchId: 'dispatch-turn-a', targetAgentId: 'a',
+            conversationId: '9007199254740993', conversationGeneration: '1', deltaSeq, content: deltaSeq }))
+          const readbackTimers = timers.filter(timer => timer.delay === 250 && !timer.cleared)
+          expect(readbackTimers).to.have.length(1)
+          readbackTimers[0].callback()
+          await flushReadbacks()
+          options.onStreamEnd()
+        }
+      } })
+      conversation.conversationId.value = '9007199254740993'
+      conversation.setDraft('delta coalescing')
+      await conversation.sendHallMessage()
+      expect(requestLookups).to.equal(1)
+      expect(conversation.isConversationBusy.value).to.equal(true)
+    } finally {
+      conversation?.disposeHallConversation()
+      window.setTimeout = originalSetTimeout
+      window.clearTimeout = originalClearTimeout
+    }
   })
 
   it('keeps terminal unknown-result recovery non-busy when history reload fails', async () => {
