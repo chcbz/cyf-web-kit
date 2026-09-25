@@ -251,7 +251,7 @@
               aria-label="返回上一层"
               :disabled="voiceInteractionLocked"
               @click="returnPanel"
-            >返回</button>
+            >← 返回</button>
             <span :id="panelTitleId">{{ activePanelTitle }}</span>
             <button
               v-if="experienceMode === 'landscape-map'"
@@ -3579,6 +3579,7 @@ button.hall-room {
 .home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages .overview-source-error) { background: var(--work-paper); color: var(--work-ink); border-color: var(--work-line); }
 .home-overview .panel-overlay.theme-workbench .panel-title { min-height: 56px; padding: 10px 20px; background: var(--work-paper); color: var(--work-ink); }
 .home-overview .panel-overlay.theme-workbench .panel-title > span { font-size: 20px; }
+.home-overview .panel-overlay.theme-workbench .panel-title .panel-return { min-height: 44px; padding: 0 4px 0 0; border: 0; background: transparent; color: var(--work-brand); box-shadow: none; white-space: nowrap; }
 .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-messages) { flex: 1 1 auto; min-height: 0; padding: 16px 20px; }
 .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-chat-composer) { padding: 10px 20px 12px; }
 .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.chat-panel) { height: 100%; }

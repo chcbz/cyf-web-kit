@@ -1840,6 +1840,8 @@ describe('JuyiHall component behavior', () => {
     })
 
     await wrapper.find('.task-card').trigger('click')
+    expect(wrapper.find('.bounty-back-button').text()).to.equal('← 返回')
+    expect(wrapper.find('.bounty-modal-header h3').text()).to.equal('事项详情')
     expect(wrapper.find('.matter-archive-action').text()).to.equal('收入案卷')
     await wrapper.find('.matter-archive-action').trigger('click')
     expect(wrapper.emitted('archive-task')[0]).to.deep.equal([selectedTask])
@@ -2798,7 +2800,7 @@ describe('lightweight workbench real panel navigation', () => {
       expect(wrapper.find('.formal-delivery-probe').exists()).to.equal(true)
       expect(wrapper.find('.floating-panel').attributes('role')).to.equal('region')
       expect(wrapper.find('.panel-title').exists()).to.equal(true)
-      expect(wrapper.find('.panel-return').text()).to.equal('返回')
+      expect(wrapper.find('.panel-return').text()).to.equal('← 返回')
       expect(wrapper.find('.panel-close').exists()).to.equal(false)
 
       await wrapper.find('.panel-return').trigger('click')

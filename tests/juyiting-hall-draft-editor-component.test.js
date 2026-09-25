@@ -105,6 +105,8 @@ describe('JYT-UX-W03 HallDraftEditor boundary', () => {
     expect(bounty).to.include(':identity-scope="identityScope"')
     expect(hall).to.include(':identity-scope="hallIdentityScope"')
     expect(hall).to.include("[tenant, client, owner].filter(Boolean).join('\\u0000')")
+    const editor = readFileSync(new URL('../src/components/juyiting/HallDraftEditor.vue', import.meta.url), 'utf8')
+    expect(editor).to.include('.hall-draft-editor--draft .draft-actions .primary{flex:1 0 100%;white-space:nowrap}')
   })
 
   it('mounts the production component with its empty default draft and exposes the first save action', async () => {

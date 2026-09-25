@@ -95,6 +95,8 @@ describe('Juyi Hall navigation presentation', () => {
     expect(source).to.include('v-if="navigationPresentation.showHallReturn"')
     expect(source).to.include('v-if="navigationPresentation.showHallClose"')
     expect(source).to.include('@click="returnPanel"')
+    expect(source).to.include('>← 返回</button>')
+    expect(source).to.include('.panel-title .panel-return')
     expect(source).to.include('@click="closePanel"')
     expect(source).to.include('externalRootModalOpen: props.onboardingVisible')
   })

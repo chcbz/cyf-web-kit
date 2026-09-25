@@ -28,7 +28,7 @@
       <template v-else-if="workspace.detail.value">
         <div class="treasure-file-heading"><div><h2 ref="detailTitleRef" tabindex="-1">{{ workspace.detail.value.file.displayName }}</h2><p>{{ originText(workspace.detail.value.file.originKind) }} · {{ workspace.detail.value.file.state === 'TRASHED' ? '已回收' : '仅自己可见' }}</p></div><button v-if="treasureView === 'preview'" type="button" @click="treasureView = 'manage'">更多管理</button></div>
         <template v-if="treasureView === 'preview'">
-          <div class="treasure-preview-tools"><label>版本 <select v-model.number="selectedVersion" @change="preview(selectedVersion)"><option v-for="version in workspace.detail.value.versions" :key="version.version" :value="version.version">v{{ version.version }} · {{ version.originalFilename }}</option></select></label><button type="button" @click="download(selectedVersion)">下载</button></div>
+          <div class="treasure-preview-tools treasure-version-tools"><label><span>版本</span><select v-model.number="selectedVersion" @change="preview(selectedVersion)"><option v-for="version in workspace.detail.value.versions" :key="version.version" :value="version.version">v{{ version.version }} · {{ version.originalFilename }}</option></select></label><button type="button" @click="download(selectedVersion)">下载</button></div>
           <p class="treasure-note">本次使用固定的 v{{ selectedVersion }}；以后上传新版本，不会替换已交办的资料。</p>
           <section class="treasure-preview" aria-label="文件预览" aria-live="polite">
             <p v-if="workspace.actionState.value === 'loading-preview'">正在读取预览…</p>
@@ -474,8 +474,8 @@ onBeforeUnmount(() => { workspace.dispose(); execution.dispose() })
 .treasure-content button:disabled { opacity:.5; cursor:default; }
 .treasure-content button.treasure-primary { background:#8d402c; color:#fff9ee; border-color:#8d402c; }
 .treasure-tabs { display:flex; gap:8px; border-bottom:1px solid #d6bf99; margin-bottom:18px; }
-.treasure-tabs button { border:0; border-radius:0; }
-.treasure-tabs button[aria-pressed=true] { border-bottom:2px solid #8d402c; color:#8d402c; }
+.treasure-tabs button,.treasure-tabs button:hover,.treasure-tabs button[aria-pressed=true] { border:0; border-radius:0; background:transparent!important; box-shadow:none!important; }
+.treasure-tabs button[aria-pressed=true] { border-bottom:2px solid var(--hall-brand,#8d402c); color:var(--hall-brand,#8d402c); }
 .treasure-search { display:flex; align-items:center; gap:12px; margin:18px 0 12px; }
 .treasure-search label { width:min(360px,100%); }
 .treasure-content input:not([type=file]),.treasure-content select { padding:10px 12px; min-height:44px; box-sizing:border-box; border:1px solid #d5bd98; border-radius:4px; font:inherit; color:#513922; background:#fffdf8; max-width:100%; }
@@ -483,8 +483,8 @@ onBeforeUnmount(() => { workspace.dispose(); execution.dispose() })
 .treasure-file-row { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:20px 0; border-bottom:1px solid #d6bf99; }
 .treasure-file-row>div { min-width:0; overflow-wrap:anywhere; }.treasure-file-row button,.treasure-intro>button { flex:0 0 auto; }
 .treasure-empty { padding:28px 0; }.treasure-form { display:grid; gap:18px; max-width:680px; margin:20px 0; }.treasure-form label { display:grid; gap:8px; }.treasure-form>button { justify-self:start; }
-.treasure-preview-tools,.treasure-actions { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }.treasure-actions { justify-content:flex-end; margin-top:24px; padding-top:18px; border-top:1px solid #d6bf99; }.treasure-preview-tools label { display:flex; gap:8px; align-items:center; min-width:0; }.treasure-preview-tools select { max-width:min(520px,60vw); }
+.treasure-preview-tools,.treasure-actions { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }.treasure-actions { justify-content:flex-end; margin-top:24px; padding-top:18px; border-top:1px solid #d6bf99; }.treasure-preview-tools label { display:flex; gap:8px; align-items:center; min-width:0; }.treasure-preview-tools select { max-width:min(520px,60vw); }.treasure-version-tools{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;width:100%;align-items:center}.treasure-version-tools label{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;margin:0}.treasure-version-tools select{width:100%;max-width:none;min-width:0}.treasure-version-tools>button{white-space:nowrap}
 .treasure-preview { padding:16px 0; min-height:120px; }.treasure-preview pre { white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; }.treasure-preview img { max-width:100%; height:auto; }.treasure-manage-danger { margin-top:32px; padding-top:20px; border-top:1px solid #d6bf99; }
-@media(max-width:600px) { .personal-workspace.is-hall-treasure { padding:20px 16px; }.treasure-intro { align-items:flex-start; }.treasure-content h2 { font-size:19px; }.treasure-tabs { gap:4px; }.treasure-tabs button { padding:8px 12px; }.treasure-file-row { padding:16px 0; } }
+@media(max-width:600px) { .personal-workspace.is-hall-treasure { padding:20px 16px; }.treasure-intro { align-items:flex-start; }.treasure-content h2 { font-size:19px; }.treasure-tabs { gap:4px;overflow-x:auto; }.treasure-tabs button { flex:none;padding:8px 12px;white-space:nowrap; }.treasure-version-tools label{grid-template-columns:1fr;gap:5px}.treasure-file-row { padding:16px 0; } }
 @media(max-height:500px) { .personal-workspace.is-hall-treasure { padding:16px 20px; }.treasure-intro,.treasure-file-heading { margin-bottom:12px; }.treasure-tabs { margin-bottom:10px; }.treasure-file-row { padding:12px 0; } }
 </style>

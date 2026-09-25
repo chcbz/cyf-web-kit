@@ -6,6 +6,8 @@ import { compileScript, parse } from '@vue/compiler-sfc'
 import { mount, flushPromises } from '@vue/test-utils'
 import { canOpenHallItem, HALL_SOURCES, useHallOverview } from '../src/composables/juyiting/useHallOverview.js'
 
+const overviewSource = readFileSync(new URL('../src/components/juyiting/HallOverview.vue', import.meta.url), 'utf8')
+
 for (const name of ['Element', 'HTMLElement', 'SVGElement', 'Node']) {
   if (!globalThis[name]) Object.defineProperty(globalThis, name, { value: globalThis.window[name], configurable: true })
 }
@@ -64,6 +66,11 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       expect(wrapper.findAll('.overview-section')).to.have.length(1)
       expect(wrapper.find('.overview-section').attributes('aria-label')).to.equal('最近事项')
       expect(wrapper.find('.overview-quick-request').exists()).to.equal(true)
+      expect(wrapper.find('.quick-request-input').exists()).to.equal(true)
+      expect(wrapper.find('.quick-request-input small').text()).to.equal('0/200')
+      expect(overviewSource).to.include('padding:13px 14px 34px')
+      expect(overviewSource).to.include('resize:none')
+      expect(overviewSource).to.include('.overview-tabs button:hover')
       expect(wrapper.text()).to.include('资料不是必选')
       const request = wrapper.find('.overview-quick-request textarea')
       const create = wrapper.findAll('button').find(button => button.text() === '开始办事')
