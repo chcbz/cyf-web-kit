@@ -23,9 +23,9 @@ const withFlags = (overrides, verify) => {
   }
 }
 
-test('production defaults keep unpublished economy UI disabled and voice disabled', () => {
+test('production defaults publish economy preview while voice stays disabled', () => {
   withFlags({}, flags => assert.deepEqual(flags, {
-    VITE_ECONOMY_PREVIEW_ENABLED: 'false',
+    VITE_ECONOMY_PREVIEW_ENABLED: 'true',
     VITE_JUYITING_VOICE_ENABLED: 'false'
   }))
 })
