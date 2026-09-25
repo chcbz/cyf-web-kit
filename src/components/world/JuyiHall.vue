@@ -520,6 +520,8 @@
             :connection-status="chatConnectionStatus"
             :conversation-busy="isConversationBusy"
             :deliberation-status="deliberationStatus"
+            :durable-cancel-target="durableCancelTarget"
+            :legacy-cancel-available="canCancelLegacy"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -530,7 +532,8 @@
             :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
-            @cancel-deliberation="cancelDeliberation()"
+            @cancel-deliberation="cancelDeliberation"
+            @cancel-legacy-transport="cancelLegacyHallReply"
             @clear-target="handleClearChatTarget"
             @delete-conversation="deleteHallConversation"
             @load-history="loadHallConversationHistory({ force: true })"
@@ -566,6 +569,8 @@
             :connection-status="chatConnectionStatus"
             :conversation-busy="isConversationBusy"
             :deliberation-status="deliberationStatus"
+            :durable-cancel-target="durableCancelTarget"
+            :legacy-cancel-available="canCancelLegacy"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -576,7 +581,8 @@
             :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
-            @cancel-deliberation="cancelDeliberation()"
+            @cancel-deliberation="cancelDeliberation"
+            @cancel-legacy-transport="cancelLegacyHallReply"
             @clear-target="handleClearChatTarget"
             @delete-conversation="deleteHallConversation"
             @load-history="loadHallConversationHistory({ force: true })"
@@ -612,6 +618,8 @@
             :connection-status="chatConnectionStatus"
             :conversation-busy="isConversationBusy"
             :deliberation-status="deliberationStatus"
+            :durable-cancel-target="durableCancelTarget"
+            :legacy-cancel-available="canCancelLegacy"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -622,7 +630,8 @@
             :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
-            @cancel-deliberation="cancelDeliberation()"
+            @cancel-deliberation="cancelDeliberation"
+            @cancel-legacy-transport="cancelLegacyHallReply"
             @clear-target="handleClearChatTarget"
             @delete-conversation="deleteHallConversation"
             @load-history="loadHallConversationHistory({ force: true })"
@@ -1865,6 +1874,9 @@ const loadSettlement = async (task) => runLoadSettlement(task)
 const {
   cancelHallReplyTurn,
   cancelDeliberation,
+  cancelLegacyHallReply,
+  canCancelLegacy,
+  durableCancelTarget,
   chatConnectionStatus,
   deliberationStatus,
   conversationHistory,

@@ -35,9 +35,12 @@ export const normalizeHallMessage = (item) => {
   }
 }
 
+const JAVA_LONG_MAX = '9223372036854775807'
+
 export const canonicalWireString = (value, { allowZero = false } = {}) => {
   if (typeof value !== 'string') return ''
   if (!(allowZero ? /^(0|[1-9][0-9]*)$/ : /^[1-9][0-9]*$/).test(value)) return ''
+  if (value.length > JAVA_LONG_MAX.length || (value.length === JAVA_LONG_MAX.length && value > JAVA_LONG_MAX)) return ''
   return value
 }
 
@@ -61,7 +64,7 @@ export const clearUntrustedTurnDelta = (state, turnId) => {
 const turnState = (state, turnId) => {
   if (!turnId) return null
   if (!state.turnStates) state.turnStates = new Map()
-  const current = state.turnStates.get(turnId) || { lastDeltaSeq: '0', waitingFinal: false }
+  const current = state.turnStates.get(turnId) || { lastDeltaSeq: '0', waitingFinal: false, terminal: false }
   state.turnStates.set(turnId, current)
   return current
 }
@@ -91,6 +94,7 @@ export const appendHallEventMessage = (state, event) => {
     // V2 deltas are valid only with canonical turnId + sequence. Legacy agents may omit both.
     if ((turnId || event.deltaSeq !== undefined) && (!turnId || !deltaSeq)) return { type: 'invalid_delta' }
     const tracker = turnState(state, turnId)
+    if (tracker?.terminal) return { type: 'late_delta', turnId }
     if (tracker?.waitingFinal) return { type: 'waiting_final', turnId }
     if (tracker) {
       const last = BigInt(tracker.lastDeltaSeq)
@@ -122,6 +126,13 @@ export const appendHallEventMessage = (state, event) => {
     return { type: 'delta', message: pendingMessage, turnId }
   }
 
+  if (event.type === 'resync_required') {
+    const turnId = exactTurnId(event)
+    if (!turnId) return { type: 'invalid_delta' }
+    clearUntrustedTurnDelta(state, turnId)
+    return { type: 'resync_required', turnId }
+  }
+
   const isAgentFinal = event.senderType === 'agent' && event.type === 'agent_message'
   if (isAgentFinal && (typeof event.messageId !== 'string' || !event.messageId)) {
     return { type: 'invalid_message_id' }
@@ -133,7 +144,7 @@ export const appendHallEventMessage = (state, event) => {
   const finalTurnId = exactTurnId(event)
   if (finalTurnId) {
     const tracker = turnState(state, finalTurnId)
-    if (tracker) tracker.waitingFinal = false
+    if (tracker) { tracker.waitingFinal = false; tracker.terminal = true }
   }
   if (streamingMessage && event.senderType === 'agent') {
     streamingMessage.localId = localId
@@ -144,8 +155,7 @@ export const appendHallEventMessage = (state, event) => {
     streamingMessage.turnId = finalTurnId || streamingMessage.turnId
     streamingMessage.streaming = false
     streamingMessage.statusText = '回话已毕'
-    state.isAwaitingReply = false
-    state.isStreaming = false
+    if (!state.manageTurnBusy) { state.isAwaitingReply = false; state.isStreaming = false }
     return { type: 'final', message: streamingMessage, shouldStopPolling: true, toastName: senderName }
   }
   if (state.messages.some(message => message.localId === localId)) {
@@ -164,8 +174,7 @@ export const appendHallEventMessage = (state, event) => {
     statusText: event.type === 'agent_message' ? '回话已毕' : ''
   }
   state.messages.push(message)
-  state.isAwaitingReply = false
-  state.isStreaming = false
+  if (!state.manageTurnBusy) { state.isAwaitingReply = false; state.isStreaming = false }
   if (event.senderType === 'agent' && event.type === 'agent_message') {
     return { type: 'final', message, shouldStopPolling: true, toastName: senderName }
   }
@@ -183,7 +192,7 @@ const appendStreamAgentFinal = (state, event) => {
   }
   const senderName = normalizeSenderName(event.senderName)
   const finalTurnId = exactTurnId(event)
-  if (finalTurnId) { const tracker = turnState(state, finalTurnId); if (tracker) tracker.waitingFinal = false }
+  if (finalTurnId) { const tracker = turnState(state, finalTurnId); if (tracker) { tracker.waitingFinal = false; tracker.terminal = true } }
   const existing = state.messages.find(message => message.localId === event.messageId)
   // SSE can start the visible reply with a delta before this request stream delivers
   // its authoritative final. Promote that placeholder instead of adding a second row.
@@ -211,7 +220,7 @@ const appendStreamAgentFinal = (state, event) => {
   message.streaming = false
   message.statusText = '回话已毕'
   if (!existing && !streamingMessage) state.messages.push(message)
-  state.isAwaitingReply = false
+  if (!state.manageTurnBusy) state.isAwaitingReply = false
   return {
     type: 'stream_final',
     message,

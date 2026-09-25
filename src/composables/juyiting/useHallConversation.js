@@ -5,6 +5,7 @@ import {
   hasResolvedAgentReply,
   normalizeHallMessage,
   normalizeSenderName,
+  canonicalWireString,
   resolveHallUserSenderName
 } from './hallConversationMessages.js'
 import { fetchHallConversationEvents } from '../../utils/authenticatedSse.js'
@@ -12,6 +13,15 @@ import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
 import { combineAbortSignals } from '../../utils/abortSignals.js'
 import { captureHallVoiceSnapshot } from './useHallVoiceConversation.js'
 import { exactHallConversationId, normalizeHallConversationHistory } from './hallConversationHistory.js'
+import { createHallSseParser } from './hallConversationSse.js'
+import {
+  cancellationTarget,
+  deliberationBusy,
+  deliberationStatusText,
+  isPendingTurn,
+  isTerminalTurnState,
+  reduceDeliberationEvent
+} from './hallDeliberationState.js'
 
 const runtimeEnv = import.meta.env ?? {}
 const HALL_HISTORY_PAGE_SIZE = 100
@@ -52,7 +62,7 @@ export const useHallConversation = ({
   const deliberationStatus = ref('')
   const activeRequest = ref(null)
   const activeTurns = ref([])
-  const capabilityState = ref({ loaded: false, v2: false, readOnlyConstrained: false, fallbackReason: '旧版传令兼容模式' })
+  const capabilityState = ref({ loaded: false, v2: false, fallbackReason: '旧版传令兼容模式' })
   const draftRevision = ref(0)
   const replyEventSequence = ref(0)
   const observedFinalReplyIds = new Set()
@@ -61,6 +71,8 @@ export const useHallConversation = ({
   const eventCursors = new Map()
   const turnStates = new Map()
   let capabilityPromise = null
+  let capabilityAttempt = 0
+  let authoritativeResyncPromise = null
   let activeBuiltInTurn = null
   let recoveringReplyTurn = null
 
@@ -90,32 +102,59 @@ export const useHallConversation = ({
 
   const exactRuntimeId = exactHallConversationId
   const now = () => Date.now()
-  const wireString = value => typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value) ? value : ''
   const apiData = response => response?.data?.data ?? response?.data ?? response
+  const authEpoch = () => apiStore?.authorizationGeneration
   const v2Supported = capability => capability?.schemaVersion === '2' && capability.requestId === true &&
-    capability.requestRevision === true && capability.contextSnapshot === true && capability.durableTurns === true && capability.deltaSequence === true && capability.cancel === true &&
-    Array.isArray(capability.interactionHints) && capability.interactionHints.includes('chat')
+    capability.requestRevision === true && capability.contextSnapshot === true && capability.durableTurns === true &&
+    capability.deltaSequence === true && capability.cancel === true && Array.isArray(capability.interactionHints) &&
+    capability.interactionHints.includes('chat')
   const inputRefsFor = metadata => Array.isArray(metadata?.inputRefs)
     ? metadata.inputRefs.map(ref => ({ type: typeof ref?.type === 'string' ? ref.type : '', id: typeof ref?.id === 'string' ? ref.id : '' }))
       .filter(ref => ref.type && ref.id)
     : []
+  const safeOutgoingMetadata = metadata => {
+    const source = metadata && typeof metadata === 'object' ? metadata : {}
+    const safe = {}
+    for (const key of ['libraryCitationId', 'librarySourceType']) {
+      if (typeof source[key] === 'string' && source[key]) safe[key] = source[key]
+    }
+    return safe
+  }
   const seenVector = () => ({ conversationId: conversationId.value || undefined, eventCursor: eventCursors.get(conversationId.value) || undefined })
   const recordObservation = (name, request) => { request?.observations?.push({ name, at: now() }) }
-  const negotiateCapabilities = async () => {
+  const captureGuard = (scope = scopeSnapshot()) => Object.freeze({
+    generation: lifecycleGeneration, authEpoch: authEpoch(), scope, signature: scopeSignature(scope)
+  })
+  const guardCurrent = guard => Boolean(guard && !disposed && guard.generation === lifecycleGeneration &&
+    guard.authEpoch === authEpoch() && guard.signature === scopeSignature(scopeSnapshot()) && sameScope(guard.scope))
+  const abortIfStale = guard => {
+    if (!guardCurrent(guard)) throw new DOMException('Hall identity or scope changed', 'AbortError')
+  }
+  const negotiateCapabilities = async guard => {
+    abortIfStale(guard)
     if (capabilityState.value.loaded) return capabilityState.value
-    if (capabilityPromise) return capabilityPromise
-    capabilityPromise = (async () => {
+    if (capabilityPromise) { const result = await capabilityPromise; abortIfStale(guard); return result }
+    const attempt = ++capabilityAttempt
+    const promise = (async () => {
       try {
         const response = await chatApi.get('/capabilities', {}, { autoLoading: false, signal: lifecycleController.signal })
+        abortIfStale(guard)
+        if (attempt !== capabilityAttempt) throw new DOMException('Stale capability negotiation', 'AbortError')
         const capability = apiData(response)
-        capabilityState.value = { loaded: true, v2: v2Supported(capability), readOnlyConstrained: capability?.readOnlyConstrained !== false,
-          fallbackReason: v2Supported(capability) ? '' : '服务端未声明 v2 durable turn 能力' }
+        const v2 = v2Supported(capability)
+        capabilityState.value = { loaded: true, v2, fallbackReason: v2 ? '' : '服务端未声明 v2 durable turn 能力' }
       } catch (error) {
-        capabilityState.value = { loaded: true, v2: false, readOnlyConstrained: false, fallbackReason: '能力协商不可用，已安全回退旧传令' }
-      } finally { capabilityPromise = null }
+        if (error?.name === 'AbortError' || !guardCurrent(guard) || attempt !== capabilityAttempt) throw error?.name === 'AbortError'
+          ? error : new DOMException('Hall identity changed during capability negotiation', 'AbortError')
+        capabilityState.value = { loaded: true, v2: false, fallbackReason: '能力协商不可用，已安全回退旧传令' }
+      } finally {
+        if (capabilityPromise === promise) capabilityPromise = null
+      }
+      abortIfStale(guard)
       return capabilityState.value
     })()
-    return capabilityPromise
+    capabilityPromise = promise
+    return promise
   }
 
   const scopeSnapshot = () => {
@@ -144,7 +183,11 @@ export const useHallConversation = ({
     return hallConversationHistoryGeneration
   }
 
-  const isConversationBusy = computed(() => isStreaming.value || isAwaitingReply.value || isConversationLoading.value || Boolean(conversationHistoryDeletingId.value))
+  const durableBusy = computed(() => deliberationBusy(activeRequest.value, activeTurns.value))
+  const durableCancelTarget = computed(() => cancellationTarget(activeRequest.value, activeTurns.value))
+  const canCancelDurable = computed(() => Boolean(durableCancelTarget.value))
+  const canCancelLegacy = computed(() => !activeRequest.value?.requestId && (isStreaming.value || isAwaitingReply.value))
+  const isConversationBusy = computed(() => durableBusy.value || isStreaming.value || isAwaitingReply.value || isConversationLoading.value || Boolean(conversationHistoryDeletingId.value))
 
   const pendingAgentName = computed(() => {
     if (!selectedAgent.value) return ''
@@ -267,31 +310,67 @@ export const useHallConversation = ({
     return true
   }
 
+  const syncDurablePresentation = () => {
+    if (!activeRequest.value?.requestId) return
+    const busy = deliberationBusy(activeRequest.value, activeTurns.value)
+    isAwaitingReply.value = busy
+    isStreaming.value = activeTurns.value.some(turn => ['STREAMING', 'GENERATING'].includes(String(turn.state || '').toUpperCase()))
+    deliberationStatus.value = deliberationStatusText(activeRequest.value, activeTurns.value) ||
+      (busy ? '等待回话' : String(activeRequest.value.state || '').toUpperCase() === 'PARTIAL' ? '部分回话已完成' : '')
+  }
+
+  const applyDeliberationEvent = event => {
+    if (!event || typeof event !== 'object') return false
+    if (activeRequest.value?.requestId && event.requestId && event.requestId !== activeRequest.value.requestId) return false
+    const reduced = reduceDeliberationEvent({ request: activeRequest.value, turns: activeTurns.value }, event)
+    if (reduced.handled) {
+      activeRequest.value = reduced.request
+      activeTurns.value = reduced.turns
+      for (const turn of activeTurns.value) {
+        if (!turn?.turnId) continue
+        const tracker = turnStates.get(turn.turnId) || { lastDeltaSeq: '0', waitingFinal: false, terminal: false }
+        tracker.terminal = isTerminalTurnState(turn.state)
+        turnStates.set(turn.turnId, tracker)
+      }
+      recordObservation('first_status', activeRequest.value)
+    }
+    return reduced.handled
+  }
+
   const appendHallEventMessage = (event) => {
+    const durableHandled = applyDeliberationEvent(event)
+    const messageEvent = event?.type === 'agent_message_delta' || event?.type === 'agent_message' || event?.type === 'resync_required'
+    if (!messageEvent) {
+      if (durableHandled) syncDurablePresentation()
+      return durableHandled
+    }
     const state = {
       conversationId: conversationId.value,
       messages: messages.value,
       isAwaitingReply: isAwaitingReply.value,
       isStreaming: isStreaming.value,
-      turnStates
+      turnStates,
+      manageTurnBusy: Boolean(activeRequest.value?.requestId)
     }
     const result = reduceHallEventMessage(state, event)
     conversationId.value = state.conversationId
     messages.value = state.messages
     isAwaitingReply.value = state.isAwaitingReply
     isStreaming.value = state.isStreaming
-    if (result.type === 'delta') { recordObservation('first_delta', activeRequest.value); deliberationStatus.value = '生成中' }
+    if (['invalid_delta', 'resync_required'].includes(result.type)) {
+      void authoritativeResync(event.conversationId, result.type)
+      return false
+    }
+    if (result.type === 'late_delta') { syncDurablePresentation(); return true }
+    if (result.type === 'delta') recordObservation('first_delta', activeRequest.value)
     if (result.type === 'final') recordObservation('final_render', activeRequest.value)
-    if (event?.type === 'turn_state' && typeof event?.state === 'string') deliberationStatus.value = event.state
     if (result.type === 'final' && result.message?.sender === 'AGENT' &&
         recoveringReplyTurn?.conversationId === event.conversationId) {
       if (recoveringReplyTurn.baselineMessageIds.has(exactMessageId(result.message))) {
-        isAwaitingReply.value = true
-        return
+        syncDurablePresentation()
+        return true
       }
       recoveringReplyTurn = null
-      isAwaitingReply.value = false
-      isStreaming.value = false
     }
     if (result.type === 'final' && result.message?.sender === 'AGENT' && stageActiveBuiltInFinal({
       message: result.message,
@@ -299,17 +378,16 @@ export const useHallConversation = ({
       toastName: result.toastName,
       replyConversationId: event.conversationId
     })) {
-      isAwaitingReply.value = true
-      isStreaming.value = true
-      return
+      syncDurablePresentation()
+      return true
     }
-    if (result.shouldStopPolling) {
-      stopHallReplyPolling()
-    }
+    if (result.shouldStopPolling && !deliberationBusy(activeRequest.value, activeTurns.value)) stopHallReplyPolling()
     if (result.toastName) showToast(`${result.toastName} 已回话`)
     if (result.type === 'final' && result.message?.sender === 'AGENT') {
       notifyFinalReply({ message: result.message, source: 'agent_event', replyConversationId: event.conversationId })
     }
+    syncDurablePresentation()
+    return !['ignored', 'invalid_message_id', 'invalid_conversation'].includes(result.type)
   }
 
   const apiStreamUrl = (path, params = {}) => {
@@ -356,11 +434,9 @@ export const useHallConversation = ({
 
   const failHallEventStream = (generation, error) => {
     if (disposed || generation !== lifecycleGeneration || error?.name === 'AbortError') return
-    if (error?.status === 400 || error?.status === 409 || error?.status === 410) {
-      eventCursors.delete(conversationId.value)
-      messages.value = messages.value.filter(message => !message.streaming)
-      turnStates.clear()
-      void loadHallConversationContent(conversationId.value)
+    if (error?.status === 400 || error?.status === 409 || error?.status === 410 || error?.status === 501) {
+      void authoritativeResync(conversationId.value, `sse_${error.status}`, { restartStream: error.status !== 501 })
+      return
     }
     if (isTerminalHallEventError(error)) {
       hallEventTerminal = true
@@ -377,6 +453,8 @@ export const useHallConversation = ({
   const startHallEventStream = async () => {
     if (disposed || hallEventTerminal || !isPageVisible()) return
     const generation = lifecycleGeneration
+    const streamScope = scopeSnapshot()
+    const streamGuard = { generation, authEpoch: authEpoch(), scope: streamScope, signature: scopeSignature(streamScope) }
     const id = conversationId.value
     if (typeof id !== 'string' || !id || hallEventConversationId === id) return
     stopHallEventTransport()
@@ -393,8 +471,8 @@ export const useHallConversation = ({
         headers: cursor ? { 'Last-Event-ID': cursor } : {},
         signal: eventSignal.signal
       })
-      if (disposed || generation !== lifecycleGeneration || !response) {
-        if (!response && generation === lifecycleGeneration) hallEventTerminal = true
+      if (!guardCurrent(streamGuard) || !response) {
+        if (!response && guardCurrent(streamGuard)) hallEventTerminal = true
         hallEventController = null
         return
       }
@@ -407,32 +485,25 @@ export const useHallConversation = ({
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
-      let buffer = ''; let frame = { data: [], id: '' }
-      const consumeLine = line => {
-        if (line === '') {
-          if (!frame.data.length) { frame = { data: [], id: '' }; return }
-          const payload = frame.data.join('\n')
-          if (frame.id) eventCursors.set(id, frame.id)
-          try {
-            const event = JSON.parse(payload)
-            const cursor = wireString(event.nextCursor || event.cursor || '')
-            if (cursor) eventCursors.set(id, cursor)
-            if (event.type === 'stream_ready') { hallEventReconnectFailures = 0; frame = { data: [], id: '' }; return }
-            appendHallEventMessage(event)
-            hallEventReconnectFailures = 0
-          } catch (error) { log.warn('聚义厅事件帧无效', error) }
-          frame = { data: [], id: '' }; return
-        }
-        if (line.startsWith('id:')) { frame.id = line.slice(3).trim(); return }
-        if (line.startsWith('data:')) frame.data.push(line.slice(5).replace(/^ /, ''))
-      }
+      const parser = createHallSseParser({
+        conversationId: id,
+        onEvent: event => {
+          if (!guardCurrent(streamGuard)) return false
+          if (event.type === 'stream_ready') { hallEventReconnectFailures = 0; return true }
+          const accepted = appendHallEventMessage(event)
+          if (accepted) hallEventReconnectFailures = 0
+          return accepted
+        },
+        onCursor: cursorValue => eventCursors.set(id, cursorValue),
+        onInvalid: reason => { log.warn('聚义厅事件帧无效', reason); void authoritativeResync(id, reason) }
+      })
       while (true) {
         const { done, value } = await reader.read()
         if (done || disposed || generation !== lifecycleGeneration) break
-        buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n').replace(/\r/g, '\n')
-        let end; while ((end = buffer.indexOf('\n')) !== -1) { consumeLine(buffer.slice(0, end)); buffer = buffer.slice(end + 1) }
+        parser.push(decoder.decode(value, { stream: true }))
       }
-      buffer += decoder.decode(); if (buffer) consumeLine(buffer)
+      parser.push(decoder.decode())
+      parser.finish()
       if (!disposed && generation === lifecycleGeneration && !eventSignal.signal.aborted) {
         hallEventConversationId = ''
         hallEventController = null
@@ -473,10 +544,23 @@ export const useHallConversation = ({
     startHallEventStream()
   }
 
+  const resetDurableState = () => {
+    capabilityAttempt += 1
+    capabilityPromise = null
+    capabilityState.value = { loaded: false, v2: false, fallbackReason: '旧版传令兼容模式' }
+    deliberationStatus.value = ''
+    activeRequest.value = null
+    activeTurns.value = []
+    turnStates.clear()
+    eventCursors.clear()
+    authoritativeResyncPromise = null
+  }
+
   const resetLifecycle = () => {
     lifecycleGeneration += 1
     recoveringReplyTurn = null
     lifecycleController.abort(new DOMException('Hall identity lifecycle reset', 'AbortError'))
+    resetDurableState()
     if (!disposed) lifecycleController = new AbortController()
   }
 
@@ -630,6 +714,7 @@ export const useHallConversation = ({
             isStreaming.value = false
             stopHallReplyPolling()
           }
+          if (activeRequest.value?.requestId) syncDurablePresentation()
           if (isSelectedLoad) conversationLoadError.value = ''
           loaded = true
           startHallEventStream()
@@ -928,35 +1013,61 @@ export const useHallConversation = ({
   }
 
   const processStream = (eventData) => {
+    const raw = String(eventData || '').replace(/^data:\s?/, '').trim()
+    let event = null
+    try { event = JSON.parse(raw) } catch { /* legacy text stream */ }
+    if (event && typeof event === 'object' && !Array.isArray(event)) {
+      const durableEvent = Boolean(event.requestId || event.turnId || event.agentDelivery ||
+        ['chat_request_replay', 'agent_message_delta', 'agent_message', 'resync_required'].includes(event.type))
+      if (durableEvent && !Object.hasOwn(event, 'conversationId') && conversationId.value) event.conversationId = conversationId.value
+      if (durableEvent && event.conversationId && conversationId.value && event.conversationId !== conversationId.value) {
+        void authoritativeResync(conversationId.value, 'conversation_conflict')
+        return false
+      }
+      if (event.agentDelivery || event.type === 'chat_request_replay' || (event.requestId && !['agent_message_delta', 'agent_message', 'resync_required'].includes(event.type))) {
+        const handled = applyDeliberationEvent(event)
+        if (event.agentDelivery && event.agentDelivery.accepted !== true) {
+          const state = { conversationId: conversationId.value, messages: messages.value, isAwaitingReply: isAwaitingReply.value, isStreaming: isStreaming.value, turnStates, manageTurnBusy: true }
+          const result = appendStreamPayload(state, JSON.stringify(event))
+          conversationId.value = state.conversationId
+          messages.value = state.messages
+          if (result.shouldReconnect) { startHallEventStream(); scheduleHallConversationSync(result.conversationId) }
+        }
+        if (event.agentDelivery?.accepted === true && event.requestId) {
+          void recoverUnknownRequest(event.requestId, captureGuard())
+        }
+        syncDurablePresentation()
+        return handled
+      }
+      if (event.type === 'agent_message' && activeBuiltInTurn) {
+        applyDeliberationEvent(event)
+        const state = { conversationId: conversationId.value, messages: messages.value, isAwaitingReply: isAwaitingReply.value,
+          isStreaming: isStreaming.value, turnStates, manageTurnBusy: Boolean(activeRequest.value?.requestId) }
+        const result = appendStreamPayload(state, JSON.stringify(event))
+        conversationId.value = state.conversationId; messages.value = state.messages
+        isAwaitingReply.value = state.isAwaitingReply; isStreaming.value = state.isStreaming
+        if (result.type === 'stream_final' && result.message?.content) streamFinalCandidate = { message: result.message, conversationId: result.conversationId, toastName: result.toastName }
+        syncDurablePresentation()
+        return result.type === 'stream_final'
+      }
+      if (['agent_message_delta', 'agent_message', 'resync_required'].includes(event.type)) return appendHallEventMessage(event)
+    }
     const state = {
-      conversationId: conversationId.value,
-      messages: messages.value,
-      isAwaitingReply: isAwaitingReply.value,
-      isStreaming: isStreaming.value,
-      turnStates
+      conversationId: conversationId.value, messages: messages.value,
+      isAwaitingReply: isAwaitingReply.value, isStreaming: isStreaming.value, turnStates,
+      manageTurnBusy: Boolean(activeRequest.value?.requestId)
     }
     const result = appendStreamPayload(state, eventData)
     conversationId.value = state.conversationId
     messages.value = state.messages
     isAwaitingReply.value = state.isAwaitingReply
     isStreaming.value = state.isStreaming
-    if (result.shouldStopPolling) {
-      stopHallReplyPolling()
-    }
-    if (result.type === 'assistant' && result.message?.content) {
-      streamFinalCandidate = { message: result.message, conversationId: null, toastName: result.toastName }
-    }
-    if (result.type === 'stream_final' && result.message?.content) {
-      streamFinalCandidate = { message: result.message, conversationId: result.conversationId, toastName: result.toastName }
-    }
-    if (result.type === 'conversation') {
-      suppressedRestoreScopes.delete(scopeSignature(scopeSnapshot()))
-      resolveBuiltInTurnConversation(result.conversationId)
-    }
-    if (result.shouldReconnect) {
-      startHallEventStream()
-      scheduleHallConversationSync(result.conversationId)
-    }
+    if (result.shouldStopPolling && !durableBusy.value) stopHallReplyPolling()
+    if (result.type === 'assistant' && result.message?.content) streamFinalCandidate = { message: result.message, conversationId: null, toastName: result.toastName }
+    if (result.type === 'stream_final' && result.message?.content) streamFinalCandidate = { message: result.message, conversationId: result.conversationId, toastName: result.toastName }
+    if (result.type === 'conversation') { suppressedRestoreScopes.delete(scopeSignature(scopeSnapshot())); resolveBuiltInTurnConversation(result.conversationId) }
+    if (result.shouldReconnect) { startHallEventStream(); scheduleHallConversationSync(result.conversationId) }
+    return !['invalid_conversation', 'invalid_message_id'].includes(result.type)
   }
 
   const sendHallMessage = async ({
@@ -981,10 +1092,18 @@ export const useHallConversation = ({
       sendContext = validated
     }
     const requestConversationId = isVoiceSend ? sendContext.conversationId : conversationId.value
-    const capability = typeof chatApi.get === 'function'
-      ? await negotiateCapabilities()
-      : { loaded: true, v2: false, readOnlyConstrained: false, fallbackReason: '旧版传令兼容模式' }
-    if (disposed) return false
+    const sendScope = scopeSnapshot()
+    const sendGuard = captureGuard(sendScope)
+    let capability
+    try {
+      capability = typeof chatApi.get === 'function'
+        ? await negotiateCapabilities(sendGuard)
+        : { loaded: true, v2: false, fallbackReason: '旧版传令兼容模式' }
+      abortIfStale(sendGuard)
+    } catch (error) {
+      if (error?.name === 'AbortError') return false
+      throw error
+    }
     const metadataSource = isVoiceSend ? (sendContext.outgoingMetadata || {}) : (outgoingMetadata?.value || {})
     const mentionAgentIds = Array.isArray(sendContext.mentionAgentIds) && sendContext.mentionAgentIds.length
       ? sendContext.mentionAgentIds
@@ -996,9 +1115,8 @@ export const useHallConversation = ({
     const interactionHint = inputRefsFor(metadataSource).length ? 'inspect' : 'chat'
     const request = capability.v2 ? { requestId, requestRevision, observations: [] } : null
     recordObservation('send', request)
-    const generation = lifecycleGeneration
     const replyGeneration = ++hallReplyGeneration
-    const isCurrentReplyTurn = () => !disposed && generation === lifecycleGeneration && replyGeneration === hallReplyGeneration
+    const isCurrentReplyTurn = () => guardCurrent(sendGuard) && replyGeneration === hallReplyGeneration
     if (explicitContent === undefined) clearDraft()
     stopHallReplyStreaming()
     clearBuiltInTurn()
@@ -1014,8 +1132,8 @@ export const useHallConversation = ({
     })
     isStreaming.value = true
     isAwaitingReply.value = true
-    deliberationStatus.value = capability.v2 ? 'Fast CHAT · read-only-constrained · 排队' : capability.fallbackReason
-    activeRequest.value = request
+    deliberationStatus.value = '正在提交，等待受理'
+    activeRequest.value = request ? { ...request, state: 'SUBMITTING' } : null
     activeTurns.value = []
     stopHallReplyPolling()
 
@@ -1024,8 +1142,7 @@ export const useHallConversation = ({
     hallReplySignalCleanup = replySignal.cleanup
 
     try {
-      const safeMetadata = { ...metadataSource }
-      ;['execute', 'executeHint', 'interactionMode', 'route', 'intent', 'metadataAlias'].forEach(key => delete safeMetadata[key])
+      const safeMetadata = safeOutgoingMetadata(metadataSource)
       const body = {
         content,
         conversationId: requestConversationId,
@@ -1037,7 +1154,7 @@ export const useHallConversation = ({
         taskId: sendContext.taskId,
         forceNewConversation: requestConversationId === '',
         senderType: 'user', senderName: resolveHallUserSenderName(globalStore.user),
-        metadata: { ...safeMetadata, scene: 'juyiting', mode: sendContext.mode,
+        metadata: { ...safeMetadata, scene: 'juyiting',
           scopeKey: sendContext.conversationScopeKey, selectedAgentId, mentionAgentIds,
           participantAgentIds: sendContext.participantAgentIds, targetAgentIds: sendContext.targetAgentIds, selectedTaskId }
       }
@@ -1055,19 +1172,20 @@ export const useHallConversation = ({
             return
           }
           hallReplyStreamHandle = handle
+          if (!capability.v2) deliberationStatus.value = capability.fallbackReason || '旧版传令兼容模式'
         },
         onStream: eventData => {
           if (!isCurrentReplyTurn()) return
           const previousConversationId = conversationId.value
-          processStream(eventData)
-          recordObservation('first_response', request)
+          const accepted = processStream(eventData)
+          if (accepted) recordObservation('first_response', request)
           if (conversationId.value && conversationId.value !== previousConversationId) onConversationResolved?.(conversationId.value)
         },
         onStreamEnd: () => {
           if (!isCurrentReplyTurn()) return
           hallReplyStreamHandle = null
-          isStreaming.value = false
-          deliberationStatus.value = activeTurns.value.some(turn => !terminalTurn(turn.state)) ? '正在等待其余回话' : ''
+          if (activeRequest.value?.requestId) syncDurablePresentation()
+          else { isStreaming.value = false; deliberationStatus.value = '' }
           const finalized = streamFinalCandidate
           const completedTurn = activeBuiltInTurn
           activeBuiltInTurn = null
@@ -1101,7 +1219,7 @@ export const useHallConversation = ({
       isAwaitingReply.value = false
       if (capability.v2 && requestId) {
         deliberationStatus.value = '结果未知，正在核对原请求'
-        await recoverUnknownRequest(requestId, generation)
+        await recoverUnknownRequest(requestId, sendGuard)
       }
       const exactId = exactRuntimeId(conversationId.value)
       recoveringReplyTurn = exactId ? {
@@ -1138,35 +1256,142 @@ export const useHallConversation = ({
     }
   }
 
-  const recoverUnknownRequest = async (requestId, generation) => {
-    try {
-      const response = await chatApi.get(`/requests/${requestId}`, {}, { autoLoading: false, signal: lifecycleController.signal })
-      if (disposed || generation !== lifecycleGeneration) return false
-      const requestView = apiData(response)
-      activeRequest.value = { ...(activeRequest.value || {}), ...requestView, requestId }
-      activeTurns.value = Array.isArray(requestView?.turns) ? requestView.turns : []
-      const id = typeof requestView?.conversationId === 'string' ? requestView.conversationId : conversationId.value
-      if (id) { conversationId.value = id; startHallEventStream(); void loadHallConversationContent(id) }
-      const pending = activeTurns.value.some(turn => !terminalTurn(turn.state))
-      isAwaitingReply.value = pending
-      deliberationStatus.value = pending ? '正在恢复原请求' : requestView?.state === 'partial' ? '部分回话已完成' : ''
-      return true
-    } catch (error) { deliberationStatus.value = '需要恢复核对'; return false }
+  const applyRequestView = (requestView, requestId) => {
+    if (!requestView || typeof requestView !== 'object' || requestView.requestId !== requestId) return false
+    const requestRevision = canonicalWireString(requestView.requestRevision)
+    const requestStateVersion = canonicalWireString(requestView.stateVersion, { allowZero: true })
+    const requestConversationId = exactRuntimeId(requestView.conversationId)
+    if ((requestView.requestRevision !== undefined && !requestRevision) ||
+        (requestView.stateVersion !== undefined && !requestStateVersion) ||
+        (requestView.conversationId !== undefined && !requestConversationId)) return false
+    const nextTurns = []
+    for (const turn of Array.isArray(requestView.turns) ? requestView.turns : []) {
+      if (typeof turn?.turnId !== 'string' || !turn.turnId || (turn.requestId && turn.requestId !== requestId)) return false
+      const stateVersion = canonicalWireString(turn.stateVersion, { allowZero: true })
+      const lastDeltaSeq = canonicalWireString(turn.lastDeltaSeq, { allowZero: true })
+      const turnRevision = canonicalWireString(turn.requestRevision)
+      const turnConversationId = exactRuntimeId(turn.conversationId)
+      const finalMessageId = turn.finalMessageId == null ? null : exactRuntimeId(turn.finalMessageId)
+      if ((turn.stateVersion !== undefined && !stateVersion) || (turn.lastDeltaSeq !== undefined && !lastDeltaSeq) ||
+          (turn.requestRevision !== undefined && !turnRevision) || (turn.conversationId !== undefined && !turnConversationId) ||
+          (turn.finalMessageId != null && !finalMessageId)) return false
+      const normalizedTurn = { ...turn, requestId, requestRevision: turnRevision, conversationId: turnConversationId,
+        stateVersion, lastDeltaSeq, finalMessageId }
+      const previous = activeTurns.value.find(item => item.turnId === turn.turnId)
+      const staleVersion = previous?.stateVersion && stateVersion && BigInt(stateVersion) < BigInt(previous.stateVersion)
+      if (staleVersion || (isTerminalTurnState(previous?.state) && !isTerminalTurnState(normalizedTurn.state))) {
+        nextTurns.push(previous)
+      } else {
+        nextTurns.push(normalizedTurn)
+      }
+    }
+    activeRequest.value = { ...(activeRequest.value || {}), ...requestView, requestId,
+      requestRevision, stateVersion: requestStateVersion, conversationId: requestConversationId }
+    activeTurns.value = nextTurns
+    for (const turn of activeTurns.value) {
+      const tracker = turnStates.get(turn.turnId) || { lastDeltaSeq: '0', waitingFinal: false, terminal: false }
+      tracker.lastDeltaSeq = turn.lastDeltaSeq || tracker.lastDeltaSeq
+      tracker.terminal = isTerminalTurnState(turn.state)
+      tracker.waitingFinal = String(turn.state || '').toUpperCase() === 'RECOVERY_REQUIRED'
+      turnStates.set(turn.turnId, tracker)
+    }
+    syncDurablePresentation()
+    return true
   }
-  const cancelDeliberation = async ({ turnId, allPending = false, turnIds = [] } = {}) => {
-    const request = activeRequest.value
+
+  const recoverUnknownRequest = async (requestId, guard = captureGuard()) => {
     try {
-      if (turnId) {
-        const turn = activeTurns.value.find(item => item.turnId === turnId)
-        await chatApi.post(`/turns/${turnId}/cancel`, { expectedStateVersion: String(turn?.stateVersion || '') }, { autoLoading: false })
-      } else if (request?.requestId) {
-        const selected = turnIds.filter(value => typeof value === 'string' && value)
-        if (Boolean(allPending) === Boolean(selected.length)) return false
-        await chatApi.post(`/requests/${request.requestId}/cancel${allPending ? '?allPending=true' : ''}`, allPending ? {} : { turnIds: selected }, { autoLoading: false })
-      } else return false
-      deliberationStatus.value = '取消请求已提交'
+      abortIfStale(guard)
+      const response = await chatApi.get(`/requests/${requestId}`, {}, { autoLoading: false, signal: lifecycleController.signal })
+      abortIfStale(guard)
+      const requestView = apiData(response)
+      if (!applyRequestView(requestView, requestId)) return false
+      const id = typeof requestView?.conversationId === 'string' ? requestView.conversationId : conversationId.value
+      if (id) conversationId.value = id
       return true
-    } catch (error) { log.warn('取消聚义厅回话失败', error); return false }
+    } catch (error) {
+      if (error?.name === 'AbortError' || !guardCurrent(guard)) return false
+      deliberationStatus.value = '需要恢复核对'
+      return false
+    }
+  }
+
+  const authoritativeResync = (id = conversationId.value, reason = 'resync_required', { restartStream = true } = {}) => {
+    const exactId = exactRuntimeId(id)
+    if (!exactId || disposed) return Promise.resolve(false)
+    if (authoritativeResyncPromise) return authoritativeResyncPromise
+    const guard = captureGuard()
+    eventCursors.delete(exactId)
+    messages.value = messages.value.filter(message => !message.streaming)
+    for (const tracker of turnStates.values()) tracker.waitingFinal = true
+    deliberationStatus.value = '正在拉取权威状态'
+    stopHallEventTransport()
+    if (!restartStream) hallEventTerminal = true
+    authoritativeResyncPromise = (async () => {
+      try {
+        if (activeRequest.value?.requestId) await recoverUnknownRequest(activeRequest.value.requestId, guard)
+        abortIfStale(guard)
+        if (conversationId.value === exactId) await loadHallConversationContent(exactId)
+        abortIfStale(guard)
+        if (restartStream) {
+          resetHallEventRecovery()
+          startHallEventStream()
+        } else {
+          eventStreamRecovering.value = false
+          if (deliberationBusy(activeRequest.value, activeTurns.value)) startHallReplyPolling(exactId)
+        }
+        return true
+      } catch (error) {
+        if (error?.name !== 'AbortError' && guardCurrent(guard)) log.warn('聚义厅权威恢复失败', { reason, error })
+        return false
+      } finally {
+        if (guardCurrent(guard)) authoritativeResyncPromise = null
+      }
+    })()
+    return authoritativeResyncPromise
+  }
+
+  const cancelDeliberation = async target => {
+    const request = activeRequest.value
+    const selectedTarget = target && typeof target === 'object' ? target : durableCancelTarget.value
+    if (!request?.requestId || !selectedTarget) return false
+    const guard = captureGuard()
+    try {
+      let response
+      if (selectedTarget.turnId) {
+        const turn = activeTurns.value.find(item => item.turnId === selectedTarget.turnId)
+        if (!turn || !isPendingTurn(turn)) return true
+        const expectedStateVersion = canonicalWireString(turn.stateVersion, { allowZero: true })
+        if (!expectedStateVersion) return false
+        response = await chatApi.post(`/turns/${turn.turnId}/cancel`, { expectedStateVersion }, { autoLoading: false, signal: lifecycleController.signal })
+        abortIfStale(guard)
+        const view = apiData(response)
+        if (!applyDeliberationEvent({ ...(view || {}), requestId: request.requestId, turnId: turn.turnId })) return false
+      } else if (selectedTarget.allPending === true) {
+        response = await chatApi.post(`/requests/${request.requestId}/cancel?allPending=true`, { allPending: true }, { autoLoading: false, signal: lifecycleController.signal })
+        abortIfStale(guard)
+        applyRequestView(apiData(response), request.requestId)
+      } else return false
+      syncDurablePresentation()
+      if (deliberationBusy(activeRequest.value, activeTurns.value)) deliberationStatus.value = '取消请求已提交'
+      return true
+    } catch (error) {
+      if (error?.name !== 'AbortError' && guardCurrent(guard)) log.warn('取消聚义厅回话失败', error)
+      return false
+    }
+  }
+
+  const cancelLegacyHallReply = async () => {
+    if (!canCancelLegacy.value) return false
+    const id = exactRuntimeId(conversationId.value)
+    if (id && typeof chatApi.post === 'function') {
+      try { await chatApi.post('/stop_stream', { conversationId: id }, { autoLoading: false, signal: lifecycleController.signal }) } catch (error) {
+        if (error?.name !== 'AbortError') log.warn('停止旧版聚义厅回话失败', error)
+      }
+    }
+    cancelHallReplyTurn('legacy_user_cancelled')
+    deliberationStatus.value = '已停止旧版回话等待'
+    return true
   }
 
   const insertAgentMention = (agent, suffix = '') => {
@@ -1205,6 +1430,10 @@ export const useHallConversation = ({
   return {
     cancelHallReplyTurn,
     cancelDeliberation,
+    cancelLegacyHallReply,
+    canCancelDurable,
+    canCancelLegacy,
+    durableCancelTarget,
     activeRequest,
     activeTurns,
     capabilityState,
@@ -1252,8 +1481,6 @@ function createStableRequestId () {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
   return `req-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
-function terminalTurn (state) { return ['completed', 'partial', 'failed', 'cancelled'].includes(String(state || '').toLowerCase()) }
-
 function isTerminalHallEventError (error) {
   return error?.status === 401 || error?.status === 403
 }

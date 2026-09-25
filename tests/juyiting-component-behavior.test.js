@@ -1911,6 +1911,30 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.emitted('send-message')).to.equal(undefined)
   })
 
+  it('emits explicit durable cancellation targets and keeps legacy cancellation separate', async () => {
+    const durable = mount(ChatPanel, {
+      global: { stubs },
+      props: {
+        agents: [], draft: '', messages: [], durableCancelTarget: { allPending: true },
+        mentionLabel: agent => agent.name, senderText: message => message.sender
+      }
+    })
+    await durable.find('[aria-label="取消待处理回话"]').trigger('click')
+    expect(durable.emitted('cancel-deliberation')?.[0]?.[0]).to.deep.equal({ allPending: true })
+    expect(durable.find('[aria-label="停止旧版回话等待"]').exists()).to.equal(false)
+
+    const legacy = mount(ChatPanel, {
+      global: { stubs },
+      props: {
+        agents: [], draft: '', messages: [], legacyCancelAvailable: true,
+        mentionLabel: agent => agent.name, senderText: message => message.sender
+      }
+    })
+    await legacy.find('[aria-label="停止旧版回话等待"]').trigger('click')
+    expect(legacy.emitted('cancel-legacy-transport')).to.have.length(1)
+    expect(legacy.emitted('cancel-deliberation')).to.equal(undefined)
+  })
+
   it('explains that a material reference needs an established conversation', async () => {
     const wrapper = mount(ChatPanel, {
       global: { stubs },

@@ -31,12 +31,20 @@
           <span>百宝箱</span>
         </button>
         <button
-          v-if="isAwaitingReply || isStreaming"
+          v-if="durableCancelTarget"
           class="icon-button"
           type="button"
-          title="取消当前回话"
-          aria-label="取消当前回话"
-          @click="$emit('cancel-deliberation')"
+          title="取消待处理回话"
+          aria-label="取消待处理回话"
+          @click="$emit('cancel-deliberation', durableCancelTarget)"
+        ><var-icon name="close" /></button>
+        <button
+          v-else-if="legacyCancelAvailable"
+          class="icon-button"
+          type="button"
+          title="停止旧版回话等待"
+          aria-label="停止旧版回话等待"
+          @click="$emit('cancel-legacy-transport')"
         ><var-icon name="close" /></button>
         <button
           class="icon-button"
@@ -223,6 +231,8 @@ const props = defineProps({
   conversationLoadError: { type: String, default: '' },
   conversationBusy: { type: Boolean, default: false },
   deliberationStatus: { type: String, default: '' },
+  durableCancelTarget: { type: Object, default: null },
+  legacyCancelAvailable: { type: Boolean, default: false },
   conversationId: { type: String, default: '' },
   discussionVariant: { type: String, default: 'public' },
   draft: { type: String, default: '' },
@@ -247,6 +257,7 @@ const props = defineProps({
 
 const emit = defineEmits([
   'cancel-deliberation',
+  'cancel-legacy-transport',
   'clear-target',
   'delete-conversation',
   'load-history',
