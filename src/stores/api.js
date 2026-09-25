@@ -3,6 +3,7 @@ import { useUtilStore } from './util'
 import { useGlobalStore } from './global'
 import { log } from '../utils/logger.js'
 import { createCodeChallenge, createOAuthTransaction, safeAppRelativePath } from '../utils/oauthTransaction.js'
+import { rememberOAuthBackNavigation } from '../utils/oauthNavigationHistory.js'
 import { registerIdentityCleanup, stopIdentityBoundWork } from '../utils/identityLifecycle.js'
 import { cancelReauthentication } from '../utils/reauthentication.js'
 import { combineAbortSignals, throwIfAborted } from '../utils/abortSignals.js'
@@ -121,7 +122,8 @@ export const useApiStore = defineStore('api', {
           state: transaction.state
         })
         if (authorizationGeneration !== this.authorizationGeneration || !this.authorizationStarted) return false
-        window.location.assign(`${config.authorizationServer}/oauth2/authorize?${params.toString()}`)
+        rememberOAuthBackNavigation(transaction.state, { now: transaction.createdAt })
+        window.location.replace(`${config.authorizationServer}/oauth2/authorize?${params.toString()}`)
         return true
       } catch (error) {
         if (authorizationGeneration === this.authorizationGeneration) this.authorizationStarted = false

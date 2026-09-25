@@ -132,8 +132,11 @@ describe('OAuth callback flow', () => {
       .to.equal('登录未完成，请稍后重试。')
 
     const component = readFileSync('src/components/OAuthCallback.vue', 'utf8')
+    const main = readFileSync('src/main.js', 'utf8')
     expect(component).to.include('正在安全验证授权结果')
     expect(component).to.include('transactionConfig: apiStore.oauthRuntimeConfig()')
+    expect(component).to.include('completeOAuthNavigation(query.state, returnTo')
+    expect(main).to.include('installOAuthNavigationResume()')
     expect(component).not.to.include('error_description')
     expect(component).not.to.match(/console\.|log\./)
   })

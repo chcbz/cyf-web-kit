@@ -17,6 +17,7 @@ import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApiStore } from '@/stores/api'
 import { oauthCallbackMessage, processOAuthCallback } from '@/utils/oauthCallback.js'
+import { completeOAuthNavigation } from '@/utils/oauthNavigationHistory.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -33,7 +34,9 @@ onMounted(async () => {
       transactionConfig: apiStore.oauthRuntimeConfig(),
       exchangeCodeForToken: (code, transaction) => apiStore.exchangeCodeForToken(code, transaction),
       loadUserInfo: () => apiStore.getUserInfo(),
-      replace: returnTo => router.replace(returnTo)
+      replace: returnTo => completeOAuthNavigation(query.state, returnTo, {
+        replace: path => router.replace(path)
+      })
     })
   } catch (error) {
     errorMessage.value = oauthCallbackMessage(error)

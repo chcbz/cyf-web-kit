@@ -157,6 +157,7 @@ function deferred () {
 }
 
 const OAUTH_PENDING_KEY = 'cyf.oauth.pending.v1'
+const OAUTH_HISTORY_KEY = 'cyf.oauth.history.v1'
 const DIGEST_NOT_STARTED = 'OAUTH_HARNESS_DIGEST_NOT_STARTED'
 const AUTH_SETTLED_BEFORE_DIGEST = 'OAUTH_HARNESS_AUTH_SETTLED_BEFORE_DIGEST'
 const AUTH_REJECTED_BEFORE_DIGEST = 'OAUTH_HARNESS_AUTH_REJECTED_BEFORE_DIGEST'
@@ -198,7 +199,7 @@ function assertOwnBindingRestored (binding) {
   expect(binding.target[binding.key]).to.equal(binding.value)
 }
 
-function installOAuthWindowFacade ({ crypto, onAssign }) {
+function installOAuthWindowFacade ({ crypto, onAssign = () => {}, onReplace = onAssign, history }) {
   const windowBinding = captureOwnBinding(global, 'window')
   const locationBinding = captureOwnBinding(global, 'location')
   const originalWindow = windowBinding.value
@@ -212,14 +213,16 @@ function installOAuthWindowFacade ({ crypto, onAssign }) {
     pathname: originalLocation.pathname,
     search: originalLocation.search,
     hash: originalLocation.hash,
-    assign: onAssign
+    assign: onAssign,
+    replace: onReplace
   }
   const facadeWindow = {}
   Object.defineProperties(facadeWindow, {
     location: { value: facadeLocation, enumerable: true },
     crypto: { value: crypto, enumerable: true },
     sessionStorage: { value: realSessionStorage, enumerable: true },
-    localStorage: { value: realLocalStorage, enumerable: true }
+    localStorage: { value: realLocalStorage, enumerable: true },
+    history: { value: history || originalWindow.history, enumerable: true }
   })
 
   installOwnValue(windowBinding, facadeWindow)
@@ -341,6 +344,7 @@ describe('OAuth authorization cancellation', () => {
     setActivePinia(createPinia())
     realLocalStorage.clear()
     realSessionStorage.removeItem(OAUTH_PENDING_KEY)
+    realSessionStorage.removeItem(OAUTH_HISTORY_KEY)
     activeAuthorization = null
     releaseDigest = null
     browserFacade = null
@@ -365,6 +369,7 @@ describe('OAuth authorization cancellation', () => {
         } finally {
           try {
             realSessionStorage.removeItem(OAUTH_PENDING_KEY)
+            realSessionStorage.removeItem(OAUTH_HISTORY_KEY)
           } finally {
             try {
               browserFacade?.restore()
@@ -387,6 +392,40 @@ describe('OAuth authorization cancellation', () => {
 
   after(() => {
     expect(realSessionStorage.getItem(OAUTH_PENDING_KEY)).to.equal(null)
+    expect(realSessionStorage.getItem(OAUTH_HISTORY_KEY)).to.equal(null)
+  })
+
+  it('replaces the protected route when launching authorization and records its back-stack origin', async () => {
+    const navigationCalls = []
+    const fakeHistory = {
+      length: 2,
+      state: { back: '/', current: '/juyiting', position: 1 }
+    }
+    browserFacade = installOAuthWindowFacade({
+      crypto: {
+        getRandomValues (bytes) {
+          bytes.fill(7)
+          return bytes
+        },
+        subtle: {
+          async digest () { return new Uint8Array(32).buffer }
+        }
+      },
+      history: fakeHistory,
+      onAssign: () => { throw new Error('authorization must replace, not append, the protected route') },
+      onReplace: url => navigationCalls.push(url)
+    })
+
+    const store = useApiStore()
+    store.baseUrl = 'https://api.example'
+    store.oauthClientId = 'public-web'
+
+    expect(await store.beginAuthorization('/juyiting')).to.equal(true)
+    expect(navigationCalls).to.have.length(1)
+    expect(navigationCalls[0]).to.match(/^https:\/\/api\.example\/oauth2\/authorize\?/)
+    const navigationHistory = JSON.parse(realSessionStorage.getItem(OAUTH_HISTORY_KEY))
+    expect(navigationHistory.historyLength).to.equal(2)
+    expect(navigationHistory.state).to.equal(JSON.parse(realSessionStorage.getItem(OAUTH_PENDING_KEY)).state)
   })
 
   it('cancels queued reauthentication before it creates an OAuth transaction', async () => {
