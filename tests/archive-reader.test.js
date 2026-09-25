@@ -2727,7 +2727,7 @@ describe('archive reader contract behavior', () => {
       const loadCount = api.calls.length
       for (let cycle = 0; cycle < 5; cycle += 1) {
         mode.value = 'landscape-map'; await Vue.nextTick()
-        expect(wrapper.find('.panel-orientation').exists()).to.equal(true)
+        expect(wrapper.find('.panel-orientation').exists()).to.equal(false)
         mode.value = 'portrait-command'; await Vue.nextTick()
         expect(wrapper.find('.panel-orientation').exists()).to.equal(false)
         expect(wrapper.find('.floating-panel').element).to.equal(floating)

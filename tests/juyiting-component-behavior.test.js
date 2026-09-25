@@ -390,7 +390,7 @@ describe('JuyiHall component behavior', () => {
     expect(source).to.include(':interaction-locked="isPanelSessionActive || voiceInteractionLocked"')
     expect(source).to.include(':class="[`panel-${renderedPanel}`, `layout-${panelLayout}`]"')
     expect(source).to.include('layout-full-window')
-    expect(source).to.include('panel-orientation')
+    expect(source).not.to.include('panel-orientation')
     expect(source).to.include('panelReturnPanel')
     expect(source).to.include('layout-center-modal')
   })
@@ -2705,6 +2705,21 @@ describe('lightweight workbench real panel navigation', () => {
     expect(short).to.include(':deep(.chat-panel) { flex: 0 0 auto; height: auto;')
   })
 
+  it('repairs legacy UTF-8 mojibake in the Hall account label', async () => {
+    const home = Vue.ref('overview')
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const mocks = createActualHallMocks({ mode: Vue.ref('landscape-map'), mounts: { library: 0, archive: 0 }, counters })
+    mocks.useHallHomeMode = () => ({ homeMode: home, isOverviewHome: Vue.computed(() => home.value === 'overview'), setHomeMode: value => { home.value = value } })
+    const oldGlobal = mocks.useGlobalStore
+    mocks.useGlobalStore = () => ({ ...oldGlobal(), user: { id: 'owner-a', nickname: 'ä½ å¥½' } })
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      expect(wrapper.find('.workbench-sidebar-account > span').text()).to.include('你好')
+      expect(wrapper.find('.workbench-sidebar-account').text()).not.to.include('ä½')
+    } finally { wrapper.unmount() }
+  })
+
   it('returns focus to the persistent more trigger when its menu item unmounts on first open', async () => {
     const home = Vue.ref('overview')
     const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
@@ -2758,6 +2773,8 @@ describe('lightweight workbench real panel navigation', () => {
       expect(wrapper.find('.panel-title').exists()).to.equal(false)
       expect(wrapper.find('.floating-panel').attributes('role')).to.equal('region')
       expect(wrapper.find('.floating-panel').attributes('aria-label')).to.equal('事项')
+      expect(document.activeElement).to.equal(wrapper.find('.floating-panel').element)
+      expect(wrapper.find('.task-search input').exists()).to.equal(false) // this harness stubs the task surface
       expect(wrapper.find('.workbench-sidebar-account').attributes('aria-label')).to.equal('个人中心')
       let overlay = wrapper.find('.panel-overlay').element
       wrapper.vm.$.setupState.closePanel(); await wrapper.vm.$.setupState.handlePanelAfterLeave(overlay)
@@ -2885,7 +2902,7 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
       expect(wrapper.find('.hall-mode-toolbar').element.style.display).to.equal('none')
       expect(wrapper.find('.hall-map-actions').exists()).to.equal(false)
       expect(wrapper.find('.floating-panel').element).to.equal(panel)
-      expect(wrapper.find('.panel-orientation').exists()).to.equal(true)
+      expect(wrapper.find('.panel-orientation').exists()).to.equal(false)
       home.value = 'overview'
       await Vue.nextTick()
       expect(state.isImmersiveMap).to.equal(false)
@@ -2960,7 +2977,7 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
       expect(wrapper.find('.panel-orientation').exists()).to.equal(false)
       mode.value = 'landscape-map'
       await Vue.nextTick()
-      expect(wrapper.find('.panel-orientation').exists()).to.equal(true)
+      expect(wrapper.find('.panel-orientation').exists()).to.equal(false)
       state.returnPanel()
       await Vue.nextTick()
       expect(wrapper.findComponent(BountyPanel).element).to.equal(source)
