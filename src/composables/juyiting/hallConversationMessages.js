@@ -1,4 +1,4 @@
-import { isOwnMessage, normalizeDisplayName, resolveAccountDisplayName, resolveDisplayName } from '@/utils/displayName'
+import { isOwnMessage, normalizeDisplayName, resolveAccountDisplayName, resolveDisplayName } from '../../utils/displayName.js'
 
 export const parseMessageMetadata = (metadata) => {
   if (!metadata) return {}
