@@ -185,6 +185,62 @@ describe('useHallData operable roster', () => {
     expect(selectedAgent.value).to.include({ agentId: 'huyanzhuo', canOperate: false, status: 'busy' })
   })
 
+  it('surfaces an application-level unbind rejection instead of showing a success toast path', async () => {
+    const calls = []
+    const agentApi = {
+      delete: async (url) => {
+        calls.push(url)
+        return { data: { status: 409, code: 'AGENT_BUSY', msg: 'Agent cannot be unbound while it has durable active work' } }
+      },
+      get: async () => { throw new Error('refresh must not run after rejected DELETE') },
+      search: async () => { throw new Error('refresh must not run after rejected DELETE') }
+    }
+    const hallData = useHallData({
+      agentApi,
+      log: { warn: () => {} },
+      normalizeStatus: (status = '') => status.toLowerCase(),
+      selectedAgent: ref(null),
+      selectedTask: ref(null),
+      taskAgentMatchScore: () => 0
+    })
+
+    let failure
+    try {
+      await hallData.unbindPersona({ personaCode: 'huyanzhuo', boundToMe: true })
+    } catch (error) {
+      failure = error
+    }
+    expect(failure?.message).to.equal('Agent cannot be unbound while it has durable active work')
+    expect(failure?.code).to.equal('AGENT_BUSY')
+    expect(failure?.status).to.equal(409)
+    expect(calls).to.deep.equal(['/personas/huyanzhuo/bind'])
+  })
+
+  it('does not let an HTTP-style success status mask an application error code', async () => {
+    const agentApi = {
+      delete: async () => ({ data: { status: 200, code: 'AGENT_BUSY', msg: 'still busy' } }),
+      get: async () => { throw new Error('refresh must not run after rejected DELETE') },
+      search: async () => { throw new Error('refresh must not run after rejected DELETE') }
+    }
+    const hallData = useHallData({
+      agentApi,
+      log: { warn: () => {} },
+      normalizeStatus: (status = '') => status.toLowerCase(),
+      selectedAgent: ref(null),
+      selectedTask: ref(null),
+      taskAgentMatchScore: () => 0
+    })
+
+    let failure
+    try {
+      await hallData.unbindPersona({ personaCode: 'huyanzhuo', boundToMe: true })
+    } catch (error) {
+      failure = error
+    }
+    expect(failure?.code).to.equal('AGENT_BUSY')
+    expect(failure?.status).to.equal(200)
+  })
+
   it('reports an unbind no-op truthfully and refreshes every roster projection after DELETE', async () => {
     const calls = []
     const agentApi = {

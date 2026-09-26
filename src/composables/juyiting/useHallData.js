@@ -263,18 +263,38 @@ export const useHallData = ({
     }
   }
 
+  const requireSuccessfulMutation = (response, fallbackMessage) => {
+    const envelope = response?.data && typeof response.data === 'object'
+      ? response.data
+      : (response && typeof response === 'object' ? response : null)
+    if (!envelope || (!Object.hasOwn(envelope, 'code') && !Object.hasOwn(envelope, 'status'))) return
+    const code = envelope.code
+    const status = Number(envelope.status)
+    const hasCode = code !== undefined && code !== null
+    const hasStatus = Number.isFinite(status)
+    const successfulCode = !hasCode || code === 'E0' || code === '0' || code === 0 ||
+      code === '200' || code === 200
+    const successfulStatus = !hasStatus || status === 200
+    if (successfulCode && successfulStatus) return
+    const error = new Error(envelope.msg || envelope.message || fallbackMessage)
+    error.code = code
+    if (Number.isFinite(status)) error.status = status
+    throw error
+  }
+
   const bindPersona = async (persona, mode = 'local') => {
     // Paid server INITIAL and free REPROVISION both require the hosting DTO flow.
     // Never retry a hosting 503 through the legacy {mode: 'server'} endpoint.
     if (mode !== 'local') throw new Error('山寨安顿必须先核对服务端租约和报价；不会改走旧式 server 接口。')
     if (!persona?.personaCode || persona.systemAgent || (persona.bound && !persona.boundToMe)) return
     let bindResult = null
-    await agentApi.post(`/personas/${persona.personaCode}/bind`, { mode }, {
+    const response = await agentApi.post(`/personas/${persona.personaCode}/bind`, { mode }, {
       autoLoading: false,
       onSuccess: (result) => {
         bindResult = result?.data || null
       }
     })
+    requireSuccessfulMutation(response, '请贤未成')
     await Promise.all([loadPersonaCatalog(), loadRosterAgents({ derive: false }), loadMapAgents()])
     deriveRosterProjections()
     return bindResult
@@ -282,9 +302,10 @@ export const useHallData = ({
 
   const unbindPersona = async (persona) => {
     if (!persona?.personaCode || persona.boundToMe !== true || persona.systemAgent) return false
-    await agentApi.delete(`/personas/${persona.personaCode}/bind`, {
+    const response = await agentApi.delete(`/personas/${persona.personaCode}/bind`, {
       autoLoading: false
     })
+    requireSuccessfulMutation(response, '除名未成')
     await Promise.all([loadPersonaCatalog(), loadRosterAgents({ derive: false }), loadMapAgents()])
     deriveRosterProjections()
     return true
