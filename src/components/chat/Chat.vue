@@ -131,9 +131,15 @@ const apiStreamUrl = (path, params = {}) => {
 }
 
 const senderForMessage = (message) => {
-  if (message?.senderType === 'agent' || message?.messageType === 'agent') return 'AGENT'
-  if (message?.senderType === 'system' || message?.messageType === 'system') return 'SYSTEM'
-  if (message?.senderType === 'user' || message?.messageType === 'user') return 'USER'
+  const messageType = String(message?.messageType || '').toLowerCase()
+  const senderType = String(message?.senderType || '').toLowerCase()
+  if (senderType === 'agent' || messageType === 'agent') return 'AGENT'
+  if (messageType === 'user') return 'USER'
+  if (messageType === 'assistant') return 'ASSISTANT'
+  if (messageType === 'system') return 'SYSTEM'
+  if (senderType === 'user') return 'USER'
+  if (senderType === 'system') return 'SYSTEM'
+  if (senderType === 'assistant') return 'ASSISTANT'
   return String(message?.messageType || message?.senderType || 'USER').toUpperCase()
 }
 
