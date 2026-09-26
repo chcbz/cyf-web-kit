@@ -99,8 +99,9 @@ describe('W05 real formal-review component boundary', () => {
       expect(wrapper.findAll('.formal-delivery-summary')[0].text()).to.have.length.greaterThan(1000)
       expect(wrapper.findAll('.formal-inline-preview')).to.have.length(8)
       expect(wrapper.findAll('form.formal-decision')).to.have.length(8)
-      expect(listSource).to.include('min-height:0;overflow-y:auto;overflow-x:hidden')
-      expect(listSource).to.include('overscroll-behavior:contain')
+      expect(listSource).to.match(/min-height:\s*0;[\s\S]*?overflow-y:\s*auto;[\s\S]*?overflow-x:\s*hidden/)
+      expect(listSource).to.match(/overscroll-behavior:\s*contain/)
+      expect(listSource).to.include('var(--formal-brand, #923f30)')
     } finally { wrapper.unmount() }
   })
 
@@ -159,7 +160,7 @@ const FormalTaskDeliveryPanel = new Function('Vue', 'deps', panelScript)(Vue, {
 describe('BF19 production formal rework boundary', () => {
   it('provides a bounded panel shell around the single formal-delivery scroll region', () => {
     expect(panelSource).to.include('class="formal-task-delivery-panel"')
-    expect(panelSource).to.include('grid-template-rows:auto minmax(0,1fr) auto;flex:1 1 auto;min-width:0;min-height:0;overflow:hidden')
+    expect(panelSource).to.match(/grid-template-rows:\s*auto minmax\(0, ?1fr\) auto;[\s\S]*?flex:\s*1 1 auto;[\s\S]*?min-height:\s*0;[\s\S]*?overflow:\s*hidden/)
   })
   before(() => { for (const name of ['Element', 'HTMLElement', 'SVGElement', 'Node']) globalThis[name] ||= globalThis.window[name] })
   const scope = { taskId: 'task-1', conversationId: 'conversation-1', targetAgentId: 'agent-1', conversationConfirmed: true }

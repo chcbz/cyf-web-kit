@@ -99,5 +99,61 @@ const retryDownload = () => retryItem.value ? void downloadOutput(retryItem.valu
 </script>
 
 <style scoped>
-.formal-task-delivery-panel{display:grid;grid-template-rows:auto minmax(0,1fr) auto;flex:1 1 auto;min-width:0;min-height:0;overflow:hidden}.formal-task-delivery-intro,.formal-task-delivery-status{min-width:0}.formal-task-delivery-intro{display:grid;gap:6px}.formal-task-delivery-intro p{margin:0}.formal-output-state{margin:10px 0 0;padding:8px;border-radius:6px;background:#f7edcf;color:#765d2d;font-size:13px}.formal-output-state.is-error{background:#fae7e1;color:#7a3026}.formal-output-state button{min-height:36px;margin-left:6px;border:1px solid #315d4e;border-radius:5px;padding:5px 9px;color:#fff;background:#315d4e}
+.formal-task-delivery-panel {
+  --formal-ground: var(--work-ground, #f3f3ed);
+  --formal-paper: var(--work-paper, #fffefa);
+  --formal-ink: var(--work-ink, #242e2b);
+  --formal-muted: var(--work-muted, #68716b);
+  --formal-line: var(--work-line, #d8d8ce);
+  --formal-brand: var(--work-brand, #923f30);
+  --formal-brand-surface: var(--hall-surface-brand, #f6eee8);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--formal-ground);
+  color: var(--formal-ink);
+}
+.formal-task-delivery-intro,.formal-task-delivery-status { min-width: 0; }
+.formal-task-delivery-intro {
+  display: grid;
+  gap: 8px;
+  margin: 16px 20px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--formal-line);
+  border-radius: 10px;
+  background: var(--formal-paper);
+}
+.formal-task-delivery-intro p { margin: 0; color: var(--formal-muted); font-size: 14px; line-height: 1.55; }
+.formal-task-delivery-intro button,.formal-output-state button {
+  min-height: 40px;
+  border: 1px solid var(--formal-brand);
+  border-radius: 8px;
+  padding: 7px 12px;
+  background: var(--formal-brand);
+  color: var(--formal-paper);
+  font: inherit;
+  cursor: pointer;
+}
+.formal-task-delivery-intro button { justify-self: start; }
+.formal-output-state {
+  margin: 10px 20px 16px;
+  padding: 10px 12px;
+  border: 1px solid #ead8aa;
+  border-radius: 8px;
+  background: #fbf4df;
+  color: #765d2d;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.formal-output-state.is-error { border-color: #e9beb5; background: #fae7e1; color: #7a3026; }
+.formal-output-state button { min-height: 32px; margin-left: 8px; padding: 4px 9px; }
+.formal-task-delivery-panel button:focus-visible { outline: 3px solid color-mix(in srgb, var(--formal-brand) 52%, transparent); outline-offset: 2px; }
+@media (max-width: 760px) {
+  .formal-task-delivery-intro { margin: 12px 16px 0; padding: 12px; }
+  .formal-output-state { margin: 10px 16px 12px; }
+  .formal-task-delivery-intro button { width: 100%; }
+}
 </style>

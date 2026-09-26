@@ -480,6 +480,7 @@ onBeforeUnmount(() => { workspace.dispose(); execution.dispose() })
 .treasure-search { display:flex; align-items:center; gap:12px; margin:18px 0 12px; }
 .treasure-search label { width:min(360px,100%); }
 .treasure-content input:not([type=file]),.treasure-content select { padding:10px 12px; min-height:44px; box-sizing:border-box; border:1px solid #d5bd98; border-radius:4px; font:inherit; color:#513922; background:#fffdf8; max-width:100%; }
+.treasure-search input,.treasure-search>button { box-sizing:border-box; height:44px; min-height:44px; }
 .treasure-search input { width:100%; }
 .treasure-file-row { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:20px 0; border-bottom:1px solid #d6bf99; }
 .treasure-file-row>div { min-width:0; overflow-wrap:anywhere; }.treasure-file-row button,.treasure-intro>button { flex:0 0 auto; }

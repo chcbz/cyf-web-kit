@@ -4059,12 +4059,17 @@ button.hall-room {
     overflow: hidden;
     white-space: nowrap;
   }
-  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar > button span) {
+  /* Hide only the button label at phone widths. BountyActionIcon also renders a span. */
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar > button .toolbar-label) {
     position: absolute;
     width: 1px;
     height: 1px;
     overflow: hidden;
     clip: rect(0 0 0 0);
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar > button .bounty-action-icon) {
+    display: inline-flex;
+    flex: 0 0 auto;
   }
   .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-create-actions) {
     grid-column: 1 / -1;

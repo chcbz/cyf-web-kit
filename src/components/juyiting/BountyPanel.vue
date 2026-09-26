@@ -24,7 +24,7 @@
         </div>
         <button @click="$emit('load-tasks')">
           <BountyActionIcon name="refresh" />
-          <span>重查</span>
+          <span class="toolbar-label">重查</span>
         </button>
         <div class="task-create-actions">
           <button class="new-task-button" type="button" @click="showCreateForm = !showCreateForm">
@@ -659,6 +659,15 @@ defineExpose({ openTask, canGoBack, back })
   overflow: hidden;
 }
 
+/* The list needs a bounded flex parent so it can own scrolling inside the Hall panel. */
+.bounty-source {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
 button {
   border: 0;
   cursor: pointer;
@@ -792,10 +801,12 @@ button:disabled {
 }
 
 .task-list {
-  overflow: auto;
   min-width: 0;
   min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
   padding: 0;
+  -webkit-overflow-scrolling: touch;
 }
 
 .task-card {
