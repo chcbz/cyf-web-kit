@@ -18,7 +18,7 @@
       <article v-for="link in links.links.value" :key="link.relationId" class="task-link-row" :class="link.role.toLowerCase()">
         <div>
           <strong>{{ roleText(link.role) }}</strong>
-          <span>{{ link.fileId }} · v{{ link.version }}</span>
+          <span>{{ materialName(link) }} · v{{ link.version }}</span>
           <small>{{ link.state === 'ACTIVE' ? '当前关联' : '已解除关联' }}</small>
         </div>
         <div class="task-link-actions">
@@ -71,7 +71,7 @@
           <button type="button" class="attach-material" :disabled="!canAttach" @click="attach">确认使用此版本</button>
         </template>
         <p v-else class="task-material-note">尚未选择资料。资料不是开始办理的前置条件。</p>
-        <button type="button" class="use-no-material" @click="closeMaterialPicker">{{ activeInputLinks.length ? '完成选择' : '不使用资料，返回事项' }}</button>
+        <button type="button" class="use-no-material" @click="closeMaterialPicker">{{ activeExecutionLinks.length ? '完成选择' : '不使用资料，返回事项' }}</button>
         <p v-if="links.actionState.value === 'saving'" class="task-material-note" role="status">正在确认关联…</p>
         <p v-else-if="links.error.value && links.actionState.value === 'error'" class="task-material-error" role="alert">{{ links.error.value }}</p>
       </footer>
@@ -87,12 +87,13 @@
       <p v-if="formal.readyReason.value" class="task-material-error" role="status">{{ formal.readyReason.value }}</p>
       <template v-else>
         <fieldset class="formal-inputs">
-          <legend>本次使用的资料（可选）</legend>
-          <p v-if="!activeInputLinks.length" class="task-material-note">当前不使用资料；执行能力允许时可直接开始办理。</p>
-          <label v-for="link in activeInputLinks" :key="link.relationId">
+          <legend>本次交给 Agent 读取的固定版本资料（可选）</legend>
+          <p v-if="!activeExecutionLinks.length" class="task-material-note">当前不使用资料；执行能力允许时可直接开始办理。</p>
+          <label v-for="link in activeExecutionLinks" :key="link.relationId">
             <input v-model="selectedInputKeys" type="checkbox" :value="inputKey(link)" :disabled="isOtherVersionSelected(link)">
-            <span>{{ link.fileId }} · v{{ link.version }}</span>
+            <span>{{ materialName(link) }} · v{{ link.version }} · {{ roleText(link.role) }}</span>
           </label>
+          <p v-if="activeExecutionLinks.some(link => link.role === 'REFERENCE')" class="task-material-note">参考资料也只有在这里明确勾选并点击“确认并开始办理”后，才进入 Agent 的 input manifest；议事消息本身不携带文件内容。</p>
         </fieldset>
         <label class="formal-instruction">
           <span>办理说明</span>
@@ -160,8 +161,10 @@ const selectedRole = ref('INPUT')
 const selectedInputKeys = ref([])
 const materialPickerOpen = ref(false)
 const instruction = ref('')
-const workspace = usePersonalWorkspace({ identityEpoch: () => props.identityEpoch })
-const links = usePersonalWorkspaceTaskLinks({ taskId: () => props.taskId, identityEpoch: () => props.identityEpoch })
+const linkNames = ref({})
+const materialIdentityKey = computed(() => `${props.identityEpoch}\u0000${props.identityScope}`)
+const workspace = usePersonalWorkspace({ identityEpoch: materialIdentityKey })
+const links = usePersonalWorkspaceTaskLinks({ taskId: () => props.taskId, identityEpoch: materialIdentityKey })
 const formal = useFormalTaskExecution({
   taskId: () => props.taskId,
   conversationId: () => props.conversationId,
@@ -175,8 +178,8 @@ const formal = useFormalTaskExecution({
 const selectedFile = computed(() => workspace.detail.value?.file?.fileId === selectedFileId.value ? workspace.detail.value.file : null)
 const canAttach = computed(() => Boolean(selectedFile.value?.state === 'ACTIVE' && Number.isSafeInteger(selectedVersion.value) && selectedVersion.value > 0 && links.actionState.value !== 'saving'))
 const outputLinks = computed(() => links.links.value.filter(link => link.state === 'ACTIVE' && link.role === 'OUTPUT'))
-const activeInputLinks = computed(() => links.links.value.filter(link => link.state === 'ACTIVE' && link.role === 'INPUT'))
-const selectedInputs = computed(() => activeInputLinks.value
+const activeExecutionLinks = computed(() => links.links.value.filter(link => link.state === 'ACTIVE' && ['INPUT', 'REFERENCE'].includes(link.role)))
+const selectedInputs = computed(() => activeExecutionLinks.value
   .filter(link => selectedInputKeys.value.includes(inputKey(link)))
   .map(link => ({ fileId: link.fileId, version: link.version })))
 const canBegin = computed(() => !formal.readyReason.value &&
@@ -189,6 +192,15 @@ const executionFact = computed(() => {
 })
 
 const roleText = role => ({ INPUT: '输入资料', REFERENCE: '参考资料', OUTPUT: '成果引用' })[role] || '未知用途'
+const materialName = link => linkNames.value[link.fileId] || workspace.items.value.find(file => file.fileId === link.fileId)?.displayName || `资料 ${link.fileId}`
+const resolveLinkNames = async operationKey => {
+  for (const link of links.links.value) {
+    if (linkNames.value[link.fileId] || workspace.items.value.some(file => file.fileId === link.fileId)) continue
+    const detail = await workspace.select(link.fileId)
+    if (operationKey !== `${materialIdentityKey.value}\u0000${props.taskId}`) return
+    if (detail?.file?.state === 'ACTIVE' && detail.file.fileId === link.fileId) linkNames.value = { ...linkNames.value, [link.fileId]: detail.file.displayName }
+  }
+}
 const inputKey = link => `${link.fileId}\u0000${link.version}`
 const isOtherVersionSelected = link => selectedInputKeys.value.some(key => key.startsWith(`${link.fileId}\u0000`) && key !== inputKey(link))
 const resetPickerSelection = () => { selectedFileId.value = ''; selectedVersion.value = null; selectedRole.value = 'INPUT' }
@@ -198,8 +210,10 @@ const resetSelection = () => {
 }
 const openMaterialPicker = () => { materialPickerOpen.value = true }
 const closeMaterialPicker = () => { materialPickerOpen.value = false; resetPickerSelection() }
-const refresh = () => {
-  void workspace.refresh({ state: 'ACTIVE' }); void links.load(); void formal.refreshReadiness()
+const refresh = async () => {
+  const operationKey = `${materialIdentityKey.value}\u0000${props.taskId}`
+  const [, loaded] = await Promise.all([workspace.refresh({ state: 'ACTIVE' }), links.load(), formal.refreshReadiness()])
+  if (loaded && operationKey === `${materialIdentityKey.value}\u0000${props.taskId}`) await resolveLinkNames(operationKey)
 }
 const selectFile = async fileId => {
   const detail = await workspace.select(fileId)
@@ -240,12 +254,12 @@ const recoverFormalExecution = async () => {
 }
 const loadFormalHistory = () => { void formal.loadFormalHistory() }
 
-watch(() => `${props.identityEpoch}\u0000${props.taskId}\u0000${props.conversationId}\u0000${props.targetAgentId}\u0000${props.formalExecutionAuthorized}\u0000${props.formalExecutionAuthorizationReason}\u0000${props.defaultInstruction}`, resetSelection, { immediate: true, flush: 'sync' })
-watch(activeInputLinks, values => {
+watch(() => `${materialIdentityKey.value}\u0000${props.taskId}\u0000${props.conversationId}\u0000${props.targetAgentId}\u0000${props.formalExecutionAuthorized}\u0000${props.formalExecutionAuthorizationReason}\u0000${props.defaultInstruction}`, () => { linkNames.value = {}; resetSelection() }, { immediate: true, flush: 'sync' })
+watch(activeExecutionLinks, values => {
   selectedInputKeys.value = selectedInputKeys.value.filter(key => values.some(link => inputKey(link) === key))
 })
 onMounted(() => {
-  refresh()
+  void refresh()
   void formal.recoverOriginalRequest().then(result => { if (result) emit('formal-execution-recovered', result) })
 })
 onBeforeUnmount(() => { workspace.dispose(); links.dispose(); formal.dispose() })

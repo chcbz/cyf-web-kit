@@ -10,14 +10,14 @@
         <button
           class="icon-button material-reference-entry"
           type="button"
-          title="引用百宝箱资料"
-          aria-label="引用资料"
+          :title="isTaskDiscussion ? '查看事项固定资料' : '引用百宝箱资料'"
+          :aria-label="isTaskDiscussion ? '事项资料' : '引用资料'"
           :aria-expanded="materialPickerOpen ? 'true' : 'false'"
           :disabled="voice?.voiceInteractionLocked"
           @click="toggleMaterialPicker"
         >
           <var-icon name="book-open-page-variant-outline" />
-          <span>引用资料</span>
+          <span>{{ isTaskDiscussion ? '事项资料' : '引用资料' }}</span>
         </button>
         <button
           class="icon-button workspace-entry"
@@ -67,60 +67,47 @@
     <section v-if="materialPickerOpen" class="material-reference-picker" aria-label="引用议事资料">
       <div class="material-reference-heading">
         <div>
-          <strong>引用资料</strong>
-          <small>引用会固定到当前话头及所选版本，并写入下一句传话。</small>
+          <strong>{{ isTaskDiscussion ? '当前事项固定资料' : '引用资料' }}</strong>
+          <small>{{ isTaskDiscussion ? '来自当前任务的真实资料目录；不会写入普通消息，也不会自动开始执行。' : '引用固定到当前话头及所选版本；不会把资料内容或假摘要写入消息。' }}</small>
         </div>
         <button type="button" aria-label="收起引用资料" @click="materialPickerOpen = false">
           <var-icon name="close" />
         </button>
       </div>
-      <p v-if="!hasConversation" class="material-reference-notice">
-        请先发送一条消息建立话头，再从百宝箱引用资料。
+      <p v-if="!hasMaterialScope" class="material-reference-notice">
+        {{ isTaskDiscussion ? '未确认当前事项标识，不能读取或展示资料。' : '请先发送一条消息建立话头，再从百宝箱引用资料。' }}
       </p>
       <template v-else>
         <p v-if="materialError" class="material-reference-error" role="alert">{{ materialError }}</p>
         <div v-if="materialLoading" class="material-reference-state">正在查找百宝箱资料…</div>
-        <div v-else-if="!workspace.items.value?.length" class="material-reference-state">
-          百宝箱暂无可引用资料。
-          <button type="button" @click="$emit('open-workspace')">去百宝箱添加</button>
+        <div v-if="isTaskDiscussion" class="task-material-directory">
+          <p v-if="!activeMaterialLinks.length" class="material-reference-state">当前事项没有已确认的 INPUT/REFERENCE 固定版本资料。可返回事项详情选择资料。</p>
+          <article v-for="link in activeMaterialLinks" :key="link.relationId" class="task-material-reference">
+            <div><strong>{{ materialName(link) }}</strong><small>v{{ link.version }} · {{ link.role === 'INPUT' ? '用于办理' : '参考资料' }}</small></div>
+            <p>{{ link.role === 'INPUT' ? '议事时 Agent 会收到这份资料的标识、固定版本和用途；明确开始办理并勾选后，才会获得文件读取授权。' : '议事时 Agent 会收到这份资料的标识、固定版本和用途；明确开始办理并勾选后，才会获得文件读取授权。' }}</p>
+          </article>
+          <p class="material-reference-notice">议事转发只携带任务资料标识、固定版本和用途，不携带文件内容、下载地址或伪造摘要；明确开始办理并勾选后，才通过正式执行 input manifest 授予读取。</p>
         </div>
-        <ul v-else class="material-reference-list">
-          <li v-for="file in workspace.items.value" :key="file.fileId">
-            <div class="material-reference-file">
-              <strong :title="file.displayName">{{ file.displayName }}</strong>
-              <small>版本 {{ file.latestVersion }}</small>
-            </div>
-            <button
-              v-if="linkedFileIds.has(`${file.fileId}:${file.latestVersion}`)"
-              type="button"
-              class="material-reference-linked"
-              :disabled="materialActionBusy"
-              @click="removeMaterialReference(linkFor(file))"
-            >
-              移除引用
-            </button>
-            <button
-              v-else
-              type="button"
-              :disabled="materialActionBusy"
-              @click="addMaterialReference(file)"
-            >
-              引用
-            </button>
-          </li>
-        </ul>
-        <div v-if="activeMaterialLinks.length" class="active-material-references">
-          <span>本话头已引用：</span>
-          <button
-            v-for="link in activeMaterialLinks"
-            :key="link.relationId"
-            type="button"
-            :disabled="materialActionBusy"
-            @click="removeMaterialReference(link)"
-          >
-            {{ materialName(link) }} · v{{ link.version }} <var-icon name="close" />
-          </button>
-        </div>
+        <template v-else>
+          <div v-if="!workspace.items.value?.length" class="material-reference-state">
+            百宝箱暂无可引用资料。
+            <button type="button" @click="$emit('open-workspace')">去百宝箱添加</button>
+          </div>
+          <ul v-else class="material-reference-list">
+            <li v-for="file in workspace.items.value" :key="file.fileId">
+              <div class="material-reference-file">
+                <strong :title="file.displayName">{{ file.displayName }}</strong>
+                <small>版本 {{ file.latestVersion }}</small>
+              </div>
+              <button v-if="linkedFileIds.has(`${file.fileId}:${file.latestVersion}`)" type="button" class="material-reference-linked" :disabled="materialActionBusy" @click="removeMaterialReference(linkFor(file))">移除引用</button>
+              <button v-else type="button" :disabled="materialActionBusy" @click="addMaterialReference(file)">引用</button>
+            </li>
+          </ul>
+          <div v-if="activeMaterialLinks.length" class="active-material-references">
+            <span>本话头已引用：</span>
+            <button v-for="link in activeMaterialLinks" :key="link.relationId" type="button" :disabled="materialActionBusy" @click="removeMaterialReference(link)">{{ materialName(link) }} · v{{ link.version }} <var-icon name="close" /></button>
+          </div>
+        </template>
       </template>
     </section>
 
@@ -188,13 +175,14 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import HallChatComposer from './HallChatComposer.vue'
 import HallConversationHistory from './HallConversationHistory.vue'
 import { usePersonalWorkspace } from '../../composables/usePersonalWorkspace.js'
 import { usePersonalWorkspaceConversationLinks } from '../../composables/usePersonalWorkspaceConversationLinks.js'
+import { usePersonalWorkspaceTaskLinks } from '../../composables/usePersonalWorkspaceTaskLinks.js'
 
 marked.setOptions({
   breaks: true,
@@ -221,6 +209,7 @@ const props = defineProps({
   isAwaitingReply: { type: Boolean, default: false },
   isStreaming: { type: Boolean, default: false },
   identityEpoch: { type: [Number, String], default: 0 },
+  identityScope: { type: String, default: '' },
   mentionLabel: { type: Function, required: true },
   messages: { type: Array, default: () => [] },
   pendingAgentName: { type: String, default: '' },
@@ -255,48 +244,58 @@ const messageBoxRef = ref(null)
 const historyOpen = ref(false)
 const materialPickerOpen = ref(false)
 const pendingAuthor = '聚义厅'
-const workspace = usePersonalWorkspace({ identityEpoch: () => props.identityEpoch })
-const materialLinks = usePersonalWorkspaceConversationLinks({
+const materialIdentityKey = computed(() => `${props.identityEpoch}\u0000${props.identityScope}`)
+const taskId = computed(() => String(props.selectedTask?.id || '').trim())
+const isTaskDiscussion = computed(() => props.discussionVariant === 'bounty')
+const workspace = usePersonalWorkspace({ identityEpoch: materialIdentityKey })
+const conversationMaterialLinks = usePersonalWorkspaceConversationLinks({
   conversationId: () => props.conversationId,
-  identityEpoch: () => props.identityEpoch
+  identityEpoch: materialIdentityKey
 })
-const hasConversation = computed(() => Boolean(props.conversationId))
-const materialLoading = computed(() => workspace.loading.value || materialLinks.loading.value)
-const materialActionBusy = computed(() => ['saving', 'removing'].includes(materialLinks.actionState.value))
-const materialError = computed(() => materialLinks.error.value || workspace.error.value)
-const activeMaterialLinks = computed(() => materialLinks.links.value.filter(link => link.state === 'ACTIVE' && link.role === 'REFERENCE'))
+const taskMaterialLinks = usePersonalWorkspaceTaskLinks({
+  taskId,
+  identityEpoch: materialIdentityKey
+})
+const materialNames = ref({})
+const hasMaterialScope = computed(() => isTaskDiscussion.value ? Boolean(taskId.value) : Boolean(props.conversationId))
+const selectedMaterialDirectory = computed(() => isTaskDiscussion.value ? taskMaterialLinks : conversationMaterialLinks)
+const materialLoading = computed(() => workspace.loading.value || selectedMaterialDirectory.value.loading.value)
+const materialActionBusy = computed(() => ['saving', 'removing'].includes(selectedMaterialDirectory.value.actionState.value))
+const materialError = computed(() => selectedMaterialDirectory.value.error.value || workspace.error.value)
+const activeMaterialLinks = computed(() => selectedMaterialDirectory.value.links.value.filter(link => link.state === 'ACTIVE' &&
+  (isTaskDiscussion.value ? ['INPUT', 'REFERENCE'].includes(link.role) : link.role === 'REFERENCE')))
 const linkedFileIds = computed(() => new Set(activeMaterialLinks.value.map(link => `${link.fileId}:${link.version}`)))
 const linkFor = file => activeMaterialLinks.value.find(link => link.fileId === file.fileId && link.version === file.latestVersion)
-const materialName = link => workspace.items.value.find(file => file.fileId === link.fileId)?.displayName || `资料 ${link.fileId}`
+const materialName = link => materialNames.value[link.fileId] || workspace.items.value.find(file => file.fileId === link.fileId)?.displayName || `资料 ${link.fileId}`
+const resolveMaterialNames = async operationKey => {
+  for (const link of activeMaterialLinks.value) {
+    if (materialNames.value[link.fileId] || workspace.items.value.some(file => file.fileId === link.fileId)) continue
+    const detail = await workspace.select(link.fileId)
+    if (operationKey !== `${materialIdentityKey.value}\u0000${taskId.value}\u0000${props.conversationId}`) return
+    if (detail?.file?.state === 'ACTIVE' && detail.file.fileId === link.fileId) {
+      materialNames.value = { ...materialNames.value, [link.fileId]: detail.file.displayName }
+    }
+  }
+}
 const refreshMaterialReferences = async () => {
-  if (!hasConversation.value) return
-  await Promise.all([workspace.refresh({ state: 'ACTIVE' }), materialLinks.load()])
+  if (!hasMaterialScope.value) return
+  const operationKey = `${materialIdentityKey.value}\u0000${taskId.value}\u0000${props.conversationId}`
+  const directory = selectedMaterialDirectory.value
+  const [, loaded] = await Promise.all([workspace.refresh({ state: 'ACTIVE' }), directory.load()])
+  if (!loaded || operationKey !== `${materialIdentityKey.value}\u0000${taskId.value}\u0000${props.conversationId}`) return
+  await resolveMaterialNames(operationKey)
 }
 const toggleMaterialPicker = async () => {
   materialPickerOpen.value = !materialPickerOpen.value
   if (materialPickerOpen.value) await refreshMaterialReferences()
 }
-const materialCitation = file => `《${file.displayName}》v${file.latestVersion}`
 const addMaterialReference = async file => {
-  const link = await materialLinks.attach({ fileId: file.fileId, version: file.latestVersion, role: 'REFERENCE' })
-  if (!link) return
-  const citation = materialCitation(file)
-  const draft = props.draft.trim()
-  if (!draft.includes(citation)) emit('update:draft', `${draft ? `${draft}\n\n` : ''}参看资料：${citation}`)
+  if (isTaskDiscussion.value) return
+  await conversationMaterialLinks.attach({ fileId: file.fileId, version: file.latestVersion, role: 'REFERENCE' })
 }
 const removeMaterialReference = async link => {
-  if (!link) return
-  const detached = await materialLinks.detach(link)
-  if (!detached) return
-  const citationLine = `参看资料：${materialName(link)}v${link.version}`
-  if (props.draft.includes(citationLine)) {
-    emit('update:draft', props.draft
-      .split('\n')
-      .filter(line => line !== citationLine)
-      .join('\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim())
-  }
+  if (!link || isTaskDiscussion.value) return
+  await conversationMaterialLinks.detach(link)
 }
 const toggleHistory = () => {
   historyOpen.value = !historyOpen.value
@@ -329,8 +328,14 @@ watch(() => props.messages, () => {
   })
 }, { deep: true })
 
-watch(() => props.conversationId, () => {
+watch(() => `${materialIdentityKey.value}\u0000${taskId.value}\u0000${props.conversationId}`, () => {
   materialPickerOpen.value = false
+  materialNames.value = {}
+}, { flush: 'sync' })
+onBeforeUnmount(() => {
+  workspace.dispose()
+  conversationMaterialLinks.dispose()
+  taskMaterialLinks.dispose()
 })
 </script>
 
@@ -778,4 +783,8 @@ button:disabled {
     max-width: 94%;
   }
 }
+</style>
+
+<style scoped>
+.task-material-directory{display:grid;gap:8px}.task-material-reference{display:grid;gap:5px;padding:10px 12px;border:1px solid #d8ded8;border-radius:8px;background:#f6faf7}.task-material-reference>div{display:flex;align-items:baseline;justify-content:space-between;gap:8px}.task-material-reference strong,.task-material-reference small{overflow-wrap:anywhere}.task-material-reference small{color:#5f746b;font-size:11px}.task-material-reference p{margin:0;color:#5b6963;font-size:12px;line-height:1.55}.material-reference-notice{line-height:1.55}
 </style>

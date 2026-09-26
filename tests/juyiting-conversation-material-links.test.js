@@ -6,13 +6,16 @@ const source = readFileSync(new URL('../src/components/juyiting/ChatPanel.vue', 
 const workspaceSource = readFileSync(new URL('../src/components/workspace/PersonalWorkspace.vue', import.meta.url), 'utf8')
 
 describe('Juyi Hall conversation material references', () => {
-  it('keeps the compact Babao entry and allows version-pinned references in the conversation', () => {
+  it('shows task-scoped fixed versions from the real task directory without turning them into chat text', () => {
     assert.match(source, /class="icon-button workspace-entry"/)
     assert.match(source, /\$emit\('open-workspace'\)/)
     assert.match(source, /usePersonalWorkspaceConversationLinks/)
-    assert.match(source, /引用资料/)
-    assert.match(source, /role: 'REFERENCE'/)
-    assert.match(source, /参看资料：/)
+    assert.match(source, /usePersonalWorkspaceTaskLinks/)
+    assert.match(source, /当前事项固定资料/)
+    assert.match(source, /\['INPUT', 'REFERENCE'\]/)
+    assert.match(source, /资料标识、固定版本和用途/)
+    assert.match(source, /正式执行 input manifest/)
+    assert.doesNotMatch(source, /参看资料：/)
     assert.doesNotMatch(source, /execution-directory/)
     assert.doesNotMatch(source, /deliverable-directory/)
   })

@@ -49,8 +49,46 @@ describe('Juyi Hall one-sentence matter adapter', () => {
     expect(calls[0].data.inputs).to.deep.equal([])
     expect(calls.some(call => call.url.includes('/personal-workspace/executions'))).to.equal(false)
     expect(result.receipt.execution).to.equal(null)
-    expect(model.message.value).to.include('尚未调用 Agent')
+    expect(model.message.value).to.include('下一步可选择承办好汉')
+    expect(model.message.value).to.include('尚未开始执行')
     model.drafts.dispose()
+  })
+
+
+  it('links each selected fixed version after TASK creation and reports partial success without recreating the task', async () => {
+    const calls = []
+    const link = ({ relationId, fileId, version, role }) => ({
+      relationId, taskId: 'task-quick-1', fileId, version, role, state: 'ACTIVE', relationRevision: 1, createdAt: 3
+    })
+    const model = useHallQuickMatter({
+      identityScope: 'tenant\u0000client\u0000owner-a', identityEpoch: ref(1), storage: memoryStorage(), keyFactory: () => 'quick-material-key',
+      agentApi: { execute: async request => {
+        calls.push(request)
+        if (request.url === '/hall/drafts') return savedDraft(request.data)
+        if (request.url.endsWith('/submit')) return taskReceipt()
+        if (request.url === '/tasks/task-quick-1') return taskDetail()
+        if (request.url === '/tasks/task-quick-1/file-links' && request.method === 'POST' && request.data.fileId === 'file-a') {
+          const saved = link({ relationId: 'rel-a', ...request.data })
+          return { data: saved, headers: { etag: '"rel-a:1"' } }
+        }
+        if (request.url === '/tasks/task-quick-1/file-links' && request.method === 'POST') throw Object.assign(new Error('unavailable'), { status: 503 })
+        throw new Error(`unexpected request ${request.method} ${request.url}`)
+      } }
+    })
+    const result = await model.submit({ request: '整理活动方案', materials: [
+      { fileId: 'file-a', version: 1, role: 'INPUT', displayName: '活动说明' },
+      { fileId: 'file-b', version: 4, role: 'REFERENCE', displayName: '参考案例' }
+    ] })
+
+    expect(result.linkedMaterials.map(item => [item.fileId, item.version, item.role])).to.deep.equal([['file-a', 1, 'INPUT']])
+    expect(result.failedMaterials.map(item => item.fileId)).to.deep.equal(['file-b'])
+    expect(model.message.value).to.include('已关联 1 份固定版本资料，1 份未关联')
+    expect(calls.filter(call => call.url === '/hall/drafts')).to.have.length(1)
+    expect(calls.filter(call => call.url.endsWith('/file-links')).map(call => call.data)).to.deep.equal([
+      { fileId: 'file-a', version: 1, role: 'INPUT' }, { fileId: 'file-b', version: 4, role: 'REFERENCE' }
+    ])
+    expect(calls.some(call => call.url.includes('/personal-workspace/executions'))).to.equal(false)
+    model.materialLinks.dispose(); model.drafts.dispose()
   })
 
   it('rejects empty and over-limit requests before any network request', async () => {

@@ -11,14 +11,19 @@ const overviewSource = readFileSync(new URL('../src/components/juyiting/HallOver
 for (const name of ['Element', 'HTMLElement', 'SVGElement', 'Node']) {
   if (!globalThis[name]) Object.defineProperty(globalThis, name, { value: globalThis.window[name], configurable: true })
 }
-const load = api => {
+const emptyWorkspace = () => ({
+  items: Vue.ref([]), nextCursor: Vue.ref(null), listState: Vue.ref('empty'), loading: Vue.ref(false), error: Vue.ref(''), detail: Vue.ref(null),
+  refresh: async () => true, loadMore: async () => false, select: async () => null, dispose: () => {}
+})
+const load = (api, workspace = emptyWorkspace()) => {
   const filename = new URL('../src/components/juyiting/HallOverview.vue', import.meta.url).pathname
   const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
   const code = compileScript(descriptor, { id: 'hall-overview-mount', inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_line, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]@\/composables\/juyiting\/useHallOverview['"];?\s*$/gm, 'var { canOpenHallItem, HALL_SOURCES, useHallOverview } = deps')
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]@\/composables\/usePersonalWorkspace['"];?\s*$/gm, 'var { usePersonalWorkspace } = deps')
     .replace('export default', 'return')
-  return new Function('Vue', 'deps', code)(Vue, { canOpenHallItem, HALL_SOURCES, useHallOverview: options => useHallOverview({ ...options, api }) })
+  return new Function('Vue', 'deps', code)(Vue, { canOpenHallItem, HALL_SOURCES, useHallOverview: options => useHallOverview({ ...options, api }), usePersonalWorkspace: () => workspace })
 }
 const summary = (sourceType, sourceId, nextAction) => ({ ref: { sourceType, sourceId }, title: sourceId,
   status: { code: 'QUEUED', evidenceSource: 'PERSISTED', observedAt: 100 }, targetAgent: null, nextAction, allowedActions: [nextAction], updatedAt: 100 })
@@ -82,8 +87,49 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       await request.setValue('整理一份明天活动的执行方案')
       expect(create.attributes('disabled')).to.equal(undefined)
       await create.trigger('submit')
-      expect(wrapper.emitted('quick-request')).to.deep.equal([['整理一份明天活动的执行方案']])
+      expect(wrapper.emitted('quick-request')).to.deep.equal([[{ request: '整理一份明天活动的执行方案', materials: [] }]])
       expect(calls.map(call => [call.method, call.url])).to.deep.equal([['GET', '/hall/overview']])
+    } finally { wrapper.unmount() }
+  })
+
+
+  it('uses a real fixed-version picker, preserves confirmed selection on cancel, and clears it on identity change', async () => {
+    const detail = Vue.ref(null)
+    const workspace = {
+      items: Vue.ref([{ fileId: 'file-a', displayName: '活动底稿', latestVersion: 2 }]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), error: Vue.ref(''), detail,
+      refresh: async () => true, loadMore: async () => false,
+      select: async () => {
+        detail.value = { file: { fileId: 'file-a', displayName: '活动底稿', state: 'ACTIVE', latestVersion: 2 }, latestVersion: { version: 2 }, versions: [{ version: 1, originalFilename: 'plan-v1.pdf' }, { version: 2, originalFilename: 'plan-v2.pdf' }] }
+        return detail.value
+      }, dispose: () => {}
+    }
+    const wrapper = mount(load({ execute: async () => response() }, workspace), { props, global: { stubs: { teleport: true } } })
+    try {
+      await settle()
+      await wrapper.get('.quick-material-open').trigger('click')
+      expect(wrapper.emitted('open-workspace')).to.equal(undefined)
+      await wrapper.get('.quick-material-files button').trigger('click')
+      await settle()
+      await wrapper.get('.quick-material-fields select').setValue('1')
+      await wrapper.get('.quick-material-fields .primary').trigger('click')
+      await wrapper.get('.quick-material-confirm').trigger('click')
+      expect(wrapper.get('.quick-material-summary').text()).to.include('活动底稿')
+      expect(wrapper.get('.quick-material-summary').text()).to.include('v1')
+
+      await wrapper.get('.quick-material-open').trigger('click')
+      await wrapper.get('.quick-material-files button').trigger('click')
+      await settle()
+      await wrapper.get('.quick-material-fields select').setValue('2')
+      await wrapper.get('.quick-material-fields .primary').trigger('click')
+      await wrapper.findAll('.quick-material-picker footer>button').at(-1).trigger('click')
+      expect(wrapper.get('.quick-material-summary').text()).to.include('v1')
+      expect(wrapper.get('.quick-material-summary').text()).not.to.include('v2')
+
+      await wrapper.get('textarea').setValue('整理活动方案')
+      await wrapper.get('.overview-quick-request').trigger('submit')
+      expect(wrapper.emitted('quick-request')[0][0]).to.deep.equal({ request: '整理活动方案', materials: [{ fileId: 'file-a', version: 1, role: 'INPUT', displayName: '活动底稿' }] })
+      await wrapper.setProps({ identityScope: 'tenant\u0000client\u0000owner-b', identityEpoch: 2 })
+      expect(wrapper.find('.quick-material-summary').exists()).to.equal(false)
     } finally { wrapper.unmount() }
   })
 

@@ -93,6 +93,33 @@ describe('W06 workspace bounty material links', () => {
     assert.match(wrapper.text(), /明确开始正式办理/)
   })
 
+
+  it('offers both INPUT and REFERENCE task links to the explicit formal execution input manifest', async () => {
+    const begun = []
+    const formal = formalExecutionStub()
+    formal.readyReason.value = ''
+    formal.execution.generationEnabled = Vue.ref(true)
+    formal.begin = async payload => { begun.push(payload); return { executionId: 'exec-reference', state: 'QUEUED' } }
+    const workspace = {
+      items: Vue.ref([{ fileId: 'file_ref', displayName: '真实参考资料', latestVersion: 3 }]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), error: Vue.ref(''), detail: Vue.ref(null),
+      refresh: async () => true, loadMore: async () => false, select: async () => null, dispose: () => {}
+    }
+    const links = {
+      links: Vue.ref([taskLink({ relationId: 'rel_ref', fileId: 'file_ref', version: 2, role: 'REFERENCE' })]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), actionState: Vue.ref('idle'), error: Vue.ref(''),
+      load: async () => true, loadMore: async () => false, attach: async () => null, detach: async () => null, dispose: () => {}
+    }
+    const component = TaskMaterialLinks({ vue: Vue, '@/composables/useFormalTaskExecution': { useFormalTaskExecution: () => formal }, '@/composables/usePersonalWorkspace': { usePersonalWorkspace: () => workspace }, '@/composables/usePersonalWorkspaceTaskLinks': { usePersonalWorkspaceTaskLinks: () => links } })
+    const wrapper = mount(component, { global: { stubs: { teleport: true } }, props: { taskId: 'task_a', conversationId: 'conversation_a', targetAgentId: 'agent_a', conversationConfirmed: true, formalExecutionAuthorized: true, identityEpoch: 1, identityScope: 'tenant\u0000client\u0000owner-a', defaultInstruction: '整理正式成果' } })
+    wrappers.push(wrapper)
+    await Vue.nextTick()
+
+    assert.match(wrapper.text(), /真实参考资料 · v2 · 参考资料/)
+    assert.match(wrapper.text(), /明确勾选.*input manifest/)
+    await wrapper.get('.formal-inputs input').setValue(true)
+    await wrapper.get('.begin-formal-execution').trigger('click')
+    assert.deepEqual(begun, [{ inputs: [{ fileId: 'file_ref', version: 2 }], instruction: '整理正式成果', confirmed: true }])
+  })
+
   it('renders a server-returned OUTPUT link as an execution-managed reference without inventing formal delivery', () => {
     const workspace = { items: Vue.ref([]), nextCursor: Vue.ref(null), listState: Vue.ref('empty'), loading: Vue.ref(false), error: Vue.ref(''), detail: Vue.ref(null), refresh: async () => true, loadMore: async () => false, select: async () => null, dispose: () => {} }
     const links = { links: Vue.ref([taskLink({ relationId: 'rel_output', role: 'OUTPUT' })]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), actionState: Vue.ref('idle'), error: Vue.ref(''), load: async () => true, loadMore: async () => false, attach: async () => null, detach: async () => null, dispose: () => {} }
@@ -180,6 +207,7 @@ describe('W06 workspace bounty material links', () => {
     const hall = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
     assert.match(hall, /:formal-task-execution-context="formalTaskExecutionContext"/)
     assert.match(bounty, /formalTaskExecutionScope\.taskId/)
+    assert.match(bounty, /v-if="formalTaskExecutionScope"/)
     assert.match(bounty, /workspace-shortcut/)
     assert.match(bounty, /open-workspace/)
     assert.match(bounty, /@click="\$emit\('discuss-task', detailTask, assignedAgentForTask\(detailTask\)\)"/)

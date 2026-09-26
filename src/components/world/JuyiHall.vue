@@ -564,6 +564,7 @@
             :conversation-history-loading="conversationHistoryLoading"
             :conversation-id="conversationId"
             :identity-epoch="apiStore.authorizationGeneration"
+            :identity-scope="hallIdentityScope"
             :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
@@ -1654,7 +1655,7 @@ const handleQuickRequest = async request => {
   hallReadRevision.value += 1
   await selectTask(task)
   await openOverviewTask(task)
-  showToast('事项已建立；确认前不会调用 Agent')
+  showToast(quickMatter.message.value || '事项已建立。下一步可选择承办好汉或补充资料；尚未开始执行。')
   return true
 }
 
