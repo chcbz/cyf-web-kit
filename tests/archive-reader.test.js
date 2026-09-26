@@ -314,6 +314,7 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
   const taskWorkspace = workspaceState || null
   return {
     ...HallPanelHelpers,
+    resolveAccountDisplayName: (user, fallback = '用户') => user?.nickname || user?.username || fallback,
     useRouter: () => ({ push: asyncNoop }),
     onBeforeRouteLeave: noop,
     confirmHallLeave,

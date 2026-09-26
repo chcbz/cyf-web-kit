@@ -204,6 +204,7 @@ const createActualHallVoiceMocks = ({
   return {
     env: { VITE_JUYITING_VOICE_ENABLED: 'true' },
     resolveLiveMapPreviewActivation, resolveHallNavigationPresentation, isEconomyPreviewBuildEnabled,
+    resolveAccountDisplayName: (user, fallback = '用户') => user?.nickname || user?.username || fallback,
     isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: async () => null,
     capturePanelReturnTarget: () => null, focusHallPanel: noop, isCurrentPanelGeneration: () => true, isSafePanelFocusTarget: () => false,
     resolvePanelReturnTarget: () => null, restorePanelFocus: noop, trapPanelFocus: noop,

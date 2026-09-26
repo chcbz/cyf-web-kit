@@ -84,6 +84,7 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
   return {
     ...HallPanelHelpers, useHallHomeMode, useFormalTaskExecutionScope, confirmHallLeave, hasMeaningfulHallLeaveWork,
     resolveLiveMapPreviewActivation, isEconomyPreviewBuildEnabled,
+    resolveAccountDisplayName: (user, fallback = '用户') => user?.nickname || user?.username || fallback,
     isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: async () => null,
     env: { VITE_JUYITING_TASK_WORKSPACE_ENABLED: workspaceState ? 'true' : undefined },
     useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({ authorizationGeneration: 1, token: async () => false }),

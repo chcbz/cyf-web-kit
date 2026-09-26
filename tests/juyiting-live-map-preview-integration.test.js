@@ -159,6 +159,7 @@ const makeHallPageMocks = ({ mode, counters, voiceLocked = Vue.ref(false) }) => 
   }
   return {
     resolveLiveMapPreviewActivation, resolveHallNavigationPresentation, useFormalTaskExecutionScope,
+    resolveAccountDisplayName: (user, fallback = '用户') => user?.nickname || user?.username || fallback,
     isEconomyPreviewBuildEnabled: () => false,
     isEconomyPreviewCapability: () => false,
     loadEconomyPreviewCapability: async () => null,

@@ -86,6 +86,7 @@ const createHallMocks = ({ SelectedAgentCard, counters }) => {
   const conversationDraft = Vue.ref('旧话头')
   return {
     resolveLiveMapPreviewActivation, isEconomyPreviewBuildEnabled,
+    resolveAccountDisplayName: (user, fallback = '用户') => user?.nickname || user?.username || fallback,
     isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: async () => null,
     env: {}, capturePanelReturnTarget: () => null, focusHallPanel: noop, isCurrentPanelGeneration: () => true, isSafePanelFocusTarget: () => false,
     resolvePanelReturnTarget: () => null, restorePanelFocus: noop, trapPanelFocus: noop,

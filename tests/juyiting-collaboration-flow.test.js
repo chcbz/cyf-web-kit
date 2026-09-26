@@ -146,7 +146,9 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallConversationSource).to.include('mentionAgentIds,')
     expect(hallConversationSource).to.include('selectedTaskId')
     expect(hallConversationSource).to.include('const metadataSource = isVoiceSend ? (sendContext.outgoingMetadata || {}) : (outgoingMetadata?.value || {})')
-    expect(hallConversationSource).to.include('...metadataSource,')
+    expect(hallConversationSource).to.include('const { senderName: _legacySenderName, senderType: _legacySenderType, ...safeMetadataSource } = metadataSource')
+    expect(hallConversationSource).to.include('...safeMetadataSource,')
+    expect(hallConversationSource).not.to.include('...metadataSource,')
   })
 
   it('sends hall messages with durable public bounty and private conversation scopes', () => {
