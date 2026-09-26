@@ -197,7 +197,8 @@ describe('C07A task workspace wiring', () => {
   })
 
   it('uses atomic explicit JuyiHall action inputs, never brief/default or assignment completion, and disposes the real binding on unmount', () => {
-    const selectAgentSource = hallSource.slice(hallSource.indexOf('const selectAgent'), hallSource.indexOf('const openPanel'))
+    const selectAgentStart = hallSource.indexOf('const selectAgent = (agent) => {')
+    const selectAgentSource = hallSource.slice(selectAgentStart, hallSource.indexOf('const exactHostedAgentId', selectAgentStart))
     const briefSource = hallSource.slice(hallSource.indexOf('const briefSelectedTask'), hallSource.indexOf('const discussTask'))
     const assignTaskSource = hallSource.slice(hallSource.indexOf('const assignTask'), hallSource.indexOf('const autoAssignTask'))
     const autoAssignTaskSource = hallSource.slice(hallSource.indexOf('const autoAssignTask'), hallSource.indexOf('const archiveTask'))

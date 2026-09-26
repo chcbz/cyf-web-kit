@@ -86,6 +86,7 @@ const createHallMocks = ({ SelectedAgentCard, counters }) => {
   const conversationDraft = Vue.ref('旧话头')
   return {
     resolveLiveMapPreviewActivation, isEconomyPreviewBuildEnabled,
+    resolveHallNavigationPresentation: () => ({ renderedPanel: null, overlayClass: {}, floatingPanelClass: {} }),
     resolveAccountDisplayName: (user, fallback = '用户') => user?.nickname || user?.username || fallback,
     isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: async () => null,
     env: {}, capturePanelReturnTarget: () => null, focusHallPanel: noop, isCurrentPanelGeneration: () => true, isSafePanelFocusTarget: () => false,
@@ -230,7 +231,7 @@ describe('SelectedAgentCard interaction contract', () => {
     expect(hallSource).to.include('.panel-overlay.is-full-window .floating-panel.layout-full-window')
     expect(hallSource).to.include('width: min(1180px, 100%)')
     expect(hallSource).to.include('.home-overview .panel-overlay.is-workbench-panel')
-    expect(hallSource).to.include('inset: 0 0 calc(62px + env(safe-area-inset-bottom)) 0')
+    expect(hallSource).to.include('inset: 0 0 var(--hall-content-bottom-inset) 0')
     expect(hallSource).to.include("'is-virtual-landscape': isVirtualLandscape")
     expect(compactTitleRule).to.include('padding: 6px 10px')
     expect(hallSource).to.include('.panel-overlay.is-compact-chat-overlay :deep(.discussion-brief)')
@@ -269,7 +270,7 @@ describe('SelectedAgentCard interaction contract', () => {
 
   it('toggles the selected agent without showing a toast', () => {
     const selectAgentStart = hallSource.indexOf('const selectAgent = (agent) => {')
-    const selectAgentEnd = hallSource.indexOf('const openPanel', selectAgentStart)
+    const selectAgentEnd = hallSource.indexOf('const exactHostedAgentId', selectAgentStart)
     const selectAgentSource = hallSource.slice(selectAgentStart, selectAgentEnd)
 
     expect(selectAgentSource).to.include('taskWorkspaceBinding.selectExplicitActor(agent)')
