@@ -6,7 +6,8 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { useFormalDeliveries } from '../src/composables/useFormalDeliveries.js'
 
 const filename = new URL('../src/components/deliveries/FormalDeliveryList.vue', import.meta.url).pathname
-const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
+const listSource = readFileSync(filename, 'utf8')
+const { descriptor } = parse(listSource, { filename })
 const script = compileScript(descriptor, { id: 'hall-formal-review-component', inlineTemplate: true }).content
   .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
   .replace(/^import\s+\{\s*useFormalDeliveries\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { useFormalDeliveries } = deps')
@@ -74,6 +75,35 @@ describe('W05 real formal-review component boundary', () => {
     } finally { wrapper.unmount() }
   })
 
+  it('keeps long delivery content, previews, and acceptance controls in one bounded scroll region', async () => {
+    const exactOutput = {
+      artifactId: 'artifact-1', artifactVersion: '2', sha256: 'a'.repeat(64), state: 'AVAILABLE',
+      title: 'result.pdf', mimeType: 'application/pdf', byteLength: 128, canPreview: true, canDownload: true
+    }
+    const longSummary = '长摘要内容 '.repeat(500)
+    const deliveries = Array.from({ length: 8 }, (_, index) => ({
+      ...delivery, deliveryId: `delivery-${index + 1}`, revision: index + 1, summary: longSummary
+    }))
+    const wrapper = mount(FormalDeliveryList, {
+      props: {
+        taskId: 'task-1', identityFingerprint: 'owner-a:client:1', readOutputs: [exactOutput],
+        previewOutputKey: `artifact-1:2:${'a'.repeat(64)}`,
+        adapter: { list: async () => deliveries, decide: async () => {}, createRework: async () => {} }
+      },
+      slots: { preview: '<section class="preview-slot">长内容预览</section>' }
+    })
+    try {
+      await flushPromises()
+      expect(wrapper.find('.formal-delivery-list').classes()).to.include('formal-delivery-list')
+      expect(wrapper.findAll('.formal-delivery-card')).to.have.length(8)
+      expect(wrapper.findAll('.formal-delivery-summary')[0].text()).to.have.length.greaterThan(1000)
+      expect(wrapper.findAll('.formal-inline-preview')).to.have.length(8)
+      expect(wrapper.findAll('form.formal-decision')).to.have.length(8)
+      expect(listSource).to.include('min-height:0;overflow-y:auto;overflow-x:hidden')
+      expect(listSource).to.include('overscroll-behavior:contain')
+    } finally { wrapper.unmount() }
+  })
+
   it('offers exact preview and download actions only for hash-matched formal artifacts', async () => {
     const exactOutput = {
       artifactId: 'artifact-1', artifactVersion: '2', sha256: 'a'.repeat(64), state: 'AVAILABLE',
@@ -111,6 +141,7 @@ describe('W05 real formal-review component boundary', () => {
 // Mount the production Hall boundary, not just a list with invented rework props.
 import { useOutputs } from '../src/composables/useOutputs.js'
 const panelFilename = new URL('../src/components/deliveries/FormalTaskDeliveryPanel.vue', import.meta.url).pathname
+const panelSource = readFileSync(panelFilename, 'utf8')
 const panelScript = compileScript(parse(readFileSync(panelFilename, 'utf8'), { filename: panelFilename }).descriptor,
   { id: 'formal-task-delivery-panel', inlineTemplate: true }).content
   .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
@@ -126,6 +157,10 @@ const FormalTaskDeliveryPanel = new Function('Vue', 'deps', panelScript)(Vue, {
 })
 
 describe('BF19 production formal rework boundary', () => {
+  it('provides a bounded panel shell around the single formal-delivery scroll region', () => {
+    expect(panelSource).to.include('class="formal-task-delivery-panel"')
+    expect(panelSource).to.include('grid-template-rows:auto minmax(0,1fr) auto;flex:1 1 auto;min-width:0;min-height:0;overflow:hidden')
+  })
   before(() => { for (const name of ['Element', 'HTMLElement', 'SVGElement', 'Node']) globalThis[name] ||= globalThis.window[name] })
   const scope = { taskId: 'task-1', conversationId: 'conversation-1', targetAgentId: 'agent-1', conversationConfirmed: true }
   const output = (state, version) => ({

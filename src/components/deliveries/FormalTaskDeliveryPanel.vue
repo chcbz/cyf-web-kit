@@ -1,9 +1,11 @@
 <template>
-  <section aria-label="正式成果办理">
-    <p v-if="!source">返工前请进入本榜文议事，并明确选定已指派好汉；不会使用私人会话或其他榜文成果。</p>
-    <button v-if="!source" type="button" @click="$emit('discuss-task')">进入本榜文议事</button>
-    <p v-else>返工承办人：{{ executionContext.targetAgentId }} · 使用本榜文议事中的固定成果版本。</p>
-    <p v-if="source && ['unavailable', 'forbidden', 'syncing'].includes(outputs.state.value)" role="status">{{ outputs.message.value }}</p>
+  <section class="formal-task-delivery-panel" aria-label="正式成果办理">
+    <div class="formal-task-delivery-intro">
+      <p v-if="!source">返工前请进入本榜文议事，并明确选定已指派好汉；不会使用私人会话或其他榜文成果。</p>
+      <button v-if="!source" type="button" @click="$emit('discuss-task')">进入本榜文议事</button>
+      <p v-else>返工承办人：{{ executionContext.targetAgentId }} · 使用本榜文议事中的固定成果版本。</p>
+      <p v-if="source && ['unavailable', 'forbidden', 'syncing'].includes(outputs.state.value)" role="status">{{ outputs.message.value }}</p>
+    </div>
     <FormalDeliveryList
       :key="`${taskId}:${identityFingerprint}:${source?.id || ''}:${selectedAgentId}`"
       :task-id="taskId"
@@ -24,8 +26,10 @@
         <OutputPreview :item="output" :load="taskOutputs.preview" :context-key="taskOutputs.cacheKey.value" />
       </template>
     </FormalDeliveryList>
-    <p v-if="taskOutputs.loading.value" class="formal-output-state" role="status">正在核对可下载的固定成果版本…</p>
-    <p v-else-if="actionError" class="formal-output-state is-error" role="alert">{{ actionError }} <button type="button" @click="retryDownload">重试</button></p>
+    <div class="formal-task-delivery-status">
+      <p v-if="taskOutputs.loading.value" class="formal-output-state" role="status">正在核对可下载的固定成果版本…</p>
+      <p v-else-if="actionError" class="formal-output-state is-error" role="alert">{{ actionError }} <button type="button" @click="retryDownload">重试</button></p>
+    </div>
   </section>
 </template>
 
@@ -95,5 +99,5 @@ const retryDownload = () => retryItem.value ? void downloadOutput(retryItem.valu
 </script>
 
 <style scoped>
-.formal-output-state{margin:10px 0 0;padding:8px;border-radius:6px;background:#f7edcf;color:#765d2d;font-size:13px}.formal-output-state.is-error{background:#fae7e1;color:#7a3026}.formal-output-state button{min-height:36px;margin-left:6px;border:1px solid #315d4e;border-radius:5px;padding:5px 9px;color:#fff;background:#315d4e}
+.formal-task-delivery-panel{display:grid;grid-template-rows:auto minmax(0,1fr) auto;flex:1 1 auto;min-width:0;min-height:0;overflow:hidden}.formal-task-delivery-intro,.formal-task-delivery-status{min-width:0}.formal-task-delivery-intro{display:grid;gap:6px}.formal-task-delivery-intro p{margin:0}.formal-output-state{margin:10px 0 0;padding:8px;border-radius:6px;background:#f7edcf;color:#765d2d;font-size:13px}.formal-output-state.is-error{background:#fae7e1;color:#7a3026}.formal-output-state button{min-height:36px;margin-left:6px;border:1px solid #315d4e;border-radius:5px;padding:5px 9px;color:#fff;background:#315d4e}
 </style>
