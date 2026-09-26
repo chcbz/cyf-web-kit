@@ -461,6 +461,57 @@ describe('JYT-UX-W05 real editor source restoration', () => {
     } finally { wrapper.unmount() }
   })
 
+  it('submits an empty private format as server-supported text and shows the actual default on confirmation', async () => {
+    const deps = editorDeps()
+    const model = deps.useHallDrafts()
+    deps.useHallDrafts = () => model
+    model.allowedMimeTypes.value = ['application/pdf', 'text/plain']
+    const wrapper = mount(loadEditor(deps), { props: { ...base, selectedAgent: { agentId: 'agent-a' }, agents: [{ agentId: 'agent-a', name: '吴用' }] } })
+    try {
+      await settle()
+      expect(wrapper.text()).to.include('交付格式 可选；默认文本')
+      expect(wrapper.find('select[aria-label="期望格式"]').element.value).to.equal('')
+      await wrapper.find('input').setValue('默认文本事项')
+      await wrapper.find('textarea').setValue('未选择格式也可提交。')
+      await button(wrapper, '下一步：确认交办').trigger('click')
+      await settle()
+      expect(editorState.created[0].outputMime).to.equal('text/plain')
+      expect(wrapper.text()).to.include('文本 · text/plain')
+      expect(wrapper.find('.authorization input').element.disabled).to.equal(false)
+    } finally { wrapper.unmount() }
+  })
+
+  it('uses the first service-supported format only when text is unavailable', async () => {
+    const deps = editorDeps()
+    const model = deps.useHallDrafts()
+    deps.useHallDrafts = () => model
+    model.allowedMimeTypes.value = ['application/pdf']
+    const wrapper = mount(loadEditor(deps), { props: { ...base, selectedAgent: { agentId: 'agent-a' } } })
+    try {
+      await settle()
+      await wrapper.find('input').setValue('默认 PDF')
+      await wrapper.find('textarea').setValue('服务端没有文本格式。')
+      await button(wrapper, '下一步：确认交办').trigger('click')
+      await settle()
+      expect(editorState.created[0].outputMime).to.equal('application/pdf')
+      expect(wrapper.text()).to.include('PDF · application/pdf')
+    } finally { wrapper.unmount() }
+  })
+
+  it('keeps a restored supported non-text format instead of silently replacing it with the default', async () => {
+    const { component, calls } = await setupReader(request => formalSaved({ title: '原格式', instruction: '保留 PDF', targetAgentId: 'agent-a', outputMime: 'application/pdf' },
+      { kind: 'CREATE', revision: request.method === 'PUT' ? 2 : 1 }), () => ({ allowedMimeTypes: ['text/plain', 'application/pdf'], generationEnabled: true }))
+    const wrapper = mount(component, { props: { ...base, initialRef: { sourceType: 'DRAFT', sourceId: 'formal-draft' } } })
+    try {
+      await settle()
+      expect(wrapper.find('select[aria-label="期望格式"]').element.value).to.equal('application/pdf')
+      await wrapper.find('form').trigger('submit')
+      await settle()
+      expect(calls.at(-1).data.outputMime).to.equal('application/pdf')
+      expect(wrapper.find('select[aria-label="期望格式"]').element.value).to.equal('application/pdf')
+    } finally { wrapper.unmount() }
+  })
+
   it('keeps long saved private text and format visible when capabilities are unavailable, without allowing submission', async () => {
     const instruction = '合法正文'.repeat(5000)
     const { component, calls } = await setupReader(request => formalSaved({ title: '原稿', instruction, outputMime: 'application/pdf', targetAgentId: 'agent-a' },
@@ -559,6 +610,32 @@ describe('JYT-UX-W02 visible draft-step regressions', () => {
       expect(failed).to.equal(true)
       expect(wrapper.text()).to.include('保存失败，请重试。')
       expect(wrapper.find('.authorization input').element.disabled).to.equal(true)
+    } finally { wrapper.unmount() }
+  })
+
+  it('keeps material selection count and actions in a bounded footer while the long list owns scrolling', async () => {
+    const deps = editorDeps()
+    const workspace = deps.usePersonalWorkspace()
+    deps.usePersonalWorkspace = () => workspace
+    workspace.items.value = Array.from({ length: 24 }, (_, index) => ({ fileId: `file-${index}`, displayName: `很长的资料名称 ${index} `.repeat(4), latestVersion: index + 1 }))
+    workspace.listState.value = 'ready'
+    const wrapper = mount(loadEditor(deps), { props: base })
+    try {
+      await settle()
+      await button(wrapper, '添加资料').trigger('click')
+      await settle()
+      expect(wrapper.find('.material-picker-flow').exists()).to.equal(true)
+      expect(wrapper.find('.material-picker-header').exists()).to.equal(true)
+      expect(wrapper.find('.material-picker-body').findAll('article')).to.have.length(24)
+      expect(wrapper.find('.material-picker-footer').text()).to.include('已选 0 份')
+      expect(wrapper.find('.material-picker-footer').text()).to.include('使用所选资料')
+      await wrapper.find('.material-picker-body input[type="checkbox"]').setValue(true)
+      expect(wrapper.find('.material-picker-footer').text()).to.include('已选 1 份')
+      const source = readFileSync(new URL('../src/components/juyiting/HallDraftEditor.vue', import.meta.url), 'utf8')
+      expect(source).to.include('.material-picker-flow{display:grid;grid-template-rows:auto minmax(0,1fr) auto')
+      expect(source).to.include('.material-picker-body{min-height:0;overflow:auto')
+      expect(source).to.include('env(safe-area-inset-bottom)')
+      expect(source).not.to.include('.material-picker-footer{position:fixed')
     } finally { wrapper.unmount() }
   })
 
