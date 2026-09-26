@@ -4,8 +4,7 @@ import {
   appendStreamPayload,
   hasResolvedAgentReply,
   normalizeHallMessage,
-  normalizeSenderName,
-  resolveHallUserSenderName
+  normalizeSenderName
 } from './hallConversationMessages.js'
 import { fetchHallConversationEvents } from '../../utils/authenticatedSse.js'
 import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
@@ -135,9 +134,10 @@ export const useHallConversation = ({
   })
 
   const senderText = (message) => {
+    if (message?.isSelf) return '你'
     const senderName = normalizeSenderName(message?.senderName)
     if (senderName) return senderName
-    if (message.sender === 'USER') return '你'
+    if (message.sender === 'USER') return '用户'
     if (message.sender === 'SYSTEM') return '传令牌'
     return '聚义厅'
   }
@@ -238,7 +238,7 @@ export const useHallConversation = ({
       isAwaitingReply: isAwaitingReply.value,
       isStreaming: isStreaming.value
     }
-    const result = reduceHallEventMessage(state, event)
+    const result = reduceHallEventMessage(state, event, globalStore.getJiacn)
     conversationId.value = state.conversationId
     messages.value = state.messages
     isAwaitingReply.value = state.isAwaitingReply
@@ -538,7 +538,8 @@ export const useHallConversation = ({
         signal: lifecycleController.signal,
         onSuccess: (contentResult) => {
           if (!isCurrentContentLoad()) return
-          messages.value = (Array.isArray(contentResult?.data) ? contentResult.data : []).map(normalizeHallMessage).filter(Boolean)
+          messages.value = (Array.isArray(contentResult?.data) ? contentResult.data : [])
+            .map(item => normalizeHallMessage(item, globalStore.getJiacn)).filter(Boolean)
           const recovery = recoveringReplyTurn?.conversationId === exactId ? recoveringReplyTurn : null
           const finalAgentReplies = messages.value.filter(message => message.sender === 'AGENT' && !message.streaming &&
             String(message.content || '').trim() && (!recovery || !recovery.baselineMessageIds.has(exactMessageId(message))))
@@ -876,7 +877,7 @@ export const useHallConversation = ({
       isAwaitingReply: isAwaitingReply.value,
       isStreaming: isStreaming.value
     }
-    const result = appendStreamPayload(state, eventData)
+    const result = appendStreamPayload(state, eventData, globalStore.getJiacn)
     conversationId.value = state.conversationId
     messages.value = state.messages
     isAwaitingReply.value = state.isAwaitingReply
@@ -923,6 +924,7 @@ export const useHallConversation = ({
     }
     const requestConversationId = isVoiceSend ? sendContext.conversationId : conversationId.value
     const metadataSource = isVoiceSend ? (sendContext.outgoingMetadata || {}) : (outgoingMetadata?.value || {})
+    const { senderName: _legacySenderName, senderType: _legacySenderType, ...safeMetadataSource } = metadataSource
     const mentionAgentIds = Array.isArray(sendContext.mentionAgentIds) && sendContext.mentionAgentIds.length
       ? sendContext.mentionAgentIds
       : sendContext.targetAgentIds
@@ -939,7 +941,8 @@ export const useHallConversation = ({
     messages.value.push({
       localId: `user-${Date.now()}-${localMessageSequence}`,
       sender: 'USER',
-      senderName: resolveHallUserSenderName(globalStore.user),
+      senderName: '你',
+      isSelf: true,
       content,
       timestamp: Date.now(),
       streaming: false
@@ -963,10 +966,8 @@ export const useHallConversation = ({
         targetAgentId: sendContext.targetAgentId,
         taskId: sendContext.taskId,
         forceNewConversation: requestConversationId === '',
-        senderType: 'user',
-        senderName: resolveHallUserSenderName(globalStore.user),
         metadata: {
-          ...metadataSource,
+          ...safeMetadataSource,
           scene: 'juyiting',
           mode: sendContext.mode,
           scopeKey: sendContext.conversationScopeKey,

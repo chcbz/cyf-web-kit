@@ -49,6 +49,7 @@ import { log } from '../../utils/logger'
 import { fetchChatConversationEvents } from '../../utils/authenticatedSse.js'
 import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
 import { combineAbortSignals } from '../../utils/abortSignals.js'
+import { isOwnMessage, resolveDisplayName } from '../../utils/displayName'
 
 // 导入子组件
 import ChatMessageList from './ChatMessageList.vue'
@@ -129,17 +130,35 @@ const apiStreamUrl = (path, params = {}) => {
   return searchParams ? `${requestPath}?${searchParams}` : requestPath
 }
 
+const senderForMessage = (message) => {
+  if (message?.senderType === 'agent' || message?.messageType === 'agent') return 'AGENT'
+  if (message?.senderType === 'system' || message?.messageType === 'system') return 'SYSTEM'
+  if (message?.senderType === 'user' || message?.messageType === 'user') return 'USER'
+  return String(message?.messageType || message?.senderType || 'USER').toUpperCase()
+}
+
+const senderNameForMessage = (message, sender, identity) => {
+  const isSelf = sender === 'USER' && isOwnMessage({ ...message, isSelf: false }, identity)
+  const fallback = sender === 'USER' ? '用户' : (sender === 'AGENT' ? '好汉' : '系统')
+  return { isSelf, senderName: isSelf ? '你' : resolveDisplayName(message.senderName, fallback) }
+}
+
 const normalizeLoadedMessage = (message, currentConversationId) => {
   const senderType = message.senderType || message.messageType || ''
+  const sender = senderForMessage(message)
+  const { isSelf, senderName } = senderNameForMessage(message, sender, globalStore.getJiacn)
   return {
-    sender: senderType === 'agent' ? 'AGENT' : (message.messageType || 'USER'),
+    sender,
     content: message.content || '',
     timestamp: message.createTime || new Date().getTime(),
     conversationId: currentConversationId,
     localId: `${message.id || `${currentConversationId}-${message.createTime || Date.now()}`}`,
-    senderName: message.senderName || '',
+    senderName,
     senderAvatar: message.senderAvatar || '',
-    senderType
+    senderType,
+    jiacn: message.jiacn,
+    ownerJiacn: message.ownerJiacn,
+    isSelf
   }
 }
 
@@ -149,15 +168,20 @@ const appendConversationEventMessage = (event = {}) => {
   const localId = `${event.messageId || `${event.senderType || 'event'}-${event.agentId || 'unknown'}-${event.timestamp || Date.now()}`}`
   if (messages.value.some(message => message.localId === localId)) return
 
+  const sender = senderForMessage(event)
+  const { isSelf, senderName } = senderNameForMessage(event, sender, globalStore.getJiacn)
   messages.value.push({
-    sender: event.senderType === 'agent' ? 'AGENT' : (event.messageType || 'ASSISTANT'),
+    sender,
     content: event.content,
     timestamp: event.timestamp || Date.now(),
     conversationId: conversationId.value,
     localId,
-    senderName: event.senderName || '',
+    senderName,
     senderAvatar: event.senderAvatar || '',
-    senderType: event.senderType || ''
+    senderType: event.senderType || '',
+    jiacn: event.jiacn,
+    ownerJiacn: event.ownerJiacn,
+    isSelf
   })
   scrollToBottom()
 }
@@ -488,14 +512,19 @@ const processBotResponse = (eventData) => {
       loadConversations()
     } else if (data.senderType && data.content) {
       // 处理带 sender 元数据的消息（聚义厅 agent 消息等）
+      const sender = senderForMessage(data)
+      const { isSelf, senderName } = senderNameForMessage(data, sender, globalStore.getJiacn)
       const msg = {
-        sender: data.senderType === 'agent' ? 'AGENT' : (data.senderType === 'system' ? 'SYSTEM' : 'ASSISTANT'),
+        sender,
         content: data.content,
         timestamp: new Date().getTime(),
         localId: `${data.messageId || `${data.senderType || 'msg'}-${data.timestamp || Date.now()}`}`,
         senderType: data.senderType,
-        senderName: data.senderName || '',
-        senderAvatar: data.senderAvatar || ''
+        senderName,
+        senderAvatar: data.senderAvatar || '',
+        jiacn: data.jiacn,
+        ownerJiacn: data.ownerJiacn,
+        isSelf
       }
       messages.value.push(msg)
       scrollToBottom()
@@ -531,7 +560,9 @@ const sendMessage = async (message) => {
         timestamp: new Date().getTime(),
         conversationId: conversationId.value,
         localId: `user-${Date.now()}`,
-        senderType: 'user'
+        senderType: 'user',
+        senderName: '你',
+        isSelf: true
       }
     ]
     scrollToBottom()
@@ -540,8 +571,6 @@ const sendMessage = async (message) => {
       content: message,
       conversationId: conversationId.value,
       conversationType: conversationType.value,
-      senderType: 'user',
-      senderName: globalStore.getJiacn || '用户',
       metadata: conversationType.value === 'juyiting' && agentStore.selectedAgentId
         ? { selectedAgentId: agentStore.selectedAgentId }
         : undefined

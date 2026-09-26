@@ -1,3 +1,5 @@
+import { isOwnMessage, normalizeDisplayName, resolveAccountDisplayName, resolveDisplayName } from '@/utils/displayName'
+
 export const parseMessageMetadata = (metadata) => {
   if (!metadata) return {}
   if (typeof metadata === 'object') return metadata
@@ -8,26 +10,38 @@ export const parseMessageMetadata = (metadata) => {
   }
 }
 
-export const normalizeSenderName = (value) => {
-  if (typeof value !== 'string') return ''
-  return value.replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim()
+export const normalizeSenderName = (value) => normalizeDisplayName(value)
+
+export const resolveHallUserSenderName = (user) => resolveAccountDisplayName(user, '你')
+
+const hallMessageSender = (message) => {
+  if (message?.senderType === 'agent' || message?.messageType === 'agent') return 'AGENT'
+  if (message?.senderType === 'system' || message?.messageType === 'system') return 'SYSTEM'
+  if (message?.senderType === 'user' || message?.messageType === 'user') return 'USER'
+  return String(message?.messageType || message?.senderType || 'SYSTEM').toUpperCase()
 }
 
-export const resolveHallUserSenderName = (user) => {
-  return normalizeSenderName(user?.nickname) || normalizeSenderName(user?.username) || '你'
+const fallbackSenderName = (sender, value) => {
+  const fallback = sender === 'USER' ? '用户' : (sender === 'AGENT' ? '好汉' : '传令牌')
+  return resolveDisplayName(value, fallback)
 }
 
-export const normalizeHallMessage = (item) => {
+export const normalizeHallMessage = (item, identity) => {
   const metadata = parseMessageMetadata(item.metadata)
   const localId = typeof item?.id === 'string' && item.id
     ? item.id
     : (typeof metadata.messageId === 'string' && metadata.messageId ? metadata.messageId : '')
   if (!localId) return null
+  const sender = hallMessageSender(item)
+  const isSelf = sender === 'USER' && isOwnMessage({ ...item, isSelf: false }, identity)
   return {
     localId,
-    sender: item.senderType === 'agent' ? 'AGENT' : (item.messageType || item.senderType || 'SYSTEM'),
-    senderName: normalizeSenderName(item.senderName) || normalizeSenderName(metadata.senderName),
+    sender,
+    senderName: isSelf ? '你' : fallbackSenderName(sender, normalizeSenderName(item.senderName) || normalizeSenderName(metadata.senderName)),
     agentId: metadata.agentId,
+    jiacn: item.jiacn,
+    ownerJiacn: item.ownerJiacn,
+    isSelf,
     content: item.content || '',
     timestamp: item.createTime || metadata.timestamp || Date.now(),
     streaming: false,
@@ -57,11 +71,13 @@ export const hasResolvedAgentReply = (messages = []) => {
   )
 }
 
-export const appendHallEventMessage = (state, event) => {
+export const appendHallEventMessage = (state, event, identity) => {
   if (!event || typeof event.conversationId !== 'string' || typeof state.conversationId !== 'string' || event.conversationId !== state.conversationId) {
     return { type: 'ignored' }
   }
-  const senderName = normalizeSenderName(event.senderName)
+  const sender = event.type?.startsWith('agent_message') ? 'AGENT' : hallMessageSender(event)
+  const isSelf = sender === 'USER' && isOwnMessage({ ...event, isSelf: false }, identity)
+  const senderName = isSelf ? '你' : fallbackSenderName(sender, event.senderName)
   if (event.type === 'agent_message_delta') {
     let pendingMessage = currentStreamingAgentMessage(state.messages, event)
     if (!pendingMessage) {
@@ -112,9 +128,12 @@ export const appendHallEventMessage = (state, event) => {
 
   const message = {
     localId,
-    sender: event.senderType === 'agent' ? 'AGENT' : (event.messageType || 'ASSISTANT'),
+    sender,
     senderName,
     agentId: event.agentId,
+    jiacn: event.jiacn,
+    ownerJiacn: event.ownerJiacn,
+    isSelf,
     content: event.content || '',
     timestamp: event.timestamp || Date.now(),
     streaming: false,
@@ -138,7 +157,7 @@ const appendStreamAgentFinal = (state, event) => {
   if (hasConversationId && state.conversationId && event.conversationId !== state.conversationId) {
     return { type: 'ignored' }
   }
-  const senderName = normalizeSenderName(event.senderName)
+  const senderName = fallbackSenderName('AGENT', event.senderName)
   const existing = state.messages.find(message => message.localId === event.messageId)
   // SSE can start the visible reply with a delta before this request stream delivers
   // its authoritative final. Promote that placeholder instead of adding a second row.
@@ -148,6 +167,8 @@ const appendStreamAgentFinal = (state, event) => {
     sender: 'AGENT',
     senderName,
     agentId: event.agentId,
+    jiacn: event.jiacn,
+    ownerJiacn: event.ownerJiacn,
     content: '',
     timestamp: event.timestamp || Date.now(),
     streaming: false,
@@ -174,7 +195,7 @@ const appendStreamAgentFinal = (state, event) => {
   }
 }
 
-export const appendStreamPayload = (state, eventData) => {
+export const appendStreamPayload = (state, eventData, identity) => {
   let payload = eventData.startsWith('data:') ? eventData.slice(5).trim() : eventData.trim()
   if (!payload || payload === '[DONE]' || payload === '[EOM]') return { type: 'empty' }
 
@@ -205,7 +226,7 @@ export const appendStreamPayload = (state, eventData) => {
       return { type: 'delivery', message, conversationId, shouldReconnect }
     }
     if (data.type === 'agent_message') return appendStreamAgentFinal(state, data)
-    if (data.type === 'agent_message_delta') return appendHallEventMessage(state, data)
+    if (data.type === 'agent_message_delta') return appendHallEventMessage(state, data, identity)
     if (Object.prototype.hasOwnProperty.call(data, 'conversationId')) {
       if (typeof data.conversationId !== 'string' || !data.conversationId || typeof state.conversationId !== 'string') {
         return { type: 'invalid_conversation' }

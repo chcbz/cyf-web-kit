@@ -713,6 +713,7 @@ import {
 import { log } from '@/utils/logger'
 import { isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
 import { isEconomyPreviewCapability, loadEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
+import { resolveAccountDisplayName } from '@/utils/displayName'
 import { juyitingGame } from '@/game/index.js'
 
 const emit = defineEmits(['open-onboarding'])
@@ -722,25 +723,9 @@ const globalStore = useGlobalStore()
 const apiStore = useApiStore()
 const router = useRouter()
 const accountAvatar = computed(() => String(globalStore.user?.avatar || '').trim())
-// Historical account records may contain UTF-8 bytes decoded as Latin-1 or an
-// encoded UTF-8 string. Repair only those recognizable cases for Hall labels.
-const looksLikeUtf8Mojibake = value => /[\u00c2-\u00f4][\u0080-\u00bf]/u.test(value)
-const looksLikePercentEncodedUtf8 = value => /%(?:[89a-fA-F][0-9a-fA-F])/.test(value)
-const normalizeAccountText = value => {
-  if (typeof value !== 'string') return ''
-  let normalized = value.trim()
-  if (looksLikePercentEncodedUtf8(normalized)) {
-    try { normalized = decodeURIComponent(normalized).trim() } catch { /* keep malformed legacy values unchanged */ }
-  }
-  if (!normalized || !looksLikeUtf8Mojibake(normalized) || typeof TextDecoder === 'undefined') return normalized
-  const bytes = Array.from(normalized, character => character.charCodeAt(0))
-  if (bytes.some(byte => byte > 0xff)) return normalized
-  try { return new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(bytes)).trim() || normalized } catch { return normalized }
-}
 const accountDisplayName = computed(() => {
   const user = globalStore.user || {}
-  return normalizeAccountText(user.nickname) || normalizeAccountText(user.username)
-    || normalizeAccountText(String(globalStore.getUserId || '')) || '个人中心'
+  return resolveAccountDisplayName(user, String(globalStore.getUserId || '')) || '个人中心'
 })
 const hallIdentityScope = computed(() => {
   const owner = String(globalStore.user?.id || globalStore.user?.openid || globalStore.getUserId || globalStore.getOpenid || '').trim()

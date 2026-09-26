@@ -23,6 +23,7 @@
 import { computed } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import { resolveDisplayName } from '../../utils/displayName'
 
 // 配置marked
 marked.setOptions({
@@ -56,10 +57,9 @@ const sanitizedContent = computed(() => {
 const senderLabel = computed(() => {
   const type = props.message.senderType
   if (!type) return ''
-  if (type === 'agent') {
-    return props.message.senderName || 'Agent'
-  }
-  if (type === 'user') return '用户'
+  if (props.message.isSelf) return '你'
+  if (type === 'agent') return resolveDisplayName(props.message.senderName, '好汉')
+  if (type === 'user') return resolveDisplayName(props.message.senderName, '用户')
   if (type === 'system') return '系统'
   if (type === 'assistant') return '助手'
   return ''

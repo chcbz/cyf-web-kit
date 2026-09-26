@@ -9,6 +9,7 @@ import {
   normalizeHallMessage,
   resolveHallUserSenderName
 } from '../src/composables/juyiting/hallConversationMessages.js'
+import { isOwnMessage } from '../src/utils/displayName.js'
 
 const scopedConversation = (id = '1001', overrides = {}) => ({
   id,
@@ -288,7 +289,7 @@ describe('useHallConversation scoped message loading', () => {
       globalStore: { getJiacn: 'jia-user', user: { name: 'legacy-name', nickname: '  Test\u0000er  ', username: 'account-name' } },
       log: { warn: () => {}, error: () => {} },
       openPanel: () => {},
-      outgoingMetadata: ref({}),
+      outgoingMetadata: ref({ senderName: '旧客户端显示名', senderType: 'agent' }),
       portraitShortName: agent => agent?.name || agent?.agentId || '',
       selectedAgent: ref({ agentId: 'wuyong', name: 'Wu Yong' }),
       selectedTask: ref({ id: 'task-2', title: 'Task 2' }),
@@ -300,7 +301,6 @@ describe('useHallConversation scoped message loading', () => {
 
     expect(payloads[0]).to.deep.include({
       content: 'discuss this task',
-      senderName: 'Tester',
       conversationType: 'juyiting',
       conversationScopeType: 'private',
       conversationScopeKey: 'task:task-2:agent:wuyong',
@@ -309,13 +309,24 @@ describe('useHallConversation scoped message loading', () => {
     })
     expect(payloads[0].targetAgentIds).to.deep.equal(['wuyong'])
     expect(payloads[0].metadata.mentionAgentIds).to.deep.equal(['wuyong'])
-    expect(conversation.messages.value[0]).to.include({ content: 'discuss this task', senderName: 'Tester' })
+    expect(payloads[0].metadata).not.to.have.any.keys('senderName', 'senderType')
+    expect(payloads[0]).not.to.have.any.keys('senderName', 'senderType')
+    expect(conversation.messages.value[0]).to.include({ content: 'discuss this task', senderName: '你', isSelf: true })
   })
 
   it('resolves a safe hall sender name from nickname, then username, then self label', () => {
     expect(resolveHallUserSenderName({ nickname: '  林\u0000冲\n', username: '豹子头' })).to.equal('林冲')
     expect(resolveHallUserSenderName({ nickname: '\u0000\n', username: '  豹子\u007F头  ' })).to.equal('豹子头')
     expect(resolveHallUserSenderName({ name: 'legacy-name', nickname: '', username: '\t' })).to.equal('你')
+  })
+
+  it('labels only exact server identities as self after a history refresh or identity switch', () => {
+    const own = normalizeHallMessage({ id: 'self', senderType: 'user', jiacn: 'hero', senderName: 'old name', content: '自己' }, 'hero')
+    const other = normalizeHallMessage({ id: 'other', senderType: 'user', jiacn: 'hero', senderName: 'old name', content: '旧身份' }, 'next-hero')
+
+    expect(own).to.include({ isSelf: true, senderName: '你' })
+    expect(other).to.include({ isSelf: false, senderName: 'old name' })
+    expect(isOwnMessage({ jiacn: 'hero' }, 'next-hero')).to.equal(false)
   })
 
   it('normalizes persisted agent messages with metadata', () => {
@@ -372,6 +383,22 @@ describe('useHallConversation scoped message loading', () => {
     expect(appendStreamPayload(streamState, '{"type":"agent_message","messageId":9223372036854775807,"senderType":"agent","content":"unsafe"}').type).to.equal('invalid_message_id')
     expect(streamState.conversationId).to.equal('')
     expect(streamState.messages).to.deep.equal([])
+  })
+
+  it('normalizes the same agent name across SSE delta and final events', () => {
+    const state = { conversationId: '1001', messages: [], isAwaitingReply: true, isStreaming: true }
+    appendHallEventMessage(state, {
+      type: 'agent_message_delta', conversationId: '1001', agentId: 'wuyong',
+      senderName: 'å\u0090´ç\u0094¨', content: '先查', timestamp: 10
+    })
+    const final = appendStreamPayload(state, JSON.stringify({
+      type: 'agent_message', conversationId: '1001', messageId: '99', agentId: 'wuyong',
+      senderType: 'agent', senderName: 'å\u0090´ç\u0094¨', content: '先查日志', timestamp: 11
+    }))
+
+    expect(final.type).to.equal('stream_final')
+    expect(state.messages).to.have.length(1)
+    expect(state.messages[0]).to.include({ senderName: '吴用', content: '先查日志', streaming: false })
   })
 
   it('merges agent delta and final events without duplicate messages', () => {

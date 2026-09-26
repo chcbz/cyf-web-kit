@@ -8,6 +8,7 @@ import { resolveLiveMapPreviewActivation } from '../src/composables/juyiting/liv
 import { createEconomyRequestIntentStore } from '../src/composables/juyiting/economyRequestIntent.js'
 import { useFormalTaskExecutionScope } from '../src/composables/useFormalTaskExecutionScope.js'
 import { useHallTaskActions } from '../src/composables/juyiting/useHallTaskActions.js'
+import { resolveAccountDisplayName } from '../src/utils/displayName.js'
 
 let mount
 let Vue
@@ -2606,6 +2607,7 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
     ...panelHelpers, useFormalTaskExecutionScope,
     env: {}, capturePanelReturnTarget: panelHelpers.capturePanelReturnTarget, focusHallPanel: panelHelpers.focusHallPanel, isCurrentPanelGeneration: panelHelpers.isCurrentPanelGeneration, isSafePanelFocusTarget: panelHelpers.isSafePanelFocusTarget, resolveLiveMapPreviewActivation, resolvePanelReturnTarget: panelHelpers.resolvePanelReturnTarget, restorePanelFocus: panelHelpers.restorePanelFocus, trapPanelFocus: panelHelpers.trapPanelFocus,
     onBeforeRouteLeave: navigation?.onBeforeRouteLeave || noop, useRouter: () => navigation?.router || ({ push: asyncNoop }), confirmHallLeave: navigation?.confirmHallLeave || (() => true), hasMeaningfulHallLeaveWork: navigation?.hasMeaningfulHallLeaveWork || (() => false), useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({ token: asyncNoop }), agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {},
+    resolveAccountDisplayName,
     isEconomyPreviewBuildEnabled: () => Boolean(economyCapability), isEconomyPreviewCapability: capability => Boolean(capability && capability.principalScopeFingerprint === economyCapability?.principalScopeFingerprint), loadEconomyPreviewCapability: async () => economyCapability,
     roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
     useHallData: ({ selectedAgent, selectedTask }) => { counters.owners.data += 1; selectedAgent.value = { agentId: 'agent-o04', name: 'sentinel-agent' }; selectedTask.value = counters.initialSelectedTask || { id: 'task-o04', title: 'sentinel-task' }; return hallData },

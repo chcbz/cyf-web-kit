@@ -167,6 +167,7 @@ import { commandObservabilityClient } from '@/composables/commandObservabilityAp
 import { assessCommandObservabilityCapability, capabilityUnavailableMessage } from '@/utils/commandObservabilityPolicy'
 import { commandObservabilityTarget, economyPreviewTarget, previewFailureFromRoute, previewFailureMessage, returnToJuyiHall } from '@/utils/profileNavigation'
 import { useApiStore } from '@/stores/api'
+import { resolveAccountDisplayName, resolveDisplayName } from '@/utils/displayName'
 
 const router = useRouter()
 const route = useRoute()
@@ -196,35 +197,9 @@ const { cancelButton: cancelConfirmationButton, close: closeConfirmation, confir
 })
 const user = computed(() => globalStore.user)
 
-// Some legacy profile records were saved after UTF-8 bytes had been interpreted as
-// Latin-1. Repair only that recognizable pattern; normal Unicode names are left intact.
-const looksLikeUtf8Mojibake = value => /[\u00c2-\u00f4][\u0080-\u00bf]/u.test(value)
-const looksLikePercentEncodedUtf8 = value => /%(?:[89a-fA-F][0-9a-fA-F])/.test(value)
-
-const normalizeProfileText = value => {
-  if (typeof value !== 'string') return ''
-  let normalized = value.trim()
-  if (looksLikePercentEncodedUtf8(normalized)) {
-    try {
-      normalized = decodeURIComponent(normalized).trim()
-    } catch {
-      // Keep the original account value when it is not valid percent-encoded UTF-8.
-    }
-  }
-  if (!normalized || !looksLikeUtf8Mojibake(normalized) || typeof TextDecoder === 'undefined') return normalized
-
-  const bytes = Array.from(normalized, character => character.charCodeAt(0))
-  if (bytes.some(byte => byte > 0xff)) return normalized
-  try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(bytes)).trim() || normalized
-  } catch {
-    return normalized
-  }
-}
-
-const nickname = computed(() => normalizeProfileText(user.value.nickname))
-const accountName = computed(() => normalizeProfileText(user.value.username))
-const displayName = computed(() => nickname.value || accountName.value || '个人中心')
+const nickname = computed(() => resolveDisplayName(user.value.nickname))
+const accountName = computed(() => resolveDisplayName(user.value.username))
+const displayName = computed(() => resolveAccountDisplayName(user.value, '个人中心'))
 const avatarKey = computed(() => `${user.value.id || 'anonymous'}:${user.value.avatar || ''}`)
 const navigationFailure = computed(() => {
   const reason = previewFailureFromRoute(route)
