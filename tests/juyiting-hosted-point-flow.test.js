@@ -27,6 +27,16 @@ describe('Juyi Hall hosted point flow', () => {
     expect(hall).to.include("Assignment remains the user's explicit button click.")
   })
 
+  it('puts the newly selected hosted agent first without silently assigning it', () => {
+    expect(bounty).to.include('const selectedOperableAgent = computed(() => {')
+    expect(bounty).to.include('agent.canOperate !== true || agent.systemAgent === true')
+    expect(bounty).to.include('trim().toLowerCase() === \'online\'')
+    expect(bounty).to.include('[selectedOperableAgent.value, ...assignableRecommendedAgents.value, ...legacyFallback]')
+    expect(bounty).to.include('!seen.has(agent.agentId) && seen.add(agent.agentId)')
+    expect(bounty).to.include('@click="$emit(\'assign-task\', detailTask, agent)"')
+    expect(bounty).not.to.include("props.recommendedAgents.filter(agent => ['吴用', '林冲']")
+  })
+
   it('cancels the unbounded roster readback on identity change and unmount, while CTA recruitment hides local setup', () => {
     expect(hall).to.include(`cancelHostedPointWait()
   cancelPanelChatLoad()`)

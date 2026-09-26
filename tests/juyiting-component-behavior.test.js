@@ -1806,6 +1806,64 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.emitted('archive-task')[0]).to.deep.equal([selectedTask])
   })
 
+  it('prioritizes and deduplicates the selected hosted agent in embedded matter assignment', async () => {
+    const selectedTask = {
+      id: 'task-hosted',
+      title: 'Hosted point flow',
+      status: 'open',
+      description: 'Produce a short plain-text result',
+      requiredAbilities: []
+    }
+    const hostedAgent = {
+      agentId: 'agent-gongsunsheng',
+      name: '公孙胜',
+      status: 'online',
+      boundToMe: true,
+      canOperate: true,
+      systemAgent: false,
+      abilities: []
+    }
+    const legacyAgent = {
+      agentId: 'agent-wuyong',
+      name: '吴用',
+      status: 'online',
+      canOperate: true,
+      abilities: ['planning']
+    }
+    const wrapper = mount(BountyPanel, {
+      global: { stubs },
+      props: {
+        embeddedHall: true,
+        tasks: [selectedTask],
+        selectedTask,
+        selectedAgent: hostedAgent,
+        recommendedAgents: [{ ...hostedAgent }, legacyAgent],
+        operableAgents: [hostedAgent, legacyAgent],
+        taskAbilityOptions: [],
+        taskStatusFilters: [],
+        abilityText: item => (item.abilities || []).join(' / '),
+        canAssign: (task, agent) => Boolean(task && agent),
+        formatTime: value => value,
+        portraitName: item => item.name,
+        portraitStyle: () => ({}),
+        taskAgentMatchScore: () => 98,
+        taskStateClass: () => 'is-open',
+        taskStatusCount: () => 1,
+        taskStatusText: status => status
+      }
+    })
+
+    await wrapper.find('.task-card').trigger('click')
+
+    const buttons = wrapper.findAll('.matter-agent-actions button')
+    expect(buttons.map(button => button.text())).to.deep.equal(['交给公孙胜', '交给吴用'])
+    expect(wrapper.emitted('assign-task')).to.equal(undefined)
+
+    await buttons[0].trigger('click')
+
+    expect(wrapper.emitted('assign-task')[0]).to.deep.equal([selectedTask, hostedAgent])
+  })
+
   it('keeps completed embedded matters closable by exposing archive and then showing the archived receipt', async () => {
     const selectedTask = {
       id: 'task-399',

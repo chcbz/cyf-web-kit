@@ -488,8 +488,22 @@ const assignedAgentForTask = task => {
   if (assignedIds.length !== 1) return null
   return props.operableAgents.find(agent => agent.agentId === assignedIds[0]) || null
 }
-const preferredAgents = computed(() => props.recommendedAgents.filter(agent => ['吴用', '林冲'].some(name => `${agent.name || ''}${agent.displayName || ''}${agent.personaName || ''}`.includes(name))).slice(0, 2))
 const assignableRecommendedAgents = computed(() => props.recommendedAgents.filter(agent => props.canAssign(detailTask.value, agent)))
+const selectedOperableAgent = computed(() => {
+  const agentId = props.selectedAgent?.agentId
+  if (!agentId) return null
+  const agent = props.operableAgents.find(item => item.agentId === agentId)
+  if (!agent || agent.canOperate !== true || agent.systemAgent === true) return null
+  return `${agent.status || ''}`.trim().toLowerCase() === 'online' ? agent : null
+})
+const preferredAgents = computed(() => {
+  const legacyFallback = props.recommendedAgents.filter(agent =>
+    ['吴用', '林冲'].some(name => `${agent.name || ''}${agent.displayName || ''}${agent.personaName || ''}`.includes(name)))
+  const seen = new Set()
+  return [selectedOperableAgent.value, ...assignableRecommendedAgents.value, ...legacyFallback]
+    .filter(agent => agent?.agentId && !seen.has(agent.agentId) && seen.add(agent.agentId))
+    .slice(0, 2)
+})
 const preferredAgentName = computed(() => {
   const assignedId = taskAssigneeIds(detailTask.value)[0]
   const assigned = props.operableAgents.find(agent => agent.agentId === assignedId)
