@@ -192,8 +192,8 @@ describe('W06 workspace bounty material links', () => {
     const source = readFileSync(new URL('../src/components/personal-workspace/TaskMaterialLinks.vue', import.meta.url), 'utf8')
     assert.match(source, /<Teleport to="body">/)
     assert.match(source, /grid-template-rows:\s*auto minmax\(0, ?1fr\) auto/)
-    assert.match(source, /--picker-paper: var\(--work-paper, #fffefa\)/)
-    assert.match(source, /--picker-brand: var\(--work-brand, #923f30\)/)
+    assert.match(source, /--material-paper:#fffefa/)
+    assert.match(source, /--material-brand:#923f30/)
     assert.match(source, /workspace-file-list button\.selected/)
   })
 

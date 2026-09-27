@@ -81,8 +81,8 @@
               class="reader-header-button reader-exit"
               @click="closeReading"
             >
-              <span class="reader-exit-long">返回典籍列表</span>
-              <span class="reader-exit-short">返回</span>
+              <span class="reader-exit-long">← 返回典籍列表</span>
+              <span class="reader-exit-short">← 返回</span>
             </button>
             <div class="reader-heading">
               <p class="reader-kicker">固定典籍</p>
@@ -325,6 +325,7 @@
               type="button"
               :disabled="!citationParagraph"
               @click="citeParagraph"
+            class="reader-cite-action"
             >引用当前段落起草交办</button>
             <button
               type="button"
@@ -797,6 +798,12 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .archive-reader {
+  --archive-ground: var(--work-ground, #f3f3ed);
+  --archive-paper: var(--work-paper, #fffefa);
+  --archive-ink: var(--work-ink, #242e2b);
+  --archive-muted: var(--work-muted, #68716b);
+  --archive-line: var(--work-line, #d8d8ce);
+  --archive-brand: var(--work-brand, #923f30);
   container-type: inline-size;
   display: flex;
   min-height: 0;
@@ -935,10 +942,10 @@ onBeforeUnmount(() => {
 .reader-actions button,
 .archive-state button {
   padding: 8px 11px;
-  border: 0;
+  border: 1px solid var(--archive-line);
   border-radius: 7px;
-  background: #eadabb;
-  color: #3f2815;
+  background: var(--archive-paper);
+  color: var(--archive-ink);
   cursor: pointer;
   font: inherit;
   text-align: left;
@@ -1029,13 +1036,21 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+.reader-actions .reader-cite-action {
+  grid-column: span 2;
+  white-space: normal;
+  line-height: 1.3;
+}
+
 .reader-header-button {
-  background: #d8c29d;
+  background: #f3f3ed;
 }
 
 .reader-header-button.reader-exit {
-  background: #23483e;
-  color: #fff8e8;
+  border-color: transparent;
+  background: transparent;
+  color: var(--archive-brand);
+  font-weight: 500;
 }
 
 .reader-layout {
@@ -1510,9 +1525,30 @@ onBeforeUnmount(() => {
   z-index: auto;
   transform: none;
   flex: 1;
+  background: var(--archive-ground);
+  color: var(--archive-ink);
 }
 .archive-reader.is-embedded-reader .reader-header {
   padding-top: 8px;
+  border-color: var(--archive-line);
+  background: var(--archive-paper);
+}
+.archive-reader.is-embedded-reader .reader-content,
+.archive-reader.is-embedded-reader .reader-catalog,
+.archive-reader.is-embedded-reader .reader-notes {
+  border-color: var(--archive-line);
+  background: var(--archive-paper);
+  color: var(--archive-ink);
+}
+.archive-reader.is-embedded-reader .reader-actions button {
+  border-color: var(--archive-line);
+  background: var(--archive-paper);
+  color: var(--archive-ink);
+}
+.archive-reader.is-embedded-reader .reader-actions .reader-cite-action {
+  background: var(--archive-brand);
+  border-color: var(--archive-brand);
+  color: var(--archive-paper);
 }
 
 </style>

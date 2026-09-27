@@ -518,7 +518,7 @@ onUnmounted(() => {
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 10px;
   min-height: 0;
-  padding: 0 12px 12px;
+  padding: 12px 12px 12px;
   overflow: auto;
 }
 
