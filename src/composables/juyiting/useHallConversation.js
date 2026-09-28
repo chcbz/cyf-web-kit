@@ -356,7 +356,7 @@ export const useHallConversation = ({
   const appendHallEventMessage = (event, { deferServerResync = false } = {}) => {
     const needsReadback = needsUnversionedTurnReadback(event)
     const durableHandled = applyDeliberationEvent(event)
-    const messageEvent = event?.type === 'agent_message_delta' || event?.type === 'agent_message' || event?.type === 'resync_required'
+    const messageEvent = event?.type === 'agent_message_delta' || event?.type === 'agent_message' || event?.type === 'resync_required' || ['part.processing', 'part.ready', 'part.failed'].includes(event?.type)
     if (!messageEvent) {
       if (durableHandled) syncDurablePresentation()
       return durableHandled
@@ -374,7 +374,11 @@ export const useHallConversation = ({
     messages.value = state.messages
     isAwaitingReply.value = state.isAwaitingReply
     isStreaming.value = state.isStreaming
-    if (result.type === 'invalid_delta') {
+    if (result.type === 'missing_message') {
+      void authoritativeResync(event.conversationId, result.type)
+      return false
+    }
+    if (result.type === 'invalid_part' || result.type === 'invalid_delta') {
       void authoritativeResync(event.conversationId, result.type)
       return false
     }
@@ -382,7 +386,7 @@ export const useHallConversation = ({
       if (!deferServerResync) void authoritativeResync(event.conversationId, result.type, { clearCursor: false })
       return event.type === 'resync_required'
     }
-    if (result.type === 'late_delta') { syncDurablePresentation(); return true }
+    if (result.type === 'late_delta' || result.type === 'duplicate_part') { syncDurablePresentation(); return true }
     if (needsReadback && result.type === 'delta') scheduleAuthoritativeRequestReadback(event.requestId)
     if (needsReadback && event.type === 'agent_message' && ['final', 'duplicate'].includes(result.type)) {
       scheduleAuthoritativeRequestReadback(event.requestId, { immediate: true })

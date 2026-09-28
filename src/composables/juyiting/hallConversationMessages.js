@@ -1,3 +1,4 @@
+import { applyMessagePartEvent, isMessagePartEvent, mergeMessageParts } from './hallMessageParts.js'
 import { isOwnMessage, normalizeDisplayName, resolveAccountDisplayName, resolveDisplayName } from '../../utils/displayName.js'
 
 export const parseMessageMetadata = (metadata) => {
@@ -49,6 +50,7 @@ export const normalizeHallMessage = (item, identity) => {
     ownerJiacn: item.ownerJiacn,
     isSelf,
     content: item.content || '',
+    parts: mergeMessageParts([], Array.isArray(item.parts) ? item.parts : []),
     timestamp: item.createTime || metadata.timestamp || Date.now(),
     streaming: false,
     statusText: ''
@@ -107,6 +109,7 @@ export const appendHallEventMessage = (state, event, identity) => {
   if (!event || typeof event.conversationId !== 'string' || typeof state.conversationId !== 'string' || event.conversationId !== state.conversationId) {
     return { type: 'ignored' }
   }
+  if (isMessagePartEvent(event)) return applyMessagePartEvent(state, event)
   const sender = event.type?.startsWith('agent_message') ? 'AGENT' : hallMessageSender(event)
   const isSelf = sender === 'USER' && isOwnMessage({ ...event, isSelf: false }, identity)
   const senderName = isSelf ? '你' : fallbackSenderName(sender, event.senderName)
@@ -176,6 +179,7 @@ export const appendHallEventMessage = (state, event, identity) => {
       state.messages.splice(state.messages.indexOf(streamingMessage), 1)
     }
     existing.content = event.content || existing.content
+    existing.parts = mergeMessageParts(existing.parts, Array.isArray(event.parts) ? event.parts : [])
     existing.timestamp = event.timestamp || existing.timestamp
     existing.senderName = senderName || existing.senderName
     existing.agentId = event.agentId || existing.agentId
@@ -188,6 +192,7 @@ export const appendHallEventMessage = (state, event, identity) => {
   if (streamingMessage && event.senderType === 'agent') {
     streamingMessage.localId = localId
     streamingMessage.content = event.content || streamingMessage.content
+    streamingMessage.parts = mergeMessageParts(streamingMessage.parts, Array.isArray(event.parts) ? event.parts : [])
     streamingMessage.timestamp = event.timestamp || streamingMessage.timestamp
     streamingMessage.senderName = senderName || streamingMessage.senderName
     streamingMessage.agentId = event.agentId || streamingMessage.agentId
@@ -208,6 +213,7 @@ export const appendHallEventMessage = (state, event, identity) => {
     isSelf,
     turnId: finalTurnId,
     content: event.content || '',
+    parts: mergeMessageParts([], Array.isArray(event.parts) ? event.parts : []),
     timestamp: event.timestamp || Date.now(),
     streaming: false,
     statusText: event.type === 'agent_message' ? '回话已毕' : ''
@@ -258,6 +264,7 @@ const appendStreamAgentFinal = (state, event) => {
   message.agentId = event.agentId || message.agentId
   message.turnId = finalTurnId || message.turnId
   message.content = event.content || message.content
+  message.parts = mergeMessageParts(message.parts, Array.isArray(event.parts) ? event.parts : [])
   message.timestamp = event.timestamp || message.timestamp
   message.streaming = false
   message.statusText = '回话已毕'

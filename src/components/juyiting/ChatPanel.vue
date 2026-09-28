@@ -158,6 +158,7 @@
           <span v-if="message.streaming" class="message-state">回话未尽</span>
         </div>
         <div class="message-content" v-html="renderMarkdown(message.content)"></div>
+        <HallMessageParts :parts="message.parts" :conversation-id="conversationId" :identity-key="materialIdentityKey" />
         <small v-if="message.statusText" class="message-status">{{ message.statusText }}</small>
       </div>
       <p v-if="deliberationStatus" class="deliberation-status">{{ deliberationStatus }}</p>
@@ -193,6 +194,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import HallMessageParts from './HallMessageParts.vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import HallChatComposer from './HallChatComposer.vue'
