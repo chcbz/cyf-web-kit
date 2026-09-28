@@ -513,6 +513,9 @@
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
             :conversation-busy="isConversationBusy"
+            :deliberation-status="deliberationStatus"
+            :durable-cancel-target="durableCancelTarget"
+            :legacy-cancel-available="canCancelLegacy"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -523,6 +526,8 @@
             :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
+            @cancel-deliberation="cancelDeliberation"
+            @cancel-legacy-transport="cancelLegacyHallReply"
             @clear-target="handleClearChatTarget"
             @delete-conversation="deleteHallConversation"
             @load-history="loadHallConversationHistory({ force: true })"
@@ -557,6 +562,9 @@
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
             :conversation-busy="isConversationBusy"
+            :deliberation-status="deliberationStatus"
+            :durable-cancel-target="durableCancelTarget"
+            :legacy-cancel-available="canCancelLegacy"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -568,6 +576,8 @@
             :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
+            @cancel-deliberation="cancelDeliberation"
+            @cancel-legacy-transport="cancelLegacyHallReply"
             @clear-target="handleClearChatTarget"
             @delete-conversation="deleteHallConversation"
             @load-history="loadHallConversationHistory({ force: true })"
@@ -602,6 +612,9 @@
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
             :conversation-busy="isConversationBusy"
+            :deliberation-status="deliberationStatus"
+            :durable-cancel-target="durableCancelTarget"
+            :legacy-cancel-available="canCancelLegacy"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -612,6 +625,8 @@
             :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
+            @cancel-deliberation="cancelDeliberation"
+            @cancel-legacy-transport="cancelLegacyHallReply"
             @clear-target="handleClearChatTarget"
             @delete-conversation="deleteHallConversation"
             @load-history="loadHallConversationHistory({ force: true })"
@@ -1940,7 +1955,12 @@ const loadSettlement = async (task) => runLoadSettlement(task)
 
 const {
   cancelHallReplyTurn,
+  cancelDeliberation,
+  cancelLegacyHallReply,
+  canCancelLegacy,
+  durableCancelTarget,
   chatConnectionStatus,
+  deliberationStatus,
   conversationHistory,
   conversationHistoryDeletingId,
   conversationHistoryError,
@@ -1954,6 +1974,7 @@ const {
   insertAgentMention,
   isAwaitingReply,
   isConversationBusy,
+  isSubmitting,
   isStreaming,
   loadHallConversationHistory,
   loadHallMessages,
@@ -1988,6 +2009,9 @@ const {
   showToast,
   onFinalReply: payload => {
     voiceReplyCorrelation.observe(payload)
+  },
+  onDelivery: ({ agentId }) => {
+    if (agentId) markAgentSpeaking(agentId, '收到传令', 'system')
   }
 })
 
@@ -2027,7 +2051,7 @@ hallVoice = useHallVoiceConversation({
   },
   getDraft: () => draft.value,
   getDraftRevision: () => draftRevision.value,
-  isReplyBusy: () => isStreaming.value || isAwaitingReply.value,
+  isReplyBusy: () => Boolean(isSubmitting?.value) || isStreaming.value || isAwaitingReply.value,
   onCaptureStateChange: capturing => setSoundSuppressed?.(capturing),
   onReplyTurnTerminal: ({ reason, turnId }) => {
     const closedCurrentTurn = voiceReplyCorrelation.closeIfCurrent(turnId, reason)
@@ -2035,7 +2059,7 @@ hallVoice = useHallVoiceConversation({
   },
   onOpenReview: () => { if (!activePanel.value) openPanel('chat') },
   onSendVoice: async ({ content, contextSnapshot, draftRevision: frozenDraftRevision, turnId }) => {
-    if (isStreaming.value || isAwaitingReply.value) return false
+    if (Boolean(isSubmitting?.value) || isStreaming.value || isAwaitingReply.value) return false
     const correlationTurnId = voiceReplyCorrelation.start({
       turnId,
       baselineSequence: replyEventSequence.value,
@@ -2066,7 +2090,7 @@ const voiceInteractionLocked = computed(() => hallVoice.voiceInteractionLocked)
 const accountEntryDisabled = computed(() => isPanelSessionActive.value || voiceInteractionLocked.value)
 const hallLeaveHasMeaningfulWork = computed(() => hasMeaningfulHallLeaveWork({
   draft: draft.value,
-  isAwaitingReply: isAwaitingReply.value,
+  isAwaitingReply: isAwaitingReply.value || Boolean(isSubmitting?.value),
   isStreaming: isStreaming.value,
   voiceInteractionLocked: voiceInteractionLocked.value,
   voiceTurnActive: Boolean(hallVoice?.voiceTurnActive)
@@ -2181,9 +2205,6 @@ const handleSendHallMessage = async () => {
   voiceReplyCorrelation.close('manual_text_send')
   hallVoice?.cancel()
   playSend()
-  const currentContext = chatContext.value || {}
-  const targets = currentContext.targetAgentIds?.length ? currentContext.targetAgentIds : currentContext.participantAgentIds
-  targets?.slice(0, 3).forEach(agentId => markAgentSpeaking(agentId, '收到传令', 'system'))
   await sendHallMessage()
 }
 
@@ -2195,7 +2216,6 @@ const handleMentionAgent = (agent) => {
   playTap()
   setMentionAgent(agent)
   mentionAgent(agent)
-  markAgentSpeaking(agent, '收到传令', 'system')
 }
 
 const handleClearChatTarget = () => {

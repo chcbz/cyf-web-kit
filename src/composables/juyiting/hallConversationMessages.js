@@ -55,12 +55,38 @@ export const normalizeHallMessage = (item, identity) => {
   }
 }
 
+const JAVA_LONG_MAX = '9223372036854775807'
+
+export const canonicalWireString = (value, { allowZero = false } = {}) => {
+  if (typeof value !== 'string') return ''
+  if (!(allowZero ? /^(0|[1-9][0-9]*)$/ : /^[1-9][0-9]*$/).test(value)) return ''
+  if (value.length > JAVA_LONG_MAX.length || (value.length === JAVA_LONG_MAX.length && value > JAVA_LONG_MAX)) return ''
+  return value
+}
+
+const exactTurnId = event => typeof event?.turnId === 'string' && event.turnId ? event.turnId : ''
+const exactDeltaSeq = event => canonicalWireString(event?.deltaSeq)
+
 export const currentStreamingAgentMessage = (messages, event) => {
+  const turnId = exactTurnId(event)
   return messages.find(message =>
-    message.sender === 'AGENT' &&
-    message.streaming &&
-    (!event.agentId || message.agentId === event.agentId)
+    message.sender === 'AGENT' && message.streaming &&
+    (turnId ? message.turnId === turnId : (!message.turnId && (!event.agentId || message.agentId === event.agentId)))
   ) || null
+}
+
+export const clearUntrustedTurnDelta = (state, turnId) => {
+  if (!turnId) return
+  state.messages = state.messages.filter(message => !(message.streaming && message.turnId === turnId))
+  state.turnStates?.set?.(turnId, { ...(state.turnStates.get(turnId) || {}), waitingFinal: true })
+}
+
+const turnState = (state, turnId) => {
+  if (!turnId) return null
+  if (!state.turnStates) state.turnStates = new Map()
+  const current = state.turnStates.get(turnId) || { lastDeltaSeq: '0', waitingFinal: false, terminal: false }
+  state.turnStates.set(turnId, current)
+  return current
 }
 
 export const hasResolvedAgentReply = (messages = []) => {
@@ -85,27 +111,48 @@ export const appendHallEventMessage = (state, event, identity) => {
   const isSelf = sender === 'USER' && isOwnMessage({ ...event, isSelf: false }, identity)
   const senderName = isSelf ? '你' : fallbackSenderName(sender, event.senderName)
   if (event.type === 'agent_message_delta') {
+    const turnId = exactTurnId(event)
+    const deltaSeq = exactDeltaSeq(event)
+    // V2 deltas are valid only with canonical turnId + sequence. Legacy agents may omit both.
+    if ((turnId || event.deltaSeq !== undefined) && (!turnId || !deltaSeq)) return { type: 'invalid_delta' }
+    const tracker = turnState(state, turnId)
+    if (tracker?.terminal) return { type: 'late_delta', turnId }
+    if (tracker?.waitingFinal) return { type: 'waiting_final', turnId }
+    if (tracker) {
+      const last = BigInt(tracker.lastDeltaSeq)
+      const next = BigInt(deltaSeq)
+      if (next <= last) return { type: 'duplicate_delta', turnId }
+      if (next !== last + 1n) {
+        clearUntrustedTurnDelta(state, turnId)
+        return { type: 'resync_required', turnId }
+      }
+      tracker.lastDeltaSeq = deltaSeq
+    }
     let pendingMessage = currentStreamingAgentMessage(state.messages, event)
     if (!pendingMessage) {
       pendingMessage = {
-        localId: `delta-${event.agentId || 'agent'}-${event.timestamp || Date.now()}`,
-        sender: 'AGENT',
-        senderName,
-        agentId: event.agentId,
-        content: '',
-        timestamp: event.timestamp || Date.now(),
-        streaming: true,
+        localId: `delta-${turnId || event.agentId || 'agent'}-${event.timestamp || Date.now()}`,
+        sender: 'AGENT', senderName, agentId: event.agentId, turnId,
+        content: '', timestamp: event.timestamp || Date.now(), streaming: true,
         statusText: '正在回话'
       }
       state.messages.push(pendingMessage)
     }
     pendingMessage.content += event.content || ''
+    pendingMessage.deltaSeq = deltaSeq || pendingMessage.deltaSeq
     pendingMessage.timestamp = event.timestamp || pendingMessage.timestamp
     pendingMessage.senderName = senderName || pendingMessage.senderName
     pendingMessage.streaming = true
     pendingMessage.statusText = '正在回话'
     state.isAwaitingReply = false
-    return { type: 'delta', message: pendingMessage }
+    return { type: 'delta', message: pendingMessage, turnId }
+  }
+
+  if (event.type === 'resync_required') {
+    const turnId = exactTurnId(event)
+    if (!turnId) return { type: 'invalid_delta' }
+    clearUntrustedTurnDelta(state, turnId)
+    return { type: 'resync_required', turnId }
   }
 
   const isAgentFinal = event.senderType === 'agent' && event.type === 'agent_message'
@@ -116,20 +163,39 @@ export const appendHallEventMessage = (state, event, identity) => {
     ? event.messageId
     : `event-${event.agentId || 'message'}-${event.timestamp || Date.now()}`
   const streamingMessage = event.senderType === 'agent' ? currentStreamingAgentMessage(state.messages, event) : null
+  const existing = state.messages.find(message => message.localId === localId)
+  const finalTurnId = exactTurnId(event)
+  if (finalTurnId) {
+    const tracker = turnState(state, finalTurnId)
+    if (tracker) { tracker.waitingFinal = false; tracker.terminal = true }
+  }
+  if (existing && event.senderType === 'agent') {
+    if (!streamingMessage || streamingMessage === existing) {
+      if (!existing.streaming) return { type: 'duplicate' }
+    } else {
+      state.messages.splice(state.messages.indexOf(streamingMessage), 1)
+    }
+    existing.content = event.content || existing.content
+    existing.timestamp = event.timestamp || existing.timestamp
+    existing.senderName = senderName || existing.senderName
+    existing.agentId = event.agentId || existing.agentId
+    existing.turnId = finalTurnId || existing.turnId
+    existing.streaming = false
+    existing.statusText = '回话已毕'
+    if (!state.manageTurnBusy) { state.isAwaitingReply = false; state.isStreaming = false }
+    return { type: 'final', message: existing, shouldStopPolling: true, toastName: senderName }
+  }
   if (streamingMessage && event.senderType === 'agent') {
     streamingMessage.localId = localId
     streamingMessage.content = event.content || streamingMessage.content
     streamingMessage.timestamp = event.timestamp || streamingMessage.timestamp
     streamingMessage.senderName = senderName || streamingMessage.senderName
     streamingMessage.agentId = event.agentId || streamingMessage.agentId
+    streamingMessage.turnId = finalTurnId || streamingMessage.turnId
     streamingMessage.streaming = false
     streamingMessage.statusText = '回话已毕'
-    state.isAwaitingReply = false
-    state.isStreaming = false
+    if (!state.manageTurnBusy) { state.isAwaitingReply = false; state.isStreaming = false }
     return { type: 'final', message: streamingMessage, shouldStopPolling: true, toastName: senderName }
-  }
-  if (state.messages.some(message => message.localId === localId)) {
-    return { type: 'duplicate' }
   }
 
   const message = {
@@ -140,14 +206,14 @@ export const appendHallEventMessage = (state, event, identity) => {
     jiacn: event.jiacn,
     ownerJiacn: event.ownerJiacn,
     isSelf,
+    turnId: finalTurnId,
     content: event.content || '',
     timestamp: event.timestamp || Date.now(),
     streaming: false,
     statusText: event.type === 'agent_message' ? '回话已毕' : ''
   }
   state.messages.push(message)
-  state.isAwaitingReply = false
-  state.isStreaming = false
+  if (!state.manageTurnBusy) { state.isAwaitingReply = false; state.isStreaming = false }
   if (event.senderType === 'agent' && event.type === 'agent_message') {
     return { type: 'final', message, shouldStopPolling: true, toastName: senderName }
   }
@@ -164,6 +230,8 @@ const appendStreamAgentFinal = (state, event) => {
     return { type: 'ignored' }
   }
   const senderName = fallbackSenderName('AGENT', event.senderName)
+  const finalTurnId = exactTurnId(event)
+  if (finalTurnId) { const tracker = turnState(state, finalTurnId); if (tracker) { tracker.waitingFinal = false; tracker.terminal = true } }
   const existing = state.messages.find(message => message.localId === event.messageId)
   // SSE can start the visible reply with a delta before this request stream delivers
   // its authoritative final. Promote that placeholder instead of adding a second row.
@@ -175,6 +243,7 @@ const appendStreamAgentFinal = (state, event) => {
     agentId: event.agentId,
     jiacn: event.jiacn,
     ownerJiacn: event.ownerJiacn,
+    turnId: finalTurnId,
     content: '',
     timestamp: event.timestamp || Date.now(),
     streaming: false,
@@ -187,12 +256,13 @@ const appendStreamAgentFinal = (state, event) => {
   message.sender = 'AGENT'
   message.senderName = senderName || message.senderName
   message.agentId = event.agentId || message.agentId
+  message.turnId = finalTurnId || message.turnId
   message.content = event.content || message.content
   message.timestamp = event.timestamp || message.timestamp
   message.streaming = false
   message.statusText = '回话已毕'
   if (!existing && !streamingMessage) state.messages.push(message)
-  state.isAwaitingReply = false
+  if (!state.manageTurnBusy) state.isAwaitingReply = false
   return {
     type: 'stream_final',
     message,

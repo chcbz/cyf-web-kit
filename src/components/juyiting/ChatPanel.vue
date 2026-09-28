@@ -31,6 +31,22 @@
           <span>百宝箱</span>
         </button>
         <button
+          v-if="durableCancelTarget"
+          class="icon-button"
+          type="button"
+          title="取消待处理回话"
+          aria-label="取消待处理回话"
+          @click="$emit('cancel-deliberation', durableCancelTarget)"
+        ><var-icon name="close" /></button>
+        <button
+          v-else-if="legacyCancelAvailable"
+          class="icon-button"
+          type="button"
+          title="停止旧版回话等待"
+          aria-label="停止旧版回话等待"
+          @click="$emit('cancel-legacy-transport')"
+        ><var-icon name="close" /></button>
+        <button
           class="icon-button"
           type="button"
           title="重取回话"
@@ -144,6 +160,7 @@
         <div class="message-content" v-html="renderMarkdown(message.content)"></div>
         <small v-if="message.statusText" class="message-status">{{ message.statusText }}</small>
       </div>
+      <p v-if="deliberationStatus" class="deliberation-status">{{ deliberationStatus }}</p>
       <div v-if="isAwaitingReply" class="hall-message SYSTEM is-pending">
         <strong>{{ pendingAuthor }}</strong>
         <div class="message-content" v-html="renderMarkdown(pendingLabel)"></div>
@@ -201,6 +218,9 @@ const props = defineProps({
   conversationHistoryLoading: { type: Boolean, default: false },
   conversationLoadError: { type: String, default: '' },
   conversationBusy: { type: Boolean, default: false },
+  deliberationStatus: { type: String, default: '' },
+  durableCancelTarget: { type: Object, default: null },
+  legacyCancelAvailable: { type: Boolean, default: false },
   conversationId: { type: String, default: '' },
   discussionVariant: { type: String, default: 'public' },
   draft: { type: String, default: '' },
@@ -225,6 +245,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits([
+  'cancel-deliberation',
+  'cancel-legacy-transport',
   'clear-target',
   'delete-conversation',
   'load-history',
@@ -662,6 +684,8 @@ button:disabled {
 }
 
 .message-state,
+.deliberation-status { margin: 8px 12px; color: var(--color-warning, #a66b16); font-size: 12px; }
+
 .message-status {
   color: #8a6f4b;
   font-size: 12px;

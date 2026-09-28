@@ -87,6 +87,45 @@ describe('useHallConversation scoped message loading', () => {
     }
   })
 
+  it('falls back to authoritative polling without reconnecting when durable SSE is unsupported', async () => {
+    const originalFetch = global.fetch
+    const originalSetTimeout = window.setTimeout
+    let fetchCount = 0
+    let reconnectTimerCount = 0
+    let contentLoads = 0
+    global.fetch = async () => {
+      fetchCount += 1
+      return new Response('', { status: 501 })
+    }
+    window.setTimeout = () => {
+      reconnectTimerCount += 1
+      return 1
+    }
+    try {
+      const conversation = useHallConversation({
+        apiStore: { token: async () => 'token', authorizationGeneration: 1 },
+        chatApi: {
+          list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation()] }),
+          getById: async (_path, _id, options) => { contentLoads += 1; options.onSuccess({ data: [] }) }
+        },
+        chatContext: ref({ conversationScopeType: 'public', conversationScopeKey: 'public', mode: 'public', participantAgentIds: [], targetAgentIds: [] }),
+        chatMode: ref('public'), globalStore: { getJiacn: 'jia-user', user: {} },
+        log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}),
+        portraitShortName: agent => agent?.name || agent?.agentId || '', selectedAgent: ref(null), selectedTask: ref(null), showToast: () => {}
+      })
+      await conversation.loadHallMessages()
+      await new Promise(resolve => setImmediate(resolve))
+      await new Promise(resolve => setImmediate(resolve))
+      expect(fetchCount).to.equal(1)
+      expect(contentLoads).to.be.at.least(2)
+      expect(reconnectTimerCount).to.equal(0)
+      conversation.disposeHallConversation()
+    } finally {
+      global.fetch = originalFetch
+      window.setTimeout = originalSetTimeout
+    }
+  })
+
   it('does not reconnect or replay when the protected SSE endpoint returns 401', async () => {
     const originalFetch = global.fetch
     const originalSetTimeout = window.setTimeout
