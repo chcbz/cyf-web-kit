@@ -19,38 +19,39 @@
             </span>
           </label>
           <div class="quick-request-actions">
-            <button type="button" class="quick-material-open" :disabled="quickPending || !enabled" @click="openQuickMaterialPicker"><var-icon name="paperclip" aria-hidden="true" />参考图（可选）<span v-if="selectedMaterials.length">{{ selectedMaterials.length }}</span></button>
+            <button type="button" class="quick-material-open" :disabled="quickPending || !enabled" @click="openQuickMaterialPicker('materials')"><var-icon name="paperclip" aria-hidden="true" />资料（可选）<span v-if="selectedMaterials.length">{{ selectedMaterials.length }}</span></button>
+            <button type="button" class="quick-reference-open" :disabled="quickPending || !enabled" @click="openQuickMaterialPicker('reference-image')"><var-icon name="image-outline" aria-hidden="true" />参考图（可选）</button>
             <button class="primary" type="submit" :disabled="quickPending || !quickRequest.trim()"><var-icon name="send" aria-hidden="true" />{{ quickPending ? '正在建立事项…' : '开始办事' }}</button>
           </div>
-          <ul v-if="selectedMaterials.length" class="quick-material-summary" aria-label="已选固定版本参考图">
+          <ul v-if="selectedMaterials.length" class="quick-material-summary" aria-label="已选固定版本资料">
             <li v-for="material in selectedMaterials" :key="materialKey(material)">
-              <span><strong>{{ material.displayName }}</strong><small>参考图 · 固定 v{{ material.version }}</small></span>
-              <button type="button" :disabled="quickPending" :aria-label="`取消选择参考图 ${material.displayName} v${material.version}`" @click="removeSelectedMaterial(material)">取消</button>
+              <span><strong>{{ material.displayName }}</strong><small>{{ material.selectionKind === 'reference-image' ? '参考图' : material.role === 'INPUT' ? '用于办理' : '仅供参考' }} · 固定 v{{ material.version }}</small></span>
+              <button type="button" :disabled="quickPending" :aria-label="`取消选择 ${material.displayName} v${material.version}`" @click="removeSelectedMaterial(material)">取消</button>
             </li>
           </ul>
           <p v-if="quickMessage" :class="{ 'quick-request-error': quickMessage.includes('未关联') || quickMessage.includes('待核对') }" role="status">{{ quickMessage }}</p>
           <Teleport to="body">
             <section v-if="materialPickerOpen" class="quick-material-picker" role="region" aria-labelledby="quick-material-picker-title">
-              <header><button type="button" @click="cancelQuickMaterialPicker">返回</button><div><h3 id="quick-material-picker-title">为新事项选择参考图</h3><p>只显示当前工作空间中的图片。每张参考图固定到明确版本；返回不会改变已确认选择。</p></div></header>
+              <header><button type="button" @click="cancelQuickMaterialPicker">返回</button><div><h3 id="quick-material-picker-title">{{ referenceImagePicker ? '为新事项选择参考图' : '为新事项选择资料' }}</h3><p>{{ referenceImagePicker ? '只显示当前工作空间中的图片。每张参考图固定到明确版本；返回不会改变已确认选择。' : '每份资料固定到明确版本；返回不会改变已确认选择。' }}</p></div></header>
               <div class="quick-material-picker-body">
                 <p v-if="workspace.listState.value === 'loading'" role="status">正在读取你的资料…</p>
                 <p v-else-if="workspace.error.value" class="quick-request-error" role="alert">{{ workspace.error.value }}</p>
-                <div v-else-if="workspace.items.value.length" class="quick-material-files" aria-label="可选参考图片">
+                <div v-else-if="workspace.items.value.length" class="quick-material-files" :aria-label="referenceImagePicker ? '可选参考图片' : '可选资料'">
                   <button v-for="file in workspace.items.value" :key="file.fileId" type="button" :class="{ selected: pickerFileId === file.fileId }" @click="selectQuickMaterialFile(file.fileId)"><strong>{{ file.displayName }}</strong><small>最新 v{{ file.latestVersion }}</small></button>
                 </div>
-                <p v-else-if="workspace.listState.value === 'empty'">百宝箱暂无可选参考图片；可不选直接建立事项。</p>
-                <button v-if="workspace.nextCursor.value" type="button" :disabled="workspace.loading.value" @click="workspace.loadMore({ state: 'ACTIVE', mediaFamily: 'IMAGE' })">读取更多资料</button>
+                <p v-else-if="workspace.listState.value === 'empty'">{{ referenceImagePicker ? '百宝箱暂无可选参考图片；可不选直接建立事项。' : '百宝箱暂无资料；可不选资料直接建立事项。' }}</p>
+                <button v-if="workspace.nextCursor.value" type="button" :disabled="workspace.loading.value" @click="loadMoreQuickMaterials">读取更多资料</button>
               </div>
               <footer>
                 <div v-if="pickerDetail" class="quick-material-fields">
                   <label><span>固定版本</span><select v-model.number="pickerVersion"><option v-for="version in pickerDetail.versions" :key="version.version" :value="version.version">v{{ version.version }} · {{ version.originalFilename }}</option></select></label>
-                  <p class="quick-reference-note">将作为参考图关联到此事项，不会开放整个工作空间。</p>
-                  <button type="button" class="primary" :disabled="!pickerVersion" @click="stageQuickMaterial">加入参考图</button>
+                  <template v-if="referenceImagePicker"><p class="quick-reference-note">将作为参考图关联到此事项，不会开放整个工作空间。</p><button type="button" class="primary" :disabled="!pickerVersion" @click="stageQuickMaterial">加入参考图</button></template>
+                  <template v-else><label><span>资料用途</span><select v-model="pickerRole"><option value="INPUT">用于办理</option><option value="REFERENCE">仅供参考</option></select></label><button type="button" class="primary" :disabled="!pickerVersion" @click="stageQuickMaterial">加入选择</button></template>
                 </div>
                 <ul v-if="draftMaterials.length" class="quick-material-draft" aria-label="待确认资料">
-                  <li v-for="material in draftMaterials" :key="materialKey(material)"><span>{{ material.displayName }} · 参考图 · 固定 v{{ material.version }}</span><button type="button" @click="removeDraftMaterial(material)">移除</button></li>
+                  <li v-for="material in draftMaterials" :key="materialKey(material)"><span>{{ material.displayName }} · {{ material.selectionKind === 'reference-image' ? '参考图' : material.role === 'INPUT' ? '用于办理' : '仅供参考' }} · 固定 v{{ material.version }}</span><button type="button" @click="removeDraftMaterial(material)">移除</button></li>
                 </ul>
-                <button type="button" class="quick-material-confirm" @click="confirmQuickMaterials">确认参考图（{{ draftMaterials.length }}）</button>
+                <button type="button" class="quick-material-confirm" @click="confirmQuickMaterials">确认选择（{{ draftMaterials.length }}）</button>
                 <button type="button" @click="cancelQuickMaterialPicker">取消，不更改原选择</button>
               </footer>
             </section>
@@ -118,39 +119,48 @@ const selectedMaterials = ref([])
 const draftMaterials = ref([])
 const pickerFileId = ref('')
 const pickerVersion = ref(null)
+const pickerRole = ref('INPUT')
+const pickerMode = ref('materials')
+const referenceImagePicker = computed(() => pickerMode.value === 'reference-image')
 const imageMime = value => typeof value === 'string' && ['image/png', 'image/jpeg'].includes(value.split(';', 1)[0].trim().toLowerCase())
 const pickerDetail = computed(() => {
   const detail = workspace.detail.value
   if (detail?.file?.fileId !== pickerFileId.value || detail.file.state !== 'ACTIVE' || !Array.isArray(detail.versions)) return null
-  const versions = detail.versions.filter(version => imageMime(version?.contentMimeType))
+  const versions = referenceImagePicker.value
+    ? detail.versions.filter(version => imageMime(version?.contentMimeType))
+    : detail.versions
   return versions.length ? { ...detail, versions } : null
 })
 const materialKey = material => `${material.fileId}:${material.version}:${material.role}`
-const resetMaterialPicker = () => { pickerFileId.value = ''; pickerVersion.value = null; workspace.detail.value = null }
-const openQuickMaterialPicker = async () => {
+const resetMaterialPicker = () => { pickerFileId.value = ''; pickerVersion.value = null; pickerRole.value = 'INPUT'; workspace.detail.value = null }
+const openQuickMaterialPicker = async (mode = 'materials') => {
   if (!props.enabled || !props.identityScope || props.quickPending) return
+  pickerMode.value = mode === 'reference-image' ? 'reference-image' : 'materials'
   draftMaterials.value = selectedMaterials.value.map(material => ({ ...material }))
   resetMaterialPicker()
   materialPickerOpen.value = true
-  await workspace.refresh({ state: 'ACTIVE', mediaFamily: 'IMAGE' })
+  await workspace.refresh(referenceImagePicker.value ? { state: 'ACTIVE', mediaFamily: 'IMAGE' } : { state: 'ACTIVE' })
 }
-const cancelQuickMaterialPicker = () => { materialPickerOpen.value = false; draftMaterials.value = []; resetMaterialPicker() }
+const cancelQuickMaterialPicker = () => { materialPickerOpen.value = false; draftMaterials.value = []; pickerMode.value = 'materials'; resetMaterialPicker() }
+const loadMoreQuickMaterials = () => workspace.loadMore(referenceImagePicker.value ? { state: 'ACTIVE', mediaFamily: 'IMAGE' } : { state: 'ACTIVE' })
 const selectQuickMaterialFile = async fileId => {
   const operationIdentity = materialIdentityKey.value
   const detail = await workspace.select(fileId)
   if (!detail || materialIdentityKey.value !== operationIdentity || !materialPickerOpen.value || detail.file.state !== 'ACTIVE') return
-  const versions = Array.isArray(detail.versions) ? detail.versions.filter(version => imageMime(version?.contentMimeType)) : []
+  const versions = Array.isArray(detail.versions)
+    ? (referenceImagePicker.value ? detail.versions.filter(version => imageMime(version?.contentMimeType)) : detail.versions)
+    : []
   if (!versions.length) return
   pickerFileId.value = detail.file.fileId
   pickerVersion.value = versions.some(version => version.version === detail.latestVersion?.version) ? detail.latestVersion.version : versions[versions.length - 1].version
   const existing = draftMaterials.value.find(material => material.fileId === detail.file.fileId)
-  if (existing) pickerVersion.value = existing.version
+  if (existing) { pickerVersion.value = existing.version; pickerRole.value = existing.role }
 }
 const stageQuickMaterial = () => {
   const detail = pickerDetail.value
   const version = Number(pickerVersion.value)
   if (!detail || !Number.isSafeInteger(version) || !detail.versions.some(item => item.version === version)) return
-  const material = { fileId: detail.file.fileId, version, role: 'REFERENCE', displayName: detail.file.displayName }
+  const material = { fileId: detail.file.fileId, version, role: referenceImagePicker.value ? 'REFERENCE' : pickerRole.value, displayName: detail.file.displayName, selectionKind: referenceImagePicker.value ? 'reference-image' : 'material' }
   draftMaterials.value = [...draftMaterials.value.filter(item => item.fileId !== material.fileId), material]
 }
 const removeDraftMaterial = material => { draftMaterials.value = draftMaterials.value.filter(item => materialKey(item) !== materialKey(material)) }
@@ -158,12 +168,13 @@ const confirmQuickMaterials = () => {
   selectedMaterials.value = draftMaterials.value.map(material => ({ ...material }))
   materialPickerOpen.value = false
   draftMaterials.value = []
+  pickerMode.value = 'materials'
   resetMaterialPicker()
 }
 const removeSelectedMaterial = material => { selectedMaterials.value = selectedMaterials.value.filter(item => materialKey(item) !== materialKey(material)) }
 const submitQuickRequest = () => {
   const value = quickRequest.value.trim()
-  if (value) emit('quick-request', { request: value, materials: selectedMaterials.value.map(material => ({ ...material })) })
+  if (value) emit('quick-request', { request: value, materials: selectedMaterials.value.map(({ fileId, version, role, displayName }) => ({ fileId, version, role, displayName })) })
 }
 const archiveView = ref(false)
 const selectedView = ref('recent')

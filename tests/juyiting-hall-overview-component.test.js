@@ -81,7 +81,8 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       const create = wrapper.findAll('button').find(button => button.text() === '开始办事')
       expect(create.attributes('disabled')).to.equal('')
       expect(create.find('var-icon').attributes('name')).to.equal('send')
-      expect(wrapper.findAll('button').find(button => button.text() === '参考图（可选）').find('var-icon').attributes('name')).to.equal('paperclip')
+      expect(wrapper.findAll('button').find(button => button.text() === '资料（可选）').find('var-icon').attributes('name')).to.equal('paperclip')
+      expect(wrapper.findAll('button').find(button => button.text() === '参考图（可选）').find('var-icon').attributes('name')).to.equal('image-outline')
       expect(wrapper.find('.overview-resource-icon').attributes('name')).to.equal('file-document-outline')
       expect(create.element.compareDocumentPosition(wrapper.find('.overview-section').element) & Node.DOCUMENT_POSITION_FOLLOWING).not.to.equal(0)
       await request.setValue('整理一份明天活动的执行方案')
@@ -107,7 +108,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
     const wrapper = mount(load({ execute: async () => response() }, workspace), { props, global: { stubs: { teleport: true } } })
     try {
       await settle()
-      await wrapper.get('.quick-material-open').trigger('click')
+      await wrapper.get('.quick-reference-open').trigger('click')
       expect(refreshes).to.deep.equal([{ state: 'ACTIVE', mediaFamily: 'IMAGE' }])
       expect(wrapper.text()).to.include('只显示当前工作空间中的图片')
       expect(wrapper.emitted('open-workspace')).to.equal(undefined)
@@ -134,6 +135,38 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       expect(wrapper.emitted('quick-request')[0][0]).to.deep.equal({ request: '整理活动方案', materials: [{ fileId: 'file-a', version: 1, role: 'REFERENCE', displayName: '活动底稿' }] })
       await wrapper.setProps({ identityScope: 'tenant\u0000client\u0000owner-b', identityEpoch: 2 })
       expect(wrapper.find('.quick-material-summary').exists()).to.equal(false)
+    } finally { wrapper.unmount() }
+  })
+
+  it('preserves unfiltered fixed-version INPUT materials alongside the reference-image picker', async () => {
+    const detail = Vue.ref(null)
+    const refreshes = []
+    const workspace = {
+      items: Vue.ref([{ fileId: 'file-pdf', displayName: '执行说明', latestVersion: 3 }]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), error: Vue.ref(''), detail,
+      refresh: async options => { refreshes.push(options); return true }, loadMore: async () => false,
+      select: async () => {
+        detail.value = { file: { fileId: 'file-pdf', displayName: '执行说明', state: 'ACTIVE', latestVersion: 3 }, latestVersion: { version: 3, contentMimeType: 'application/pdf' }, versions: [{ version: 2, originalFilename: 'brief-v2.pdf', contentMimeType: 'application/pdf' }, { version: 3, originalFilename: 'brief-v3.pdf', contentMimeType: 'application/pdf' }] }
+        return detail.value
+      }, dispose: () => {}
+    }
+    const wrapper = mount(load({ execute: async () => response() }, workspace), { props, global: { stubs: { teleport: true } } })
+    try {
+      await settle()
+      await wrapper.get('.quick-material-open').trigger('click')
+      expect(refreshes).to.deep.equal([{ state: 'ACTIVE' }])
+      expect(wrapper.text()).to.include('为新事项选择资料')
+      await wrapper.get('.quick-material-files button').trigger('click')
+      await settle()
+      expect(wrapper.findAll('.quick-material-fields select')).to.have.length(2)
+      await wrapper.findAll('.quick-material-fields select').at(0).setValue('2')
+      await wrapper.findAll('.quick-material-fields select').at(1).setValue('INPUT')
+      await wrapper.get('.quick-material-fields .primary').trigger('click')
+      await wrapper.get('.quick-material-confirm').trigger('click')
+      expect(wrapper.get('.quick-material-summary').text()).to.include('执行说明')
+      expect(wrapper.get('.quick-material-summary').text()).to.include('用于办理')
+      await wrapper.get('textarea').setValue('整理活动方案')
+      await wrapper.get('.overview-quick-request').trigger('submit')
+      expect(wrapper.emitted('quick-request')[0][0]).to.deep.equal({ request: '整理活动方案', materials: [{ fileId: 'file-pdf', version: 2, role: 'INPUT', displayName: '执行说明' }] })
     } finally { wrapper.unmount() }
   })
 
