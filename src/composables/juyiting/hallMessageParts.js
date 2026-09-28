@@ -1,6 +1,6 @@
 /** Only server-persisted, scoped asset IDs are eligible for authenticated media reads. */
 const exactId = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value)
-const canonicalRevision = value => {
+export const revisionOf = value => {
   const text = typeof value === 'number' && Number.isSafeInteger(value) ? String(value) : value
   return typeof text === 'string' && /^[1-9][0-9]*$/.test(text) && BigInt(text) <= 9223372036854775807n ? text : ''
 }
@@ -10,7 +10,7 @@ const mimeFor = value => typeof value === 'string' && /^[a-z0-9.+-]+\/[a-z0-9.+-
 
 export const normalizeMessagePart = (part, { requireMediaAsset = false } = {}) => {
   if (!part || !exactId(part.partId) || !mediaKinds.has(part.kind) || !partStates.has(part.state)) return null
-  const revision = canonicalRevision(part.revision)
+  const revision = revisionOf(part.revision)
   if (!revision) return null
   const assetId = exactId(part.assetId) ? part.assetId : ''
   if (requireMediaAsset && part.state === 'ready' && part.kind !== 'text' && !assetId) return null
