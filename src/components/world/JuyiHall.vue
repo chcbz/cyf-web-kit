@@ -498,6 +498,10 @@
             :inert="renderedPanel !== 'chat' ? '' : null"
             :aria-hidden="renderedPanel !== 'chat' ? 'true' : null"
             :draft="draft"
+            :active-request="activeRequest"
+            :active-turns="activeTurns"
+            :capability-state="capabilityState"
+            :deliberation-v2-enabled="multimediaDeliberationUiEnabled"
             :voice="hallVoice"
             @update:draft="setDraft"
             @voice-apply="applyVoiceTranscript"
@@ -685,6 +689,7 @@ import { useHallChatContext } from '@/composables/juyiting/useHallChatContext'
 import { useHallBackendSceneState } from '@/composables/juyiting/useHallBackendSceneState'
 import { useHallCommandQueue } from '@/composables/juyiting/useHallCommandQueue'
 import { useHallConversation } from '@/composables/juyiting/useHallConversation'
+import { isMultimediaDeliberationUiEnabled } from '@/composables/juyiting/hallMultimediaDeliberationUi'
 import { useHallVoiceConversation } from '@/composables/juyiting/useHallVoiceConversation'
 import { confirmHallLeave, hasMeaningfulHallLeaveWork } from '@/composables/juyiting/hallAccountNavigation'
 import { createHallVoiceReplyCorrelation } from '@/composables/juyiting/hallVoiceReplyCorrelation'
@@ -759,6 +764,7 @@ const selectedAgent = ref(null)
 const selectedTask = ref(null)
 const economyPreviewEnabled = ref(false)
 const workItemPlanEnabled = import.meta.env.VITE_JUYITING_WORK_ITEM_PLAN_ENABLED === 'true'
+const multimediaDeliberationUiEnabled = isMultimediaDeliberationUiEnabled(import.meta.env.VITE_JUYITING_MULTIMEDIA_DELIBERATION_V2_UI)
 const economyPreviewCapability = ref(null)
 const economyPreviewChecked = ref(false)
 const economyPreviewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
@@ -1954,6 +1960,9 @@ const cancelFunding = async (task) => {
 const loadSettlement = async (task) => runLoadSettlement(task)
 
 const {
+  activeRequest,
+  activeTurns,
+  capabilityState,
   cancelHallReplyTurn,
   cancelDeliberation,
   cancelLegacyHallReply,

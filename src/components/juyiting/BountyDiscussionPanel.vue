@@ -7,6 +7,7 @@
         <small>{{ bountySubtitle }}</small>
       </div>
     </div>
+    <BountyDeliberationStatus :presentation="v2Presentation" />
     <ChatPanel
       v-model:draft="draftProxy"
       discussion-variant="bounty"
@@ -37,9 +38,14 @@
 <script setup>
 import { computed } from 'vue'
 import ChatPanel from './ChatPanel.vue'
+import BountyDeliberationStatus from './BountyDeliberationStatus.vue'
+import { bountyDeliberationPresentation } from '../../composables/juyiting/hallMultimediaDeliberationUi.js'
 
 const props = defineProps({
+  activeRequest: { type: Object, default: null },
+  activeTurns: { type: Array, default: () => [] },
   agents: { type: Array, default: () => [] },
+  capabilityState: { type: Object, default: null },
   connectionStatus: { type: String, default: '' },
   conversationHistory: { type: Array, default: () => [] },
   conversationHistoryDeletingId: { type: String, default: '' },
@@ -49,6 +55,7 @@ const props = defineProps({
   conversationLoadError: { type: String, default: '' },
   conversationBusy: { type: Boolean, default: false },
   deliberationStatus: { type: String, default: '' },
+  deliberationV2Enabled: { type: Boolean, default: false },
   durableCancelTarget: { type: Object, default: null },
   legacyCancelAvailable: { type: Boolean, default: false },
   conversationId: { type: String, default: '' },
@@ -91,6 +98,14 @@ const draftProxy = computed({
   get: () => props.draft,
   set: value => emit('update:draft', value)
 })
+
+const v2Presentation = computed(() => bountyDeliberationPresentation({
+  enabled: props.deliberationV2Enabled,
+  capability: props.capabilityState,
+  request: props.activeRequest,
+  turns: props.activeTurns,
+  messages: props.messages
+}))
 
 const bountySubtitle = computed(() => {
   const taskName = props.selectedTask?.title || props.selectedTask?.id || '当前榜文'
