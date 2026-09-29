@@ -144,13 +144,24 @@ const loadPreview = async item => {
     }
     previewUrls.value = { ...previewUrls.value, [item.outputId]: URL.createObjectURL(blob) }
     itemErrors.value = { ...itemErrors.value, [item.outputId]: '' }
-  } catch (cause) { itemErrors.value = { ...itemErrors.value, [item.outputId]: cause?.message || '预览失败' } }
+  } catch (cause) {
+    if (generation === epoch && items.value.some(current => current.outputId === item.outputId)) {
+      itemErrors.value = { ...itemErrors.value, [item.outputId]: cause?.message || '预览失败' }
+    }
+  }
 }
 const download = async item => {
+  const generation = epoch
   try {
     const blob = await bytes(item, false)
-    if (blob) saveOutputBlob({ blob, item: { name: item.outputId } })
-  } catch (cause) { itemErrors.value = { ...itemErrors.value, [item.outputId]: cause?.message || '下载失败' } }
+    if (blob && generation === epoch && items.value.some(current => current.outputId === item.outputId)) {
+      saveOutputBlob({ blob, item: { name: item.outputId } })
+    }
+  } catch (cause) {
+    if (generation === epoch && items.value.some(current => current.outputId === item.outputId)) {
+      itemErrors.value = { ...itemErrors.value, [item.outputId]: cause?.message || '下载失败' }
+    }
+  }
 }
 watch(() => `${props.enabled}\u0000${props.identityKey}\u0000${props.conversationId}\u0000${props.request?.requestId}\u0000${props.request?.stateVersion}`, () => {
   cleanup()
