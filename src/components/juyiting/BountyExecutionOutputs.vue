@@ -3,16 +3,16 @@
     <strong>议事成果</strong>
     <p v-if="error" role="alert">{{ error }} <button type="button" @click="refresh">重新读取</button></p>
     <p v-else-if="!items.length" role="status">{{ loading ? '正在读取已提交成果…' : '尚无已校验的成果；生成完成后将在此显示。' }}</p>
-    <div v-for="item in items" :key="`${item.requestId}:${item.stepId}:${item.outputId}`" class="bounty-output">
+    <div v-for="item in items" :key="outputItemKey(item)" class="bounty-output">
       <strong>{{ previewKind(item.contentMimeType) === 'image' ? '图片' : previewKind(item.contentMimeType) === 'audio' ? '音频' : '文件' }}</strong>
       <span>{{ item.contentMimeType }} · {{ item.byteLength }} 字节</span>
       <button v-if="item.previewUrl && previewKind(item.contentMimeType) !== 'file'" type="button" @click="loadPreview(item)">预览</button>
       <button type="button" @click="download(item)">下载</button>
-      <p v-if="itemErrors[item.outputId]" role="alert">{{ itemErrors[item.outputId] }}</p>
-      <p v-if="textPreviews[item.outputId]" class="bounty-output-text">{{ textPreviews[item.outputId] }}</p>
-      <template v-if="previewUrls[item.outputId]">
-        <img v-if="previewKind(item.contentMimeType) === 'image'" :src="previewUrls[item.outputId]" alt="议事生成图片" />
-        <audio v-else-if="previewKind(item.contentMimeType) === 'audio'" :src="previewUrls[item.outputId]" controls preload="none" aria-label="议事生成音频" />
+      <p v-if="itemErrors[outputItemKey(item)]" role="alert">{{ itemErrors[outputItemKey(item)] }}</p>
+      <p v-if="textPreviews[outputItemKey(item)]" class="bounty-output-text">{{ textPreviews[outputItemKey(item)] }}</p>
+      <template v-if="previewUrls[outputItemKey(item)]">
+        <img v-if="previewKind(item.contentMimeType) === 'image'" :src="previewUrls[outputItemKey(item)]" alt="议事生成图片" />
+        <audio v-else-if="previewKind(item.contentMimeType) === 'audio'" :src="previewUrls[outputItemKey(item)]" controls preload="none" aria-label="议事生成音频" />
         <span v-else>此格式请下载查看。</span>
       </template>
     </div>
@@ -22,7 +22,7 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { createApi } from '../../composables/useHttp.js'
-import { exactOutputId, outputCatalogItems, previewKind, scopedExecutionSteps } from '../../composables/juyiting/bountyOutputCatalog.js'
+import { exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps } from '../../composables/juyiting/bountyOutputCatalog.js'
 import { saveOutputBlob } from '../../utils/outputDownload.js'
 
 const props = defineProps({
@@ -70,16 +70,16 @@ const list = async () => {
   abort = controller
   loading.value = true
   try {
-    if (!scopedSteps.value.length) {
-      const response = await api.get(`/requests/${encodeURIComponent(props.request.requestId)}`, {},
-        { autoLoading: false, needAuth: true, signal: controller.signal })
-      const value = response?.data?.data ?? response?.data
-      if (generation !== epoch || controller.signal.aborted) return
-      if (value?.requestId !== props.request.requestId || value?.conversationId !== props.conversationId) {
-        throw new Error('议事请求范围不匹配')
-      }
-      hydratedRequest.value = value
+    // Re-read the owner-scoped request on each refresh: a later EXECUTE step can
+    // be attached after the first output and must not be hidden by the old snapshot.
+    const response = await api.get(`/requests/${encodeURIComponent(props.request.requestId)}`, {},
+      { autoLoading: false, needAuth: true, signal: controller.signal })
+    const value = response?.data?.data ?? response?.data
+    if (generation !== epoch || controller.signal.aborted) return
+    if (value?.requestId !== props.request.requestId || value?.conversationId !== props.conversationId) {
+      throw new Error('议事请求范围不匹配')
     }
+    hydratedRequest.value = value
     const catalog = []
     for (const step of scopedSteps.value) {
       const path = `/requests/${encodeURIComponent(step.requestId)}/steps/${encodeURIComponent(step.stepId)}/outputs`
@@ -96,6 +96,19 @@ const list = async () => {
       }
     }
     if (generation !== epoch || controller.signal.aborted) return
+    // A revoked/replaced output must not leave an older preview URL in this panel.
+    const current = new Map(catalog.map(item => [outputItemKey(item), item.sha256]))
+    for (const previous of items.value) {
+      const key = outputItemKey(previous)
+      if (current.get(key) === previous.sha256) continue
+      if (previewUrls.value[key]) URL.revokeObjectURL(previewUrls.value[key])
+      const { [key]: ignoredPreview, ...previews } = previewUrls.value
+      const { [key]: ignoredText, ...texts } = textPreviews.value
+      const { [key]: ignoredError, ...errors } = itemErrors.value
+      previewUrls.value = previews
+      textPreviews.value = texts
+      itemErrors.value = errors
+    }
     items.value = catalog
     error.value = ''
   } catch (cause) {
@@ -106,7 +119,7 @@ const list = async () => {
       loading.value = false
       // Poll only the current owner request while the panel is mounted. Never start a new
       // execution when checking progress, and never stop a transport due to an elapsed SLO.
-      if (!items.value.length && props.enabled && scopedExecutionStepsSafeRequest(props.request, props.conversationId) && !error.value) timer = setTimeout(list, 2500)
+      if (props.enabled && scopedExecutionStepsSafeRequest(props.request, props.conversationId) && !error.value) timer = setTimeout(list, 2500)
     }
   }
 }
@@ -129,7 +142,7 @@ const bytes = async (item, preview) => {
   return blob
 }
 const loadPreview = async item => {
-  if (!item.previewUrl || previewUrls.value[item.outputId]) return
+  if (!item.previewUrl || previewUrls.value[outputItemKey(item)]) return
   const generation = epoch
   try {
     const blob = await bytes(item, true)
@@ -138,15 +151,16 @@ const loadPreview = async item => {
     if (previewKind(item.contentMimeType) === 'text') {
       if (blob.size > 2 * 1024 * 1024) throw new Error('文本较大，请下载查看')
       const text = await blob.text()
-      if (generation !== epoch || !items.value.some(current => current.outputId === item.outputId)) return
-      textPreviews.value = { ...textPreviews.value, [item.outputId]: text }
+      if (generation !== epoch || !items.value.some(current => outputItemKey(current) === outputItemKey(item) && current.sha256 === item.sha256)) return
+      textPreviews.value = { ...textPreviews.value, [outputItemKey(item)]: text }
       return
     }
-    previewUrls.value = { ...previewUrls.value, [item.outputId]: URL.createObjectURL(blob) }
-    itemErrors.value = { ...itemErrors.value, [item.outputId]: '' }
+    if (generation !== epoch || !items.value.some(current => outputItemKey(current) === outputItemKey(item) && current.sha256 === item.sha256)) return
+    previewUrls.value = { ...previewUrls.value, [outputItemKey(item)]: URL.createObjectURL(blob) }
+    itemErrors.value = { ...itemErrors.value, [outputItemKey(item)]: '' }
   } catch (cause) {
-    if (generation === epoch && items.value.some(current => current.outputId === item.outputId)) {
-      itemErrors.value = { ...itemErrors.value, [item.outputId]: cause?.message || '预览失败' }
+    if (generation === epoch && items.value.some(current => outputItemKey(current) === outputItemKey(item) && current.sha256 === item.sha256)) {
+      itemErrors.value = { ...itemErrors.value, [outputItemKey(item)]: cause?.message || '预览失败' }
     }
   }
 }
@@ -154,12 +168,12 @@ const download = async item => {
   const generation = epoch
   try {
     const blob = await bytes(item, false)
-    if (blob && generation === epoch && items.value.some(current => current.outputId === item.outputId)) {
+    if (blob && generation === epoch && items.value.some(current => outputItemKey(current) === outputItemKey(item) && current.sha256 === item.sha256)) {
       saveOutputBlob({ blob, item: { name: item.outputId } })
     }
   } catch (cause) {
-    if (generation === epoch && items.value.some(current => current.outputId === item.outputId)) {
-      itemErrors.value = { ...itemErrors.value, [item.outputId]: cause?.message || '下载失败' }
+    if (generation === epoch && items.value.some(current => outputItemKey(current) === outputItemKey(item) && current.sha256 === item.sha256)) {
+      itemErrors.value = { ...itemErrors.value, [outputItemKey(item)]: cause?.message || '下载失败' }
     }
   }
 }

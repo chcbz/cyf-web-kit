@@ -30,6 +30,12 @@ export function outputCatalogItems (items, requestId, stepId) {
   }).map(item => Object.freeze({ ...item, requestId, stepId }))
 }
 
+// A run can reuse output_1 in a later EXECUTE step. Cache keys must include the
+// authoritative request and step rather than the output identifier alone.
+export function outputItemKey (item) {
+  return JSON.stringify([item?.requestId, item?.stepId, item?.outputId])
+}
+
 export function previewKind (mime) {
   if (/^image\/(?:png|jpeg|webp|gif)$/.test(mime)) return 'image'
   if (/^audio\/(?:mpeg|wav|ogg)$/.test(mime)) return 'audio'

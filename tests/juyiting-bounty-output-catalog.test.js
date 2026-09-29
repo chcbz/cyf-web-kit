@@ -1,5 +1,5 @@
 import { expect } from 'chai'
-import { outputCatalogItems, previewKind, scopedExecutionSteps } from '../src/composables/juyiting/bountyOutputCatalog.js'
+import { outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps } from '../src/composables/juyiting/bountyOutputCatalog.js'
 
 const requestId = 'request-1'
 const stepId = 'step-1'
@@ -32,6 +32,13 @@ describe('scoped bounty output catalog', () => {
       output({ contentMimeType: 'text/html', previewUrl: prefix + 'output-1' })
     ]) expect(outputCatalogItems([forged], requestId, stepId)).to.deep.equal([])
     expect(outputCatalogItems([output(), output()], requestId, stepId)).to.have.length(1)
+  })
+
+  it('isolates preview keys for outputs reused across steps and colon-bearing ids', () => {
+    expect(outputItemKey({ requestId, stepId: 'step-1', outputId: 'output_1' }))
+      .not.to.equal(outputItemKey({ requestId, stepId: 'step-2', outputId: 'output_1' }))
+    expect(outputItemKey({ requestId: 'a:b', stepId: 'c', outputId: 'output_1' }))
+      .not.to.equal(outputItemKey({ requestId: 'a', stepId: 'b:c', outputId: 'output_1' }))
   })
 
   it('never previews active content as media', () => {
