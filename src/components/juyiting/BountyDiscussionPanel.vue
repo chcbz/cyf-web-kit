@@ -8,6 +8,7 @@
       </div>
     </div>
     <BountyDeliberationStatus :presentation="v2Presentation" />
+    <BountyExecutionOutputs :enabled="deliberationV2Enabled" :request="activeRequest" :conversation-id="conversationId" :identity-key="`${identityEpoch}\u0000${identityScope}`" />
     <ChatPanel
       v-model:draft="draftProxy"
       discussion-variant="bounty"
@@ -39,6 +40,7 @@
 import { computed } from 'vue'
 import ChatPanel from './ChatPanel.vue'
 import BountyDeliberationStatus from './BountyDeliberationStatus.vue'
+import BountyExecutionOutputs from './BountyExecutionOutputs.vue'
 import { bountyDeliberationPresentation } from '../../composables/juyiting/hallMultimediaDeliberationUi.js'
 
 const props = defineProps({
