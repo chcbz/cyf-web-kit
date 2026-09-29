@@ -6,13 +6,14 @@ import {
 } from '../src/composables/juyiting/hallMultimediaDeliberationUi.js'
 
 const v2Capability = { v2: true }
-const chatRequest = () => ({ requestId: 'request-1', requestRevision: '1', state: 'RUNNING' })
+const legacyChatRequest = () => ({ requestId: 'request-1', requestRevision: '1', state: 'RUNNING' })
+const executePlanningRequest = () => ({ requestId: 'request-2', state: 'PLANNING', steps: [{ kind: 'EXECUTE' }] })
 const receivedChatTurn = () => ({ route: 'CHAT', state: 'RECEIVED' })
 
 const present = changes => bountyDeliberationPresentation({
   enabled: true,
   capability: v2Capability,
-  request: chatRequest(),
+  request: legacyChatRequest(),
   turns: [receivedChatTurn()],
   messages: [],
   ...changes
@@ -27,38 +28,34 @@ describe('Juyi Hall multimedia deliberation v2 presentation', () => {
     expect(present({ capability: { v2: false } })).to.equal(null)
   })
 
-  it('shows the real CHAT RUNNING request with its RECEIVED turn and never calls a bird prompt complete', () => {
-    const presentation = present()
-    expect(presentation).to.include({ route: 'CHAT', routeLabel: 'CHAT 回话', state: 'RUNNING' })
-    expect(presentation.phase).to.include('回话已受理')
-    expect(presentation.mediaNotice).to.include('尚未收到可领取的会话图片资产')
-    expect(presentation.mediaNotice).to.include('不代表“画鸟”已完成')
+  it('keeps CHAT RUNNING on the existing chat surface without inferring a v2 banner', () => {
+    expect(present()).to.equal(null)
+    expect(present({ request: { requestId: 'claimed-schema', interactionSchemaVersion: '2', state: 'RUNNING' } })).to.equal(null)
   })
 
   it('shows action-proposal EXECUTE PLANNING from controlled server steps without inventing a CHAT route', () => {
-    const presentation = present({
-      request: { requestId: 'request-2', state: 'PLANNING', steps: [{ kind: 'EXECUTE' }] },
-      turns: []
-    })
+    const presentation = present({ request: executePlanningRequest(), turns: [] })
     expect(presentation).to.include({ route: 'EXECUTE', routeLabel: '执行办理', state: 'PLANNING' })
     expect(presentation.phase).to.include('尚未产生可领取媒体')
   })
 
-  it('is replay-stable and leaves old unmarked CHAT on the limited legacy surface', () => {
-    const first = present()
-    const replay = present()
+  it('is replay-stable for a durable proposal and never infers v2 from a CHAT revision or route', () => {
+    const changes = { request: executePlanningRequest(), turns: [] }
+    const first = present(changes)
+    const replay = present(changes)
     expect(replay).to.deep.equal(first)
-    expect(present({ request: { requestId: 'legacy-request', state: 'RUNNING' } })).to.equal(null)
-    expect(present({ turns: [{ route: 'CHAT', state: 'QUEUED' }] })).to.equal(null)
+    expect(present({ request: { requestId: 'legacy-request', requestRevision: '1', state: 'RUNNING' } })).to.equal(null)
+    expect(present({ request: { requestId: 'inspect-only', state: 'PLANNING', steps: [{ kind: 'INSPECT' }] }, turns: [] })).to.equal(null)
+    expect(present({ request: executePlanningRequest(), turns: [receivedChatTurn()] })).to.equal(null)
   })
 
   it('renders media availability only for a ready scoped image asset and leaves missing assets waiting', () => {
     const missingAsset = [{ parts: [{ kind: 'image', state: 'ready', assetId: '', mime: 'image/png' }] }]
     const actualAsset = [{ parts: [{ kind: 'image', state: 'ready', assetId: 'asset-1', mime: 'image/png' }] }]
     expect(hasVerifiedConversationImage(missingAsset)).to.equal(false)
-    expect(present({ messages: missingAsset }).mediaNotice).to.include('尚未收到')
+    expect(present({ request: executePlanningRequest(), turns: [], messages: missingAsset }).mediaNotice).to.include('尚未收到')
     expect(hasVerifiedConversationImage(actualAsset)).to.equal(true)
-    expect(present({ messages: actualAsset }).mediaNotice).to.include('已收到可领取')
+    expect(present({ request: executePlanningRequest(), turns: [], messages: actualAsset }).mediaNotice).to.include('已收到可领取')
   })
 
   it('shows no v2 request state after an identity switch has cleared its owner-scoped projection', () => {
