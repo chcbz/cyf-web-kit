@@ -6,7 +6,7 @@
     aria-label="悬赏议事 v2 状态"
   >
     <strong>{{ presentation.title }}</strong>
-    <span>类型：{{ presentation.route }} · 状态：{{ presentation.state }}</span>
+    <span>类型：{{ presentation.routeLabel }} · 状态：{{ presentation.state }}</span>
     <p>{{ presentation.phase }}</p>
     <small>{{ presentation.mediaNotice }}</small>
   </aside>

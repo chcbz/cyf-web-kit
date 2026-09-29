@@ -5,14 +5,15 @@ import {
   isMultimediaDeliberationUiEnabled
 } from '../src/composables/juyiting/hallMultimediaDeliberationUi.js'
 
-const planningRequest = () => ({ requestId: 'request-1', route: 'CHAT', state: 'PLANNING' })
 const v2Capability = { v2: true }
+const chatRequest = () => ({ requestId: 'request-1', requestRevision: '1', state: 'RUNNING' })
+const receivedChatTurn = () => ({ route: 'CHAT', state: 'RECEIVED' })
 
 const present = changes => bountyDeliberationPresentation({
   enabled: true,
   capability: v2Capability,
-  request: planningRequest(),
-  turns: [],
+  request: chatRequest(),
+  turns: [receivedChatTurn()],
   messages: [],
   ...changes
 })
@@ -26,18 +27,29 @@ describe('Juyi Hall multimedia deliberation v2 presentation', () => {
     expect(present({ capability: { v2: false } })).to.equal(null)
   })
 
-  it('shows only the server-projected CHAT/PLANNING state and never calls a bird prompt complete', () => {
+  it('shows the real CHAT RUNNING request with its RECEIVED turn and never calls a bird prompt complete', () => {
     const presentation = present()
-    expect(presentation).to.include({ route: 'CHAT', state: 'PLANNING', phase: '议事规划中' })
+    expect(presentation).to.include({ route: 'CHAT', routeLabel: 'CHAT 回话', state: 'RUNNING' })
+    expect(presentation.phase).to.include('回话已受理')
     expect(presentation.mediaNotice).to.include('尚未收到可领取的会话图片资产')
     expect(presentation.mediaNotice).to.include('不代表“画鸟”已完成')
   })
 
-  it('is replay-stable and refuses an unrecognized state instead of inventing a reducer transition', () => {
-    const first = present({ turns: [{ route: 'CHAT', state: 'PLANNING' }] })
-    const replay = present({ turns: [{ route: 'CHAT', state: 'PLANNING' }] })
+  it('shows action-proposal EXECUTE PLANNING from controlled server steps without inventing a CHAT route', () => {
+    const presentation = present({
+      request: { requestId: 'request-2', state: 'PLANNING', steps: [{ kind: 'EXECUTE' }] },
+      turns: []
+    })
+    expect(presentation).to.include({ route: 'EXECUTE', routeLabel: '执行办理', state: 'PLANNING' })
+    expect(presentation.phase).to.include('尚未产生可领取媒体')
+  })
+
+  it('is replay-stable and leaves old unmarked CHAT on the limited legacy surface', () => {
+    const first = present()
+    const replay = present()
     expect(replay).to.deep.equal(first)
-    expect(present({ request: { ...planningRequest(), state: 'RUNNING' } })).to.equal(null)
+    expect(present({ request: { requestId: 'legacy-request', state: 'RUNNING' } })).to.equal(null)
+    expect(present({ turns: [{ route: 'CHAT', state: 'QUEUED' }] })).to.equal(null)
   })
 
   it('renders media availability only for a ready scoped image asset and leaves missing assets waiting', () => {
@@ -50,6 +62,6 @@ describe('Juyi Hall multimedia deliberation v2 presentation', () => {
   })
 
   it('shows no v2 request state after an identity switch has cleared its owner-scoped projection', () => {
-    expect(present({ request: null })).to.equal(null)
+    expect(present({ request: null, turns: [] })).to.equal(null)
   })
 })
