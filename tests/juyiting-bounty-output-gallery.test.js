@@ -233,4 +233,77 @@ describe('bounty output gallery live owner scope', () => {
     } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
   })
 
+  it('retains the pending archive intent on projection refresh and ignores its late receipt after identity switch', async () => {
+    const oldTimeout = globalThis.setTimeout
+    const oldClear = globalThis.clearTimeout
+    let finishWrite; let sent
+    const catalogItem = item('step-1')
+    const chatApi = { get: async path => {
+      if (path === '/requests/request-1') return { data: { data: { requestId: 'request-1', conversationId: 'conversation-1',
+        steps: [{ ...step('step-1'), taskId: 'task-1', assignmentRevision: '3' }] } } }
+      if (path.endsWith('/steps/step-1/outputs')) return { data: { data: [catalogItem] } }
+      throw new Error(`unexpected GET ${path}`)
+    }, execute: request => { sent = request; return new Promise(resolve => { finishWrite = resolve }) } }
+    const Component = new Function('Vue', 'deps', script)(Vue, {
+      createApi: () => chatApi, exactOutputId, outputCatalogItems, outputItemKey,
+      previewKind, scopedExecutionSteps, readOutputRecovery, writeOutputRecovery, saveOutputBlob: () => {}
+    })
+    globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : oldTimeout(fn, delay, ...args)
+    globalThis.clearTimeout = id => { if (id !== 999) oldClear(id) }
+    let wrapper
+    try {
+      wrapper = mount(Component, { props: { enabled: true, identityKey: 'owner-a', conversationId: 'conversation-1',
+        request: { requestId: 'request-1', conversationId: 'conversation-1', stateVersion: 1 } } })
+      await flushPromises()
+      await wrapper.findAll('.bounty-output button').find(button => button.text() === '保存到工作空间').trigger('click')
+      await flushPromises()
+      expect(sent.headers['Idempotency-Key']).to.match(/^conversation-archive-/)
+      await wrapper.setProps({ request: { requestId: 'request-1', conversationId: 'conversation-1', stateVersion: 2 } })
+      await flushPromises()
+      expect(wrapper.text()).to.include('正在保存真实成果字节')
+      await wrapper.setProps({ identityKey: 'owner-b' })
+      await flushPromises()
+      finishWrite({ data: { data: { state: 'saved', outputRef: sent.data.outputRef,
+        sha256: catalogItem.sha256, fileId: 'file-a', version: 1 } } })
+      await flushPromises()
+      expect(wrapper.text()).not.to.include('file-a')
+      expect(wrapper.text()).not.to.include('已保存到工作空间')
+    } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
+  })
+
+  it('does not show a stale finalization receipt after the owner changes', async () => {
+    const oldTimeout = globalThis.setTimeout
+    const oldClear = globalThis.clearTimeout
+    let finishWrite
+    const chatApi = { get: async path => {
+      if (path === '/requests/request-1') return { data: { data: { requestId: 'request-1', conversationId: 'conversation-1',
+        steps: [{ ...step('step-1'), taskId: 'task-1', assignmentRevision: '3' }] } } }
+      if (path.endsWith('/steps/step-1/outputs')) return { data: { data: [item('step-1')] } }
+      throw new Error(`unexpected GET ${path}`)
+    } }
+    const agentApi = { execute: () => new Promise(resolve => { finishWrite = resolve }) }
+    const Component = new Function('Vue', 'deps', script)(Vue, {
+      createApi: base => base === '/agent' ? agentApi : chatApi, exactOutputId, outputCatalogItems, outputItemKey,
+      previewKind, scopedExecutionSteps, readOutputRecovery, writeOutputRecovery, saveOutputBlob: () => {}
+    })
+    globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : oldTimeout(fn, delay, ...args)
+    globalThis.clearTimeout = id => { if (id !== 999) oldClear(id) }
+    let wrapper
+    try {
+      wrapper = mount(Component, { props: { enabled: true, identityKey: 'owner-a', taskVersion: '9',
+        conversationId: 'conversation-1', request: { requestId: 'request-1', conversationId: 'conversation-1' } } })
+      await flushPromises()
+      await wrapper.find('input[type="checkbox"]').setValue(true)
+      await wrapper.find('.finalize-button').trigger('click')
+      await flushPromises()
+      expect(wrapper.text()).to.include('正在正式提交并验收')
+      await wrapper.setProps({ identityKey: 'owner-b' })
+      await flushPromises()
+      finishWrite({ data: { data: { stage: 'TASK_COMPLETED', deliveryState: 'accepted', deliveryId: 'delivery-a' } } })
+      await flushPromises()
+      expect(wrapper.text()).not.to.include('delivery-a')
+      expect(wrapper.text()).not.to.include('任务已完成')
+    } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
+  })
+
 })

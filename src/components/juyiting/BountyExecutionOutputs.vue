@@ -132,24 +132,28 @@ const loadPreview = async item => {
     patchMap(itemErrors, key, '')
   } catch (cause) { if (generation === epoch) patchMap(itemErrors, key, cause?.message || '预览失败') }
 }
-const download = async item => { const key = outputItemKey(item); try { const blob = await bytes(item, false); if (blob) saveOutputBlob({ blob, item: { name: item.outputId } }) } catch (cause) { patchMap(itemErrors, key, cause?.message || '下载失败') } }
+const download = async item => { const key = outputItemKey(item); const generation = epoch; try { const blob = await bytes(item, false); if (blob && generation === epoch) saveOutputBlob({ blob, item: { name: item.outputId } }) } catch (cause) { if (generation === epoch) patchMap(itemErrors, key, cause?.message || '下载失败') } }
 const archive = async (item, retry = false) => {
+  const generation = epoch
   const key = outputItemKey(item); const prior = archiveState(item); if (prior.busy || prior.state === 'saved') return
   let intent = prior.intent
   try {
     if (!intent) intent = { idempotencyKey: uuid('conversation-archive'), body: { mode: 'CREATE', displayName: item.outputId, targetFileId: null, expectedVersion: null, outputRef: { requestId: item.requestId, stepId: item.stepId, outputId: item.outputId, sha256: item.sha256 } } }
     patchMap(archiveStates, key, { ...prior, intent, busy: true, state: 'saving', message: retry ? '正在重放原保存操作…' : '正在保存真实成果字节…' })
     const response = await api.execute({ url: `/conversations/${encodeURIComponent(props.conversationId)}/archive-operations`, method: 'POST', headers: { 'Idempotency-Key': intent.idempotencyKey }, data: intent.body, autoLoading: false, needAuth: true })
+    if (generation !== epoch) return
     const value = response?.data?.data ?? response?.data
     if (value?.state !== 'saved' || value?.outputRef?.requestId !== item.requestId || value?.outputRef?.stepId !== item.stepId || value?.outputRef?.outputId !== item.outputId || value?.sha256 !== item.sha256 || !exactOutputId(value?.fileId) || !Number.isInteger(value?.version) || value.version < 1) throw new Error('保存回执无法确认精确成果。')
     patchMap(archiveStates, key, { intent, busy: false, state: 'saved', message: `已保存到工作空间：${value.fileId} v${value.version}` })
   } catch (cause) {
+    if (generation !== epoch) return
     const unknown = cause?.requestErrorClass === 'network' || cause instanceof TypeError || cause?.status >= 500 || cause?.response?.status >= 500
     patchMap(archiveStates, key, { intent, busy: false, state: unknown ? 'unknown' : 'error', message: unknown ? '保存结果不明确；请重试原操作，不要另存副本。' : (cause?.message || '保存失败。') })
   }
 }
 const stepFor = item => requestSnapshots.value.find(request => request.requestId === item.requestId)?.steps?.find(step => step.stepId === item.stepId)
 const finalizeSelected = async () => {
+  const generation = epoch
   if (finalizeState.value.busy || !selectedKeys.value.length) return
   const selected = items.value.filter(item => selectedKeys.value.includes(outputItemKey(item)))
   const steps = selected.map(stepFor)
@@ -165,15 +169,18 @@ const finalizeSelected = async () => {
     if (!intent) intent = { idempotencyKey: uuid('conversation-finalize'), taskId: taskIds[0], body: { expectedTaskVersion: taskVersion, expectedAssignmentRevision: assignmentRevisions[0], conversationId: props.conversationId, summary: '聚义厅会话选定成果验收', selectedOutputs: selected.map(item => ({ requestId: item.requestId, stepId: item.stepId, outputId: item.outputId, sha256: item.sha256, title: item.outputId, purpose: '用户选定最终成果' })) } }
     finalizeState.value = { state: 'submitting', busy: true, message: '正在按精确摘要晋升、正式提交并验收…', intent }
     const response = await agentApi.execute({ url: `/tasks/${encodeURIComponent(intent.taskId)}/finalizations`, method: 'POST', headers: { 'Idempotency-Key': intent.idempotencyKey }, data: intent.body, autoLoading: false, needAuth: true })
+    if (generation !== epoch) return
     const value = response?.data?.data ?? response?.data
     if (value?.stage !== 'TASK_COMPLETED' || value?.deliveryState !== 'accepted' || !exactOutputId(value?.deliveryId)) throw new Error('服务端尚未确认任务完成。')
     finalizeState.value = { state: 'completed', busy: false, message: `正式成果已验收，任务已完成：${value.deliveryId}`, intent }
   } catch (cause) {
+    if (generation !== epoch) return
     const unknown = cause?.requestErrorClass === 'network' || cause instanceof TypeError || cause?.status >= 500 || cause?.response?.status >= 500
     finalizeState.value = { state: unknown ? 'unknown' : 'error', busy: false, message: unknown ? '验收结果不明确；再次点击将重放同一操作，不会重复生成或重复验收。' : (cause?.message || '正式验收失败。'), intent }
   }
 }
 const editImage = async item => {
+  const generation = epoch
   const key = outputItemKey(item); const content = editDrafts.value[key]?.trim(); const step = stepFor(item)
   const previous = editIntents.value[key]
   if ((!content && !previous) || !step || editState(item).busy || editState(item).state === 'accepted') return
@@ -187,6 +194,7 @@ const editImage = async item => {
   patchMap(editStates, key, { state: 'submitting', busy: true, message: '正在提交同会话引用修改…' })
   try {
     const response = await api.execute({ url: `/conversations/${encodeURIComponent(props.conversationId)}/interactions`, method: 'POST', headers: { 'Idempotency-Key': intent.idempotencyKey }, data: { schemaVersion: 2, taskId: intent.taskId, expectedAssignmentRevision: intent.assignmentRevision, content: intent.content, inputRefs: [{ type: 'conversation_output', requestId: item.requestId, stepId: item.stepId, outputId: item.outputId, sha256: item.sha256 }], replyTo: null, continuationOf: item.requestId, actionProposal: { kind: 'edit_image' } }, autoLoading: false, needAuth: true })
+    if (generation !== epoch) return
     const value = response?.data?.data ?? response?.data
     if (!exactOutputId(value?.requestId) || !exactOutputId(value?.stepId)) throw new Error('服务端未返回可恢复的修改请求。')
     followupRequestIds.value = [...new Set([...followupRequestIds.value, value.requestId])]
@@ -196,13 +204,14 @@ const editImage = async item => {
     patchMap(editStates, key, { state: 'accepted', busy: false, message: '修改请求已受理；新稿就绪后会在同一成果区出现。' })
     refresh()
   } catch (cause) {
+    if (generation !== epoch) return
     const unknown = cause?.requestErrorClass === 'network' || cause instanceof TypeError || cause?.status >= 500 || cause?.response?.status >= 500
     // Even a malformed receipt can follow a successful charged execution. Keep the
     // original key and exact payload until a server status lookup proves otherwise.
     patchMap(editStates, key, { state: unknown ? 'unknown' : 'error', busy: false, message: unknown ? '修改结果不明确；再次点击仅重试原请求，不会创建新生成。' : (cause?.message || '修改未确认；只能重试原请求。') })
   }
 }
-watch(() => `${props.enabled}\u0000${props.identityKey}\u0000${props.conversationId}\u0000${props.request?.requestId}\u0000${props.request?.stateVersion}`, () => {
+watch(() => `${props.enabled}\u0000${props.identityKey}\u0000${props.conversationId}\u0000${props.request?.requestId}`, () => {
   cleanup()
   if (validRootRequest()) {
     const recovered = readOutputRecovery(recoveryScope())
@@ -211,6 +220,8 @@ watch(() => `${props.enabled}\u0000${props.identityKey}\u0000${props.conversatio
     requestSnapshots.value = [props.request]; void list()
   }
 }, { immediate: true })
+// A new projection must refresh the list without discarding in-flight write intents.
+watch(() => props.request?.stateVersion, () => { if (validRootRequest()) refresh() })
 onBeforeUnmount(cleanup)
 </script>
 <style scoped>
