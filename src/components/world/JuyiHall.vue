@@ -715,7 +715,7 @@ import { useHallSound } from '@/composables/juyiting/useHallSound'
 import { useHallTaskActions } from '@/composables/juyiting/useHallTaskActions'
 import { useHallPointAndStart } from '@/composables/juyiting/useHallPointAndStart'
 import { createPointAndStartIntentStore } from '@/composables/juyiting/hallPointAndStartIntent'
-import { capabilityAllowsNewStart, capabilityAllowsOriginalReplay, loadNativeBountyCapability } from '@/composables/juyiting/hallNativeBountyCapability'
+import { capabilityAllowsNewStart, capabilityAllowsOriginalReplay, createNativeCapabilityObservationFence, loadNativeBountyCapability, pointAndStartIntentReadLane } from '@/composables/juyiting/hallNativeBountyCapability'
 import { useHallQuickMatter } from '@/composables/juyiting/useHallQuickMatter'
 import { useTaskWorkspace } from '@/composables/juyiting/useTaskWorkspace'
 import { createDisabledTaskWorkspaceBinding, isTaskWorkspaceBuildEnabled } from '@/composables/juyiting/taskWorkspaceFeature'
@@ -2020,28 +2020,33 @@ const {
 
 
 const pointAndStartCapability = ref(null)
-const pointAndStartStorage = typeof window !== 'undefined' ? window.localStorage : null
+const pointAndStartStorage = (() => {
+  try { return typeof window !== 'undefined' ? window.localStorage : null } catch { return null }
+})()
+const pointAndStartObservation = createNativeCapabilityObservationFence({
+  getIdentityScope: () => hallIdentityScope.value,
+  getAuthorizationGeneration: () => apiStore.authorizationGeneration
+})
 const pointAndStartOfferMatches = (capability, taskId, agentId, generation = apiStore.authorizationGeneration, scope = hallIdentityScope.value) =>
   capability?.taskId === taskId && capability?.targetAgentId === agentId &&
-  capability?.authorizationGeneration === generation && capability?.identityScope === scope
+  capability?.authorizationGeneration === generation && capability?.identityScope === scope && capability?.isCurrent?.() === true
 const pointAndStartIntentState = (taskId) => createPointAndStartIntentStore({
   storage: pointAndStartStorage,
   scope: hallIdentityScope.value,
   taskId
 }).read()
-const clearPointAndStartCapability = () => { pointAndStartCapability.value = null }
-const readPointAndStartCapability = async (taskId, targetAgentId) => {
-  const identityScope = hallIdentityScope.value
-  const authorizationGeneration = apiStore.authorizationGeneration
+const clearPointAndStartCapability = () => { pointAndStartObservation.invalidate(); pointAndStartCapability.value = null }
+const readPointAndStartCapability = async (taskId, targetAgentId, observation = pointAndStartObservation.capture()) => {
+  const { identityScope, authorizationGeneration } = observation
   let capability = null
   try { capability = await loadNativeBountyCapability({ agentApi, taskId, targetAgentId }) } catch (error) {
-    if (identityScope === hallIdentityScope.value && authorizationGeneration === apiStore.authorizationGeneration) {
+    if (observation.isCurrent()) {
       log.warn('native bounty capability is unavailable:', error)
     }
     return null
   }
-  if (identityScope !== hallIdentityScope.value || authorizationGeneration !== apiStore.authorizationGeneration || !capability) return null
-  pointAndStartCapability.value = Object.freeze({ ...capability, identityScope, authorizationGeneration })
+  if (!observation.isCurrent() || !capability) return null
+  pointAndStartCapability.value = Object.freeze({ ...capability, identityScope, authorizationGeneration, isCurrent: observation.isCurrent })
   return pointAndStartCapability.value
 }
 const canUsePointAndStartOffer = (task, agent) => pointAndStartOfferMatches(pointAndStartCapability.value, task?.id, agent?.agentId) &&
@@ -2098,7 +2103,9 @@ const resumePointAndStartOriginal = async (task) => {
   const intent = pointAndStartIntentState(task?.id)
   if (intent.state !== 'PRESENT') return checkPointAndStartOriginal(task)
   const targetAgentId = intent.record.body.agentId
-  const capability = await readPointAndStartCapability(task.id, targetAgentId)
+  const observation = pointAndStartObservation.capture()
+  const capability = await readPointAndStartCapability(task.id, targetAgentId, observation)
+  if (!observation.isCurrent()) return false
   if (!capability || !canReplayPointAndStartOriginal({ id: task.id }, { agentId: targetAgentId })) {
     showToast('原点将只能只读核对；当前未取得可重放的服务端办理通道。')
     return checkPointAndStartOriginal(task)
@@ -2111,6 +2118,10 @@ const assignTask = async (task, agent) => {
   // before funded/multi/open eligibility so a changed current snapshot cannot
   // turn an uncertain original write into a fresh legacy assignment.
   const original = pointAndStartIntentState(task.id)
+  if (pointAndStartIntentReadLane(original) === 'UNAVAILABLE') {
+    showToast('无法读取原点将恢复记录；未另建点将。请恢复浏览器本地存储后核对原操作。')
+    return false
+  }
   if (original.state === 'PRESENT' || original.state === 'CORRUPT') {
     if (original.state === 'CORRUPT') showToast('原点将恢复记录损坏；为避免重复办理，未改走旧式点将。')
     else await checkPointAndStartOriginal(task)
@@ -2126,7 +2137,11 @@ const assignTask = async (task, agent) => {
   const oneOrdinaryTarget = task.funding?.mode !== 'FUNDED_SINGLE_AGENT' && targetAgents.length === 1
   if (oneOrdinaryTarget) {
     const target = targetAgents[0]
-    const capability = await readPointAndStartCapability(task.id, target.agentId)
+    const clickedTaskId = task.id
+    const clickedTargetId = target.agentId
+    const observation = pointAndStartObservation.capture()
+    const capability = await readPointAndStartCapability(clickedTaskId, clickedTargetId, observation)
+    if (!observation.isCurrent() || task.id !== clickedTaskId || target.agentId !== clickedTargetId) return false
     if (capability && canUsePointAndStartOffer(task, target)) {
       const started = await startPointAndStart({
         task,
@@ -2138,6 +2153,14 @@ const assignTask = async (task, agent) => {
       if (!started) showToast(explainPointAndStartState())
       return started
     }
+    if (capability && capability.nativeExecution.state !== 'UNDECLARED') {
+      const reasons = capability.newStart.blockingReasons
+      showToast(reasons.includes('COST_AUTHORIZATION_UNAVAILABLE')
+        ? '本目标的自动办理尚缺本次生成的费用授权；未生成，也未改走传统点将。'
+        : `本目标暂不能自动办理（${reasons.join('、') || capability.nativeExecution.state}）；未另建点将。`)
+      return false
+    }
+    showToast('当前未确认目标支持自动办理；本次仅传统点将，不会自动生成或交付。')
   }
 
   taskWorkspaceBinding.clearExplicitActor()
@@ -2153,7 +2176,7 @@ watch(() => selectedTask.value?.id, taskId => {
   clearPointAndStartCapability()
   if (taskId && pointAndStartIntentState(taskId).state === 'PRESENT') void checkPointAndStartOriginal({ id: taskId })
 }, { flush: 'sync' })
-watch([() => apiStore.authorizationGeneration, hallIdentityScope], clearPointAndStartCapability, { flush: 'sync' })
+watch([() => apiStore.authorizationGeneration, hallIdentityScope, () => selectedAgent.value?.agentId], clearPointAndStartCapability, { flush: 'sync' })
 
 const formalTaskExecutionContext = useFormalTaskExecutionScope({
   selectedTask,
@@ -2476,6 +2499,7 @@ onUnmounted(() => {
   taskWorkspaceBinding.dispose()
   voiceReplyCorrelation.close('unmount')
   hallVoice?.dispose()
+  clearPointAndStartCapability()
   disposePointAndStart()
   disposeHallConversation()
   hallBackendSceneState?.dispose()

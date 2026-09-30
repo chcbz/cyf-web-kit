@@ -43,8 +43,8 @@ export const parseNativeBountyCapability = value => {
     value.lane !== LANE || !exactKeys(value.serverLane, ['state', 'blockingReasons']) ||
     !serverStates.has(value.serverLane.state) || !reasons(value.serverLane.blockingReasons) ||
     !exactKeys(value.nativeExecution, ['state', 'transport', 'schemaVersion', 'supportedOperations']) ||
-    !nativeStates.has(value.nativeExecution.state) || value.nativeExecution.transport !== TRANSPORT ||
-    value.nativeExecution.schemaVersion !== 1 || !operations(value.nativeExecution.supportedOperations) ||
+    !nativeStates.has(value.nativeExecution.state) ||
+    !operations(value.nativeExecution.supportedOperations) ||
     !exactKeys(value.authorization, ['state', 'paidExecutionAuthorized']) || !authorizationStates.has(value.authorization.state) ||
     typeof value.authorization.paidExecutionAuthorized !== 'boolean' ||
     !exactKeys(value.newStart, ['eligible', 'blockingReasons']) || typeof value.newStart.eligible !== 'boolean' ||
@@ -54,6 +54,12 @@ export const parseNativeBountyCapability = value => {
     Object.keys(RECOVERY).some(key => value.originalIntentRecovery[key] !== RECOVERY[key])) return null
   const requestedOperations = operations(value.requestedOperations)
   const supportedOperations = operations(value.nativeExecution.supportedOperations)
+  const declared = value.nativeExecution.transport === TRANSPORT && value.nativeExecution.schemaVersion === 1
+  const undeclared = value.nativeExecution.transport === null && value.nativeExecution.schemaVersion === null
+  if ((!declared && !undeclared) || (undeclared && supportedOperations.length) ||
+    (value.nativeExecution.state === 'READY' && (!declared || supportedOperations.length !== 1)) ||
+    requestedOperations.some(operation => !supportedOperations.includes(operation)) ||
+    (value.authorization.state === 'UNAVAILABLE' && value.authorization.paidExecutionAuthorized)) return null
   const selectable = requestedOperations.length === 1 && requestedOperations[0] === OPERATION && value.initialOperation === OPERATION
   const coherentNewStart = value.newStart.eligible === true && value.serverLane.state === 'READY' &&
     value.nativeExecution.state === 'READY' && value.authorization.state === 'READY' &&
@@ -61,14 +67,15 @@ export const parseNativeBountyCapability = value => {
   // Never turn a partial/contradictory response into start authority. A future
   // legitimate cost bridge may make this branch true without a UI flag change.
   if ((value.newStart.eligible && !coherentNewStart) || (!selectable && value.initialOperation !== null) ||
-    (selectable && value.nativeExecution.state !== 'READY' && value.newStart.eligible)) return null
+    (requestedOperations.length === 1 && value.initialOperation !== OPERATION) ||
+    (selectable && value.nativeExecution.state !== 'READY')) return null
   return Object.freeze({
     schemaVersion: 1,
     taskId: value.taskId,
     targetAgentId: value.targetAgentId,
     lane: LANE,
     serverLane: Object.freeze({ state: value.serverLane.state, blockingReasons: Object.freeze(reasons(value.serverLane.blockingReasons)) }),
-    nativeExecution: Object.freeze({ state: value.nativeExecution.state, transport: TRANSPORT, schemaVersion: 1,
+    nativeExecution: Object.freeze({ state: value.nativeExecution.state, transport: value.nativeExecution.transport, schemaVersion: value.nativeExecution.schemaVersion,
       supportedOperations: Object.freeze(supportedOperations) }),
     authorization: Object.freeze({ state: value.authorization.state, paidExecutionAuthorized: value.authorization.paidExecutionAuthorized }),
     newStart: Object.freeze({ eligible: value.newStart.eligible, blockingReasons: Object.freeze(reasons(value.newStart.blockingReasons)) }),
@@ -97,4 +104,30 @@ export const loadNativeBountyCapability = async ({ agentApi, taskId, targetAgent
   }))
   const capability = parseNativeBountyCapability(value)
   return capability?.taskId === taskId && capability.targetAgentId === targetAgentId ? capability : null
+}
+
+/** A local observation fence, not an authorization or transport deadline.
+ * Each explicit task/target read supersedes the previous observation; page
+ * selection changes/unmount invalidate it. Persisted writes are never cancelled.
+ */
+export const createNativeCapabilityObservationFence = ({ getIdentityScope, getAuthorizationGeneration }) => {
+  let epoch = 0
+  return Object.freeze({
+    invalidate: () => { epoch++ },
+    capture: () => {
+      const capturedEpoch = ++epoch
+      const identityScope = getIdentityScope()
+      const authorizationGeneration = getAuthorizationGeneration()
+      return Object.freeze({ identityScope, authorizationGeneration,
+        isCurrent: () => capturedEpoch === epoch && identityScope === getIdentityScope() &&
+          authorizationGeneration === getAuthorizationGeneration() })
+    }
+  })
+}
+
+export const pointAndStartIntentReadLane = value => {
+  if (value?.state === 'ABSENT') return 'NONE'
+  if (value?.state === 'PRESENT' || value?.state === 'CORRUPT') return 'RECOVERY'
+  // Inaccessible storage does not prove the original write never existed.
+  return 'UNAVAILABLE'
 }
