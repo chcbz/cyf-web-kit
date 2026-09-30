@@ -100,24 +100,32 @@ const {
   identityEpoch: identityGeneration
 })
 
-let syncingModel = false
+let syncingModelRequest = 0
 let modelSyncRequest = 0
 const signature = references => Array.isArray(references)
   ? JSON.stringify(references.map(reference => [reference?.fileId, reference?.version, reference?.purpose]))
   : 'invalid'
 
 watch(() => props.modelValue, async references => {
-  if (signature(references) === signature(draftReferences.value)) return
+  const matchesDraft = signature(references) === signature(draftReferences.value)
+  const hadPendingSync = Boolean(syncingModelRequest)
   const request = ++modelSyncRequest
-  syncingModel = true
+  if (matchesDraft && !hadPendingSync) return
+  const identity = identityGeneration.value
+  syncingModelRequest = request
   const validated = await replaceReferences(references)
-  if (request !== modelSyncRequest) return
-  syncingModel = false
+  if (request !== modelSyncRequest || identity !== identityGeneration.value) return
+  if (syncingModelRequest === request) syncingModelRequest = 0
   emit('update:modelValue', (validated || []).map(reference => ({ ...reference })))
 }, { deep: true, immediate: true })
 
+watch(identityGeneration, () => {
+  modelSyncRequest += 1
+  syncingModelRequest = 0
+}, { flush: 'sync' })
+
 watch(draftReferences, references => {
-  if (!syncingModel) emit('update:modelValue', references.map(reference => ({ ...reference })))
+  if (!syncingModelRequest) emit('update:modelValue', references.map(reference => ({ ...reference })))
 })
 
 watch(toRef(props, 'disabled'), value => {
