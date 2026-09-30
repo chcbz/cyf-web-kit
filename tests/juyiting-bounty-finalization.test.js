@@ -1,0 +1,172 @@
+import { expect } from 'chai'
+import { ref } from 'vue'
+import { safeFinalizationVersion, validFinalizationReceipt, useHallBountyFinalization } from '../src/composables/juyiting/useHallBountyFinalization.js'
+
+const body = () => ({ expectedTaskVersion: 9, expectedAssignmentRevision: 3, conversationId: 'conversation-1',
+  summary: '选定鸟图验收', selectedOutputs: [{ requestId: 'request-1', stepId: 'step-1', outputId: 'output_1',
+    sha256: 'a'.repeat(64), title: '鸟', purpose: '最终成果' }] })
+const intent = () => ({ taskId: 'task-1', body: body(), operationId: '' })
+const receipt = (patch = {}, original = body()) => ({ operationId: 'finalization-1', taskId: 'task-1',
+  conversationId: 'conversation-1', state: 'pending', stateVersion: '1', stage: 'PROMOTING',
+  expectedTaskVersion: String(original.expectedTaskVersion), expectedAssignmentRevision: String(original.expectedAssignmentRevision),
+  selectedOutputs: original.selectedOutputs, deliveryId: null, deliveryState: null, taskState: 'running', taskVersion: '9',
+  errorCode: null, retryable: false, ...patch })
+const completed = (patch = {}, original = body()) => receipt({ state: 'completed', stage: 'TASK_COMPLETED', stateVersion: '5',
+  deliveryId: 'delivery-1', deliveryState: 'accepted', taskState: 'completed', taskVersion: '12', ...patch }, original)
+const memory = () => { const values = new Map(); return { values, getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } }
+const error = status => Object.assign(new Error('request failed'), { status })
+const setup = (execute, options = {}) => {
+  const calls = []; const storage = options.storage || memory()
+  const api = { execute: async request => { calls.push(request); return execute(request, calls.length) } }
+  const client = useHallBountyFinalization({ api, conversationId: ref('conversation-1'), identityKey: ref('owner-a'), storage,
+    idempotencyKeyFactory: () => 'finalization-original-key-0001', ...options })
+  return { client, storage, calls, api }
+}
+const send = client => client.submit({ taskId: 'task-1', body: body() })
+
+describe('MMD finalization immutable owner acceptance', () => {
+  it('rejects missing, unsafe, padded and noncanonical task versions without coercion', () => {
+    for (const value of ['', null, undefined, '01', ' 9', '9 ', '-1', '1.5', 1.5, true, Number.MAX_SAFE_INTEGER + 1, '9223372036854775807']) expect(safeFinalizationVersion(value)).to.equal(null)
+    for (const value of [0, '0', 9, '9', Number.MAX_SAFE_INTEGER, String(Number.MAX_SAFE_INTEGER)]) expect(safeFinalizationVersion(value)).to.equal(Number(value))
+  })
+  it('requires exact frozen source set, scope, versions and actual accepted/completed facts', () => {
+    expect(validFinalizationReceipt(completed(), intent())).to.equal(true)
+    const variants = [
+      { taskId: 'other-task' }, { conversationId: 'other-conversation' }, { expectedTaskVersion: '10' },
+      { expectedAssignmentRevision: '4' }, { expectedTaskVersion: 9 }, { stateVersion: '0' }, { stateVersion: '01' },
+      { taskVersion: '8' }, { taskVersion: 12 }, { taskVersion: '9223372036854775808' },
+      { deliveryId: null }, { deliveryState: 'submitted' }, { taskState: 'reviewing' }, { state: 'pending' },
+      { stage: 'SUBMITTED' }, { errorCode: 'FAILURE' }, { retryable: true },
+      { selectedOutputs: [] }, { selectedOutputs: [{ ...body().selectedOutputs[0], sha256: 'b'.repeat(64) }] },
+      { selectedOutputs: [{ ...body().selectedOutputs[0], title: 'changed' }] }, { producerId: 'forged' }
+    ]
+    for (const patch of variants) expect(validFinalizationReceipt(completed(patch), intent()), JSON.stringify(patch)).to.equal(false)
+    const missing = completed(); delete missing.operationId
+    expect(validFinalizationReceipt(missing, intent())).to.equal(false)
+    expect(validFinalizationReceipt(completed(), { ...intent(), operationId: 'other-operation' })).to.equal(false)
+  })
+  it('persists and reads back the immutable intent before its first POST', async () => {
+    const { client, calls, storage } = setup(request => {
+      expect(storage.values.size).to.equal(1)
+      const persisted = JSON.parse([...storage.values.values()][0])
+      expect(request.headers['Idempotency-Key']).to.equal(persisted.idempotencyKey)
+      expect(request.data).to.deep.equal(persisted.body)
+      expect(Object.isFrozen(request.data.selectedOutputs[0])).to.equal(true)
+      return { data: { data: completed() } }
+    })
+    try { expect((await send(client)).state).to.equal('completed'); expect(client.status.value.state).to.equal('completed'); expect(calls).to.have.length(1) } finally { client.dispose() }
+  })
+  it('does not infer completion from a bare stage/delivery label', async () => {
+    const { client } = setup(() => ({ data: { stage: 'TASK_COMPLETED', deliveryId: 'delivery-1', deliveryState: 'accepted' } }))
+    try { await send(client); expect(client.status.value.state).to.equal('unknown'); expect(client.status.value.intent).not.to.equal(null); expect(client.status.value.receipt).to.equal(null) } finally { client.dispose() }
+  })
+  it('does not submit concurrently on a second click', async () => {
+    let finish
+    const { client, calls } = setup(() => new Promise(resolve => { finish = resolve }))
+    try { const pending = send(client); expect(await send(client)).to.equal(null); expect(calls).to.have.length(1); finish({ data: completed() }); await pending } finally { client.dispose() }
+  })
+  it('lost acknowledgement/remount keeps the original key/body; a status check never writes', async () => {
+    const { client, storage, calls, api } = setup(() => { throw new TypeError('lost acknowledgement') })
+    await send(client); client.dispose()
+    const recovered = useHallBountyFinalization({ api, storage, conversationId: 'conversation-1', identityKey: 'owner-a',
+      idempotencyKeyFactory: () => { throw new Error('must not create a new key') } })
+    try {
+      expect(calls).to.have.length(1); expect(recovered.status.value.state).to.equal('unknown')
+      const original = recovered.status.value.intent
+      api.execute = async request => { calls.push(request); expect(request.method).to.equal('GET'); return { data: completed() } }
+      await recovered.check()
+      expect(calls[1].url).to.equal('/tasks/task-1/finalizations/request')
+      expect(calls[1].headers['Idempotency-Key']).to.equal(original.idempotencyKey)
+      expect(recovered.status.value.state).to.equal('completed')
+      await recovered.resume(); expect(calls.filter(c => c.method === 'POST')).to.have.length(1)
+    } finally { recovered.dispose() }
+  })
+  it('only an explicit resume after 404 replays the original immutable POST', async () => {
+    const { client, calls } = setup((request, count) => {
+      if (count === 1) throw new TypeError('lost acknowledgement')
+      if (request.method === 'GET') throw error(404)
+      return { data: completed() }
+    })
+    try {
+      await send(client); await client.check()
+      expect(calls.map(c => c.method)).to.deep.equal(['POST', 'GET'])
+      expect(client.status.value.state).to.equal('unknown')
+      const changed = body(); changed.selectedOutputs[0].sha256 = 'b'.repeat(64)
+      await client.submit({ taskId: 'different-task', body: changed })
+      expect(calls.map(c => c.method)).to.deep.equal(['POST', 'GET', 'GET', 'POST'])
+      expect(calls[3].data).to.deep.equal(calls[0].data)
+      expect(calls[3].url).to.equal(calls[0].url)
+      expect(calls[3].headers).to.deep.equal(calls[0].headers)
+    } finally { client.dispose() }
+  })
+  it('known operation reads by ID and resumes pending only with the original write', async () => {
+    const { client, calls } = setup(request => ({ data: request.method === 'POST' && calls.length > 1 ? completed() : receipt() }))
+    try {
+      await send(client); await client.check()
+      expect(calls[1].url).to.equal('/tasks/task-1/finalizations/finalization-1')
+      expect(calls).to.have.length(2)
+      await client.resume()
+      expect(calls.map(c => c.method)).to.deep.equal(['POST', 'GET', 'GET', 'POST'])
+      expect(calls[3].headers).to.deep.equal(calls[0].headers)
+    } finally { client.dispose() }
+  })
+  for (const status of [401, 403, 409, 500]) it(`does not replay a POST when status reconciliation fails with ${status}`, async () => {
+    const { client, calls } = setup((request, count) => { if (count === 1) return { data: receipt() }; throw error(status) })
+    try { await send(client); await client.resume(); expect(calls.map(c => c.method)).to.deep.equal(['POST', 'GET']); expect(client.status.value.state).not.to.equal('completed') } finally { client.dispose() }
+  })
+  it('nonretryable domain failure is not automatically submitted again', async () => {
+    const { client, calls } = setup(() => ({ data: receipt({ state: 'failed', errorCode: 'ASSIGNMENT_CHANGED', retryable: false }) }))
+    try { await send(client); await client.resume(); expect(calls.map(c => c.method)).to.deep.equal(['POST', 'GET']); expect(client.status.value.state).to.equal('failed') } finally { client.dispose() }
+  })
+  it('retryable phase failure can resume the original operation without generation', async () => {
+    const { client, calls } = setup(request => ({ data: request.method === 'POST' && calls.length > 1 ? completed() : receipt({ state: 'failed', errorCode: 'PROMOTION_STORAGE', retryable: true }) }))
+    try { await send(client); await client.resume(); expect(calls.map(c => c.method)).to.deep.equal(['POST', 'GET', 'POST']); expect(client.status.value.state).to.equal('completed') } finally { client.dispose() }
+  })
+  it('identity switching aborts and fences a late completion while preserving each owner recovery key', async () => {
+    const owner = ref('owner-a'); let finish
+    const { client, calls, storage } = setup(() => new Promise(resolve => { finish = resolve }), { identityKey: owner })
+    try {
+      const pending = send(client); owner.value = 'owner-b'
+      expect(calls[0].signal.aborted).to.equal(true)
+      finish({ data: completed() }); await pending
+      expect(client.status.value.state).to.equal('idle'); expect(client.status.value.receipt).to.equal(null)
+      expect(storage.values.size).to.equal(1)
+      owner.value = 'owner-a'; expect(client.status.value.state).to.equal('unknown')
+      expect(client.status.value.intent.idempotencyKey).to.equal(calls[0].headers['Idempotency-Key'])
+    } finally { client.dispose() }
+  })
+  it('rejects receipt version rollback and conflicting same-version facts', async () => {
+    const states = [receipt({ stateVersion: '4' }), receipt({ stateVersion: '3' }), receipt({ stateVersion: '4', stage: 'READY_TO_SUBMIT' })]
+    const { client } = setup(() => ({ data: states.shift() }))
+    try { await send(client); await client.check(); expect(client.status.value.receipt.stateVersion).to.equal('4'); await client.check(); expect(client.status.value.receipt.stage).to.equal('PROMOTING') } finally { client.dispose() }
+  })
+  it('rejects a higher-version receipt that regresses a confirmed domain stage or completion', async () => {
+    const states = [completed(), receipt({ stateVersion: '6', taskVersion: '12' })]
+    const { client } = setup(() => ({ data: states.shift() }))
+    try { await send(client); await client.check(); expect(client.status.value.receipt.stage).to.equal('TASK_COMPLETED'); expect(client.status.value.receipt.deliveryId).to.equal('delivery-1') } finally { client.dispose() }
+  })
+  for (const label of ['unavailable', 'readback mismatch', 'corrupt recovered intent', 'recovery read error']) it(`never opens a new operation with ${label} storage`, async () => {
+    let storage
+    if (label === 'unavailable') storage = { getItem: () => null, setItem: () => { throw new Error('unavailable') } }
+    else if (label === 'readback mismatch') storage = { getItem: () => null, setItem: () => {} }
+    else if (label === 'corrupt recovered intent') storage = { getItem: () => '{invalid', setItem: () => {} }
+    else storage = { getItem: () => { throw new Error('read error') }, setItem: () => {} }
+    const { client, calls } = setup(() => { throw new Error('must not request') }, { storage })
+    try { await send(client); await client.resume(); await client.check(); expect(calls).to.have.length(0); expect(['error', 'recovery_error']).to.include(client.status.value.state) } finally { client.dispose() }
+  })
+  it('confirmed server completion stays confirmed when later recovery persistence fails', async () => {
+    const storage = memory(); let writes = 0
+    const original = storage.setItem
+    storage.setItem = (key, value) => { if (++writes > 1) throw new Error('storage changed'); original(key, value) }
+    const { client } = setup(() => ({ data: completed() }), { storage })
+    try { await send(client); expect(client.status.value.state).to.equal('completed'); expect(client.status.value.receipt.deliveryId).to.equal('delivery-1') } finally { client.dispose() }
+  })
+  it('does not accept hidden permission fields or duplicate source selections', async () => {
+    const { client, calls } = setup(() => { throw new Error('must not request') })
+    try {
+      const forged = body(); forged.producerId = 'forged'; await client.submit({ taskId: 'task-1', body: forged })
+      const duplicate = body(); duplicate.selectedOutputs.push({ ...duplicate.selectedOutputs[0] }); await client.submit({ taskId: 'task-1', body: duplicate })
+      expect(calls).to.have.length(0)
+    } finally { client.dispose() }
+  })
+})

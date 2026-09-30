@@ -1,10 +1,10 @@
 <template>
-  <section v-if="enabled && scopedSteps.length" class="bounty-output-gallery" aria-label="悬赏议事成果">
+  <section v-if="enabled && (scopedSteps.length || finalizeState.intent || finalizeState.message)" class="bounty-output-gallery" aria-label="悬赏议事成果">
     <strong>议事成果</strong>
     <p v-if="error" role="alert">{{ error }} <button type="button" @click="refresh">重新读取</button></p>
     <p v-else-if="!items.length" role="status">{{ loading ? '正在读取已提交成果…' : '尚无已校验的成果；生成完成后将在此显示。' }}</p>
     <div v-for="item in items" :key="outputItemKey(item)" class="bounty-output">
-      <label class="result-choice"><input v-model="selectedKeys" type="checkbox" :value="outputItemKey(item)" /> 最终成果</label>
+      <label class="result-choice"><input v-model="selectedKeys" type="checkbox" :value="outputItemKey(item)" :disabled="!!finalizeState.intent || finalizeState.busy || finalizeState.state === 'recovery_error'" /> 最终成果</label>
       <strong>{{ previewKind(item.contentMimeType) === 'image' ? '图片' : previewKind(item.contentMimeType) === 'audio' ? '音频' : previewKind(item.contentMimeType) === 'text' ? '文本' : '文件' }}</strong>
       <span>{{ item.contentMimeType }} · {{ item.byteLength }} 字节</span>
       <button v-if="item.previewUrl && previewKind(item.contentMimeType) !== 'file'" type="button" @click="loadPreview(item)">预览</button>
@@ -25,7 +25,9 @@
         <p v-if="editState(item).message" :role="editState(item).state === 'accepted' ? 'status' : 'alert'">{{ editState(item).message }}</p>
       </form>
     </div>
-    <button v-if="selectedKeys.length" type="button" class="finalize-button" :disabled="finalizeState.busy" @click="finalizeSelected">{{ finalizeState.busy ? '正在正式提交并验收…' : `验收选中的 ${selectedKeys.length} 项成果` }}</button>
+    <button v-if="selectedKeys.length || finalizeState.intent" type="button" class="finalize-button" :disabled="finalizeState.busy || finalizeState.state === 'completed' || finalizeState.state === 'recovery_error' || (finalizeState.receipt?.state === 'failed' && !finalizeState.receipt.retryable)" @click="finalizeSelected">{{ finalizeState.busy ? '正在确认原验收操作…' : finalizeState.state === 'completed' ? '需求已完成' : finalizeState.intent ? '继续原验收' : `验收选中的 ${selectedKeys.length} 项成果` }}</button>
+    <button v-if="finalizeState.intent" type="button" class="finalize-status-button" :disabled="finalizeState.busy" @click="finalizations.check">查询验收状态</button>
+    <small v-if="finalizeState.intent">原验收已固定 {{ finalizeState.intent.body.selectedOutputs.length }} 项成果；查询不会重新生成、提交或验收。</small>
     <p v-if="finalizeState.message" :role="finalizeState.state === 'completed' ? 'status' : 'alert'">{{ finalizeState.message }}</p>
     <small>这里只使用服务端按所属人校验并持久保存的真实字节；个人保存与正式验收是独立操作。</small>
     <div v-if="expandedUrl" class="image-overlay" role="dialog" aria-modal="true" aria-label="放大查看议事图片" @click.self="expandedUrl = ''" @keydown.esc="expandedUrl = ''">
@@ -40,6 +42,7 @@ import { exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedEx
 import { saveOutputBlob } from '../../utils/outputDownload.js'
 import { readOutputRecovery, writeOutputRecovery } from '../../composables/juyiting/bountyOutputRecovery.js'
 import { useHallConversationArchive } from '../../composables/juyiting/useHallConversationArchive.js'
+import { useHallBountyFinalization, safeFinalizationVersion } from '../../composables/juyiting/useHallBountyFinalization.js'
 
 const props = defineProps({
   enabled: { type: Boolean, default: false }, request: { type: Object, default: null },
@@ -60,7 +63,10 @@ const items = ref([]); const loading = ref(false); const error = ref('')
 const previewUrls = ref({}); const textPreviews = ref({}); const itemErrors = ref({})
 const editStates = ref({}); const editDrafts = ref({}); const editIntents = ref({}); const selectedKeys = ref([])
 const expandedUrl = ref('')
-const finalizeState = ref({ state: 'idle', busy: false, message: '', intent: null })
+const finalizations = useHallBountyFinalization({ api: agentApi,
+  conversationId: () => props.enabled ? props.conversationId : null, identityKey: () => props.identityKey
+})
+const finalizeState = finalizations.status
 let abort = null; let timer = null; let epoch = 0
 const inFlight = new Set()
 const validRootRequest = () => props.enabled && exactOutputId(props.request?.requestId) && props.request?.conversationId === props.conversationId
@@ -84,7 +90,7 @@ const cleanup = () => {
   requestSnapshots.value = []; followupRequestIds.value = []; items.value = []; previewUrls.value = {}; textPreviews.value = {}
   archives.reset()
   itemErrors.value = {}; editStates.value = {}; editDrafts.value = {}; editIntents.value = {}; selectedKeys.value = []
-  expandedUrl.value = ''; finalizeState.value = { state: 'idle', busy: false, message: '', intent: null }; loading.value = false; error.value = ''
+  expandedUrl.value = ''; loading.value = false; error.value = ''
 }
 const fetchRequest = async (requestId, controller) => {
   const response = await api.get(`/requests/${encodeURIComponent(requestId)}`, {}, { autoLoading: false, needAuth: true, signal: controller.signal })
@@ -114,7 +120,9 @@ const list = async () => {
     if (generation !== epoch || controller.signal.aborted) return
     const current = new Map(catalog.map(item => [outputItemKey(item), item.sha256]))
     for (const previous of items.value) if (current.get(outputItemKey(previous)) !== previous.sha256 && previewUrls.value[outputItemKey(previous)]) URL.revokeObjectURL(previewUrls.value[outputItemKey(previous)])
-    items.value = catalog; selectedKeys.value = selectedKeys.value.filter(key => current.has(key)); error.value = ''
+    items.value = catalog; selectedKeys.value = finalizeState.value.intent
+      ? finalizeState.value.intent.body.selectedOutputs.map(outputItemKey)
+      : selectedKeys.value.filter(key => current.has(key)); error.value = ''
   } catch (cause) { if (!controller.signal.aborted && generation === epoch) error.value = cause?.message || '读取成果失败' }
   finally { if (generation === epoch) { abort = null; loading.value = false; if (validRootRequest() && !error.value) timer = setTimeout(list, 2500) } }
 }
@@ -150,31 +158,25 @@ const archive = async item => {
 }
 const stepFor = item => requestSnapshots.value.find(request => request.requestId === item.requestId)?.steps?.find(step => step.stepId === item.stepId)
 const finalizeSelected = async () => {
-  const generation = epoch
-  if (finalizeState.value.busy || !selectedKeys.value.length) return
+  if (finalizeState.value.busy) return
+  if (finalizeState.value.intent) return finalizations.resume()
+  if (!selectedKeys.value.length || finalizeState.value.state === 'recovery_error') return
+  const invalid = message => { finalizeState.value = { ...finalizeState.value, state: 'error', busy: false, message } }
   const selected = items.value.filter(item => selectedKeys.value.includes(outputItemKey(item)))
   const steps = selected.map(stepFor)
-  if (selected.length !== selectedKeys.value.length || steps.some(step => !step)) { finalizeState.value = { state: 'error', busy: false, message: '最终成果范围已变化，请刷新后重选。', intent: null }; return }
-  const assignmentRevisions = steps.map(step => Number(step.assignmentRevision))
-  if (assignmentRevisions.some(value => !Number.isSafeInteger(value) || value < 0) || new Set(assignmentRevisions).size !== 1) { finalizeState.value = { state: 'error', busy: false, message: '任务版本无法安全确认，请刷新后重试。', intent: null }; return }
-  const taskVersion = Number(props.taskVersion)
-  if (!Number.isSafeInteger(taskVersion) || taskVersion < 0) { finalizeState.value = { state: 'error', busy: false, message: '任务版本无法安全确认，请刷新任务后重试。', intent: null }; return }
+  if (selected.length !== selectedKeys.value.length || steps.some(step => !step)) return invalid('最终成果范围已变化，请刷新后重选。')
+  const assignmentRevisions = steps.map(step => safeFinalizationVersion(step.assignmentRevision))
+  if (assignmentRevisions.some(value => value == null) || new Set(assignmentRevisions).size !== 1) return invalid('任务指派版本无法安全确认，请刷新后重试。')
+  const taskVersion = safeFinalizationVersion(props.taskVersion)
+  if (taskVersion == null) return invalid('任务版本无法安全确认，请刷新任务后重试。')
   const taskIds = [...new Set(steps.map(step => step.taskId))]
-  if (taskIds.length !== 1 || !exactOutputId(taskIds[0])) { finalizeState.value = { state: 'error', busy: false, message: '最终成果不属于同一任务。', intent: null }; return }
-  let intent = finalizeState.value.intent
-  try {
-    if (!intent) intent = { idempotencyKey: uuid('conversation-finalize'), taskId: taskIds[0], body: { expectedTaskVersion: taskVersion, expectedAssignmentRevision: assignmentRevisions[0], conversationId: props.conversationId, summary: '聚义厅会话选定成果验收', selectedOutputs: selected.map(item => ({ requestId: item.requestId, stepId: item.stepId, outputId: item.outputId, sha256: item.sha256, title: item.outputId, purpose: '用户选定最终成果' })) } }
-    finalizeState.value = { state: 'submitting', busy: true, message: '正在按精确摘要晋升、正式提交并验收…', intent }
-    const response = await agentApi.execute({ url: `/tasks/${encodeURIComponent(intent.taskId)}/finalizations`, method: 'POST', headers: { 'Idempotency-Key': intent.idempotencyKey }, data: intent.body, autoLoading: false, needAuth: true })
-    if (generation !== epoch) return
-    const value = response?.data?.data ?? response?.data
-    if (value?.stage !== 'TASK_COMPLETED' || value?.deliveryState !== 'accepted' || !exactOutputId(value?.deliveryId)) throw new Error('服务端尚未确认任务完成。')
-    finalizeState.value = { state: 'completed', busy: false, message: `正式成果已验收，任务已完成：${value.deliveryId}`, intent }
-  } catch (cause) {
-    if (generation !== epoch) return
-    const unknown = cause?.requestErrorClass === 'network' || cause instanceof TypeError || cause?.status >= 500 || cause?.response?.status >= 500
-    finalizeState.value = { state: unknown ? 'unknown' : 'error', busy: false, message: unknown ? '验收结果不明确；再次点击将重放同一操作，不会重复生成或重复验收。' : (cause?.message || '正式验收失败。'), intent }
-  }
+  if (taskIds.length !== 1 || !exactOutputId(taskIds[0])) return invalid('最终成果不属于同一任务。')
+  return finalizations.submit({ taskId: taskIds[0], body: {
+    expectedTaskVersion: taskVersion, expectedAssignmentRevision: assignmentRevisions[0],
+    conversationId: props.conversationId, summary: '聚义厅会话选定成果验收',
+    selectedOutputs: selected.map(item => ({ requestId: item.requestId, stepId: item.stepId,
+      outputId: item.outputId, sha256: item.sha256, title: item.outputId, purpose: '用户选定最终成果' }))
+  } })
 }
 const editImage = async item => {
   const generation = epoch

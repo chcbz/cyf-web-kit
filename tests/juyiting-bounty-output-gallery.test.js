@@ -7,6 +7,7 @@ import { compileScript, parse } from '@vue/compiler-sfc'
 import { exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart } from '../src/composables/juyiting/bountyOutputCatalog.js'
 import { readOutputRecovery, writeOutputRecovery } from '../src/composables/juyiting/bountyOutputRecovery.js'
 import { useHallConversationArchive } from '../src/composables/juyiting/useHallConversationArchive.js'
+import { useHallBountyFinalization, safeFinalizationVersion } from '../src/composables/juyiting/useHallBountyFinalization.js'
 
 const filename = new URL('../src/components/juyiting/BountyExecutionOutputs.vue', import.meta.url).pathname
 const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
@@ -19,6 +20,7 @@ const script = compileScript(descriptor, { id: 'hall-bounty-live-output-test', i
   .replace(/^import\s+\{\s*saveOutputBlob\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { saveOutputBlob } = deps')
   .replace(/^import\s+\{\s*readOutputRecovery,[^}]+\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { readOutputRecovery, writeOutputRecovery } = deps')
   .replace(/^import\s+\{\s*useHallConversationArchive\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { useHallConversationArchive } = deps')
+  .replace(/^import\s+\{\s*useHallBountyFinalization,[^}]+\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { useHallBountyFinalization, safeFinalizationVersion } = deps')
   .replace('export default', 'return')
 const zeroDigest = createHash('sha256').update(Buffer.alloc(20)).digest('hex')
 const item = stepId => {
@@ -29,6 +31,8 @@ const item = stepId => {
 const step = id => ({ stepId: id, kind: 'EXECUTE', executionId: `execution-${id}` })
 
 describe('bounty output gallery live owner scope', () => {
+  beforeEach(() => window.sessionStorage.clear())
+  afterEach(() => window.sessionStorage.clear())
   const previous = new Map()
   before(() => {
     for (const name of ['Element', 'HTMLElement', 'SVGElement', 'Node']) {
@@ -49,7 +53,7 @@ describe('bounty output gallery live owner scope', () => {
     const oldCreate = URL.createObjectURL
     const oldRevoke = URL.revokeObjectURL
     let poll; let requestReads = 0; let created = 0
-    const revoked = []
+    const revoked = []; const previewObservers = new Set()
     const mockApi = { get: async path => {
       if (path === '/requests/request-1') return { data: { data: {
         requestId: 'request-1', conversationId: 'conversation-1',
@@ -61,7 +65,7 @@ describe('bounty output gallery live owner scope', () => {
     }, execute: async () => ({ data: new Blob([new Uint8Array(20)], { type: 'image/png' }) }) }
     const Component = new Function('Vue', 'deps', script)(Vue, {
       createApi: () => mockApi, exactOutputId, outputCatalogItems, outputItemKey,
-      previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, useHallConversationArchive, readOutputRecovery, writeOutputRecovery, saveOutputBlob: () => {}
+      previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, useHallBountyFinalization, safeFinalizationVersion, useHallConversationArchive, readOutputRecovery, writeOutputRecovery, saveOutputBlob: () => {}
     })
     globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? (poll = fn, 999) : oldTimeout(fn, delay, ...args)
     globalThis.clearTimeout = id => { if (id === 999) poll = null; else oldClear(id) }
@@ -82,13 +86,21 @@ describe('bounty output gallery live owner scope', () => {
       for (let index = 0; index < wrapper.findAll('.bounty-output').length; index++) {
         const output = wrapper.findAll('.bounty-output')[index]
         const preview = output.findAll('button').find(button => button.text() === '预览')
-        await preview.trigger('click')
-        for (let attempt = 0; attempt < 50 && wrapper.findAll('.bounty-output img').length <= index; attempt++) { await new Promise(resolve => setImmediate(resolve)); await flushPromises() }
+        const ready = new Promise(resolve => {
+          const observer = new window.MutationObserver(() => {
+            if (wrapper.findAll('.bounty-output img').length > index) {
+              observer.disconnect(); previewObservers.delete(observer); resolve()
+            }
+          })
+          previewObservers.add(observer); observer.observe(wrapper.element, { childList: true, subtree: true })
+        })
+        await preview.trigger('click'); await ready
       }
       expect(wrapper.findAll('.bounty-output img').map(image => image.attributes('src')))
         .to.deep.equal(['blob:test-1', 'blob:test-2'])
     } finally {
       try {
+        for (const observer of previewObservers) observer.disconnect()
         wrapper?.unmount()
       } finally {
         globalThis.setTimeout = oldTimeout
@@ -119,7 +131,7 @@ describe('bounty output gallery live owner scope', () => {
       return { data: { data: { requestId: 'request-2', stepId: 'step-2' } } }
     } }
     const Component = new Function('Vue', 'deps', script)(Vue, {
-      createApi: () => chatApi, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, useHallConversationArchive,
+      createApi: () => chatApi, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, useHallBountyFinalization, safeFinalizationVersion, useHallConversationArchive,
       readOutputRecovery: () => structuredClone(recovery),
       writeOutputRecovery: (_scope, value) => { recovery = JSON.parse(JSON.stringify(value)); return true }, saveOutputBlob: () => {}
     })
@@ -179,7 +191,7 @@ describe('bounty output gallery live owner scope', () => {
     }
     const Component = new Function('Vue', 'deps', script)(Vue, {
       createApi: () => chatApi, exactOutputId, outputCatalogItems, outputItemKey,
-      previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, useHallConversationArchive, readOutputRecovery, writeOutputRecovery,
+      previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, useHallBountyFinalization, safeFinalizationVersion, useHallConversationArchive, readOutputRecovery, writeOutputRecovery,
       saveOutputBlob: () => { downloaded++ }
     })
     globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : originalTimeout(fn, delay, ...args)
@@ -214,10 +226,13 @@ describe('bounty output gallery live owner scope', () => {
       throw new Error(`unexpected GET ${path}`)
     }, execute: async () => { throw new Error('unexpected chat write') } }
     const agentApi = { execute: async request => { submitted = request; return { data: { data: {
-      stage: 'TASK_COMPLETED', deliveryState: 'accepted', deliveryId: 'delivery-1' } } } } }
+      operationId: 'finalization-1', taskId: 'task-1', conversationId: 'conversation-1', state: 'completed',
+      stateVersion: '5', stage: 'TASK_COMPLETED', expectedTaskVersion: '9', expectedAssignmentRevision: '3',
+      selectedOutputs: request.data.selectedOutputs, deliveryId: 'delivery-1', deliveryState: 'accepted',
+      taskState: 'completed', taskVersion: '12', errorCode: null, retryable: false } } } } }
     const Component = new Function('Vue', 'deps', script)(Vue, {
       createApi: base => base === '/agent' ? agentApi : chatApi, exactOutputId, outputCatalogItems, outputItemKey,
-      previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, useHallConversationArchive, readOutputRecovery, writeOutputRecovery, saveOutputBlob: () => {}
+      previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, useHallBountyFinalization, safeFinalizationVersion, useHallConversationArchive, readOutputRecovery, writeOutputRecovery, saveOutputBlob: () => {}
     })
     globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : oldTimeout(fn, delay, ...args)
     globalThis.clearTimeout = id => { if (id !== 999) oldClear(id) }
@@ -231,7 +246,7 @@ describe('bounty output gallery live owner scope', () => {
       await flushPromises()
       expect(submitted.data.expectedTaskVersion).to.equal(9)
       expect(submitted.data.expectedAssignmentRevision).to.equal(3)
-      expect(wrapper.text()).to.include('任务已完成')
+      expect(wrapper.text()).to.include('需求已完成')
     } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
   })
 
@@ -248,7 +263,7 @@ describe('bounty output gallery live owner scope', () => {
     }, execute: request => { sent = request; return new Promise(resolve => { finishWrite = resolve }) } }
     const Component = new Function('Vue', 'deps', script)(Vue, {
       createApi: () => chatApi, exactOutputId, outputCatalogItems, outputItemKey,
-      previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, useHallConversationArchive, readOutputRecovery, writeOutputRecovery, saveOutputBlob: () => {}
+      previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, useHallBountyFinalization, safeFinalizationVersion, useHallConversationArchive, readOutputRecovery, writeOutputRecovery, saveOutputBlob: () => {}
     })
     globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : oldTimeout(fn, delay, ...args)
     globalThis.clearTimeout = id => { if (id !== 999) oldClear(id) }
@@ -285,7 +300,7 @@ describe('bounty output gallery live owner scope', () => {
     const agentApi = { execute: () => new Promise(resolve => { finishWrite = resolve }) }
     const Component = new Function('Vue', 'deps', script)(Vue, {
       createApi: base => base === '/agent' ? agentApi : chatApi, exactOutputId, outputCatalogItems, outputItemKey,
-      previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, useHallConversationArchive, readOutputRecovery, writeOutputRecovery, saveOutputBlob: () => {}
+      previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, useHallBountyFinalization, safeFinalizationVersion, useHallConversationArchive, readOutputRecovery, writeOutputRecovery, saveOutputBlob: () => {}
     })
     globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : oldTimeout(fn, delay, ...args)
     globalThis.clearTimeout = id => { if (id !== 999) oldClear(id) }
@@ -297,7 +312,7 @@ describe('bounty output gallery live owner scope', () => {
       await wrapper.find('input[type="checkbox"]').setValue(true)
       await wrapper.find('.finalize-button').trigger('click')
       await flushPromises()
-      expect(wrapper.text()).to.include('正在正式提交并验收')
+      expect(wrapper.text()).to.include('正在确认原验收操作')
       await wrapper.setProps({ identityKey: 'owner-b' })
       await flushPromises()
       finishWrite({ data: { data: { stage: 'TASK_COMPLETED', deliveryState: 'accepted', deliveryId: 'delivery-a' } } })
@@ -323,7 +338,7 @@ describe('bounty output gallery live owner scope', () => {
     }) }) }
     const Component = new Function('Vue', 'deps', script)(Vue, {
       createApi: () => chatApi, exactOutputId, outputCatalogItems, outputItemKey,
-      previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, useHallConversationArchive,
+      previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, useHallBountyFinalization, safeFinalizationVersion, useHallConversationArchive,
       readOutputRecovery, writeOutputRecovery, saveOutputBlob: value => downloads.push(value)
     })
     globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : oldTimeout(fn, delay, ...args)
@@ -362,7 +377,7 @@ describe('bounty output gallery live owner scope', () => {
     const stored = new Map(); const storage = { getItem: key => stored.get(key) || null, setItem: (key, value) => stored.set(key, value) }
     const Component = new Function('Vue', 'deps', script)(Vue, {
       createApi: () => chatApi, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps,
-      downloadMimeType, outputDownloadName, outputAssetPart, readOutputRecovery, writeOutputRecovery, saveOutputBlob: () => {},
+      downloadMimeType, outputDownloadName, outputAssetPart, useHallBountyFinalization, safeFinalizationVersion, readOutputRecovery, writeOutputRecovery, saveOutputBlob: () => {},
       useHallConversationArchive: args => useHallConversationArchive({ ...args, storage })
     })
     globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? (poll = fn, 999) : oldTimeout(fn, delay, ...args)
@@ -411,7 +426,7 @@ describe('bounty output gallery live owner scope', () => {
     const stored = new Map(); const storage = { getItem: key => stored.get(key) || null, setItem: (key, value) => stored.set(key, value) }
     const Component = new Function('Vue', 'deps', script)(Vue, {
       createApi: () => chatApi, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps,
-      downloadMimeType, outputDownloadName, outputAssetPart, readOutputRecovery, writeOutputRecovery, saveOutputBlob: () => {},
+      downloadMimeType, outputDownloadName, outputAssetPart, useHallBountyFinalization, safeFinalizationVersion, readOutputRecovery, writeOutputRecovery, saveOutputBlob: () => {},
       useHallConversationArchive: args => useHallConversationArchive({ ...args, storage })
     })
     globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : oldTimeout(fn, delay, ...args)
@@ -439,5 +454,87 @@ describe('bounty output gallery live owner scope', () => {
       expect(stored.size).to.equal(1)
     } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
   })
+
+  it('restores the locked original acceptance after remount and only explicitly replays after a read-only 404', async () => {
+    const oldTimeout = globalThis.setTimeout; const oldClear = globalThis.clearTimeout
+    const calls = []; let reads = 0
+    const chatApi = { get: async path => {
+      if (path === '/requests/request-1') return { data: { data: { requestId: 'request-1', conversationId: 'conversation-1',
+        steps: [{ ...step('step-1'), taskId: 'task-1', assignmentRevision: '3' }] } } }
+      if (path.endsWith('/steps/step-1/outputs')) return { data: { data: [item('step-1')] } }
+      throw new Error(`unexpected GET ${path}`)
+    } }
+    const agentApi = { execute: async request => {
+      calls.push(request)
+      if (calls.length === 1) throw new TypeError('lost POST ACK')
+      if (request.method === 'GET') { reads++; throw Object.assign(new Error('not visible yet'), { status: 404 }) }
+      return { data: { data: { operationId: 'finalization-original', taskId: 'task-1', conversationId: 'conversation-1',
+        state: 'completed', stateVersion: '5', stage: 'TASK_COMPLETED', expectedTaskVersion: '9', expectedAssignmentRevision: '3',
+        selectedOutputs: request.data.selectedOutputs, deliveryId: 'delivery-original', deliveryState: 'accepted',
+        taskState: 'completed', taskVersion: '12', errorCode: null, retryable: false } } }
+    } }
+    const Component = new Function('Vue', 'deps', script)(Vue, {
+      createApi: base => base === '/agent' ? agentApi : chatApi, exactOutputId, outputCatalogItems, outputItemKey,
+      previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, useHallConversationArchive,
+      useHallBountyFinalization, safeFinalizationVersion, readOutputRecovery, writeOutputRecovery, saveOutputBlob: () => {}
+    })
+    globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : oldTimeout(fn, delay, ...args)
+    globalThis.clearTimeout = id => { if (id !== 999) oldClear(id) }
+    const props = { enabled: true, identityKey: 'owner-finalization-recovery', taskVersion: '9', conversationId: 'conversation-1',
+      request: { requestId: 'request-1', conversationId: 'conversation-1', stateVersion: '1' } }
+    let wrapper
+    try {
+      wrapper = mount(Component, { props }); await flushPromises()
+      await wrapper.find('input[type="checkbox"]').setValue(true)
+      await wrapper.find('.finalize-button').trigger('click'); await flushPromises()
+      expect(calls).to.have.length(1)
+      await wrapper.setProps({ request: { ...props.request, stateVersion: '2' } }); await flushPromises()
+      expect(calls).to.have.length(1)
+      expect(wrapper.find('input[type="checkbox"]').attributes()).to.have.property('disabled')
+      wrapper.unmount(); wrapper = mount(Component, { props: { ...props, taskVersion: '12' } }); await flushPromises()
+      expect(calls).to.have.length(1)
+      expect(wrapper.find('input[type="checkbox"]').element.checked).to.equal(true)
+      expect(wrapper.find('.finalize-button').text()).to.equal('继续原验收')
+      await wrapper.find('.finalize-status-button').trigger('click'); await flushPromises()
+      expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET'])
+      expect(wrapper.text()).not.to.include('需求已完成')
+      await wrapper.find('.finalize-button').trigger('click'); await flushPromises()
+      expect(reads).to.equal(2)
+      expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET', 'GET', 'POST'])
+      expect(calls[3].data).to.deep.equal(calls[0].data)
+      expect(calls[3].headers).to.deep.equal(calls[0].headers)
+      expect(wrapper.text()).to.include('需求已完成')
+      expect(wrapper.text()).to.include('delivery-original')
+      expect(wrapper.find('.finalize-button').attributes()).to.have.property('disabled')
+    } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
+  })
+
+  for (const [version, revision] of [['', '3'], ['01', '3'], ['9007199254740992', '3'], ['9', ''], ['9', '01']]) {
+    it(`refuses unknown/noncanonical task=${JSON.stringify(version)} assignment=${JSON.stringify(revision)} versions before acceptance`, async () => {
+      const oldTimeout = globalThis.setTimeout; const oldClear = globalThis.clearTimeout
+      const writes = []
+      const chatApi = { get: async path => {
+        if (path === '/requests/request-1') return { data: { data: { requestId: 'request-1', conversationId: 'conversation-1',
+          steps: [{ ...step('step-1'), taskId: 'task-1', assignmentRevision: revision }] } } }
+        return { data: { data: [item('step-1')] } }
+      } }
+      const Component = new Function('Vue', 'deps', script)(Vue, {
+        createApi: base => base === '/agent' ? { execute: async request => { writes.push(request) } } : chatApi,
+        exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName,
+        outputAssetPart, useHallConversationArchive, useHallBountyFinalization, safeFinalizationVersion, readOutputRecovery,
+        writeOutputRecovery, saveOutputBlob: () => {}
+      })
+      globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : oldTimeout(fn, delay, ...args)
+      globalThis.clearTimeout = id => { if (id !== 999) oldClear(id) }
+      let wrapper
+      try {
+        wrapper = mount(Component, { props: { enabled: true, identityKey: 'owner-version', taskVersion: version,
+          conversationId: 'conversation-1', request: { requestId: 'request-1', conversationId: 'conversation-1' } } })
+        await flushPromises(); await wrapper.find('input[type="checkbox"]').setValue(true)
+        await wrapper.find('.finalize-button').trigger('click'); await flushPromises()
+        expect(writes).to.have.length(0); expect(wrapper.text()).to.include('版本无法安全确认')
+      } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
+    })
+  }
 
 })
