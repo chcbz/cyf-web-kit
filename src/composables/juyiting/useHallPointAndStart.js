@@ -22,7 +22,7 @@ const initialState = () => ({ status: 'IDLE', intent: null, projection: null, er
 /** Negotiation is supplied by the server-capability integration, never the UI flag.
  * This source slice does not advertise support or authorize fees/tools itself. */
 export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
-  isSupported = () => false, canAssign = () => false, createIdempotencyKey = () => globalThis.crypto.randomUUID(),
+  isSupported = () => false, canReplayOriginal = () => false, canAssign = () => false, createIdempotencyKey = () => globalThis.crypto.randomUUID(),
   onAdmitted = async () => false }) => {
   const scope = computed(() => unref(typeof actorScopeKey === 'function' ? actorScopeKey() : actorScopeKey))
   const state = ref(initialState())
@@ -143,7 +143,7 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
     try { return await project(intent, captured, epoch) } catch (error) {
       if (!current(captured, epoch)) return false
       if (error?.status !== 404 || error?.code !== 'ASSIGNMENT_OPERATION_UNAVAILABLE' ||
-        intent.postAcknowledged || intent.projection || isSupported({ id: taskId }, { agentId: intent.body.agentId }) !== true) throw error
+        intent.postAcknowledged || intent.projection || canReplayOriginal({ id: taskId }, { agentId: intent.body.agentId }) !== true) throw error
       return send(intent, captured, epoch)
     }
   })

@@ -314,6 +314,8 @@
             :funded-quote-preview="fundedQuotePreview"
             :funded-claim-state="fundedClaimState"
             :funded-create-recovery="fundedCreateRecovery"
+            :point-and-start-state="pointAndStartState"
+            :point-and-start-busy="pointAndStartBusy"
             :format-time="formatTime"
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
@@ -347,6 +349,8 @@
             @open-formal-results="openFormalResults"
             @start-formal-draft="openPanel('formalDraft', { restore: true })"
             @resume-funded-create="resumeFundedCreate"
+            @check-point-and-start="checkPointAndStartOriginal"
+            @resume-point-and-start="resumePointAndStartOriginal"
             @cancel-funded-create-recovery="showToast('原资金榜请求仍会保留；请在准备好后明确恢复。')"
             @cancel-funding="cancelFunding"
             @load-settlement="loadSettlement"
@@ -709,6 +713,9 @@ import { useHallSceneState } from '@/composables/juyiting/useHallSceneState'
 import { useHallSceneDebugBridge } from '@/composables/juyiting/useHallSceneDebugBridge'
 import { useHallSound } from '@/composables/juyiting/useHallSound'
 import { useHallTaskActions } from '@/composables/juyiting/useHallTaskActions'
+import { useHallPointAndStart } from '@/composables/juyiting/useHallPointAndStart'
+import { createPointAndStartIntentStore } from '@/composables/juyiting/hallPointAndStartIntent'
+import { capabilityAllowsNewStart, capabilityAllowsOriginalReplay, loadNativeBountyCapability } from '@/composables/juyiting/hallNativeBountyCapability'
 import { useHallQuickMatter } from '@/composables/juyiting/useHallQuickMatter'
 import { useTaskWorkspace } from '@/composables/juyiting/useTaskWorkspace'
 import { createDisabledTaskWorkspaceBinding, isTaskWorkspaceBuildEnabled } from '@/composables/juyiting/taskWorkspaceFeature'
@@ -1919,25 +1926,6 @@ const resumeFundedCreate = async () => {
   return created
 }
 
-const assignTask = async (task, agent) => {
-  const targetAgents = Array.isArray(agent) ? agent : [agent].filter(Boolean)
-  const hasExplicitAgentId = item => typeof item?.agentId === 'string' && Boolean(item.agentId.trim())
-  if (!task?.id || !targetAgents.length || targetAgents.some(item => !hasExplicitAgentId(item))) return false
-  if (task.funding?.mode === 'FUNDED_SINGLE_AGENT' && !economyPreviewEnabled.value) return false
-  if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT') {
-    if (targetAgents.some(item => !canAssign(task, item))) return false
-  }
-
-  taskWorkspaceBinding.clearExplicitActor()
-  const assignmentSucceeded = await runAssignTask(task, agent)
-  if (!assignmentSucceeded) return false
-
-  const canonicalTask = tasks.value.find(item => item.id === task.id) || task
-  if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT' ||
-    (canonicalTask.status === 'assigned' && canonicalTask.assignedAgentId === targetAgents[0].agentId)) markTaskAssigned(canonicalTask, targetAgents)
-  return true
-}
-
 const autoAssignTask = async (task) => {
   if (task?.funding?.mode === 'FUNDED_SINGLE_AGENT') return false
   await runAutoAssignTask(task)
@@ -1967,6 +1955,7 @@ const loadSettlement = async (task) => runLoadSettlement(task)
 const {
   activeRequest,
   activeTurns,
+  adoptBountyBootstrap,
   capabilityState,
   cancelHallReplyTurn,
   cancelDeliberation,
@@ -2028,6 +2017,143 @@ const {
     if (agentId) markAgentSpeaking(agentId, '收到传令', 'system')
   }
 })
+
+
+const pointAndStartCapability = ref(null)
+const pointAndStartStorage = typeof window !== 'undefined' ? window.localStorage : null
+const pointAndStartOfferMatches = (capability, taskId, agentId, generation = apiStore.authorizationGeneration, scope = hallIdentityScope.value) =>
+  capability?.taskId === taskId && capability?.targetAgentId === agentId &&
+  capability?.authorizationGeneration === generation && capability?.identityScope === scope
+const pointAndStartIntentState = (taskId) => createPointAndStartIntentStore({
+  storage: pointAndStartStorage,
+  scope: hallIdentityScope.value,
+  taskId
+}).read()
+const clearPointAndStartCapability = () => { pointAndStartCapability.value = null }
+const readPointAndStartCapability = async (taskId, targetAgentId) => {
+  const identityScope = hallIdentityScope.value
+  const authorizationGeneration = apiStore.authorizationGeneration
+  let capability = null
+  try { capability = await loadNativeBountyCapability({ agentApi, taskId, targetAgentId }) } catch (error) {
+    if (identityScope === hallIdentityScope.value && authorizationGeneration === apiStore.authorizationGeneration) {
+      log.warn('native bounty capability is unavailable:', error)
+    }
+    return null
+  }
+  if (identityScope !== hallIdentityScope.value || authorizationGeneration !== apiStore.authorizationGeneration || !capability) return null
+  pointAndStartCapability.value = Object.freeze({ ...capability, identityScope, authorizationGeneration })
+  return pointAndStartCapability.value
+}
+const canUsePointAndStartOffer = (task, agent) => pointAndStartOfferMatches(pointAndStartCapability.value, task?.id, agent?.agentId) &&
+  capabilityAllowsNewStart(pointAndStartCapability.value, task, agent)
+const canReplayPointAndStartOriginal = (task, agent) => pointAndStartOfferMatches(pointAndStartCapability.value, task?.id, agent?.agentId) &&
+  capabilityAllowsOriginalReplay(pointAndStartCapability.value, task?.id, agent?.agentId)
+const attachAdmittedPointAndStart = async ({ task, targetAgentId, reference, isCurrent }) => {
+  if (!isCurrent?.() || panelDisposed || task?.id !== reference?.taskId || targetAgentId !== reference?.targetAgentId) return false
+  // Admission receives only the canonical TaskDTO. Never synthesize assignment
+  // fields from a grant receipt or choose a different roster target.
+  const target = operableRosterAgents.value.find(agent => agent?.agentId === targetAgentId)
+  if (!target) return false
+  tasks.value = tasks.value.map(item => item?.id === task.id ? task : item)
+  selectedTask.value = task
+  if (!openPanel('chat')) return false
+  enterBountyDiscussion(task)
+  await nextTick()
+  if (!isCurrent?.() || panelDisposed || selectedTask.value?.id !== task.id) return false
+  return adoptBountyBootstrap(reference)
+}
+const {
+  state: pointAndStartState,
+  busy: pointAndStartBusy,
+  start: startPointAndStart,
+  checkOriginal: checkPointAndStart,
+  resumeOriginal: resumePointAndStart,
+  dispose: disposePointAndStart
+} = useHallPointAndStart({
+  agentApi,
+  actorScopeKey: hallIdentityScope,
+  storage: pointAndStartStorage,
+  isSupported: canUsePointAndStartOffer,
+  canReplayOriginal: canReplayPointAndStartOriginal,
+  canAssign: (task, agent) => {
+    const current = operableRosterAgents.value.find(item => item?.agentId === agent?.agentId)
+    return Boolean(current && canAssign(task, current))
+  },
+  onAdmitted: attachAdmittedPointAndStart
+})
+const explainPointAndStartState = () => ({
+  UNKNOWN: '原点将结果待核对；不会改走旧式点将。',
+  PREPARING: '原点将已受理，议事仍在准备；可只读核对。',
+  ADMITTED: '首轮议事已受理，正在接入原会话；不会重发首轮。',
+  HISTORICAL: '原点将已不再是当前指派，仅可核对历史事实。',
+  FAILED: '原点将已记录失败状态；请核对原操作。'
+}[pointAndStartState.value.status] || '原点将正在核对；不会创建另一条点将。')
+const checkPointAndStartOriginal = async (task) => {
+  if (!task?.id) return false
+  const result = await checkPointAndStart(task.id)
+  if (!result && pointAndStartState.value.intent?.taskId === task.id) showToast(explainPointAndStartState())
+  return result
+}
+const resumePointAndStartOriginal = async (task) => {
+  const intent = pointAndStartIntentState(task?.id)
+  if (intent.state !== 'PRESENT') return checkPointAndStartOriginal(task)
+  const targetAgentId = intent.record.body.agentId
+  const capability = await readPointAndStartCapability(task.id, targetAgentId)
+  if (!capability || !canReplayPointAndStartOriginal({ id: task.id }, { agentId: targetAgentId })) {
+    showToast('原点将只能只读核对；当前未取得可重放的服务端办理通道。')
+    return checkPointAndStartOriginal(task)
+  }
+  return resumePointAndStart(task.id)
+}
+const assignTask = async (task, agent) => {
+  if (!task?.id) return false
+  // A durable v2 original always wins over every normal lane. This check happens
+  // before funded/multi/open eligibility so a changed current snapshot cannot
+  // turn an uncertain original write into a fresh legacy assignment.
+  const original = pointAndStartIntentState(task.id)
+  if (original.state === 'PRESENT' || original.state === 'CORRUPT') {
+    if (original.state === 'CORRUPT') showToast('原点将恢复记录损坏；为避免重复办理，未改走旧式点将。')
+    else await checkPointAndStartOriginal(task)
+    return false
+  }
+
+  const targetAgents = Array.isArray(agent) ? agent : [agent].filter(Boolean)
+  const hasExplicitAgentId = item => typeof item?.agentId === 'string' && Boolean(item.agentId.trim())
+  if (!targetAgents.length || targetAgents.some(item => !hasExplicitAgentId(item))) return false
+  if (task.funding?.mode === 'FUNDED_SINGLE_AGENT' && !economyPreviewEnabled.value) return false
+  if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT' && targetAgents.some(item => !canAssign(task, item))) return false
+
+  const oneOrdinaryTarget = task.funding?.mode !== 'FUNDED_SINGLE_AGENT' && targetAgents.length === 1
+  if (oneOrdinaryTarget) {
+    const target = targetAgents[0]
+    const capability = await readPointAndStartCapability(task.id, target.agentId)
+    if (capability && canUsePointAndStartOffer(task, target)) {
+      const started = await startPointAndStart({
+        task,
+        agent: target,
+        requestedOperations: capability.requestedOperations,
+        initialOperation: capability.initialOperation,
+        inputRefs: []
+      })
+      if (!started) showToast(explainPointAndStartState())
+      return started
+    }
+  }
+
+  taskWorkspaceBinding.clearExplicitActor()
+  const assignmentSucceeded = await runAssignTask(task, agent)
+  if (!assignmentSucceeded) return false
+  const canonicalTask = tasks.value.find(item => item.id === task.id) || task
+  if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT' ||
+    (canonicalTask.status === 'assigned' && canonicalTask.assignedAgentId === targetAgents[0].agentId)) markTaskAssigned(canonicalTask, targetAgents)
+  return true
+}
+
+watch(() => selectedTask.value?.id, taskId => {
+  clearPointAndStartCapability()
+  if (taskId && pointAndStartIntentState(taskId).state === 'PRESENT') void checkPointAndStartOriginal({ id: taskId })
+}, { flush: 'sync' })
+watch([() => apiStore.authorizationGeneration, hallIdentityScope], clearPointAndStartCapability, { flush: 'sync' })
 
 const formalTaskExecutionContext = useFormalTaskExecutionScope({
   selectedTask,
@@ -2350,6 +2476,7 @@ onUnmounted(() => {
   taskWorkspaceBinding.dispose()
   voiceReplyCorrelation.close('unmount')
   hallVoice?.dispose()
+  disposePointAndStart()
   disposeHallConversation()
   hallBackendSceneState?.dispose()
   stopHallEventStream()

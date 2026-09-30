@@ -50,7 +50,7 @@ const harness = (overrides = {}) => {
     }, ...overrides.api
   }
   const flow = useHallPointAndStart({ agentApi: api, actorScopeKey: scope, storage: memory,
-    canAssign: current => current.status === 'open', isSupported: () => true,
+    canAssign: current => current.status === 'open', isSupported: () => true, canReplayOriginal: () => true,
     createIdempotencyKey: () => 'original-key', onAdmitted: async value => { admitted.push(value); return true }, ...overrides.options })
   instances.push(flow)
   return { flow, calls, memory, scope, admitted, seed: value => createPointAndStartIntentStore({ storage: memory,

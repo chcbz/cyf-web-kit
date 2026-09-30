@@ -170,6 +170,23 @@
               <span v-if="fundedClaimState.refreshPending">榜文刷新待完成，请重查；勿重复领令。<button type="button" @click="$emit('refresh-funded-claim', detailTask)">重查已确认榜文</button></span>
             </p>
             <p v-else-if="fundedClaimState?.taskId === detailTask.id && fundedClaimState.status === 'unresolved'" role="status">原领令结果未知，请由原好汉核对，不要重新取价。</p>
+            <section v-if="pointAndStartForDetail" class="point-and-start-recovery" role="status">
+              <strong>{{ pointAndStartRecoveryTitle }}</strong>
+              <p>原点将目标：{{ pointAndStartForDetail.intent.body.agentId }}；需求修订：{{ pointAndStartForDetail.intent.body.requirementRevision }}；首轮动作：{{ pointAndStartForDetail.intent.body.initialOperation }}。</p>
+              <p>原授权操作：{{ pointAndStartForDetail.intent.body.requestedOperations.join('、') }}；固定资料：{{ pointAndStartInputSummary }}。</p>
+              <p>{{ pointAndStartRecoveryHint }}</p>
+              <button
+                type="button"
+                :disabled="pointAndStartBusy"
+                @click="$emit('check-point-and-start', detailTask)"
+              >核对原点将</button>
+              <button
+                v-if="pointAndStartForDetail.status === 'UNKNOWN'"
+                type="button"
+                :disabled="pointAndStartBusy"
+                @click="$emit('resume-point-and-start', detailTask)"
+              >继续原点将</button>
+            </section>
             <div class="modal-task-info">
               <section v-if="embeddedHall" class="matter-advice-card" aria-label="办理建议">
                 <div class="matter-advice-heading"><span>办理建议</span><strong>{{ simpleMatterStatus(detailTask) }}</strong></div>
@@ -428,6 +445,8 @@ const props = defineProps({
   fundedQuotePreview: { type: Object, default: null },
   fundedClaimState: { type: Object, default: null },
   fundedCreateRecovery: { type: Object, default: null },
+  pointAndStartState: { type: Object, default: null },
+  pointAndStartBusy: { type: Boolean, default: false },
   abilityText: { type: Function, required: true },
   canAssign: { type: Function, required: true },
   formatTime: { type: Function, required: true },
@@ -455,6 +474,8 @@ const emit = defineEmits([
   'open-formal-results',
   'mark-changed',
   'resume-funded-create',
+  'check-point-and-start',
+  'resume-point-and-start',
   'cancel-funded-create-recovery',
   'discuss-task',
   'load-settlement',
@@ -481,6 +502,30 @@ const taskForm = ref({
   grossBountyAmountMicro: ''
 })
 const detailTask = computed(() => modalTask.value)
+const pointAndStartForDetail = computed(() => {
+  const state = props.pointAndStartState
+  return state?.intent?.taskId === detailTask.value?.id && state.intent?.body ? state : null
+})
+const pointAndStartRecoveryTitle = computed(() => ({
+  UNKNOWN: '发现原点将，结果待核对',
+  PREPARING: '原点将已受理，议事准备中',
+  ADMITTED: '首轮议事已受理',
+  ATTACHED: '已接入原悬赏议事',
+  HISTORICAL: '原点将已成为历史记录',
+  FAILED: '原点将记录为失败'
+}[pointAndStartForDetail.value?.status] || '原点将正在核对'))
+const pointAndStartRecoveryHint = computed(() => ({
+  UNKNOWN: '不会另建点将或改走旧式点将；只有你明确继续时，才可能按原键和原正文重放。',
+  PREPARING: '可只读重查原操作；不会重发首轮议事。',
+  ADMITTED: '可只读核对并接入同一会话；不会另开会话或重发首轮。',
+  ATTACHED: '当前显示的是原会话，不会再发送第一轮。',
+  HISTORICAL: '原指派已被撤回或替代，仅可查看真实历史。',
+  FAILED: '请核对原操作；不会以当前编辑或另一好汉替换它。'
+}[pointAndStartForDetail.value?.status] || '正在核对原点将。'))
+const pointAndStartInputSummary = computed(() => {
+  const refs = pointAndStartForDetail.value?.intent?.body?.inputRefs || []
+  return refs.length ? refs.map(ref => `${ref.fileId} v${ref.version} (${ref.purpose})`).join('、') : '无（本入口当前仅支持空资料）'
+})
 // The parent is the only authority for task-scoped discussion/workspace facts.  A
 // detail may never borrow the context of whichever task was previously selected.
 const assignedAgentForTask = task => {
@@ -1440,6 +1485,9 @@ button:disabled {
   max-height: 100%;
   box-shadow: none;
 }
+.point-and-start-recovery { margin: 12px 0; padding: 12px; border: 1px solid #d6bb7f; border-radius: 8px; background: #fff9e9; color: #624a20; }
+.point-and-start-recovery p { margin: 6px 0; }
+.point-and-start-recovery button + button { margin-left: 8px; }
 </style>
 
 <style scoped>

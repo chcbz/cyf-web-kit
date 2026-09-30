@@ -80,8 +80,11 @@ describe('useHallTaskActions', () => {
     const wrapper = hallSource.match(/const assignTask = async \(task, agent\) => \{([\s\S]*?)\n\}/)?.[1] || ''
     expect(wrapper).to.include('const targetAgents = Array.isArray(agent) ? agent : [agent].filter(Boolean)')
     expect(wrapper).to.include('const hasExplicitAgentId')
-    expect(wrapper).to.include('if (!task?.id || !targetAgents.length || targetAgents.some(item => !hasExplicitAgentId(item))) return false')
-    expect(wrapper).to.include('if (targetAgents.some(item => !canAssign(task, item))) return false')
+    expect(wrapper).to.include('if (!task?.id) return false')
+    expect(wrapper).to.include('if (!targetAgents.length || targetAgents.some(item => !hasExplicitAgentId(item))) return false')
+    expect(wrapper).to.include("original.state === 'PRESENT' || original.state === 'CORRUPT'")
+    expect(wrapper.indexOf("original.state === 'PRESENT' || original.state === 'CORRUPT'")).to.be.lessThan(wrapper.indexOf('const targetAgents = Array.isArray(agent)'))
+    expect(wrapper).to.include("if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT' && targetAgents.some(item => !canAssign(task, item))) return false")
     expect(wrapper).to.include('await runAssignTask(task, agent)')
     expect(wrapper).not.to.include('selectedAgent.value')
   })
