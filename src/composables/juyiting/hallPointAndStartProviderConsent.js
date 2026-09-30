@@ -4,7 +4,7 @@ const BINDING_FIELDS = ['bindingId', 'bindingEpoch']
 const RECEIPT_FIELDS = ['schemaVersion', 'consentId', 'taskId', 'targetAgentId', 'state', 'version', 'assignmentIdempotencyKey', 'assignmentBaseHash', 'inputSnapshotDigest', 'providerBinding', 'modelId', 'custody', 'operatorPolicyRevision', 'pricingMode', 'maxOutboundRequestAttempts', 'expiresAt']
 const RECEIPT_BINDING_FIELDS = ['bindingId', 'bindingEpoch']
 const REVOKE_FIELDS = ['key', 'expectedVersion']
-const STATES = new Set(['ISSUED', 'BOUND', 'RESERVED', 'CONSUMED', 'REVOKED'])
+const STATES = new Set(['ISSUED', 'BOUND', 'RESERVED', 'CONSUMED', 'REVOKED', 'EXPIRED'])
 const clone = value => JSON.parse(JSON.stringify(value))
 const equal = (left, right) => JSON.stringify(left) === JSON.stringify(right)
 const fields = (value, expected) => value && typeof value === 'object' && !Array.isArray(value) &&
@@ -64,10 +64,19 @@ export const providerConsentReceipt = (value, intent, previous = null) => {
     value.pricingMode !== 'UNPRICED_EXTERNAL_ACCOUNT' || value.maxOutboundRequestAttempts !== 1 || !positiveLong(value.expiresAt)) return null
   if (previous) {
     if (!providerConsentReceipt(previous, intent) || BigInt(value.version) < BigInt(previous.version) ||
-      immutableReceiptKeys.some(key => !equal(value[key], previous[key])) ||
-      (value.version === previous.version && !equal(value, previous))) return null
-    const rank = { ISSUED: 1, BOUND: 2, RESERVED: 3, CONSUMED: 4, REVOKED: 4 }
-    if (rank[value.state] < rank[previous.state] || ['CONSUMED', 'REVOKED'].includes(previous.state) && value.state !== previous.state) return null
+      immutableReceiptKeys.some(key => !equal(value[key], previous[key]))) return null
+    const sameVersion = value.version === previous.version
+    const active = new Set(['ISSUED', 'BOUND', 'RESERVED'])
+    if (sameVersion) {
+      // API read projection only: an unchanged active DB row may be shown as EXPIRED.
+      if (!equal(value, previous) && !(value.state === 'EXPIRED' && active.has(previous.state))) return null
+    } else if (['CONSUMED', 'REVOKED'].includes(previous.state) ||
+      previous.state === 'EXPIRED' && !['EXPIRED', 'CONSUMED', 'REVOKED'].includes(value.state) ||
+      value.state === 'EXPIRED' && previous.state !== 'EXPIRED') return null
+    else {
+      const rank = { ISSUED: 1, BOUND: 2, RESERVED: 3, CONSUMED: 4, REVOKED: 4 }
+      if (rank[value.state] < rank[previous.state]) return null
+    }
   }
   return clone(value)
 }

@@ -36,12 +36,23 @@ describe('frozen provider-consent intent and receipt contract', () => {
   for (const [name, mutate] of [
     ['wrong target', value => { value.targetAgentId = 'foreign' }], ['wrong assignment key', value => { value.assignmentIdempotencyKey = 'foreign' }],
     ['wrong hash', value => { value.assignmentBaseHash = 'bad' }], ['wrong epoch', value => { value.providerBinding.bindingEpoch = '2' }],
-    ['extra authority', value => { value.providerBinding.authority = 'forbidden' }], ['expired pseudo-state', value => { value.state = 'EXPIRED' }]
+    ['extra authority', value => { value.providerBinding.authority = 'forbidden' }], ['unknown state', value => { value.state = 'PAID' }]
   ]) it(`rejects ${name} receipts`, () => { const value = receipt(); mutate(value); expect(providerConsentReceipt(value, intent())).to.equal(null) })
   it('accepts each frozen core receipt state without treating it as paid/newStart', () => {
-    for (const state of ['ISSUED', 'BOUND', 'RESERVED', 'CONSUMED', 'REVOKED']) {
+    for (const state of ['ISSUED', 'BOUND', 'RESERVED', 'CONSUMED', 'REVOKED', 'EXPIRED']) {
       expect(providerConsentReceipt(receipt({ state }), intent())?.state).to.equal(state)
     }
+  })
+  it('allows only the API readonly same-version active-to-expired projection', () => {
+    const issued = receipt(); const record = intent({ providerConsent: { ...intent().providerConsent, receipt: issued } })
+    const expired = receipt({ state: 'EXPIRED' })
+    expect(providerConsentReceipt(expired, record, issued)?.state).to.equal('EXPIRED')
+    expect(providerConsentReceipt(receipt({ state: 'EXPIRED', assignmentBaseHash: 'c'.repeat(64) }), record, issued)).to.equal(null)
+    const expiredRecord = intent({ providerConsent: { ...intent().providerConsent, receipt: expired } })
+    expect(providerConsentReceipt(receipt({ state: 'BOUND', version: '2' }), expiredRecord, expired)).to.equal(null)
+    expect(providerConsentReceipt(receipt({ state: 'REVOKED', version: '2' }), expiredRecord, expired)?.state).to.equal('REVOKED')
+    expect(providerConsentReceipt(receipt({ state: 'CONSUMED', version: '2' }), expiredRecord, expired)?.state).to.equal('CONSUMED')
+    expect(providerConsentReceipt(receipt({ state: 'EXPIRED', version: '2' }), expiredRecord, expired)?.state).to.equal('EXPIRED')
   })
   it('uses BigInt-safe monotonic receipt versions and immutable facts', () => {
     const initial = receipt({ version: '9007199254740993', state: 'BOUND' }); const record = intent({ providerConsent: { ...intent().providerConsent, receipt: initial } })
@@ -66,24 +77,30 @@ describe('frozen provider-consent intent and receipt contract', () => {
     expect(store.read().record.providerConsent.issueBody.providerBinding.bindingId).to.equal('binding-1')
     expect(providerConsentExtension(first.providerConsent, first)).not.to.equal(null)
   })
+  it('requires explicit acknowledgement with zero storage or POST side effects when absent', async () => {
+    const h = harness()
+    expect(await h.flow.prepareAndIssue({ taskId: 'task-1', assignment: assignment(), providerBinding: binding() })).to.equal(false)
+    expect(h.calls).to.deep.equal([])
+    expect(h.memory.values.size).to.equal(0)
+  })
   it('persists/readbacks assignment and issue keys/bodies before the one issuer POST', async () => {
     const h = harness()
-    expect(await h.flow.prepareAndIssue({ taskId: 'task-1', assignment: assignment(), providerBinding: binding() })).to.equal(true)
+    expect(await h.flow.prepareAndIssue({ taskId: 'task-1', assignment: assignment(), providerBinding: binding(), acknowledgement: providerConsentAcknowledgement })).to.equal(true)
     const saved = createPointAndStartIntentStore({ storage: h.memory, scope: h.scope.value, taskId: 'task-1' }).read().record
     expect(h.calls[0]).to.deep.equal(['post', '/tasks/task-1/point-and-start-cost-consents', saved.providerConsent.issueBody, 'issue-key'])
     expect(saved.key).to.equal('assignment-key'); expect(saved.body).to.deep.equal(assignment()); expect(saved.providerConsent.receipt.state).to.equal('ISSUED')
   })
   it('fails closed on corrupt or unreadable shared storage without an issuer POST', async () => {
     const corrupt = harness(); corrupt.seed(); const name = [...corrupt.memory.values.keys()][0]; corrupt.memory.setItem(name, '{bad')
-    expect(await corrupt.flow.prepareAndIssue({ taskId: 'task-1', assignment: assignment(), providerBinding: binding() })).to.equal(false)
+    expect(await corrupt.flow.prepareAndIssue({ taskId: 'task-1', assignment: assignment(), providerBinding: binding(), acknowledgement: providerConsentAcknowledgement })).to.equal(false)
     expect(corrupt.calls).to.deep.equal([])
     const unavailable = harness({ storage: { getItem: () => null, setItem: () => {} } })
-    expect(await unavailable.flow.prepareAndIssue({ taskId: 'task-1', assignment: assignment(), providerBinding: binding() })).to.equal(false)
+    expect(await unavailable.flow.prepareAndIssue({ taskId: 'task-1', assignment: assignment(), providerBinding: binding(), acknowledgement: providerConsentAcknowledgement })).to.equal(false)
     expect(unavailable.calls).to.deep.equal([])
   })
   it('never overwrites an ordinary original intent with a consent extension', async () => {
     const h = harness(); const ordinary = intent(); delete ordinary.providerConsent; expect(h.seed(ordinary).state).to.equal('PRESENT')
-    expect(await h.flow.prepareAndIssue({ taskId: 'task-1', assignment: assignment(), providerBinding: binding() })).to.equal(false)
+    expect(await h.flow.prepareAndIssue({ taskId: 'task-1', assignment: assignment(), providerBinding: binding(), acknowledgement: providerConsentAcknowledgement })).to.equal(false)
     expect(h.calls).to.deep.equal([]); expect(h.flow.state.value.status).to.equal('ORIGINAL_PENDING')
   })
   it('check only GETs, while explicit resume GET404 replays the same issue body/key', async () => {
@@ -108,9 +125,30 @@ describe('frozen provider-consent intent and receipt contract', () => {
     expect(await h.flow.revokeOriginal('task-1')).to.equal(true)
     expect(h.calls.filter(call => call[1].endsWith('/revoke')).map(call => call[3])).to.deep.equal(['revoke-key', 'revoke-key'])
   })
+  it('permits an expired receipt to revoke with its original persisted version', async () => {
+    const h = harness({ api: {
+      get: async (path, query, options) => { h.calls.push(['get', path, options?.headers?.['Idempotency-Key']]); return { data: receipt({ state: 'EXPIRED' }) } },
+      create: async (path, body, options) => { h.calls.push(['post', path, copy(body), options.headers['Idempotency-Key']]); return { data: receipt({ state: 'REVOKED', version: '2' }) } }
+    } })
+    h.seed(intent({ providerConsent: { ...intent().providerConsent, receipt: receipt({ state: 'EXPIRED' }) } }))
+    expect(await h.flow.revokeOriginal('task-1')).to.equal(true)
+    expect(h.calls.find(call => call[1].endsWith('/revoke')).slice(2)).to.deep.equal([{ expectedVersion: '1' }, 'revoke-key'])
+  })
+  it('fences same-identity task and target navigation without deleting the original intent', async () => {
+    let resolve; const h = harness({ api: { create: async () => new Promise(done => { resolve = done }) } })
+    expect(h.flow.selectContext({ taskId: 'task-1', targetAgentId: 'agent-1' })).to.equal(true)
+    const pending = h.flow.prepareAndIssue({ taskId: 'task-1', assignment: assignment(), providerBinding: binding(), acknowledgement: providerConsentAcknowledgement })
+    await Promise.resolve()
+    expect(h.flow.selectContext({ taskId: 'task-2', targetAgentId: 'agent-2' })).to.equal(true)
+    resolve({ data: receipt() })
+    expect(await pending).to.equal(false)
+    expect(h.flow.state.value.status).to.equal('IDLE')
+    expect(h.flow.context.value).to.deep.equal({ taskId: 'task-2', targetAgentId: 'agent-2' })
+    expect(createPointAndStartIntentStore({ storage: h.memory, scope: h.scope.value, taskId: 'task-1' }).read().record.providerConsent.receipt).to.equal(null)
+  })
   it('fences a late receipt after actor scope changes', async () => {
     let resolve; const scope = ref('tenant\u0000client\u0000owner'); const h = harness({ scope, api: { create: async () => new Promise(done => { resolve = done }) } })
-    const pending = h.flow.prepareAndIssue({ taskId: 'task-1', assignment: assignment(), providerBinding: binding() }); await Promise.resolve(); scope.value = 'tenant\u0000client\u0000other'; resolve({ data: receipt() })
+    const pending = h.flow.prepareAndIssue({ taskId: 'task-1', assignment: assignment(), providerBinding: binding(), acknowledgement: providerConsentAcknowledgement }); await Promise.resolve(); scope.value = 'tenant\u0000client\u0000other'; resolve({ data: receipt() })
     expect(await pending).to.equal(false); expect(h.flow.state.value.status).to.equal('IDLE')
   })
   it('does not allow the ordinary point flow to reach /assign when a cost extension exists', async () => {
