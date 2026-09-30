@@ -21,7 +21,7 @@
       </template>
       <form v-if="previewKind(item.contentMimeType) === 'image'" class="image-rework" @submit.prevent="editImage(item)">
         <label>引用此稿修改 <input v-model="editDrafts[outputItemKey(item)]" maxlength="4000" placeholder="例如：把羽毛改成蓝色" /></label>
-        <button type="submit" :disabled="editState(item).busy || !editDrafts[outputItemKey(item)]?.trim()">{{ editState(item).busy ? '正在提交…' : '同会话生成新稿' }}</button>
+        <button type="submit" :disabled="editState(item).busy || (!editDrafts[outputItemKey(item)]?.trim() && !editIntents[outputItemKey(item)])">{{ editState(item).busy ? '正在提交…' : editIntents[outputItemKey(item)] ? '重试原修改' : '同会话生成新稿' }}</button>
         <p v-if="editState(item).message" :role="editState(item).state === 'accepted' ? 'status' : 'alert'">{{ editState(item).message }}</p>
       </form>
     </div>
@@ -38,6 +38,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { createApi } from '../../composables/useHttp.js'
 import { exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps } from '../../composables/juyiting/bountyOutputCatalog.js'
 import { saveOutputBlob } from '../../utils/outputDownload.js'
+import { readOutputRecovery, writeOutputRecovery } from '../../composables/juyiting/bountyOutputRecovery.js'
 
 const props = defineProps({
   enabled: { type: Boolean, default: false }, request: { type: Object, default: null },
@@ -51,7 +52,7 @@ const followupRequestIds = ref([])
 const scopedSteps = computed(() => requestSnapshots.value.flatMap(request => scopedExecutionSteps(request, props.conversationId)))
 const items = ref([]); const loading = ref(false); const error = ref('')
 const previewUrls = ref({}); const textPreviews = ref({}); const itemErrors = ref({})
-const archiveStates = ref({}); const editStates = ref({}); const editDrafts = ref({}); const selectedKeys = ref([])
+const archiveStates = ref({}); const editStates = ref({}); const editDrafts = ref({}); const editIntents = ref({}); const selectedKeys = ref([])
 const expandedUrl = ref('')
 const finalizeState = ref({ state: 'idle', busy: false, message: '', intent: null })
 let abort = null; let timer = null; let epoch = 0
@@ -61,13 +62,17 @@ const uuid = prefix => { const value = globalThis.crypto?.randomUUID?.(); if (!v
 const sha256Blob = async blob => Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', await blob.arrayBuffer())), byte => byte.toString(16).padStart(2, '0')).join('')
 const patchMap = (target, key, value) => { target.value = { ...target.value, [key]: value } }
 const archiveState = item => archiveStates.value[outputItemKey(item)] || { state: 'idle', busy: false, message: '' }
-const editState = item => editStates.value[outputItemKey(item)] || { state: 'idle', busy: false, message: '' }
+const editState = item => editStates.value[outputItemKey(item)] || (editIntents.value[outputItemKey(item)]
+  ? { state: 'unknown', busy: false, message: '此前修改请求的结果不明确；请重试原请求，勿创建新生成。' }
+  : { state: 'idle', busy: false, message: '' })
+const recoveryScope = () => ({ identityKey: props.identityKey, conversationId: props.conversationId, rootRequestId: props.request?.requestId })
+const persistRecovery = () => writeOutputRecovery(recoveryScope(), { followups: followupRequestIds.value, edits: editIntents.value })
 const cleanup = () => {
   epoch++; if (timer != null) clearTimeout(timer); timer = null; abort?.abort(); abort = null
   for (const controller of inFlight) controller.abort(); inFlight.clear()
   for (const url of Object.values(previewUrls.value)) URL.revokeObjectURL(url)
   requestSnapshots.value = []; followupRequestIds.value = []; items.value = []; previewUrls.value = {}; textPreviews.value = {}
-  itemErrors.value = {}; archiveStates.value = {}; editStates.value = {}; editDrafts.value = {}; selectedKeys.value = []
+  itemErrors.value = {}; archiveStates.value = {}; editStates.value = {}; editDrafts.value = {}; editIntents.value = {}; selectedKeys.value = []
   expandedUrl.value = ''; finalizeState.value = { state: 'idle', busy: false, message: '', intent: null }; loading.value = false; error.value = ''
 }
 const fetchRequest = async (requestId, controller) => {
@@ -167,20 +172,40 @@ const finalizeSelected = async () => {
 }
 const editImage = async item => {
   const key = outputItemKey(item); const content = editDrafts.value[key]?.trim(); const step = stepFor(item)
-  if (!content || !step || editState(item).busy) return
-  let idempotencyKey
-  try { idempotencyKey = uuid('conversation-edit') } catch (cause) { patchMap(editStates, key, { state: 'error', busy: false, message: cause.message }); return }
+  const previous = editIntents.value[key]
+  if ((!content && !previous) || !step || editState(item).busy || editState(item).state === 'accepted') return
+  let intent = previous
+  try {
+    if (!intent) intent = { idempotencyKey: uuid('conversation-edit'), content, requestId: item.requestId, stepId: item.stepId, outputId: item.outputId, sha256: item.sha256, taskId: step.taskId, assignmentRevision: Number(step.assignmentRevision) }
+    if (intent.sha256 !== item.sha256 || intent.taskId !== step.taskId || intent.assignmentRevision !== Number(step.assignmentRevision)) throw new Error('源稿或任务指派已变化，请刷新后重新选择。')
+    patchMap(editIntents, key, intent)
+    if (!persistRecovery()) throw new Error('无法保存修改请求的恢复凭据，已拒绝发起生成。')
+  } catch (cause) { patchMap(editStates, key, { state: 'error', busy: false, message: cause.message }); return }
   patchMap(editStates, key, { state: 'submitting', busy: true, message: '正在提交同会话引用修改…' })
   try {
-    const response = await api.execute({ url: `/conversations/${encodeURIComponent(props.conversationId)}/interactions`, method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, data: { schemaVersion: 2, taskId: step.taskId, expectedAssignmentRevision: Number(step.assignmentRevision), content, inputRefs: [{ type: 'conversation_output', requestId: item.requestId, stepId: item.stepId, outputId: item.outputId, sha256: item.sha256 }], replyTo: null, continuationOf: item.requestId, actionProposal: { kind: 'edit_image' } }, autoLoading: false, needAuth: true })
+    const response = await api.execute({ url: `/conversations/${encodeURIComponent(props.conversationId)}/interactions`, method: 'POST', headers: { 'Idempotency-Key': intent.idempotencyKey }, data: { schemaVersion: 2, taskId: intent.taskId, expectedAssignmentRevision: intent.assignmentRevision, content: intent.content, inputRefs: [{ type: 'conversation_output', requestId: item.requestId, stepId: item.stepId, outputId: item.outputId, sha256: item.sha256 }], replyTo: null, continuationOf: item.requestId, actionProposal: { kind: 'edit_image' } }, autoLoading: false, needAuth: true })
     const value = response?.data?.data ?? response?.data
     if (!exactOutputId(value?.requestId) || !exactOutputId(value?.stepId)) throw new Error('服务端未返回可恢复的修改请求。')
     followupRequestIds.value = [...new Set([...followupRequestIds.value, value.requestId])]
+    const remaining = { ...editIntents.value }; delete remaining[key]; editIntents.value = remaining
+    persistRecovery()
     patchMap(editStates, key, { state: 'accepted', busy: false, message: '修改请求已受理；新稿就绪后会在同一成果区出现。' })
     refresh()
-  } catch (cause) { patchMap(editStates, key, { state: 'error', busy: false, message: cause?.message || '引用修改未受理。' }) }
+  } catch (cause) {
+    const unknown = cause?.requestErrorClass === 'network' || cause instanceof TypeError || cause?.status >= 500 || cause?.response?.status >= 500
+    // Even a malformed receipt can follow a successful charged execution. Keep the
+    // original key and exact payload until a server status lookup proves otherwise.
+    patchMap(editStates, key, { state: unknown ? 'unknown' : 'error', busy: false, message: unknown ? '修改结果不明确；再次点击仅重试原请求，不会创建新生成。' : (cause?.message || '修改未确认；只能重试原请求。') })
+  }
 }
-watch(() => `${props.enabled}\u0000${props.identityKey}\u0000${props.conversationId}\u0000${props.request?.requestId}\u0000${props.request?.stateVersion}`, () => { cleanup(); if (validRootRequest()) { requestSnapshots.value = [props.request]; void list() } }, { immediate: true })
+watch(() => `${props.enabled}\u0000${props.identityKey}\u0000${props.conversationId}\u0000${props.request?.requestId}\u0000${props.request?.stateVersion}`, () => {
+  cleanup()
+  if (validRootRequest()) {
+    const recovered = readOutputRecovery(recoveryScope())
+    followupRequestIds.value = recovered.followups; editIntents.value = recovered.edits
+    requestSnapshots.value = [props.request]; void list()
+  }
+}, { immediate: true })
 onBeforeUnmount(cleanup)
 </script>
 <style scoped>
