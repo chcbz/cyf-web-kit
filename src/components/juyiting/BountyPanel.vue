@@ -192,6 +192,13 @@
               <span v-if="fundedClaimState.refreshPending">榜文刷新待完成，请重查；勿重复领令。<button type="button" @click="$emit('refresh-funded-claim', detailTask)">重查已确认榜文</button></span>
             </p>
             <p v-else-if="fundedClaimState?.taskId === detailTask.id && fundedClaimState.status === 'unresolved'" role="status">原领令结果未知，请由原好汉核对，不要重新取价。</p>
+            <section v-if="controlledConsentOffer?.taskId === detailTask.id" class="point-and-start-recovery controlled-image-consent" role="status">
+              <strong>受控图像外部账户确认</strong>
+              <p>将按当前好汉、任务关联资料和受控图像通道办理一次请求；外部账户结果与费用未知，未展示或虚构金额。</p>
+              <label><input v-model="controlledConsentAcknowledged" type="checkbox" /> 我明确确认这一次受控图像请求</label>
+              <button type="button" :disabled="controlledConsentBusy || !controlledConsentAcknowledged" @click="$emit('confirm-controlled-image-consent', detailTask, controlledConsentOffer.targetAgentId)">确认并继续原点将</button>
+              <p v-if="controlledConsentOffer.error">{{ controlledConsentOffer.error }}</p>
+            </section>
             <section v-if="pointAndStartForDetail" class="point-and-start-recovery" role="status">
               <strong>{{ pointAndStartRecoveryTitle }}</strong>
               <p>原点将目标：{{ pointAndStartForDetail.intent.body.agentId }}；需求修订：{{ pointAndStartForDetail.intent.body.requirementRevision }}；首轮动作：{{ pointAndStartForDetail.intent.body.initialOperation }}。</p>
@@ -472,6 +479,8 @@ const props = defineProps({
   requirementCreateBusy: { type: Boolean, default: false },
   pointAndStartState: { type: Object, default: null },
   pointAndStartBusy: { type: Boolean, default: false },
+  controlledConsentOffer: { type: Object, default: null },
+  controlledConsentBusy: { type: Boolean, default: false },
   abilityText: { type: Function, required: true },
   canAssign: { type: Function, required: true },
   formatTime: { type: Function, required: true },
@@ -503,6 +512,7 @@ const emit = defineEmits([
   'resume-funded-create',
   'check-point-and-start',
   'resume-point-and-start',
+  'confirm-controlled-image-consent',
   'cancel-funded-create-recovery',
   'discuss-task',
   'load-settlement',
@@ -518,6 +528,7 @@ const emit = defineEmits([
 ])
 
 const modalTask = ref(null)
+const controlledConsentAcknowledged = ref(false)
 const showCreateForm = ref(false)
 const createPending = ref(false)
 const taskReferenceInputs = ref([])
@@ -536,6 +547,10 @@ const requirementCreateInputSummary = computed(() => {
 })
 // A late success can only clear the exact submitting draft under the same
 // authenticated actor; editing during POST preserves the newer draft.
+watch(() => [props.controlledConsentOffer, props.controlledConsentOffer?.taskId, props.controlledConsentOffer?.targetAgentId,
+  props.selectedTask?.id, props.selectedTask?.taskVersion, props.selectedTask?.requirementRevision, props.selectedTask?.revision], () => {
+  controlledConsentAcknowledged.value = false
+}, { flush: 'sync' })
 watch(() => [props.identityScope, props.authorizationGeneration], () => {
   createAttempt++
   createPending.value = false
@@ -543,8 +558,10 @@ watch(() => [props.identityScope, props.authorizationGeneration], () => {
   taskForm.value = { title: '', description: '', requiredAbilities: '', funded: false, grossBountyAmountMicro: '' }
   modalTask.value = null
   selectedAssigneeIds.value = []
+  controlledConsentAcknowledged.value = false
 }, { flush: 'sync' })
 const detailTask = computed(() => modalTask.value)
+watch(() => modalTask.value?.id || '', () => { controlledConsentAcknowledged.value = false }, { flush: 'sync' })
 const pointAndStartForDetail = computed(() => {
   const state = props.pointAndStartState
   return state?.intent?.taskId === detailTask.value?.id && state.intent?.body ? state : null

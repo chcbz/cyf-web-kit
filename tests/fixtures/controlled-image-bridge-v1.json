@@ -1,0 +1,681 @@
+{
+  "contract": "controlled-image-bridge-v1",
+  "status": "FROZEN_EXPECTATIONS_NOT_EXECUTED",
+  "real_provider_authority": false,
+  "wire": {
+    "assignment_key": "fixture_assignment_key",
+    "consent_issue_key": "fixture_consent_issue_key",
+    "wrapper": {
+      "schemaVersion": 1,
+      "assignment": {
+        "agentId": "agent_fixture_1",
+        "workflowVersion": 2,
+        "businessAction": "assign_and_start",
+        "expectedTaskVersion": 6,
+        "requirementRevision": 3,
+        "requestedOperations": [
+          "GENERATE_IMAGE"
+        ],
+        "initialOperation": "GENERATE_IMAGE",
+        "inputRefs": []
+      },
+      "providerConsent": {
+        "consentId": "consent_1234567890abcdef1234567890abcdef",
+        "expectedVersion": "1"
+      }
+    },
+    "wrapper_receipt": {
+      "schemaVersion": 1,
+      "grant": {
+        "grantId": "grant_fixture_1",
+        "taskId": "task_fixture_1",
+        "requirementRevision": 3,
+        "assignmentRevision": 7,
+        "targetAgentId": "agent_fixture_1",
+        "permittedOperations": [
+          "GENERATE_IMAGE"
+        ],
+        "inputs": [],
+        "state": "ACTIVE",
+        "grantVersion": 1,
+        "paidExecutionAuthorized": true,
+        "createdAt": 1790000000000,
+        "revokedAt": null
+      },
+      "providerConsent": {
+        "schemaVersion": 1,
+        "consentId": "consent_1234567890abcdef1234567890abcdef",
+        "taskId": "task_fixture_1",
+        "targetAgentId": "agent_fixture_1",
+        "state": "BOUND",
+        "version": "2",
+        "assignmentIdempotencyKey": "fixture_assignment_key",
+        "assignmentBaseHash": "915fa80ae0b9d6f7acfd71b5ad30d85d7c141a9516ffbfe7880ef4b2d3abb39d",
+        "inputSnapshotDigest": "15396100736831afa1a30f4e01d5b218d829ed56a7bf309463fc1d4360c14abd",
+        "providerBinding": {
+          "bindingId": "fixture_binding",
+          "bindingEpoch": "1"
+        },
+        "modelId": "fixture_model_not_a_real_provider",
+        "custody": "OPERATOR_TEMPLATE",
+        "operatorPolicyRevision": "fixture_policy_r1",
+        "pricingMode": "UNPRICED_EXTERNAL_ACCOUNT",
+        "maxOutboundRequestAttempts": 1,
+        "expiresAt": "1893456000000"
+      }
+    },
+    "capability": {
+      "schemaVersion": 2,
+      "taskId": "task_fixture_1",
+      "targetAgentId": "agent_fixture_1",
+      "lane": "ORDINARY_SINGLE_AGENT_CONTROLLED_IMAGE_ASSIGN_AND_START",
+      "serverLane": {
+        "state": "READY",
+        "blockingReasons": []
+      },
+      "controlledExecution": {
+        "state": "READY",
+        "transport": "PERSONAL_WORKSPACE_CONTROLLED_IMAGE_HTTP_V2",
+        "schemaVersion": 1,
+        "supportedOperations": [
+          "GENERATE_IMAGE"
+        ]
+      },
+      "providerBinding": {
+        "providerLane": "CONTROLLED_IMAGE_HTTP_V1",
+        "bindingId": "fixture_binding",
+        "bindingEpoch": "1",
+        "modelId": "fixture_model_not_a_real_provider",
+        "maxInputItems": 16,
+        "maxOutboundRequestAttempts": 1,
+        "precallFenceVersion": 1
+      },
+      "authorization": {
+        "state": "CONSENT_REQUIRED",
+        "paidExecutionAuthorized": false
+      },
+      "newStart": {
+        "eligible": false,
+        "blockingReasons": [
+          "OWNER_EXACT_CONSENT_REQUIRED"
+        ]
+      },
+      "requestedOperations": [
+        "GENERATE_IMAGE"
+      ],
+      "initialOperation": "GENERATE_IMAGE",
+      "inputRefsPolicy": "TASK_LINKED_REFERENCE",
+      "maxInputItems": 16,
+      "originalIntentRecovery": {
+        "legacyFallbackAllowed": false,
+        "unknownOrNotFoundMeans": "RECOVERY_REQUIRED",
+        "replayPolicy": "EXPLICIT_USER_EXACT_ORIGINAL_KEY_AND_BODY_ONLY"
+      }
+    },
+    "controlledImageBountyExecution": {
+      "schemaVersion": 1,
+      "enabled": true,
+      "transport": "PERSONAL_WORKSPACE_CONTROLLED_IMAGE_HTTP_V2",
+      "commandSchemaVersions": [
+        2
+      ],
+      "leaseProtocolVersions": [
+        1
+      ],
+      "providerStartFenceVersions": [
+        2
+      ],
+      "resultCommitProtocolVersions": [
+        1
+      ],
+      "operations": [
+        {
+          "operation": "GENERATE_IMAGE",
+          "inputManifest": {
+            "schemaVersion": 1,
+            "minItems": 0,
+            "maxItems": 16,
+            "mimeTypes": [
+              "image/jpeg",
+              "image/png"
+            ]
+          },
+          "resultManifest": {
+            "schemaVersion": 1,
+            "minItems": 1,
+            "maxItems": 1,
+            "outputId": "output_1",
+            "mimeTypes": [
+              "image/png"
+            ]
+          }
+        }
+      ]
+    },
+    "command": {
+      "schemaVersion": 2,
+      "taskId": "task_fixture_1",
+      "runId": "pwe_run_fixture_1",
+      "conversationId": "conv_fixture_1",
+      "commandId": "pwe_cmd_fixture_1",
+      "messageId": "pwe_msg_fixture_1",
+      "instruction": "画一只鸟\n\n照片风格。",
+      "outputContentMimeType": "image/png",
+      "outputId": "output_1",
+      "providerExecution": {
+        "providerLane": "CONTROLLED_IMAGE_HTTP_V1",
+        "consentId": "consent_1234567890abcdef1234567890abcdef",
+        "bindingId": "fixture_binding",
+        "bindingEpoch": "1",
+        "modelId": "fixture_model_not_a_real_provider",
+        "maxInputItems": 16,
+        "maxOutboundRequestAttempts": 1,
+        "precallFenceVersion": 1
+      }
+    },
+    "provider_start_request": {
+      "schemaVersion": 2,
+      "commandId": "pwe_cmd_fixture_1",
+      "messageId": "pwe_msg_fixture_1",
+      "executionId": "pwe_fixture_1",
+      "providerExecution": {
+        "providerLane": "CONTROLLED_IMAGE_HTTP_V1",
+        "consentId": "consent_1234567890abcdef1234567890abcdef",
+        "bindingId": "fixture_binding",
+        "bindingEpoch": "1",
+        "modelId": "fixture_model_not_a_real_provider",
+        "maxInputItems": 16,
+        "maxOutboundRequestAttempts": 1,
+        "precallFenceVersion": 1
+      },
+      "fence": {
+        "version": 1,
+        "token": "12345678-1234-4234-8234-123456789abc"
+      }
+    },
+    "provider_start_receipt": {
+      "schemaVersion": 2,
+      "started": true,
+      "taskId": "task_fixture_1",
+      "runId": "pwe_run_fixture_1",
+      "executionId": "pwe_fixture_1",
+      "commandId": "pwe_cmd_fixture_1",
+      "messageId": "pwe_msg_fixture_1",
+      "providerExecution": {
+        "providerLane": "CONTROLLED_IMAGE_HTTP_V1",
+        "consentId": "consent_1234567890abcdef1234567890abcdef",
+        "bindingId": "fixture_binding",
+        "bindingEpoch": "1",
+        "modelId": "fixture_model_not_a_real_provider",
+        "maxInputItems": 16,
+        "maxOutboundRequestAttempts": 1,
+        "precallFenceVersion": 1
+      },
+      "leaseVersion": 1
+    },
+    "authority_locator": "mmd-ci-v1:consent_1234567890abcdef1234567890abcdef",
+    "consent_issue_body": {
+      "schemaVersion": 1,
+      "assignmentIdempotencyKey": "fixture_assignment_key",
+      "assignment": {
+        "agentId": "agent_fixture_1",
+        "workflowVersion": 2,
+        "businessAction": "assign_and_start",
+        "expectedTaskVersion": 6,
+        "requirementRevision": 3,
+        "requestedOperations": [
+          "GENERATE_IMAGE"
+        ],
+        "initialOperation": "GENERATE_IMAGE",
+        "inputRefs": []
+      },
+      "providerBinding": {
+        "bindingId": "fixture_binding",
+        "bindingEpoch": "1"
+      },
+      "acknowledgement": "UNPRICED_EXTERNAL_ACCOUNT_ONE_IMAGE_REQUEST_ATTEMPT"
+    }
+  },
+  "case_groups": {
+    "wrapper_replay": [
+      {
+        "id": "exact_original_replay",
+        "input": {
+          "same_key": true,
+          "same_wrapper": true
+        },
+        "expect": {
+          "first_status": 201,
+          "replay_status": 200,
+          "bootstrap_count": 1,
+          "new_consent_count": 0
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "same_key_changed_consent",
+        "input": {
+          "mutation": "providerConsent.consentId"
+        },
+        "expect": {
+          "status": 409,
+          "new_assignment_count": 0
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "same_key_changed_version",
+        "input": {
+          "mutation": "providerConsent.expectedVersion"
+        },
+        "expect": {
+          "status": 409,
+          "new_assignment_count": 0
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "assign_ack_lost",
+        "input": {
+          "post_ack": "lost",
+          "readback": "found"
+        },
+        "expect": {
+          "read_only_get": true,
+          "new_post_count": 0,
+          "same_grant": true
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "request_404_unknown",
+        "input": {
+          "readback_status": 404
+        },
+        "expect": {
+          "automatic_post_count": 0,
+          "legacy_assign_count": 0,
+          "retain_original": true
+        },
+        "result": "NOT_RUN"
+      }
+    ],
+    "authority_tuple": [
+      {
+        "id": "unknown_nonempty_locator",
+        "input": {
+          "locator": "forged_nonempty"
+        },
+        "expect": {
+          "admitted": false,
+          "http_attempt_count": 0
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "each_tuple_dimension_drift",
+        "input": {
+          "mutate_each": [
+            "tenant",
+            "client",
+            "owner",
+            "task",
+            "target",
+            "grant",
+            "grantVersion",
+            "assignmentRevision",
+            "assignmentBaseHash",
+            "inputSnapshotDigest",
+            "consent",
+            "bindingId",
+            "bindingEpoch",
+            "modelId",
+            "operatorPolicyRevision"
+          ]
+        },
+        "expect": {
+          "admitted": false,
+          "consume_count": 0,
+          "http_attempt_count": 0
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "binding_only_not_new_protocol",
+        "input": {
+          "credential_binding": true,
+          "controlled_execution_sibling": false
+        },
+        "expect": {
+          "capability_ready": false,
+          "http_attempt_count": 0
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "different_runtime_or_epoch",
+        "input": {
+          "session": "other_current_or_ambiguous",
+          "binding_epoch": "2"
+        },
+        "expect": {
+          "admitted": false,
+          "http_attempt_count": 0
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "individually_unique_different_sessions",
+        "input": {
+          "credential_session": "session_one",
+          "controlled_declaration_session": "session_two",
+          "both_individually_unique": true
+        },
+        "expect": {
+          "capability_ready": false,
+          "admitted": false,
+          "http_attempt_count": 0
+        },
+        "result": "NOT_RUN"
+      }
+    ],
+    "three_atomic_segments": [
+      {
+        "id": "assign_bind_rollback",
+        "input": {
+          "inject_each": [
+            "assignment",
+            "grant",
+            "bootstrap",
+            "bound_consent",
+            "operation_mapping",
+            "locator"
+          ]
+        },
+        "expect": {
+          "all_segment_writes_rollback": true
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "execution_reserve_chat_rollback",
+        "input": {
+          "inject_each": [
+            "execution",
+            "input_rows",
+            "reserve",
+            "chat_link",
+            "chat_step",
+            "chat_request"
+          ]
+        },
+        "expect": {
+          "all_segment_writes_rollback": true,
+          "consent_state": "BOUND"
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "start_consume_rollback",
+        "input": {
+          "inject_each": [
+            "consume",
+            "start_marker"
+          ]
+        },
+        "expect": {
+          "all_segment_writes_rollback": true,
+          "consent_state": "RESERVED",
+          "http_attempt_count": 0
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "start_ack_lost",
+        "input": {
+          "server_start": "committed",
+          "client_ack": "lost"
+        },
+        "expect": {
+          "consent_state": "CONSUMED",
+          "replay_status": 409,
+          "http_attempt_count": 0,
+          "second_callable_receipt_count": 0
+        },
+        "result": "NOT_RUN"
+      }
+    ],
+    "races_and_leases": [
+      {
+        "id": "revoke_first",
+        "input": {
+          "commit_order": [
+            "revoke",
+            "start"
+          ]
+        },
+        "expect": {
+          "start_status": 409,
+          "consume_count": 0,
+          "http_attempt_count": 0
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "start_first",
+        "input": {
+          "commit_order": [
+            "start",
+            "revoke"
+          ]
+        },
+        "expect": {
+          "consume_count": 1,
+          "revoke_status": 409,
+          "refund_claim": false
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "concurrent_start",
+        "input": {
+          "caller_count": 2
+        },
+        "expect": {
+          "callable_receipt_count": 1,
+          "consume_count": 1,
+          "http_attempt_count_max": 1
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "different_second_run",
+        "input": {
+          "new_execution": true,
+          "new_run": true
+        },
+        "expect": {
+          "reserve_rejected": true,
+          "http_attempt_count": 0
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "lease_mismatch",
+        "input": {
+          "mutate_each": [
+            "runtimeInstanceId",
+            "fence.version",
+            "fence.token",
+            "executionId",
+            "commandId",
+            "messageId",
+            "providerExecution"
+          ]
+        },
+        "expect": {
+          "started": false,
+          "http_attempt_count": 0
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "stable_ledger_restart",
+        "input": {
+          "existing_claim": true,
+          "new_process": true
+        },
+        "expect": {
+          "new_http_attempt_count": 0
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "consumed_existing_asset_after_policy_expiry",
+        "input": {
+          "consent_state": "CONSUMED",
+          "policy_expired": true,
+          "asset_acl_valid": true
+        },
+        "expect": {
+          "existing_asset_read_allowed": true,
+          "new_execution_allowed": false
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "consumed_run_explicit_cancellation_or_acl_revocation",
+        "input": {
+          "consent_state": "CONSUMED",
+          "mutate_each": [
+            "execution_cancelled",
+            "conversation_access_revoked",
+            "source_input_access_revoked",
+            "asset_access_revoked"
+          ]
+        },
+        "expect": {
+          "affected_operation_allowed": false,
+          "new_http_attempt_count": 0
+        },
+        "result": "NOT_RUN"
+      }
+    ],
+    "input_boundaries": [
+      {
+        "id": "no_reference_generation",
+        "input": {
+          "count": 0
+        },
+        "expect": {
+          "accepted_count": 0,
+          "provider_request_kind": "generations",
+          "http_attempt_count_max": 1
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "sixteen_reference_generation",
+        "input": {
+          "count": 16
+        },
+        "expect": {
+          "accepted_count": 16,
+          "dropped_count": 0,
+          "provider_request_kind": "edits",
+          "http_attempt_count_max": 1
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "seventeen_reference_reject",
+        "input": {
+          "count": 17
+        },
+        "expect": {
+          "reserve_count": 0,
+          "download_count": 0,
+          "start_count": 0,
+          "http_attempt_count": 0,
+          "dropped_count": 0
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "reference_mismatch",
+        "input": {
+          "mutate_each": [
+            "mime",
+            "sha256",
+            "version",
+            "byteLength",
+            "order"
+          ]
+        },
+        "expect": {
+          "start_count": 0,
+          "http_attempt_count": 0
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "v1_controlled_reject",
+        "input": {
+          "controlled_config": true,
+          "command_schema_version": 1
+        },
+        "expect": {
+          "lease_count": 0,
+          "download_count": 0,
+          "start_count": 0,
+          "http_attempt_count": 0
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "v2_native_reject",
+        "input": {
+          "native_v1_config": true,
+          "command_schema_version": 2
+        },
+        "expect": {
+          "lease_count": 0,
+          "download_count": 0,
+          "start_count": 0,
+          "http_attempt_count": 0
+        },
+        "result": "NOT_RUN"
+      },
+      {
+        "id": "native_v1_32_unchanged",
+        "input": {
+          "controlled_config": false,
+          "native_v1": true,
+          "count": 32
+        },
+        "expect": {
+          "legacy_capacity_unchanged": true
+        },
+        "result": "NOT_RUN"
+      }
+    ]
+  },
+  "fixture_seed": {
+    "scope": {
+      "tenantId": "0",
+      "clientId": "fixture_client",
+      "ownerJiacn": "fixture_owner"
+    },
+    "task_version_before": 6,
+    "requirement_revision": 3,
+    "requirement_title": "画一只鸟",
+    "requirement_description": "照片风格。",
+    "assignment_revision_after": 7,
+    "grant_version": 1,
+    "input_snapshot_json": "[]",
+    "assignment_base_hash_source_payload": "ASSIGN_AND_START_INITIAL_OPERATION_V1\ntask_fixture_1\nagent_fixture_1\n6\n3\n[\"GENERATE_IMAGE\"]\n[]\nGENERATE_IMAGE",
+    "assignment_base_hash_sha256": "915fa80ae0b9d6f7acfd71b5ad30d85d7c141a9516ffbfe7880ef4b2d3abb39d",
+    "input_snapshot_digest_sha256": "15396100736831afa1a30f4e01d5b218d829ed56a7bf309463fc1d4360c14abd",
+    "custody_note": "OPERATOR_TEMPLATE is a fictitious exact-ID operator attestation label; current core has no custody enum. Not actual managed/local authority."
+  }
+}

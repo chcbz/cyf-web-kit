@@ -29,6 +29,8 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
   const busy = ref(false)
   let generation = 0
   let disposed = false
+  let observationTimer = null
+  let observationTaskId = null
   const current = (captured, epoch) => !disposed && scope.value === captured && generation === epoch
   const stopWatch = watch(scope, () => { generation++; state.value = initialState(); busy.value = false }, { flush: 'sync' })
   const store = (captured, taskId) => createPointAndStartIntentStore({ storage, scope: captured, taskId })
@@ -83,6 +85,7 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
     state.value = { status: 'CONFIRMED', intent, projection: intent.projection || null, error: null }
     return project(intent, captured, epoch)
   }
+  const stopObservation = () => { if (observationTimer !== null) clearTimeout(observationTimer); observationTimer = null; observationTaskId = null }
   const run = async (taskId, action) => {
     if (disposed || busy.value || !exactPointAndStartId(taskId) || !exactPointAndStartScope(scope.value)) return false
     const captured = scope.value
@@ -97,13 +100,26 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
   const checkOriginal = taskId => run(taskId, async (captured, epoch) => {
     const intent = readIntent(captured, taskId)
     if (!intent) return false
-    if (intent.providerConsent) {
+    if (intent.providerConsent && !intent.controlledImageBridge) {
       state.value = { status: 'COST_CONSENT_PENDING', intent, projection: null, error: '费用意图须使用费用同意恢复；未调用旧点将' }
       return false
     }
     state.value = { status: intent.projection ? 'CONFIRMED' : 'UNKNOWN', intent, projection: intent.projection || null, error: null }
     return project(intent, captured, epoch)
   })
+  // Read-only observation has no retry budget or deadline. It ends only at a
+  // terminal/non-current projection, explicit stop, identity generation change, or disposal.
+  const observeOriginal = (taskId, schedule = callback => setTimeout(callback, 1000)) => {
+    stopObservation(); observationTaskId = taskId
+    const tick = async () => {
+      if (disposed || observationTaskId !== taskId) return
+      await checkOriginal(taskId)
+      if (disposed || observationTaskId !== taskId || state.value.status !== 'PREPARING') { stopObservation(); return }
+      observationTimer = schedule(() => { void tick() })
+    }
+    void tick()
+    return true
+  }
   const start = ({ task, agent, requestedOperations, initialOperation, inputRefs = [] }) => {
     // Capture the explicit clicked target and selection before any asynchronous
     // read. Editing the draft while GET runs must never alter the admitted body.
@@ -148,7 +164,7 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
   const resumeOriginal = taskId => run(taskId, async (captured, epoch) => {
     const intent = readIntent(captured, taskId)
     if (!intent) return false
-    if (intent.providerConsent) {
+    if (intent.providerConsent && !intent.controlledImageBridge) {
       state.value = { status: 'COST_CONSENT_PENDING', intent, projection: null, error: '费用意图须使用费用同意恢复；未调用旧点将' }
       return false
     }
@@ -156,10 +172,10 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
     try { return await project(intent, captured, epoch) } catch (error) {
       if (!current(captured, epoch)) return false
       if (error?.status !== 404 || error?.code !== 'ASSIGNMENT_OPERATION_UNAVAILABLE' ||
-        intent.postAcknowledged || intent.projection || canReplayOriginal({ id: taskId }, { agentId: intent.body.agentId }) !== true) throw error
+        intent.providerConsent || intent.postAcknowledged || intent.projection || canReplayOriginal({ id: taskId }, { agentId: intent.body.agentId }) !== true) throw error
       return send(intent, captured, epoch)
     }
   })
-  return { state, busy, start, checkOriginal, resumeOriginal,
-    dispose: () => { disposed = true; generation++; stopWatch(); busy.value = false } }
+  return { state, busy, start, checkOriginal, resumeOriginal, observeOriginal, stopObservation,
+    dispose: () => { disposed = true; generation++; stopObservation(); stopWatch(); busy.value = false } }
 }

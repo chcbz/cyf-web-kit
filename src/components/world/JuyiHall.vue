@@ -316,8 +316,10 @@
             :funded-create-recovery="fundedCreateRecovery"
             :requirement-create-state="requirementCreateState"
             :requirement-create-busy="requirementCreateBusy"
-            :point-and-start-state="pointAndStartState"
-            :point-and-start-busy="pointAndStartBusy"
+            :point-and-start-state="pointAndStartPresentationState"
+            :point-and-start-busy="pointAndStartBusy || controlledBridgeBusy"
+            :controlled-consent-offer="controlledConsentOffer"
+            :controlled-consent-busy="controlledBridgeBusy"
             :format-time="formatTime"
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
@@ -355,6 +357,7 @@
             @resume-funded-create="resumeFundedCreate"
             @check-point-and-start="checkPointAndStartOriginal"
             @resume-point-and-start="resumePointAndStartOriginal"
+            @confirm-controlled-image-consent="confirmControlledImageConsent"
             @cancel-funded-create-recovery="showToast('原资金榜请求仍会保留；请在准备好后明确恢复。')"
             @cancel-funding="cancelFunding"
             @load-settlement="loadSettlement"
@@ -721,6 +724,10 @@ import { useHallRequirementCreate } from '@/composables/juyiting/useHallRequirem
 import { useHallPointAndStart } from '@/composables/juyiting/useHallPointAndStart'
 import { useHallTaskLinkedReferenceInputs } from '@/composables/juyiting/hallTaskLinkedReferenceInputs'
 import { createPointAndStartIntentStore } from '@/composables/juyiting/hallPointAndStartIntent'
+import { pointAndStartRecoveryLane } from '@/composables/juyiting/hallPointAndStartRecoveryLane'
+import { providerConsentAcknowledgement } from '@/composables/juyiting/hallPointAndStartProviderConsent'
+import { capabilityOffersControlledImageConsent, createControlledImageCapabilityObservationFence, loadControlledImageBountyCapability } from '@/composables/juyiting/hallControlledImageBountyCapability'
+import { useHallPointAndStartControlledBridge } from '@/composables/juyiting/useHallPointAndStartControlledBridge'
 import { capabilityAllowsNewStart, capabilityAllowsOriginalReplay, createNativeCapabilityObservationFence, loadNativeBountyCapability, pointAndStartIntentReadLane } from '@/composables/juyiting/hallNativeBountyCapability'
 import { useHallQuickMatter } from '@/composables/juyiting/useHallQuickMatter'
 import { useTaskWorkspace } from '@/composables/juyiting/useTaskWorkspace'
@@ -2067,6 +2074,22 @@ const {
 })
 
 
+const controlledImageCapability = ref(null)
+const controlledConsentOffer = ref(null)
+const controlledImageObservation = createControlledImageCapabilityObservationFence({
+  getIdentityScope: () => hallIdentityScope.value,
+  getAuthorizationGeneration: () => apiStore.authorizationGeneration
+})
+const readControlledImageCapability = async (taskId, targetAgentId, observation = controlledImageObservation.capture()) => {
+  let capability = null
+  try { capability = await loadControlledImageBountyCapability({ agentApi, taskId, targetAgentId }) } catch (error) {
+    if (observation.isCurrent()) log.warn('controlled image capability is unavailable:', error)
+    return null
+  }
+  if (!observation.isCurrent() || !capability) return null
+  controlledImageCapability.value = Object.freeze({ ...capability, identityScope: observation.identityScope, authorizationGeneration: observation.authorizationGeneration, isCurrent: observation.isCurrent })
+  return controlledImageCapability.value
+}
 const pointAndStartCapability = ref(null)
 const pointAndStartStorage = (() => {
   try { return typeof window !== 'undefined' ? window.localStorage : null } catch { return null }
@@ -2086,7 +2109,7 @@ const pointAndStartIntentState = (taskId) => createPointAndStartIntentStore({
   scope: hallIdentityScope.value,
   taskId
 }).read()
-const clearPointAndStartCapability = () => { pointAndStartObservation.invalidate(); pointAndStartReferenceInputs.invalidate(); pointAndStartCapability.value = null }
+const clearPointAndStartCapability = () => { pointAndStartObservation.invalidate(); controlledImageObservation.invalidate(); pointAndStartReferenceInputs.invalidate(); invalidateControlledBridge(); stopPointAndStartObservation(); pointAndStartCapability.value = null; controlledImageCapability.value = null; controlledConsentOffer.value = null }
 const readPointAndStartCapability = async (taskId, targetAgentId, observation = pointAndStartObservation.capture()) => {
   const { identityScope, authorizationGeneration } = observation
   let capability = null
@@ -2119,11 +2142,49 @@ const attachAdmittedPointAndStart = async ({ task, targetAgentId, reference, isC
   return adoptBountyBootstrap(reference)
 }
 const {
+  state: controlledBridgeState,
+  busy: controlledBridgeBusy,
+  selectContext: selectControlledBridgeContext,
+  start: startControlledBridge,
+  checkOriginal: checkControlledBridgeOriginal,
+  resumeOriginal: resumeControlledBridgeOriginal,
+  dispose: disposeControlledBridge,
+  invalidate: invalidateControlledBridge
+} = useHallPointAndStartControlledBridge({
+  agentApi,
+  actorScopeKey: hallIdentityScope,
+  storage: pointAndStartStorage,
+  keys: {
+    createAssignmentKey: () => globalThis.crypto?.randomUUID?.(),
+    createIssueKey: () => globalThis.crypto?.randomUUID?.()
+  },
+  onBound: async ({ intent, isCurrent }) => {
+    // The bridge receipt is not a bootstrap request. Observe the existing original
+    // projection until it is admitted/historical/failed or this context is invalidated.
+    if (isCurrent?.()) observePointAndStart(intent.taskId)
+  }
+})
+const confirmControlledImageConsent = async (task, targetAgentId) => {
+  const offer = controlledConsentOffer.value
+  if (!offer || offer.taskId !== task?.id || offer.targetAgentId !== targetAgentId || !capabilityOffersControlledImageConsent(offer.capability, task, { agentId: targetAgentId })) return false
+  const current = operableRosterAgents.value.find(agent => agent?.agentId === targetAgentId)
+  if (!current || !canAssign(task, current) || !selectControlledBridgeContext({ taskId: task.id, targetAgentId })) return false
+  const refs = await pointAndStartReferenceInputs.resolve({ taskId: task.id, inputRefsPolicy: offer.capability.inputRefsPolicy, isCurrent: () => offer.observation.isCurrent() })
+  if (!offer.observation.isCurrent() || refs.state !== 'READY') { showToast('参考资料未能核对，未办理。'); return false }
+  const started = await startControlledBridge({ task, agent: current, requestedOperations: offer.capability.requestedOperations,
+    initialOperation: offer.capability.initialOperation, inputRefs: refs.inputRefs,
+    providerBinding: { bindingId: offer.capability.providerBinding.bindingId, bindingEpoch: offer.capability.providerBinding.bindingEpoch }, acknowledgement: providerConsentAcknowledgement })
+  if (!started) showToast('受控图像原点将待核对；不会改走旧式点将。')
+  return started
+}
+const {
   state: pointAndStartState,
   busy: pointAndStartBusy,
   start: startPointAndStart,
   checkOriginal: checkPointAndStart,
   resumeOriginal: resumePointAndStart,
+  observeOriginal: observePointAndStart,
+  stopObservation: stopPointAndStartObservation,
   dispose: disposePointAndStart
 } = useHallPointAndStart({
   agentApi,
@@ -2137,6 +2198,7 @@ const {
   },
   onAdmitted: attachAdmittedPointAndStart
 })
+const pointAndStartPresentationState = computed(() => pointAndStartState.value.intent?.taskId === controlledBridgeState.value.intent?.taskId && pointAndStartState.value.status !== 'IDLE' ? pointAndStartState.value : controlledBridgeState.value.intent ? controlledBridgeState.value : pointAndStartState.value)
 const explainPointAndStartState = () => ({
   UNKNOWN: '原点将结果待核对；不会改走旧式点将。',
   PREPARING: '原点将已受理，议事仍在准备；可只读核对。',
@@ -2146,7 +2208,8 @@ const explainPointAndStartState = () => ({
 }[pointAndStartState.value.status] || '原点将正在核对；不会创建另一条点将。')
 const checkPointAndStartOriginal = async (task) => {
   if (!task?.id) return false
-  const result = await checkPointAndStart(task.id)
+  const existing = pointAndStartIntentState(task.id)
+  const result = pointAndStartRecoveryLane(existing) === 'CONTROLLED' ? await checkControlledBridgeOriginal(task.id) : await checkPointAndStart(task.id)
   if (!result && pointAndStartState.value.intent?.taskId === task.id) showToast(explainPointAndStartState())
   return result
 }
@@ -2154,6 +2217,7 @@ const resumePointAndStartOriginal = async (task) => {
   const intent = pointAndStartIntentState(task?.id)
   if (intent.state !== 'PRESENT') return checkPointAndStartOriginal(task)
   const targetAgentId = intent.record.body.agentId
+  if (pointAndStartRecoveryLane(intent) === 'CONTROLLED') return resumeControlledBridgeOriginal(task.id)
   const observation = pointAndStartObservation.capture()
   const capability = await readPointAndStartCapability(task.id, targetAgentId, observation)
   if (!observation.isCurrent()) return false
@@ -2190,6 +2254,19 @@ const assignTask = async (task, agent) => {
     const target = targetAgents[0]
     const clickedTaskId = task.id
     const clickedTargetId = target.agentId
+    const controlledObservation = controlledImageObservation.capture()
+    const controlledCapability = await readControlledImageCapability(clickedTaskId, clickedTargetId, controlledObservation)
+    if (!controlledObservation.isCurrent() || task.id !== clickedTaskId || target.agentId !== clickedTargetId) return false
+    if (controlledCapability?.controlledObservation !== 'UNDECLARED') {
+      if (capabilityOffersControlledImageConsent(controlledCapability, task, target)) {
+        controlledConsentOffer.value = { taskId: clickedTaskId, targetAgentId: clickedTargetId, capability: controlledCapability, observation: controlledObservation, error: null }
+        selectControlledBridgeContext({ taskId: clickedTaskId, targetAgentId: clickedTargetId })
+        showToast('请在事项详情中明确确认一次受控图像外部账户请求。')
+        return false
+      }
+      showToast('受控图像通道当前不可按此原点将办理；未改走旧式点将。')
+      return false
+    }
     const observation = pointAndStartObservation.capture()
     const capability = await readPointAndStartCapability(clickedTaskId, clickedTargetId, observation)
     if (!observation.isCurrent() || task.id !== clickedTaskId || target.agentId !== clickedTargetId) return false
@@ -2234,7 +2311,7 @@ const assignTask = async (task, agent) => {
   return true
 }
 
-watch(() => selectedTask.value?.id, taskId => {
+watch(() => [selectedTask.value?.id, selectedTask.value?.taskVersion, selectedTask.value?.requirementRevision, selectedTask.value?.revision], ([taskId]) => {
   clearPointAndStartCapability()
   if (taskId && pointAndStartIntentState(taskId).state === 'PRESENT') void checkPointAndStartOriginal({ id: taskId })
 }, { flush: 'sync' })
@@ -2565,6 +2642,7 @@ onUnmounted(() => {
   disposeRequirementCreate()
   pointAndStartReferenceInputs.dispose()
   disposePointAndStart()
+  disposeControlledBridge()
   disposeHallConversation()
   hallBackendSceneState?.dispose()
   stopHallEventStream()

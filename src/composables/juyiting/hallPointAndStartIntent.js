@@ -1,5 +1,6 @@
 import { bountyBootstrapReference } from './hallBountyBootstrap.js'
 import { providerConsentExtension } from './hallPointAndStartProviderConsent.js'
+import { controlledImageBridgeExtension } from './hallControlledImagePointAndStartBridge.js'
 
 const PREFIX = 'cyf.juyiting.point-and-start.v1'
 const clone = value => JSON.parse(JSON.stringify(value))
@@ -124,6 +125,7 @@ const validIntent = record => {
     !pointAndStartLong(record.grant.assignmentRevision, true) || !pointAndStartLong(record.grant.grantVersion) ||
     !inputFacts(record.grant.inputs))) return false
   if (record.providerConsent !== undefined && !providerConsentExtension(record.providerConsent, record)) return false
+  if (record.controlledImageBridge !== undefined && !controlledImageBridgeExtension(record.controlledImageBridge, record)) return false
   return !record.projection || Boolean(pointAndStartProjection(record.projection, record))
 }
 /** One original intent per owner/task; corrupt/unavailable storage is never writable. */
@@ -147,6 +149,9 @@ export const createPointAndStartIntentStore = ({ storage, scope, taskId }) => {
       (old.record.grant && !equal(old.record.grant, record.grant)) ||
       (old.record.providerConsent && !providerConsentExtension(record.providerConsent, record, old.record.providerConsent)) ||
       (!old.record.providerConsent && record.providerConsent !== undefined) ||
+      (old.record.controlledImageBridge && !controlledImageBridgeExtension(record.controlledImageBridge, record, old.record.controlledImageBridge)) ||
+      (!old.record.controlledImageBridge && record.controlledImageBridge !== undefined &&
+        record.providerConsent?.receipt?.state !== 'ISSUED') ||
       (old.record.projection && !pointAndStartProjection(record.projection, record, old.record.projection)))) return { state: 'CORRUPT' }
     try {
       const encoded = JSON.stringify(record)
