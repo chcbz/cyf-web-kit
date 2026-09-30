@@ -17,6 +17,25 @@ const unwrap = response => {
 const operationStates = new Set(['pending', 'saving', 'saved', 'partial_failed'])
 const itemStates = new Set(['pending', 'saving', 'saved', 'failed'])
 const keyFor = ({ assetId, revision }) => `${assetId}\u0000${revision}`
+const archiveStorageKey = (identityScope, conversationId, part) => {
+  if (typeof identityScope !== 'string' || !identityScope || identityScope.length > 512 || !ID(conversationId) || !ID(part?.assetId) || !revisionOf(part?.revision)) return ''
+  return `juyiting:archive-intent:v1:${encodeURIComponent(identityScope)}:${conversationId}:${part.assetId}:${revisionOf(part.revision)}`
+}
+const browserStorage = () => { try { return globalThis.sessionStorage } catch { return null } }
+const persistedIntent = (storage, key) => {
+  if (!storage || !key) return null
+  try {
+    const entry = JSON.parse(storage.getItem(key) || 'null')
+    if (!entry || !validIdempotencyKey(entry.idempotencyKey) ||
+        (entry.operationId != null && entry.operationId !== '' && !ID(entry.operationId))) return null
+    return { state: 'unknown', message: '已找到先前的保存操作，请查询原操作，不要创建新的保存。',
+      busy: false, idempotencyKey: entry.idempotencyKey, operationId: entry.operationId || '' }
+  } catch { return null }
+}
+const storeIntent = (storage, key, intent) => {
+  if (!storage || !key || !validIdempotencyKey(intent.idempotencyKey)) return
+  try { storage.setItem(key, JSON.stringify({ idempotencyKey: intent.idempotencyKey, operationId: intent.operationId || '' })) } catch { /* No persistent browser storage: this tab still reuses the in-memory key. */ }
+}
 const defaultIdempotencyKey = () => {
   const uuid = globalThis.crypto?.randomUUID?.()
   if (!uuid) throw new Error('当前环境不能生成安全的幂等键，未发送保存请求。')
@@ -59,11 +78,13 @@ const failure = error => {
  * assetId + immutable revision; filenames, generated URLs, storage paths and model-authored text never
  * enter the archive wire payload.
  */
-export function useHallConversationArchive ({ api = createApi('/chat'), conversationId = null, identityEpoch = 0, idempotencyKeyFactory = defaultIdempotencyKey } = {}) {
+export function useHallConversationArchive ({ api = createApi('/chat'), conversationId = null, identityEpoch = 0, identityScope = null, storage = browserStorage(), idempotencyKeyFactory = defaultIdempotencyKey } = {}) {
   const records = ref({})
   const currentConversationId = computed(() => valueOf(conversationId))
   const currentEpoch = computed(() => String(valueOf(identityEpoch) ?? ''))
-  const scopeKey = computed(() => ID(currentConversationId.value) ? `${currentEpoch.value}\u0000${currentConversationId.value}` : '')
+  const stableIdentity = computed(() => valueOf(identityScope))
+  const intentKey = part => archiveStorageKey(stableIdentity.value, currentConversationId.value, part)
+  const scopeKey = computed(() => ID(currentConversationId.value) ? `${currentEpoch.value}\u0000${stableIdentity.value || ''}\u0000${currentConversationId.value}` : '')
   const controllers = new Set()
   let generation = 0
   let disposed = false
@@ -87,7 +108,7 @@ export function useHallConversationArchive ({ api = createApi('/chat'), conversa
   }
   const statusFor = part => {
     if (!validPart(part)) return { state: 'idle', message: '', busy: false, operationId: '' }
-    return records.value[keyFor(part)] || { state: 'idle', message: '', busy: false, operationId: '' }
+    return records.value[keyFor(part)] || persistedIntent(storage, intentKey(part)) || { state: 'idle', message: '', busy: false, operationId: '' }
   }
   const updateFromReceipt = (key, entry, receipt) => {
     const message = receipt.state === 'saved'
@@ -97,6 +118,7 @@ export function useHallConversationArchive ({ api = createApi('/chat'), conversa
         : '保存请求已受理，正在等待服务端确认。'
     const next = { ...entry, state: receipt.state, message, busy: false, operationId: receipt.operationId, revision: receipt.revision, item: receipt.item }
     put(key, next)
+    storeIntent(storage, intentKey(receipt.item), next)
     return next
   }
   const check = async part => {
@@ -137,6 +159,8 @@ export function useHallConversationArchive ({ api = createApi('/chat'), conversa
     const snapshot = { generation, scopeKey: scopeKey.value }
     const entry = { ...current, state: 'saving', message: '正在提交保存请求…', busy: true, idempotencyKey, operationId: current.operationId || '', item: null }
     put(key, entry)
+    // Record the intent before the POST: a lost ACK or page refresh must not create a second file.
+    storeIntent(storage, intentKey(part), entry)
     const body = { mode: 'create', items: [{ assetRef: { assetId: part.assetId, revision: revisionOf(part.revision) } }] }
     try {
       const raw = await request({ url: `/conversations/${encodeURIComponent(currentConversationId.value)}/archive-operations`, method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, data: body }, snapshot)
@@ -151,11 +175,11 @@ export function useHallConversationArchive ({ api = createApi('/chat'), conversa
       return null
     }
   }
-  const save = part => send(part)
   const retry = part => {
     const current = statusFor(part)
     return current.operationId ? check(part) : send(part, current)
   }
+  const save = part => retry(part)
 
   const stop = watch(scopeKey, reset, { immediate: true, flush: 'sync' })
   const dispose = () => { if (!disposed) { disposed = true; stop(); reset() } }

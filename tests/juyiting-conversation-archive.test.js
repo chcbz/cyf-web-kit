@@ -81,6 +81,64 @@ describe('JYT-MMD-W2 conversation archive operations', () => {
     } finally { archives.dispose() }
   })
 
+  it('reuses the pre-recorded idempotency key after a lost POST acknowledgement and reload', async () => {
+    const stored = new Map()
+    const storage = { getItem: key => stored.get(key) ?? null, setItem: (key, value) => stored.set(key, value) }
+    const calls = []
+    const api = { execute: async options => {
+      calls.push(options)
+      if (calls.length === 1) throw new TypeError('lost acknowledgement')
+      return { data: receipt('saved', { fileId: 'workspace-file-1', version: 2 }) }
+    } }
+    const props = { api, storage, conversationId: Vue.ref('conversation-1'), identityScope: Vue.ref('tenant\u0000client\u0000owner-a'),
+      idempotencyKeyFactory: () => 'archive-key-original' }
+    const first = useHallConversationArchive({ ...props, identityEpoch: Vue.ref(1) })
+    try {
+      await first.save(part())
+      expect(first.statusFor(part()).state).to.equal('unknown')
+      expect(stored.size).to.equal(1) // persisted before POST, even without a receipt
+    } finally { first.dispose() }
+    const second = useHallConversationArchive({ ...props, identityEpoch: Vue.ref(99), idempotencyKeyFactory: () => { throw new Error('duplicate key') } })
+    try {
+      expect(second.statusFor(part()).state).to.equal('unknown')
+      await second.retry(part())
+      expect(calls).to.have.length(2)
+      expect(calls[0].headers['Idempotency-Key']).to.equal(calls[1].headers['Idempotency-Key'])
+      expect(second.statusFor(part()).state).to.equal('saved')
+    } finally { second.dispose() }
+  })
+
+  it('recovers a known operation by status only and never trusts an old identity or an unverified saved label', async () => {
+    const stored = new Map()
+    const storage = { getItem: key => stored.get(key) ?? null, setItem: (key, value) => stored.set(key, value) }
+    const calls = []
+    const api = { execute: async options => {
+      calls.push(options)
+      return { data: calls.length === 1 ? receipt('pending') : receipt('saved', { fileId: 'workspace-file-1', version: 2 }) }
+    } }
+    const scope = Vue.ref('tenant\u0000client\u0000owner-a')
+    const first = useHallConversationArchive({ api, storage, conversationId: Vue.ref('conversation-1'), identityScope: scope,
+      idempotencyKeyFactory: () => 'archive-key-status' })
+    try {
+      await first.save(part())
+      expect(first.statusFor(part()).state).to.equal('saved')
+    } finally { first.dispose() }
+    const second = useHallConversationArchive({ api, storage, conversationId: Vue.ref('conversation-1'), identityScope: scope,
+      idempotencyKeyFactory: () => { throw new Error('should not create key') } })
+    try {
+      expect(second.statusFor(part()).state).to.equal('unknown') // not trusted before owner-scoped readback
+      scope.value = 'tenant\u0000client\u0000owner-b'
+      await Vue.nextTick()
+      expect(second.statusFor(part()).state).to.equal('idle')
+      scope.value = 'tenant\u0000client\u0000owner-a'
+      await Vue.nextTick()
+      expect(second.statusFor(part()).state).to.equal('unknown')
+      await second.save(part())
+      expect(calls.at(-1).method).to.equal('GET')
+      expect(second.statusFor(part()).state).to.equal('saved')
+    } finally { second.dispose() }
+  })
+
   it('never turns malformed or partial receipts into a local saved result', async () => {
     let sequence = 0
     const api = { execute: async () => {

@@ -21,7 +21,7 @@
           class="part-save-button"
           :disabled="archiveStatus(part).busy || archiveStatus(part).state === 'saved'"
           @click="saveToWorkspace(part)"
-        >{{ archiveStatus(part).state === 'saved' ? '已保存到工作空间' : archiveStatus(part).busy ? '正在确认保存…' : '保存到工作空间' }}</button>
+        >{{ archiveStatus(part).state === 'saved' ? '已保存到工作空间' : archiveStatus(part).busy ? '正在确认保存…' : archiveStatus(part).state === 'unknown' ? '继续原保存' : '保存到工作空间' }}</button>
         <p v-if="archiveStatus(part).message" :class="{ 'part-archive-error': ['error', 'unknown', 'partial_failed'].includes(archiveStatus(part).state) }" :role="['error', 'unknown', 'partial_failed'].includes(archiveStatus(part).state) ? 'alert' : 'status'">{{ archiveStatus(part).message }}</p>
         <button
           v-if="['pending', 'saving', 'unknown', 'error', 'partial_failed'].includes(archiveStatus(part).state) && !archiveStatus(part).busy"
@@ -38,8 +38,8 @@ import HallMessageMedia from './HallMessageMedia.vue'
 import { useHallConversationArchive } from '../../composables/juyiting/useHallConversationArchive.js'
 import { revisionOf } from '../../composables/juyiting/hallMessageParts.js'
 
-const props = defineProps({ parts: { type: Array, default: () => [] }, conversationId: { type: String, default: '' }, identityKey: { type: String, default: '' } })
-const archives = useHallConversationArchive({ conversationId: () => props.conversationId, identityEpoch: () => props.identityKey })
+const props = defineProps({ parts: { type: Array, default: () => [] }, conversationId: { type: String, default: '' }, identityKey: { type: String, default: '' }, identityScope: { type: String, default: '' } })
+const archives = useHallConversationArchive({ conversationId: () => props.conversationId, identityEpoch: () => props.identityKey, identityScope: () => props.identityScope })
 const canSaveToWorkspace = part => part?.state === 'ready' && typeof part?.assetId === 'string' && part.assetId.length > 0 && Boolean(revisionOf(part?.revision))
 const archiveStatus = part => archives.statusFor(part)
 const saveToWorkspace = part => { void archives.save(part) }

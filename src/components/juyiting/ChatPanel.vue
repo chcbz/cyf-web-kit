@@ -158,7 +158,12 @@
           <span v-if="message.streaming" class="message-state">回话未尽</span>
         </div>
         <div class="message-content" v-html="renderMarkdown(message.content)"></div>
-        <HallMessageParts :parts="message.parts" :conversation-id="conversationId" :identity-key="materialIdentityKey" />
+        <HallMessageParts
+          :parts="message.parts"
+          :conversation-id="conversationId"
+          :identity-key="materialIdentityKey"
+          :identity-scope="identityScope"
+        />
         <small v-if="message.statusText" class="message-status">{{ message.statusText }}</small>
       </div>
       <slot name="bounty-results" />

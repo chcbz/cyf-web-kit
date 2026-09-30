@@ -35,7 +35,7 @@ describe('scoped bounty media belongs to the conversation transcript', () => {
       messages: [{ localId: 'first', sender: 'AGENT', content: '第一稿', parts: [] }],
       senderText: () => 'Agent', renderMarkdown: text => text,
       deliberationStatus: '', isAwaitingReply: false, emptyText: '暂无',
-      conversationId: 'conversation-1', materialIdentityKey: 'owner-a'
+      conversationId: 'conversation-1', materialIdentityKey: 'owner-a', identityScope: 'tenant\u0000client\u0000owner-a'
     }) }
     const globals = ['Element', 'HTMLElement', 'SVGElement', 'Node']
     const installed = globals.filter(name => !globalThis[name])
