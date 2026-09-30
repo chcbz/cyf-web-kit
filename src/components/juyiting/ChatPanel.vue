@@ -158,6 +158,7 @@
           <span v-if="message.streaming" class="message-state">回话未尽</span>
         </div>
         <div class="message-content" v-html="renderMarkdown(message.content)"></div>
+        <BountyTextSelectionArchive v-if="isTaskDiscussion" :conversation-id="conversationId" :identity-key="materialIdentityKey" :message="message" />
         <HallMessageParts
           :parts="message.parts"
           :conversation-id="conversationId"
@@ -201,6 +202,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import HallMessageParts from './HallMessageParts.vue'
+import BountyTextSelectionArchive from './BountyTextSelectionArchive.vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import HallChatComposer from './HallChatComposer.vue'
