@@ -99,6 +99,7 @@ export function useHallReferenceImageSelection ({
   const pendingKeys = new Set()
   let generation = 0
   let detailRequest = 0
+  let replacementGeneration = 0
   let disposed = false
 
   const draftReferences = computed(() => selected.value.map(item => Object.freeze({
@@ -117,9 +118,10 @@ export function useHallReferenceImageSelection ({
     sessions.clear()
     selected.value = []
   }
-  const clear = ({ resetCatalog = false } = {}) => {
+  const clear = ({ resetCatalog = false, invalidateReplacement = true } = {}) => {
     generation += 1
     detailRequest += 1
+    if (invalidateReplacement) replacementGeneration += 1
     for (const session of [...pendingSessions]) disposeSession(session)
     pendingSessions.clear()
     pendingKeys.clear()
@@ -224,47 +226,46 @@ export function useHallReferenceImageSelection ({
   }
 
   const replaceReferences = async references => {
+    const replacement = ++replacementGeneration
+    clear({ resetCatalog: true, invalidateReplacement: false })
+    const snapshot = { generation, epoch: currentEpoch.value }
+    const replacementCurrent = () => replacement === replacementGeneration && stillCurrent(snapshot)
+    const failCurrentReplacement = message => {
+      if (!replacementCurrent()) return null
+      clear({ resetCatalog: true, invalidateReplacement: false })
+      return setError(message)
+    }
+
     if (!Array.isArray(references) || references.length > HALL_REFERENCE_MAX_ITEMS) {
-      clear({ resetCatalog: true })
-      return setError('参考图草稿必须是 0 到 32 项的明确版本列表。')
+      return failCurrentReplacement('参考图草稿必须是 0 到 32 项的明确版本列表。')
     }
     const normalized = []
     const keys = new Set()
     for (const candidate of references) {
+      if (!replacementCurrent()) return null
       const reference = toHallDraftReference(candidate)
-      if (!reference) {
-        clear({ resetCatalog: true })
-        return setError('参考图草稿包含无效的文件、版本或用途。')
-      }
+      if (!reference) return failCurrentReplacement('参考图草稿包含无效的文件、版本或用途。')
       const key = referenceKey(reference.fileId, reference.version)
-      if (keys.has(key)) {
-        clear({ resetCatalog: true })
-        return setError('参考图草稿不能包含重复的精确版本。')
-      }
+      if (keys.has(key)) return failCurrentReplacement('参考图草稿不能包含重复的精确版本。')
       keys.add(key)
       normalized.push(reference)
     }
 
-    clear({ resetCatalog: true })
     if (!normalized.length) {
+      if (!replacementCurrent()) return null
       state.value = 'ready'
       return []
     }
     for (const reference of normalized) {
+      if (!replacementCurrent()) return null
       const detail = await openFile(reference.fileId)
-      if (!detail) {
-        const message = error.value
-        clear({ resetCatalog: true })
-        return setError(message || '参考图草稿验证失败。')
-      }
+      if (!replacementCurrent()) return null
+      if (!detail) return failCurrentReplacement(error.value || '参考图草稿验证失败。')
       const added = await addReference(reference.fileId, reference.version)
-      if (!added) {
-        const message = error.value
-        clear({ resetCatalog: true })
-        return setError(message || '参考图草稿验证失败。')
-      }
+      if (!replacementCurrent()) return null
+      if (!added) return failCurrentReplacement(error.value || '参考图草稿验证失败。')
     }
-    return draftReferences.value
+    return replacementCurrent() ? draftReferences.value : null
   }
 
   const removeReference = (fileId, requestedVersion) => {

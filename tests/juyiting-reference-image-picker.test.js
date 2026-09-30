@@ -228,6 +228,45 @@ describe('hall requirement-draft reference image selection', () => {
     selection.dispose()
   })
 
+  it('fences an old replacement when a new identity replacement wins without reading later old files', async () => {
+    const pendingOldDetail = deferred()
+    const epoch = ref('owner-a')
+    const details = new Map([
+      ['old-1', detailView('old-1')],
+      ['old-2', detailView('old-2')],
+      ['new-file', detailView('new-file')]
+    ])
+    const fixture = createFixture({
+      details,
+      detailHandler: fileId => fileId === 'old-1'
+        ? pendingOldDetail.promise
+        : { data: details.get(fileId), headers: { etag: `"${fileId}:1"` } }
+    })
+    const selection = useHallReferenceImageSelection({ api: fixture.api, identityEpoch: epoch, urlApi: fixture.urlApi })
+    const oldReplacement = selection.replaceReferences([
+      { fileId: 'old-1', version: 1, purpose: 'REFERENCE' },
+      { fileId: 'old-2', version: 1, purpose: 'REFERENCE' }
+    ])
+    await Promise.resolve()
+    assert.ok(fixture.calls.some(call => call.url === '/personal-workspace/files/old-1'))
+
+    epoch.value = 'owner-b'
+    const newReference = { fileId: 'new-file', version: 1, purpose: 'REFERENCE' }
+    assert.deepEqual(await selection.replaceReferences([newReference]), [newReference])
+    const newPreviewUrl = selection.selected.value[0].previewUrl
+    assert.ok(newPreviewUrl)
+
+    pendingOldDetail.resolve({ data: details.get('old-1'), headers: { etag: '"old-1:1"' } })
+    assert.equal(await oldReplacement, null)
+    await flush()
+
+    assert.deepEqual(selection.draftReferences.value, [newReference])
+    assert.equal(selection.selected.value[0].previewUrl, newPreviewUrl)
+    assert.ok(!fixture.revoked.includes(newPreviewUrl))
+    assert.ok(!fixture.calls.some(call => call.url === '/personal-workspace/files/old-2'))
+    selection.dispose()
+  })
+
   it('revokes owned Blob URLs on remove, close, model replacement and component unmount', async () => {
     const details = new Map([
       ['file-a', detailView('file-a')],
@@ -277,6 +316,127 @@ describe('hall requirement-draft reference image selection', () => {
       else globalThis.SVGElement = priorSvgElement
       if (priorElement === undefined) delete globalThis.Element
       else globalThis.Element = priorElement
+    }
+  })
+
+  it('mounts the actual picker and fences stale model completion across an identity/model replacement', async () => {
+    const Vue = await import('vue')
+    const staleModels = new Map([
+      ['old-file', deferred()],
+      ['restore-file', deferred()]
+    ])
+    const replacements = []
+    const reference = fileId => ({ fileId, version: 1, purpose: 'REFERENCE' })
+    const selectionModule = {
+      HALL_REFERENCE_MAX_ITEMS,
+      useHallReferenceImageSelection: ({ identityEpoch }) => {
+        const items = Vue.ref([])
+        const listState = Vue.ref('idle')
+        const currentDetail = Vue.ref(null)
+        const selected = Vue.ref([])
+        const draftReferences = Vue.ref([])
+        const state = Vue.ref('ready')
+        const error = Vue.ref('')
+        Vue.watch(identityEpoch, () => {
+          currentDetail.value = null
+          selected.value = []
+          draftReferences.value = []
+        }, { flush: 'sync' })
+        return {
+          items,
+          listState,
+          currentDetail,
+          selected,
+          draftReferences,
+          state,
+          error,
+          refresh: async () => true,
+          openFile: async () => null,
+          addReference: async () => null,
+          replaceReferences: async references => {
+            const copy = references.map(item => ({ ...item }))
+            replacements.push(copy)
+            const pending = staleModels.get(copy[0]?.fileId)
+            if (pending) return pending.promise
+            selected.value = copy.map(item => ({
+              ...item,
+              displayName: item.fileId,
+              contentMimeType: 'image/png',
+              previewUrl: `blob:${item.fileId}`
+            }))
+            draftReferences.value = copy
+            return copy
+          },
+          removeReference: () => false,
+          close: () => {}
+        }
+      }
+    }
+    const filename = new URL('../src/components/juyiting/HallReferenceImagePicker.vue', import.meta.url).pathname
+    const { descriptor, errors } = parse(readFileSync(filename, 'utf8'), { filename })
+    assert.deepEqual(errors, [])
+    const imports = new Proxy({
+      vue: Vue,
+      '../../composables/juyiting/hallReferenceImageSelection.js': selectionModule
+    }, { get: (target, name) => target[name] })
+    const code = compileScript(descriptor, { id: 'mounted-hall-reference-picker', inlineTemplate: true }).content
+      .replace(/^import\s+\{([\s\S]*?)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_, names, path) =>
+        `const { ${names.split(',').map(name => name.trim().replace(/\s+as\s+/, ': ')).join(', ')} } = imports[${JSON.stringify(path)}]`)
+      .replace(/^import\s+([^\s]+)\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_, name, path) => `const ${name} = imports[${JSON.stringify(path)}]`)
+      .replace('export default', 'return')
+    const Picker = new Function('imports', code)(imports)
+    const domDescriptors = {}
+    for (const key of ['SVGElement', 'Element', 'Node']) {
+      domDescriptors[key] = Object.getOwnPropertyDescriptor(globalThis, key)
+      Object.defineProperty(globalThis, key, { configurable: true, writable: true, value: window[key] })
+    }
+    let wrapper
+    try {
+      wrapper = mount(Picker, {
+        props: { modelValue: [reference('old-file')], identityScope: 'owner-a', identityEpoch: 1 }
+      })
+      await flush()
+      assert.deepEqual(replacements, [[reference('old-file')]])
+
+      await wrapper.setProps({
+        modelValue: [reference('new-file')],
+        identityScope: 'owner-b',
+        identityEpoch: 2
+      })
+      await flush()
+      assert.deepEqual(replacements, [[reference('old-file')], [reference('new-file')]])
+      const beforeStaleCompletion = [...(wrapper.emitted('update:modelValue') || [])]
+      assert.deepEqual(beforeStaleCompletion.at(-1), [[reference('new-file')]])
+
+      staleModels.get('old-file').resolve(null)
+      await flush()
+      assert.deepEqual(wrapper.emitted('update:modelValue') || [], beforeStaleCompletion)
+      assert.deepEqual((wrapper.emitted('update:modelValue') || []).at(-1), [[reference('new-file')]])
+
+      wrapper.unmount()
+      wrapper = mount(Picker, {
+        props: { modelValue: [reference('restore-file')], identityScope: 'owner-b', identityEpoch: 2 }
+      })
+      await flush()
+      const replacementOffset = replacements.length
+      assert.deepEqual(replacements.at(-1), [reference('restore-file')])
+
+      await wrapper.setProps({ modelValue: [] })
+      await flush()
+      assert.deepEqual(replacements.slice(replacementOffset), [[]])
+      const beforeOldRestore = [...(wrapper.emitted('update:modelValue') || [])]
+      assert.deepEqual(beforeOldRestore.at(-1), [[]])
+
+      staleModels.get('restore-file').resolve([reference('restore-file')])
+      await flush()
+      assert.deepEqual(wrapper.emitted('update:modelValue') || [], beforeOldRestore)
+      assert.deepEqual((wrapper.emitted('update:modelValue') || []).at(-1), [[]])
+    } finally {
+      wrapper?.unmount()
+      for (const [key, property] of Object.entries(domDescriptors)) {
+        if (property) Object.defineProperty(globalThis, key, property)
+        else delete globalThis[key]
+      }
     }
   })
 
