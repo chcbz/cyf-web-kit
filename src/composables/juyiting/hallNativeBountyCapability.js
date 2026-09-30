@@ -49,15 +49,18 @@ export const parseNativeBountyCapability = value => {
     typeof value.authorization.paidExecutionAuthorized !== 'boolean' ||
     !exactKeys(value.newStart, ['eligible', 'blockingReasons']) || typeof value.newStart.eligible !== 'boolean' ||
     !reasons(value.newStart.blockingReasons) || !operations(value.requestedOperations) ||
-    !['GENERATE_IMAGE', null].includes(value.initialOperation) || value.inputRefsPolicy !== 'EMPTY_ONLY' ||
+    !['GENERATE_IMAGE', null].includes(value.initialOperation) || !['EMPTY_ONLY', 'TASK_LINKED_REFERENCE'].includes(value.inputRefsPolicy) ||
     !exactKeys(value.originalIntentRecovery, Object.keys(RECOVERY)) ||
     Object.keys(RECOVERY).some(key => value.originalIntentRecovery[key] !== RECOVERY[key])) return null
   const requestedOperations = operations(value.requestedOperations)
   const supportedOperations = operations(value.nativeExecution.supportedOperations)
   const declared = value.nativeExecution.transport === TRANSPORT && value.nativeExecution.schemaVersion === 1
   const undeclared = value.nativeExecution.transport === null && value.nativeExecution.schemaVersion === null
+  const taskLinkedReferences = value.inputRefsPolicy === 'TASK_LINKED_REFERENCE'
   if ((!declared && !undeclared) || (undeclared && supportedOperations.length) ||
     (value.nativeExecution.state === 'READY' && (!declared || supportedOperations.length !== 1)) ||
+    (taskLinkedReferences && (value.serverLane.state !== 'READY' || value.nativeExecution.state !== 'READY' ||
+      !declared || supportedOperations.length !== 1 || supportedOperations[0] !== OPERATION)) ||
     requestedOperations.some(operation => !supportedOperations.includes(operation)) ||
     (value.authorization.state === 'UNAVAILABLE' && value.authorization.paidExecutionAuthorized)) return null
   const selectable = requestedOperations.length === 1 && requestedOperations[0] === OPERATION && value.initialOperation === OPERATION
@@ -81,7 +84,7 @@ export const parseNativeBountyCapability = value => {
     newStart: Object.freeze({ eligible: value.newStart.eligible, blockingReasons: Object.freeze(reasons(value.newStart.blockingReasons)) }),
     requestedOperations: Object.freeze(requestedOperations),
     initialOperation: value.initialOperation,
-    inputRefsPolicy: 'EMPTY_ONLY',
+    inputRefsPolicy: value.inputRefsPolicy,
     originalIntentRecovery: Object.freeze({ ...RECOVERY })
   })
 }

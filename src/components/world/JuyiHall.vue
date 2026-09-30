@@ -719,6 +719,7 @@ import { useHallSound } from '@/composables/juyiting/useHallSound'
 import { useHallTaskActions } from '@/composables/juyiting/useHallTaskActions'
 import { useHallRequirementCreate } from '@/composables/juyiting/useHallRequirementCreate'
 import { useHallPointAndStart } from '@/composables/juyiting/useHallPointAndStart'
+import { useHallTaskLinkedReferenceInputs } from '@/composables/juyiting/hallTaskLinkedReferenceInputs'
 import { createPointAndStartIntentStore } from '@/composables/juyiting/hallPointAndStartIntent'
 import { capabilityAllowsNewStart, capabilityAllowsOriginalReplay, createNativeCapabilityObservationFence, loadNativeBountyCapability, pointAndStartIntentReadLane } from '@/composables/juyiting/hallNativeBountyCapability'
 import { useHallQuickMatter } from '@/composables/juyiting/useHallQuickMatter'
@@ -2074,6 +2075,9 @@ const pointAndStartObservation = createNativeCapabilityObservationFence({
   getIdentityScope: () => hallIdentityScope.value,
   getAuthorizationGeneration: () => apiStore.authorizationGeneration
 })
+const pointAndStartReferenceInputs = useHallTaskLinkedReferenceInputs({
+  identityEpoch: computed(() => `${hallIdentityScope.value}\u0000${apiStore.authorizationGeneration}`)
+})
 const pointAndStartOfferMatches = (capability, taskId, agentId, generation = apiStore.authorizationGeneration, scope = hallIdentityScope.value) =>
   capability?.taskId === taskId && capability?.targetAgentId === agentId &&
   capability?.authorizationGeneration === generation && capability?.identityScope === scope && capability?.isCurrent?.() === true
@@ -2082,7 +2086,7 @@ const pointAndStartIntentState = (taskId) => createPointAndStartIntentStore({
   scope: hallIdentityScope.value,
   taskId
 }).read()
-const clearPointAndStartCapability = () => { pointAndStartObservation.invalidate(); pointAndStartCapability.value = null }
+const clearPointAndStartCapability = () => { pointAndStartObservation.invalidate(); pointAndStartReferenceInputs.invalidate(); pointAndStartCapability.value = null }
 const readPointAndStartCapability = async (taskId, targetAgentId, observation = pointAndStartObservation.capture()) => {
   const { identityScope, authorizationGeneration } = observation
   let capability = null
@@ -2190,12 +2194,23 @@ const assignTask = async (task, agent) => {
     const capability = await readPointAndStartCapability(clickedTaskId, clickedTargetId, observation)
     if (!observation.isCurrent() || task.id !== clickedTaskId || target.agentId !== clickedTargetId) return false
     if (capability && canUsePointAndStartOffer(task, target)) {
+      const referenceInputs = await pointAndStartReferenceInputs.resolve({
+        taskId: clickedTaskId,
+        inputRefsPolicy: capability.inputRefsPolicy,
+        isCurrent: () => observation.isCurrent() && task.id === clickedTaskId && target.agentId === clickedTargetId
+      })
+      if (!observation.isCurrent() || task.id !== clickedTaskId || target.agentId !== clickedTargetId || referenceInputs.state === 'STALE') return false
+      if (referenceInputs.state !== 'READY') {
+        showToast('参考资料未能核对，未办理。')
+        return false
+      }
+      if (referenceInputs.inputRefs.length) showToast(`已核对 ${referenceInputs.inputRefs.length} 张任务参考图的精确版本，将按任务关联办理。`)
       const started = await startPointAndStart({
         task,
         agent: target,
         requestedOperations: capability.requestedOperations,
         initialOperation: capability.initialOperation,
-        inputRefs: []
+        inputRefs: referenceInputs.inputRefs
       })
       if (!started) showToast(explainPointAndStartState())
       return started
@@ -2548,6 +2563,7 @@ onUnmounted(() => {
   hallVoice?.dispose()
   clearPointAndStartCapability()
   disposeRequirementCreate()
+  pointAndStartReferenceInputs.dispose()
   disposePointAndStart()
   disposeHallConversation()
   hallBackendSceneState?.dispose()

@@ -172,6 +172,31 @@ describe('persisted exact point-and-start source contract', () => {
     expect(h.calls.find(c => c[0] === 'post').slice(2)).to.deep.equal([record().body, 'original-key'])
   })
 
+  it('explicit recovery replays persisted reference versions even when an external catalog could have changed', async () => {
+    const input = { fileId: 'image-original', version: 2, purpose: 'REFERENCE' }
+    const facts = { ...input, contentMimeType: 'image/png', byteLength: '12', contentHash: 'c'.repeat(64) }
+    const original = { ...record(), body: pointAndStartBody({ agentId: 'agent-1', taskVersion: '6', requirementRevision: '3',
+      requestedOperations: args().requestedOperations, initialOperation: 'GENERATE_IMAGE', inputRefs: [input] }) }
+    let actionReads = 0
+    const h = harness({ api: {
+      get: async path => {
+        if (path.endsWith('/assignment-operation') && actionReads++ === 0) {
+          throw Object.assign(new Error('not yet observed'), { status: 404, code: 'ASSIGNMENT_OPERATION_UNAVAILABLE' })
+        }
+        return { data: path.endsWith('/assignment-operation') ? { ...projection(), inputs: [facts] } : canonical() }
+      },
+      create: async (path, body, options) => {
+        h.calls.push(['post', path, copy(body), options.headers['Idempotency-Key']])
+        return { data: { ...grant(), inputs: [{ ...facts, byteLength: 12 }] } }
+      }
+    } })
+    h.seed(original)
+
+    expect(await h.flow.resumeOriginal('task-1')).to.equal(true)
+    expect(h.calls.find(call => call[0] === 'post')[2].inputRefs).to.deep.equal([input])
+    expect(h.flow.state.value.intent.body.inputRefs).to.deep.equal([input])
+  })
+
   it('confirmed POST + projection404 cannot erase facts or trigger replay', async () => {
     const h = harness({ api: { get: async () => { const e = new Error('missing'); e.status = 404; e.code = 'ASSIGNMENT_OPERATION_UNAVAILABLE'; throw e } } })
     h.seed({ ...record(), postAcknowledged: true })

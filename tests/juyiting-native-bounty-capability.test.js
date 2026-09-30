@@ -1,5 +1,6 @@
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
+import { compileScript, compileTemplate, parse } from '@vue/compiler-sfc'
 import {
   capabilityAllowsNewStart,
   capabilityAllowsOriginalReplay,
@@ -48,15 +49,30 @@ describe('native bounty capability contract', () => {
     expect(capabilityAllowsNewStart(parsed, { id: 'task-1' }, { agentId: 'agent-1' })).to.equal(true)
   })
 
+  it('accepts only the two frozen input policies without treating either as fee authority', () => {
+    for (const inputRefsPolicy of ['EMPTY_ONLY', 'TASK_LINKED_REFERENCE']) {
+      const parsed = parseNativeBountyCapability(capability({ inputRefsPolicy }))
+      expect(parsed?.inputRefsPolicy).to.equal(inputRefsPolicy)
+      expect(capabilityAllowsNewStart(parsed, { id: 'task-1' }, { agentId: 'agent-1' })).to.equal(false)
+    }
+  })
+
   for (const [name, mutate] of [
     ['fast transport', value => { value.nativeExecution.transport = 'FAST_CHAT_EXECUTE' }],
     ['EDIT advertisement', value => { value.nativeExecution.supportedOperations = ['EDIT_IMAGE'] }],
-    ['reference input policy', value => { value.inputRefsPolicy = 'TASK_LINKED_REFERENCE' }],
+    ['unknown input policy', value => { value.inputRefsPolicy = 'LATEST_OR_DRAFT' }],
     ['paid-looking start without authorization', value => { value.newStart = { eligible: true, blockingReasons: [] } }],
     ['legacy fallback permission', value => { value.originalIntentRecovery.legacyFallbackAllowed = true }]
   ]) it(`rejects ${name}`, () => {
     const value = capability(); mutate(value)
     expect(parseNativeBountyCapability(value)).to.equal(null)
+  })
+
+  for (const [name, overrides] of [
+    ['offline native lane', { nativeExecution: { state: 'OFFLINE', transport: null, schemaVersion: null, supportedOperations: [] }, requestedOperations: [], initialOperation: null }],
+    ['stopped server lane', { serverLane: { state: 'NOT_RUNNING', blockingReasons: ['SERVER_NOT_RUNNING'] } }]
+  ]) it(`rejects TASK_LINKED_REFERENCE with a contradictory ${name}`, () => {
+    expect(parseNativeBountyCapability(capability({ inputRefsPolicy: 'TASK_LINKED_REFERENCE', ...overrides }))).to.equal(null)
   })
 
   for (const state of ['OFFLINE', 'UNDECLARED', 'DISABLED', 'UNSUPPORTED', 'AMBIGUOUS']) {
@@ -125,12 +141,23 @@ describe('native bounty capability contract', () => {
     expect(mismatched).to.equal(null)
   })
 
-  it('wires native capability, exact persisted recovery, empty refs, and no first-turn resend into the real page', () => {
+  it('keeps the actual Hall script and template compilable with the shared resolver wiring', () => {
+    const parsed = parse(page, { filename: 'JuyiHall.vue' })
+    expect(parsed.errors).to.deep.equal([])
+    const script = compileScript(parsed.descriptor, { id: 'task-linked-reference-hall' })
+    expect(script.content).to.include('useHallTaskLinkedReferenceInputs')
+    const template = compileTemplate({ id: 'task-linked-reference-hall', filename: 'JuyiHall.vue', source: parsed.descriptor.template.content })
+    expect(template.errors).to.deep.equal([])
+  })
+
+  it('wires native capability, exact persisted recovery, authoritative refs, and no first-turn resend into the real page', () => {
     for (const text of [
       'loadNativeBountyCapability({ agentApi, taskId, targetAgentId })',
       'capabilityAllowsNewStart(pointAndStartCapability.value, task, agent)',
       'capabilityAllowsOriginalReplay(pointAndStartCapability.value, task?.id, agent?.agentId)',
-      'inputRefs: []',
+      'useHallTaskLinkedReferenceInputs',
+      'pointAndStartReferenceInputs.resolve({',
+      'inputRefs: referenceInputs.inputRefs',
       'pointAndStartIntentReadLane(original)',
       'hallIdentityScope, () => selectedAgent.value?.agentId], clearPointAndStartCapability',
       'if (!observation.isCurrent() || task.id !== clickedTaskId || target.agentId !== clickedTargetId) return false',
@@ -151,8 +178,8 @@ describe('native bounty capability contract', () => {
 // verifies write routing, not a full Vue mount/browser/Provider acceptance.
 const actualAssign = page.match(/const assignTask = async \(task, agent\) => \{([\s\S]*?)\n\}\n\nwatch\(/)?.[1]
 if (!actualAssign) throw new Error('Actual JuyiHall assignment closure not found')
-const pageHarness = ({ original = { state: 'ABSENT' }, offer = null, defer = false } = {}) => {
-  const h = { identity: 'owner-1', auth: 1, legacy: [], native: [], reads: [], checks: [], toasts: [] }
+const pageHarness = ({ original = { state: 'ABSENT' }, offer = null, defer = false, referenceResult = { state: 'READY', inputRefs: [] }, deferReferences = false } = {}) => {
+  const h = { identity: 'owner-1', auth: 1, legacy: [], native: [], reads: [], catalog: [], checks: [], toasts: [] }
   const observation = createNativeCapabilityObservationFence({ getIdentityScope: () => h.identity, getAuthorizationGeneration: () => h.auth })
   h.invalidate = observation.invalidate
   const deps = {
@@ -169,6 +196,11 @@ const pageHarness = ({ original = { state: 'ABSENT' }, offer = null, defer = fal
       return offer
     },
     canUsePointAndStartOffer: (task, agent) => capabilityAllowsNewStart(offer, task, agent),
+    pointAndStartReferenceInputs: { resolve: async request => {
+      h.catalog.push(request)
+      if (deferReferences) return new Promise(resolve => { h.resolveReferences = () => resolve(request.isCurrent() ? referenceResult : { state: 'STALE', inputRefs: [] }) })
+      return request.isCurrent() ? referenceResult : { state: 'STALE', inputRefs: [] }
+    } },
     startPointAndStart: async intent => { h.native.push(intent); return true },
     explainPointAndStartState: () => 'pending',
     taskWorkspaceBinding: { clearExplicitActor: () => {} },
@@ -201,6 +233,7 @@ describe('actual JuyiHall native assignment routing closure', () => {
     const h = pageHarness({ original: { state: 'UNAVAILABLE' } })
     expect(await h.assign({ id: 'task-1' }, { agentId: 'agent-1' })).to.equal(false)
     expect(h.reads).to.have.length(0)
+    expect(h.catalog).to.have.length(0)
     expect(h.legacy).to.have.length(0)
     expect(h.native).to.have.length(0)
   })
@@ -210,6 +243,7 @@ describe('actual JuyiHall native assignment routing closure', () => {
     expect(await h.assign({ id: 'task-1', funding: { mode: 'FUNDED_SINGLE_AGENT' } }, [{ agentId: 'agent-1' }, { agentId: 'agent-2' }])).to.equal(false)
     expect(h.checks).to.deep.equal(['task-1'])
     expect(h.reads).to.have.length(0)
+    expect(h.catalog).to.have.length(0)
     expect(h.legacy).to.have.length(0)
     expect(h.native).to.have.length(0)
   })
@@ -231,14 +265,43 @@ describe('actual JuyiHall native assignment routing closure', () => {
     expect(h.toasts.join()).to.include('不会自动生成或交付')
   })
 
-  it('uses the explicit clicked task/target and exactly one point-and-start intent for a coherent future authorized offer', async () => {
-    const offer = parseNativeBountyCapability(capability({ authorization: { state: 'READY', paidExecutionAuthorized: true }, newStart: { eligible: true, blockingReasons: [] } }))
-    const h = pageHarness({ offer })
+  it('uses the explicit clicked task/target and resolved exact references for one coherent authorized intent', async () => {
+    const offer = parseNativeBountyCapability(capability({ inputRefsPolicy: 'TASK_LINKED_REFERENCE',
+      authorization: { state: 'READY', paidExecutionAuthorized: true }, newStart: { eligible: true, blockingReasons: [] } }))
+    const inputRefs = [{ fileId: 'image-1', version: 2, purpose: 'REFERENCE' }]
+    const h = pageHarness({ offer, referenceResult: { state: 'READY', inputRefs } })
     expect(await h.assign({ id: 'task-1' }, { agentId: 'agent-1' })).to.equal(true)
     expect(h.legacy).to.have.length(0)
+    expect(h.catalog).to.have.length(1)
+    expect(h.catalog[0].taskId).to.equal('task-1')
+    expect(h.catalog[0].inputRefsPolicy).to.equal('TASK_LINKED_REFERENCE')
     expect(h.native).to.have.length(1)
     expect(h.native[0].task.id).to.equal('task-1')
     expect(h.native[0].agent.agentId).to.equal('agent-1')
-    expect(h.native[0].inputRefs).to.deep.equal([])
+    expect(h.native[0].inputRefs).to.deep.equal(inputRefs)
+    expect(h.toasts.join()).to.include('1 张任务参考图的精确版本')
+  })
+
+  it('does not fall back to legacy or empty refs when authoritative reference resolution fails', async () => {
+    const offer = parseNativeBountyCapability(capability({ inputRefsPolicy: 'TASK_LINKED_REFERENCE',
+      authorization: { state: 'READY', paidExecutionAuthorized: true }, newStart: { eligible: true, blockingReasons: [] } }))
+    const h = pageHarness({ offer, referenceResult: { state: 'BLOCKED', reason: 'CATALOG_UNAVAILABLE', inputRefs: [] } })
+    expect(await h.assign({ id: 'task-1' }, { agentId: 'agent-1' })).to.equal(false)
+    expect(h.native).to.have.length(0)
+    expect(h.legacy).to.have.length(0)
+    expect(h.toasts).to.deep.equal(['参考资料未能核对，未办理。'])
+  })
+
+  it('fences a late reference catalog on authorization change before any native or legacy write', async () => {
+    const offer = parseNativeBountyCapability(capability({ inputRefsPolicy: 'TASK_LINKED_REFERENCE',
+      authorization: { state: 'READY', paidExecutionAuthorized: true }, newStart: { eligible: true, blockingReasons: [] } }))
+    const h = pageHarness({ offer, deferReferences: true, referenceResult: { state: 'READY', inputRefs: [{ fileId: 'image-1', version: 2, purpose: 'REFERENCE' }] } })
+    const pending = h.assign({ id: 'task-1' }, { agentId: 'agent-1' })
+    await Promise.resolve(); await Promise.resolve()
+    h.auth += 1
+    h.resolveReferences()
+    expect(await pending).to.equal(false)
+    expect(h.native).to.have.length(0)
+    expect(h.legacy).to.have.length(0)
   })
 })
