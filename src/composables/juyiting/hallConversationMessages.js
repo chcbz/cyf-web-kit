@@ -173,9 +173,17 @@ export const appendHallEventMessage = (state, event, identity) => {
     if (tracker) { tracker.waitingFinal = false; tracker.terminal = true }
   }
   if (existing && event.senderType === 'agent') {
-    if (!streamingMessage || streamingMessage === existing) {
-      if (!existing.streaming) return { type: 'duplicate' }
-    } else {
+    if (!existing.streaming && (!streamingMessage || streamingMessage === existing)) {
+      // A replayed final can carry newly projected asset parts. Do not replay its
+      // text/final notification; accept only newer, validated part revisions.
+      const merged = mergeMessageParts(existing.parts, Array.isArray(event.parts) ? event.parts : [])
+      const hasNewParts = merged.some(part => !existing.parts?.some(previous =>
+        previous.partId === part.partId && previous.revision === part.revision))
+      if (!hasNewParts) return { type: 'duplicate' }
+      existing.parts = merged
+      return { type: 'part', message: existing }
+    }
+    if (streamingMessage && streamingMessage !== existing) {
       state.messages.splice(state.messages.indexOf(streamingMessage), 1)
     }
     existing.content = event.content || existing.content

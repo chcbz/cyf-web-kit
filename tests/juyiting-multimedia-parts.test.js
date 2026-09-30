@@ -23,6 +23,26 @@ describe('bounty conversation persisted media parts', () => {
     expect(appendHallEventMessage(current, event, 'owner').type).to.equal('duplicate_part')
     expect(current.messages).to.have.length(1)
   })
+  it('merges newer projected parts on a replayed final without replaying the text or final notification', () => {
+    const current = state()
+    const projected = part => ({
+      type: 'agent_message', conversationId: '77', messageId: '32',
+      senderType: 'agent', content: 'stale text', timestamp: 123,
+      parts: [part]
+    })
+    const result = appendHallEventMessage(current, projected(image(2)), 'owner')
+    expect(result.type).to.equal('part')
+    expect(result).not.to.have.property('shouldStopPolling')
+    expect(result).not.to.have.property('toastName')
+    expect(current.messages).to.have.length(1)
+    expect(current.messages[0].content).to.equal('鸟')
+    expect(current.messages[0].parts[0].revision).to.equal('2')
+    expect(appendHallEventMessage(current, projected(image(1, { state: 'failed' })), 'owner').type).to.equal('duplicate')
+    expect(appendHallEventMessage(current, projected(image(3, { assetId: '', url: 'https://example.invalid/bird.png' })), 'owner').type).to.equal('duplicate')
+    expect(appendHallEventMessage(current, projected(image(2)), 'owner').type).to.equal('duplicate')
+    expect(current.messages[0].parts[0].state).to.equal('ready')
+    expect(current.messages[0].parts[0].revision).to.equal('2')
+  })
   it('prevents older processing/failed events and duplicate replay from rolling back a ready card', () => {
     const current = state()
     appendHallEventMessage(current, { type: 'part.ready', conversationId: '77', messageId: '32', part: image(4) }, 'owner')
