@@ -161,6 +161,7 @@
         <HallMessageParts :parts="message.parts" :conversation-id="conversationId" :identity-key="materialIdentityKey" />
         <small v-if="message.statusText" class="message-status">{{ message.statusText }}</small>
       </div>
+      <slot name="bounty-results" />
       <p v-if="deliberationStatus" class="deliberation-status">{{ deliberationStatus }}</p>
       <div v-if="isAwaitingReply" class="hall-message SYSTEM is-pending">
         <strong>{{ pendingAuthor }}</strong>

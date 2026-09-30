@@ -8,7 +8,6 @@
       </div>
     </div>
     <BountyDeliberationStatus :presentation="v2Presentation" />
-    <BountyExecutionOutputs :enabled="deliberationV2Enabled" :request="activeRequest" :conversation-id="conversationId" :identity-key="`${identityEpoch}\u0000${identityScope}`" />
     <ChatPanel
       v-model:draft="draftProxy"
       discussion-variant="bounty"
@@ -32,7 +31,11 @@
       @select-conversation="$emit('select-conversation', $event)"
       @send-message="$emit('send-message')"
       @voice-apply="$emit('voice-apply', $event)"
-    />
+    >
+      <template #bounty-results>
+        <BountyExecutionOutputs :enabled="deliberationV2Enabled" :request="activeRequest" :conversation-id="conversationId" :identity-key="`${identityEpoch}\u0000${identityScope}`" />
+      </template>
+    </ChatPanel>
   </section>
 </template>
 
