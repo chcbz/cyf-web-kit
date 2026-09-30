@@ -8,6 +8,10 @@ export const exactPointAndStartId = (value, max = 100) => typeof value === 'stri
   const p = c.codePointAt(0)
   return p >= 0x20 && p !== 0x7f && !(p >= 0x80 && p <= 0x9f) && !(p >= 0xd800 && p <= 0xdfff)
 })
+// Principal namespaces use the real Hall tenant/client/owner NUL separators;
+// they are encoded storage keys, not task/Agent IDs or backend authorization.
+export const exactPointAndStartScope = value => typeof value === 'string' && value.length > 0 &&
+  value.split('\u0000').every(part => exactPointAndStartId(part, 1024))
 export const pointAndStartLong = (value, zero = false) => typeof value === 'string' &&
   /^(0|[1-9][0-9]*)$/.test(value) && BigInt(value) <= 9223372036854775807n && (zero || value !== '0')
 const safeNumber = (value, zero = false) => pointAndStartLong(value, zero) &&
@@ -122,7 +126,7 @@ const validIntent = record => {
 }
 /** One original intent per owner/task; corrupt/unavailable storage is never writable. */
 export const createPointAndStartIntentStore = ({ storage, scope, taskId }) => {
-  const name = exactPointAndStartId(scope, 1024) && exactPointAndStartId(taskId)
+  const name = exactPointAndStartScope(scope) && exactPointAndStartId(taskId)
     ? `${PREFIX}.${encodeURIComponent(scope)}.${encodeURIComponent(taskId)}` : ''
   const read = () => {
     if (!name || !storage) return { state: 'UNAVAILABLE' }

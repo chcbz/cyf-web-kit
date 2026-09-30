@@ -1,6 +1,6 @@
 import { computed, ref, unref, watch } from 'vue'
 import { bountyBootstrapReference } from './hallBountyBootstrap.js'
-import { createPointAndStartIntentStore, exactPointAndStartId, pointAndStartBody,
+import { createPointAndStartIntentStore, exactPointAndStartId, exactPointAndStartScope, pointAndStartBody,
   pointAndStartGrant, pointAndStartLong, pointAndStartProjection } from './hallPointAndStartIntent.js'
 
 const unwrap = result => {
@@ -84,7 +84,7 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
     return project(intent, captured, epoch)
   }
   const run = async (taskId, action) => {
-    if (disposed || busy.value || !exactPointAndStartId(taskId) || !exactPointAndStartId(scope.value, 1024)) return false
+    if (disposed || busy.value || !exactPointAndStartId(taskId) || !exactPointAndStartScope(scope.value)) return false
     const captured = scope.value
     const epoch = generation
     busy.value = true

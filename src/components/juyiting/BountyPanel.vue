@@ -45,10 +45,32 @@
         </div>
       </div>
 
+      <section v-if="requirementCreateState && requirementCreateState.status !== 'IDLE'" class="requirement-create-recovery" role="status">
+        <strong>原张榜操作待核对</strong>
+        <template v-if="requirementCreateState.intent">
+          <p>原榜文：{{ requirementCreateState.intent.body.title }}</p>
+          <p>原需求：{{ requirementCreateState.intent.body.description || '未填写' }}</p>
+          <p>精确参考资料：{{ requirementCreateInputSummary }}</p>
+          <p>当前编辑稿不会替换原需求；核对不会再次创建或启动 Agent。</p>
+          <button type="button" :disabled="requirementCreateBusy" @click="$emit('check-requirement-create')">核对原张榜</button>
+          <button v-if="!requirementCreateState.intent.receipt" type="button" :disabled="requirementCreateBusy" @click="$emit('resume-requirement-create')">确认继续原张榜</button>
+        </template>
+        <p v-if="requirementCreateState.error">{{ requirementCreateState.error }}</p>
+      </section>
+
       <form v-if="showCreateForm" class="task-create-form" @submit.prevent="submitCreateTask">
-        <input v-model.trim="taskForm.title" name="taskTitle" placeholder="榜文名目" />
-        <textarea v-model.trim="taskForm.description" name="taskDescription" placeholder="榜文缘由"></textarea>
+        <input v-model="taskForm.title" name="taskTitle" placeholder="榜文名目" />
+        <textarea v-model="taskForm.description" name="taskDescription" placeholder="榜文缘由"></textarea>
         <input v-model.trim="taskForm.requiredAbilities" name="requiredAbilities" placeholder="所需本领，逗号分隔" />
+        <HallReferenceImagePicker
+          class="task-reference-picker"
+          v-if="!taskForm.funded && identityScope"
+          v-model="taskReferenceInputs"
+          :identity-scope="identityScope"
+          :identity-epoch="authorizationGeneration"
+          :disabled="createPending || requirementCreateBusy"
+        />
+        <small v-else-if="taskReferenceInputs.length" role="status">资金榜暂不支持普通榜参考图；请切回普通榜移除资料，再选择资金悬赏。</small>
         <label v-if="fundedPreviewEnabled" class="funded-create-toggle">
           <input v-model="taskForm.funded" type="checkbox" /> 资金悬赏（开发预览）
         </label>
@@ -72,7 +94,7 @@
           <button type="button" @click="$emit('resume-funded-create')">确认按原请求恢复</button>
           <button type="button" @click="$emit('cancel-funded-create-recovery')">暂不恢复</button>
         </section>
-        <button type="submit" :disabled="createPending || !taskForm.title || (taskForm.funded && !validGrossAmount)">{{ createPending ? '张榜中…' : '张榜悬赏' }}</button>
+        <button type="submit" :disabled="createPending || requirementCreateBusy || !taskForm.title.trim() || (taskForm.funded && (!validGrossAmount || taskReferenceInputs.length))">{{ createPending ? '张榜中…' : '张榜悬赏' }}</button>
       </form>
 
       <HallDraftEditor
@@ -417,6 +439,7 @@ import BountyActionIcon from './BountyActionIcon.vue'
 import WorkItemPlanPanel from './WorkItemPlanPanel.vue'
 import TeamRecommendationPanel from './TeamRecommendationPanel.vue'
 import HallDraftEditor from './HallDraftEditor.vue'
+import HallReferenceImagePicker from './HallReferenceImagePicker.vue'
 import TaskMaterialLinks from '@/components/personal-workspace/TaskMaterialLinks.vue'
 import { formatSilverMicro, isCanonicalMicroAmount } from '@/utils/silverAmount'
 
@@ -445,6 +468,8 @@ const props = defineProps({
   fundedQuotePreview: { type: Object, default: null },
   fundedClaimState: { type: Object, default: null },
   fundedCreateRecovery: { type: Object, default: null },
+  requirementCreateState: { type: Object, default: null },
+  requirementCreateBusy: { type: Boolean, default: false },
   pointAndStartState: { type: Object, default: null },
   pointAndStartBusy: { type: Boolean, default: false },
   abilityText: { type: Function, required: true },
@@ -469,6 +494,8 @@ const emit = defineEmits([
   'refresh-funded-claim',
   'recruit-agent',
   'create-task',
+  'check-requirement-create',
+  'resume-requirement-create',
   'start-formal-draft',
   'start-private-draft',
   'open-formal-results',
@@ -493,6 +520,8 @@ const emit = defineEmits([
 const modalTask = ref(null)
 const showCreateForm = ref(false)
 const createPending = ref(false)
+const taskReferenceInputs = ref([])
+let createAttempt = 0
 const selectedAssigneeIds = ref([])
 const taskForm = ref({
   title: '',
@@ -501,6 +530,20 @@ const taskForm = ref({
   funded: false,
   grossBountyAmountMicro: ''
 })
+const requirementCreateInputSummary = computed(() => {
+  const refs = props.requirementCreateState?.intent?.body?.inputRefs || []
+  return refs.length ? refs.map(item => `${item.fileId} v${item.version}`).join('、') : '无参考图'
+})
+// A late success can only clear the exact submitting draft under the same
+// authenticated actor; editing during POST preserves the newer draft.
+watch(() => [props.identityScope, props.authorizationGeneration], () => {
+  createAttempt++
+  createPending.value = false
+  taskReferenceInputs.value = []
+  taskForm.value = { title: '', description: '', requiredAbilities: '', funded: false, grossBountyAmountMicro: '' }
+  modalTask.value = null
+  selectedAssigneeIds.value = []
+}, { flush: 'sync' })
 const detailTask = computed(() => modalTask.value)
 const pointAndStartForDetail = computed(() => {
   const state = props.pointAndStartState
@@ -623,8 +666,8 @@ const taskAssigneeIds = (task) => {
 }
 
 const submitCreateTask = () => {
-  if (!taskForm.value.title) return
-  if (taskForm.value.funded && !validGrossAmount.value) return
+  if (!taskForm.value.title.trim()) return
+  if (taskForm.value.funded && (!validGrossAmount.value || taskReferenceInputs.value.length)) return
   const payload = {
     title: taskForm.value.title,
     description: taskForm.value.description,
@@ -636,14 +679,20 @@ const submitCreateTask = () => {
   if (props.fundedPreviewEnabled && taskForm.value.funded) {
     payload.grossBountyAmountMicro = taskForm.value.grossBountyAmountMicro
     payload.settlementPolicy = 'GROSS_INCLUSIVE'
+  } else {
+    payload.inputRefs = taskReferenceInputs.value.map(item => ({ ...item }))
   }
-  if (createPending.value) return
+  if (createPending.value || props.requirementCreateBusy) return
+  const attempt = ++createAttempt
+  const originalDraft = JSON.stringify({ form: taskForm.value, refs: taskReferenceInputs.value })
   createPending.value = true
   emit('create-task', payload, (created) => {
+    if (attempt !== createAttempt) return
     createPending.value = false
     // Reset only after the parent receives a definitive success acknowledgement.
     // Recoverable/ambiguous failures retain the exact funded draft for retry.
-    if (created) {
+    if (created && originalDraft === JSON.stringify({ form: taskForm.value, refs: taskReferenceInputs.value })) {
+      taskReferenceInputs.value = []
       taskForm.value = { title: '', description: '', requiredAbilities: '', funded: false, grossBountyAmountMicro: '' }
       showCreateForm.value = false
     }
@@ -759,6 +808,27 @@ button:disabled {
 .task-search input,
 .task-search select,
 .task-create-form input,
+.task-reference-picker { grid-column: 1 / -1; min-width: 0; }
+
+.task-create-form { max-height: min(55vh, 30rem); overflow-y: auto; }
+
+.requirement-create-recovery {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: min(35vh, 14rem);
+  margin: 0 16px 12px;
+  padding: 10px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  border: 1px solid #b99358;
+  border-radius: 8px;
+  background: #fff4da;
+  color: #4a3423;
+}
+
+.requirement-create-recovery p { margin: 6px 0; }
+.requirement-create-recovery button { margin-right: 8px; padding: 6px 10px; border-radius: 6px; }
+
 .task-create-form textarea {
   min-width: 0;
   height: 36px;

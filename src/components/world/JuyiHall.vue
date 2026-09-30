@@ -314,6 +314,8 @@
             :funded-quote-preview="fundedQuotePreview"
             :funded-claim-state="fundedClaimState"
             :funded-create-recovery="fundedCreateRecovery"
+            :requirement-create-state="requirementCreateState"
+            :requirement-create-busy="requirementCreateBusy"
             :point-and-start-state="pointAndStartState"
             :point-and-start-busy="pointAndStartBusy"
             :format-time="formatTime"
@@ -345,6 +347,8 @@
             @archive-task="archiveTask"
             @brief-selected-task="briefSelectedTask"
             @create-task="createTask"
+            @check-requirement-create="checkRequirementCreate"
+            @resume-requirement-create="resumeRequirementCreate"
             @start-private-draft="openPrivateDraft()"
             @open-formal-results="openFormalResults"
             @start-formal-draft="openPanel('formalDraft', { restore: true })"
@@ -713,6 +717,7 @@ import { useHallSceneState } from '@/composables/juyiting/useHallSceneState'
 import { useHallSceneDebugBridge } from '@/composables/juyiting/useHallSceneDebugBridge'
 import { useHallSound } from '@/composables/juyiting/useHallSound'
 import { useHallTaskActions } from '@/composables/juyiting/useHallTaskActions'
+import { useHallRequirementCreate } from '@/composables/juyiting/useHallRequirementCreate'
 import { useHallPointAndStart } from '@/composables/juyiting/useHallPointAndStart'
 import { createPointAndStartIntentStore } from '@/composables/juyiting/hallPointAndStartIntent'
 import { capabilityAllowsNewStart, capabilityAllowsOriginalReplay, createNativeCapabilityObservationFence, loadNativeBountyCapability, pointAndStartIntentReadLane } from '@/composables/juyiting/hallNativeBountyCapability'
@@ -1914,10 +1919,52 @@ const {
   tasks
 })
 
+const requirementCreateStorage = (() => {
+  try { return typeof window !== 'undefined' ? window.localStorage : null } catch { return null }
+})()
+const {
+  state: requirementCreateState,
+  busy: requirementCreateBusy,
+  create: runRequirementCreate,
+  checkOriginal: checkRequirementCreate,
+  resumeOriginal: resumeRequirementCreate,
+  readOriginal: readRequirementCreateOriginal,
+  dispose: disposeRequirementCreate
+} = useHallRequirementCreate({
+  agentApi,
+  actorScopeKey: hallIdentityScope,
+  identityEpoch: () => apiStore.authorizationGeneration,
+  storage: requirementCreateStorage,
+  onCommitted: (receipt, fence) => {
+    if (!fence.isCurrent()) return false
+    tasks.value = [receipt.task, ...tasks.value.filter(task => task.id !== receipt.taskId)]
+    selectedTask.value = receipt.task
+    markTaskCreated(receipt.task)
+    playSuccess()
+    showToast('榜文及精确参考资料已确认；点将后才开始办理。')
+    return true
+  }
+})
 const createTask = async (payload, acknowledge = () => {}) => {
-  const created = await runCreateTask(payload)
-  if (created) markTaskCreated(selectedTask.value)
-  acknowledge(created)
+  // Preserve the funded lane, but never let it replace a pending ordinary
+  // creation operation, or reinterpret private references as funding authority.
+  let created = false
+  try {
+    if (payload?.grossBountyAmountMicro) {
+      const original = readRequirementCreateOriginal()
+      if (original.state !== 'ABSENT' || payload.inputRefs?.length) {
+        showToast('请先核对原张榜；资金榜不提交普通榜参考图。')
+      } else {
+        created = await runCreateTask(payload)
+        if (created) markTaskCreated(selectedTask.value)
+      }
+    } else if (fundedCreateRecovery.value) {
+      showToast('请先核对原资金榜；当前编辑稿未提交。')
+    } else {
+      created = await runRequirementCreate(payload)
+      if (!created && requirementCreateState.value.error) showToast(requirementCreateState.value.error)
+    }
+  } finally { acknowledge(created) }
   return created
 }
 const resumeFundedCreate = async () => {
@@ -2500,6 +2547,7 @@ onUnmounted(() => {
   voiceReplyCorrelation.close('unmount')
   hallVoice?.dispose()
   clearPointAndStartCapability()
+  disposeRequirementCreate()
   disposePointAndStart()
   disposeHallConversation()
   hallBackendSceneState?.dispose()
