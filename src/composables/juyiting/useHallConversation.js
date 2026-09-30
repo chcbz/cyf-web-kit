@@ -15,6 +15,10 @@ import { exactHallConversationId, normalizeHallConversationHistory } from './hal
 import { createHallSseParser } from './hallConversationSse.js'
 import { isMessagePartEvent } from './hallMessageParts.js'
 import {
+  bountyBootstrapReference, sameBountyBootstrapReference, bountyBootstrapContextMatches,
+  validateBountyBootstrapRequest, bootstrapReadbackIsCurrent
+} from './hallBountyBootstrap.js'
+import {
   cancellationTarget,
   deliberationBusy,
   deliberationStatusText,
@@ -61,6 +65,7 @@ export const useHallConversation = ({
   const isStreaming = ref(false)
   const isAwaitingReply = ref(false)
   const isSubmitting = ref(false)
+  const isAdoptingBountyBootstrap = ref(false)
   const eventStreamRecovering = ref(false)
   const deliberationStatus = ref('')
   const activeRequest = ref(null)
@@ -81,6 +86,8 @@ export const useHallConversation = ({
   let activeBuiltInTurn = null
   let recoveringReplyTurn = null
   let activeSendToken = null
+  let bootstrapAdoptionToken = null
+  let adoptedBootstrap = null
 
   let hallEventController = null
   let hallEventConversationId = ''
@@ -193,7 +200,7 @@ export const useHallConversation = ({
   const durableCancelTarget = computed(() => cancellationTarget(activeRequest.value, activeTurns.value))
   const canCancelDurable = computed(() => Boolean(durableCancelTarget.value))
   const canCancelLegacy = computed(() => !activeRequest.value?.requestId && (isStreaming.value || isAwaitingReply.value))
-  const isConversationBusy = computed(() => isSubmitting.value || durableBusy.value || isStreaming.value || isAwaitingReply.value || isConversationLoading.value || Boolean(conversationHistoryDeletingId.value))
+  const isConversationBusy = computed(() => isAdoptingBountyBootstrap.value || isSubmitting.value || durableBusy.value || isStreaming.value || isAwaitingReply.value || isConversationLoading.value || Boolean(conversationHistoryDeletingId.value))
 
   const pendingAgentName = computed(() => {
     if (!selectedAgent.value) return ''
@@ -606,7 +613,12 @@ export const useHallConversation = ({
     isSubmitting.value = false
   }
 
-  const resetLifecycle = () => {
+  const resetLifecycle = ({ keepBootstrapAdoption = false } = {}) => {
+    if (!keepBootstrapAdoption) {
+      bootstrapAdoptionToken = null
+      isAdoptingBountyBootstrap.value = false
+    }
+    adoptedBootstrap = null
     lifecycleGeneration += 1
     recoveringReplyTurn = null
     lifecycleController.abort(new DOMException('Hall identity lifecycle reset', 'AbortError'))
@@ -707,7 +719,9 @@ export const useHallConversation = ({
       generation === lifecycleGeneration &&
       loadGeneration === hallConversationLoadGeneration &&
       conversationId.value === exactId &&
-      sameScope(expectedScope)
+      sameScope(expectedScope) &&
+      (!guard.identity || guardCurrent(guard.identity)) &&
+      (!guard.adoptionCurrent || guard.adoptionCurrent())
     )
     let loaded = false
     let contentFailed = false
@@ -837,7 +851,7 @@ export const useHallConversation = ({
   }
 
   const loadHallMessages = ({ force = false } = {}) => {
-    if (disposed) return Promise.resolve(false)
+    if (disposed || isAdoptingBountyBootstrap.value) return Promise.resolve(false)
     const expectedScope = scopeSnapshot()
     if (!expectedScope) return Promise.resolve(false)
     const expectedSignature = scopeSignature(expectedScope)
@@ -1345,7 +1359,7 @@ export const useHallConversation = ({
   const sendHallMessage = async (options = {}) => {
     const isVoiceSend = options.source === 'voice'
     const content = String(isVoiceSend ? (options.content ?? '') : ((options.content ?? draft.value) || '')).trim()
-    if (disposed || !content || activeSendToken || isStreaming.value || isAwaitingReply.value || isConversationLoading.value || conversationHistoryDeletingId.value || conversationLoadError.value) return false
+    if (disposed || !content || isAdoptingBountyBootstrap.value || activeSendToken || isStreaming.value || isAwaitingReply.value || isConversationLoading.value || conversationHistoryDeletingId.value || conversationLoadError.value) return false
     const sendToken = Object.freeze({ requestId: createStableRequestId(), generation: lifecycleGeneration })
     activeSendToken = sendToken
     isSubmitting.value = true
@@ -1404,6 +1418,71 @@ export const useHallConversation = ({
     }
     syncDurablePresentation()
     return true
+  }
+
+  const adoptBountyBootstrap = async (value) => {
+    const reference = bountyBootstrapReference(value)
+    const contextMatches = () => bountyBootstrapContextMatches(chatContext?.value, selectedTask?.value, selectedAgent?.value, reference)
+    if (disposed || !reference || !contextMatches() || isAdoptingBountyBootstrap.value || activeSendToken || isSubmitting.value) return false
+    const retry = sameBountyBootstrapReference(adoptedBootstrap, reference) &&
+      activeRequest.value?.requestId === reference.initialRequestId && conversationId.value === reference.conversationId
+    if (!retry && (isConversationBusy.value || pendingHallConversationLoad ||
+        (activeRequest.value?.requestId && activeRequest.value.requestId !== reference.initialRequestId))) return false
+    const job = { guard: captureGuard(), requestBefore: activeRequest.value?.requestId || '' }
+    bootstrapAdoptionToken = job
+    isAdoptingBountyBootstrap.value = true
+    const current = () => bootstrapAdoptionToken === job && guardCurrent(job.guard) && contextMatches()
+    try {
+      const response = await chatApi.get(`/requests/${encodeURIComponent(reference.initialRequestId)}`, {}, {
+        autoLoading: false, signal: lifecycleController.signal
+      })
+      if (!current() || (activeRequest.value?.requestId || '') !== job.requestBefore) return false
+      const requestView = validateBountyBootstrapRequest(apiData(response), reference)
+      if (!requestView || (retry && !bootstrapReadbackIsCurrent(activeRequest.value, requestView))) return false
+      let loadGeneration
+      if (!retry) {
+        loadGeneration = invalidateConversationLoads()
+        invalidateConversationHistoryLoads()
+        pendingHallConversationLoad = null
+        pendingHallConversationHistoryLoad = null
+        conversationHistoryLoading.value = false
+        resetLifecycle({ keepBootstrapAdoption: true })
+        stopHallEventStream()
+        stopHallReplyStreaming()
+        stopHallReplyPolling()
+        stopHallConversationSync()
+        clearBuiltInTurn()
+        job.guard = captureGuard()
+        conversationId.value = reference.conversationId
+        selectedHallConversationId.value = reference.conversationId
+        loadedConversationScopeSignature = ''
+        messages.value = []
+        suppressedRestoreScopes.delete(job.guard.signature)
+      } else loadGeneration = invalidateConversationLoads()
+      // Keep the accepted server fact even if the separate history read fails.
+      if (!applyRequestView(requestView, reference.initialRequestId)) return false
+      adoptedBootstrap = reference
+      conversationLoadError.value = ''
+      const loaded = await loadHallConversationContent(reference.conversationId, {
+        loadGeneration, scope: job.guard.scope, selection: true, identity: job.guard,
+        adoptionCurrent: () => current() && activeRequest.value?.requestId === reference.initialRequestId
+      })
+      if (!current()) return false
+      if (!loaded && activeRequest.value?.requestId === reference.initialRequestId) {
+        conversationLoadError.value = '首轮需求已受理，历史暂不可取；请核对原请求，勿重复生成。'
+        isConversationLoading.value = false
+      }
+      return loaded && activeRequest.value?.requestId === reference.initialRequestId
+    } catch (error) {
+      if (error?.name !== 'AbortError' && current()) log.warn('核对悬赏议事首轮失败', error)
+      return false
+    } finally {
+      if (bootstrapAdoptionToken === job) {
+        bootstrapAdoptionToken = null
+        isAdoptingBountyBootstrap.value = false
+        isConversationLoading.value = false
+      }
+    }
   }
 
   const recoverUnknownRequest = async (requestId, guard = captureGuard()) => {
@@ -1632,6 +1711,8 @@ export const useHallConversation = ({
   }
 
   return {
+    adoptBountyBootstrap,
+    isAdoptingBountyBootstrap,
     cancelHallReplyTurn,
     cancelDeliberation,
     cancelLegacyHallReply,
