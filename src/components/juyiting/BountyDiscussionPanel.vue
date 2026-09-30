@@ -33,7 +33,7 @@
       @voice-apply="$emit('voice-apply', $event)"
     >
       <template #bounty-results>
-        <BountyExecutionOutputs :enabled="deliberationV2Enabled" :request="activeRequest" :conversation-id="conversationId" :identity-key="`${identityEpoch}\u0000${identityScope}`" />
+        <BountyExecutionOutputs :enabled="deliberationV2Enabled" :request="activeRequest" :conversation-id="conversationId" :identity-key="`${identityEpoch}\u0000${identityScope}`" :task-version="selectedTask?.taskVersion ?? selectedTask?.version" />
       </template>
     </ChatPanel>
   </section>
