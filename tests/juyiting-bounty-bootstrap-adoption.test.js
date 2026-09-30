@@ -1,5 +1,6 @@
 import { expect } from 'chai'
 import { ref } from 'vue'
+import { setImmediate } from 'node:timers'
 import { useHallConversation } from '../src/composables/juyiting/useHallConversation.js'
 import { stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 
@@ -207,6 +208,68 @@ describe('actual Hall conversation adopts the exact admitted bounty bootstrap', 
     expect(hall.activeRequest.value.stateVersion).to.equal('2')
     expect(hall.activeRequest.value.steps[0].executionId).to.equal('execution-1')
   })
+
+  it('releases only this request busy state after canonical OUTPUT_COMMITTED read, not task completion', async () => {
+    let committed = false
+    const { hall, selectedTask } = harness({ get: async () => {
+      const view = requestView()
+      if (committed) {
+        view.state = 'OUTPUT_COMMITTED'; view.stateVersion = '2'
+        Object.assign(view.steps[0], { state: 'OUTPUT_COMMITTED', stateVersion: '2', executionId: 'execution-1', executionState: 'RUNNING' })
+      }
+      return { data: view }
+    } })
+    expect(await hall.adoptBountyBootstrap(reference())).to.equal(true)
+    expect(hall.isConversationBusy.value).to.equal(true)
+    committed = true
+    expect(await hall.adoptBountyBootstrap(reference())).to.equal(true)
+    expect(hall.isConversationBusy.value).to.equal(false)
+    expect(hall.chatConnectionStatus.value).to.equal('本轮成果已就绪')
+    expect(selectedTask.value).to.deep.equal({ id: 'task-1' })
+  })
+
+  for (const invalidReadback of [false, true]) {
+    it(`uses the real SSE parser to read canonical request after native media final${invalidReadback ? ' and rejects a wrong task' : ''}`, async () => {
+      const originalFetch = global.fetch
+      let controller
+      let reads = 0
+      const { hall, apiStore, calls, selectedTask } = harness({ get: async path => {
+        calls.push(['get', path]); reads += 1
+        const view = requestView()
+        if (reads > 1) {
+          view.state = 'OUTPUT_COMMITTED'; view.stateVersion = '2'
+          Object.assign(view.steps[0], { state: 'OUTPUT_COMMITTED', stateVersion: '2', executionId: 'execution-1' })
+          if (invalidReadback) view.steps[0].taskId = 'foreign'
+        }
+        return { data: view }
+      } })
+      apiStore.token = async () => 'token'
+      global.fetch = async () => new Response(new ReadableStream({ start: value => { controller = value } }), {
+        status: 200, headers: { 'Content-Type': 'text/event-stream' }
+      })
+      try {
+        expect(await hall.adoptBountyBootstrap(reference())).to.equal(true)
+        await new Promise(resolve => setImmediate(resolve))
+        const event = { type: 'agent_message', requestId: 'initial-request-1', conversationId: reference().conversationId,
+          messageId: '5', eventSequence: '1', eventVersion: '1', senderType: 'agent', agentId: 'agent-1',
+          senderName: '好汉', content: '成果已生成', parts: [{ partId: 'part-1', revision: '1', kind: 'image',
+            state: 'ready', assetId: 'asset-1', mime: 'image/png' }] }
+        controller.enqueue(new TextEncoder().encode(`id: 1\ndata: ${JSON.stringify(event)}\n\n`))
+        await new Promise(resolve => setImmediate(resolve))
+        await new Promise(resolve => setImmediate(resolve))
+        expect(reads).to.equal(2)
+        expect(hall.messages.value.find(message => message.content === '成果已生成').parts[0].assetId).to.equal('asset-1')
+        expect(hall.activeRequest.value.state).to.equal(invalidReadback ? 'PLANNING' : 'OUTPUT_COMMITTED')
+        expect(hall.isConversationBusy.value).to.equal(invalidReadback)
+        expect(selectedTask.value).to.deep.equal({ id: 'task-1' })
+        expect(calls.filter(call => ['post', 'stream', 'list'].includes(call[0]))).to.deep.equal([])
+      } finally {
+        hall.disposeHallConversation()
+        // The authenticated transport owns cancellation; dispose already closes its reader.
+        global.fetch = originalFetch
+      }
+    })
+  }
 
   it('never adopts the old bootstrap after a different active request exists', async () => {
     const { hall, calls } = harness()

@@ -394,6 +394,14 @@ export const useHallConversation = ({
       if (!deferServerResync) void authoritativeResync(event.conversationId, result.type, { clearCursor: false })
       return event.type === 'resync_required'
     }
+    const bootstrapEvent = adoptedBootstrap && event.requestId === adoptedBootstrap.initialRequestId &&
+      activeRequest.value?.requestId === adoptedBootstrap.initialRequestId && event.conversationId === adoptedBootstrap.conversationId &&
+      bountyBootstrapContextMatches(chatContext?.value, selectedTask?.value, selectedAgent?.value, adoptedBootstrap)
+    if (bootstrapEvent && ((event.type === 'agent_message' && ['final', 'duplicate', 'part'].includes(result.type)) ||
+        (event.type === 'part.ready' && ['part', 'duplicate_part'].includes(result.type)))) {
+      // A media event is a readback hint, never authority to mark execution/task completed.
+      scheduleAuthoritativeRequestReadback(adoptedBootstrap.initialRequestId, { immediate: true })
+    }
     if (result.type === 'late_delta' || result.type === 'duplicate_part') { syncDurablePresentation(); return true }
     if (needsReadback && result.type === 'delta') scheduleAuthoritativeRequestReadback(event.requestId)
     if (needsReadback && event.type === 'agent_message' && ['final', 'duplicate'].includes(result.type)) {
@@ -1491,9 +1499,15 @@ export const useHallConversation = ({
     const promise = (async () => {
       try {
         abortIfStale(guard)
-        const response = await chatApi.get(`/requests/${requestId}`, {}, { autoLoading: false, signal: lifecycleController.signal })
+        const response = await chatApi.get(`/requests/${encodeURIComponent(requestId)}`, {}, { autoLoading: false, signal: lifecycleController.signal })
         abortIfStale(guard)
-        const requestView = apiData(response)
+        let requestView = apiData(response)
+        if (adoptedBootstrap?.initialRequestId === requestId) {
+          if (activeRequest.value?.requestId !== requestId ||
+              !bountyBootstrapContextMatches(chatContext?.value, selectedTask?.value, selectedAgent?.value, adoptedBootstrap)) return false
+          requestView = validateBountyBootstrapRequest(requestView, adoptedBootstrap)
+          if (!requestView || !bootstrapReadbackIsCurrent(activeRequest.value, requestView)) return false
+        }
         if (!applyRequestView(requestView, requestId)) return false
         const id = typeof requestView?.conversationId === 'string' ? requestView.conversationId : conversationId.value
         if (id) conversationId.value = id

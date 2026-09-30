@@ -1,13 +1,13 @@
 import { canonicalWireString } from './hallConversationMessages.js'
 
 const TERMINAL_TURN_STATES = new Set(['FINAL_PERSISTED', 'PUBLISHED', 'FAILED', 'CANCELLED'])
-const TERMINAL_REQUEST_STATES = new Set(['COMPLETED', 'PARTIAL', 'FAILED', 'CANCELLED'])
+const TERMINAL_REQUEST_STATES = new Set(['COMPLETED', 'PARTIAL', 'FAILED', 'CANCELLED', 'OUTPUT_COMMITTED'])
 const PENDING_LABELS = {
   RECEIVED: '已受理', QUEUED: '排队中', DISPATCHED: '正在理解', UNDERSTANDING: '正在理解',
   INSPECT: '只读检查中', STREAMING: '生成中', GENERATING: '生成中', FALLBACK: '安全回退处理中',
   RECOVERY_REQUIRED: '需要恢复核对', ACCEPTANCE_UNKNOWN: '结果未知，正在核对', UNKNOWN: '结果未知，正在核对',
   CANCEL_REQUESTED: '正在取消', COMPLETED: '已完成', PARTIAL: '部分回话已完成', FAILED: '回话失败',
-  CANCELLED: '已取消', FINAL_PERSISTED: '已完成', PUBLISHED: '已完成'
+  CANCELLED: '已取消', FINAL_PERSISTED: '已完成', PUBLISHED: '已完成', OUTPUT_COMMITTED: '本轮成果已就绪'
 }
 
 export const normalizeDeliberationState = value => typeof value === 'string' ? value.trim().toUpperCase() : ''
