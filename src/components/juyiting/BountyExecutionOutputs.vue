@@ -112,10 +112,13 @@ const bytes = async (item, preview) => {
   const generation = epoch; const controller = new AbortController(); inFlight.add(controller)
   try {
     const response = await api.execute({ url: (preview ? item.previewUrl : item.downloadUrl).replace(/^\/chat/, ''), method: 'GET', responseType: 'blob', autoLoading: false, needAuth: true, signal: controller.signal })
-    if (controller.signal.aborted || generation !== epoch || !(response?.data instanceof Blob) || response.data.size !== item.byteLength) return null
+    if (controller.signal.aborted || generation !== epoch) return null
+    if (!(response?.data instanceof Blob)) throw new Error('服务端未返回可读取的成果字节。')
     const blob = response.data
+    if (blob.size !== item.byteLength) throw new Error('成果字节长度与清单不一致，已拒绝使用。')
     if (await sha256Blob(blob) !== item.sha256) throw new Error('成果摘要校验失败，已拒绝使用。')
-    if (preview && blob.type !== item.contentMimeType) throw new Error('媒体类型不匹配，已拒绝预览')
+    if (controller.signal.aborted || generation !== epoch) return null
+    if (blob.type !== item.contentMimeType) throw new Error('媒体类型不匹配，已拒绝使用。')
     return blob
   } finally { inFlight.delete(controller) }
 }

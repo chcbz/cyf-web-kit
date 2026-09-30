@@ -156,6 +156,50 @@ describe('bounty output gallery live owner scope', () => {
       wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear
     }
   })
+  it('refuses mismatched output bytes and download MIME with a visible error', async () => {
+    const originalTimeout = globalThis.setTimeout
+    const originalClear = globalThis.clearTimeout
+    const itemForCatalog = item('step-1')
+    const responses = [
+      new Blob([new Uint8Array(20)], { type: 'application/octet-stream' }),
+      new Blob([new Uint8Array(19)], { type: 'image/png' })
+    ]
+    let downloaded = 0
+    const chatApi = {
+      get: async path => {
+        if (path === '/requests/request-1') return { data: { data: {
+          requestId: 'request-1', conversationId: 'conversation-1', steps: [step('step-1')]
+        } } }
+        if (path.endsWith('/steps/step-1/outputs')) return { data: { data: [itemForCatalog] } }
+        throw new Error(`unexpected GET ${path}`)
+      },
+      execute: async () => ({ data: responses.shift() })
+    }
+    const Component = new Function('Vue', 'deps', script)(Vue, {
+      createApi: () => chatApi, exactOutputId, outputCatalogItems, outputItemKey,
+      previewKind, scopedExecutionSteps, readOutputRecovery, writeOutputRecovery,
+      saveOutputBlob: () => { downloaded++ }
+    })
+    globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : originalTimeout(fn, delay, ...args)
+    globalThis.clearTimeout = id => { if (id !== 999) originalClear(id) }
+    let wrapper
+    try {
+      wrapper = mount(Component, { props: { enabled: true, identityKey: 'owner-a',
+        conversationId: 'conversation-1', request: { requestId: 'request-1', conversationId: 'conversation-1' } } })
+      await flushPromises()
+      const buttons = () => wrapper.findAll('.bounty-output button')
+      await buttons().find(button => button.text() === '下载').trigger('click')
+      for (let attempt = 0; attempt < 50 && !wrapper.text().includes('媒体类型不匹配'); attempt++) { await new Promise(resolve => originalTimeout(resolve, 10)); await flushPromises() }
+      expect(wrapper.text()).to.include('媒体类型不匹配')
+      await buttons().find(button => button.text() === '预览').trigger('click')
+      await flushPromises()
+      expect(wrapper.text()).to.include('成果字节长度与清单不一致')
+      expect(wrapper.find('.bounty-output img').exists()).to.equal(false)
+      expect(downloaded).to.equal(0)
+    } finally {
+      wrapper?.unmount(); globalThis.setTimeout = originalTimeout; globalThis.clearTimeout = originalClear
+    }
+  })
   it('uses the canonical task version separately from assignment revision when finalizing', async () => {
     const oldTimeout = globalThis.setTimeout
     const oldClear = globalThis.clearTimeout
