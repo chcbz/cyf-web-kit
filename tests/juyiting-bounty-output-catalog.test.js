@@ -1,5 +1,5 @@
 import { expect } from 'chai'
-import { outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps } from '../src/composables/juyiting/bountyOutputCatalog.js'
+import { outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName } from '../src/composables/juyiting/bountyOutputCatalog.js'
 
 const requestId = 'request-1'
 const stepId = 'step-1'
@@ -48,4 +48,20 @@ describe('scoped bounty output catalog', () => {
     expect(previewKind('text/html')).to.equal('file')
     expect(previewKind('image/svg+xml')).to.equal('file')
   })
+  it('shares the passive attachment MIME policy and gives downloads usable extensions', () => {
+    for (const [mime, extension] of [
+      ['image/png', 'png'], ['image/jpeg', 'jpg'], ['audio/mp4', 'm4a'], ['audio/webm', 'webm'],
+      ['application/pdf', 'pdf'], ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'docx']
+    ]) {
+      expect(downloadMimeType(mime)).to.equal(mime)
+      expect(outputDownloadName({ outputId: 'output_1', contentMimeType: mime })).to.equal(`output_1.${extension}`)
+    }
+    expect(downloadMimeType('image/svg+xml')).to.equal('application/octet-stream')
+    expect(outputDownloadName({ outputId: '../escape', contentMimeType: 'image/svg+xml' })).to.equal('output.bin')
+    for (const mime of ['audio/mp4', 'audio/webm']) {
+      expect(previewKind(mime)).to.equal('audio')
+      expect(outputCatalogItems([output({ contentMimeType: mime })], requestId, stepId)).to.have.length(1)
+    }
+  })
+
 })

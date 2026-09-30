@@ -1,7 +1,7 @@
 /** Browser-safe projection of the owner-authorized conversation output catalog. */
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/
 const HASH = /^[0-9a-f]{64}$/
-export const INLINE_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'audio/mpeg', 'audio/wav', 'audio/ogg', 'text/plain'])
+export const INLINE_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/webm', 'text/plain'])
 export const exactOutputId = value => typeof value === 'string' && ID.test(value)
 
 export function scopedExecutionSteps (request, conversationId) {
@@ -38,7 +38,20 @@ export function outputItemKey (item) {
 
 export function previewKind (mime) {
   if (/^image\/(?:png|jpeg|webp|gif)$/.test(mime)) return 'image'
-  if (/^audio\/(?:mpeg|wav|ogg)$/.test(mime)) return 'audio'
+  if (/^audio\/(?:mpeg|wav|ogg|mp4|webm)$/.test(mime)) return 'audio'
   if (mime === 'text/plain') return 'text'
   return 'file'
 }
+
+// Matches the server's passive attachment formats. Unsupported/active types use
+// an opaque transport MIME, while the immutable catalogue hash still pins bytes.
+const DOWNLOAD_EXTENSIONS = new Map([
+  ['image/png', 'png'], ['image/jpeg', 'jpg'], ['image/webp', 'webp'], ['image/gif', 'gif'],
+  ['audio/mpeg', 'mp3'], ['audio/wav', 'wav'], ['audio/ogg', 'ogg'], ['audio/mp4', 'm4a'],
+  ['audio/webm', 'webm'], ['text/plain', 'txt'], ['application/pdf', 'pdf'],
+  ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'docx'],
+  ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xlsx'],
+  ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'pptx']
+])
+export const downloadMimeType = mime => DOWNLOAD_EXTENSIONS.has(mime) ? mime : 'application/octet-stream'
+export const outputDownloadName = item => `${exactOutputId(item?.outputId) ? item.outputId : 'output'}.${DOWNLOAD_EXTENSIONS.get(item?.contentMimeType) || 'bin'}`

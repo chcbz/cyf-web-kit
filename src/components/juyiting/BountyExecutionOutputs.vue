@@ -36,7 +36,7 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { createApi } from '../../composables/useHttp.js'
-import { exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps } from '../../composables/juyiting/bountyOutputCatalog.js'
+import { exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName } from '../../composables/juyiting/bountyOutputCatalog.js'
 import { saveOutputBlob } from '../../utils/outputDownload.js'
 import { readOutputRecovery, writeOutputRecovery } from '../../composables/juyiting/bountyOutputRecovery.js'
 
@@ -118,7 +118,7 @@ const bytes = async (item, preview) => {
     if (blob.size !== item.byteLength) throw new Error('成果字节长度与清单不一致，已拒绝使用。')
     if (await sha256Blob(blob) !== item.sha256) throw new Error('成果摘要校验失败，已拒绝使用。')
     if (controller.signal.aborted || generation !== epoch) return null
-    if (blob.type !== item.contentMimeType) throw new Error('媒体类型不匹配，已拒绝使用。')
+    if (blob.type !== (preview ? item.contentMimeType : downloadMimeType(item.contentMimeType))) throw new Error('媒体类型不匹配，已拒绝使用。')
     return blob
   } finally { inFlight.delete(controller) }
 }
@@ -132,7 +132,7 @@ const loadPreview = async item => {
     patchMap(itemErrors, key, '')
   } catch (cause) { if (generation === epoch) patchMap(itemErrors, key, cause?.message || '预览失败') }
 }
-const download = async item => { const key = outputItemKey(item); const generation = epoch; try { const blob = await bytes(item, false); if (blob && generation === epoch) saveOutputBlob({ blob, item: { name: item.outputId } }) } catch (cause) { if (generation === epoch) patchMap(itemErrors, key, cause?.message || '下载失败') } }
+const download = async item => { const key = outputItemKey(item); const generation = epoch; try { const blob = await bytes(item, false); if (blob && generation === epoch) saveOutputBlob({ blob, item: { name: outputDownloadName(item) } }) } catch (cause) { if (generation === epoch) patchMap(itemErrors, key, cause?.message || '下载失败') } }
 const archive = async (item, retry = false) => {
   const generation = epoch
   const key = outputItemKey(item); const prior = archiveState(item); if (prior.busy || prior.state === 'saved') return
