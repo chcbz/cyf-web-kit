@@ -21,10 +21,10 @@
           class="part-save-button"
           :disabled="archiveStatus(part).busy || archiveStatus(part).state === 'saved'"
           @click="saveToWorkspace(part)"
-        >{{ archiveStatus(part).state === 'saved' ? '已保存到工作空间' : archiveStatus(part).busy ? '正在确认保存…' : archiveStatus(part).state === 'unknown' ? '继续原保存' : '保存到工作空间' }}</button>
+        >{{ archiveStatus(part).state === 'saved' ? '已保存到工作空间' : archiveStatus(part).busy ? '正在确认保存…' : ['pending', 'saving', 'unknown', 'partial_failed'].includes(archiveStatus(part).state) ? '继续原保存' : '保存到工作空间' }}</button>
         <p v-if="archiveStatus(part).message" :class="{ 'part-archive-error': ['error', 'unknown', 'partial_failed'].includes(archiveStatus(part).state) }" :role="['error', 'unknown', 'partial_failed'].includes(archiveStatus(part).state) ? 'alert' : 'status'">{{ archiveStatus(part).message }}</p>
         <button
-          v-if="['pending', 'saving', 'unknown', 'error', 'partial_failed'].includes(archiveStatus(part).state) && !archiveStatus(part).busy"
+          v-if="archiveStatus(part).operationId && ['pending', 'saving', 'unknown', 'error', 'partial_failed'].includes(archiveStatus(part).state) && !archiveStatus(part).busy"
           type="button"
           class="part-archive-refresh"
           @click="refreshArchiveStatus(part)"
@@ -43,7 +43,7 @@ const archives = useHallConversationArchive({ conversationId: () => props.conver
 const canSaveToWorkspace = part => part?.state === 'ready' && typeof part?.assetId === 'string' && part.assetId.length > 0 && Boolean(revisionOf(part?.revision))
 const archiveStatus = part => archives.statusFor(part)
 const saveToWorkspace = part => { void archives.save(part) }
-const refreshArchiveStatus = part => { void archives.retry(part) }
+const refreshArchiveStatus = part => { void archives.check(part) }
 </script>
 <style scoped>
 .message-parts { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0; }

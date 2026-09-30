@@ -169,6 +169,22 @@ describe('JYT-MMD-W2 conversation archive operations', () => {
     } finally { resumed.dispose() }
   })
 
+  it('keeps the status-query action read-only when an archived operation remains pending', async () => {
+    const calls = []
+    const api = { execute: async options => {
+      calls.push(options)
+      return { data: receipt('pending') }
+    } }
+    const archives = useHallConversationArchive({ api, conversationId: Vue.ref('conversation-1'),
+      identityScope: Vue.ref('tenant\u0000client\u0000owner-a'), idempotencyKeyFactory: () => 'archive-key-query-only' })
+    try {
+      await archives.save(part())
+      await archives.check(part())
+      expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET', 'GET'])
+      expect(archives.statusFor(part()).state).to.equal('pending')
+    } finally { archives.dispose() }
+  })
+
   it('never turns malformed or partial receipts into a local saved result', async () => {
     let sequence = 0
     const api = { execute: async () => {
@@ -202,6 +218,21 @@ describe('JYT-MMD-W2 conversation archive operations', () => {
       expect(archives.records.value).to.deep.equal({})
       expect(archives.statusFor(part()).state).to.equal('idle')
     } finally { archives.dispose() }
+  })
+
+  it('distinguishes read-only status checks from an explicit original-save retry in the UI', async () => {
+    const calls = []
+    const archive = { statusFor: () => ({ state: 'pending', message: '', busy: false, operationId: 'operation-1' }),
+      save: () => { calls.push('save'); return Promise.resolve(null) },
+      check: () => { calls.push('check'); return Promise.resolve(null) } }
+    const wrapper = mount(loadParts(archive), { props: { conversationId: 'conversation-1', identityKey: 'owner-a', parts: [part()] } })
+    try {
+      expect(wrapper.get('.part-save-button').text()).to.equal('继续原保存')
+      expect(wrapper.get('.part-archive-refresh').text()).to.equal('查询保存状态')
+      await wrapper.get('.part-archive-refresh').trigger('click')
+      await wrapper.get('.part-save-button').trigger('click')
+      expect(calls).to.deep.equal(['check', 'save'])
+    } finally { wrapper.unmount() }
   })
 
   it('renders save only for ready persisted assets and leaves existing media controls intact', async () => {

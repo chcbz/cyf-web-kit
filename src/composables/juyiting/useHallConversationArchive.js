@@ -192,5 +192,5 @@ export function useHallConversationArchive ({ api = createApi('/chat'), conversa
   const stop = watch(scopeKey, reset, { immediate: true, flush: 'sync' })
   const dispose = () => { if (!disposed) { disposed = true; stop(); reset() } }
   if (getCurrentInstance()) onBeforeUnmount(dispose)
-  return { records, statusFor, save, retry, reset, dispose }
+  return { records, statusFor, save, retry, check, reset, dispose }
 }
