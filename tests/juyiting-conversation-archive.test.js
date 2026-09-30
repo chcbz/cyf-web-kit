@@ -139,6 +139,36 @@ describe('JYT-MMD-W2 conversation archive operations', () => {
     } finally { second.dispose() }
   })
 
+  it('replays the original save intent only after a known operation is still pending', async () => {
+    const stored = new Map()
+    const storage = { getItem: key => stored.get(key) ?? null, setItem: (key, value) => stored.set(key, value) }
+    const calls = []
+    const api = { execute: async options => {
+      calls.push(options)
+      if (calls.length === 1) return { data: receipt('pending') }
+      if (calls.length === 2 || calls.length === 3) return { data: receipt('pending') }
+      return { data: receipt('saved', { fileId: 'workspace-file-1', version: 1 }) }
+    } }
+    const args = { api, storage, conversationId: Vue.ref('conversation-1'),
+      identityScope: Vue.ref('tenant\u0000client\u0000owner-a'),
+      idempotencyKeyFactory: () => 'original-save-key-42' }
+    const first = useHallConversationArchive(args)
+    try {
+      await first.save(part()) // initial POST pending, then a single GET pending
+      expect(first.statusFor(part()).state).to.equal('pending')
+      expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET'])
+    } finally { first.dispose() }
+    const resumed = useHallConversationArchive({ ...args, idempotencyKeyFactory: () => { throw new Error('new key') } })
+    try {
+      expect(resumed.statusFor(part()).state).to.equal('unknown')
+      await resumed.retry(part()) // explicit action: GET pending, original POST saved
+      expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET', 'GET', 'POST'])
+      expect(calls[3].headers['Idempotency-Key']).to.equal(calls[0].headers['Idempotency-Key'])
+      expect(calls[3].data).to.deep.equal(calls[0].data)
+      expect(resumed.statusFor(part()).state).to.equal('saved')
+    } finally { resumed.dispose() }
+  })
+
   it('never turns malformed or partial receipts into a local saved result', async () => {
     let sequence = 0
     const api = { execute: async () => {

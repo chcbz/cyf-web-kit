@@ -175,9 +175,17 @@ export function useHallConversationArchive ({ api = createApi('/chat'), conversa
       return null
     }
   }
-  const retry = part => {
+  const retry = async part => {
     const current = statusFor(part)
-    return current.operationId ? check(part) : send(part, current)
+    if (!current.operationId) return send(part, current)
+    // A known operation may be left PROCESSING after the ACK/worker was lost. First
+    // read the owner-scoped fact; only an explicit retry of a still-pending result
+    // replays the original immutable POST/key so the server can reconcile its write.
+    const status = await check(part)
+    if (status && ['pending', 'saving'].includes(status.state) && validIdempotencyKey(status.idempotencyKey)) {
+      return send(part, status)
+    }
+    return status
   }
   const save = part => retry(part)
 
