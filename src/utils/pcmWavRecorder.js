@@ -28,7 +28,9 @@ export const createPcm16MonoResampler = ({ inputRate, outputRate = TARGET_SAMPLE
         output.push(Math.max(-1, Math.min(1, value)))
         position += ratio
       }
-      const consumed = Math.floor(position)
+      // Keep the final source sample when the next output position has crossed
+      // this callback boundary; it is needed to interpolate with the next block.
+      const consumed = Math.min(Math.floor(position), Math.max(0, merged.length - 1))
       pending = merged.slice(consumed)
       position -= consumed
       return Float32Array.from(output)
@@ -97,7 +99,7 @@ const workletUrl = new URL('./pcmWavCaptureWorklet.js', import.meta.url).href
 
 export const supportsPcmWavCapture = browser => Boolean(browser?.AudioContext && browser?.AudioWorkletNode)
 
-export const createPcmWavRecorder = async ({ stream, browser = globalThis, onPcmData, workletModuleUrl = workletUrl } = {}) => {
+export const createPcmWavRecorder = async ({ stream, browser = globalThis, onPcmData, onProcessorError, abortSignal, workletModuleUrl = workletUrl } = {}) => {
   const AudioContextClass = browser.AudioContext || browser.webkitAudioContext
   const AudioWorkletNodeClass = browser.AudioWorkletNode
   if (!stream || !AudioContextClass || !AudioWorkletNodeClass) throw new Error('当前浏览器不支持 PCM/WAV 录音，仍可使用文字传令')
@@ -110,26 +112,42 @@ export const createPcmWavRecorder = async ({ stream, browser = globalThis, onPcm
   const chunks = []
   let stopResolve
   let stopReject
+  const abortError = () => new DOMException('PCM/WAV recording cancelled', 'AbortError')
+  const rejectPendingStop = cause => {
+    if (!stopReject) return
+    const reject = stopReject
+    stopResolve = stopReject = null
+    reject(cause)
+  }
+  const onAbort = () => { void close() }
   const close = async () => {
     if (closed) return
     closed = true
-    if (stopReject) {
-      const reject = stopReject
-      stopResolve = stopReject = null
-      reject(new DOMException('PCM/WAV recording cancelled', 'AbortError'))
-    }
+    abortSignal?.removeEventListener?.('abort', onAbort)
+    rejectPendingStop(abortError())
     try { source?.disconnect?.() } catch {}
     try { node?.disconnect?.() } catch {}
     try { gain?.disconnect?.() } catch {}
     try { node?.port?.close?.() } catch {}
     try { await context.close?.() } catch {}
   }
+  if (abortSignal?.aborted) {
+    await close()
+    throw abortError()
+  }
+  abortSignal?.addEventListener?.('abort', onAbort, { once: true })
   try {
     await context.audioWorklet.addModule(workletModuleUrl)
+    if (abortSignal?.aborted || closed) throw abortError()
     source = context.createMediaStreamSource(stream)
     node = new AudioWorkletNodeClass(context, 'cyf-pcm-wav-capture')
     gain = context.createGain()
     gain.gain.value = 0
+    node.onprocessorerror = () => {
+      const cause = new Error('录音处理器出错')
+      rejectPendingStop(cause)
+      onProcessorError?.(cause)
+    }
     node.port.onmessage = event => {
       if (closed) return
       if (event.data?.type === 'pcm') {
@@ -154,7 +172,7 @@ export const createPcmWavRecorder = async ({ stream, browser = globalThis, onPcm
         await new Promise((resolve, reject) => {
           stopResolve = resolve
           stopReject = reject
-          try { node.port.postMessage({ type: 'flush' }) } catch (cause) { reject(cause) }
+          try { node.port.postMessage({ type: 'flush' }) } catch (cause) { rejectPendingStop(cause) }
         })
         const total = chunks.reduce((size, chunk) => size + chunk.byteLength, 0)
         const pcm = new Uint8Array(total)

@@ -131,6 +131,7 @@ export const useHallVoiceConversation = ({
   let generation = 0
   let mediaStream = null
   let pcmRecorder = null
+  let recorderInitController = null
   let bytes = 0
   let ticker = null
   let hardStopTimer = null
@@ -180,7 +181,8 @@ export const useHallVoiceConversation = ({
     generation += 1
     uploadController?.abort(new DOMException('Voice turn cancelled', 'AbortError'))
     ttsController?.abort(new DOMException('Voice turn cancelled', 'AbortError'))
-    uploadController = ttsController = null
+    recorderInitController?.abort(new DOMException('Voice turn cancelled', 'AbortError'))
+    uploadController = ttsController = recorderInitController = null
     clearCaptureTimers()
     const recorder = pcmRecorder
     pcmRecorder = null
@@ -325,8 +327,13 @@ export const useHallVoiceConversation = ({
       }
       mediaStream = capture
       bytes = 0
+      recorderInitController = new AbortController()
       const recorder = await recorderFactory({
         stream: capture,
+        abortSignal: recorderInitController.signal,
+        onProcessorError: cause => {
+          if (current === generation) failCapture(cause?.message || '录音处理器出错')
+        },
         onPcmData: chunk => {
           if (current !== generation) return
           const size = chunk?.byteLength || 0
@@ -340,6 +347,7 @@ export const useHallVoiceConversation = ({
         return false
       }
       pcmRecorder = recorder
+      recorderInitController = null
       await recorder.start?.()
       if (current !== generation) return false
       setState('recording')
@@ -375,10 +383,17 @@ export const useHallVoiceConversation = ({
         stopTracks(mediaStream)
         mediaStream = null
         pcmRecorder = null
-        if (blob?.type !== 'audio/wav' || !blob.size || blob.size > HALL_VOICE_MAX_AUDIO_BYTES || !validatePcm16MonoWav(new Uint8Array(await blob.arrayBuffer()), { maxBytes: HALL_VOICE_MAX_AUDIO_BYTES })) {
+        if (blob?.type !== 'audio/wav' || !blob.size || blob.size > HALL_VOICE_MAX_AUDIO_BYTES) {
           failCapture('录音 WAV 格式无效或超过 5MiB')
           return
         }
+        const wavBytes = new Uint8Array(await blob.arrayBuffer())
+        if (current !== generation) return
+        if (!validatePcm16MonoWav(wavBytes, { maxBytes: HALL_VOICE_MAX_AUDIO_BYTES })) {
+          failCapture('录音 WAV 格式无效或超过 5MiB')
+          return
+        }
+        if (current !== generation) return
         void upload(current, blob)
       } catch (cause) {
         if (current === generation) failCapture(cause?.message || '录音停止失败')
@@ -507,8 +522,8 @@ export const useHallVoiceConversation = ({
       if (current !== generation) return false
       const contentType = response.headers.get('content-type')?.trim().toLowerCase()
       const contentLength = response.headers.get('content-length')
-      const declaredLength = Number(contentLength)
-      if (!response.ok || !response.body || contentType !== 'audio/wav' || !/^\d+$/.test(contentLength || '') || !Number.isSafeInteger(declaredLength) || declaredLength <= 0 || declaredLength > HALL_VOICE_MAX_TTS_BYTES) throw new Error('语音回答暂不可用')
+      const declaredLength = contentLength === null ? null : Number(contentLength)
+      if (!response.ok || !response.body || contentType !== 'audio/wav' || (contentLength !== null && (!/^\d+$/.test(contentLength) || !Number.isSafeInteger(declaredLength) || declaredLength <= 0 || declaredLength > HALL_VOICE_MAX_TTS_BYTES))) throw new Error('语音回答暂不可用')
       const reader = response.body.getReader()
       const parts = []
       let total = 0
@@ -523,7 +538,7 @@ export const useHallVoiceConversation = ({
         parts.push(value)
       }
       if (current !== generation) return false
-      if (!total || total !== declaredLength) throw new Error('语音回答为空或长度不符，文字已保留')
+      if (!total || (declaredLength !== null && total !== declaredLength)) throw new Error('语音回答为空或长度不符，文字已保留')
       const wav = new Uint8Array(total)
       let offset = 0
       parts.forEach(part => { wav.set(part, offset); offset += part.byteLength })

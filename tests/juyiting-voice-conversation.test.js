@@ -410,6 +410,49 @@ describe('Juyi Hall voice lifecycle', () => {
     expect(captureEvents).to.deep.equal([true, false, true, false])
   })
 
+  it('fails capture on processor error and ignores delayed WAV validation after cancellation', async () => {
+    const harness = browserHarness()
+    let processorError
+    let disposed = 0
+    const recorder = {
+      start: async () => {},
+      stop: async () => new Blob([createPcm16MonoWav(new Uint8Array([0, 0]))], { type: 'audio/wav' }),
+      dispose: async () => { disposed += 1 }
+    }
+    const { voice } = createVoice({
+      browser: harness.browser,
+      createRecorder: options => { processorError = options.onProcessorError; return recorder }
+    })
+    await voice.startRecording()
+    processorError(new Error('processor lost'))
+    expect(voice.state).to.equal('error')
+    expect(voice.error).to.equal('processor lost')
+    expect(disposed).to.equal(1)
+    voice.dispose()
+
+    const arrayBuffer = deferred()
+    let uploads = 0
+    const delayed = createVoice({
+      browser: harness.browser,
+      chatCreate: async () => { uploads += 1; return { data: { data: { text: '不应上传' } } } },
+      createRecorder: () => ({
+        start: async () => {},
+        stop: async () => ({ type: 'audio/wav', size: 46, arrayBuffer: () => arrayBuffer.promise }),
+        dispose: async () => {}
+      })
+    }).voice
+    await delayed.startRecording()
+    expect(delayed.stopRecording()).to.equal(true)
+    await flush()
+    delayed.cancel()
+    arrayBuffer.resolve(createPcm16MonoWav(new Uint8Array([0, 0])).buffer)
+    await flush()
+    expect(delayed.state).to.equal('idle')
+    expect(delayed.error).to.equal('')
+    expect(uploads).to.equal(0)
+    delayed.dispose()
+  })
+
   it('aborts hidden transcribing and locks pending-send conflict review', async () => {
     FakeRecorder.instances = []
     const upload = deferred()
@@ -1370,6 +1413,46 @@ describe('Juyi Hall TTS cleanup', () => {
     expect(request).to.deep.include({ voice: 'juyiting-default', format: 'wav' })
     expect(plays).to.equal(0)
     expect(voice.error).to.equal('语音回答暂不可用')
+    voice.dispose()
+  })
+
+  it('rejects a supplied Content-Length that differs from the WAV bytes', async () => {
+    let plays = 0
+    class AudioProbe { async play () { plays += 1 }; pause () {} }
+    const harness = browserHarness({
+      AudioClass: AudioProbe,
+      fetchImpl: async () => ({
+        ok: true,
+        headers: new Headers({ 'content-type': 'audio/wav', 'content-length': String(wavBytes().byteLength - 1) }),
+        body: new ReadableStream({ start (controller) { controller.enqueue(wavBytes()); controller.close() } })
+      })
+    })
+    const voice = createVoice({ browser: harness.browser }).voice
+    voice.setReplyVoiceEnabled(true)
+    await transcribeToReview(voice)
+    await voice.sendTranscript()
+    expect(await voice.completeReply({ content: '回话' })).to.equal(false)
+    expect(plays).to.equal(0)
+    expect(voice.error).to.equal('语音回答为空或长度不符，文字已保留')
+    voice.dispose()
+  })
+
+  it('accepts a headerless WAV response when intrinsic RIFF length is valid', async () => {
+    class SpeakingAudio { async play () {}; pause () {} }
+    const harness = browserHarness({
+      AudioClass: SpeakingAudio,
+      fetchImpl: async () => ({
+        ok: true,
+        headers: new Headers({ 'content-type': 'audio/wav' }),
+        body: new ReadableStream({ start (controller) { controller.enqueue(wavBytes()); controller.close() } })
+      })
+    })
+    const voice = createVoice({ browser: harness.browser }).voice
+    voice.setReplyVoiceEnabled(true)
+    await transcribeToReview(voice)
+    await voice.sendTranscript()
+    expect(await voice.completeReply({ content: '回话' })).to.equal(true)
+    expect(voice.state).to.equal('speaking')
     voice.dispose()
   })
 
