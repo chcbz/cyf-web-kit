@@ -1,7 +1,9 @@
 import { expect } from 'chai'
+import * as Vue from 'vue'
 import { normalizeHallMessage, appendHallEventMessage } from '../src/composables/juyiting/hallConversationMessages.js'
 import { applyMessagePartEvent, conversationAssetContentPath, mergeMessageParts, safeMediaKind } from '../src/composables/juyiting/hallMessageParts.js'
 import { createHallSseParser } from '../src/composables/juyiting/hallConversationSse.js'
+import { useHallConversation } from '../src/composables/juyiting/useHallConversation.js'
 
 const image = (revision, changes = {}) => ({ partId: 'img-1', revision: String(revision), kind: 'image', state: 'ready', assetId: 'asset-1', mime: 'image/png', filename: 'bird.png', ...changes })
 const state = () => ({ conversationId: '77', messages: [{ localId: '32', sender: 'AGENT', content: '鸟', parts: [], streaming: false }], isAwaitingReply: false, isStreaming: false, turnStates: new Map() })
@@ -47,6 +49,36 @@ describe('bounty conversation persisted media parts', () => {
     expect(safeMediaKind(current.messages[0].parts[0])).to.equal('audio')
     expect(safeMediaKind({ kind: 'image', mime: 'image/svg+xml' })).to.equal('file')
     expect(mergeMessageParts(current.messages[0].parts, [{ partId: 'file-2', revision: '2', kind: 'file', state: 'ready', assetId: 'asset-3', mime: 'application/pdf' }])).to.have.length(2)
+  })
+  it('applies owner-scoped media events from the reply stream instead of consuming them as status only', async () => {
+    const events = [
+      { type: 'part.ready', requestId: 'req-1', conversationId: '77', messageId: '32', part: image(1) },
+      { type: 'part.failed', requestId: 'req-1', conversationId: '77', messageId: '32', part: image(0) },
+      { type: 'part.ready', requestId: 'req-2', conversationId: 'other', messageId: '32', part: image(2) }
+    ]
+    const conversation = useHallConversation({
+      apiStore: { token: async () => '' },
+      chatApi: { create: async (_path, _body, options) => {
+        for (const event of events) options.onStream(JSON.stringify(event))
+        options.onStreamEnd()
+      } },
+      chatContext: Vue.ref({ conversationScopeType: 'bounty', conversationScopeKey: 'task:task-1',
+        targetAgentIds: ['agent-1'], targetAgentId: 'agent-1', participantAgentIds: ['agent-1'],
+        mentionAgentIds: [], taskId: 'task-1' }),
+      chatMode: Vue.ref('bounty'), globalStore: { getJiacn: 'owner', user: { name: 'Tester' } },
+      log: { warn: () => {}, error: () => {} }, openPanel: () => {},
+      outgoingMetadata: Vue.ref({}), portraitShortName: () => '',
+      selectedAgent: Vue.ref({ agentId: 'agent-1' }), selectedTask: Vue.ref({ id: 'task-1' }),
+      showToast: () => {}
+    })
+    try {
+      conversation.conversationId.value = '77'
+      conversation.messages.value.push(state().messages[0])
+      expect(await conversation.sendHallMessage({ content: '改成蓝色' })).to.equal(true)
+      const persisted = conversation.messages.value.find(message => message.localId === '32')
+      expect(persisted.parts).to.have.length(1)
+      expect(persisted.parts[0]).to.include({ assetId: 'asset-1', state: 'ready', revision: '1' })
+    } finally { conversation.disposeHallConversation() }
   })
   it('does not accept untrusted lower revision or a signed URL in place of private bytes', () => {
     const current = [image(3)]

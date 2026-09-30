@@ -13,6 +13,7 @@ import { combineAbortSignals } from '../../utils/abortSignals.js'
 import { captureHallVoiceSnapshot } from './useHallVoiceConversation.js'
 import { exactHallConversationId, normalizeHallConversationHistory } from './hallConversationHistory.js'
 import { createHallSseParser } from './hallConversationSse.js'
+import { isMessagePartEvent } from './hallMessageParts.js'
 import {
   cancellationTarget,
   deliberationBusy,
@@ -1074,6 +1075,9 @@ export const useHallConversation = ({
         void authoritativeResync(conversationId.value, 'conversation_conflict')
         return false
       }
+      // Stream replies can also carry replayed media events. Never consume a scoped
+      // part as a status-only request update; the same reducer handles SSE and stream.
+      if (isMessagePartEvent(event)) return appendHallEventMessage(event)
       if (event.agentDelivery || event.type === 'chat_request_replay' || (event.requestId && !['agent_message_delta', 'agent_message', 'resync_required'].includes(event.type))) {
         const handled = applyDeliberationEvent(event)
         const deliveryState = String(event.agentDelivery?.state || event.state || '').toUpperCase()
