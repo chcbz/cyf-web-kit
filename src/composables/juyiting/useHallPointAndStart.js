@@ -97,6 +97,10 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
   const checkOriginal = taskId => run(taskId, async (captured, epoch) => {
     const intent = readIntent(captured, taskId)
     if (!intent) return false
+    if (intent.providerConsent) {
+      state.value = { status: 'COST_CONSENT_PENDING', intent, projection: null, error: '费用意图须使用费用同意恢复；未调用旧点将' }
+      return false
+    }
     state.value = { status: intent.projection ? 'CONFIRMED' : 'UNKNOWN', intent, projection: intent.projection || null, error: null }
     return project(intent, captured, epoch)
   })
@@ -111,7 +115,12 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
       if (isSupported(task, agent) !== true || task?.funding?.mode === 'FUNDED_SINGLE_AGENT' ||
       !exactPointAndStartId(targetId)) throw new Error('此榜或目标尚未协商支持新办理流程')
       const old = readIntent(captured, taskId)
-      if (old) { state.value = { status: 'UNKNOWN', intent: old, projection: old.projection || null, error: null }; throw new Error('存在原点将记录，请明确核对或恢复原操作') }
+      if (old) {
+        const consentPending = Boolean(old.providerConsent)
+        state.value = { status: consentPending ? 'COST_CONSENT_PENDING' : 'UNKNOWN', intent: old, projection: consentPending ? null : old.projection || null,
+          error: consentPending ? '存在费用同意意图，请使用费用意图恢复；未调用旧点将' : null }
+        throw new Error(consentPending ? '存在费用同意意图，请使用费用意图恢复；未调用旧点将' : '存在原点将记录，请明确核对或恢复原操作')
+      }
       const requirement = await get(`/tasks/${encodeURIComponent(taskId)}/requirements/current`)
       if (!current(captured, epoch)) return false
       if (task?.id !== taskId || agent?.agentId !== targetId) throw new Error('榜文或显式目标已变化；未发送点将')
@@ -139,6 +148,10 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
   const resumeOriginal = taskId => run(taskId, async (captured, epoch) => {
     const intent = readIntent(captured, taskId)
     if (!intent) return false
+    if (intent.providerConsent) {
+      state.value = { status: 'COST_CONSENT_PENDING', intent, projection: null, error: '费用意图须使用费用同意恢复；未调用旧点将' }
+      return false
+    }
     state.value = { status: intent.postAcknowledged ? 'CONFIRMED' : 'UNKNOWN', intent, projection: intent.projection || null, error: null }
     try { return await project(intent, captured, epoch) } catch (error) {
       if (!current(captured, epoch)) return false
