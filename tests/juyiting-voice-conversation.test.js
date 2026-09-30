@@ -10,16 +10,17 @@ import {
   useHallVoiceConversation
 } from '../src/composables/juyiting/useHallVoiceConversation.js'
 import { useHallConversation } from '../src/composables/juyiting/useHallConversation.js'
+import { createPcm16MonoWav, validatePcm16MonoWav } from '../src/utils/pcmWavRecorder.js'
 import { identityCleanupHandlerCount, stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 import { resolveLiveMapPreviewActivation } from '../src/composables/juyiting/liveMapPreviewPolicy.js'
 import { resolveHallNavigationPresentation } from '../src/composables/juyiting/useHallPanels.js'
 import { isEconomyPreviewBuildEnabled } from '../src/utils/silverAmount.js'
 
-const flush = async () => { await Promise.resolve(); await Promise.resolve(); await Vue.nextTick() }
+const flush = async () => { for (let index = 0; index < 6; index += 1) await Promise.resolve(); await Vue.nextTick() }
 const withVoiceBrowserState = async run => {
   const originals = [
     [window, 'setTimeout'], [window, 'clearTimeout'], [navigator, 'mediaDevices'],
-    [globalThis, 'MediaRecorder'], [globalThis, 'Audio'], [globalThis, 'fetch']
+    [globalThis, 'MediaRecorder'], [globalThis, 'AudioContext'], [globalThis, 'AudioWorkletNode'], [globalThis, 'Audio'], [globalThis, 'fetch']
   ].map(([owner, key]) => ({ owner, key, descriptor: Object.getOwnPropertyDescriptor(owner, key) }))
   try { return await run() } finally {
     for (const { owner, key, descriptor } of originals) {
@@ -28,6 +29,13 @@ const withVoiceBrowserState = async run => {
     }
   }
 }
+const wavBytes = () => createPcm16MonoWav(new Uint8Array([0, 0]))
+const wavResponse = () => ({
+  ok: true,
+  headers: new Headers({ 'content-type': 'audio/wav', 'content-length': String(wavBytes().byteLength) }),
+  body: new ReadableStream({ start (controller) { controller.enqueue(wavBytes()); controller.close() } })
+})
+
 const deferred = () => {
   let resolve
   let reject
@@ -87,21 +95,67 @@ const validContext = (overrides = {}) => ({
   ...overrides
 })
 
+const installWorkletCaptureFakes = () => {
+  class FakeAudioContext {
+    constructor () {
+      this.destination = {}
+      this.audioWorklet = { addModule: async () => {} }
+    }
+    createMediaStreamSource () { return { connect: () => {}, disconnect: () => {} } }
+    createGain () { return { gain: { value: 1 }, connect: () => {}, disconnect: () => {} } }
+    async resume () {}
+    async close () {}
+  }
+  class FakeAudioWorkletNode {
+    constructor () {
+      const node = this
+      const recorder = new FakeRecorder({
+        onPcmData: data => node.port.onmessage?.({ data: { type: 'pcm', data: data.buffer } })
+      })
+      this.port = {
+        onmessage: null,
+        postMessage: ({ type }) => { if (type === 'flush') queueMicrotask(() => this.port.onmessage?.({ data: { type: 'flushed' } })) },
+        close: () => {}
+      }
+      this.connect = () => {}
+      this.disconnect = () => {}
+      this.recorder = recorder
+    }
+  }
+  globalThis.AudioContext = FakeAudioContext
+  globalThis.AudioWorkletNode = FakeAudioWorkletNode
+}
+
 class FakeRecorder {
   static instances = []
-  static isTypeSupported = type => type.startsWith('audio/webm')
-  constructor (stream, options) {
+  constructor ({ stream, onPcmData }) {
     this.stream = stream
-    this.mimeType = options.mimeType
+    this.onPcmData = onPcmData
     this.state = 'inactive'
+    this.pcm = []
+    this.disposed = false
     FakeRecorder.instances.push(this)
   }
-  start () { this.state = 'recording' }
-  stop () {
-    this.state = 'inactive'
-    const callback = this.onstop
-    queueMicrotask(() => callback?.())
+  async start () { this.state = 'recording' }
+  emitPcm (data = new Uint8Array([0, 0])) {
+    const bytes = data instanceof Uint8Array ? data : new Uint8Array(data)
+    this.onPcmData?.(bytes)
+    this.pcm.push(bytes)
   }
+  // Preserve the former deterministic recorder call-site shape while producing real WAV bytes.
+  ondataavailable (event) {
+    const size = event?.data?.size || 2
+    this.emitPcm(new Uint8Array(Math.max(2, size - (size % 2))))
+  }
+  async stop () {
+    this.state = 'inactive'
+    const total = this.pcm.reduce((sum, chunk) => sum + chunk.byteLength, 0)
+    const pcm = new Uint8Array(total || 2)
+    let offset = 0
+    this.pcm.forEach(chunk => { pcm.set(chunk, offset); offset += chunk.byteLength })
+    return new Blob([createPcm16MonoWav(pcm)], { type: 'audio/wav' })
+  }
+  async dispose () { this.disposed = true; this.state = 'inactive' }
 }
 
 const browserHarness = ({ permission, AudioClass, fetchImpl } = {}) => {
@@ -116,7 +170,6 @@ const browserHarness = ({ permission, AudioClass, fetchImpl } = {}) => {
   }
   const browser = {
     navigator: { mediaDevices: { getUserMedia: permission || (async () => makeStream()) } },
-    MediaRecorder: FakeRecorder,
     Audio: AudioClass || class { play = async () => {}; pause () {} },
     URL: { createObjectURL: () => 'blob:voice', revokeObjectURL: value => revoked.push(value) },
     fetch: fetchImpl || (async () => { throw new Error('unexpected fetch') }),
@@ -138,7 +191,7 @@ const browserHarness = ({ permission, AudioClass, fetchImpl } = {}) => {
   return { browser, documentListeners, listeners, makeStream, revoked, tracks }
 }
 
-const createVoice = ({ enabled = true, browser, chatCreate, onSendVoice, onReplyTurnTerminal, showToast = () => {}, draft = '', revision = 0, context = validContext(), replyBusy = false, captureEvents = [] } = {}) => {
+const createVoice = ({ enabled = true, browser, createRecorder = options => new FakeRecorder(options), chatCreate, onSendVoice, onReplyTurnTerminal, showToast = () => {}, draft = '', revision = 0, context = validContext(), replyBusy = false, captureEvents = [] } = {}) => {
   let currentDraft = draft
   let currentRevision = revision
   let currentContext = context
@@ -155,7 +208,8 @@ const createVoice = ({ enabled = true, browser, chatCreate, onSendVoice, onReply
     onCaptureStateChange: value => captureEvents.push(value),
     onReplyTurnTerminal,
     showToast,
-    browser
+    browser,
+    createRecorder
   })
   return { voice, setDraft: value => { currentDraft = value; currentRevision += 1 }, setContext: value => { currentContext = value } }
 }
@@ -294,30 +348,36 @@ describe('Juyi Hall voice mounted facade', () => {
 })
 
 describe('Juyi Hall voice recording format support', () => {
-  it('rejects MP4-only recorders and falls back only to WebM/Opus when MIME probing is unavailable', async () => {
-    let permissionCalls = 0
-    class Mp4OnlyRecorder extends FakeRecorder {}
-    Mp4OnlyRecorder.isTypeSupported = type => type === 'audio/mp4'
-    const mp4Harness = browserHarness({ permission: async () => { permissionCalls += 1; return mp4Harness.makeStream() } })
-    mp4Harness.browser.MediaRecorder = Mp4OnlyRecorder
-    const mp4Voice = createVoice({ browser: mp4Harness.browser }).voice
-    expect(mp4Voice.supported).to.equal(false)
-    expect(mp4Voice.state).to.equal('unsupported')
-    expect(mp4Voice.canRecord).to.equal(false)
-    expect(await mp4Voice.startRecording()).to.equal(false)
-    expect(permissionCalls).to.equal(0)
-    mp4Voice.dispose()
+  it('uploads an exact PCM16 mono 24k WAV named juyiting-voice.wav', async () => {
+    const harness = browserHarness()
+    let uploaded
+    const { voice } = createVoice({
+      browser: harness.browser,
+      chatCreate: async (path, body) => {
+        expect(path).to.equal('/speech/transcriptions')
+        uploaded = body.get('audio')
+        return { data: { data: { text: 'WAV 转写' } } }
+      }
+    })
+    await transcribeToReview(voice)
+    expect(uploaded.name).to.equal('juyiting-voice.wav')
+    expect(uploaded.type).to.equal('audio/wav')
+    expect(validatePcm16MonoWav(new Uint8Array(await uploaded.arrayBuffer()), { maxBytes: HALL_VOICE_MAX_AUDIO_BYTES })).to.equal(true)
+    voice.dispose()
+  })
 
-    class LegacyRecorder extends FakeRecorder {}
-    LegacyRecorder.isTypeSupported = undefined
-    const legacyHarness = browserHarness()
-    legacyHarness.browser.MediaRecorder = LegacyRecorder
-    const legacyVoice = createVoice({ browser: legacyHarness.browser }).voice
-    expect(legacyVoice.supported).to.equal(true)
-    expect(await legacyVoice.startRecording()).to.equal(true)
-    expect(FakeRecorder.instances.at(-1).mimeType).to.equal('audio/webm;codecs=opus')
-    legacyVoice.cancel()
-    legacyVoice.dispose()
+  it('requires AudioWorklet capture unless a deterministic recorder factory is injected', () => {
+    const harness = browserHarness()
+    const unsupported = useHallVoiceConversation({
+      apiStore: { token: async () => 'token' }, chatApi: { create: async () => ({}) }, enabled: true,
+      getContext: validContext, getDraft: () => '', getDraftRevision: () => 0, isReplyBusy: () => false,
+      browser: harness.browser
+    })
+    expect(unsupported.supported).to.equal(false)
+    const injected = createVoice({ browser: harness.browser }).voice
+    expect(injected.supported).to.equal(true)
+    unsupported.dispose()
+    injected.dispose()
   })
 })
 
@@ -525,11 +585,7 @@ describe('Juyi Hall voice identity and capture controls', () => {
     expect(replyVoice.state).to.equal('idle')
     expect(replyVoice.transcript).to.equal('')
     expect(replyVoice.voiceTurnActive).to.equal(false)
-    tts.resolve({
-      ok: true,
-      headers: new Headers({ 'content-type': 'audio/mpeg', 'content-length': '3' }),
-      body: new ReadableStream({ start (controller) { controller.enqueue(new Uint8Array([1, 2, 3])); controller.close() } })
-    })
+    tts.resolve(wavResponse())
     expect(await synthesizing).to.equal(false)
     expect(replyVoice.state).to.equal('idle')
     replyVoice.dispose()
@@ -625,11 +681,7 @@ describe('Juyi Hall voice identity and capture controls', () => {
     }
     const speakingHarness = browserHarness({
       AudioClass: SpeakingAudio,
-      fetchImpl: async () => ({
-        ok: true,
-        headers: new Headers({ 'content-type': 'audio/mpeg', 'content-length': '3' }),
-        body: new ReadableStream({ start (controller) { controller.enqueue(new Uint8Array([1, 2, 3])); controller.close() } })
-      })
+      fetchImpl: async () => wavResponse()
     })
     const speakingVoice = createVoice({ browser: speakingHarness.browser }).voice
     speakingVoice.setReplyVoiceEnabled(true)
@@ -701,6 +753,7 @@ describe('Juyi Hall portrait voice lock', () => {
       } }
     })
     globalThis.MediaRecorder = FakeRecorder
+    installWorkletCaptureFakes()
 
     const HallVoiceControls = loadSfc('../src/components/juyiting/HallVoiceControls.vue')
     const HallVoiceHud = loadSfc('../src/components/juyiting/HallVoiceHud.vue', { HallVoiceControls })
@@ -1033,11 +1086,7 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
       AudioClass: SpeakingAudio,
       fetchImpl: async () => {
         ttsFetches += 1
-        return {
-          ok: true,
-          headers: new Headers({ 'content-type': 'audio/mpeg', 'content-length': '3' }),
-          body: new ReadableStream({ start (controller) { controller.enqueue(new Uint8Array([1, 2, 3])); controller.close() } })
-        }
+        return wavResponse()
       }
     })
     harness.browser.window.setTimeout = clock.setTimeout
@@ -1156,6 +1205,7 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
       } }
     })
     globalThis.MediaRecorder = FakeRecorder
+    installWorkletCaptureFakes()
     globalThis.Audio = class {
       play = async () => { audioPlays += 1 }
       pause () {}
@@ -1163,7 +1213,7 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
     globalThis.fetch = async url => {
       if (!String(url).includes('/chat/speech/synthesis')) return new Response(null, { status: 204 })
       ttsFetches += 1
-      return new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'content-type': 'audio/mpeg', 'content-length': '3' } })
+      return new Response(wavBytes(), { status: 200, headers: { 'content-type': 'audio/wav', 'content-length': String(wavBytes().byteLength) } })
     }
     const JuyiHall = loadActualJuyiHall(createActualHallVoiceMocks({
       chatApi, conversationRef, correlationRef, selectedAgentFixture, SelectedAgentCardComponent, voiceRef
@@ -1275,11 +1325,7 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
 })
 
 describe('Juyi Hall TTS cleanup', () => {
-  const audioResponse = () => ({
-    ok: true,
-    headers: new Headers({ 'content-type': 'audio/mpeg', 'content-length': '3' }),
-    body: new ReadableStream({ start (controller) { controller.enqueue(new Uint8Array([1, 2, 3])); controller.close() } })
-  })
+  const audioResponse = wavResponse
 
   it('revokes object URLs on play rejection and media error', async () => {
     class RejectAudio { constructor () { RejectAudio.instance = this } play = async () => { throw new Error('autoplay denied') }; pause () {} }
@@ -1305,10 +1351,32 @@ describe('Juyi Hall TTS cleanup', () => {
     expect(harness.revoked).to.deep.equal(['blob:voice'])
   })
 
+  it('requests WAV and rejects a MIME/header-invalid response before playback', async () => {
+    let request
+    let plays = 0
+    class AudioProbe { async play () { plays += 1 }; pause () {} }
+    const harness = browserHarness({
+      AudioClass: AudioProbe,
+      fetchImpl: async (_url, options) => {
+        request = JSON.parse(options.body)
+        return { ...wavResponse(), headers: new Headers({ 'content-type': 'audio/mpeg', 'content-length': String(wavBytes().byteLength) }) }
+      }
+    })
+    const voice = createVoice({ browser: harness.browser }).voice
+    voice.setReplyVoiceEnabled(true)
+    await transcribeToReview(voice)
+    await voice.sendTranscript()
+    expect(await voice.completeReply({ content: '回话' })).to.equal(false)
+    expect(request).to.deep.include({ voice: 'juyiting-default', format: 'wav' })
+    expect(plays).to.equal(0)
+    expect(voice.error).to.equal('语音回答暂不可用')
+    voice.dispose()
+  })
+
   it('routes a zero-byte successful TTS response through terminal error cleanup', async () => {
     const emptyResponse = {
       ok: true,
-      headers: new Headers({ 'content-type': 'audio/mpeg', 'content-length': '0' }),
+      headers: new Headers({ 'content-type': 'audio/wav', 'content-length': '0' }),
       body: new ReadableStream({ start (controller) { controller.close() } })
     }
     const harness = browserHarness({ fetchImpl: async () => emptyResponse })
@@ -1318,7 +1386,7 @@ describe('Juyi Hall TTS cleanup', () => {
     await voice.sendTranscript()
     expect(await voice.completeReply({ content: '回话' })).to.equal(false)
     expect(voice.state).to.equal('error')
-    expect(voice.error).to.equal('语音回答为空，文字已保留')
+    expect(voice.error).to.equal('语音回答暂不可用')
     expect(voice.voiceTurnActive).to.equal(false)
     expect(voice.canRecord).to.equal(true)
     voice.dispose()
