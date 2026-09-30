@@ -44,6 +44,7 @@ import { readOutputRecovery, writeOutputRecovery } from '../../composables/juyit
 import { useHallConversationArchive } from '../../composables/juyiting/useHallConversationArchive.js'
 import { useHallBountyFinalization, safeFinalizationVersion } from '../../composables/juyiting/useHallBountyFinalization.js'
 
+const emit = defineEmits(['task-completed'])
 const props = defineProps({
   enabled: { type: Boolean, default: false }, request: { type: Object, default: null },
   conversationId: { type: String, default: '' }, identityKey: { type: String, default: '' },
@@ -67,6 +68,17 @@ const finalizations = useHallBountyFinalization({ api: agentApi,
   conversationId: () => props.enabled ? props.conversationId : null, identityKey: () => props.identityKey
 })
 const finalizeState = finalizations.status
+let lastCompletedOperation = ''
+watch(() => finalizeState.value.receipt, receipt => {
+  if (!props.enabled || finalizeState.value.state !== 'completed' || !receipt) return
+  const key = JSON.stringify([props.identityKey, props.conversationId, receipt.operationId])
+  if (key === lastCompletedOperation) return
+  lastCompletedOperation = key
+  // The composable validated original scope, exact selection, accepted delivery and domain task completion.
+  // This is a request to refresh the server projection, not a local task-status mutation.
+  emit('task-completed', Object.freeze({ taskId: receipt.taskId, conversationId: receipt.conversationId,
+    operationId: receipt.operationId, deliveryId: receipt.deliveryId, taskVersion: receipt.taskVersion }))
+}, { flush: 'sync' })
 let abort = null; let timer = null; let epoch = 0
 const inFlight = new Set()
 const validRootRequest = () => props.enabled && exactOutputId(props.request?.requestId) && props.request?.conversationId === props.conversationId

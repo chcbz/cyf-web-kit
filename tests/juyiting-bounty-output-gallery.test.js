@@ -225,10 +225,10 @@ describe('bounty output gallery live owner scope', () => {
       if (path.endsWith('/steps/step-1/outputs')) return { data: { data: [catalogItem] } }
       throw new Error(`unexpected GET ${path}`)
     }, execute: async () => { throw new Error('unexpected chat write') } }
-    const agentApi = { execute: async request => { submitted = request; return { data: { data: {
+    const agentApi = { execute: async request => { if (request.method === 'POST') submitted = request; return { data: { data: {
       operationId: 'finalization-1', taskId: 'task-1', conversationId: 'conversation-1', state: 'completed',
       stateVersion: '5', stage: 'TASK_COMPLETED', expectedTaskVersion: '9', expectedAssignmentRevision: '3',
-      selectedOutputs: request.data.selectedOutputs, deliveryId: 'delivery-1', deliveryState: 'accepted',
+      selectedOutputs: submitted.data.selectedOutputs, deliveryId: 'delivery-1', deliveryState: 'accepted',
       taskState: 'completed', taskVersion: '12', errorCode: null, retryable: false } } } } }
     const Component = new Function('Vue', 'deps', script)(Vue, {
       createApi: base => base === '/agent' ? agentApi : chatApi, exactOutputId, outputCatalogItems, outputItemKey,
@@ -247,6 +247,10 @@ describe('bounty output gallery live owner scope', () => {
       expect(submitted.data.expectedTaskVersion).to.equal(9)
       expect(submitted.data.expectedAssignmentRevision).to.equal(3)
       expect(wrapper.text()).to.include('需求已完成')
+      expect(wrapper.emitted('task-completed')).to.deep.equal([[{ taskId: 'task-1', conversationId: 'conversation-1',
+        operationId: 'finalization-1', deliveryId: 'delivery-1', taskVersion: '12' }]])
+      await wrapper.find('.finalize-status-button').trigger('click'); await flushPromises()
+      expect(wrapper.emitted('task-completed')).to.have.length(1)
     } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
   })
 
@@ -317,6 +321,7 @@ describe('bounty output gallery live owner scope', () => {
       await flushPromises()
       finishWrite({ data: { data: { stage: 'TASK_COMPLETED', deliveryState: 'accepted', deliveryId: 'delivery-a' } } })
       await flushPromises()
+      expect(wrapper.emitted('task-completed')).to.equal(undefined)
       expect(wrapper.text()).not.to.include('delivery-a')
       expect(wrapper.text()).not.to.include('任务已完成')
     } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
@@ -488,6 +493,7 @@ describe('bounty output gallery live owner scope', () => {
       await wrapper.find('input[type="checkbox"]').setValue(true)
       await wrapper.find('.finalize-button').trigger('click'); await flushPromises()
       expect(calls).to.have.length(1)
+      expect(wrapper.emitted('task-completed')).to.equal(undefined)
       await wrapper.setProps({ request: { ...props.request, stateVersion: '2' } }); await flushPromises()
       expect(calls).to.have.length(1)
       expect(wrapper.find('input[type="checkbox"]').attributes()).to.have.property('disabled')

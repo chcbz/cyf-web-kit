@@ -597,6 +597,7 @@
             @retry-conversation="retryHallConversation"
             @select-conversation="selectHallConversation"
             @send-message="handleSendHallMessage"
+            @task-completed="loadTasks"
           />
 
           <PrivateDiscussionPanel

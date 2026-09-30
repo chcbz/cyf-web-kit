@@ -33,7 +33,7 @@
       @voice-apply="$emit('voice-apply', $event)"
     >
       <template #bounty-results>
-        <BountyExecutionOutputs :enabled="deliberationV2Enabled" :request="activeRequest" :conversation-id="conversationId" :identity-key="`${identityEpoch}\u0000${identityScope}`" :task-version="selectedTask?.taskVersion ?? selectedTask?.version" />
+        <BountyExecutionOutputs :enabled="deliberationV2Enabled" :request="activeRequest" :conversation-id="conversationId" :identity-key="`${identityEpoch}\u0000${identityScope}`" :task-version="selectedTask?.taskVersion ?? selectedTask?.version" @task-completed="$emit('task-completed', $event)" />
       </template>
     </ChatPanel>
   </section>
@@ -95,6 +95,7 @@ const emit = defineEmits([
   'retry-conversation',
   'select-conversation',
   'send-message',
+  'task-completed',
   'update:draft',
   'voice-apply'
 ])
