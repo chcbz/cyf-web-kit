@@ -345,6 +345,33 @@ describe('Juyi Hall voice mounted facade', () => {
     compact.unmount()
     on.unmount()
   })
+
+  it('confirms a reviewed transcript through the voice turn and reads the correlated reply aloud', async () => {
+    class SpeakingAudio { async play () {}; pause () {} }
+    const harness = browserHarness({ AudioClass: SpeakingAudio, fetchImpl: async () => wavResponse() })
+    let sends = 0
+    const { voice } = createVoice({
+      browser: harness.browser,
+      onSendVoice: async () => { sends += 1; return true }
+    })
+    voice.setReplyVoiceEnabled(true)
+    expect(voice.autoSendEnabled).to.equal(false)
+    await transcribeToReview(voice)
+    const HallVoiceControls = loadSfc('../src/components/juyiting/HallVoiceControls.vue')
+    const wrapper = mount(HallVoiceControls, { props: { voice }, global: { stubs: { 'var-icon': true } } })
+    expect(wrapper.get('button[aria-label="确认发送语音转写"]').element.textContent).to.equal('确认发送')
+
+    await wrapper.get('button[aria-label="确认发送语音转写"]').trigger('click')
+    await flush()
+    expect(sends).to.equal(1)
+    expect(voice.state).to.equal('waiting_reply')
+    expect(voice.voiceTurnActive).to.equal(true)
+    expect(await voice.completeReply({ content: '同一 Agent 的关联回复' })).to.equal(true)
+    expect(voice.state).to.equal('speaking')
+
+    wrapper.unmount()
+    voice.dispose()
+  })
 })
 
 describe('Juyi Hall voice recording format support', () => {
