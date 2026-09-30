@@ -1,7 +1,7 @@
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { ref } from 'vue'
+import { nextTick, reactive, ref, watch } from 'vue'
 import { useHallPointAndStartControlledBridge } from '../src/composables/juyiting/useHallPointAndStartControlledBridge.js'
 import { useHallPointAndStart } from '../src/composables/juyiting/useHallPointAndStart.js'
 import { createPointAndStartIntentStore } from '../src/composables/juyiting/hallPointAndStartIntent.js'
@@ -23,5 +23,42 @@ describe('actual JuyiHall controlled issuer-only recovery handlers', () => {
     const make = name => new Function(...Object.keys(deps), `return (${handler(name)})`)(...Object.values(deps)); const check = make('checkPointAndStartOriginal'); deps.checkPointAndStartOriginal = check; const resume = make('resumePointAndStartOriginal')
     calls.length = 0; expect(await check({ id: taskId })).to.equal(true); expect(calls).to.deep.equal([['GET', `/tasks/${taskId}/point-and-start-cost-consents/request`]])
     calls.length = 0; expect(await resume({ id: taskId })).to.equal(true); expect(calls).to.deep.equal([['GET', `/tasks/${taskId}/point-and-start-controlled-image/request`], ['POST', `/tasks/${taskId}/point-and-start-controlled-image`]]); expect(ordinary.state.value.status).to.equal('IDLE'); controlled.dispose(); ordinary.dispose()
+  })
+})
+
+describe('actual JuyiHall controlled bootstrap observation fence', () => {
+  it('adopts PREPARING→ADMITTED in the original context but fences late admitted projections after target, authorization, or revision changes', async function () { this.timeout(12000)
+    const { descriptor } = parse(readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8'))
+    const script = descriptor.scriptSetup.content; const ast = babel.parse(script, { sourceType: 'module' }); const declarations = ast.program.body.flatMap(node => node.declarations || [])
+    const declaration = name => { const node = declarations.find(node => node.id?.name === name); return script.slice(node.start, node.end) }
+    const bridgeCall = declarations.find(node => node.init?.callee?.name === 'useHallPointAndStartControlledBridge')
+    const onBound = script.slice(bridgeCall.init.arguments[0].properties.find(node => node.key.name === 'onBound').value.start, bridgeCall.init.arguments[0].properties.find(node => node.key.name === 'onBound').value.end)
+    const lifecycle = ast.program.body.filter(node => node.type === 'ExpressionStatement' && node.expression?.callee?.name === 'watch')
+      .map(node => script.slice(node.expression.start, node.expression.end)).filter(code => code.includes('[selectedTask.value?.id, selectedTask.value?.taskVersion') || code.includes('watch([() => apiStore.authorizationGeneration, hallIdentityScope, () => selectedAgent.value?.agentId]'))
+    expect(lifecycle).to.have.length(2)
+    const preparing = { schemaVersion: 1, taskId: 'task_fixture_1', targetAgentId: 'agent_fixture_1', requirementRevision: '3', assignmentRevision: '7', taskVersion: '7', grantId: 'grant_fixture_1', grantVersion: '1', grantState: 'ACTIVE', permittedOperations: ['GENERATE_IMAGE'], inputs: [], bootstrapId: 'bootstrap_fixture_1', bootstrapState: 'PENDING', stateVersion: '1', initialOperation: 'GENERATE_IMAGE', conversationId: null, initialRequestId: null, currentAssignment: true }
+    const admitted = { ...preparing, bootstrapState: 'ADMITTED', stateVersion: '2', conversationId: '9007199254740993', initialRequestId: 'initial_fixture_1' }
+    const scenario = async invalidation => {
+      const scope = ref('tenant\u0000client\u0000owner'); const apiStore = reactive({ authorizationGeneration: 1 }); const selectedTask = ref({ id: 'task_fixture_1', taskVersion: '6', requirementRevision: '3' }); const selectedAgent = ref({ agentId: 'agent_fixture_1' }); const tasks = ref([selectedTask.value]); const operableRosterAgents = ref([{ agentId: 'agent_fixture_1' }, { agentId: 'agent_new' }]); const storageValues = new Map(); const storage = { getItem: key => storageValues.get(key) ?? null, setItem: (key, value) => storageValues.set(key, value) }; const calls = []; let reads = 0; let release; let secondRead; const secondReady = new Promise(resolve => { secondRead = resolve }); const secondValue = new Promise(resolve => { release = resolve }); let adopted = 0; let opened = 0
+      const api = { get: async path => { calls.push(['GET', path]); if (path.endsWith('/requirements/current')) return { data: { taskId: 'task_fixture_1', taskVersion: '6', requirementRevision: '3' } }; if (path.endsWith('/assignment-operation')) { reads++; if (reads === 1) return { data: preparing }; secondRead(); return { data: await secondValue } }; if (path === '/tasks/task_fixture_1') return { data: reads >= 2 ? { id: 'task_fixture_1', taskVersion: '7', status: 'assigned', assignedAgentId: 'agent_fixture_1' } : { id: 'task_fixture_1', taskVersion: '6', status: 'open' } }; throw Error(path) }, create: async path => { calls.push(['POST', path]); return { data: path.endsWith('cost-consents') ? { ...copy(fixture.wire.wrapper_receipt.providerConsent), state: 'ISSUED', version: '1' } : copy(fixture.wire.wrapper_receipt) } } }
+      let invalidateBridge = () => {}; const noopFence = { invalidate () {} }; let stopObservation = () => {}; let checkOriginal = async () => false
+      const page = new Function('ref', 'watch', 'hallIdentityScope', 'apiStore', 'pointAndStartObservation', 'controlledImageObservation', 'pointAndStartReferenceInputs', 'invalidateControlledBridge', 'stopPointAndStartObservation', 'pointAndStartCapability', 'controlledImageCapability', 'controlledConsentOffer', 'pointAndStartIntentState', 'checkPointAndStartOriginal', 'panelDisposed', 'operableRosterAgents', 'tasks', 'selectedTask', 'selectedAgent', 'openPanel', 'enterBountyDiscussion', 'nextTick', 'adoptBountyBootstrap', `${declaration('pointAndStartContextGeneration')}; ${declaration('admittedPointAndStartTaskFingerprint')}; ${declaration('pointAndStartTaskFingerprint')}; ${declaration('preserveAdmittedPointAndStartContext')}; ${declaration('clearPointAndStartCapability')}; ${declaration('attachAdmittedPointAndStart')}; ${lifecycle.join(';')}; return { pointAndStartContextGeneration, clearPointAndStartCapability, attachAdmittedPointAndStart }`)(ref, watch, scope, apiStore, noopFence, noopFence, noopFence, () => invalidateBridge(), () => stopObservation(), ref(null), ref(null), ref(null), id => createPointAndStartIntentStore({ storage, scope: scope.value, taskId: id }).read(), task => checkOriginal(task), false, operableRosterAgents, tasks, selectedTask, selectedAgent, () => { opened++; return true }, () => {}, nextTick, () => { adopted++; return true })
+      const ordinary = useHallPointAndStart({ agentApi: api, actorScopeKey: scope, storage, getContextGeneration: () => page.pointAndStartContextGeneration.value, onAdmitted: page.attachAdmittedPointAndStart }); stopObservation = ordinary.stopObservation; checkOriginal = ordinary.checkOriginal
+      const bound = new Function('observePointAndStart', `return (${onBound})`)(ordinary.observeOriginal)
+      const controlled = useHallPointAndStartControlledBridge({ agentApi: api, actorScopeKey: scope, storage, keys: { createAssignmentKey: () => 'fixture_assignment_key', createIssueKey: () => 'fixture_issue_key' }, onBound: bound }); invalidateBridge = controlled.invalidate
+      controlled.selectContext({ taskId: 'task_fixture_1', targetAgentId: 'agent_fixture_1' })
+      expect(await controlled.start({ task: { id: 'task_fixture_1' }, agent: { agentId: 'agent_fixture_1' }, requestedOperations: ['GENERATE_IMAGE'], initialOperation: 'GENERATE_IMAGE', providerBinding: { bindingId: 'fixture_binding', bindingEpoch: '1' }, acknowledgement: providerConsentAcknowledgement })).to.equal(true)
+      await secondReady
+      if (invalidation === 'target') selectedAgent.value = { agentId: 'agent_new' }
+      if (invalidation === 'authorization') apiStore.authorizationGeneration++
+      if (invalidation === 'revision') selectedTask.value = { ...selectedTask.value, taskVersion: '7', requirementRevision: '4' }
+      release(admitted); await new Promise(resolve => setTimeout(resolve, 0)); await nextTick()
+      const result = { contextGeneration: page.pointAndStartContextGeneration.value, adopted, opened, status: ordinary.state.value.status, bridgePosts: calls.filter(call => call[0] === 'POST' && call[1].endsWith('controlled-image')).length, assignPosts: calls.filter(call => call[0] === 'POST' && call[1].endsWith('/assign')).length }
+      controlled.dispose(); ordinary.dispose(); return result
+    }
+    const positive = await scenario(null); expect(positive).to.deep.include({ adopted: 1, opened: 1, status: 'ATTACHED', bridgePosts: 1, assignPosts: 0 })
+    for (const invalidation of ['target', 'authorization', 'revision']) {
+      expect(await scenario(invalidation)).to.deep.include({ contextGeneration: 1, adopted: 0, opened: 0, status: 'IDLE', bridgePosts: 1, assignPosts: 0 })
+    }
   })
 })

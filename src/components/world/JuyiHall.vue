@@ -2091,6 +2091,14 @@ const readControlledImageCapability = async (taskId, targetAgentId, observation 
   return controlledImageCapability.value
 }
 const pointAndStartCapability = ref(null)
+// Every user-visible task/target/auth context change fences in-flight original
+// projection reads. The one canonical task replacement performed by a verified
+// admission is marked below, so its own reactive write cannot cancel adoption.
+const pointAndStartContextGeneration = ref(0)
+let admittedPointAndStartTaskFingerprint = null
+const pointAndStartTaskFingerprint = task => [task?.id, task?.taskVersion, task?.requirementRevision, task?.revision]
+  .map(value => value == null ? '' : String(value)).join('\u0000')
+const preserveAdmittedPointAndStartContext = task => { admittedPointAndStartTaskFingerprint = pointAndStartTaskFingerprint(task) }
 const pointAndStartStorage = (() => {
   try { return typeof window !== 'undefined' ? window.localStorage : null } catch { return null }
 })()
@@ -2109,7 +2117,7 @@ const pointAndStartIntentState = (taskId) => createPointAndStartIntentStore({
   scope: hallIdentityScope.value,
   taskId
 }).read()
-const clearPointAndStartCapability = () => { pointAndStartObservation.invalidate(); controlledImageObservation.invalidate(); pointAndStartReferenceInputs.invalidate(); invalidateControlledBridge(); stopPointAndStartObservation(); pointAndStartCapability.value = null; controlledImageCapability.value = null; controlledConsentOffer.value = null }
+const clearPointAndStartCapability = () => { pointAndStartContextGeneration.value++; pointAndStartObservation.invalidate(); controlledImageObservation.invalidate(); pointAndStartReferenceInputs.invalidate(); invalidateControlledBridge(); stopPointAndStartObservation(); pointAndStartCapability.value = null; controlledImageCapability.value = null; controlledConsentOffer.value = null }
 const readPointAndStartCapability = async (taskId, targetAgentId, observation = pointAndStartObservation.capture()) => {
   const { identityScope, authorizationGeneration } = observation
   let capability = null
@@ -2134,6 +2142,7 @@ const attachAdmittedPointAndStart = async ({ task, targetAgentId, reference, isC
   const target = operableRosterAgents.value.find(agent => agent?.agentId === targetAgentId)
   if (!target) return false
   tasks.value = tasks.value.map(item => item?.id === task.id ? task : item)
+  preserveAdmittedPointAndStartContext(task)
   selectedTask.value = task
   if (!openPanel('chat')) return false
   enterBountyDiscussion(task)
@@ -2192,6 +2201,7 @@ const {
   storage: pointAndStartStorage,
   isSupported: canUsePointAndStartOffer,
   canReplayOriginal: canReplayPointAndStartOriginal,
+  getContextGeneration: () => pointAndStartContextGeneration.value,
   canAssign: (task, agent) => {
     const current = operableRosterAgents.value.find(item => item?.agentId === agent?.agentId)
     return Boolean(current && canAssign(task, current))
@@ -2311,7 +2321,11 @@ const assignTask = async (task, agent) => {
   return true
 }
 
-watch(() => [selectedTask.value?.id, selectedTask.value?.taskVersion, selectedTask.value?.requirementRevision, selectedTask.value?.revision], ([taskId]) => {
+watch(() => [selectedTask.value?.id, selectedTask.value?.taskVersion, selectedTask.value?.requirementRevision, selectedTask.value?.revision], ([taskId, taskVersion, requirementRevision, revision]) => {
+  const fingerprint = [taskId, taskVersion, requirementRevision, revision].map(value => value == null ? '' : String(value)).join('\u0000')
+  const admittedProjection = admittedPointAndStartTaskFingerprint === fingerprint
+  admittedPointAndStartTaskFingerprint = null
+  if (admittedProjection) return
   clearPointAndStartCapability()
   if (taskId && pointAndStartIntentState(taskId).state === 'PRESENT') void checkPointAndStartOriginal({ id: taskId })
 }, { flush: 'sync' })
