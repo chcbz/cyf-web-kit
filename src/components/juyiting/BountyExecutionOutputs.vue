@@ -20,7 +20,7 @@
         <span v-else>此格式请下载查看。</span>
       </template>
       <form v-if="previewKind(item.contentMimeType) === 'image'" class="image-rework" @submit.prevent="editImage(item)">
-        <label>引用此稿修改 <input v-model="editDrafts[outputItemKey(item)]" maxlength="4000" placeholder="例如：把羽毛改成蓝色" /></label>
+        <label>引用此稿修改 <input v-model="editDrafts[outputItemKey(item)]" :readonly="Boolean(editIntents[outputItemKey(item)])" maxlength="4000" placeholder="例如：把羽毛改成蓝色" /></label>
         <button type="submit" :disabled="editState(item).busy || (!editDrafts[outputItemKey(item)]?.trim() && !editIntents[outputItemKey(item)])">{{ editState(item).busy ? '正在提交…' : editIntents[outputItemKey(item)] ? '重试原修改' : '同会话生成新稿' }}</button>
         <p v-if="editState(item).message" :role="editState(item).state === 'accepted' ? 'status' : 'alert'">{{ editState(item).message }}</p>
       </form>
@@ -188,6 +188,7 @@ const editImage = async item => {
     if (!exactOutputId(value?.requestId) || !exactOutputId(value?.stepId)) throw new Error('服务端未返回可恢复的修改请求。')
     followupRequestIds.value = [...new Set([...followupRequestIds.value, value.requestId])]
     const remaining = { ...editIntents.value }; delete remaining[key]; editIntents.value = remaining
+    const remainingDrafts = { ...editDrafts.value }; delete remainingDrafts[key]; editDrafts.value = remainingDrafts
     persistRecovery()
     patchMap(editStates, key, { state: 'accepted', busy: false, message: '修改请求已受理；新稿就绪后会在同一成果区出现。' })
     refresh()
@@ -203,6 +204,7 @@ watch(() => `${props.enabled}\u0000${props.identityKey}\u0000${props.conversatio
   if (validRootRequest()) {
     const recovered = readOutputRecovery(recoveryScope())
     followupRequestIds.value = recovered.followups; editIntents.value = recovered.edits
+    editDrafts.value = Object.fromEntries(Object.entries(recovered.edits).map(([key, intent]) => [key, intent.content]))
     requestSnapshots.value = [props.request]; void list()
   }
 }, { immediate: true })

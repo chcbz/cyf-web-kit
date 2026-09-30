@@ -139,6 +139,8 @@ describe('bounty output gallery live owner scope', () => {
       wrapper = mount(Component, { props })
       await flushPromises()
       expect(wrapper.find('.image-rework button').text()).to.equal('重试原修改')
+      expect(wrapper.find('.image-rework input').element.readOnly).to.equal(true)
+      expect(wrapper.find('.image-rework input').element.value).to.equal('改成蓝色')
       await wrapper.find('.image-rework').trigger('submit')
       await flushPromises()
       expect(writes).to.have.length(2)
