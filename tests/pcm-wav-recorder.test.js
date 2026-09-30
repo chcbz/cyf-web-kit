@@ -98,13 +98,14 @@ describe('PCM/WAV recorder', () => {
     expect(closed).to.equal(1)
   })
 
-  it('releases a pending stop when the worklet reports a processor error', async () => {
+  it('releases a pending stop and closes owned resources when the worklet reports a processor error', async () => {
     let node
+    let closed = 0
     class Context {
       constructor () { this.destination = {}; this.audioWorklet = { addModule: async () => {} } }
       createMediaStreamSource () { return { connect: () => {}, disconnect: () => {} } }
       createGain () { return { gain: { value: 1 }, connect: () => {}, disconnect: () => {} } }
-      async close () {}
+      async close () { closed += 1 }
     }
     class Node {
       constructor () {
@@ -120,7 +121,9 @@ describe('PCM/WAV recorder', () => {
     let cause
     try { await stopping } catch (error) { cause = error }
     expect(cause?.message).to.equal('录音处理器出错')
-    await recorder.dispose()
+    expect(closed).to.equal(1)
+    node.onprocessorerror()
+    expect(closed).to.equal(1)
   })
 
   it('closes the owned AudioContext promptly when worklet initialization is aborted', async () => {

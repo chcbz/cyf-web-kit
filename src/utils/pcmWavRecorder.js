@@ -144,9 +144,10 @@ export const createPcmWavRecorder = async ({ stream, browser = globalThis, onPcm
     gain = context.createGain()
     gain.gain.value = 0
     node.onprocessorerror = () => {
+      if (closed) return
       const cause = new Error('录音处理器出错')
       rejectPendingStop(cause)
-      onProcessorError?.(cause)
+      try { onProcessorError?.(cause) } finally { void close() }
     }
     node.port.onmessage = event => {
       if (closed) return
