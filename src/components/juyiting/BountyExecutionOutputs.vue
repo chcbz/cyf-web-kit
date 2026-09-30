@@ -9,9 +9,9 @@
       <span>{{ item.contentMimeType }} · {{ item.byteLength }} 字节</span>
       <button v-if="item.previewUrl && previewKind(item.contentMimeType) !== 'file'" type="button" @click="loadPreview(item)">预览</button>
       <button type="button" @click="download(item)">下载</button>
-      <button type="button" :disabled="archiveState(item).busy || archiveState(item).state === 'saved'" @click="archive(item)">{{ archiveState(item).state === 'saved' ? '已保存到工作空间' : archiveState(item).busy ? '正在保存…' : '保存到工作空间' }}</button>
-      <button v-if="archiveState(item).state === 'unknown'" type="button" @click="archive(item, true)">重试原保存</button>
-      <p v-if="archiveState(item).message" :role="archiveState(item).state === 'saved' ? 'status' : 'alert'">{{ archiveState(item).message }}</p>
+      <button type="button" :disabled="!outputAssetPart(item) || archiveState(item).busy || archiveState(item).state === 'saved'" @click="archive(item)">{{ archiveState(item).state === 'saved' ? '已保存到工作空间' : archiveState(item).busy ? '正在保存…' : !outputAssetPart(item) ? '等待资产登记' : '保存到工作空间' }}</button>
+      <button v-if="archiveState(item).state === 'unknown'" type="button" @click="archive(item)">重试原保存</button>
+      <p v-if="archiveState(item).message" :role="['saved', 'waiting_asset', 'pending', 'saving'].includes(archiveState(item).state) ? 'status' : 'alert'">{{ archiveState(item).message }}</p>
       <p v-if="itemErrors[outputItemKey(item)]" role="alert">{{ itemErrors[outputItemKey(item)] }}</p>
       <p v-if="textPreviews[outputItemKey(item)]" class="bounty-output-text">{{ textPreviews[outputItemKey(item)] }}</p>
       <template v-if="previewUrls[outputItemKey(item)]">
@@ -36,9 +36,10 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { createApi } from '../../composables/useHttp.js'
-import { exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName } from '../../composables/juyiting/bountyOutputCatalog.js'
+import { exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart } from '../../composables/juyiting/bountyOutputCatalog.js'
 import { saveOutputBlob } from '../../utils/outputDownload.js'
 import { readOutputRecovery, writeOutputRecovery } from '../../composables/juyiting/bountyOutputRecovery.js'
+import { useHallConversationArchive } from '../../composables/juyiting/useHallConversationArchive.js'
 
 const props = defineProps({
   enabled: { type: Boolean, default: false }, request: { type: Object, default: null },
@@ -47,12 +48,17 @@ const props = defineProps({
 })
 const api = createApi('/chat')
 const agentApi = createApi('/agent')
+const archives = useHallConversationArchive({ api,
+  conversationId: () => props.enabled && props.identityKey ? props.conversationId : null,
+  identityEpoch: () => `${props.enabled}\u0000${props.identityKey}`,
+  identityScope: () => props.identityKey
+})
 const requestSnapshots = ref([])
 const followupRequestIds = ref([])
 const scopedSteps = computed(() => requestSnapshots.value.flatMap(request => scopedExecutionSteps(request, props.conversationId)))
 const items = ref([]); const loading = ref(false); const error = ref('')
 const previewUrls = ref({}); const textPreviews = ref({}); const itemErrors = ref({})
-const archiveStates = ref({}); const editStates = ref({}); const editDrafts = ref({}); const editIntents = ref({}); const selectedKeys = ref([])
+const editStates = ref({}); const editDrafts = ref({}); const editIntents = ref({}); const selectedKeys = ref([])
 const expandedUrl = ref('')
 const finalizeState = ref({ state: 'idle', busy: false, message: '', intent: null })
 let abort = null; let timer = null; let epoch = 0
@@ -61,7 +67,11 @@ const validRootRequest = () => props.enabled && exactOutputId(props.request?.req
 const uuid = prefix => { const value = globalThis.crypto?.randomUUID?.(); if (!value) throw new Error('当前环境不能生成安全幂等键。'); return `${prefix}-${value}` }
 const sha256Blob = async blob => Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', await blob.arrayBuffer())), byte => byte.toString(16).padStart(2, '0')).join('')
 const patchMap = (target, key, value) => { target.value = { ...target.value, [key]: value } }
-const archiveState = item => archiveStates.value[outputItemKey(item)] || { state: 'idle', busy: false, message: '' }
+const archiveState = item => {
+  const part = outputAssetPart(item)
+  return part ? archives.statusFor(part) : { state: 'waiting_asset', busy: false,
+    message: '成果已提交，正在等待持久会话资产登记；暂不能保存。' }
+}
 const editState = item => editStates.value[outputItemKey(item)] || (editIntents.value[outputItemKey(item)]
   ? { state: 'unknown', busy: false, message: '此前修改请求的结果不明确；请重试原请求，勿创建新生成。' }
   : { state: 'idle', busy: false, message: '' })
@@ -72,7 +82,8 @@ const cleanup = () => {
   for (const controller of inFlight) controller.abort(); inFlight.clear()
   for (const url of Object.values(previewUrls.value)) URL.revokeObjectURL(url)
   requestSnapshots.value = []; followupRequestIds.value = []; items.value = []; previewUrls.value = {}; textPreviews.value = {}
-  itemErrors.value = {}; archiveStates.value = {}; editStates.value = {}; editDrafts.value = {}; editIntents.value = {}; selectedKeys.value = []
+  archives.reset()
+  itemErrors.value = {}; editStates.value = {}; editDrafts.value = {}; editIntents.value = {}; selectedKeys.value = []
   expandedUrl.value = ''; finalizeState.value = { state: 'idle', busy: false, message: '', intent: null }; loading.value = false; error.value = ''
 }
 const fetchRequest = async (requestId, controller) => {
@@ -133,23 +144,9 @@ const loadPreview = async item => {
   } catch (cause) { if (generation === epoch) patchMap(itemErrors, key, cause?.message || '预览失败') }
 }
 const download = async item => { const key = outputItemKey(item); const generation = epoch; try { const blob = await bytes(item, false); if (blob && generation === epoch) saveOutputBlob({ blob, item: { name: outputDownloadName(item) } }) } catch (cause) { if (generation === epoch) patchMap(itemErrors, key, cause?.message || '下载失败') } }
-const archive = async (item, retry = false) => {
-  const generation = epoch
-  const key = outputItemKey(item); const prior = archiveState(item); if (prior.busy || prior.state === 'saved') return
-  let intent = prior.intent
-  try {
-    if (!intent) intent = { idempotencyKey: uuid('conversation-archive'), body: { mode: 'CREATE', displayName: item.outputId, targetFileId: null, expectedVersion: null, outputRef: { requestId: item.requestId, stepId: item.stepId, outputId: item.outputId, sha256: item.sha256 } } }
-    patchMap(archiveStates, key, { ...prior, intent, busy: true, state: 'saving', message: retry ? '正在重放原保存操作…' : '正在保存真实成果字节…' })
-    const response = await api.execute({ url: `/conversations/${encodeURIComponent(props.conversationId)}/archive-operations`, method: 'POST', headers: { 'Idempotency-Key': intent.idempotencyKey }, data: intent.body, autoLoading: false, needAuth: true })
-    if (generation !== epoch) return
-    const value = response?.data?.data ?? response?.data
-    if (value?.state !== 'saved' || value?.outputRef?.requestId !== item.requestId || value?.outputRef?.stepId !== item.stepId || value?.outputRef?.outputId !== item.outputId || value?.sha256 !== item.sha256 || !exactOutputId(value?.fileId) || !Number.isInteger(value?.version) || value.version < 1) throw new Error('保存回执无法确认精确成果。')
-    patchMap(archiveStates, key, { intent, busy: false, state: 'saved', message: `已保存到工作空间：${value.fileId} v${value.version}` })
-  } catch (cause) {
-    if (generation !== epoch) return
-    const unknown = cause?.requestErrorClass === 'network' || cause instanceof TypeError || cause?.status >= 500 || cause?.response?.status >= 500
-    patchMap(archiveStates, key, { intent, busy: false, state: unknown ? 'unknown' : 'error', message: unknown ? '保存结果不明确；请重试原操作，不要另存副本。' : (cause?.message || '保存失败。') })
-  }
+const archive = async item => {
+  const part = outputAssetPart(item)
+  if (part && props.enabled && props.identityKey) await archives.save(part)
 }
 const stepFor = item => requestSnapshots.value.find(request => request.requestId === item.requestId)?.steps?.find(step => step.stepId === item.stepId)
 const finalizeSelected = async () => {

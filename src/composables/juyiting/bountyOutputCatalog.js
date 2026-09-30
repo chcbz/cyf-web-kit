@@ -3,6 +3,17 @@ const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/
 const HASH = /^[0-9a-f]{64}$/
 export const INLINE_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/webm', 'text/plain'])
 export const exactOutputId = value => typeof value === 'string' && ID.test(value)
+const assetRefValid = ref => ref && typeof ref === 'object' && !Array.isArray(ref) &&
+  Object.keys(ref).length === 2 && Object.keys(ref).every(key => ['assetId', 'revision'].includes(key)) &&
+  typeof ref.assetId === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(ref.assetId) &&
+  typeof ref.revision === 'string' && /^[1-9][0-9]{0,18}$/.test(ref.revision) && BigInt(ref.revision) <= 9223372036854775807n
+
+// Only the server's persisted asset reference can enter the existing archive client.
+export function outputAssetPart (item) {
+  if (!assetRefValid(item?.assetRef)) return null
+  return Object.freeze({ state: 'ready', kind: previewKind(item.contentMimeType),
+    assetId: item.assetRef.assetId, revision: item.assetRef.revision })
+}
 
 export function scopedExecutionSteps (request, conversationId) {
   if (!exactOutputId(request?.requestId) || request?.conversationId !== conversationId) return []
@@ -20,6 +31,7 @@ export function outputCatalogItems (items, requestId, stepId) {
         typeof item.contentMimeType !== 'string' || !item.contentMimeType ||
         typeof item.sha256 !== 'string' || !HASH.test(item.sha256) ||
         !Number.isSafeInteger(item.byteLength) || item.byteLength < 0) return false
+    if (item.assetRef != null && !assetRefValid(item.assetRef)) return false
     const expected = `${prefix}${encodeURIComponent(item.outputId)}`
     if (item.downloadUrl !== `${expected}?download=true` ||
         (item.previewUrl != null && item.previewUrl !== expected) ||
@@ -27,7 +39,8 @@ export function outputCatalogItems (items, requestId, stepId) {
         (!INLINE_MIME.has(item.contentMimeType) && item.previewUrl != null)) return false
     seen.add(item.outputId)
     return true
-  }).map(item => Object.freeze({ ...item, requestId, stepId }))
+  }).map(item => Object.freeze({ ...item, requestId, stepId,
+    assetRef: item.assetRef == null ? null : Object.freeze({ assetId: item.assetRef.assetId, revision: item.assetRef.revision }) }))
 }
 
 // A run can reuse output_1 in a later EXECUTE step. Cache keys must include the

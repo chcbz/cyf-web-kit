@@ -1,5 +1,5 @@
 import { expect } from 'chai'
-import { outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName } from '../src/composables/juyiting/bountyOutputCatalog.js'
+import { outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart } from '../src/composables/juyiting/bountyOutputCatalog.js'
 
 const requestId = 'request-1'
 const stepId = 'step-1'
@@ -61,6 +61,24 @@ describe('scoped bounty output catalog', () => {
     for (const mime of ['audio/mp4', 'audio/webm']) {
       expect(previewKind(mime)).to.equal('audio')
       expect(outputCatalogItems([output({ contentMimeType: mime })], requestId, stepId)).to.have.length(1)
+    }
+  })
+
+  it('accepts only an exact persisted optional assetRef, keeping legacy unprojected media readable', () => {
+    const base = output()
+    expect(outputCatalogItems([base], requestId, stepId)[0].assetRef).to.equal(null)
+    expect(outputAssetPart(base)).to.equal(null)
+    const ready = outputCatalogItems([output({ assetRef: { assetId: 'ast_1', revision: '1' } })], requestId, stepId)[0]
+    expect(outputAssetPart(ready)).to.deep.equal({ state: 'ready', kind: 'image', assetId: 'ast_1', revision: '1' })
+    expect(Object.isFrozen(ready.assetRef)).to.equal(true)
+    for (const ref of [
+      { assetId: '../foreign', revision: '1' }, { assetId: 'ast_1', revision: 1 },
+      { assetId: 'ast_1', revision: '0' }, { assetId: 'ast_1', revision: '01' },
+      { assetId: 'ast_1', revision: '9223372036854775808' },
+      { assetId: 'ast_1', revision: '1', sha256: 'a'.repeat(64) }, 'ast_1'
+    ]) {
+      expect(outputCatalogItems([output({ assetRef: ref })], requestId, stepId)).to.deep.equal([])
+      expect(outputAssetPart(output({ assetRef: ref }))).to.equal(null)
     }
   })
 
