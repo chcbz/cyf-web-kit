@@ -562,6 +562,7 @@
             :inert="renderedPanel !== 'chat' ? '' : null"
             :aria-hidden="renderedPanel !== 'chat' ? 'true' : null"
             :active-request="activeRequest"
+            :request-catalog="bountyRequestCatalog.entries"
             :active-turns="activeTurns"
             :capability-state="capabilityState"
             :deliberation-v2-enabled="multimediaDeliberationUiEnabled"
@@ -736,6 +737,7 @@ import { providerConsentAcknowledgement } from '@/composables/juyiting/hallPoint
 import { capabilityOffersControlledImageConsent, createControlledImageCapabilityObservationFence, loadControlledImageBountyCapability } from '@/composables/juyiting/hallControlledImageBountyCapability'
 import { useHallPointAndStartControlledBridge } from '@/composables/juyiting/useHallPointAndStartControlledBridge'
 import { useHallBountyFollowup } from '@/composables/juyiting/useHallBountyFollowup'
+import { useHallBountyRequestCatalog } from '@/composables/juyiting/useHallBountyRequestCatalog'
 import { capabilityAllowsNewStart, capabilityAllowsOriginalReplay, createNativeCapabilityObservationFence, loadNativeBountyCapability, pointAndStartIntentReadLane } from '@/composables/juyiting/hallNativeBountyCapability'
 import { useHallQuickMatter } from '@/composables/juyiting/useHallQuickMatter'
 import { useTaskWorkspace } from '@/composables/juyiting/useTaskWorkspace'
@@ -2017,6 +2019,8 @@ const cancelFunding = async (task) => {
 
 const loadSettlement = async (task) => runLoadSettlement(task)
 
+let notifyBountyRequestCatalog = () => {}
+
 const {
   activeRequest,
   activeTurns,
@@ -2080,7 +2084,8 @@ const {
   },
   onDelivery: ({ agentId }) => {
     if (agentId) markAgentSpeaking(agentId, '收到传令', 'system')
-  }
+  },
+  onRequestCatalogHint: event => notifyBountyRequestCatalog(event)
 })
 
 const followupContextGeneration = ref(0)
@@ -2093,6 +2098,13 @@ const followupCurrentContext = () => ({
 const followupStorage = (() => {
   try { return typeof window !== 'undefined' ? window.sessionStorage : null } catch { return null }
 })()
+const bountyRequestCatalog = useHallBountyRequestCatalog({
+  chatApi, identityScope: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
+  getContext: () => ({ conversationId: conversationId.value, taskId: conversationTask.value?.id || '',
+    targetAgentId: conversationAgent.value?.agentId || '', assignmentRevision: activeRequest.value?.steps?.find(step => step.targetAgentId === conversationAgent.value?.agentId)?.assignmentRevision || '' }),
+  getContextGeneration: () => followupContextGeneration.value, enabled: () => multimediaDeliberationUiEnabled && chatMode.value === 'bounty'
+})
+notifyBountyRequestCatalog = () => bountyRequestCatalog.hint()
 const {
   state: followupState,
   busy: followupBusy,
@@ -2112,6 +2124,7 @@ const {
   enabled: () => followupExecuteEnabled.value,
   onAdmitted: async ({ receipt, isCurrent }) => {
     if (!isCurrent?.()) return false
+    bountyRequestCatalog.hint()
     showToast(`受控图像办理已受理（${receipt.requestId}）；不会改走旧传令。`)
     return true
   }
@@ -2378,6 +2391,11 @@ const followupTaskFence = computed(() => [selectedTask.value?.id, selectedTask.v
   selectedTask.value?.requirementRevision, selectedTask.value?.revision].map(value => value == null ? '' : String(value)).join('\u0000'))
 watch([followupTaskFence, () => apiStore.authorizationGeneration, hallIdentityScope, () => conversationId.value,
   () => activeRequest.value?.conversationGeneration, () => conversationAgent.value?.agentId, () => chatMode.value], invalidateFollowupContext, { flush: 'sync' })
+watch([followupTaskFence, () => apiStore.authorizationGeneration, hallIdentityScope, () => conversationId.value,
+  () => conversationAgent.value?.agentId, () => chatMode.value], () => {
+  bountyRequestCatalog.reset()
+  if (chatMode.value === 'bounty' && conversationId.value) void bountyRequestCatalog.refresh()
+}, { flush: 'sync' })
 
 const formalTaskExecutionContext = useFormalTaskExecutionScope({
   selectedTask,

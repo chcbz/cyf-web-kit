@@ -47,7 +47,8 @@ export const useHallConversation = ({
   selectedTask,
   showToast,
   onFinalReply,
-  onDelivery
+  onDelivery,
+  onRequestCatalogHint = null
 }) => {
   const messages = ref([])
   const conversationId = ref('')
@@ -365,6 +366,9 @@ export const useHallConversation = ({
     const needsReadback = needsUnversionedTurnReadback(event)
     const durableHandled = applyDeliberationEvent(event)
     const messageEvent = event?.type === 'agent_message_delta' || event?.type === 'agent_message' || event?.type === 'resync_required' || ['part.processing', 'part.ready', 'part.failed'].includes(event?.type)
+    // Keep the active-request reducer closed. A non-active media event can only ask the
+    // independent read-only catalog to re-read its owner-scoped index.
+    if (event?.type === 'part.ready' && event.requestId && event.conversationId === conversationId.value) onRequestCatalogHint?.(event)
     if (!messageEvent) {
       if (durableHandled) syncDurablePresentation()
       return durableHandled

@@ -4,7 +4,7 @@
     <p v-if="error" role="alert">{{ error }} <button type="button" @click="refresh">重新读取</button></p>
     <p v-else-if="!items.length" role="status">{{ loading ? '正在读取已提交成果…' : '尚无已校验的成果；生成完成后将在此显示。' }}</p>
     <div v-for="item in items" :key="outputItemKey(item)" class="bounty-output">
-      <label class="result-choice"><input v-model="selectedKeys" type="checkbox" :value="outputItemKey(item)" :disabled="!!finalizeState.intent || finalizeState.busy || finalizeState.state === 'recovery_error'" /> 最终成果</label>
+      <label class="result-choice"><input v-model="selectedKeys" type="checkbox" :value="outputItemKey(item)" :disabled="!currentWritable(item) || !!finalizeState.intent || finalizeState.busy || finalizeState.state === 'recovery_error'" /> 最终成果</label>
       <strong>{{ previewKind(item.contentMimeType) === 'image' ? '图片' : previewKind(item.contentMimeType) === 'audio' ? '音频' : previewKind(item.contentMimeType) === 'text' ? '文本' : '文件' }}</strong>
       <span>{{ item.contentMimeType }} · {{ item.byteLength }} 字节</span>
       <button v-if="item.previewUrl && previewKind(item.contentMimeType) !== 'file'" type="button" @click="loadPreview(item)">预览</button>
@@ -21,7 +21,7 @@
       </template>
       <form v-if="previewKind(item.contentMimeType) === 'image'" class="image-rework" @submit.prevent="editImage(item)">
         <label>引用此稿修改 <input v-model="editDrafts[outputItemKey(item)]" maxlength="4000" placeholder="例如：把羽毛改成蓝色" /></label>
-        <button type="submit" :disabled="!followupEnabled || !outputAssetPart(item) || !editDrafts[outputItemKey(item)]?.trim()">{{ followupEnabled ? '请求受控修改预览' : '受控修改未启用' }}</button>
+        <button type="submit" :disabled="!followupEnabled || !currentWritable(item) || !outputAssetPart(item) || !editDrafts[outputItemKey(item)]?.trim()">{{ followupEnabled ? '请求受控修改预览' : '受控修改未启用' }}</button>
       </form>
     </div>
     <button v-if="selectedKeys.length || finalizeState.intent" type="button" class="finalize-button" :disabled="finalizeState.busy || finalizeState.state === 'completed' || finalizeState.state === 'recovery_error' || (finalizeState.receipt?.state === 'failed' && !finalizeState.receipt.retryable)" @click="finalizeSelected">{{ finalizeState.busy ? '正在确认原验收操作…' : finalizeState.state === 'completed' ? '需求已完成' : finalizeState.intent ? '继续原验收' : `验收选中的 ${selectedKeys.length} 项成果` }}</button>
@@ -46,7 +46,7 @@ const emit = defineEmits(['request-followup-edit', 'task-completed'])
 const props = defineProps({
   enabled: { type: Boolean, default: false }, request: { type: Object, default: null },
   conversationId: { type: String, default: '' }, identityKey: { type: String, default: '' },
-  followupEnabled: { type: Boolean, default: false },
+  followupEnabled: { type: Boolean, default: false }, catalog: { type: Array, default: () => [] },
   taskVersion: { type: [String, Number], default: '' }
 })
 const api = createApi('/chat')
@@ -57,6 +57,9 @@ const archives = useHallConversationArchive({ api,
   identityScope: () => props.identityKey
 })
 const requestSnapshots = ref([])
+const catalogRequests = computed(() => Array.isArray(props.catalog) && props.catalog.length
+  ? props.catalog.map(entry => entry?.request).filter(Boolean)
+  : (props.request ? [props.request] : []))
 const scopedSteps = computed(() => requestSnapshots.value.flatMap(request => scopedExecutionSteps(request, props.conversationId)))
 const items = ref([]); const loading = ref(false); const error = ref('')
 const previewUrls = ref({}); const textPreviews = ref({}); const itemErrors = ref({})
@@ -79,7 +82,8 @@ watch(() => finalizeState.value.receipt, receipt => {
 }, { flush: 'sync' })
 let abort = null; let timer = null; let epoch = 0
 const inFlight = new Set()
-const validRootRequest = () => props.enabled && exactOutputId(props.request?.requestId) && props.request?.conversationId === props.conversationId
+const validRootRequest = () => props.enabled && catalogRequests.value.length > 0 && catalogRequests.value.every(request => exactOutputId(request?.requestId) && request.conversationId === props.conversationId)
+const currentWritable = item => item?.requestId === props.request?.requestId
 const sha256Blob = async blob => Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', await blob.arrayBuffer())), byte => byte.toString(16).padStart(2, '0')).join('')
 const patchMap = (target, key, value) => { target.value = { ...target.value, [key]: value } }
 const archiveState = item => {
@@ -106,7 +110,7 @@ const list = async () => {
   if (!validRootRequest() || abort) return
   const generation = epoch; const controller = new AbortController(); abort = controller; loading.value = true
   try {
-    const ids = [props.request.requestId]
+    const ids = [...new Set(catalogRequests.value.map(request => request.requestId))]
     const snapshots = []
     for (const id of ids) snapshots.push(await fetchRequest(id, controller))
     if (generation !== epoch || controller.signal.aborted) return
@@ -183,7 +187,7 @@ const finalizeSelected = async () => {
   } })
 }
 const editImage = item => {
-  if (!props.followupEnabled) return
+  if (!props.followupEnabled || !currentWritable(item)) return
   const content = editDrafts.value[outputItemKey(item)]?.trim()
   const asset = outputAssetPart(item)
   if (!content || !asset || !exactOutputId(item.requestId) || !exactOutputId(item.stepId)) return
@@ -192,12 +196,12 @@ const editImage = item => {
   emit('request-followup-edit', Object.freeze({ content, assetRef: Object.freeze({ assetId: asset.assetId, revision: asset.revision }),
     continuationOf: Object.freeze({ requestId: item.requestId, stepId: item.stepId }) }))
 }
-watch(() => `${props.enabled}\u0000${props.identityKey}\u0000${props.conversationId}\u0000${props.request?.requestId}`, () => {
+watch(() => `${props.enabled}\u0000${props.identityKey}\u0000${props.conversationId}\u0000${catalogRequests.value.map(request => request.requestId).join('\u0001')}`, () => {
   cleanup()
   if (validRootRequest()) {
     // Legacy schema-2 edit records remain untouched in session storage. They are not
     // replayed, converted or used to populate a schema-3 follow-up request.
-    requestSnapshots.value = [props.request]; void list()
+    requestSnapshots.value = catalogRequests.value; void list()
   }
 }, { immediate: true })
 // A new projection must refresh the list without discarding in-flight write intents.

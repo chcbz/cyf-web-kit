@@ -46,6 +46,7 @@
           :enabled="deliberationV2Enabled"
           :followup-enabled="followupExecuteEnabled"
           :request="activeRequest"
+          :catalog="requestCatalog"
           :conversation-id="conversationId"
           :identity-key="`${identityEpoch}\u0000${identityScope}`"
           :task-version="selectedTask?.taskVersion ?? selectedTask?.version"
@@ -67,6 +68,7 @@ import { bountyDeliberationPresentation } from '../../composables/juyiting/hallM
 
 const props = defineProps({
   activeRequest: { type: Object, default: null },
+  requestCatalog: { type: Array, default: () => [] },
   activeTurns: { type: Array, default: () => [] },
   agents: { type: Array, default: () => [] },
   capabilityState: { type: Object, default: null },
