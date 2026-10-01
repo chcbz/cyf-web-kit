@@ -10,11 +10,10 @@ const issued = operation => ({ schemaVersion: 2, consentId: 'consent_fixture', c
 const admitted = () => ({ schemaVersion: 3, requestId: 'request_fixture', userMessageId: 'message_fixture', stepId: 'step_fixture', executionIntentId: 'intent_fixture', consentId: 'consent_fixture', operationGrantId: 'opgrant_fixture', state: 'PLANNING', stateVersion: '0', eventCursor: 'cursor_fixture', statusUrl: '/chat/requests/request_fixture', replay: false })
 const response = data => ({ data: { data } })
 
-const lane = ({ api, enabled = true, current = context, state = {} } = {}) => {
+const lane = ({ api, enabled = true, current = context, state = {}, keys = { createFinalKey: () => 'final-key-0001', createIssueKey: () => 'issue-key-0001' } } = {}) => {
   const scope = ref('tenant\u0000client\u0000owner'); const auth = ref(1); const generation = ref(1); const selected = ref({ conversationId: current.conversationId, taskId: current.taskId, targetAgentId: current.targetAgentId })
   const followup = useHallBountyFollowup({ chatApi: api, actorScopeKey: scope, authorizationGeneration: auth,
-    getContext: () => selected.value, getContextGeneration: () => generation.value, storage: state.storage || storage(), enabled: () => enabled,
-    keys: { createFinalKey: () => 'final-key-0001', createIssueKey: () => 'issue-key-0001' } })
+    getContext: () => selected.value, getContextGeneration: () => generation.value, storage: state.storage || storage(), enabled: () => enabled, keys })
   return { followup, scope, auth, generation, selected, store: state.storage }
 }
 
@@ -58,6 +57,60 @@ describe('Hall F1 follow-up schema-3 route', () => {
     expect(followup.state.value.preview.providerBinding.bindingId).to.equal('binding/fixture:one')
     expect(followup.state.value.preview.modelId).to.equal('model/revision-1')
     followup.dispose()
+  })
+
+  it('counts 4,000 Unicode code points rather than UTF-16 units', async () => {
+    const calls = []
+    const api = { get: async () => response(context), create: async (path, body) => { calls.push([path, body]); return response(preview('GENERATE_IMAGE')) } }
+    const { followup } = lane({ api })
+    expect(await followup.prepareGenerate({ content: '🐦'.repeat(4000) })).to.equal(true)
+    expect(calls).to.have.length(1)
+    followup.invalidate()
+    expect(await followup.prepareGenerate({ content: '🐦'.repeat(4001) })).to.equal(false)
+    expect(calls).to.have.length(1)
+    followup.dispose()
+  })
+
+  it('rejects all ISO control characters before any preview POST', async () => {
+    for (const content of ['画\n一只鸟', '画\u0085一只鸟']) {
+      const calls = []
+      const api = { get: async () => response(context), create: async path => { calls.push(path); return response(preview('GENERATE_IMAGE')) } }
+      const { followup } = lane({ api })
+      expect(await followup.prepareGenerate({ content })).to.equal(false)
+      expect(calls).to.deep.equal([])
+      followup.dispose()
+    }
+  })
+
+  it('uses distinct secure getRandomValues keys and refuses to POST when secure entropy is absent', async () => {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, 'crypto')
+    const restore = () => { if (previous) Object.defineProperty(globalThis, 'crypto', previous); else delete globalThis.crypto }
+    try {
+      let sequence = 0
+      Object.defineProperty(globalThis, 'crypto', { configurable: true, value: { getRandomValues: bytes => {
+        bytes.fill(sequence++)
+        return bytes
+      } } })
+      const writes = []
+      const api = { get: async () => response(context), create: async (path, _body, options) => { writes.push([path, options.headers['Idempotency-Key']]); return response(preview('GENERATE_IMAGE')) } }
+      const { followup } = lane({ api, keys: {} })
+      expect(await followup.prepareGenerate({ content: '第一只鸟' })).to.equal(true)
+      followup.invalidate()
+      expect(await followup.prepareGenerate({ content: '第二只鸟' })).to.equal(true)
+      expect(writes.map(([, value]) => value)).to.have.length(2)
+      expect(writes[0][1]).to.match(/^mmd-followup-final-[0-9a-f]{32}$/)
+      expect(writes[0][1]).to.not.equal(writes[1][1])
+      followup.dispose()
+
+      Object.defineProperty(globalThis, 'crypto', { configurable: true, value: undefined })
+      const zeroWrites = []
+      const zeroApi = { get: async () => response(context), create: async path => { zeroWrites.push(path); return response(preview('GENERATE_IMAGE')) } }
+      const zero = lane({ api: zeroApi, keys: {} }).followup
+      expect(await zero.prepareGenerate({ content: '没有安全熵' })).to.equal(false)
+      expect(await zero.prepareGenerate({ content: '仍然没有安全熵' })).to.equal(false)
+      expect(zeroWrites).to.deep.equal([])
+      zero.dispose()
+    } finally { restore() }
   })
 
   it('forms EDIT only with nested assetRef and exact producer request/step', async () => {

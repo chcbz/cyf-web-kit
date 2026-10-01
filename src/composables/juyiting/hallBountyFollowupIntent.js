@@ -20,13 +20,18 @@ const inputRef = value => {
   return value.kind === 'TASK_LINKED_WORKSPACE_VERSION' && exactKeys(value, ['kind', 'fileId', 'version', 'purpose']) &&
     followupId(value.fileId) && followupLong(value.version) && value.purpose === 'REFERENCE'
 }
+// Frozen wire rejects ISO C0/C1 controls, including LF and U+0085.
+// eslint-disable-next-line no-control-regex
+const isoControl = value => /[\u0000-\u001F\u007F-\u009F]/u.test(value)
+const validContent = value => typeof value === 'string' && value.trim() === value && value.length > 0 &&
+  Array.from(value).length <= 4000 && !isoControl(value)
 const intent = value => exactKeys(value, ['schemaVersion', 'interactionKind', 'taskId', 'expectedConversationGeneration',
   'expectedTaskVersion', 'expectedAssignmentRevision', 'expectedGrantVersion', 'requirementRevision', 'targetAgentId',
   'content', 'actionProposal', 'inputRefs', 'replyTo', 'continuationOf']) && value.schemaVersion === 3 &&
   value.interactionKind === 'EXECUTE' && followupId(value.taskId) && followupLong(value.expectedConversationGeneration) &&
   followupLong(value.expectedTaskVersion, true) && followupLong(value.expectedAssignmentRevision, true) &&
   followupLong(value.expectedGrantVersion) && followupLong(value.requirementRevision) && followupId(value.targetAgentId) &&
-  typeof value.content === 'string' && value.content.trim() === value.content && value.content.length > 0 && value.content.length <= 4000 &&
+  validContent(value.content) &&
   exactKeys(value.actionProposal, ['kind']) && ['generate_image', 'edit_image'].includes(value.actionProposal.kind) &&
   Array.isArray(value.inputRefs) && value.inputRefs.length <= 16 && value.inputRefs.every(inputRef) && value.replyTo === null && continuation(value.continuationOf) &&
   (value.actionProposal.kind === 'generate_image'
@@ -40,7 +45,7 @@ export const buildFollowupIntent = ({ context, content, kind, inputRefs, continu
   const body = { schemaVersion: 3, interactionKind: 'EXECUTE', taskId: context.taskId,
     expectedConversationGeneration: context.conversationGeneration, expectedTaskVersion: context.taskVersion,
     expectedAssignmentRevision: context.assignmentRevision, expectedGrantVersion: context.baselineGrantVersion,
-    requirementRevision: context.requirementRevision, targetAgentId: context.targetAgentId, content: String(content || '').trim(),
+    requirementRevision: context.requirementRevision, targetAgentId: context.targetAgentId, content: typeof content === 'string' && !isoControl(content) ? content.trim() : '',
     actionProposal: { kind }, inputRefs: clone(inputRefs || []), replyTo: null, continuationOf: continuationOf == null ? null : clone(continuationOf) }
   return intent(body) ? Object.freeze(body) : null
 }

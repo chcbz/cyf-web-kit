@@ -121,7 +121,22 @@ export const useHallBountyFollowup = ({ chatApi, actorScopeKey, authorizationGen
     if (!contextProjection(value) || !stableContext(value, captured)) throw new Error('当前悬赏办理上下文未能权威核对')
     return Object.freeze(clone(value))
   }
-  const makeKey = (factory, prefix) => typeof factory === 'function' ? factory() : `${prefix}-${globalThis.crypto?.randomUUID?.() || ''}`
+  const secureKey = prefix => {
+    const crypto = globalThis.crypto
+    try {
+      if (typeof crypto?.randomUUID === 'function') {
+        const uuid = crypto.randomUUID()
+        return typeof uuid === 'string' ? `${prefix}-${uuid}` : ''
+      }
+      if (typeof crypto?.getRandomValues === 'function') {
+        const bytes = new Uint8Array(16)
+        crypto.getRandomValues(bytes)
+        return `${prefix}-${Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')}`
+      }
+    } catch { /* Secure browser entropy is unavailable; do not emit a request. */ }
+    return ''
+  }
+  const makeKey = (factory, prefix) => typeof factory === 'function' ? factory() : secureKey(prefix)
   const prepare = ({ kind, content, inputRefs, continuationOf }) => run(async captured => {
     const projection = await context(captured)
     if (!projection || !current(captured)) return false
