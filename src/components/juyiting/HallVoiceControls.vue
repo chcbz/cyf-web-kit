@@ -37,6 +37,7 @@
       <p>{{ voice.transcript || voice.error }}</p>
       <button v-if="voice.transcript && voice.detached" type="button" @click="voice.adoptCurrentContext()">按当前议事采用</button>
       <div v-if="voice.transcript && !voice.detached">
+        <button type="button" aria-label="确认发送语音转写" @click="voice.sendTranscript()">确认发送</button>
         <button type="button" @click="$emit('apply', 'append')">追加</button>
         <button type="button" @click="$emit('apply', 'replace')">替换</button>
       </div>
