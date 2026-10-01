@@ -279,7 +279,7 @@ const createActualHallVoiceMocks = ({
     useHallSceneDebugBridge: () => ({ republish: noop, stop: noop }),
     useHallSound: () => ({ playAgentSelect: noop, playError: noop, playPanelOpen: noop, playRefresh: noop, playSend: noop, playSuccess: noop, playTap: noop, setSoundEnabled: noop, setSoundSuppressed: noop, soundEnabled: Vue.ref(false) }),
     useHallChatContext: () => ({
-      chatContext: Vue.ref(validContext()), chatMentionAgentIds: list, chatMentionAgents: agentList, chatMode: Vue.ref('public'), chatTargetText: Vue.ref('众好汉'),
+      chatContext: Vue.ref(validContext()), conversationAgent: Vue.ref(selectedAgentFixture), conversationTask: Vue.ref(null), chatMentionAgentIds: list, chatMentionAgents: agentList, chatMode: Vue.ref('public'), chatTargetText: Vue.ref('众好汉'),
       enterBountyDiscussion: noop, enterPrivateConversation: noop, resetToPublic: noop, setMentionAgent: noop
     }),
     useHallScene: () => ({ markAgentSpeaking: noop, markDiscussionStarted: noop, markLibraryCitation: noop, markLibrarySearching: noop, markRecommendedAgents: noop, markTaskArchived: noop, markTaskAssigned: noop, markTaskAutoAssigned: noop, markTaskCreated: noop, resetSceneFeedback: noop, sceneAgents: agentList, sceneAgentStyle: () => ({}), sceneHotspots: list, syncAfterPersonaChanged: noop }),
@@ -293,6 +293,10 @@ const createActualHallVoiceMocks = ({
     loadNativeBountyCapability: async () => null, capabilityAllowsNewStart: () => false, capabilityAllowsOriginalReplay: () => false, pointAndStartIntentReadLane: () => 'ABSENT',
     useHallPointAndStartControlledBridge: () => ({ state: Vue.ref({ status: 'IDLE', intent: null }), busy: Vue.ref(false), selectContext: () => true, start: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, dispose: noop, invalidate: noop }),
     useHallPointAndStart: () => ({ state: Vue.ref({ status: 'IDLE', intent: null }), busy: Vue.ref(false), start: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, observeOriginal: async () => false, stopObservation: noop, dispose: noop }),
+    useHallBountyRequestCatalog: () => ({ entries: Vue.ref([]), error: text, loading: Vue.ref(false), hint: noop, refresh: async () => false, reset: noop }),
+    useHallBountyFollowup: () => ({ state: Vue.ref({ status: 'IDLE' }), busy: Vue.ref(false), prepareGenerate: async () => false, prepareEdit: async () => false, confirm: async () => false, checkOriginal: async () => false, invalidate: noop, dispose: noop }),
+    useHallTypedDeliberation: () => ({ projections: Vue.ref([]), cards: Vue.ref([]), selectedPending: Vue.ref(null), error: text, busy: Vue.ref(false), recoveryAvailable: Vue.ref(false), refresh: async () => false, readOne: async () => null, submit: async () => false, recover: async () => false, resumeUnknown: async () => false, choosePending: () => false, confirmProposal: async () => false, invalidate: noop, dispose: noop }),
+    typedLong: value => typeof value === 'string' ? value : '',
     useHallConversation: options => {
       conversationRef.value = useHallConversation(options)
       return conversationRef.value

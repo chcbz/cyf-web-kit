@@ -18,6 +18,7 @@ import {
   bountyBootstrapReference, sameBountyBootstrapReference, bountyBootstrapContextMatches,
   validateBountyBootstrapRequest, bootstrapReadbackIsCurrent
 } from './hallBountyBootstrap.js'
+import { typedId } from './hallTypedDeliberation.js'
 import {
   cancellationTarget,
   deliberationBusy,
@@ -1436,14 +1437,56 @@ export const useHallConversation = ({
     return true
   }
 
+  // Typed receipt adoption has a narrower authority contract than the legacy request reducer.
+  // Validate the admitted receipt and its exact one-turn request before touching shared state.
+  const typedAcceptedReceipt = (receipt, context) => {
+    const fields = ['schemaVersion', 'intent', 'requestId', 'userMessageId', 'turnIds', 'state', 'stateVersion', 'eventCursor', 'statusUrl', 'typedOutcomeUrl', 'replay', 'pendingQuestionId']
+    if (!receipt || Array.isArray(receipt) || typeof receipt !== 'object' || Object.keys(receipt).length !== fields.length ||
+        Object.keys(receipt).some(key => !fields.includes(key)) || receipt.schemaVersion !== 1 ||
+        !['DISCUSSION', 'CLARIFICATION_REPLY'].includes(receipt.intent) || !typedId(receipt.requestId) ||
+        !canonicalWireString(receipt.userMessageId) || !Array.isArray(receipt.turnIds) || receipt.turnIds.length !== 1 ||
+        !typedId(receipt.turnIds[0]) || receipt.state !== 'ADMITTED' ||
+        !canonicalWireString(receipt.stateVersion, { allowZero: true }) || !canonicalWireString(receipt.eventCursor, { allowZero: true }) ||
+        receipt.statusUrl !== `/chat/requests/${receipt.requestId}` ||
+        receipt.typedOutcomeUrl !== `/chat/conversations/${context.conversationId}/requests/${receipt.requestId}/typed-outcome` ||
+        typeof receipt.replay !== 'boolean') return null
+    if ((receipt.intent === 'CLARIFICATION_REPLY' && !typedId(receipt.pendingQuestionId)) ||
+        (receipt.intent === 'DISCUSSION' && receipt.pendingQuestionId !== null)) return null
+    return receipt
+  }
+
+  const typedAdmittedRequest = (value, receipt, context) => {
+    if (!value || Array.isArray(value) || typeof value !== 'object' || value.requestId !== receipt.requestId ||
+        !canonicalWireString(value.requestRevision) || !canonicalWireString(value.stateVersion, { allowZero: true }) ||
+        typeof value.conversationId !== 'string' || exactRuntimeId(value.conversationId) !== context.conversationId ||
+        canonicalWireString(value.conversationGeneration) !== context.conversationGeneration ||
+        canonicalWireString(value.userMessageId) !== receipt.userMessageId || value.state !== receipt.state ||
+        canonicalWireString(value.stateVersion, { allowZero: true }) !== receipt.stateVersion ||
+        !Array.isArray(value.turns) || value.turns.length !== 1) return null
+    const turn = value.turns[0]
+    if (!turn || Array.isArray(turn) || typeof turn !== 'object' || turn.turnId !== receipt.turnIds[0] ||
+        turn.requestId !== value.requestId || canonicalWireString(turn.requestRevision) !== canonicalWireString(value.requestRevision) ||
+        typeof turn.conversationId !== 'string' || exactRuntimeId(turn.conversationId) !== value.conversationId ||
+        canonicalWireString(turn.conversationGeneration) !== value.conversationGeneration ||
+        typedId(turn.targetAgentId) !== context.targetAgentId || typeof turn.state !== 'string' || !turn.state ||
+        !canonicalWireString(turn.stateVersion, { allowZero: true }) || !canonicalWireString(turn.lastDeltaSeq, { allowZero: true }) ||
+        (turn.finalMessageId !== null && (typeof turn.finalMessageId !== 'string' || exactRuntimeId(turn.finalMessageId) === ''))) return null
+    return value
+  }
+
   // Typed discussion is already durably admitted. Re-read its authoritative request and the
   // same scoped conversation; never synthesize a user message or send a second POST.
   const adoptTypedDiscussionReceipt = async ({ receipt, context, isCurrent = () => true } = {}) => {
-    const requestId = typeof receipt?.requestId === 'string' && receipt.requestId === receipt.requestId.trim() ? receipt.requestId : ''
-    const expectedConversationId = exactRuntimeId(context?.conversationId)
-    const expectedTaskId = typeof context?.taskId === 'string' ? context.taskId : ''
-    const expectedTargetAgentId = typeof context?.targetAgentId === 'string' ? context.targetAgentId : ''
-    if (disposed || !requestId || !expectedConversationId || !expectedTaskId || !expectedTargetAgentId ||
+    const expectedConversationId = typeof context?.conversationId === 'string' ? exactRuntimeId(context.conversationId) : ''
+    const expectedTaskId = typedId(context?.taskId)
+    const expectedTargetAgentId = typedId(context?.targetAgentId)
+    const expectedGeneration = canonicalWireString(context?.conversationGeneration)
+    const expectedAssignmentRevision = canonicalWireString(context?.assignmentRevision, { allowZero: true })
+    const typedContext = expectedConversationId && expectedTaskId && expectedTargetAgentId && expectedGeneration && expectedAssignmentRevision
+      ? { conversationId: expectedConversationId, conversationGeneration: expectedGeneration, taskId: expectedTaskId, targetAgentId: expectedTargetAgentId } : null
+    const acceptedReceipt = typedContext ? typedAcceptedReceipt(receipt, typedContext) : null
+    const requestId = acceptedReceipt?.requestId || ''
+    if (disposed || !acceptedReceipt || !requestId ||
         conversationId.value !== expectedConversationId || selectedTask.value?.id !== expectedTaskId || selectedAgent.value?.agentId !== expectedTargetAgentId) return false
     const guard = captureGuard()
     const current = () => guardCurrent(guard) && isCurrent?.() && conversationId.value === expectedConversationId &&
@@ -1453,8 +1496,8 @@ export const useHallConversation = ({
         autoLoading: false, signal: lifecycleController.signal
       })
       if (!current()) return false
-      const requestView = apiData(response)
-      if (requestView?.requestId !== requestId || exactRuntimeId(requestView?.conversationId) !== expectedConversationId) return false
+      const requestView = typedAdmittedRequest(apiData(response), acceptedReceipt, typedContext)
+      if (!requestView) return false
       const loadGeneration = invalidateConversationLoads()
       if (!applyRequestView(requestView, requestId) || !current()) return false
       selectedHallConversationId.value = expectedConversationId

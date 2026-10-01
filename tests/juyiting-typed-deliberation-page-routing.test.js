@@ -21,6 +21,8 @@ const option = (callee, name) => {
   if (!property) throw new Error(`missing ${callee}.${name}`)
   return script.slice(property.value.start, property.value.end)
 }
+const typedReceipt = (requestId = 'request-typed-1', turnId = 'turn-typed-1') => ({ schemaVersion: 1, intent: 'DISCUSSION', requestId, userMessageId: '100', turnIds: [turnId], state: 'ADMITTED', stateVersion: '0', eventCursor: '1', statusUrl: `/chat/requests/${requestId}`, typedOutcomeUrl: `/chat/conversations/7/requests/${requestId}/typed-outcome`, replay: false, pendingQuestionId: null })
+const typedRequest = (requestId = 'request-typed-1', turnId = 'turn-typed-1') => ({ requestId, requestRevision: '1', stateVersion: '0', conversationId: '7', conversationGeneration: '1', userMessageId: '100', state: 'ADMITTED', turns: [{ turnId, requestId, requestRevision: '1', stateVersion: '0', conversationId: '7', conversationGeneration: '1', targetAgentId: 'agent-1', state: 'WAITING', lastDeltaSeq: '0', finalMessageId: null }] })
 describe('actual JuyiHall typed natural follow-up routing', () => {
   it('routes the one bounty composer through typed DISCUSSION only when the strict default-off flag is enabled', async () => {
     const enabled = ref(true); const draft = ref('画一只鸟'); const calls = []; const typed = { error: ref(''), submit: async body => { calls.push(['typed', body]); return true } }
@@ -81,7 +83,7 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
   it('uses the actual page accepted callback to adopt the authoritative typed request and same scoped transcript without another POST', async () => {
     const calls = []; const chatContext = ref({ conversationScopeType: 'bounty', conversationScopeKey: 'task-1', mode: 'bounty', targetAgentIds: ['agent-1'], targetAgentId: 'agent-1', taskId: 'task-1' })
     const selectedTask = ref({ id: 'task-1' }); const selectedAgent = ref({ agentId: 'agent-1', name: '吴用' })
-    const requestView = { requestId: 'request-typed-1', requestRevision: '1', stateVersion: '0', conversationId: '7', state: 'ADMITTED', turns: [{ turnId: 'turn-typed-1', requestId: 'request-typed-1', state: 'WAITING', stateVersion: '0', lastDeltaSeq: '0', requestRevision: '1', conversationId: '7', finalMessageId: null }] }
+    const requestView = typedRequest()
     const conversation = useHallConversation({ apiStore: { authorizationGeneration: 1, token: async () => null }, chatContext, chatMode: ref('bounty'),
       chatApi: { list: async (_path, _body, options) => { calls.push('LIST'); options.onSuccess({ data: [{ id: '7', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task-1' }] }) },
         getById: async (_path, id, options) => { calls.push(`CONTENT:${id}`); options.onSuccess({ data: [{ id: 'message-user-1', senderType: 'user', content: '请画一只鸟' }] }) },
@@ -91,7 +93,7 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
     try {
       expect(await conversation.loadHallMessages()).to.equal(true)
       const pageAccepted = new Function('adoptTypedDiscussionReceipt', 'bountyRequestCatalog', 'showToast', `return (${option('useHallTypedDeliberation', 'onAccepted')})`)(conversation.adoptTypedDiscussionReceipt, { hint: () => calls.push('HINT') }, text => calls.push(`TOAST:${text}`))
-      expect(await pageAccepted({ receipt: { requestId: 'request-typed-1', intent: 'DISCUSSION' }, context: { conversationId: '7', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4', conversationGeneration: '1' }, isCurrent: () => true })).to.equal(true)
+      expect(await pageAccepted({ receipt: typedReceipt(), context: { conversationId: '7', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4', conversationGeneration: '1' }, isCurrent: () => true })).to.equal(true)
       expect(conversation.activeRequest.value?.requestId).to.equal('request-typed-1')
       expect(conversation.messages.value.map(message => message.localId)).to.deep.equal(['message-user-1'])
       expect(calls.filter(call => call === 'POST')).to.deep.equal([])
@@ -111,13 +113,37 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       globalStore: { getJiacn: 'owner', user: {} }, log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}), portraitShortName: agent => agent?.name || '', selectedAgent, selectedTask, showToast: () => {} })
     try {
       expect(await conversation.loadHallMessages()).to.equal(true)
-      const pending = conversation.adoptTypedDiscussionReceipt({ receipt: { requestId: 'request-typed-late' }, context: { conversationId: '7', taskId: 'task-1', targetAgentId: 'agent-1' }, isCurrent: () => true })
+      const pending = conversation.adoptTypedDiscussionReceipt({ receipt: typedReceipt('request-typed-late', 'turn-typed-late'), context: { conversationId: '7', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4', conversationGeneration: '1' }, isCurrent: () => true })
       selectedAgent.value = { agentId: 'agent-2', name: '公孙胜' }
-      resolveRequest({ data: { data: { requestId: 'request-typed-late', requestRevision: '1', stateVersion: '0', conversationId: '7', state: 'ADMITTED', turns: [] } } })
+      resolveRequest({ data: { data: typedRequest('request-typed-late', 'turn-typed-late') } })
       expect(await pending).to.equal(false)
       expect(conversation.activeRequest.value).to.equal(null)
       expect(contentReads).to.equal(1); expect(posts).to.equal(0)
     } finally { conversation.disposeHallConversation() }
+  })
+  it('rejects every mismatched typed receipt readback before state or transcript adoption', async () => {
+    const mutations = [
+      view => { view.userMessageId = '999' },
+      view => { view.turns[0].turnId = 'foreign-turn' },
+      view => { view.conversationGeneration = '2'; view.turns[0].conversationGeneration = '2' },
+      view => { view.turns[0].targetAgentId = 'agent-foreign' },
+      view => { view.turns[0].conversationId = '77' },
+      view => { delete view.requestRevision }
+    ]
+    for (const mutate of mutations) {
+      let contentReads = 0; let posts = 0; const requestView = typedRequest(); mutate(requestView)
+      const chatContext = ref({ conversationScopeType: 'bounty', conversationScopeKey: 'task-1', mode: 'bounty', targetAgentIds: ['agent-1'], targetAgentId: 'agent-1', taskId: 'task-1' })
+      const conversation = useHallConversation({ apiStore: { authorizationGeneration: 1, token: async () => null }, chatContext, chatMode: ref('bounty'),
+        chatApi: { list: async (_path, _body, options) => options.onSuccess({ data: [{ id: '7', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task-1' }] }),
+          getById: async (_path, _id, options) => { contentReads++; options.onSuccess({ data: [] }) }, get: async () => ({ data: { data: requestView } }), create: async () => { posts++; throw new Error('unexpected') } },
+        globalStore: { getJiacn: 'owner', user: {} }, log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}), portraitShortName: agent => agent?.name || '', selectedAgent: ref({ agentId: 'agent-1', name: '吴用' }), selectedTask: ref({ id: 'task-1' }), showToast: () => {} })
+      try {
+        expect(await conversation.loadHallMessages()).to.equal(true)
+        contentReads = 0
+        expect(await conversation.adoptTypedDiscussionReceipt({ receipt: typedReceipt(), context: { conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' } })).to.equal(false)
+        expect(conversation.activeRequest.value).to.equal(null); expect(contentReads).to.equal(0); expect(posts).to.equal(0)
+      } finally { conversation.disposeHallConversation() }
+    }
   })
   it('binds a real durable final event only to authoritative typed GET readback', async () => {
     const calls = []
