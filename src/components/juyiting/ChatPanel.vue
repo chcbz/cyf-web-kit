@@ -101,6 +101,7 @@
           <article v-for="link in activeMaterialLinks" :key="link.relationId" class="task-material-reference">
             <div><strong>{{ materialName(link) }}</strong><small>v{{ link.version }} · {{ link.role === 'INPUT' ? '用于办理' : '参考资料' }}</small></div>
             <p>{{ link.role === 'INPUT' ? '议事时 Agent 会收到这份资料的标识、固定版本和用途；明确开始办理并勾选后，才会获得文件读取授权。' : '议事时 Agent 会收到这份资料的标识、固定版本和用途；明确开始办理并勾选后，才会获得文件读取授权。' }}</p>
+            <label v-if="typedEnabled && link.role === 'REFERENCE'" class="typed-source-selector"><input type="checkbox" :checked="typedSelectedSourceIds.has(`${link.fileId}\u0000${link.version}`)" @change="toggleTypedSource(link, $event.target.checked)" /> 将此固定版本作为本轮可用参考</label>
           </article>
           <p class="material-reference-notice">议事转发只携带任务资料标识、固定版本和用途，不携带文件内容、下载地址或伪造摘要；明确开始办理并勾选后，才通过正式执行 input manifest 授予读取。</p>
         </div>
@@ -165,6 +166,13 @@
           :identity-key="materialIdentityKey"
           :identity-scope="identityScope"
         />
+        <BountyTypedOutcomeCard
+          v-for="projection in typedForMessage(message)"
+          :key="projection.key"
+          :projection="projection"
+          @reply="$emit('typed-reply', $event)"
+          @confirm-proposal="$emit('typed-confirm-proposal', $event)"
+        />
         <small v-if="message.statusText" class="message-status">{{ message.statusText }}</small>
       </div>
       <slot name="bounty-results" />
@@ -190,11 +198,12 @@
       :placeholder="placeholder"
       :selected-agent="selectedAgent"
       :target-text="targetText"
+      :typed-pending-question="typedPendingQuestion"
       :voice="voice"
       @clear-target="$emit('clear-target', $event)"
       @execute-followup="$emit('execute-followup')"
       @mention-agent="$emit('mention-agent', $event)"
-      @send-message="$emit('send-message')"
+      @send-message="$emit('send-message', typedEnabled && discussionVariant === 'bounty' ? { sourceSelectors: typedSourceSelectors } : undefined)"
       @update:draft="$emit('update:draft', $event)"
       @voice-apply="$emit('voice-apply', $event)"
     />
@@ -209,6 +218,7 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import HallChatComposer from './HallChatComposer.vue'
 import HallConversationHistory from './HallConversationHistory.vue'
+import BountyTypedOutcomeCard from './BountyTypedOutcomeCard.vue'
 import { usePersonalWorkspace } from '../../composables/usePersonalWorkspace.js'
 import { usePersonalWorkspaceConversationLinks } from '../../composables/usePersonalWorkspaceConversationLinks.js'
 import { usePersonalWorkspaceTaskLinks } from '../../composables/usePersonalWorkspaceTaskLinks.js'
@@ -254,7 +264,10 @@ const props = defineProps({
   subtitle: { type: String, default: '' },
   title: { type: String, default: '议事' },
   targetText: { type: String, default: '众好汉' },
-  voice: { type: Object, default: null }
+  voice: { type: Object, default: null },
+  typedOutcomes: { type: Array, default: () => [] },
+  typedPendingQuestion: { type: Object, default: null },
+  typedEnabled: { type: Boolean, default: false }
 })
 
 const emit = defineEmits([
@@ -273,7 +286,9 @@ const emit = defineEmits([
   'select-conversation',
   'send-message',
   'update:draft',
-  'voice-apply'
+  'voice-apply',
+  'typed-reply',
+  'typed-confirm-proposal'
 ])
 
 const messageBoxRef = ref(null)
@@ -282,6 +297,9 @@ const materialPickerOpen = ref(false)
 const pendingAuthor = '聚义厅'
 const materialIdentityKey = computed(() => `${props.identityEpoch}\u0000${props.identityScope}`)
 const taskId = computed(() => String(props.selectedTask?.id || '').trim())
+const typedForMessage = message => props.typedOutcomes.filter(projection =>
+  projection?.outcome?.assistantMessageId === String(message?.localId || ''))
+
 const isTaskDiscussion = computed(() => props.discussionVariant === 'bounty')
 const workspace = usePersonalWorkspace({ identityEpoch: materialIdentityKey })
 const conversationMaterialLinks = usePersonalWorkspaceConversationLinks({
@@ -293,6 +311,7 @@ const taskMaterialLinks = usePersonalWorkspaceTaskLinks({
   identityEpoch: materialIdentityKey
 })
 const materialNames = ref({})
+const typedSelectedSourceIds = ref(new Set())
 const hasMaterialScope = computed(() => isTaskDiscussion.value ? Boolean(taskId.value) : Boolean(props.conversationId))
 const selectedMaterialDirectory = computed(() => isTaskDiscussion.value ? taskMaterialLinks : conversationMaterialLinks)
 const materialLoading = computed(() => workspace.loading.value || selectedMaterialDirectory.value.loading.value)
@@ -303,6 +322,13 @@ const activeMaterialLinks = computed(() => selectedMaterialDirectory.value.links
 const linkedFileIds = computed(() => new Set(activeMaterialLinks.value.map(link => `${link.fileId}:${link.version}`)))
 const linkFor = file => activeMaterialLinks.value.find(link => link.fileId === file.fileId && link.version === file.latestVersion)
 const materialName = link => materialNames.value[link.fileId] || workspace.items.value.find(file => file.fileId === link.fileId)?.displayName || `资料 ${link.fileId}`
+const typedSourceSelectors = computed(() => activeMaterialLinks.value.filter(link => typedSelectedSourceIds.value.has(`${link.fileId}\u0000${link.version}`) && link.role === 'REFERENCE').map(link => ({ kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: link.fileId, version: String(link.version), purpose: 'REFERENCE', assetId: null, assetRevision: null })))
+const toggleTypedSource = (link, selected) => {
+  if (!props.typedEnabled || !link || link.role !== 'REFERENCE') return
+  const next = new Set(typedSelectedSourceIds.value); const key = `${link.fileId}\u0000${link.version}`
+  if (selected) next.add(key); else next.delete(key)
+  typedSelectedSourceIds.value = next
+}
 const resolveMaterialNames = async operationKey => {
   for (const link of activeMaterialLinks.value) {
     if (materialNames.value[link.fileId] || workspace.items.value.some(file => file.fileId === link.fileId)) continue
@@ -367,6 +393,7 @@ watch(() => props.messages, () => {
 watch(() => `${materialIdentityKey.value}\u0000${taskId.value}\u0000${props.conversationId}`, () => {
   materialPickerOpen.value = false
   materialNames.value = {}
+  typedSelectedSourceIds.value = new Set()
 }, { flush: 'sync' })
 onBeforeUnmount(() => {
   workspace.dispose()

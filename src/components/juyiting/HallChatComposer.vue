@@ -33,6 +33,7 @@
         @input="handleInput"
         @keydown="handleKeydown"
       ></textarea>
+      <p v-if="typedPendingQuestion" class="typed-pending-question">正在回答：{{ typedPendingQuestion.question }}</p>
       <div class="composer-actions">
         <button
           v-if="canClear"
@@ -106,7 +107,8 @@ const props = defineProps({
   selectedAgent: { type: Object, default: null },
   targetText: { type: String, default: '众好汉' },
   maxLength: { type: Number, default: 1200 },
-  voice: { type: Object, default: null }
+  voice: { type: Object, default: null },
+  typedPendingQuestion: { type: Object, default: null }
 })
 
 const emit = defineEmits([
@@ -345,6 +347,8 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
   border-color: #7f4a22;
   box-shadow: 0 0 0 2px rgba(127, 74, 34, 0.12);
 }
+
+.typed-pending-question { grid-column: 1 / -1; margin: 0 0 4px; color: #466c5a; font-size: 12px; }
 
 .composer-actions {
   display: flex;

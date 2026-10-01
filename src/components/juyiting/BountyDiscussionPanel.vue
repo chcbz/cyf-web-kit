@@ -8,6 +8,7 @@
       </div>
     </div>
     <BountyDeliberationStatus :presentation="v2Presentation" />
+    <button v-if="typedRecoveryAvailable" type="button" class="typed-recovery" @click="$emit('typed-resume')">按原键继续未确认议事</button>
     <BountyFollowupConsentPanel
       :enabled="followupExecuteEnabled"
       :state="followupState"
@@ -24,6 +25,9 @@
       title="榜文议事"
       :voice="voice"
       :execute-enabled="followupExecuteEnabled"
+      :typed-outcomes="typedOutcomes"
+      :typed-pending-question="typedPendingQuestion"
+      :typed-enabled="typedEnabled"
       v-bind="chatProps"
       @cancel-deliberation="$emit('cancel-deliberation', $event)"
       @cancel-legacy-transport="$emit('cancel-legacy-transport')"
@@ -40,6 +44,8 @@
       @select-conversation="$emit('select-conversation', $event)"
       @send-message="$emit('send-message')"
       @voice-apply="$emit('voice-apply', $event)"
+      @typed-reply="$emit('typed-reply', $event)"
+      @typed-confirm-proposal="$emit('typed-confirm-proposal', $event)"
     >
       <template #bounty-results>
         <BountyExecutionOutputs
@@ -85,6 +91,10 @@ const props = defineProps({
   followupExecuteEnabled: { type: Boolean, default: false },
   followupState: { type: Object, default: () => ({ status: 'IDLE' }) },
   followupBusy: { type: Boolean, default: false },
+  typedOutcomes: { type: Array, default: () => [] },
+  typedPendingQuestion: { type: Object, default: null },
+  typedEnabled: { type: Boolean, default: false },
+  typedRecoveryAvailable: { type: Boolean, default: false },
   durableCancelTarget: { type: Object, default: null },
   legacyCancelAvailable: { type: Boolean, default: false },
   conversationId: { type: String, default: '' },
@@ -125,7 +135,10 @@ const emit = defineEmits([
   'send-message',
   'task-completed',
   'update:draft',
-  'voice-apply'
+  'voice-apply',
+  'typed-reply',
+  'typed-confirm-proposal',
+  'typed-resume'
 ])
 
 const draftProxy = computed({
@@ -178,6 +191,8 @@ const chatProps = computed(() => ({
 </script>
 
 <style scoped>
+.typed-recovery { align-self: flex-end; margin: 6px 12px 0; border: 1px solid #6b8d7e; border-radius: 5px; padding: 5px 8px; color: #294c3d; background: #fff; }
+
 .discussion-panel {
   display: flex;
   flex: 1;

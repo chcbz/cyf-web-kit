@@ -569,6 +569,10 @@
             :followup-execute-enabled="followupExecuteEnabled"
             :followup-state="followupState"
             :followup-busy="followupBusy"
+            :typed-outcomes="typedDeliberation.cards"
+            :typed-pending-question="typedDeliberation.selectedPending"
+            :typed-enabled="typedDeliberationEnabled"
+            :typed-recovery-available="typedDeliberation.recoveryAvailable"
             :draft="draft"
             :voice="hallVoice"
             @update:draft="setDraft"
@@ -607,6 +611,9 @@
             @confirm-followup="confirmFollowup"
             @check-followup-original="checkFollowupOriginal"
             @request-followup-edit="handleFollowupEdit"
+            @typed-reply="handleTypedReply"
+            @typed-confirm-proposal="handleTypedProposal"
+            @typed-resume="handleTypedResume"
             @load-history="loadHallConversationHistory({ force: true })"
             @load-more-history="loadMoreHallConversationHistory"
             @load-messages="retryHallConversation"
@@ -738,6 +745,8 @@ import { capabilityOffersControlledImageConsent, createControlledImageCapability
 import { useHallPointAndStartControlledBridge } from '@/composables/juyiting/useHallPointAndStartControlledBridge'
 import { useHallBountyFollowup } from '@/composables/juyiting/useHallBountyFollowup'
 import { useHallBountyRequestCatalog } from '@/composables/juyiting/useHallBountyRequestCatalog'
+import { useHallTypedDeliberation } from '@/composables/juyiting/useHallTypedDeliberation'
+import { typedLong } from '@/composables/juyiting/hallTypedDeliberation'
 import { capabilityAllowsNewStart, capabilityAllowsOriginalReplay, createNativeCapabilityObservationFence, loadNativeBountyCapability, pointAndStartIntentReadLane } from '@/composables/juyiting/hallNativeBountyCapability'
 import { useHallQuickMatter } from '@/composables/juyiting/useHallQuickMatter'
 import { useTaskWorkspace } from '@/composables/juyiting/useTaskWorkspace'
@@ -802,6 +811,7 @@ const workItemPlanEnabled = import.meta.env.VITE_JUYITING_WORK_ITEM_PLAN_ENABLED
 const multimediaDeliberationUiEnabled = isMultimediaDeliberationUiEnabled(import.meta.env.VITE_JUYITING_MULTIMEDIA_DELIBERATION_V2_UI)
 // Separate default-off F1 surface; a v2 presentation flag never advertises a v3 owner path by itself.
 const followupExecuteBuildEnabled = import.meta.env.VITE_JUYITING_FOLLOWUP_EXECUTE_V3_UI === 'true'
+const typedDeliberationBuildEnabled = import.meta.env.VITE_JUYITING_TYPED_DELIBERATION_UI === 'true'
 const economyPreviewCapability = ref(null)
 const economyPreviewChecked = ref(false)
 const economyPreviewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
@@ -2085,11 +2095,13 @@ const {
   onDelivery: ({ agentId }) => {
     if (agentId) markAgentSpeaking(agentId, '收到传令', 'system')
   },
-  onRequestCatalogHint: event => notifyBountyRequestCatalog(event)
+  onRequestCatalogHint: event => notifyBountyRequestCatalog(event),
+  onTypedOutcome: event => { if (event?.requestId) void typedDeliberation?.readOne?.(event.requestId) }
 })
 
 const followupContextGeneration = ref(0)
 const followupExecuteEnabled = computed(() => followupExecuteBuildEnabled && multimediaDeliberationUiEnabled && chatMode.value === 'bounty')
+const typedDeliberationEnabled = computed(() => typedDeliberationBuildEnabled && multimediaDeliberationUiEnabled && chatMode.value === 'bounty')
 const followupCurrentContext = () => ({
   conversationId: conversationId.value,
   taskId: conversationTask.value?.id || '',
@@ -2098,13 +2110,17 @@ const followupCurrentContext = () => ({
 const followupStorage = (() => {
   try { return typeof window !== 'undefined' ? window.sessionStorage : null } catch { return null }
 })()
+let typedDeliberation = null
 const bountyRequestCatalog = useHallBountyRequestCatalog({
   chatApi, identityScope: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
   getContext: () => ({ conversationId: conversationId.value, taskId: conversationTask.value?.id || '',
     targetAgentId: conversationAgent.value?.agentId || '', assignmentRevision: activeRequest.value?.steps?.find(step => step.targetAgentId === conversationAgent.value?.agentId)?.assignmentRevision || '' }),
   getContextGeneration: () => followupContextGeneration.value, enabled: () => multimediaDeliberationUiEnabled && chatMode.value === 'bounty'
 })
-notifyBountyRequestCatalog = () => bountyRequestCatalog.hint()
+notifyBountyRequestCatalog = () => {
+  bountyRequestCatalog.hint()
+  typedDeliberation?.refresh?.()
+}
 const {
   state: followupState,
   busy: followupBusy,
@@ -2129,7 +2145,32 @@ const {
     return true
   }
 })
-const invalidateFollowupContext = () => { followupContextGeneration.value++; invalidateFollowup() }
+const invalidateFollowupContext = () => { followupContextGeneration.value++; invalidateFollowup(); typedDeliberation?.invalidate?.() }
+const typedAssignmentRevision = () => typedLong(conversationTask.value?.assignmentRevision, { allowZero: true })
+const typedConversationGeneration = () => typedLong(activeRequest.value?.conversationGeneration) ||
+  typedLong(bountyRequestCatalog.entries.value?.[0]?.request?.conversationGeneration) || ''
+const typedDeliberationContext = () => ({ conversationId: conversationId.value, taskId: conversationTask.value?.id || '',
+  targetAgentId: conversationAgent.value?.agentId || '', assignmentRevision: typedAssignmentRevision(),
+  conversationGeneration: typedConversationGeneration() })
+const typedDeliberationStorage = (() => { try { return typeof window !== 'undefined' ? window.sessionStorage : null } catch { return null } })()
+typedDeliberation = useHallTypedDeliberation({
+  chatApi, actorScopeKey: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
+  getContext: typedDeliberationContext, getContextGeneration: () => followupContextGeneration.value,
+  getCatalogEntries: () => bountyRequestCatalog.entries.value, storage: typedDeliberationStorage,
+  enabled: () => typedDeliberationEnabled.value,
+  onAccepted: async ({ receipt, isCurrent }) => {
+    if (!isCurrent?.()) return false
+    bountyRequestCatalog.hint()
+    showToast(receipt.intent === 'CLARIFICATION_REPLY' ? '补充已受理，等待本轮自然答复。' : '议事已受理，等待本轮自然答复。')
+    return true
+  },
+  onProposal: async ({ kind, content, inputRefs, assetRef, continuationOf }) => {
+    if (!typedDeliberationEnabled.value) return false
+    if (kind === 'GENERATE_IMAGE') return prepareFollowupGenerate({ content, inputRefs })
+    if (kind === 'EDIT_IMAGE') return prepareFollowupEdit({ content, assetRef, continuationOf })
+    return false
+  }
+})
 
 const controlledImageCapability = ref(null)
 const controlledConsentOffer = ref(null)
@@ -2583,11 +2624,35 @@ const handleNewHallConversation = () => {
   return true
 }
 
-const handleSendHallMessage = async () => {
+const handleSendHallMessage = async (typedInput = {}) => {
   voiceReplyCorrelation.close('manual_text_send')
   hallVoice?.cancel()
   playSend()
-  await sendHallMessage()
+  if (typedDeliberationEnabled.value) {
+    const accepted = await typedDeliberation.submit({ content: draft.value, sourceSelectors: Array.isArray(typedInput?.sourceSelectors) ? typedInput.sourceSelectors : [] })
+    if (accepted) setDraft('')
+    else if (typedDeliberation.error.value) showToast(typedDeliberation.error.value)
+    return accepted
+  }
+  return sendHallMessage()
+}
+const handleTypedReply = projection => {
+  if (!typedDeliberationEnabled.value || !typedDeliberation.choosePending(projection)) return false
+  setDraft('')
+  showToast('请在下方输入框补充此问；不会开始办理。')
+  return true
+}
+const handleTypedResume = async () => {
+  if (!typedDeliberationEnabled.value) return false
+  const resumed = await typedDeliberation.resumeUnknown()
+  if (!resumed && typedDeliberation.error.value) showToast(typedDeliberation.error.value)
+  return resumed
+}
+const handleTypedProposal = async projection => {
+  if (!typedDeliberationEnabled.value) return false
+  const accepted = await typedDeliberation.confirmProposal(projection)
+  if (accepted) showToast('已取得本次受控图像预览，请逐项核对后明确确认。')
+  return accepted
 }
 
 // F1 EXECUTE is explicit and Hall-owned. Plain composer submit remains the existing stream route.
