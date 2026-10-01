@@ -2035,6 +2035,7 @@ const {
   activeRequest,
   activeTurns,
   adoptBountyBootstrap,
+  adoptTypedDiscussionReceipt,
   capabilityState,
   cancelHallReplyTurn,
   cancelDeliberation,
@@ -2158,11 +2159,15 @@ typedDeliberation = useHallTypedDeliberation({
   getContext: typedDeliberationContext, getContextGeneration: () => followupContextGeneration.value,
   getCatalogEntries: () => bountyRequestCatalog.entries.value, storage: typedDeliberationStorage,
   enabled: () => typedDeliberationEnabled.value,
-  onAccepted: async ({ receipt, isCurrent }) => {
+  onAccepted: async ({ receipt, context, isCurrent }) => {
+    if (!isCurrent?.()) return false
+    const adopted = await adoptTypedDiscussionReceipt({ receipt, context, isCurrent })
     if (!isCurrent?.()) return false
     bountyRequestCatalog.hint()
-    showToast(receipt.intent === 'CLARIFICATION_REPLY' ? '补充已受理，等待本轮自然答复。' : '议事已受理，等待本轮自然答复。')
-    return true
+    showToast(adopted
+      ? (receipt.intent === 'CLARIFICATION_REPLY' ? '补充已受理，已按原话头核对本轮自然答复。' : '议事已受理，已按原话头核对本轮自然答复。')
+      : '议事已受理，正在保留原话头等待只读核对；不会重复发送。')
+    return adopted
   },
   onProposal: async ({ kind, content, inputRefs, assetRef, continuationOf }) => {
     if (!typedDeliberationEnabled.value) return false

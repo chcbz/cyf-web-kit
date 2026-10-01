@@ -1436,6 +1436,40 @@ export const useHallConversation = ({
     return true
   }
 
+  // Typed discussion is already durably admitted. Re-read its authoritative request and the
+  // same scoped conversation; never synthesize a user message or send a second POST.
+  const adoptTypedDiscussionReceipt = async ({ receipt, context, isCurrent = () => true } = {}) => {
+    const requestId = typeof receipt?.requestId === 'string' && receipt.requestId === receipt.requestId.trim() ? receipt.requestId : ''
+    const expectedConversationId = exactRuntimeId(context?.conversationId)
+    const expectedTaskId = typeof context?.taskId === 'string' ? context.taskId : ''
+    const expectedTargetAgentId = typeof context?.targetAgentId === 'string' ? context.targetAgentId : ''
+    if (disposed || !requestId || !expectedConversationId || !expectedTaskId || !expectedTargetAgentId ||
+        conversationId.value !== expectedConversationId || selectedTask.value?.id !== expectedTaskId || selectedAgent.value?.agentId !== expectedTargetAgentId) return false
+    const guard = captureGuard()
+    const current = () => guardCurrent(guard) && isCurrent?.() && conversationId.value === expectedConversationId &&
+      selectedTask.value?.id === expectedTaskId && selectedAgent.value?.agentId === expectedTargetAgentId
+    try {
+      const response = await chatApi.get(`/requests/${encodeURIComponent(requestId)}`, {}, {
+        autoLoading: false, signal: lifecycleController.signal
+      })
+      if (!current()) return false
+      const requestView = apiData(response)
+      if (requestView?.requestId !== requestId || exactRuntimeId(requestView?.conversationId) !== expectedConversationId) return false
+      const loadGeneration = invalidateConversationLoads()
+      if (!applyRequestView(requestView, requestId) || !current()) return false
+      selectedHallConversationId.value = expectedConversationId
+      conversationLoadError.value = ''
+      await loadHallConversationContent(expectedConversationId, {
+        loadGeneration, scope: guard.scope, selection: true, identity: guard, adoptionCurrent: current
+      })
+      // A content read error must not reclassify an accepted receipt as UNKNOWN or replay it.
+      return current() && activeRequest.value?.requestId === requestId
+    } catch (error) {
+      if (error?.name !== 'AbortError' && current()) log.warn('核对已受理自然议事失败', error)
+      return false
+    }
+  }
+
   const adoptBountyBootstrap = async (value) => {
     const reference = bountyBootstrapReference(value)
     const contextMatches = () => bountyBootstrapContextMatches(chatContext?.value, selectedTask?.value, selectedAgent?.value, reference)
@@ -1734,6 +1768,7 @@ export const useHallConversation = ({
 
   return {
     adoptBountyBootstrap,
+    adoptTypedDiscussionReceipt,
     isAdoptingBountyBootstrap,
     cancelHallReplyTurn,
     cancelDeliberation,

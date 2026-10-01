@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import * as Vue from 'vue'
 import { ref } from 'vue'
 import { mount } from '@vue/test-utils'
+import { useHallConversation } from '../src/composables/juyiting/useHallConversation.js'
 import { compileScript } from '@vue/compiler-sfc'
 const require = createRequire(import.meta.url)
 const { parse } = require('@vue/compiler-sfc')
@@ -75,6 +76,48 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       wrapper.unmount()
       for (const [name, descriptor] of previous) { if (descriptor) Object.defineProperty(globalThis, name, descriptor); else delete globalThis[name] }
     }
+  })
+
+  it('uses the actual page accepted callback to adopt the authoritative typed request and same scoped transcript without another POST', async () => {
+    const calls = []; const chatContext = ref({ conversationScopeType: 'bounty', conversationScopeKey: 'task-1', mode: 'bounty', targetAgentIds: ['agent-1'], targetAgentId: 'agent-1', taskId: 'task-1' })
+    const selectedTask = ref({ id: 'task-1' }); const selectedAgent = ref({ agentId: 'agent-1', name: '吴用' })
+    const requestView = { requestId: 'request-typed-1', requestRevision: '1', stateVersion: '0', conversationId: '7', state: 'ADMITTED', turns: [{ turnId: 'turn-typed-1', requestId: 'request-typed-1', state: 'WAITING', stateVersion: '0', lastDeltaSeq: '0', requestRevision: '1', conversationId: '7', finalMessageId: null }] }
+    const conversation = useHallConversation({ apiStore: { authorizationGeneration: 1, token: async () => null }, chatContext, chatMode: ref('bounty'),
+      chatApi: { list: async (_path, _body, options) => { calls.push('LIST'); options.onSuccess({ data: [{ id: '7', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task-1' }] }) },
+        getById: async (_path, id, options) => { calls.push(`CONTENT:${id}`); options.onSuccess({ data: [{ id: 'message-user-1', senderType: 'user', content: '请画一只鸟' }] }) },
+        get: async path => { calls.push(`GET:${path}`); return { data: { data: requestView } } },
+        create: async () => { calls.push('POST'); throw new Error('must not post') } },
+      globalStore: { getJiacn: 'owner', user: {} }, log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}), portraitShortName: agent => agent?.name || '', selectedAgent, selectedTask, showToast: () => {} })
+    try {
+      expect(await conversation.loadHallMessages()).to.equal(true)
+      const pageAccepted = new Function('adoptTypedDiscussionReceipt', 'bountyRequestCatalog', 'showToast', `return (${option('useHallTypedDeliberation', 'onAccepted')})`)(conversation.adoptTypedDiscussionReceipt, { hint: () => calls.push('HINT') }, text => calls.push(`TOAST:${text}`))
+      expect(await pageAccepted({ receipt: { requestId: 'request-typed-1', intent: 'DISCUSSION' }, context: { conversationId: '7', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4', conversationGeneration: '1' }, isCurrent: () => true })).to.equal(true)
+      expect(conversation.activeRequest.value?.requestId).to.equal('request-typed-1')
+      expect(conversation.messages.value.map(message => message.localId)).to.deep.equal(['message-user-1'])
+      expect(calls.filter(call => call === 'POST')).to.deep.equal([])
+      expect(calls.filter(call => call === 'GET:/requests/request-typed-1')).to.have.length(1)
+      expect(calls.filter(call => call === 'CONTENT:7')).to.have.length(2)
+      expect(calls).to.include('HINT')
+    } finally { conversation.disposeHallConversation() }
+  })
+  it('fences a late authoritative typed receipt read after target drift without content adoption or POST', async () => {
+    let resolveRequest; let contentReads = 0; let posts = 0
+    const chatContext = ref({ conversationScopeType: 'bounty', conversationScopeKey: 'task-1', mode: 'bounty', targetAgentIds: ['agent-1'], targetAgentId: 'agent-1', taskId: 'task-1' })
+    const selectedTask = ref({ id: 'task-1' }); const selectedAgent = ref({ agentId: 'agent-1', name: '吴用' })
+    const conversation = useHallConversation({ apiStore: { authorizationGeneration: 1, token: async () => null }, chatContext, chatMode: ref('bounty'),
+      chatApi: { list: async (_path, _body, options) => options.onSuccess({ data: [{ id: '7', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task-1' }] }),
+        getById: async (_path, _id, options) => { contentReads++; options.onSuccess({ data: [] }) },
+        get: () => new Promise(resolve => { resolveRequest = resolve }), create: async () => { posts++; throw new Error('unexpected') } },
+      globalStore: { getJiacn: 'owner', user: {} }, log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}), portraitShortName: agent => agent?.name || '', selectedAgent, selectedTask, showToast: () => {} })
+    try {
+      expect(await conversation.loadHallMessages()).to.equal(true)
+      const pending = conversation.adoptTypedDiscussionReceipt({ receipt: { requestId: 'request-typed-late' }, context: { conversationId: '7', taskId: 'task-1', targetAgentId: 'agent-1' }, isCurrent: () => true })
+      selectedAgent.value = { agentId: 'agent-2', name: '公孙胜' }
+      resolveRequest({ data: { data: { requestId: 'request-typed-late', requestRevision: '1', stateVersion: '0', conversationId: '7', state: 'ADMITTED', turns: [] } } })
+      expect(await pending).to.equal(false)
+      expect(conversation.activeRequest.value).to.equal(null)
+      expect(contentReads).to.equal(1); expect(posts).to.equal(0)
+    } finally { conversation.disposeHallConversation() }
   })
   it('binds a real durable final event only to authoritative typed GET readback', async () => {
     const calls = []

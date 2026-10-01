@@ -163,7 +163,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
         ? { ...item, status: 'ACCEPTED', receipt: clone(receipt) } : item))
       if (body.intent === 'CLARIFICATION_REPLY') selectedPending.value = null
       await readOne(receipt.requestId, captured)
-      await onAccepted?.({ receipt, body, isCurrent: () => current(captured) })
+      await onAccepted?.({ receipt, body, context: clone(context), isCurrent: () => current(captured) })
       return true
     } catch (cause) {
       if (current(captured)) {
