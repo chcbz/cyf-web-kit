@@ -7,19 +7,30 @@ const object = value => value && typeof value === 'object' && !Array.isArray(val
 const keys = (value, names) => object(value) && Object.keys(value).length === names.length && Object.keys(value).every(key => names.includes(key))
 const clone = value => JSON.parse(JSON.stringify(value))
 const immutableRequest = request => [request.requestId, request.conversationId, request.conversationGeneration, request.userMessageId].join('\u0000')
-const validStep = (step, scope) => keys(step, ['stepId', 'stepNumber', 'taskId', 'assignmentRevision', 'targetAgentId', 'kind', 'state', 'stateVersion', 'executionIntentId', 'executionId', 'executionState']) &&
-  exactOutputId(step.stepId) && long(step.stepNumber) && step.taskId === scope.taskId && long(step.assignmentRevision, true) && exactOutputId(step.targetAgentId) &&
-  typeof step.kind === 'string' && step.kind && typeof step.state === 'string' && step.state && long(step.stateVersion, true) &&
-  exactOutputId(step.executionIntentId) && exactOutputId(step.executionId) && typeof step.executionState === 'string' && step.executionState
-const validTurn = turn => object(turn) && typeof turn.turnId === 'string' && exactOutputId(turn.turnId) &&
-  (turn.stateVersion === undefined || long(turn.stateVersion, true)) && (turn.requestRevision === undefined || long(turn.requestRevision))
+const STEP_KINDS = new Set(['CHAT', 'INSPECT', 'EXECUTE'])
+const validStep = (step, scope) => {
+  if (!keys(step, ['stepId', 'stepNumber', 'taskId', 'assignmentRevision', 'targetAgentId', 'kind', 'state', 'stateVersion', 'executionIntentId', 'executionId', 'executionState']) ||
+      !exactOutputId(step.stepId) || !long(step.stepNumber) || step.taskId !== scope.taskId || !long(step.assignmentRevision, true) || !exactOutputId(step.targetAgentId) ||
+      !STEP_KINDS.has(step.kind) || typeof step.state !== 'string' || !step.state || !long(step.stateVersion, true)) return false
+  if (step.kind !== 'EXECUTE') return step.executionIntentId === null && step.executionId === null && step.executionState === null
+  return exactOutputId(step.executionIntentId) && (step.executionId === null || exactOutputId(step.executionId)) &&
+    typeof step.executionState === 'string' && Boolean(step.executionState)
+}
+const validTurn = (turn, request) => keys(turn, ['turnId', 'requestId', 'requestRevision', 'conversationId', 'conversationGeneration',
+  'targetAgentId', 'contextSnapshotId', 'dispatchId', 'route', 'state', 'stateVersion', 'lastDeltaSeq', 'terminalReason', 'finalMessageId', 'createdAt', 'updatedAt']) &&
+  exactOutputId(turn.turnId) && turn.requestId === request.requestId && turn.requestRevision === request.requestRevision &&
+  turn.conversationId === request.conversationId && turn.conversationGeneration === request.conversationGeneration &&
+  exactOutputId(turn.targetAgentId) && exactOutputId(turn.contextSnapshotId) && exactOutputId(turn.dispatchId) &&
+  typeof turn.route === 'string' && Boolean(turn.route) && typeof turn.state === 'string' && Boolean(turn.state) &&
+  long(turn.stateVersion, true) && long(turn.lastDeltaSeq, true) && (turn.terminalReason === null || typeof turn.terminalReason === 'string') &&
+  (turn.finalMessageId === null || long(turn.finalMessageId)) && long(turn.createdAt) && long(turn.updatedAt)
 export const catalogLong = long
 export const catalogScope = value => keys(value, ['conversationId', 'conversationGeneration', 'taskId']) &&
   exactOutputId(value.conversationId) && long(value.conversationGeneration) && exactOutputId(value.taskId)
 export const catalogRequest = (value, scope) => keys(value, ['requestId', 'requestRevision', 'conversationId', 'conversationGeneration', 'userMessageId', 'state', 'stateVersion', 'turns', 'steps']) &&
   exactOutputId(value.requestId) && long(value.requestRevision) && value.conversationId === scope.conversationId &&
   value.conversationGeneration === scope.conversationGeneration && long(value.userMessageId) && typeof value.state === 'string' && value.state &&
-  long(value.stateVersion, true) && Array.isArray(value.turns) && value.turns.every(validTurn) && Array.isArray(value.steps) &&
+  long(value.stateVersion, true) && Array.isArray(value.turns) && value.turns.every(turn => validTurn(turn, value)) && Array.isArray(value.steps) &&
   value.steps.every(step => validStep(step, scope))
 export const catalogPage = (value, expected = {}) => {
   if (!keys(value, ['schemaVersion', 'scope', 'after', 'through', 'nextAfter', 'hasMore', 'entries']) || value.schemaVersion !== 1 || !catalogScope(value.scope) ||
