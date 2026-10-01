@@ -565,6 +565,9 @@
             :active-turns="activeTurns"
             :capability-state="capabilityState"
             :deliberation-v2-enabled="multimediaDeliberationUiEnabled"
+            :followup-execute-enabled="followupExecuteEnabled"
+            :followup-state="followupState"
+            :followup-busy="followupBusy"
             :draft="draft"
             :voice="hallVoice"
             @update:draft="setDraft"
@@ -599,6 +602,10 @@
             @cancel-legacy-transport="cancelLegacyHallReply"
             @clear-target="handleClearChatTarget"
             @delete-conversation="deleteHallConversation"
+            @execute-followup="handleFollowupGenerate"
+            @confirm-followup="confirmFollowup"
+            @check-followup-original="checkFollowupOriginal"
+            @request-followup-edit="handleFollowupEdit"
             @load-history="loadHallConversationHistory({ force: true })"
             @load-more-history="loadMoreHallConversationHistory"
             @load-messages="retryHallConversation"
@@ -728,6 +735,7 @@ import { pointAndStartRecoveryLane } from '@/composables/juyiting/hallPointAndSt
 import { providerConsentAcknowledgement } from '@/composables/juyiting/hallPointAndStartProviderConsent'
 import { capabilityOffersControlledImageConsent, createControlledImageCapabilityObservationFence, loadControlledImageBountyCapability } from '@/composables/juyiting/hallControlledImageBountyCapability'
 import { useHallPointAndStartControlledBridge } from '@/composables/juyiting/useHallPointAndStartControlledBridge'
+import { useHallBountyFollowup } from '@/composables/juyiting/useHallBountyFollowup'
 import { capabilityAllowsNewStart, capabilityAllowsOriginalReplay, createNativeCapabilityObservationFence, loadNativeBountyCapability, pointAndStartIntentReadLane } from '@/composables/juyiting/hallNativeBountyCapability'
 import { useHallQuickMatter } from '@/composables/juyiting/useHallQuickMatter'
 import { useTaskWorkspace } from '@/composables/juyiting/useTaskWorkspace'
@@ -790,6 +798,8 @@ const selectedTask = ref(null)
 const economyPreviewEnabled = ref(false)
 const workItemPlanEnabled = import.meta.env.VITE_JUYITING_WORK_ITEM_PLAN_ENABLED === 'true'
 const multimediaDeliberationUiEnabled = isMultimediaDeliberationUiEnabled(import.meta.env.VITE_JUYITING_MULTIMEDIA_DELIBERATION_V2_UI)
+// Separate default-off F1 surface; a v2 presentation flag never advertises a v3 owner path by itself.
+const followupExecuteBuildEnabled = import.meta.env.VITE_JUYITING_FOLLOWUP_EXECUTE_V3_UI === 'true'
 const economyPreviewCapability = ref(null)
 const economyPreviewChecked = ref(false)
 const economyPreviewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
@@ -2073,6 +2083,40 @@ const {
   }
 })
 
+const followupContextGeneration = ref(0)
+const followupExecuteEnabled = computed(() => followupExecuteBuildEnabled && multimediaDeliberationUiEnabled && chatMode.value === 'bounty')
+const followupCurrentContext = () => ({
+  conversationId: conversationId.value,
+  taskId: conversationTask.value?.id || '',
+  targetAgentId: conversationAgent.value?.agentId || ''
+})
+const followupStorage = (() => {
+  try { return typeof window !== 'undefined' ? window.sessionStorage : null } catch { return null }
+})()
+const {
+  state: followupState,
+  busy: followupBusy,
+  prepareGenerate: prepareFollowupGenerate,
+  prepareEdit: prepareFollowupEdit,
+  confirm: confirmFollowup,
+  checkOriginal: checkFollowupOriginal,
+  invalidate: invalidateFollowup,
+  dispose: disposeFollowup
+} = useHallBountyFollowup({
+  chatApi,
+  actorScopeKey: hallIdentityScope,
+  authorizationGeneration: () => apiStore.authorizationGeneration,
+  getContext: followupCurrentContext,
+  getContextGeneration: () => followupContextGeneration.value,
+  storage: followupStorage,
+  enabled: () => followupExecuteEnabled.value,
+  onAdmitted: async ({ receipt, isCurrent }) => {
+    if (!isCurrent?.()) return false
+    showToast(`受控图像办理已受理（${receipt.requestId}）；不会改走旧传令。`)
+    return true
+  }
+})
+const invalidateFollowupContext = () => { followupContextGeneration.value++; invalidateFollowup() }
 
 const controlledImageCapability = ref(null)
 const controlledConsentOffer = ref(null)
@@ -2330,6 +2374,10 @@ watch(() => [selectedTask.value?.id, selectedTask.value?.taskVersion, selectedTa
   if (taskId && pointAndStartIntentState(taskId).state === 'PRESENT') void checkPointAndStartOriginal({ id: taskId })
 }, { flush: 'sync' })
 watch([() => apiStore.authorizationGeneration, hallIdentityScope, () => selectedAgent.value?.agentId], clearPointAndStartCapability, { flush: 'sync' })
+const followupTaskFence = computed(() => [selectedTask.value?.id, selectedTask.value?.taskVersion,
+  selectedTask.value?.requirementRevision, selectedTask.value?.revision].map(value => value == null ? '' : String(value)).join('\u0000'))
+watch([followupTaskFence, () => apiStore.authorizationGeneration, hallIdentityScope, () => conversationId.value,
+  () => activeRequest.value?.conversationGeneration, () => conversationAgent.value?.agentId, () => chatMode.value], invalidateFollowupContext, { flush: 'sync' })
 
 const formalTaskExecutionContext = useFormalTaskExecutionScope({
   selectedTask,
@@ -2524,6 +2572,20 @@ const handleSendHallMessage = async () => {
   await sendHallMessage()
 }
 
+// F1 EXECUTE is explicit and Hall-owned. Plain composer submit remains the existing stream route.
+const handleFollowupGenerate = async () => {
+  if (!followupExecuteEnabled.value) return false
+  const accepted = await prepareFollowupGenerate({ content: draft.value })
+  if (accepted) showToast('已取得本次受控图像预览，请逐项核对后明确确认。')
+  return accepted
+}
+const handleFollowupEdit = async ({ content, assetRef, continuationOf } = {}) => {
+  if (!followupExecuteEnabled.value) return false
+  const accepted = await prepareFollowupEdit({ content, assetRef, continuationOf })
+  if (accepted) showToast('已取得本次上一稿修改预览，请逐项核对后明确确认。')
+  return accepted
+}
+
 const handleMentionAgent = (agent) => {
   if (!chatMentionAgents.value.some(item => item.agentId === agent?.agentId)) {
     showToast('只可点名自家好汉')
@@ -2657,6 +2719,7 @@ onUnmounted(() => {
   pointAndStartReferenceInputs.dispose()
   disposePointAndStart()
   disposeControlledBridge()
+  disposeFollowup()
   disposeHallConversation()
   hallBackendSceneState?.dispose()
   stopHallEventStream()

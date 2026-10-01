@@ -182,6 +182,7 @@
       :agents="agents"
       :discussion-variant="discussionVariant"
       :draft="draft"
+      :execute-enabled="executeEnabled"
       :interaction-locked="conversationBusy"
       :is-awaiting-reply="isAwaitingReply"
       :is-streaming="isStreaming"
@@ -191,6 +192,7 @@
       :target-text="targetText"
       :voice="voice"
       @clear-target="$emit('clear-target', $event)"
+      @execute-followup="$emit('execute-followup')"
       @mention-agent="$emit('mention-agent', $event)"
       @send-message="$emit('send-message')"
       @update:draft="$emit('update:draft', $event)"
@@ -233,6 +235,7 @@ const props = defineProps({
   legacyCancelAvailable: { type: Boolean, default: false },
   conversationId: { type: String, default: '' },
   discussionVariant: { type: String, default: 'public' },
+  executeEnabled: { type: Boolean, default: false },
   draft: { type: String, default: '' },
   emptyText: { type: String, default: '厅中暂无话头，可先传一句。' },
   eventStreamRecovering: { type: Boolean, default: false },
@@ -259,6 +262,7 @@ const emit = defineEmits([
   'cancel-legacy-transport',
   'clear-target',
   'delete-conversation',
+  'execute-followup',
   'load-history',
   'load-more-history',
   'load-messages',

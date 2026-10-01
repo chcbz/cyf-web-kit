@@ -13,16 +13,17 @@ const intent = { idempotencyKey: 'conversation-edit-safe-key', content: '改蓝�
 describe('bounty output edit recovery', () => {
   it('restores only scoped, validated request IDs and an immutable in-flight edit', () => {
     const store = storage()
-    expect(writeOutputRecovery(scope('owner-a'), { followups: ['request-2', 'request-2', '../bad'], edits: {
-      [id]: intent, [JSON.stringify(['request-1', 'bad', '../x'])]: intent } }, store)).to.equal(true)
-    expect(readOutputRecovery(scope('owner-a'), store)).to.deep.equal({ followups: ['request-2'], edits: { [id]: intent } })
-    expect(readOutputRecovery(scope('owner-b'), store)).to.deep.equal({ followups: [], edits: {} })
-    expect(readOutputRecovery({ ...scope('owner-a'), conversationId: 'conversation-2' }, store)).to.deep.equal({ followups: [], edits: {} })
+    const key = `juyiting:output-recovery:v1:${encodeURIComponent('owner-a')}:conversation-1:request-1`
+    store.setItem(key, JSON.stringify({ followups: ['request-2', 'request-2', '../bad'], edits: {
+      [id]: intent, [JSON.stringify(['request-1', 'bad', '../x'])]: intent } }))
+    expect(readOutputRecovery(scope('owner-a'), store)).to.deep.equal({ followups: ['request-2'], legacyEdits: { [id]: intent } })
+    expect(readOutputRecovery(scope('owner-b'), store)).to.deep.equal({ followups: [], legacyEdits: {} })
+    expect(readOutputRecovery({ ...scope('owner-a'), conversationId: 'conversation-2' }, store)).to.deep.equal({ followups: [], legacyEdits: {} })
   })
-  it('does not persist malformed scope or unsafe edit references', () => {
+  it('does not persist malformed scope and exposes malformed legacy edits to no new request path', () => {
     const store = storage()
     expect(writeOutputRecovery({ ...scope('owner-a'), conversationId: '../bad' }, { followups: ['request-2'] }, store)).to.equal(false)
     writeOutputRecovery(scope('owner-a'), { edits: { [id]: { ...intent, sha256: '', content: 'x' } } }, store)
-    expect(readOutputRecovery(scope('owner-a'), store).edits).to.deep.equal({})
+    expect(readOutputRecovery(scope('owner-a'), store).legacyEdits).to.deep.equal({})
   })
 })

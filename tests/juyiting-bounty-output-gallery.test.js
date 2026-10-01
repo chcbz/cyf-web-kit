@@ -111,61 +111,29 @@ describe('bounty output gallery live owner scope', () => {
     }
     expect(revoked).to.include.members(['blob:test-1', 'blob:test-2'])
   })
-  it('reuses the original edit intent after an unknown response and restores the follow-up catalog after remount', async () => {
+  it('emits only a nested assetRef plus exact producer parent for Hall-owned schema-3 edit', async () => {
     const oldTimeout = globalThis.setTimeout
     const oldClear = globalThis.clearTimeout
-    let recovery = { followups: [], edits: {} }
-    const writes = []; const reads = []
-    let attempts = 0
+    const writes = []
     const chatApi = { get: async path => {
-      reads.push(path)
       if (path === '/requests/request-1') return { data: { data: { requestId: 'request-1', conversationId: 'conversation-1',
         steps: [{ ...step('step-1'), taskId: 'task-1', assignmentRevision: '3' }] } } }
-      if (path === '/requests/request-2') return { data: { data: { requestId: 'request-2', conversationId: 'conversation-1', steps: [] } } }
       if (path.endsWith('/steps/step-1/outputs')) return { data: { data: [item('step-1')] } }
       throw new Error(`unexpected GET ${path}`)
-    }, execute: async payload => {
-      if (payload.url !== '/conversations/conversation-1/interactions') throw new Error('unexpected write')
-      writes.push(payload)
-      if (++attempts === 1) throw new TypeError('unknown network response')
-      return { data: { data: { requestId: 'request-2', stepId: 'step-2' } } }
-    } }
+    }, execute: async payload => { writes.push(payload); throw new Error('the output card must never POST an interaction') } }
     const Component = new Function('Vue', 'deps', script)(Vue, {
-      createApi: () => chatApi, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, useHallBountyFinalization, safeFinalizationVersion, useHallConversationArchive,
-      readOutputRecovery: () => structuredClone(recovery),
-      writeOutputRecovery: (_scope, value) => { recovery = JSON.parse(JSON.stringify(value)); return true }, saveOutputBlob: () => {}
+      createApi: () => chatApi, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, useHallBountyFinalization, safeFinalizationVersion, useHallConversationArchive, readOutputRecovery, writeOutputRecovery, saveOutputBlob: () => {}
     })
     globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : oldTimeout(fn, delay, ...args)
     globalThis.clearTimeout = id => { if (id !== 999) oldClear(id) }
-    const props = { enabled: true, identityKey: 'owner-a', conversationId: 'conversation-1',
-      request: { requestId: 'request-1', conversationId: 'conversation-1' } }
     let wrapper
     try {
-      wrapper = mount(Component, { props })
+      wrapper = mount(Component, { props: { enabled: true, followupEnabled: true, identityKey: 'owner-a', conversationId: 'conversation-1', request: { requestId: 'request-1', conversationId: 'conversation-1' } } })
       await flushPromises()
       await wrapper.find('.image-rework input').setValue('改成蓝色')
       await wrapper.find('.image-rework').trigger('submit')
-      await flushPromises()
-      expect(writes).to.have.length(1)
-      expect(wrapper.text()).to.include('修改结果不明确')
-      expect(Object.keys(recovery.edits)).to.have.length(1)
-      wrapper.unmount()
-      wrapper = mount(Component, { props })
-      await flushPromises()
-      expect(wrapper.find('.image-rework button').text()).to.equal('重试原修改')
-      expect(wrapper.find('.image-rework input').element.readOnly).to.equal(true)
-      expect(wrapper.find('.image-rework input').element.value).to.equal('改成蓝色')
-      await wrapper.find('.image-rework').trigger('submit')
-      await flushPromises()
-      expect(writes).to.have.length(2)
-      expect(writes[1].headers['Idempotency-Key']).to.equal(writes[0].headers['Idempotency-Key'])
-      expect(writes[1].data).to.deep.equal(writes[0].data)
-      expect(recovery.followups).to.deep.equal(['request-2'])
-      expect(recovery.edits).to.deep.equal({})
-      wrapper.unmount()
-      wrapper = mount(Component, { props })
-      await flushPromises()
-      expect(reads).to.include('/requests/request-2')
+      expect(writes).to.deep.equal([])
+      expect(wrapper.emitted('request-followup-edit')).to.deep.equal([[{ content: '改成蓝色', assetRef: { assetId: 'ast_step-1', revision: '1' }, continuationOf: { requestId: 'request-1', stepId: 'step-1' } }]])
     } finally {
       wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear
     }

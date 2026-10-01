@@ -8,6 +8,13 @@
       </div>
     </div>
     <BountyDeliberationStatus :presentation="v2Presentation" />
+    <BountyFollowupConsentPanel
+      :enabled="followupExecuteEnabled"
+      :state="followupState"
+      :busy="followupBusy"
+      @confirm="$emit('confirm-followup', $event)"
+      @check-original="$emit('check-followup-original', $event)"
+    />
     <ChatPanel
       v-model:draft="draftProxy"
       discussion-variant="bounty"
@@ -16,11 +23,13 @@
       :subtitle="bountySubtitle"
       title="榜文议事"
       :voice="voice"
+      :execute-enabled="followupExecuteEnabled"
       v-bind="chatProps"
       @cancel-deliberation="$emit('cancel-deliberation', $event)"
       @cancel-legacy-transport="$emit('cancel-legacy-transport')"
       @clear-target="$emit('clear-target', $event)"
       @delete-conversation="$emit('delete-conversation', $event)"
+      @execute-followup="$emit('execute-followup')"
       @load-history="$emit('load-history')"
       @load-more-history="$emit('load-more-history')"
       @load-messages="$emit('load-messages')"
@@ -33,7 +42,16 @@
       @voice-apply="$emit('voice-apply', $event)"
     >
       <template #bounty-results>
-        <BountyExecutionOutputs :enabled="deliberationV2Enabled" :request="activeRequest" :conversation-id="conversationId" :identity-key="`${identityEpoch}\u0000${identityScope}`" :task-version="selectedTask?.taskVersion ?? selectedTask?.version" @task-completed="$emit('task-completed', $event)" />
+        <BountyExecutionOutputs
+          :enabled="deliberationV2Enabled"
+          :followup-enabled="followupExecuteEnabled"
+          :request="activeRequest"
+          :conversation-id="conversationId"
+          :identity-key="`${identityEpoch}\u0000${identityScope}`"
+          :task-version="selectedTask?.taskVersion ?? selectedTask?.version"
+          @request-followup-edit="$emit('request-followup-edit', $event)"
+          @task-completed="$emit('task-completed', $event)"
+        />
       </template>
     </ChatPanel>
   </section>
@@ -44,6 +62,7 @@ import { computed } from 'vue'
 import ChatPanel from './ChatPanel.vue'
 import BountyDeliberationStatus from './BountyDeliberationStatus.vue'
 import BountyExecutionOutputs from './BountyExecutionOutputs.vue'
+import BountyFollowupConsentPanel from './BountyFollowupConsentPanel.vue'
 import { bountyDeliberationPresentation } from '../../composables/juyiting/hallMultimediaDeliberationUi.js'
 
 const props = defineProps({
@@ -61,6 +80,9 @@ const props = defineProps({
   conversationBusy: { type: Boolean, default: false },
   deliberationStatus: { type: String, default: '' },
   deliberationV2Enabled: { type: Boolean, default: false },
+  followupExecuteEnabled: { type: Boolean, default: false },
+  followupState: { type: Object, default: () => ({ status: 'IDLE' }) },
+  followupBusy: { type: Boolean, default: false },
   durableCancelTarget: { type: Object, default: null },
   legacyCancelAvailable: { type: Boolean, default: false },
   conversationId: { type: String, default: '' },
@@ -86,6 +108,10 @@ const emit = defineEmits([
   'cancel-legacy-transport',
   'clear-target',
   'delete-conversation',
+  'execute-followup',
+  'confirm-followup',
+  'check-followup-original',
+  'request-followup-edit',
   'load-history',
   'load-more-history',
   'load-messages',

@@ -45,6 +45,15 @@
           <var-icon name="close-circle-outline" />
         </button>
         <button
+          v-if="executeEnabled && discussionVariant === 'bounty'"
+          class="composer-execute"
+          type="button"
+          :disabled="!canSend"
+          title="按当前文字请求受控图像生成预览"
+          aria-label="请求受控图像生成预览"
+          @click="$emit('execute-followup')"
+        >生成图片</button>
+        <button
           class="composer-send"
           type="submit"
           :disabled="!canSend"
@@ -88,6 +97,7 @@ const props = defineProps({
   agents: { type: Array, default: () => [] },
   discussionVariant: { type: String, default: 'public' },
   draft: { type: String, default: '' },
+  executeEnabled: { type: Boolean, default: false },
   interactionLocked: { type: Boolean, default: false },
   isAwaitingReply: { type: Boolean, default: false },
   isStreaming: { type: Boolean, default: false },
@@ -101,6 +111,7 @@ const props = defineProps({
 
 const emit = defineEmits([
   'clear-target',
+  'execute-followup',
   'mention-agent',
   'send-message',
   'update:draft',
@@ -362,6 +373,16 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
 
 .composer-send {
   background: #7f4a22;
+}
+
+.composer-execute {
+  border: 1px solid #7f4a22;
+  border-radius: 6px;
+  background: #fff3de;
+  color: #6a3719;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
 }
 
 .composer-clear:disabled,
