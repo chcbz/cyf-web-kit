@@ -112,3 +112,27 @@ describe('typed natural discussion interaction adapter', () => {
     lane.dispose()
   })
 })
+
+describe('typed inspection interaction adapter', () => {
+  beforeEach(() => { globalThis.crypto = { randomUUID: () => '00000000-0000-4000-8000-000000000002' } })
+  it('uses explicit selected inspection admission and v2 outcome only, with no CHAT fallback', async () => {
+    const calls = []; const context = ref({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' })
+    const source = { kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'file-1', version: '7', purpose: 'REFERENCE', assetId: null, assetRevision: null }
+    const admission = { schemaVersion: 1, intent: 'DISCUSSION', requestId: 'request-inspect', userMessageId: '100', turnIds: ['turn-inspect'], state: 'ADMITTED', stateVersion: '0', eventCursor: '1', statusUrl: '/chat/requests/request-inspect', typedOutcomeUrl: '/chat/conversations/7/requests/request-inspect/inspection-outcome', replay: false, pendingQuestionId: null }
+    const pending = { schemaVersion: 2, contract: 'juyiting-typed-inspection-v1', conversationId: '7', conversationGeneration: '1', requestId: 'request-inspect', requestRevision: '1', turnId: 'turn-inspect', state: 'PENDING', outcome: null, inspection: { authorizationId: 'inspection-1', manifestDigest: `sha256:${'a'.repeat(64)}`, sourceRefIds: ['source-1'], inputSummary: null } }
+    const lane = useHallTypedDeliberation({ chatApi: { create: async (path, body, options) => { calls.push(['POST', path, body, options.headers['Idempotency-Key']]); return { data: { data: admission } } }, get: async path => { calls.push(['GET', path]); return { data: { data: pending } } } }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context.value, getContextGeneration: () => 1, getCatalogEntries: () => [], storage: store(), enabled: () => true })
+    expect(await lane.submit({ content: '请查阅此资料。', sourceSelectors: [source], inspection: true })).to.equal(true)
+    expect(calls.map(call => call[1])).to.deep.equal(['/conversations/7/interactions/inspection', '/conversations/7/requests/request-inspect/inspection-outcome'])
+    expect(lane.inspectionStatus.value).to.match(/查阅/)
+    lane.dispose()
+  })
+  it('uses inspection GET-by-original-key recovery on 404 without an automatic POST', async () => {
+    const calls = []; const storage = store(); const context = ref({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' })
+    const source = { kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'file-1', version: '7', purpose: 'REFERENCE', assetId: null, assetRevision: null }
+    const lane = useHallTypedDeliberation({ chatApi: { create: async (_path, _body, options) => { calls.push(['POST', options.headers['Idempotency-Key']]); throw Object.assign(new Error('lost'), { status: 503 }) }, get: async (_path, _body, options) => { calls.push(['GET', options.headers['Idempotency-Key']]); throw Object.assign(new Error('not found'), { status: 404 }) } }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context.value, getContextGeneration: () => 1, getCatalogEntries: () => [], storage, enabled: () => true })
+    expect(await lane.submit({ content: '请查阅。', sourceSelectors: [source], inspection: true })).to.equal(false)
+    expect(await lane.recover()).to.equal(true)
+    expect(calls.map(call => call[0])).to.deep.equal(['POST', 'GET'])
+    lane.dispose()
+  })
+})

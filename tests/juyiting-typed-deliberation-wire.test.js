@@ -49,3 +49,13 @@ describe('typed natural deliberation frozen wire', () => {
     expect(typedOutcomeProjection(extra)).to.equal(null)
   })
 })
+
+describe('typed inspection v2 wire', () => {
+  it('keeps INSPECT v2 distinct from CHAT v1 and rejects unknown versions', async () => {
+    const { inspectionOutcomeProjection } = await import('../src/composables/juyiting/hallTypedDeliberation.js')
+    const inspection = { schemaVersion: 2, contract: 'juyiting-typed-inspection-v1', conversationId: '7', conversationGeneration: '1', requestId: 'request-inspect', requestRevision: '1', turnId: 'turn-inspect', state: 'PENDING', outcome: null, inspection: { authorizationId: 'inspection-1', manifestDigest: `sha256:${'a'.repeat(64)}`, sourceRefIds: ['source-1'], inputSummary: null } }
+    expect(inspectionOutcomeProjection(inspection, { conversationId: '7', conversationGeneration: '1', requestId: 'request-inspect' })).to.include({ purpose: 'INSPECT', state: 'PENDING' })
+    expect(typedOutcomeProjection(inspection)).to.equal(null)
+    expect(inspectionOutcomeProjection({ ...inspection, schemaVersion: 3 })).to.equal(null)
+  })
+})

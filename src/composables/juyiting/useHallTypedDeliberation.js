@@ -1,9 +1,10 @@
 import { computed, ref, unref, watch } from 'vue'
-import { discussionAccepted, discussionBody, outcomeCardKey, typedId, typedLong, typedOutcomeProjection } from './hallTypedDeliberation.js'
+import { discussionAccepted, discussionBody, inspectionAccepted, inspectionOutcomeProjection, outcomeCardKey, typedId, typedLong, typedOutcomeProjection } from './hallTypedDeliberation.js'
 
 const unwrap = response => response?.data?.data ?? response?.data ?? response
 const clone = value => JSON.parse(JSON.stringify(value))
 const storagePrefix = 'cyf:hall:typed-deliberation:v1'
+const recordPurpose = record => record?.purpose === 'INSPECT' ? 'INSPECT' : 'CHAT'
 const secureKey = () => {
   try {
     if (typeof globalThis.crypto?.randomUUID === 'function') {
@@ -26,7 +27,7 @@ const readRecords = (storage, scope, context) => {
   if (!storage || !key) return []
   try {
     const value = JSON.parse(storage.getItem(key) || '[]')
-    return Array.isArray(value) ? value.filter(record => record && typeof record === 'object' && typedId(record.key) && record.body) : []
+    return Array.isArray(value) ? value.filter(record => record && typeof record === 'object' && typedId(record.key) && record.body && (record.purpose === undefined || ['CHAT', 'INSPECT'].includes(record.purpose))) : []
   } catch { return [] }
 }
 const writeRecords = (storage, scope, context, records) => {
@@ -60,7 +61,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   const current = captured => !disposed && enabled?.() && captured.generation === generation && captured.scope === scope.value &&
     captured.authorization === unref(typeof authorizationGeneration === 'function' ? authorizationGeneration() : authorizationGeneration) &&
     captured.contextGeneration === getContextGeneration?.() && sameContext(captured.context, getContext?.() || {})
-  const path = (context, requestId = '') => `/conversations/${encodeURIComponent(context.conversationId)}/requests/${encodeURIComponent(requestId)}/typed-outcome`
+  const path = (context, requestId = '', purpose = 'CHAT') => `/conversations/${encodeURIComponent(context.conversationId)}/requests/${encodeURIComponent(requestId)}/${purpose === 'INSPECT' ? 'inspection-outcome' : 'typed-outcome'}`
   const sorted = values => [...values].sort((a, b) => a.requestId.localeCompare(b.requestId))
   const compareLong = (one, two) => one.length - two.length || (one < two ? -1 : one > two ? 1 : 0)
   const sameFinalBinding = (one, two) => one?.requestId === two?.requestId && one?.turnId === two?.turnId &&
@@ -92,13 +93,16 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       (clarification.state === 'ANSWERED' || selected.expectedPendingQuestionStateVersion !== clarification.stateVersion)) selectedPending.value = null
     return true
   }
-  const readOne = async (requestId, captured = capture()) => {
+  const readOne = async (requestId, captured = capture(), requestedPurpose = '') => {
     if (!typedId(requestId) || !current(captured)) return null
+    const record = readRecords(storage, captured.scope, captured.context).find(item => item.receipt?.requestId === requestId)
+    const purpose = requestedPurpose || recordPurpose(record)
     try {
-      const raw = unwrap(await chatApi.get(path(captured.context, requestId), {}, { autoLoading: false, needAuth: true }))
+      const raw = unwrap(await chatApi.get(path(captured.context, requestId, purpose), {}, { autoLoading: false, needAuth: true }))
       if (!current(captured)) return null
-      const projection = typedOutcomeProjection(raw, { conversationId: captured.context.conversationId,
-        conversationGeneration: captured.context.conversationGeneration, taskId: captured.context.taskId, requestId })
+      const projection = purpose === 'INSPECT'
+        ? inspectionOutcomeProjection(raw, { conversationId: captured.context.conversationId, conversationGeneration: captured.context.conversationGeneration, taskId: captured.context.taskId, requestId })
+        : typedOutcomeProjection(raw, { conversationId: captured.context.conversationId, conversationGeneration: captured.context.conversationGeneration, taskId: captured.context.taskId, requestId })
       if (!projection) return null
       apply(projection, captured)
       return projection
@@ -116,7 +120,8 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     refreshing = true; error.value = ''
     try {
       const requestIds = [...new Set((getCatalogEntries?.() || []).map(entry => entry?.request?.requestId).filter(typedId))]
-      await Promise.all(requestIds.map(requestId => readOne(requestId, captured)))
+      const inspectionRequestIds = [...new Set(readRecords(storage, captured.scope, captured.context).filter(record => recordPurpose(record) === 'INSPECT').map(record => record.receipt?.requestId).filter(typedId))]
+      await Promise.all(requestIds.map(requestId => readOne(requestId, captured, 'CHAT')).concat(inspectionRequestIds.map(requestId => readOne(requestId, captured, 'INSPECT'))))
       return current(captured)
     } finally {
       if (current(captured)) refreshing = false
@@ -129,22 +134,27 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     if (!clarification || clarification.state !== 'OPEN') return false
     selectedPending.value = Object.freeze({ parentOutcomeId: projection.outcome.outcomeId,
       expectedParentStateVersion: clarification.stateVersion, pendingQuestionId: clarification.pendingQuestionId,
-      expectedPendingQuestionStateVersion: clarification.stateVersion, question: clarification.question })
+      expectedPendingQuestionStateVersion: clarification.stateVersion, question: clarification.question, purpose: projection.purpose || 'CHAT' })
     return true
   }
-  const submit = async ({ content, sourceSelectors = [] } = {}) => {
+  const submit = async ({ content, sourceSelectors = [], inspection = false } = {}) => {
     if (busy.value || !enabled?.()) return false
     const captured = capture(); const context = captured.context
     if (!current(captured) || !typedId(context.conversationId) || !typedId(context.taskId) || !typedId(context.targetAgentId) ||
       !typedLong(context.assignmentRevision, { allowZero: true })) return false
     const pending = selectedPending.value
+    const purpose = inspection ? 'INSPECT' : (pending?.purpose || 'CHAT')
+    if (purpose === 'INSPECT' && !pending && (!Array.isArray(sourceSelectors) || sourceSelectors.length === 0)) {
+      if (current(captured)) error.value = '请明确选择本轮交给当前 Agent 查阅的资料；未发送'
+      return false
+    }
     const body = discussionBody(pending ? { intent: 'CLARIFICATION_REPLY', taskId: context.taskId, assignmentRevision: context.assignmentRevision,
       content, parentOutcomeId: pending.parentOutcomeId, expectedParentStateVersion: pending.expectedParentStateVersion,
       pendingQuestionId: pending.pendingQuestionId, expectedPendingQuestionStateVersion: pending.expectedPendingQuestionStateVersion, sourceSelectors }
       : { intent: 'DISCUSSION', taskId: context.taskId, assignmentRevision: context.assignmentRevision, content, sourceSelectors })
     const key = secureKey()
     if (!body || !key) { if (current(captured)) error.value = '议事输入或安全请求键不符合冻结合同；未发送'; return false }
-    const record = { key, body: clone(body), context: clone(context), status: 'POSTING' }
+    const record = { key, purpose, body: clone(body), context: clone(context), status: 'POSTING' }
     const records = readRecords(storage, captured.scope, context)
     if (!persistRecords(captured, [...records, record])) { if (current(captured)) error.value = '原议事键持久化失败；未发送'; return false }
     busy.value = true; error.value = ''
@@ -154,22 +164,23 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   const postOriginal = async (record, captured) => {
     const context = captured.context
     const body = storedBody(record?.body)
+    const purpose = recordPurpose(record)
     if (!body || !typedId(record?.key) || !sameContext(record.context, context) || !current(captured)) return false
     try {
-      const receipt = discussionAccepted(unwrap(await chatApi.create(`/conversations/${encodeURIComponent(context.conversationId)}/interactions/discussion`, clone(body), apiOptions(record.key))), body, context.conversationId)
+      const receipt = (purpose === 'INSPECT' ? inspectionAccepted : discussionAccepted)(unwrap(await chatApi.create(`/conversations/${encodeURIComponent(context.conversationId)}/interactions/${purpose === 'INSPECT' ? 'inspection' : 'discussion'}`, clone(body), apiOptions(record.key))), body, context.conversationId)
       if (!current(captured)) return false
       if (!receipt) throw new Error('议事受理回执不匹配')
       persistRecords(captured, readRecords(storage, captured.scope, context).map(item => item.key === record.key
-        ? { ...item, status: 'ACCEPTED', receipt: clone(receipt) } : item))
+        ? { ...item, purpose, status: 'ACCEPTED', receipt: clone(receipt) } : item))
       if (body.intent === 'CLARIFICATION_REPLY') selectedPending.value = null
-      await readOne(receipt.requestId, captured)
-      await onAccepted?.({ receipt, body, context: clone(context), isCurrent: () => current(captured) })
+      await readOne(receipt.requestId, captured, purpose)
+      await onAccepted?.({ receipt, body, purpose, context: clone(context), isCurrent: () => current(captured) })
       return true
     } catch (cause) {
       if (current(captured)) {
         persistRecords(captured, readRecords(storage, captured.scope, context).map(item => item.key === record.key
-          ? { ...item, status: 'UNKNOWN' } : item))
-        error.value = cause?.message || '议事受理结果待核对；请按原键只读恢复或显式续办'
+          ? { ...item, purpose, status: 'UNKNOWN' } : item))
+        error.value = cause?.message || (purpose === 'INSPECT' ? '查阅受理待核对；不会改走普通议事或办理' : '议事受理结果待核对；请按原键只读恢复或显式续办')
       }
       return false
     }
@@ -178,7 +189,19 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   const recover = async () => {
     const captured = capture(); if (!current(captured)) return false
     const records = readRecords(storage, captured.scope, captured.context).filter(record => sameContext(record.context, captured.context))
-    await Promise.all(records.filter(record => typedId(record.receipt?.requestId)).map(record => readOne(record.receipt.requestId, captured)))
+    await Promise.all(records.filter(record => typedId(record.receipt?.requestId)).map(record => readOne(record.receipt.requestId, captured, recordPurpose(record))))
+    await Promise.all(records.filter(record => record.status === 'UNKNOWN' && recordPurpose(record) === 'INSPECT').map(async record => {
+      try {
+        const raw = unwrap(await chatApi.get(`/conversations/${encodeURIComponent(captured.context.conversationId)}/interactions/inspection/request`, {}, apiOptions(record.key)))
+        const receipt = inspectionAccepted(raw, storedBody(record.body), captured.context.conversationId)
+        if (!receipt || !current(captured)) return
+        persistRecords(captured, readRecords(storage, captured.scope, captured.context).map(item => item.key === record.key
+          ? { ...item, purpose: 'INSPECT', status: 'ACCEPTED', receipt: clone(receipt) } : item))
+        await readOne(receipt.requestId, captured, 'INSPECT')
+      } catch (cause) {
+        if (current(captured) && cause?.status && cause.status !== 404) error.value = cause?.message || '查阅恢复读取失败'
+      }
+    }))
     return current(captured)
   }
   const resumeUnknown = async (key = '') => {
@@ -191,6 +214,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     finally { if (current(captured)) busy.value = false }
   }
   const confirmProposal = async projection => {
+    if (projection?.purpose === 'INSPECT') return false
     const proposal = projection?.outcome?.proposal
     if (!proposal || !current(capture())) return false
     const inputs = selectorInputs(proposal)
@@ -203,10 +227,16 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     return false
   }
   const cards = computed(() => projections.value.filter(item => item.state === 'READY' && item.outcome).map(item => Object.freeze({ ...item, key: outcomeCardKey(item) })))
+  const inspectionStatus = computed(() => {
+    storageRevision.value
+    if (projections.value.some(item => item.purpose === 'INSPECT' && item.state === 'PENDING')) return '正在查阅资料；受理或目录可用不表示已读。'
+    return readRecords(storage, scope.value, getContext?.() || {}).some(record => recordPurpose(record) === 'INSPECT' && record.status === 'ACCEPTED')
+      ? '查阅已受理，正在等待 Agent 查阅；尚未表示已读。' : ''
+  })
   const invalidate = () => { generation++; busy.value = false; projections.value = []; selectedPending.value = null; error.value = '' }
   const stopScope = watch(scope, invalidate, { flush: 'sync' })
   const stopCatalog = typeof getCatalogEntries === 'function' ? watch(getCatalogEntries, () => { void refresh(); void recover() }, { deep: true }) : () => {}
   const recoveryAvailable = computed(() => { storageRevision.value; return readRecords(storage, scope.value, getContext?.() || {}).some(record => record.status === 'UNKNOWN') })
-  return { projections, cards, selectedPending, error, busy, recoveryAvailable, refresh, readOne, submit, recover, resumeUnknown, choosePending, confirmProposal,
+  return { projections, cards, selectedPending, error, busy, recoveryAvailable, inspectionStatus, refresh, readOne, submit, recover, resumeUnknown, choosePending, confirmProposal,
     invalidate, dispose: () => { disposed = true; invalidate(); stopScope(); stopCatalog() } }
 }

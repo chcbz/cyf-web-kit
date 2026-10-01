@@ -87,4 +87,23 @@ export const discussionAccepted = (value, body, conversationId) => {
   if (body.intent === 'CLARIFICATION_REPLY' ? value.pendingQuestionId !== body.pendingQuestionId : value.pendingQuestionId !== null) return null
   return freeze(value)
 }
+const inspectionFields = ['authorizationId', 'manifestDigest', 'sourceRefIds', 'inputSummary']
+const inspectionSummaryFields = ['inputDigest', 'sources']
+const inspectionReceiptSourceFields = ['sourceRefId', 'sha256', 'byteLength', 'carrier', 'contributionDigest']
+const digest = value => typeof value === 'string' && /^sha256:[a-f0-9]{64}$/.test(value)
+export const inspectionOutcomeProjection = (value, context = {}) => {
+  const fields = ['schemaVersion', 'contract', 'conversationId', 'conversationGeneration', 'requestId', 'requestRevision', 'turnId', 'state', 'outcome', 'inspection']
+  if (!exactKeys(value, fields) || value.schemaVersion !== 2 || value.contract !== 'juyiting-typed-inspection-v1' || !typedId(value.conversationId) || !typedLong(value.conversationGeneration) || !typedId(value.requestId) || !typedLong(value.requestRevision) || !typedId(value.turnId) || !['PENDING', 'READY'].includes(value.state) || !exactKeys(value.inspection, inspectionFields) || !typedId(value.inspection.authorizationId) || !digest(value.inspection.manifestDigest) || !Array.isArray(value.inspection.sourceRefIds) || !value.inspection.sourceRefIds.length || value.inspection.sourceRefIds.some(item => !typedId(item)) || new Set(value.inspection.sourceRefIds).size !== value.inspection.sourceRefIds.length) return null
+  if ((context.conversationId && value.conversationId !== context.conversationId) || (context.conversationGeneration && value.conversationGeneration !== context.conversationGeneration) || (context.requestId && value.requestId !== context.requestId)) return null
+  if (value.state === 'PENDING') return value.outcome === null && value.inspection.inputSummary === null ? freeze({ ...value, purpose: 'INSPECT' }) : null
+  if (context.taskId && value.outcome?.taskId !== context.taskId) return null
+  if (!exactKeys(value.inspection.inputSummary, inspectionSummaryFields) || !digest(value.inspection.inputSummary.inputDigest) || !Array.isArray(value.inspection.inputSummary.sources) || value.inspection.inputSummary.sources.length !== value.inspection.sourceRefIds.length || value.inspection.inputSummary.sources.some((source, index) => !exactKeys(source, inspectionReceiptSourceFields) || source.sourceRefId !== value.inspection.sourceRefIds[index] || !/^[a-f0-9]{64}$/.test(source.sha256) || !typedLong(source.byteLength, { allowZero: true }) || !['DIRECT_TEXT', 'LOCAL_IMAGE', 'LOCAL_AUDIO', 'PARSED_TEXT'].includes(source.carrier) || !digest(source.contributionDigest))) return null
+  const normalized = outcome(value.outcome)
+  return normalized ? freeze({ ...value, outcome: normalized, purpose: 'INSPECT' }) : null
+}
+export const inspectionAccepted = (value, body, conversationId) => {
+  const accepted = discussionAccepted({ ...value, typedOutcomeUrl: `/chat/conversations/${conversationId}/requests/${value?.requestId || ''}/typed-outcome` }, body, conversationId)
+  if (!accepted || value.typedOutcomeUrl !== `/chat/conversations/${conversationId}/requests/${value.requestId}/inspection-outcome`) return null
+  return freeze(value)
+}
 export const outcomeCardKey = value => `${value.requestId}\u0000${value.turnId}\u0000${value.outcome?.outcomeId || ''}`

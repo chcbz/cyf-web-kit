@@ -573,6 +573,7 @@
             :typed-pending-question="typedDeliberation.selectedPending.value"
             :typed-enabled="typedDeliberationEnabled"
             :typed-recovery-available="typedDeliberation.recoveryAvailable.value"
+            :typed-inspection-status="typedDeliberation.inspectionStatus.value"
             :draft="draft"
             :voice="hallVoice"
             @update:draft="setDraft"
@@ -2159,8 +2160,9 @@ typedDeliberation = useHallTypedDeliberation({
   getContext: typedDeliberationContext, getContextGeneration: () => followupContextGeneration.value,
   getCatalogEntries: () => bountyRequestCatalog.entries.value, storage: typedDeliberationStorage,
   enabled: () => typedDeliberationEnabled.value,
-  onAccepted: async ({ receipt, context, isCurrent }) => {
+  onAccepted: async ({ receipt, purpose, context, isCurrent }) => {
     if (!isCurrent?.()) return false
+    if (purpose === 'INSPECT') { bountyRequestCatalog.hint(); showToast('查阅已受理，正在等待 Agent 查阅；受理不表示已读。'); return true }
     const adopted = await adoptTypedDiscussionReceipt({ receipt, context, isCurrent })
     if (!isCurrent?.()) return false
     bountyRequestCatalog.hint()
@@ -2637,7 +2639,10 @@ const handleSendHallMessage = async (typedInput = {}) => {
   hallVoice?.cancel()
   playSend()
   if (typedDeliberationEnabled.value) {
-    const accepted = await typedDeliberation.submit({ content: draft.value, sourceSelectors: Array.isArray(typedInput?.sourceSelectors) ? typedInput.sourceSelectors : [] })
+    const sourceSelectors = Array.isArray(typedInput?.sourceSelectors) ? typedInput.sourceSelectors : []
+    const accepted = await typedDeliberation.submit(typedInput?.inspection === true
+      ? { content: draft.value, sourceSelectors, inspection: true }
+      : { content: draft.value, sourceSelectors })
     if (accepted) setDraft('')
     else if (typedDeliberation.error.value) showToast(typedDeliberation.error.value)
     return accepted

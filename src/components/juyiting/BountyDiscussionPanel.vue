@@ -8,6 +8,7 @@
       </div>
     </div>
     <BountyDeliberationStatus :presentation="v2Presentation" />
+    <p v-if="typedInspectionStatus" class="typed-inspection-status" role="status">{{ typedInspectionStatus }}</p>
     <button
       v-if="typedRecoveryAvailable"
       type="button"
@@ -100,6 +101,7 @@ const props = defineProps({
   typedPendingQuestion: { type: Object, default: null },
   typedEnabled: { type: Boolean, default: false },
   typedRecoveryAvailable: { type: Boolean, default: false },
+  typedInspectionStatus: { type: String, default: '' },
   durableCancelTarget: { type: Object, default: null },
   legacyCancelAvailable: { type: Boolean, default: false },
   conversationId: { type: String, default: '' },
@@ -236,4 +238,8 @@ const chatProps = computed(() => ({
   color: #4f6c61;
   font-size: 12px;
 }
+</style>
+
+<style scoped>
+.typed-inspection-status{margin:8px 0;padding:8px 10px;border-left:3px solid #6f8c81;background:#f3f8f4;color:#3f6254;font-size:12px;line-height:1.5}
 </style>

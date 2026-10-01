@@ -101,9 +101,9 @@
           <article v-for="link in activeMaterialLinks" :key="link.relationId" class="task-material-reference">
             <div><strong>{{ materialName(link) }}</strong><small>v{{ link.version }} · {{ link.role === 'INPUT' ? '用于办理' : '参考资料' }}</small></div>
             <p>{{ link.role === 'INPUT' ? '议事时 Agent 会收到这份资料的标识、固定版本和用途；明确开始办理并勾选后，才会获得文件读取授权。' : '议事时 Agent 会收到这份资料的标识、固定版本和用途；明确开始办理并勾选后，才会获得文件读取授权。' }}</p>
-            <label v-if="typedEnabled && link.role === 'REFERENCE'" class="typed-source-selector"><input type="checkbox" :checked="typedSelectedSourceIds.has(`${link.fileId}\u0000${link.version}`)" @change="toggleTypedSource(link, $event.target.checked)" /> 将此固定版本作为本轮可用参考</label>
+            <label v-if="typedEnabled && link.role === 'REFERENCE'" class="typed-source-selector"><input type="checkbox" :checked="typedSelectedSourceIds.has(`${link.fileId}\u0000${link.version}`)" @change="toggleTypedSource(link, $event.target.checked)" /> 将此固定版本交给当前 Agent 本轮查阅</label>
           </article>
-          <p class="material-reference-notice">议事转发只携带任务资料标识、固定版本和用途，不携带文件内容、下载地址或伪造摘要；明确开始办理并勾选后，才通过正式执行 input manifest 授予读取。</p>
+          <p class="material-reference-notice">勾选资料并发送即明确请求本轮查阅；资料目录本身不授予机器读取。界面不保证 Agent 已就绪或已读，实际可用性由服务端受理时校验。</p>
         </div>
         <template v-else>
           <div v-if="!workspace.items.value?.length" class="material-reference-state">
@@ -203,7 +203,7 @@
       @clear-target="$emit('clear-target', $event)"
       @execute-followup="$emit('execute-followup')"
       @mention-agent="$emit('mention-agent', $event)"
-      @send-message="$emit('send-message', typedEnabled && discussionVariant === 'bounty' ? { sourceSelectors: typedSourceSelectors } : undefined)"
+      @send-message="$emit('send-message', typedEnabled && discussionVariant === 'bounty' ? { sourceSelectors: typedSourceSelectors, inspection: typedSourceSelectors.length > 0 } : undefined)"
       @update:draft="$emit('update:draft', $event)"
       @voice-apply="$emit('voice-apply', $event)"
     />

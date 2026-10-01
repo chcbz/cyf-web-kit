@@ -57,7 +57,7 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
     const attrs = [...tag.matchAll(/:(typed-[a-z-]+)="([^"]+)"/g)].map(match => `:${match[1]}="${match[2]}"`).join(' ')
     const { compile } = require('@vue/compiler-dom')
     const render = new Function('Vue', compile(`<BountyDiscussionPanel ${attrs} />`, { mode: 'function' }).code)(Vue)
-    const vnode = render(Vue.proxyRefs({ typedDeliberation: { cards: ref([{ requestId: 'request-1' }]), selectedPending: ref(null), recoveryAvailable: ref(true) }, typedDeliberationEnabled: ref(true) }), [])
+    const vnode = render(Vue.proxyRefs({ typedDeliberation: { cards: ref([{ requestId: 'request-1' }]), selectedPending: ref(null), recoveryAvailable: ref(true), inspectionStatus: ref('') }, typedDeliberationEnabled: ref(true) }), [])
     expect(vnode.props['typed-outcomes']).to.deep.equal([{ requestId: 'request-1' }]); expect(vnode.props['typed-pending-question']).to.equal(null); expect(vnode.props['typed-recovery-available']).to.equal(true)
     const panelFile = new URL('../src/components/juyiting/BountyDiscussionPanel.vue', import.meta.url).pathname
     const panelDescriptor = parse(readFileSync(panelFile, 'utf8'), { filename: panelFile }).descriptor
