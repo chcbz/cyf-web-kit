@@ -35,24 +35,24 @@
             <h3>阁中典籍</h3>
             <p>先择一部典籍，再进入沉浸翻阅。</p>
           </div>
-          <span class="archive-shelf-count">共 {{ reader.catalog ? 1 : 0 }} 部</span>
+          <span class="archive-shelf-count">共 {{ reader.works.length }} 部</span>
         </header>
 
-        <article class="archive-book-card">
+        <article v-for="work in reader.works" :key="work.workId" class="archive-book-card">
           <div class="archive-book-cover" aria-hidden="true">
             <span>古典</span>
-            <strong>{{ reader.catalog?.title || '水滸傳' }}</strong>
-            <small>一百二十回</small>
+            <strong>{{ work.title }}</strong>
+            <small>{{ work.workId === reader.catalog?.workId ? `${chapterCount} 回` : '已上架' }}</small>
           </div>
           <div class="archive-book-info">
             <p class="reader-kicker">已收录典籍</p>
-            <h4>{{ reader.catalog?.title || '水滸傳' }}</h4>
-            <p>含引首与 {{ chapterCount }} 回正文，可记录阅读进度、书签及私人手札。</p>
+            <h4>{{ work.title }}</h4>
+            <p>已上架可阅读；进度、书签和私人手札按版本独立保存。</p>
             <button
               type="button"
               class="archive-book-open"
               :disabled="embedded && !detailAllowed"
-              @click="enterReading"
+              @click="enterReading($event, work)"
             >
               进入翻阅
             </button>
@@ -85,7 +85,7 @@
               <span class="reader-exit-short">← 返回</span>
             </button>
             <div class="reader-heading">
-              <p class="reader-kicker">固定典籍</p>
+              <p class="reader-kicker">已发布典籍</p>
               <h3 id="archive-reader-title">{{ reader.catalog?.title || '水滸傳' }}</h3>
             </div>
             <div class="reader-header-actions">
@@ -121,7 +121,7 @@
               v-if="catalogOpen"
               id="archive-reader-catalog"
               class="reader-catalog"
-              aria-label="《水滸傳》目录"
+              :aria-label="`《${reader.catalog?.title || '典籍'}》目录`"
             >
               <button
                 v-for="block in reader.blocks"
@@ -478,14 +478,16 @@ const retryCatalog = () => runAction(
   '典籍重试失败。'
 )
 
-const enterReading = async (event) => {
+const enterReading = async (event, work) => {
   if (embedded && !detailAllowed) return
   returnFocusElement = typeof event?.currentTarget?.focus === 'function'
     ? event.currentTarget
     : document.activeElement
   await closeProgressPromise
   const opened = await runAction(
-    () => reader.initialize({ reuseCatalog: true }),
+    () => work && work.workId !== reader.catalog?.workId
+      ? reader.selectWork(work.workId)
+      : reader.initialize({ reuseCatalog: true }),
     '典籍暂无法读取，请稍后重试。'
   )
   if ((!opened && !reader.chapter) || (embedded && (!detailAllowed || !active))) return
@@ -782,7 +784,9 @@ onMounted(() => {
   })
   window.addEventListener('keydown', handleReaderKeydown)
   if (readingOpen.value && !embedded) document.body?.classList.add('archive-reading-open')
-  reader.initialize({ openChapter: readingOpen.value }).catch(() => {})
+  reader.initialize({ openChapter: readingOpen.value })
+    .then(() => reader.loadWorks().catch(() => {}))
+    .catch(() => {})
 })
 
 onBeforeUnmount(() => {

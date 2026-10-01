@@ -361,6 +361,7 @@ const loadLibraryPanelSfc = (ArchiveReader) => {
   const body = compileScript(descriptor, { id: 'archive-library-integration', inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace(/^import\s+ArchiveReader\s+from\s+['"].\/archive\/ArchiveReader\.vue['"];?\s*$/gm, 'var ArchiveReader = arguments[1]')
+    .replace(/^import\s+ArchiveMaintenancePanel\s+from\s+['"].\/archive\/ArchiveMaintenancePanel\.vue['"];?\s*$/gm, 'var ArchiveMaintenancePanel = { template: "<div />" }')
     .replace('export default', 'return')
   return new Function('Vue', 'ArchiveReader', body)(Vue, ArchiveReader)
 }
@@ -486,6 +487,49 @@ afterEach(() => {
 })
 
 describe('archive reader contract behavior', () => {
+  it('selects a second published work without reviving an old delayed block', async () => {
+    const delayedOld = deferred()
+    const base = makeApi({ getBlock: blockId => blockId === chapterOne.blockId
+      ? delayedOld.promise : response(blocksById.get(blockId)) })
+    const secondId = 'aed_two'
+    const secondSummary = blockSummary('CHAPTER', `${secondId}-c001`, 1, '新书首章')
+    const second = {
+      ...secondSummary, editionId: secondId, manifestSha256: 'f'.repeat(64),
+      paragraphs: [paragraph(secondSummary.blockId, 1, '新书原文', 'e')]
+    }
+    const shelf = [
+      { workId: catalog.workId, title: catalog.title, activeEditionId: editionId },
+      { workId: 'wrk_two', title: '第二部', activeEditionId: secondId }
+    ]
+    const api = { ...base, get: (path, params, options) => {
+      if (path === '/works' || path === '/works/wrk_two/catalog' ||
+          path === `/editions/${secondId}/chapters/${secondSummary.blockId}`) {
+        base.calls.push({ method: 'get', path, params, options })
+        if (path === '/works') return Promise.resolve(response({ items: shelf, nextCursor: null }))
+        if (path.endsWith('/catalog')) return Promise.resolve(response({
+          title: '第二部', workId: 'wrk_two', activeEdition: {
+            editionId: secondId, manifestSha256: second.manifestSha256,
+            preface: null, chapters: [secondSummary]
+          }
+        }))
+        return Promise.resolve(response(second))
+      }
+      return base.get(path, params, options)
+    } }
+    const mounted = mountReader(api)
+    await mounted.reader.initialize({ openChapter: false })
+    await mounted.reader.loadWorks()
+    const oldBlock = mounted.reader.loadBlock(c1Summary)
+    await waitFor(() => base.calls.some(call => call.path.endsWith(`/chapters/${chapterOne.blockId}`)))
+    const selected = await mounted.reader.selectWork('wrk_two')
+    expect(selected.blockId).to.equal(secondSummary.blockId)
+    expect(mounted.reader.catalog.value.workId).to.equal('wrk_two')
+    delayedOld.resolve(response(chapterOne))
+    expect(await oldBlock).to.equal(null)
+    expect(mounted.reader.chapter.value.paragraphs[0].text).to.equal('新书原文')
+    expect(base.calls.some(call => call.path === `/me/progress/${secondId}`)).to.equal(true)
+    mounted.wrapper.unmount()
+  })
   it('sends progress through the real createApi and useHttp adapter contract', async () => {
     const originalFetch = globalThis.fetch
     const requests = []

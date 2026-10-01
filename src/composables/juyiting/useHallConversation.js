@@ -906,6 +906,7 @@ export const useHallConversation = ({
     contextSnapshot,
     source = 'text',
     clearDraftRevision,
+    archiveMaintenanceIntent,
     onConversationResolved
   } = {}) => {
     const isVoiceSend = source === 'voice'
@@ -923,6 +924,10 @@ export const useHallConversation = ({
       sendContext = validated
     }
     const requestConversationId = isVoiceSend ? sendContext.conversationId : conversationId.value
+    const safeArchiveMaintenanceIntent = archiveMaintenanceIntent && archiveMaintenanceIntent.schemaVersion === 1 &&
+      typeof archiveMaintenanceIntent.confirmationRef === 'string' && archiveMaintenanceIntent.confirmationRef.trim()
+      ? { schemaVersion: 1, confirmationRef: archiveMaintenanceIntent.confirmationRef.trim() }
+      : null
     const metadataSource = isVoiceSend ? (sendContext.outgoingMetadata || {}) : (outgoingMetadata?.value || {})
     const { senderName: _legacySenderName, senderType: _legacySenderType, ...safeMetadataSource } = metadataSource
     const mentionAgentIds = Array.isArray(sendContext.mentionAgentIds) && sendContext.mentionAgentIds.length
@@ -966,6 +971,7 @@ export const useHallConversation = ({
         targetAgentId: sendContext.targetAgentId,
         taskId: sendContext.taskId,
         forceNewConversation: requestConversationId === '',
+        ...(safeArchiveMaintenanceIntent ? { archiveMaintenanceIntent: safeArchiveMaintenanceIntent } : {}),
         metadata: {
           ...safeMetadataSource,
           scene: 'juyiting',

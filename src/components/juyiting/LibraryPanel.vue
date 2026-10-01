@@ -34,6 +34,13 @@
       >
         案卷检索
       </button>
+      <button id="library-maintenance-tab" ref="maintenanceTab" type="button" role="tab"
+        :tabindex="activeTab === 'maintenance' ? 0 : -1"
+        :aria-selected="activeTab === 'maintenance'" aria-controls="library-maintenance-panel"
+        :class="{ active: activeTab === 'maintenance' }"
+        @click="activeTab = 'maintenance'" @keydown="handleTabKeydown($event, 'maintenance')">
+        任职与维护
+      </button>
     </div>
 
     <ArchiveReader
@@ -51,6 +58,9 @@
       @navigation-state="readerHasBack = $event"
       @start-draft="$emit('start-draft', $event)"
     />
+
+    <ArchiveMaintenancePanel v-if="activeTab === 'maintenance'" id="library-maintenance-panel"
+      role="tabpanel" aria-labelledby="library-maintenance-tab" @open-maintenance-entry="$emit('open-maintenance-entry', $event)" />
 
     <div
       v-show="activeTab === 'search'"
@@ -133,6 +143,7 @@
 <script setup>
 import { computed, nextTick, ref } from 'vue'
 import ArchiveReader from './archive/ArchiveReader.vue'
+import ArchiveMaintenancePanel from './archive/ArchiveMaintenancePanel.vue'
 
 const activeTab = ref('reader')
 const readerRef = ref(null)
@@ -142,12 +153,13 @@ const back = () => canGoBack.value ? readerRef.value?.back() : false
 defineExpose({ canGoBack, back })
 const readerTab = ref(null)
 const searchTab = ref(null)
-const tabOrder = ['reader', 'search']
+const maintenanceTab = ref(null)
+const tabOrder = ['reader', 'search', 'maintenance']
 
 const focusTab = async (tab) => {
   activeTab.value = tab
   await nextTick()
-  const element = tab === 'reader' ? readerTab.value : searchTab.value
+  const element = tab === 'reader' ? readerTab.value : tab === 'search' ? searchTab.value : maintenanceTab.value
   element?.focus()
 }
 
@@ -177,7 +189,7 @@ defineProps({
   virtualLandscape: Boolean
 })
 
-defineEmits(['start-draft', 'cite-library', 'search-library', 'update:keyword', 'update:sourceType'])
+defineEmits(['start-draft', 'cite-library', 'open-maintenance-entry', 'search-library', 'update:keyword', 'update:sourceType'])
 
 const sourceText = (type = '') => {
   if (type === 'project') return '项目案卷'

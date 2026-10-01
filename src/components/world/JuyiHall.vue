@@ -644,6 +644,7 @@
             :virtual-landscape="isVirtualLandscape"
             @start-draft="openPrivateDraft"
             @cite-library="citeLibraryItem"
+            @open-maintenance-entry="openArchiveMaintenanceConversation"
             @search-library="searchLibrary"
           />
         </section>
@@ -752,6 +753,7 @@ const portraitTaskDetailOpen = ref(false)
 const mapResumeSnapshot = ref(null)
 const landscapeEntryTarget = ref(null)
 let landscapeEntryTargetGeneration = 0
+let archiveMaintenanceEntryGeneration = 0
 // Stable FE2 entrypoint: taskWorkspace.workspace, connectionState, error, subject, retry, and reload.
 const taskWorkspaceEnabled = isTaskWorkspaceBuildEnabled(import.meta.env.VITE_JUYITING_TASK_WORKSPACE_ENABLED)
 const taskWorkspace = taskWorkspaceEnabled ? useTaskWorkspace() : null
@@ -2166,6 +2168,35 @@ const showRandomAgentBubble = () => {
   }, 3600)
 }
 
+
+const openArchiveMaintenanceConversation = async ({ entry, confirmationRef, job } = {}) => {
+  if (voiceInteractionLocked.value || typeof confirmationRef !== 'string' || !confirmationRef.trim()) return false
+  const authorizationEpoch = apiStore.authorizationGeneration
+  const entryGeneration = ++archiveMaintenanceEntryGeneration
+  const stillCurrent = () => authorizationEpoch === apiStore.authorizationGeneration && entryGeneration === archiveMaintenanceEntryGeneration && !voiceInteractionLocked.value
+  const direct = entry === 'private'
+  if (direct) {
+    // Direct entry is deliberately exact: never fall back to Songjiang or another roster agent.
+    const agent = operableRosterAgents.value.find(item => item?.agentId === job?.assignedAgentId)
+    if (!agent || !enterPrivateConversation(agent)) {
+      showToast('受任 Agent 的私密会话当前不可用；请刷新授权状态。')
+      return false
+    }
+  } else {
+    enterArchiveSongjiangConversation()
+  }
+  if (!stillCurrent() || !openPanel('chat', { root: true })) return false
+  newHallConversation()
+  await nextTick()
+  if (!stillCurrent()) return false
+  const sent = await sendHallMessage({
+    content: '请按服务器确认的典籍维护请求处理。',
+    archiveMaintenanceIntent: { schemaVersion: 1, confirmationRef: confirmationRef.trim() }
+  })
+  if (!stillCurrent()) return false
+  if (!sent) showToast('典籍维护会话未能建立；确认引用仍留在典籍阁，请勿重新创建请求。')
+  return sent
+}
 
 const handleNewHallConversation = () => {
   if (isConversationBusy.value) return false

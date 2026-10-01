@@ -82,6 +82,9 @@ export { isCanonicalDecimal, mutationHeaders, utf8ByteLength }
 
 export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitialize = true, saveDelay = 800 } = {}) => {
   const catalog = ref(null)
+  const works = ref([])
+  const selectedWorkId = ref(null)
+  const selectedEditionId = ref(null)
   const chapter = ref(null)
   const progress = ref(null)
   const bookmarks = ref([])
@@ -129,6 +132,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
   let questionRetryOperation = null
   let questionRetryPromise = null
   let identityGeneration = 0
+  let worksFetched = false
   let unregisterIdentityCleanup = null
   let blockLoadKey = null
   let blockLoadPromise = null
@@ -192,11 +196,18 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     if (catalogLoadPromise) return catalogLoadPromise
     const requestIdentity = identityGeneration
     if (!isCurrentIdentity(requestIdentity) || signal?.aborted) return Promise.resolve(null)
-    const request = api.get('/catalog', undefined, { autoLoading: false, signal }).then((result) => {
+    const path = selectedEditionId.value
+      ? `/editions/${encodeURIComponent(selectedEditionId.value)}/catalog`
+      : selectedWorkId.value ? `/works/${encodeURIComponent(selectedWorkId.value)}/catalog` : '/catalog'
+    const request = api.get(path, undefined, { autoLoading: false, signal }).then((result) => {
       if (!isCurrentIdentity(requestIdentity) || signal?.aborted) return null
       const nextCatalog = unwrap(result)
       if (!nextCatalog?.activeEdition?.editionId) throw new Error('案卷阁目录响应不完整')
       catalog.value = nextCatalog
+      if (!works.value.some(work => work.workId === nextCatalog.workId)) {
+        works.value = [...works.value, { workId: nextCatalog.workId, title: nextCatalog.title,
+          activeEditionId: nextCatalog.activeEdition.editionId }]
+      }
       return nextCatalog
     })
     const pending = request.finally(() => {
@@ -204,6 +215,28 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     })
     catalogLoadPromise = pending
     return pending
+  }
+
+  const loadWorks = async (signal) => {
+    const generation = identityGeneration
+    const result = await api.get('/works', undefined, { autoLoading: false, signal })
+    const snapshot = unwrap(result)
+    if (!Array.isArray(snapshot?.items)) throw new Error('典籍书架响应不完整')
+    if (isCurrentIdentity(generation) && !signal?.aborted) {
+      works.value = snapshot.items
+      worksFetched = true
+    }
+    return snapshot.items
+  }
+
+  const selectWork = async (workId, editionId = null) => {
+    if (!works.value.some(work => work.workId === workId)) throw new Error('典籍不存在')
+    const shelf = works.value
+    clearIdentityBoundState()
+    works.value = shelf
+    selectedWorkId.value = workId
+    selectedEditionId.value = editionId
+    return initialize({ openChapter: true })
   }
 
   const loadProgress = async (editionId = edition.value?.editionId, signal) => {
@@ -1233,7 +1266,9 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
         questionCreateOperation = operation
       }
       const result = await replayAmbiguousMutation(() => api.put(
-        `/me/questions/${operation.questionId}`,
+        (edition.value.editionId === 'shuihuzhuan-zh-120-v1'
+          ? `/me/questions/${operation.questionId}`
+          : `/editions/${encodeURIComponent(edition.value.editionId)}/questions/${operation.questionId}`),
         operation.body,
         { autoLoading: false, headers: mutationHeaders({}, operation.idempotencyKey), signal: controller.signal }
       ))
@@ -1403,6 +1438,10 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     initializeController = null
     blockController = null
     catalog.value = null
+    works.value = []
+    selectedWorkId.value = null
+    selectedEditionId.value = null
+    worksFetched = false
     chapter.value = null
     progress.value = null
     bookmarks.value = []
@@ -1477,6 +1516,10 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     initialize,
     isCanonicalDecimal,
     loadBlock,
+    loadWorks,
+    selectWork,
+    selectedWorkId,
+    works,
     loading,
     locationFor,
     noteAnchorNotice,

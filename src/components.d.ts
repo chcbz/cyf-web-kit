@@ -13,6 +13,8 @@ declare module 'vue' {
     AgentList: typeof import('./components/agent/AgentList.vue')['default']
     AgentPanel: typeof import('./components/juyiting/AgentPanel.vue')['default']
     AgentToken: typeof import('./components/juyiting/AgentToken.vue')['default']
+    ArchiveMaintenancePanel: typeof import('./components/juyiting/archive/ArchiveMaintenancePanel.vue')['default']
+    ArchiveMaintenanceReceiptCard: typeof import('./components/juyiting/archive/ArchiveMaintenanceReceiptCard.vue')['default']
     ArchiveReader: typeof import('./components/juyiting/archive/ArchiveReader.vue')['default']
     ArtifactOutcomePanel: typeof import('./components/juyiting/ArtifactOutcomePanel.vue')['default']
     ArtifactTransferPanel: typeof import('./components/juyiting/ArtifactTransferPanel.vue')['default']

@@ -141,7 +141,8 @@
           <strong>{{ senderText(message) }}</strong>
           <span v-if="message.streaming" class="message-state">回话未尽</span>
         </div>
-        <div class="message-content" v-html="renderMarkdown(message.content)"></div>
+        <ArchiveMaintenanceReceiptCard v-if="isArchiveMaintenanceReceipt(message.content, message.sender)" :content="message.content" />
+        <div v-else class="message-content" v-html="renderMarkdown(message.content)"></div>
         <small v-if="message.statusText" class="message-status">{{ message.statusText }}</small>
       </div>
       <div v-if="isAwaitingReply" class="hall-message SYSTEM is-pending">
@@ -180,6 +181,7 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import HallChatComposer from './HallChatComposer.vue'
 import HallConversationHistory from './HallConversationHistory.vue'
+import ArchiveMaintenanceReceiptCard from './archive/ArchiveMaintenanceReceiptCard.vue'
 import { usePersonalWorkspace } from '../../composables/usePersonalWorkspace.js'
 import { usePersonalWorkspaceConversationLinks } from '../../composables/usePersonalWorkspaceConversationLinks.js'
 import { usePersonalWorkspaceTaskLinks } from '../../composables/usePersonalWorkspaceTaskLinks.js'
@@ -319,6 +321,7 @@ const pendingLabel = computed(() => {
   return '正在整理回报...'
 })
 const renderMarkdown = (content = '') => DOMPurify.sanitize(marked(String(content || '')))
+const isArchiveMaintenanceReceipt = (content, sender) => { try { return ['ASSISTANT', 'SYSTEM', 'assistant', 'system'].includes(sender) && JSON.parse(content)?.type === 'archive_maintenance_receipt' } catch { return false } }
 
 watch(() => props.messages, () => {
   nextTick(() => {

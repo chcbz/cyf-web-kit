@@ -15,6 +15,8 @@ export const useHallChatContext = ({
   const chatMode = ref('public')
   const taskDiscussionAgentIds = ref([])
   const chatMentionAgentIds = ref([])
+  // Only the explicit archive flow may target the canonical coordinator.
+  const archiveSongjiang = ref(false)
   // An explicit conversation subject is independent of browsing another task/agent.
   const conversationSubject = ref({ agentId: '', task: null })
   const conversationTask = computed(() => conversationSubject.value.task)
@@ -91,15 +93,16 @@ export const useHallChatContext = ({
       participantAgentIds: [],
       selectedAgentId: null,
       selectedTaskId: null,
-      targetAgentIds: allowedMentionIds(chatMentionAgentIds.value),
+      targetAgentIds: archiveSongjiang.value ? ['builtin-songjiang'] : allowedMentionIds(chatMentionAgentIds.value),
       taskId: null,
-      targetAgentId: allowedMentionIds(chatMentionAgentIds.value)[0] || ''
+      targetAgentId: archiveSongjiang.value ? 'builtin-songjiang' : allowedMentionIds(chatMentionAgentIds.value)[0] || ''
     }
   })
 
   const clearChatTargets = () => {
     taskDiscussionAgentIds.value = []
     chatMentionAgentIds.value = []
+    archiveSongjiang.value = false
   }
 
   const resetToPublic = ({ clearSelection = false } = {}) => {
@@ -118,6 +121,7 @@ export const useHallChatContext = ({
     conversationSubject.value = { agentId: '', task: { ...task } }
     selectedAgent.value = null
     chatMentionAgentIds.value = []
+    archiveSongjiang.value = false
     chatMode.value = 'bounty'
     taskDiscussionAgentIds.value = taskAssigneeIds(selectedTask.value)
   }
@@ -127,8 +131,17 @@ export const useHallChatContext = ({
     selectedAgent.value = agent
     chatMentionAgentIds.value = []
     taskDiscussionAgentIds.value = []
+    archiveSongjiang.value = false
     conversationSubject.value = { agentId: agent.agentId, task: task?.id ? { ...task } : null }
     chatMode.value = 'private'
+    return true
+  }
+
+  const enterArchiveSongjiangConversation = () => {
+    clearChatTargets()
+    conversationSubject.value = { agentId: '', task: null }
+    archiveSongjiang.value = true
+    chatMode.value = 'public'
     return true
   }
 
@@ -158,6 +171,7 @@ export const useHallChatContext = ({
     chatMode,
     chatTargetText,
     clearChatTargets,
+    enterArchiveSongjiangConversation,
     enterBountyDiscussion,
     enterPrivateConversation,
     resetToPublic,
