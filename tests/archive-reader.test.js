@@ -237,19 +237,18 @@ const loadArchiveReaderSfc = (archiveModule) => {
   const relativePath = '../src/components/juyiting/archive/ArchiveReader.vue'
   const filename = new URL(relativePath, import.meta.url).pathname
   const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8')
-    .replace('defineExpose({ back })', '')
     .replace(
-      '</script>',
+      /defineExpose\(\{\s*back\s*,\s*openEdition\s*\}\)/,
       `defineExpose({
         back,
+        openEdition,
         __editorStateForTest: () => ({ editingNote: editingNote.value, noteText: noteText.value }),
         __switchEditorTargetForTest: (note, text) => {
           editingNote.value = note
           noteText.value = text
           editorRevision += 1
         }
-      })
-      </script>`
+      })`
     )
   const { descriptor } = parse(source, { filename })
   const script = compileScript(descriptor, {
@@ -354,16 +353,16 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
   }
 }
 
-const loadLibraryPanelSfc = (ArchiveReader) => {
+const loadLibraryPanelSfc = (ArchiveReader, ArchiveMaintenancePanel = { template: '<div />' }) => {
   const relativePath = '../src/components/juyiting/LibraryPanel.vue'
   const filename = new URL(relativePath, import.meta.url).pathname
   const { descriptor } = parse(readFileSync(new URL(relativePath, import.meta.url), 'utf8'), { filename })
   const body = compileScript(descriptor, { id: 'archive-library-integration', inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace(/^import\s+ArchiveReader\s+from\s+['"].\/archive\/ArchiveReader\.vue['"];?\s*$/gm, 'var ArchiveReader = arguments[1]')
-    .replace(/^import\s+ArchiveMaintenancePanel\s+from\s+['"].\/archive\/ArchiveMaintenancePanel\.vue['"];?\s*$/gm, 'var ArchiveMaintenancePanel = { template: "<div />" }')
+    .replace(/^import\s+ArchiveMaintenancePanel\s+from\s+['"].\/archive\/ArchiveMaintenancePanel\.vue['"];?\s*$/gm, 'var ArchiveMaintenancePanel = arguments[2]')
     .replace('export default', 'return')
-  return new Function('Vue', 'ArchiveReader', body)(Vue, ArchiveReader)
+  return new Function('Vue', 'ArchiveReader', 'ArchiveMaintenancePanel', body)(Vue, ArchiveReader, ArchiveMaintenancePanel)
 }
 
 const mountArchiveReader = (api, options = {}) => {
@@ -2834,6 +2833,33 @@ describe('archive reader contract behavior', () => {
     expect(readerUnmounts).to.equal(1)
   })
 
+})
+
+
+describe('archive maintenance to historical reader wiring', function () { this.timeout(10000)
+  const exactCatalog = (exactEditionId) => {
+    const summary = { blockType:'PREFACE', blockId:`${exactEditionId}-preface`, number:null, title:'引首', paragraphCount:1, utf8ByteLength:18, etag:'e'.repeat(64) }
+    return { representationSchemaVersion:1, workId:'work-history', title:'历史水浒', activeEdition:{ editionId:exactEditionId, manifestSha256:'f'.repeat(64), sourceSha256:'s'.repeat(64), prefaceParagraphCount:1, chapterParagraphCount:0, readerParagraphCount:1, readerUtf8ByteLength:18, preface:summary, chapters:[] } }
+  }
+  const exactBlock = exactEditionId => ({ representationSchemaVersion:1, editionId:exactEditionId, manifestSha256:'f'.repeat(64), blockType:'PREFACE', blockId:`${exactEditionId}-preface`, number:null, title:'引首', paragraphCount:1, utf8ByteLength:18, paragraphs:[{ paragraphId:`${exactEditionId}-p1`, ordinal:1, text:'历史版本真实正文', utf8ByteLength:18, sha256:'a'.repeat(64) }] })
+  const maintenanceEmitter = Vue.defineComponent({ emits:['open-edition'], setup(_props,{emit}) { return () => Vue.h('button',{class:'open-historical',type:'button',onClick:()=>emit('open-edition',{workId:'work-history',editionId:'edition-history'})},'打开历史版本') } })
+  const mountLibrary = ({ gone = false } = {}) => {
+    const calls=[]; const api={
+      get:async(path,params,options={})=>{calls.push({method:'get',path,params,options});if(path==='/catalog')return response(catalog);if(path==='/works')return response({items:[{workId:catalog.workId,title:catalog.title,activeEditionId:editionId}],nextCursor:null});if(path==='/editions/edition-history/catalog'){if(gone)throw Object.assign(new Error('gone'),{status:410});return response(exactCatalog('edition-history'))}if(path==='/editions/edition-history/preface')return response(exactBlock('edition-history'));if(path==='/me/progress/edition-history')return response(null);if(path==='/me/bookmarks')return response({items:[],nextCursor:null});if(path==='/me/notes')return response({items:[],nextCursor:null});throw new Error(`Unexpected GET ${path}`)},
+      put:async(path,body,options)=>{calls.push({method:'put',path,body,options});return response({})},delete:async(path,options)=>{calls.push({method:'delete',path,options});return response({})},post:async(path,body,options)=>{calls.push({method:'post',path,body,options});return response({})}
+    }
+    let readerState
+    const ArchiveReader=loadArchiveReaderSfc({useArchiveReader:(options={})=>{readerState=useArchiveReader({...options,api,saveDelay:1});return readerState},registerIdentityCleanup,utf8ByteLength})
+    const LibraryPanel=loadLibraryPanelSfc(ArchiveReader,maintenanceEmitter)
+    const wrapper=mount(LibraryPanel,{attachTo:document.body,props:{embedded:true,detailAllowed:true,active:true,keyword:'',sourceType:'',loading:false,results:[],hasSearched:false,errorMessage:'',formatTime:value=>value},global:{stubs:{'var-icon':true}}})
+    return {api,calls,readerState,wrapper}
+  }
+  it('opens and focuses the exact historical edition with real body and no private mutation', async () => {
+    const mounted=mountLibrary();try{await waitFor(()=>mounted.wrapper.findAll('[role="tab"]').length===3);await mounted.wrapper.findAll('[role="tab"]').find(tab=>tab.text().includes('任职与维护')).trigger('click');await Vue.nextTick();await mounted.wrapper.get('.open-historical').trigger('click');await waitFor(()=>mounted.wrapper.text().includes('历史版本真实正文'));expect(mounted.calls.some(call=>call.path==='/editions/edition-history/catalog')).to.equal(true);expect(mounted.calls.some(call=>call.path==='/editions/edition-history/preface')).to.equal(true);expect(mounted.wrapper.find('.archive-reader-fullscreen').exists()).to.equal(true);expect(document.activeElement).to.equal(mounted.wrapper.get('.archive-reader-fullscreen').element);expect(mounted.calls.some(call=>['put','post','delete'].includes(call.method))).to.equal(false)}finally{mounted.wrapper.unmount()}
+  })
+  it('surfaces exact 410 and never deletes, migrates, or writes private reader records', async () => {
+    const mounted=mountLibrary({gone:true});try{await waitFor(()=>mounted.wrapper.findAll('[role="tab"]').length===3);await mounted.wrapper.findAll('[role="tab"]').find(tab=>tab.text().includes('任职与维护')).trigger('click');await Vue.nextTick();await mounted.wrapper.get('.open-historical').trigger('click');await waitFor(()=>mounted.wrapper.text().includes('此版本已下架'));expect(mounted.wrapper.find('.archive-reader-fullscreen').exists()).to.equal(false);expect(mounted.calls.some(call=>['put','post','delete'].includes(call.method))).to.equal(false);expect(mounted.calls.some(call=>call.path.includes('/me/notes')||call.path.includes('/me/bookmarks')||call.path.includes('/me/progress/edition-history'))).to.equal(false)}finally{mounted.wrapper.unmount()}
+  })
 })
 
 describe('W04 explicit reading citation continuity', () => {

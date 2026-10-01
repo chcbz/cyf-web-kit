@@ -60,7 +60,7 @@
     />
 
     <ArchiveMaintenancePanel v-if="activeTab === 'maintenance'" id="library-maintenance-panel"
-      role="tabpanel" aria-labelledby="library-maintenance-tab" @open-maintenance-entry="$emit('open-maintenance-entry', $event)" />
+      role="tabpanel" aria-labelledby="library-maintenance-tab" @open-maintenance-entry="$emit('open-maintenance-entry', $event)" @open-edition="openVerifiedEdition" />
 
     <div
       v-show="activeTab === 'search'"
@@ -150,6 +150,7 @@ const readerRef = ref(null)
 const readerHasBack = ref(false)
 const canGoBack = computed(() => activeTab.value === 'reader' && readerHasBack.value)
 const back = () => canGoBack.value ? readerRef.value?.back() : false
+const openVerifiedEdition = async payload => { activeTab.value = 'reader'; await nextTick(); return readerRef.value?.openEdition?.(payload) }
 defineExpose({ canGoBack, back })
 const readerTab = ref(null)
 const searchTab = ref(null)

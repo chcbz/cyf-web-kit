@@ -772,7 +772,23 @@ const back = () => {
   else void closeReading()
   return true
 }
-defineExpose({ back })
+const openEdition = async ({ workId, editionId }) => {
+  returnFocusElement = document.activeElement
+  await closeProgressPromise
+  const opened = await runAction(
+    () => reader.selectWork(workId, editionId),
+    '此精确版本暂无法读取。'
+  )
+  if (!opened || (embedded && (!detailAllowed || !active))) return null
+  catalogOpen.value = false
+  notesOpen.value = false
+  readingOpen.value = true
+  if (!embedded) document.body?.classList.add('archive-reading-open')
+  await nextTick()
+  dialogRef.value?.focus()
+  return opened
+}
+defineExpose({ back, openEdition })
 watch(readingOpen, value => emit('navigation-state', value), { immediate: true })
 onUpdated(() => { if (active) focusRequestedLocation() })
 

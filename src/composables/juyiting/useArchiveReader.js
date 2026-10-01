@@ -230,7 +230,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
   }
 
   const selectWork = async (workId, editionId = null) => {
-    if (!works.value.some(work => work.workId === workId)) throw new Error('典籍不存在')
+    if (!editionId && !works.value.some(work => work.workId === workId)) throw new Error('典籍不存在')
     const shelf = works.value
     clearIdentityBoundState()
     works.value = shelf
@@ -405,7 +405,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
         return nextChapter
       } catch (error) {
         if (!isCurrentIdentity(requestIdentity) || generation !== loadGeneration || error?.name === 'AbortError') return null
-        errorMessage.value = '章回暂无法读取，请稍后重试。'
+        errorMessage.value = error?.status === 410 ? '此版本已下架；你的私人手札、书签和进度仍保留，可返回目录手动选择可读版本。' : '章回暂无法读取，请稍后重试。'
         throw error
       } finally {
         parentSignal?.removeEventListener('abort', abortFromParent)
@@ -1397,7 +1397,9 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       return isActive() ? nextChapter : null
     } catch (error) {
       if (!isActive() || error?.name === 'AbortError') return null
-      errorMessage.value = '典籍暂无法读取，请稍后重试。'
+      errorMessage.value = error?.status === 410
+        ? '此版本已下架；你的私人手札、书签和进度仍保留，可返回目录手动选择可读版本。'
+        : '典籍暂无法读取，请稍后重试。'
       throw error
     } finally {
       if (isActive()) loading.value = false
