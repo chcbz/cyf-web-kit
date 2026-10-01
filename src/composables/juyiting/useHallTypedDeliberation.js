@@ -89,7 +89,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     projections.value = sorted(next)
     const selected = selectedPending.value
     if (clarification && selected && selected.pendingQuestionId === clarification.pendingQuestionId &&
-      (clarification.state === 'ANSWERED' || selected.stateVersion !== clarification.stateVersion)) selectedPending.value = null
+      (clarification.state === 'ANSWERED' || selected.expectedPendingQuestionStateVersion !== clarification.stateVersion)) selectedPending.value = null
     return true
   }
   const readOne = async (requestId, captured = capture()) => {

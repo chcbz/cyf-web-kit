@@ -59,6 +59,25 @@ describe('typed natural discussion interaction adapter', () => {
     lane.dispose()
   })
 
+  it('keeps a selected OPEN clarification across the same-version poll and sends its original CAS reply; version drift still clears it', async () => {
+    const context = ref({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }); const calls = []
+    const open = clarify('request-poll'); const sameOpen = JSON.parse(JSON.stringify(open)); const changedOpen = JSON.parse(JSON.stringify(open)); changedOpen.outcome.clarification.stateVersion = '1'
+    const reads = [open, sameOpen, clarify('request-reply')]
+    const lane = useHallTypedDeliberation({ chatApi: { get: async () => ({ data: { data: reads.shift() } }), create: async (_path, body) => { calls.push(body); return { data: { data: receipt(body.intent, 'request-reply', body.pendingQuestionId) } } } },
+      actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context.value, getContextGeneration: () => 1, getCatalogEntries: () => [], storage: store(), enabled: () => true })
+    expect(await lane.readOne('request-poll')).to.not.equal(null)
+    expect(lane.choosePending(lane.projections.value[0])).to.equal(true)
+    expect(await lane.readOne('request-poll')).to.not.equal(null)
+    expect(lane.selectedPending.value?.pendingQuestionId).to.equal('pending-request-poll')
+    expect(await lane.submit({ content: '蓝色水彩。' })).to.equal(true)
+    expect(calls).to.have.length(1)
+    expect(calls[0]).to.deep.include({ intent: 'CLARIFICATION_REPLY', parentOutcomeId: 'outcome-request-poll', pendingQuestionId: 'pending-request-poll', expectedParentStateVersion: '0', expectedPendingQuestionStateVersion: '0' })
+    reads.push(changedOpen)
+    expect(await lane.readOne('request-poll')).to.not.equal(null)
+    expect(lane.selectedPending.value).to.equal(null)
+    lane.dispose()
+  })
+
   it('keeps an answered clarification monotone, clears its selected CAS question, and rejects a foreign task without hiding historical assignment', async () => {
     const context = ref({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '9' })
     const open = clarify('request-monotone')
