@@ -23,7 +23,7 @@ export const useHallBountyRequestCatalog = ({ chatApi, enabled = () => false, id
       while (next) {
         const params = query({ ...(expectedGeneration ? { expectedGeneration } : {}), after, ...(through != null ? { through } : {}) })
         const page = catalogPage(unwrap(await chatApi.get(`/conversations/${encodeURIComponent(context.conversationId)}/requests`, params, { autoLoading: false, needAuth: true })),
-          { conversationId: context.conversationId, taskId: context.taskId, generation: expectedGeneration })
+          { conversationId: context.conversationId, taskId: context.taskId, generation: expectedGeneration, after, through })
         if (!current(captured) || !page) return false
         if (through != null && page.through !== through) throw new Error('悬赏成果索引分页边界不一致')
         through = page.through; expectedGeneration = page.scope.conversationGeneration

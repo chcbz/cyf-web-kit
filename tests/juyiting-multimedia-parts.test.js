@@ -76,6 +76,7 @@ describe('bounty conversation persisted media parts', () => {
       { type: 'part.failed', requestId: 'req-1', conversationId: '77', messageId: '32', part: image(0) },
       { type: 'part.ready', requestId: 'req-2', conversationId: 'other', messageId: '32', part: image(2) }
     ]
+    const readHints = []
     const conversation = useHallConversation({
       apiStore: { token: async () => '' },
       chatApi: { create: async (_path, _body, options) => {
@@ -89,7 +90,7 @@ describe('bounty conversation persisted media parts', () => {
       log: { warn: () => {}, error: () => {} }, openPanel: () => {},
       outgoingMetadata: Vue.ref({}), portraitShortName: () => '',
       selectedAgent: Vue.ref({ agentId: 'agent-1' }), selectedTask: Vue.ref({ id: 'task-1' }),
-      showToast: () => {}
+      showToast: () => {}, onRequestCatalogHint: event => readHints.push(event.requestId)
     })
     try {
       conversation.conversationId.value = '77'
@@ -98,6 +99,7 @@ describe('bounty conversation persisted media parts', () => {
       const persisted = conversation.messages.value.find(message => message.localId === '32')
       expect(persisted.parts).to.have.length(1)
       expect(persisted.parts[0]).to.include({ assetId: 'asset-1', state: 'ready', revision: '1' })
+      expect(readHints).to.deep.equal(['req-1'])
     } finally { conversation.disposeHallConversation() }
   })
   it('does not accept untrusted lower revision or a signed URL in place of private bytes', () => {

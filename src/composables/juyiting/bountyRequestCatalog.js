@@ -27,6 +27,8 @@ export const catalogPage = (value, expected = {}) => {
   if (expected.conversationId && value.scope.conversationId !== expected.conversationId) return null
   if (expected.taskId && value.scope.taskId !== expected.taskId) return null
   if (expected.generation && value.scope.conversationGeneration !== expected.generation) return null
+  if (expected.after != null && value.after !== expected.after) return null
+  if (expected.through != null && value.through !== expected.through) return null
   const seen = new Set(); let previous = BigInt(value.after)
   for (const entry of value.entries) {
     if (!keys(entry, ['ordinal', 'request']) || !long(entry.ordinal) || BigInt(entry.ordinal) <= previous || BigInt(entry.ordinal) > BigInt(value.through) ||
@@ -40,14 +42,27 @@ export const catalogPage = (value, expected = {}) => {
   return Object.freeze(clone(value))
 }
 const versionAtLeast = (next, previous) => BigInt(next) >= BigInt(previous)
-const mergeSteps = (oldSteps, newSteps) => {
-  const old = new Map(oldSteps.map(step => [step.stepId, step])); const result = []
-  for (const step of newSteps) {
-    const prior = old.get(step.stepId)
-    if (prior && (!versionAtLeast(step.stateVersion, prior.stateVersion) || (step.stateVersion === prior.stateVersion && JSON.stringify(step) !== JSON.stringify(prior)))) return null
-    result.push(clone(step)); old.delete(step.stepId)
+const mergeVersioned = (oldItems, newItems, id, version) => {
+  const old = new Map(oldItems.map(item => [item[id], item])); const result = []
+  for (const item of newItems) {
+    const prior = old.get(item[id])
+    if (prior && (!versionAtLeast(item[version], prior[version]) || (item[version] === prior[version] && JSON.stringify(item) !== JSON.stringify(prior)))) return null
+    result.push(clone(item)); old.delete(item[id])
   }
-  return [...old.values().map(clone), ...result]
+  return [...old.values()].map(clone).concat(result)
+}
+const mergeSteps = (oldSteps, newSteps) => mergeVersioned(oldSteps, newSteps, 'stepId', 'stateVersion')
+const mergeTurns = (oldTurns, newTurns) => {
+  // Existing TurnView revisions are authoritative when present. Older wire shapes
+  // without one remain immutable across a catalog scan rather than being invented.
+  const version = turn => turn.stateVersion ?? turn.requestRevision ?? '0'
+  const old = new Map(oldTurns.map(turn => [turn.turnId, turn])); const result = []
+  for (const turn of newTurns) {
+    const prior = old.get(turn.turnId)
+    if (prior && (!versionAtLeast(version(turn), version(prior)) || (version(turn) === version(prior) && JSON.stringify(turn) !== JSON.stringify(prior)))) return null
+    result.push(clone(turn)); old.delete(turn.turnId)
+  }
+  return [...old.values()].map(clone).concat(result)
 }
 export const mergeCatalogEntries = (previous = [], page) => {
   const old = new Map(previous.map(entry => [entry.request.requestId, entry])); const merged = new Map(old)
@@ -59,8 +74,9 @@ export const mergeCatalogEntries = (previous = [], page) => {
     if (next.request.requestRevision === prior.request.requestRevision && next.request.stateVersion === prior.request.stateVersion &&
         Object.keys(next.request).filter(key => !['steps', 'turns'].includes(key)).some(key => JSON.stringify(next.request[key]) !== JSON.stringify(prior.request[key]))) return null
     const steps = mergeSteps(prior.request.steps, next.request.steps)
-    if (!steps) return null
-    merged.set(next.request.requestId, { ordinal: next.ordinal, request: { ...clone(prior.request), ...clone(next.request), steps } })
+    const turns = mergeTurns(prior.request.turns, next.request.turns)
+    if (!steps || !turns) return null
+    merged.set(next.request.requestId, { ordinal: next.ordinal, request: { ...clone(prior.request), ...clone(next.request), turns, steps } })
   }
   return [...merged.values()].sort((a, b) => BigInt(a.ordinal) < BigInt(b.ordinal) ? -1 : 1)
 }

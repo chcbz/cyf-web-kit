@@ -511,4 +511,58 @@ describe('bounty output gallery live owner scope', () => {
     })
   }
 
+  it('discovers two indexed output_1 drafts after a storage-free refresh while keeping the historical assignment read-only', async () => {
+    const oldTimeout = globalThis.setTimeout; const oldClear = globalThis.clearTimeout
+    const downloads = []; const output = (requestId, stepId) => {
+      const url = `/chat/requests/${requestId}/steps/${stepId}/outputs/output_1`
+      return { outputId: 'output_1', contentMimeType: 'image/png', sha256: zeroDigest, byteLength: 20,
+        previewUrl: url, downloadUrl: `${url}?download=true`, assetRef: { assetId: `asset_${requestId}`, revision: '1' } }
+    }
+    const catalog = [
+      { ordinal: '1', request: { requestId: 'request-old', conversationId: 'conversation-1',
+        steps: [{ ...step('step-old'), taskId: 'task-1', targetAgentId: 'agent-old', assignmentRevision: '2' }] } },
+      { ordinal: '2', request: { requestId: 'request-current', conversationId: 'conversation-1',
+        steps: [{ ...step('step-current'), taskId: 'task-1', targetAgentId: 'agent-current', assignmentRevision: '3' }] } }
+    ]
+    const reads = []; const chatApi = { get: async path => {
+      reads.push(path)
+      if (path === '/requests/request-old') return { data: { data: catalog[0].request } }
+      if (path === '/requests/request-current') return { data: { data: catalog[1].request } }
+      if (path.endsWith('/steps/step-old/outputs')) return { data: { data: [output('request-old', 'step-old')] } }
+      if (path.endsWith('/steps/step-current/outputs')) return { data: { data: [output('request-current', 'step-current')] } }
+      throw new Error(`unexpected GET ${path}`)
+    }, execute: async request => {
+      expect(request.method).to.equal('GET')
+      return { data: new Blob([new Uint8Array(20)], { type: 'image/png' }) }
+    } }
+    const Component = new Function('Vue', 'deps', script)(Vue, {
+      createApi: () => chatApi, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps,
+      downloadMimeType, outputDownloadName, outputAssetPart, useHallBountyFinalization, safeFinalizationVersion,
+      useHallConversationArchive, readOutputRecovery, writeOutputRecovery, saveOutputBlob: value => downloads.push(value)
+    })
+    globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : oldTimeout(fn, delay, ...args)
+    globalThis.clearTimeout = id => { if (id !== 999) oldClear(id) }
+    let wrapper
+    try {
+      wrapper = mount(Component, { props: { enabled: true, followupEnabled: true, identityKey: 'owner-a', taskVersion: '9',
+        conversationId: 'conversation-1', request: catalog[1].request, catalog } })
+      await flushPromises()
+      const cards = wrapper.findAll('.bounty-output')
+      expect(cards).to.have.length(2)
+      expect(reads).to.include.members(['/requests/request-old', '/requests/request-current'])
+      expect(cards[0].find('input[type="checkbox"]').attributes()).to.have.property('disabled')
+      expect(cards[0].find('.image-rework button').attributes()).to.have.property('disabled')
+      expect(cards[1].find('input[type="checkbox"]').attributes()).not.to.have.property('disabled')
+      for (const card of cards) await card.findAll('button').find(button => button.text() === '下载').trigger('click')
+      for (let attempt = 0; attempt < 20 && downloads.length < 2; attempt++) {
+        await new Promise(resolve => oldTimeout(resolve, 5)); await flushPromises()
+      }
+      expect(downloads).to.have.length(2)
+      expect(downloads.map(value => value.item.name)).to.deep.equal(['output_1.png', 'output_1.png'])
+      expect(reads.filter(path => path.endsWith('/outputs')).sort()).to.deep.equal([
+        '/requests/request-current/steps/step-current/outputs', '/requests/request-old/steps/step-old/outputs'
+      ])
+    } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
+  })
+
 })
