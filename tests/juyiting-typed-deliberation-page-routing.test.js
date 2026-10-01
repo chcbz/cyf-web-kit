@@ -22,7 +22,7 @@ const option = (callee, name) => {
   return script.slice(property.value.start, property.value.end)
 }
 const typedReceipt = (requestId = 'request-typed-1', turnId = 'turn-typed-1') => ({ schemaVersion: 1, intent: 'DISCUSSION', requestId, userMessageId: '100', turnIds: [turnId], state: 'ADMITTED', stateVersion: '0', eventCursor: '1', statusUrl: `/chat/requests/${requestId}`, typedOutcomeUrl: `/chat/conversations/7/requests/${requestId}/typed-outcome`, replay: false, pendingQuestionId: null })
-const typedRequest = (requestId = 'request-typed-1', turnId = 'turn-typed-1') => ({ requestId, requestRevision: '1', stateVersion: '0', conversationId: '7', conversationGeneration: '1', userMessageId: '100', state: 'ADMITTED', turns: [{ turnId, requestId, requestRevision: '1', stateVersion: '0', conversationId: '7', conversationGeneration: '1', targetAgentId: 'agent-1', state: 'WAITING', lastDeltaSeq: '0', finalMessageId: null }] })
+const typedRequest = (requestId = 'request-typed-1', turnId = 'turn-typed-1', { state = 'RUNNING', stateVersion = '0', turnState = 'RECEIVED', turnStateVersion = '0', finalMessageId = null } = {}) => ({ requestId, requestRevision: '1', stateVersion, conversationId: '7', conversationGeneration: '1', userMessageId: '100', state, turns: [{ turnId, requestId, requestRevision: '1', stateVersion: turnStateVersion, conversationId: '7', conversationGeneration: '1', targetAgentId: 'agent-1', state: turnState, lastDeltaSeq: '0', finalMessageId }] })
 describe('actual JuyiHall typed natural follow-up routing', () => {
   it('routes the one bounty composer through typed DISCUSSION only when the strict default-off flag is enabled', async () => {
     const enabled = ref(true); const draft = ref('画一只鸟'); const calls = []; const typed = { error: ref(''), submit: async body => { calls.push(['typed', body]); return true } }
@@ -80,7 +80,7 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
     }
   })
 
-  it('uses the actual page accepted callback to adopt the authoritative typed request and same scoped transcript without another POST', async () => {
+  it('adopts an actual RUNNING request and RECEIVED turn after its immutable ADMITTED receipt without another POST', async () => {
     const calls = []; const chatContext = ref({ conversationScopeType: 'bounty', conversationScopeKey: 'task-1', mode: 'bounty', targetAgentIds: ['agent-1'], targetAgentId: 'agent-1', taskId: 'task-1' })
     const selectedTask = ref({ id: 'task-1' }); const selectedAgent = ref({ agentId: 'agent-1', name: '吴用' })
     const requestView = typedRequest()
@@ -94,12 +94,50 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       expect(await conversation.loadHallMessages()).to.equal(true)
       const pageAccepted = new Function('adoptTypedDiscussionReceipt', 'bountyRequestCatalog', 'showToast', `return (${option('useHallTypedDeliberation', 'onAccepted')})`)(conversation.adoptTypedDiscussionReceipt, { hint: () => calls.push('HINT') }, text => calls.push(`TOAST:${text}`))
       expect(await pageAccepted({ receipt: typedReceipt(), context: { conversationId: '7', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4', conversationGeneration: '1' }, isCurrent: () => true })).to.equal(true)
-      expect(conversation.activeRequest.value?.requestId).to.equal('request-typed-1')
+      expect(conversation.activeRequest.value).to.include({ requestId: 'request-typed-1', state: 'RUNNING', stateVersion: '0' })
+      expect(conversation.activeTurns.value[0]).to.include({ turnId: 'turn-typed-1', state: 'RECEIVED', stateVersion: '0' })
       expect(conversation.messages.value.map(message => message.localId)).to.deep.equal(['message-user-1'])
       expect(calls.filter(call => call === 'POST')).to.deep.equal([])
       expect(calls.filter(call => call === 'GET:/requests/request-typed-1')).to.have.length(1)
       expect(calls.filter(call => call === 'CONTENT:7')).to.have.length(2)
       expect(calls).to.include('HINT')
+    } finally { conversation.disposeHallConversation() }
+  })
+  it('adopts an already COMPLETED request and FINAL_PERSISTED turn for the same immutable receipt without another POST', async () => {
+    const calls = []; const chatContext = ref({ conversationScopeType: 'bounty', conversationScopeKey: 'task-1', mode: 'bounty', targetAgentIds: ['agent-1'], targetAgentId: 'agent-1', taskId: 'task-1' })
+    const requestView = typedRequest('request-typed-final', 'turn-typed-final', { state: 'COMPLETED', stateVersion: '1', turnState: 'FINAL_PERSISTED', turnStateVersion: '3', finalMessageId: '101' })
+    const conversation = useHallConversation({ apiStore: { authorizationGeneration: 1, token: async () => null }, chatContext, chatMode: ref('bounty'),
+      chatApi: { list: async (_path, _body, options) => options.onSuccess({ data: [{ id: '7', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task-1' }] }),
+        getById: async (_path, id, options) => { calls.push(`CONTENT:${id}`); options.onSuccess({ data: [] }) }, get: async path => { calls.push(`GET:${path}`); return { data: { data: requestView } } }, create: async () => { calls.push('POST'); throw new Error('must not post') } },
+      globalStore: { getJiacn: 'owner', user: {} }, log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}), portraitShortName: agent => agent?.name || '', selectedAgent: ref({ agentId: 'agent-1', name: '吴用' }), selectedTask: ref({ id: 'task-1' }), showToast: () => {} })
+    try {
+      expect(await conversation.loadHallMessages()).to.equal(true)
+      expect(await conversation.adoptTypedDiscussionReceipt({ receipt: typedReceipt('request-typed-final', 'turn-typed-final'), context: { conversationId: '7', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4', conversationGeneration: '1' } })).to.equal(true)
+      expect(conversation.activeRequest.value).to.include({ requestId: 'request-typed-final', state: 'COMPLETED', stateVersion: '1' })
+      expect(conversation.activeTurns.value[0]).to.include({ turnId: 'turn-typed-final', state: 'FINAL_PERSISTED', stateVersion: '3', finalMessageId: '101' })
+      expect(calls.filter(call => call === 'GET:/requests/request-typed-final')).to.have.length(1)
+      expect(calls.filter(call => call === 'POST')).to.deep.equal([])
+    } finally { conversation.disposeHallConversation() }
+  })
+  it('rejects a late lower-version typed readback without downgrading the newer terminal request or reading content again', async () => {
+    const calls = []; let requestView = typedRequest('request-typed-progress', 'turn-typed-progress', { state: 'COMPLETED', stateVersion: '2', turnState: 'FINAL_PERSISTED', turnStateVersion: '4', finalMessageId: '101' })
+    const chatContext = ref({ conversationScopeType: 'bounty', conversationScopeKey: 'task-1', mode: 'bounty', targetAgentIds: ['agent-1'], targetAgentId: 'agent-1', taskId: 'task-1' })
+    const conversation = useHallConversation({ apiStore: { authorizationGeneration: 1, token: async () => null }, chatContext, chatMode: ref('bounty'),
+      chatApi: { list: async (_path, _body, options) => options.onSuccess({ data: [{ id: '7', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task-1' }] }),
+        getById: async (_path, id, options) => { calls.push(`CONTENT:${id}`); options.onSuccess({ data: [] }) }, get: async path => { calls.push(`GET:${path}`); return { data: { data: requestView } } }, create: async () => { calls.push('POST'); throw new Error('must not post') } },
+      globalStore: { getJiacn: 'owner', user: {} }, log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}), portraitShortName: agent => agent?.name || '', selectedAgent: ref({ agentId: 'agent-1', name: '吴用' }), selectedTask: ref({ id: 'task-1' }), showToast: () => {} })
+    const receipt = typedReceipt('request-typed-progress', 'turn-typed-progress')
+    const context = { conversationId: '7', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4', conversationGeneration: '1' }
+    try {
+      expect(await conversation.loadHallMessages()).to.equal(true)
+      expect(await conversation.adoptTypedDiscussionReceipt({ receipt, context })).to.equal(true)
+      const contentReadsAfterTerminal = calls.filter(call => call === 'CONTENT:7').length
+      requestView = typedRequest('request-typed-progress', 'turn-typed-progress', { state: 'RUNNING', stateVersion: '1', turnState: 'RECEIVED', turnStateVersion: '1' })
+      expect(await conversation.adoptTypedDiscussionReceipt({ receipt, context })).to.equal(false)
+      expect(conversation.activeRequest.value).to.include({ requestId: 'request-typed-progress', state: 'COMPLETED', stateVersion: '2' })
+      expect(conversation.activeTurns.value[0]).to.include({ turnId: 'turn-typed-progress', state: 'FINAL_PERSISTED', stateVersion: '4', finalMessageId: '101' })
+      expect(calls.filter(call => call === 'CONTENT:7')).to.have.length(contentReadsAfterTerminal)
+      expect(calls.filter(call => call === 'POST')).to.deep.equal([])
     } finally { conversation.disposeHallConversation() }
   })
   it('fences a late authoritative typed receipt read after target drift without content adoption or POST', async () => {
@@ -142,6 +180,28 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
         contentReads = 0
         expect(await conversation.adoptTypedDiscussionReceipt({ receipt: typedReceipt(), context: { conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' } })).to.equal(false)
         expect(conversation.activeRequest.value).to.equal(null); expect(contentReads).to.equal(0); expect(posts).to.equal(0)
+      } finally { conversation.disposeHallConversation() }
+    }
+  })
+  it('rejects an admission-domain request, non-one status revision, and nonzero receipt version before state or content adoption', async () => {
+    const scenarios = [
+      { name: 'ADMITTED request state', mutateRequest: view => { view.state = 'ADMITTED' } },
+      { name: 'non-one request revision', mutateRequest: view => { view.requestRevision = '2'; view.turns[0].requestRevision = '2' } },
+      { name: 'nonzero receipt state version', mutateReceipt: value => { value.stateVersion = '1' } }
+    ]
+    for (const scenario of scenarios) {
+      let contentReads = 0; let posts = 0; const requestView = typedRequest(); const receipt = typedReceipt()
+      scenario.mutateRequest?.(requestView); scenario.mutateReceipt?.(receipt)
+      const chatContext = ref({ conversationScopeType: 'bounty', conversationScopeKey: 'task-1', mode: 'bounty', targetAgentIds: ['agent-1'], targetAgentId: 'agent-1', taskId: 'task-1' })
+      const conversation = useHallConversation({ apiStore: { authorizationGeneration: 1, token: async () => null }, chatContext, chatMode: ref('bounty'),
+        chatApi: { list: async (_path, _body, options) => options.onSuccess({ data: [{ id: '7', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task-1' }] }),
+          getById: async (_path, _id, options) => { contentReads++; options.onSuccess({ data: [] }) }, get: async () => ({ data: { data: requestView } }), create: async () => { posts++; throw new Error('unexpected') } },
+        globalStore: { getJiacn: 'owner', user: {} }, log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}), portraitShortName: agent => agent?.name || '', selectedAgent: ref({ agentId: 'agent-1', name: '吴用' }), selectedTask: ref({ id: 'task-1' }), showToast: () => {} })
+      try {
+        expect(await conversation.loadHallMessages(), scenario.name).to.equal(true)
+        contentReads = 0
+        expect(await conversation.adoptTypedDiscussionReceipt({ receipt, context: { conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' } }), scenario.name).to.equal(false)
+        expect(conversation.activeRequest.value, scenario.name).to.equal(null); expect(contentReads, scenario.name).to.equal(0); expect(posts, scenario.name).to.equal(0)
       } finally { conversation.disposeHallConversation() }
     }
   })
