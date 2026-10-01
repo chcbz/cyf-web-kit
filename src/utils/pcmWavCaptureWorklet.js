@@ -1,3 +1,4 @@
+/* global sampleRate */
 class CyfPcmWavCaptureProcessor extends AudioWorkletProcessor {
   constructor () {
     super()

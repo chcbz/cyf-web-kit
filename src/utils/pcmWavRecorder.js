@@ -125,11 +125,11 @@ export const createPcmWavRecorder = async ({ stream, browser = globalThis, onPcm
     closed = true
     abortSignal?.removeEventListener?.('abort', onAbort)
     rejectPendingStop(abortError())
-    try { source?.disconnect?.() } catch {}
-    try { node?.disconnect?.() } catch {}
-    try { gain?.disconnect?.() } catch {}
-    try { node?.port?.close?.() } catch {}
-    try { await context.close?.() } catch {}
+    try { source?.disconnect?.() } catch { /* Source may already be disconnected. */ }
+    try { node?.disconnect?.() } catch { /* Worklet node may already be disconnected. */ }
+    try { gain?.disconnect?.() } catch { /* Gain node may already be disconnected. */ }
+    try { node?.port?.close?.() } catch { /* Worklet port may already be closed. */ }
+    try { await context.close?.() } catch { /* AudioContext may already be closed. */ }
   }
   if (abortSignal?.aborted) {
     await close()

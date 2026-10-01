@@ -1,15 +1,43 @@
 <template>
-  <div v-if="voice?.supported" class="hall-voice-controls" @pointerdown.stop @keydown.stop>
+  <div
+    v-if="voice?.supported"
+    class="hall-voice-controls"
+    @pointerdown.stop
+    @keydown.stop
+  >
     <span v-if="compact" class="voice-target" :title="voice.targetLabel">{{ voice.targetLabel }}</span>
-    <button v-if="voice.state !== 'recording'" type="button" :disabled="!voice.canRecord" aria-label="开始录音" @click="voice.startRecording()">
+    <button
+      v-if="voice.state !== 'recording'"
+      type="button"
+      :disabled="!voice.canRecord"
+      aria-label="开始录音"
+      @click="voice.startRecording()"
+    >
       <var-icon name="microphone" /><span>语音</span>
     </button>
-    <button v-else type="button" class="is-recording" aria-label="停止录音并转写" @click="voice.stopRecording()">
+    <button
+      v-else
+      type="button"
+      class="is-recording"
+      aria-label="停止录音并转写"
+      @click="voice.stopRecording()"
+    >
       <var-icon name="stop" /><span>停止并转写 {{ seconds }}s</span>
     </button>
-    <button v-if="canCancelCapture" type="button" class="voice-cancel" :aria-label="cancelLabel" @click="voice.cancel()">{{ cancelLabel }}</button>
+    <button
+      v-if="canCancelCapture"
+      type="button"
+      class="voice-cancel"
+      :aria-label="cancelLabel"
+      @click="voice.cancel()"
+    >{{ cancelLabel }}</button>
     <label class="voice-toggle">
-      <input :checked="voice.autoSendEnabled" type="checkbox" :disabled="voice.recording" @change="voice.setAutoSendEnabled($event.target.checked)" /> 自动发送
+      <input
+        :checked="voice.autoSendEnabled"
+        type="checkbox"
+        :disabled="voice.recording"
+        @change="voice.setAutoSendEnabled($event.target.checked)"
+      /> 自动发送
     </label>
     <div class="voice-reply-setting">
       <label class="voice-toggle">

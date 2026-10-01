@@ -1,3 +1,4 @@
+import { before } from 'mocha'
 import { useFormalTaskExecutionScope } from '../src/composables/useFormalTaskExecutionScope.js'
 import { expect } from 'chai'
 import { compileScript, parse } from '@vue/compiler-sfc'
@@ -259,7 +260,7 @@ const createActualHallVoiceMocks = ({
     env: { VITE_JUYITING_VOICE_ENABLED: 'true' },
     resolveLiveMapPreviewActivation, resolveHallNavigationPresentation, isEconomyPreviewBuildEnabled,
     resolveAccountDisplayName: (user, fallback = '用户') => user?.nickname || user?.username || fallback,
-    isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: async () => null,
+    isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: async () => null, isMultimediaDeliberationUiEnabled: () => false,
     capturePanelReturnTarget: () => null, focusHallPanel: noop, isCurrentPanelGeneration: () => true, isSafePanelFocusTarget: () => false,
     resolvePanelReturnTarget: () => null, restorePanelFocus: noop, trapPanelFocus: noop,
     onBeforeRouteLeave: noop, useRouter: () => ({ push: asyncNoop }),
@@ -283,6 +284,15 @@ const createActualHallVoiceMocks = ({
     }),
     useHallScene: () => ({ markAgentSpeaking: noop, markDiscussionStarted: noop, markLibraryCitation: noop, markLibrarySearching: noop, markRecommendedAgents: noop, markTaskArchived: noop, markTaskAssigned: noop, markTaskAutoAssigned: noop, markTaskCreated: noop, resetSceneFeedback: noop, sceneAgents: agentList, sceneAgentStyle: () => ({}), sceneHotspots: list, syncAfterPersonaChanged: noop }),
     useHallTaskActions: () => ({ archiveTask: asyncNoop, autoAssignTask: asyncNoop, assignTask: asyncNoop, createTask: asyncNoop }),
+    useHallRequirementCreate: () => ({ state: text, busy: Vue.ref(false), create: asyncNoop, checkOriginal: async () => false, resumeOriginal: async () => false, readOriginal: () => null, dispose: noop }),
+    createControlledImageCapabilityObservationFence: () => ({ capture: () => ({ identityScope: '', authorizationGeneration: 0, isCurrent: () => true }), invalidate: noop }),
+    loadControlledImageBountyCapability: async () => null, capabilityOffersControlledImageConsent: () => false,
+    useHallTaskLinkedReferenceInputs: () => ({ resolve: async () => ({ state: 'READY', inputRefs: [] }), invalidate: noop, dispose: noop }),
+    createPointAndStartIntentStore: () => ({ read: () => ({ state: 'ABSENT' }) }), pointAndStartRecoveryLane: () => 'NATIVE', providerConsentAcknowledgement: null,
+    createNativeCapabilityObservationFence: () => ({ capture: () => ({ identityScope: '', authorizationGeneration: 0, isCurrent: () => true }), invalidate: noop }),
+    loadNativeBountyCapability: async () => null, capabilityAllowsNewStart: () => false, capabilityAllowsOriginalReplay: () => false, pointAndStartIntentReadLane: () => 'ABSENT',
+    useHallPointAndStartControlledBridge: () => ({ state: Vue.ref({ status: 'IDLE', intent: null }), busy: Vue.ref(false), selectContext: () => true, start: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, dispose: noop, invalidate: noop }),
+    useHallPointAndStart: () => ({ state: Vue.ref({ status: 'IDLE', intent: null }), busy: Vue.ref(false), start: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, observeOriginal: async () => false, stopObservation: noop, dispose: noop }),
     useHallConversation: options => {
       conversationRef.value = useHallConversation(options)
       return conversationRef.value
@@ -731,7 +741,7 @@ describe('Juyi Hall voice identity and capture controls', () => {
     const countdownVoice = createVoice({ browser: countdownHarness.browser }).voice
     countdownVoice.setAutoSendEnabled(true)
     await countdownVoice.startRecording()
-    let recorder = FakeRecorder.instances.at(-1)
+    const recorder = FakeRecorder.instances.at(-1)
     recorder.ondataavailable({ data: new Blob(['voice']) })
     countdownVoice.stopRecording()
     await flush()
@@ -939,12 +949,11 @@ describe('Juyi Hall voice sending escape', () => {
     const terminals = []
     const toasts = []
     let sequence = 0
-    let voice
     const tracker = createHallVoiceReplyCorrelation({ onReply: message => voice.completeReply(message) })
     const harness = browserHarness({ fetchImpl: async () => { throw new Error('stopped sends must not synthesize') } })
     let requestSequence = 0
     harness.browser.crypto.randomUUID = () => `voice-request-${++requestSequence}`
-    ;({ voice } = createVoice({
+    const { voice } = createVoice({
       browser: harness.browser,
       showToast: message => toasts.push(message),
       onSendVoice: async ({ turnId }) => {
@@ -961,7 +970,7 @@ describe('Juyi Hall voice sending escape', () => {
         terminals.push(payload)
         tracker.closeIfCurrent(payload.turnId, payload.reason)
       }
-    }))
+    })
     const HallVoiceControls = loadSfc('../src/components/juyiting/HallVoiceControls.vue')
     const wrapper = mount(HallVoiceControls, { props: { voice }, global: { stubs: { 'var-icon': true } } })
     try {
@@ -1055,14 +1064,13 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
   it('queues a synchronous final until voice send acceptance reaches a terminal state', async () => {
     FakeRecorder.instances = []
     const harness = browserHarness()
-    let voice
-    ;({ voice } = createVoice({
+    const { voice } = createVoice({
       browser: harness.browser,
       onSendVoice: async () => {
         expect(voice.completeReply({ content: '同步完整回话' })).to.equal(true)
         return true
       }
-    }))
+    })
     await transcribeToReview(voice)
     expect(await voice.sendTranscript()).to.equal(true)
     await flush()
@@ -1089,8 +1097,7 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
     FakeRecorder.instances = []
     const harness = browserHarness()
     let attempts = 0
-    let voice
-    ;({ voice } = createVoice({
+    const { voice } = createVoice({
       browser: harness.browser,
       onSendVoice: async () => {
         attempts += 1
@@ -1100,7 +1107,7 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
         }
         return true
       }
-    }))
+    })
     await transcribeToReview(voice)
     expect(await voice.sendTranscript()).to.equal(false)
     expect(voice.state).to.equal('conflict')
@@ -1378,7 +1385,8 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
       context: validContext({
         conversationId: 'frozen-conversation', conversationScopeType: 'private', conversationScopeKey: 'agent:frozen-agent', mode: 'private',
         targetAgentIds: ['frozen-agent'], targetAgentId: 'frozen-agent', participantAgentIds: ['frozen-agent'], mentionAgentIds: [],
-        selectedAgentId: 'frozen-agent', selectedTaskId: 'frozen-task', taskId: 'frozen-task', outgoingMetadata: { frozen: { z: 1 } }
+        selectedAgentId: 'frozen-agent', selectedTaskId: 'frozen-task', taskId: 'frozen-task',
+        outgoingMetadata: { libraryCitationId: 'archive-frozen', librarySourceType: 'knowledge-base', frozen: { z: 1 } }
       }),
       draft: 'original draft',
       draftRevision: frozenRevision
@@ -1388,7 +1396,8 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
     expect(payloads[0]).to.deep.include({ conversationId: 'frozen-conversation', conversationScopeKey: 'agent:frozen-agent', targetAgentId: 'frozen-agent', taskId: 'frozen-task' })
     expect(payloads[0].metadata).to.deep.include({ selectedAgentId: 'frozen-agent', selectedTaskId: 'frozen-task' })
     expect(payloads[0].metadata.mentionAgentIds).to.deep.equal(['frozen-agent'])
-    expect(payloads[0].metadata.frozen).to.deep.equal({ z: 1 })
+    expect(payloads[0].metadata).to.include({ libraryCitationId: 'archive-frozen', librarySourceType: 'knowledge-base' })
+    expect(payloads[0].metadata.frozen).to.equal(undefined)
     expect(conversation.draft.value).to.equal('')
     conversation.disposeHallConversation()
   })
