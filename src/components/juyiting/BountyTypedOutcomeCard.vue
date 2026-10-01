@@ -11,7 +11,7 @@
     <template v-else-if="outcome.kind === 'EXECUTION_PROPOSAL'">
       <p class="typed-proposal">{{ operationLabel }}</p>
       <small>提议不会自行办理、扣费或开始 Provider 请求；确认后仍需核对预览并明确同意。</small>
-      <button v-if="!inspection" type="button" @click="$emit('confirm-proposal', projection)">确认办理并查看预览</button><small v-else>查阅结果不会自行开始办理、扣费或 Provider 请求。</small>
+      <button type="button" @click="$emit('confirm-proposal', projection)">确认办理并查看预览</button>
     </template>
   </article>
 </template>

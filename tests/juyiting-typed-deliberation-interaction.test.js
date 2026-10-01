@@ -135,4 +135,25 @@ describe('typed inspection interaction adapter', () => {
     expect(calls.map(call => call[0])).to.deep.equal(['POST', 'GET'])
     lane.dispose()
   })
+  it('discovers INSPECT from the existing request catalog and does not force that request through CHAT', async () => {
+    const calls = []; const context = ref({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' })
+    const pending = { schemaVersion: 2, contract: 'juyiting-typed-inspection-v1', conversationId: '7', conversationGeneration: '1', requestId: 'request-catalog-inspect', requestRevision: '1', turnId: 'turn-catalog-inspect', state: 'PENDING', outcome: null, inspection: { authorizationId: 'inspection-1', manifestDigest: `sha256:${'a'.repeat(64)}`, sourceRefIds: ['source-1'], inputSummary: null } }
+    const lane = useHallTypedDeliberation({ chatApi: { get: async path => { calls.push(path); return { data: { data: pending } } } }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context.value, getContextGeneration: () => 1,
+      getCatalogEntries: () => [{ request: { requestId: 'request-catalog-inspect', turns: [{ route: 'INSPECT' }] } }], storage: store(), enabled: () => true })
+    expect(await lane.refresh()).to.equal(true)
+    expect(calls).to.deep.equal(['/conversations/7/requests/request-catalog-inspect/inspection-outcome'])
+    lane.dispose()
+  })
+  it('lets an inspection clarification continue as explicit CHAT when the user does not select another inspection', async () => {
+    const calls = []; const context = ref({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' })
+    const inspectionClarify = { ...clarify('request-inspect-clarify'), schemaVersion: 2, contract: 'juyiting-typed-inspection-v1', inspection: { authorizationId: 'inspection-1', manifestDigest: `sha256:${'a'.repeat(64)}`, sourceRefIds: ['source-1'], inputSummary: { inputDigest: `sha256:${'b'.repeat(64)}`, sources: [{ sourceRefId: 'source-1', sha256: 'c'.repeat(64), byteLength: '1', carrier: 'DIRECT_TEXT', contributionDigest: `sha256:${'d'.repeat(64)}` }] } } }
+    const chatAdmission = receipt('CLARIFICATION_REPLY', 'request-chat-reply', 'pending-request-inspect-clarify')
+    const lane = useHallTypedDeliberation({ chatApi: { get: async () => ({ data: { data: inspectionClarify } }), create: async (path, body) => { calls.push([path, body]); return { data: { data: chatAdmission } } } }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context.value, getContextGeneration: () => 1, getCatalogEntries: () => [], storage: store(), enabled: () => true })
+    expect(await lane.readOne('request-inspect-clarify', undefined, 'INSPECT')).to.not.equal(null)
+    expect(lane.choosePending(lane.projections.value[0])).to.equal(true)
+    expect(await lane.submit({ content: '只补充文字，不再查阅。' })).to.equal(true)
+    expect(calls[0][0]).to.equal('/conversations/7/interactions/discussion')
+    lane.dispose()
+  })
+
 })

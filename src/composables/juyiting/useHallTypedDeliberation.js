@@ -119,9 +119,16 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       !typedLong(captured.context.assignmentRevision, { allowZero: true })) return false
     refreshing = true; error.value = ''
     try {
-      const requestIds = [...new Set((getCatalogEntries?.() || []).map(entry => entry?.request?.requestId).filter(typedId))]
-      const inspectionRequestIds = [...new Set(readRecords(storage, captured.scope, captured.context).filter(record => recordPurpose(record) === 'INSPECT').map(record => record.receipt?.requestId).filter(typedId))]
-      await Promise.all(requestIds.map(requestId => readOne(requestId, captured, 'CHAT')).concat(inspectionRequestIds.map(requestId => readOne(requestId, captured, 'INSPECT'))))
+      const catalogEntries = getCatalogEntries?.() || []
+      const catalogInspectionIds = catalogEntries.filter(entry => entry?.request?.turns?.some(turn => turn?.route === 'INSPECT'))
+        .map(entry => entry.request.requestId).filter(typedId)
+      const catalogChatIds = catalogEntries.filter(entry => !entry?.request?.turns?.some(turn => turn?.route === 'INSPECT'))
+        .map(entry => entry?.request?.requestId).filter(typedId)
+      const storedInspectionIds = readRecords(storage, captured.scope, captured.context).filter(record => recordPurpose(record) === 'INSPECT')
+        .map(record => record.receipt?.requestId).filter(typedId)
+      const inspectionRequestIds = [...new Set([...catalogInspectionIds, ...storedInspectionIds])]
+      await Promise.all([...new Set(catalogChatIds)].map(requestId => readOne(requestId, captured, 'CHAT'))
+        .concat(inspectionRequestIds.map(requestId => readOne(requestId, captured, 'INSPECT'))))
       return current(captured)
     } finally {
       if (current(captured)) refreshing = false
@@ -143,7 +150,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     if (!current(captured) || !typedId(context.conversationId) || !typedId(context.taskId) || !typedId(context.targetAgentId) ||
       !typedLong(context.assignmentRevision, { allowZero: true })) return false
     const pending = selectedPending.value
-    const purpose = inspection ? 'INSPECT' : (pending?.purpose || 'CHAT')
+    const purpose = inspection ? 'INSPECT' : 'CHAT'
     if (purpose === 'INSPECT' && !pending && (!Array.isArray(sourceSelectors) || sourceSelectors.length === 0)) {
       if (current(captured)) error.value = '请明确选择本轮交给当前 Agent 查阅的资料；未发送'
       return false
@@ -214,7 +221,6 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     finally { if (current(captured)) busy.value = false }
   }
   const confirmProposal = async projection => {
-    if (projection?.purpose === 'INSPECT') return false
     const proposal = projection?.outcome?.proposal
     if (!proposal || !current(capture())) return false
     const inputs = selectorInputs(proposal)
@@ -230,7 +236,8 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   const inspectionStatus = computed(() => {
     storageRevision.value
     if (projections.value.some(item => item.purpose === 'INSPECT' && item.state === 'PENDING')) return '正在查阅资料；受理或目录可用不表示已读。'
-    return readRecords(storage, scope.value, getContext?.() || {}).some(record => recordPurpose(record) === 'INSPECT' && record.status === 'ACCEPTED')
+    const ready = new Set(projections.value.filter(item => item.purpose === 'INSPECT' && item.state === 'READY').map(item => item.requestId))
+    return readRecords(storage, scope.value, getContext?.() || {}).some(record => recordPurpose(record) === 'INSPECT' && record.status === 'ACCEPTED' && !ready.has(record.receipt?.requestId))
       ? '查阅已受理，正在等待 Agent 查阅；尚未表示已读。' : ''
   })
   const invalidate = () => { generation++; busy.value = false; projections.value = []; selectedPending.value = null; error.value = '' }
