@@ -52,7 +52,7 @@ const storedBody = value => {
 export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorizationGeneration, getContext, getContextGeneration,
   getCatalogEntries, storage = null, enabled = () => false, onAccepted = null, onProposal = null }) => {
   const scope = computed(() => unref(typeof actorScopeKey === 'function' ? actorScopeKey() : actorScopeKey))
-  const projections = ref([]); const selectedPending = ref(null); const error = ref(''); const busy = ref(false)
+  const projections = ref([]); const selectedPending = ref(null); const error = ref(''); const busy = ref(false); const storageRevision = ref(0)
   let generation = 0; let disposed = false; let queued = false; let refreshing = false
   const capture = () => Object.freeze({ generation, scope: scope.value,
     authorization: unref(typeof authorizationGeneration === 'function' ? authorizationGeneration() : authorizationGeneration),
@@ -62,17 +62,34 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     captured.contextGeneration === getContextGeneration?.() && sameContext(captured.context, getContext?.() || {})
   const path = (context, requestId = '') => `/conversations/${encodeURIComponent(context.conversationId)}/requests/${encodeURIComponent(requestId)}/typed-outcome`
   const sorted = values => [...values].sort((a, b) => a.requestId.localeCompare(b.requestId))
+  const compareLong = (one, two) => one.length - two.length || (one < two ? -1 : one > two ? 1 : 0)
+  const sameFinalBinding = (one, two) => one?.requestId === two?.requestId && one?.turnId === two?.turnId &&
+    one?.outcome?.outcomeId === two?.outcome?.outcomeId && one?.outcome?.finalDigest === two?.outcome?.finalDigest &&
+    one?.outcome?.taskId === two?.outcome?.taskId && one?.outcome?.assignmentRevision === two?.outcome?.assignmentRevision &&
+    one?.outcome?.assistantMessageId === two?.outcome?.assistantMessageId && one?.outcome?.kind === two?.outcome?.kind
+  const persistRecords = (captured, records) => {
+    if (!writeRecords(storage, captured.scope, captured.context, records)) return false
+    storageRevision.value++
+    return true
+  }
   const apply = (projection, captured) => {
     if (!current(captured)) return false
     const previous = projections.value.find(item => item.requestId === projection.requestId)
     if (previous && previous.state === 'READY' && projection.state === 'PENDING') return false
+    if (previous?.state === 'READY' && projection.state === 'READY' && !sameFinalBinding(previous, projection)) return false
+    const previousClarification = previous?.outcome?.kind === 'CLARIFY' ? previous.outcome.clarification : null
+    const clarification = projection?.outcome?.kind === 'CLARIFY' ? projection.outcome.clarification : null
+    if (previousClarification && clarification) {
+      if (previousClarification.pendingQuestionId !== clarification.pendingQuestionId) return false
+      const version = compareLong(clarification.stateVersion, previousClarification.stateVersion)
+      if (version < 0 || (previousClarification.state === 'ANSWERED' && clarification.state === 'OPEN')) return false
+      if (version === 0 && JSON.stringify(previous.outcome) !== JSON.stringify(projection.outcome)) return false
+    }
     const next = projections.value.filter(item => item.requestId !== projection.requestId).concat(projection)
     projections.value = sorted(next)
-    if (projection.outcome?.kind === 'CLARIFY' && projection.outcome.clarification.state === 'OPEN') {
-      const selected = selectedPending.value
-      if (selected && selected.pendingQuestionId === projection.outcome.clarification.pendingQuestionId &&
-        selected.stateVersion !== projection.outcome.clarification.stateVersion) selectedPending.value = null
-    }
+    const selected = selectedPending.value
+    if (clarification && selected && selected.pendingQuestionId === clarification.pendingQuestionId &&
+      (clarification.state === 'ANSWERED' || selected.stateVersion !== clarification.stateVersion)) selectedPending.value = null
     return true
   }
   const readOne = async (requestId, captured = capture()) => {
@@ -81,7 +98,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       const raw = unwrap(await chatApi.get(path(captured.context, requestId), {}, { autoLoading: false, needAuth: true }))
       if (!current(captured)) return null
       const projection = typedOutcomeProjection(raw, { conversationId: captured.context.conversationId,
-        conversationGeneration: captured.context.conversationGeneration, requestId })
+        conversationGeneration: captured.context.conversationGeneration, taskId: captured.context.taskId, requestId })
       if (!projection) return null
       apply(projection, captured)
       return projection
@@ -129,7 +146,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     if (!body || !key) { if (current(captured)) error.value = '议事输入或安全请求键不符合冻结合同；未发送'; return false }
     const record = { key, body: clone(body), context: clone(context), status: 'POSTING' }
     const records = readRecords(storage, captured.scope, context)
-    if (!writeRecords(storage, captured.scope, context, [...records, record])) { if (current(captured)) error.value = '原议事键持久化失败；未发送'; return false }
+    if (!persistRecords(captured, [...records, record])) { if (current(captured)) error.value = '原议事键持久化失败；未发送'; return false }
     busy.value = true; error.value = ''
     try { return await postOriginal(record, captured) }
     finally { if (current(captured)) busy.value = false }
@@ -142,7 +159,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       const receipt = discussionAccepted(unwrap(await chatApi.create(`/conversations/${encodeURIComponent(context.conversationId)}/interactions/discussion`, clone(body), apiOptions(record.key))), body, context.conversationId)
       if (!current(captured)) return false
       if (!receipt) throw new Error('议事受理回执不匹配')
-      writeRecords(storage, captured.scope, context, readRecords(storage, captured.scope, context).map(item => item.key === record.key
+      persistRecords(captured, readRecords(storage, captured.scope, context).map(item => item.key === record.key
         ? { ...item, status: 'ACCEPTED', receipt: clone(receipt) } : item))
       if (body.intent === 'CLARIFICATION_REPLY') selectedPending.value = null
       await readOne(receipt.requestId, captured)
@@ -150,7 +167,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       return true
     } catch (cause) {
       if (current(captured)) {
-        writeRecords(storage, captured.scope, context, readRecords(storage, captured.scope, context).map(item => item.key === record.key
+        persistRecords(captured, readRecords(storage, captured.scope, context).map(item => item.key === record.key
           ? { ...item, status: 'UNKNOWN' } : item))
         error.value = cause?.message || '议事受理结果待核对；请按原键只读恢复或显式续办'
       }
@@ -188,8 +205,8 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   const cards = computed(() => projections.value.filter(item => item.state === 'READY' && item.outcome).map(item => Object.freeze({ ...item, key: outcomeCardKey(item) })))
   const invalidate = () => { generation++; busy.value = false; projections.value = []; selectedPending.value = null; error.value = '' }
   const stopScope = watch(scope, invalidate, { flush: 'sync' })
-  const stopCatalog = typeof getCatalogEntries === 'function' ? watch(getCatalogEntries, () => { void refresh() }, { deep: true }) : () => {}
-  const recoveryAvailable = computed(() => readRecords(storage, scope.value, getContext?.() || {}).some(record => record.status === 'UNKNOWN'))
+  const stopCatalog = typeof getCatalogEntries === 'function' ? watch(getCatalogEntries, () => { void refresh(); void recover() }, { deep: true }) : () => {}
+  const recoveryAvailable = computed(() => { storageRevision.value; return readRecords(storage, scope.value, getContext?.() || {}).some(record => record.status === 'UNKNOWN') })
   return { projections, cards, selectedPending, error, busy, recoveryAvailable, refresh, readOne, submit, recover, resumeUnknown, choosePending, confirmProposal,
     invalidate, dispose: () => { disposed = true; invalidate(); stopScope(); stopCatalog() } }
 }

@@ -28,6 +28,17 @@ describe('typed natural deliberation frozen wire', () => {
     const invalid = clone(fixture.golden.accepted); invalid.eventCursor = '9007199254740993x'
     expect(discussionAccepted(invalid, body, '7')).to.equal(null)
   })
+
+  it('accepts a GENERATE proposal with exact image reference selectors while preserving EDIT lineage constraints', () => {
+    const generate = clone(fixture.golden.proposalRead)
+    generate.outcome.proposal.sourceRefIds = ['asset-1']
+    generate.outcome.proposal.sourceSelectors = [{ kind: 'CURRENT_CONVERSATION_ASSET', fileId: null, version: null, purpose: null, assetId: 'asset-1', assetRevision: '7' }]
+    expect(typedOutcomeProjection(generate, { conversationId: '7', conversationGeneration: '1', taskId: 'task-1', requestId: 'request-1' })).to.deep.equal(generate)
+    const foreignTask = clone(fixture.golden.answerRead); foreignTask.outcome.taskId = 'other-task'
+    expect(typedOutcomeProjection(foreignTask, { conversationId: '7', conversationGeneration: '1', taskId: 'task-1', requestId: 'request-1' })).to.equal(null)
+    const malformedEdit = clone(generate); malformedEdit.outcome.proposal.operation = 'EDIT_IMAGE'; malformedEdit.outcome.proposal.parent = null
+    expect(typedOutcomeProjection(malformedEdit)).to.equal(null)
+  })
   it('accepts all frozen typed views and rejects a foreign scope or unknown union key', () => {
     for (const name of ['pendingRead', 'answerRead', 'clarifyRead', 'proposalRead']) {
       expect(typedOutcomeProjection(fixture.golden[name], { conversationId: '7', conversationGeneration: '1', requestId: 'request-1' })).to.deep.equal(fixture.golden[name])

@@ -8,7 +8,12 @@
       </div>
     </div>
     <BountyDeliberationStatus :presentation="v2Presentation" />
-    <button v-if="typedRecoveryAvailable" type="button" class="typed-recovery" @click="$emit('typed-resume')">按原键继续未确认议事</button>
+    <button
+      v-if="typedRecoveryAvailable"
+      type="button"
+      class="typed-recovery"
+      @click="$emit('typed-resume')"
+    >按原键继续未确认议事</button>
     <BountyFollowupConsentPanel
       :enabled="followupExecuteEnabled"
       :state="followupState"
@@ -42,7 +47,7 @@
       @open-workspace="$emit('open-workspace')"
       @retry-conversation="$emit('retry-conversation')"
       @select-conversation="$emit('select-conversation', $event)"
-      @send-message="$emit('send-message')"
+      @send-message="$emit('send-message', $event)"
       @voice-apply="$emit('voice-apply', $event)"
       @typed-reply="$emit('typed-reply', $event)"
       @typed-confirm-proposal="$emit('typed-confirm-proposal', $event)"

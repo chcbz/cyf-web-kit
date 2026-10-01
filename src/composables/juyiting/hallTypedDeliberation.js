@@ -59,7 +59,7 @@ const outcome = value => {
     new Set(value.proposal.sourceRefIds).size === value.proposal.sourceRefIds.length && Array.isArray(value.proposal.sourceSelectors) &&
     value.proposal.sourceSelectors.length === value.proposal.sourceRefIds.length && value.proposal.sourceSelectors.map(sourceSelector).every(Boolean) &&
     (value.proposal.parent === null || (exactKeys(value.proposal.parent, parentFields) && typedId(value.proposal.parent.requestId) && typedId(value.proposal.parent.stepId)))) {
-    if ((value.proposal.operation === 'GENERATE_IMAGE' && value.proposal.sourceSelectors.length === 0 && value.proposal.parent === null) ||
+    if ((value.proposal.operation === 'GENERATE_IMAGE' && value.proposal.parent === null) ||
       (value.proposal.operation === 'EDIT_IMAGE' && value.proposal.sourceSelectors.length === 1 && value.proposal.sourceSelectors[0].kind === 'CURRENT_CONVERSATION_ASSET' && value.proposal.parent)) return freeze(value)
   }
   return null
@@ -71,6 +71,7 @@ export const typedOutcomeProjection = (value, context = {}) => {
   if ((context.conversationId && value.conversationId !== context.conversationId) ||
     (context.conversationGeneration && value.conversationGeneration !== context.conversationGeneration) ||
     (context.requestId && value.requestId !== context.requestId)) return null
+  if (context.taskId && value.state === 'READY' && value.outcome?.taskId !== context.taskId) return null
   if (value.state === 'PENDING' && value.outcome === null) return freeze(value)
   const normalized = outcome(value.outcome)
   if (value.state === 'READY' && normalized) return freeze({ ...value, outcome: normalized })

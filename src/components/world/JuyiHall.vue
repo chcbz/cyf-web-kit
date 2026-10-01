@@ -569,10 +569,10 @@
             :followup-execute-enabled="followupExecuteEnabled"
             :followup-state="followupState"
             :followup-busy="followupBusy"
-            :typed-outcomes="typedDeliberation.cards"
-            :typed-pending-question="typedDeliberation.selectedPending"
+            :typed-outcomes="typedDeliberation.cards.value"
+            :typed-pending-question="typedDeliberation.selectedPending.value"
             :typed-enabled="typedDeliberationEnabled"
-            :typed-recovery-available="typedDeliberation.recoveryAvailable"
+            :typed-recovery-available="typedDeliberation.recoveryAvailable.value"
             :draft="draft"
             :voice="hallVoice"
             @update:draft="setDraft"
@@ -2435,7 +2435,10 @@ watch([followupTaskFence, () => apiStore.authorizationGeneration, hallIdentitySc
 watch([followupTaskFence, () => apiStore.authorizationGeneration, hallIdentityScope, () => conversationId.value,
   () => conversationAgent.value?.agentId, () => chatMode.value], () => {
   bountyRequestCatalog.reset()
-  if (chatMode.value === 'bounty' && conversationId.value) void bountyRequestCatalog.refresh()
+  if (chatMode.value === 'bounty' && conversationId.value) {
+    void bountyRequestCatalog.refresh()
+    void typedDeliberation?.recover?.()
+  }
 }, { flush: 'sync' })
 
 const formalTaskExecutionContext = useFormalTaskExecutionScope({
@@ -2803,6 +2806,7 @@ onUnmounted(() => {
   disposePointAndStart()
   disposeControlledBridge()
   disposeFollowup()
+  typedDeliberation?.dispose?.()
   disposeHallConversation()
   hallBackendSceneState?.dispose()
   stopHallEventStream()

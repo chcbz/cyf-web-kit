@@ -1,7 +1,10 @@
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import * as Vue from 'vue'
 import { ref } from 'vue'
+import { mount } from '@vue/test-utils'
+import { compileScript } from '@vue/compiler-sfc'
 const require = createRequire(import.meta.url)
 const { parse } = require('@vue/compiler-sfc')
 const babel = require('@babel/parser')
@@ -44,6 +47,34 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
     enabled.value = false
     expect(await onProposal({ kind: 'GENERATE_IMAGE', content: '不应办理', inputRefs: [] })).to.equal(false)
     expect(calls).to.have.length(2)
+  })
+
+  it('evaluates the actual page template expressions to values and forwards selector payload through the mounted bounty panel', async () => {
+    const tag = source.match(/<BountyDiscussionPanel\b[\s\S]*?>/)[0]
+    const attrs = [...tag.matchAll(/:(typed-[a-z-]+)="([^"]+)"/g)].map(match => `:${match[1]}="${match[2]}"`).join(' ')
+    const { compile } = require('@vue/compiler-dom')
+    const render = new Function('Vue', compile(`<BountyDiscussionPanel ${attrs} />`, { mode: 'function' }).code)(Vue)
+    const vnode = render(Vue.proxyRefs({ typedDeliberation: { cards: ref([{ requestId: 'request-1' }]), selectedPending: ref(null), recoveryAvailable: ref(true) }, typedDeliberationEnabled: ref(true) }), [])
+    expect(vnode.props['typed-outcomes']).to.deep.equal([{ requestId: 'request-1' }]); expect(vnode.props['typed-pending-question']).to.equal(null); expect(vnode.props['typed-recovery-available']).to.equal(true)
+    const panelFile = new URL('../src/components/juyiting/BountyDiscussionPanel.vue', import.meta.url).pathname
+    const panelDescriptor = parse(readFileSync(panelFile, 'utf8'), { filename: panelFile }).descriptor
+    const panelCode = compileScript(panelDescriptor, { id: 'typed-panel-forward', inlineTemplate: true }).content
+      .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
+      .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_, name) => name === 'ChatPanel' ? 'var ChatPanel = deps.ChatPanel' : `var ${name} = { template: '<span />' }`)
+      .replace(/^import\s+\{\s*bountyDeliberationPresentation\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { bountyDeliberationPresentation } = deps')
+      .replace('export default', 'return')
+    const ChatPanel = { emits: ['send-message'], render () { return Vue.h('button', { class: 'emit-send', onClick: () => this.$emit('send-message', { sourceSelectors: [{ kind: 'TASK_LINKED_WORKSPACE_VERSION' }] }) }) } }
+    const Panel = new Function('Vue', 'deps', panelCode)(Vue, { ChatPanel, bountyDeliberationPresentation: () => ({}) })
+    const previous = new Map()
+    for (const name of ['Element', 'HTMLElement', 'SVGElement', 'Node']) { if (globalThis[name]) continue; previous.set(name, Object.getOwnPropertyDescriptor(globalThis, name)); Object.defineProperty(globalThis, name, { value: window[name], configurable: true, writable: true }) }
+    const wrapper = mount(Panel, { props: { mentionLabel: () => '', senderText: () => '', typedEnabled: true } })
+    try {
+      await wrapper.find('.emit-send').trigger('click')
+      expect(wrapper.emitted('send-message')).to.deep.equal([[{ sourceSelectors: [{ kind: 'TASK_LINKED_WORKSPACE_VERSION' }] }]])
+    } finally {
+      wrapper.unmount()
+      for (const [name, descriptor] of previous) { if (descriptor) Object.defineProperty(globalThis, name, descriptor); else delete globalThis[name] }
+    }
   })
   it('binds a real durable final event only to authoritative typed GET readback', async () => {
     const calls = []

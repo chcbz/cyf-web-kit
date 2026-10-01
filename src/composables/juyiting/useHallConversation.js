@@ -370,7 +370,9 @@ export const useHallConversation = ({
     // Keep the active-request reducer closed. A non-active media event can only ask the
     // independent read-only catalog to re-read its owner-scoped index.
     if (event?.type === 'part.ready' && event.requestId && event.conversationId === conversationId.value) onRequestCatalogHint?.(event)
-    if (event?.type === 'agent_message' && event?.typedOutcome && event.requestId && event.conversationId === conversationId.value) onTypedOutcome?.(event)
+    const typedRequestId = event?.type === 'agent_message' && event?.typedOutcome ? event.requestId :
+      event?.type === 'typed_question_answered' ? (event.requestId || event.replyRequestId) : ''
+    if (typedRequestId && event.conversationId === conversationId.value) onTypedOutcome?.({ ...event, requestId: typedRequestId })
     if (!messageEvent) {
       if (durableHandled) syncDurablePresentation()
       return durableHandled

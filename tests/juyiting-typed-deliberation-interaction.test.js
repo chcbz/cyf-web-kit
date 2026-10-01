@@ -58,4 +58,38 @@ describe('typed natural discussion interaction adapter', () => {
     expect(await pending).to.equal(null); expect(lane.cards.value).to.deep.equal([]); expect(posts).to.equal(0)
     lane.dispose()
   })
+
+  it('keeps an answered clarification monotone, clears its selected CAS question, and rejects a foreign task without hiding historical assignment', async () => {
+    const context = ref({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '9' })
+    const open = clarify('request-monotone')
+    const answered = JSON.parse(JSON.stringify(open)); answered.outcome.clarification.state = 'ANSWERED'; answered.outcome.clarification.stateVersion = '1'; answered.outcome.clarification.replyRequestId = 'request-reply'
+    const stale = JSON.parse(JSON.stringify(open)); const historical = JSON.parse(JSON.stringify(answered)); historical.requestId = 'request-historical'; historical.turnId = 'turn-request-historical'; historical.outcome.outcomeId = 'outcome-request-historical'; historical.outcome.assignmentRevision = '1'
+    const foreign = JSON.parse(JSON.stringify(answered)); foreign.requestId = 'request-foreign'; foreign.turnId = 'turn-request-foreign'; foreign.outcome.outcomeId = 'outcome-request-foreign'; foreign.outcome.taskId = 'task-foreign'
+    const replies = [open, answered, stale, historical, foreign]
+    const lane = useHallTypedDeliberation({ chatApi: { get: async () => ({ data: { data: replies.shift() } }) }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1),
+      getContext: () => context.value, getContextGeneration: () => 1, getCatalogEntries: () => [], storage: store(), enabled: () => true })
+    expect(await lane.readOne('request-monotone')).to.not.equal(null)
+    expect(lane.choosePending(lane.projections.value[0])).to.equal(true)
+    expect(await lane.readOne('request-monotone')).to.not.equal(null)
+    expect(lane.selectedPending.value).to.equal(null)
+    expect(lane.projections.value[0].outcome.clarification.state).to.equal('ANSWERED')
+    expect(await lane.readOne('request-monotone')).to.not.equal(null)
+    expect(lane.projections.value[0].outcome.clarification.state).to.equal('ANSWERED')
+    expect(await lane.readOne('request-historical')).to.not.equal(null)
+    expect(lane.projections.value.find(item => item.requestId === 'request-historical').outcome.assignmentRevision).to.equal('1')
+    expect(await lane.readOne('request-foreign')).to.equal(null)
+    expect(lane.projections.value[0].outcome.taskId).to.equal('task-1')
+    lane.dispose()
+  })
+
+  it('reacts to an UNKNOWN persisted original and retains GET-only recovery until explicit original-key resume', async () => {
+    const storage = store(); const context = ref({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }); let posts = 0; let gets = 0
+    const lane = useHallTypedDeliberation({ chatApi: { create: async () => { posts++; throw new Error('lost') }, get: async () => { gets++; return { data: { data: clarify('request-never') } } } },
+      actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context.value, getContextGeneration: () => 1, getCatalogEntries: () => [], storage, enabled: () => true })
+    expect(lane.recoveryAvailable.value).to.equal(false)
+    expect(await lane.submit({ content: '先记录这次讨论。' })).to.equal(false)
+    expect(lane.recoveryAvailable.value).to.equal(true)
+    expect(await lane.recover()).to.equal(true); expect(posts).to.equal(1); expect(gets).to.equal(0)
+    lane.dispose()
+  })
 })
