@@ -21,7 +21,7 @@ const flush = async () => { for (let index = 0; index < 6; index += 1) await Pro
 const withVoiceBrowserState = async run => {
   const originals = [
     [window, 'setTimeout'], [window, 'clearTimeout'], [navigator, 'mediaDevices'],
-    [globalThis, 'MediaRecorder'], [globalThis, 'AudioContext'], [globalThis, 'AudioWorkletNode'], [globalThis, 'Audio'], [globalThis, 'fetch']
+    [globalThis, 'MediaRecorder'], [globalThis, 'AudioContext'], [globalThis, 'AudioWorkletNode'], [globalThis, 'Audio'], [globalThis, 'URL'], [globalThis, 'fetch']
   ].map(([owner, key]) => ({ owner, key, descriptor: Object.getOwnPropertyDescriptor(owner, key) }))
   try { return await run() } finally {
     for (const { owner, key, descriptor } of originals) {
@@ -1409,6 +1409,40 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
 
 describe('Juyi Hall TTS cleanup', () => {
   const audioResponse = wavResponse
+
+  it('uses the Window receiver for default-browser TTS while preserving its request and cleanup contract', async () => withVoiceBrowserState(async () => {
+    const revoked = []
+    let request
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia: async () => ({ getTracks: () => [{ stop () {} }] }) }
+    })
+    globalThis.URL = {
+      createObjectURL: () => 'blob:strict-window-voice',
+      revokeObjectURL: value => revoked.push(value)
+    }
+    class DefaultAudio { async play () {}; pause () {} }
+    globalThis.Audio = DefaultAudio
+    globalThis.fetch = async function strictWindowFetch (url, options) {
+      if (this !== globalThis) throw new TypeError('Failed to execute fetch on Window: Illegal invocation')
+      request = { url, options }
+      return audioResponse()
+    }
+
+    const voice = createVoice().voice
+    voice.setReplyVoiceEnabled(true)
+    await transcribeToReview(voice)
+    await voice.sendTranscript()
+    expect(await voice.completeReply({ content: '回话' })).to.equal(true)
+    expect(request.url).to.equal('/chat/speech/synthesis')
+    expect(request.options).to.include({ method: 'POST' })
+    expect(request.options.headers).to.deep.equal({ Authorization: 'Bearer token', 'Content-Type': 'application/json' })
+    expect(request.options.signal).to.be.instanceOf(AbortSignal)
+    expect(JSON.parse(request.options.body)).to.deep.include({ voice: 'juyiting-default', format: 'wav', text: '回话' })
+    expect(voice.state).to.equal('speaking')
+    voice.cancel()
+    expect(revoked).to.deep.equal(['blob:strict-window-voice'])
+  }))
 
   it('revokes object URLs on play rejection and media error', async () => {
     class RejectAudio { constructor () { RejectAudio.instance = this } play = async () => { throw new Error('autoplay denied') }; pause () {} }

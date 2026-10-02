@@ -92,7 +92,7 @@ const defaultBrowser = () => ({
   AudioWorkletNode: globalThis.AudioWorkletNode,
   Audio: globalThis.Audio,
   URL: globalThis.URL,
-  fetch: globalThis.fetch,
+  fetch: globalThis.fetch?.bind(globalThis),
   document: globalThis.document,
   window: globalThis.window,
   crypto: globalThis.crypto
