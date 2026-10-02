@@ -1,3 +1,4 @@
+import { createHydratedIdentityScope, hasHydratedIdentity } from '../src/utils/identityScope.js'
 import { before, after } from 'mocha'
 import { expect } from 'chai'
 import { readFileSync } from 'fs'
@@ -85,6 +86,7 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
     ...HallPanelHelpers, useHallHomeMode, useFormalTaskExecutionScope, confirmHallLeave, hasMeaningfulHallLeaveWork,
     resolveLiveMapPreviewActivation, isEconomyPreviewBuildEnabled,
     resolveAccountDisplayName: (user, fallback = '用户') => user?.nickname || user?.username || fallback,
+    createHydratedIdentityScope, hasHydratedIdentity,
     isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: async () => null,
     env: { VITE_JUYITING_TASK_WORKSPACE_ENABLED: workspaceState ? 'true' : undefined }, isMultimediaDeliberationUiEnabled: () => false,
     useHallRequirementCreate: () => ({ state: Vue.ref({ error: '' }), busy: Vue.ref(false), create: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, readOriginal: () => ({ state: 'ABSENT' }), dispose: noop }),

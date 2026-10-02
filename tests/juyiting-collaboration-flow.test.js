@@ -42,7 +42,10 @@ const hallConversationMessagesSource = readFileSync(hallConversationMessagesUrl,
 describe('JuyiHall collaboration flow contract', () => {
   it('starts OAuth before any protected hall load or background activity', () => {
     const mounted = hallSource.match(/onMounted\(async \(\) => \{([\s\S]*?)\n\}\)/)?.[1]
-    expect(mounted).to.include('if (!await apiStore.token()) return')
+    expect(mounted).to.include('if (!await apiStore.token() || !initializationIsCurrent()) return')
+    expect(mounted).to.include('initializationGeneration === apiStore.authorizationGeneration')
+    expect(mounted).to.include('if (!initializationIsCurrent()) return')
+    expect(mounted.indexOf('apiStore.getUserInfo()')).to.be.lessThan(mounted.indexOf('permitStageMount()'))
     expect(mounted.indexOf('apiStore.token()')).to.be.lessThan(mounted.indexOf('permitStageMount()'))
     expect(mounted.indexOf('apiStore.token()')).to.be.lessThan(mounted.indexOf('refreshHall({ silent: true })'))
     expect(mounted.indexOf('apiStore.token()')).to.be.lessThan(mounted.indexOf('startDialogueBubbles()'))

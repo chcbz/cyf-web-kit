@@ -1,3 +1,4 @@
+import { createHydratedIdentityScope, hasHydratedIdentity } from '../src/utils/identityScope.js'
 import { confirmHallLeave, hasMeaningfulHallLeaveWork } from '../src/composables/juyiting/hallAccountNavigation.js'
 import { expect } from 'chai'
 import { createHash } from 'crypto'
@@ -315,6 +316,7 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
   return {
     ...HallPanelHelpers,
     resolveAccountDisplayName: (user, fallback = '用户') => user?.nickname || user?.username || fallback,
+    createHydratedIdentityScope, hasHydratedIdentity,
     useRouter: () => ({ push: asyncNoop }),
     onBeforeRouteLeave: noop,
     confirmHallLeave,

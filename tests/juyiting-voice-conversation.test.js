@@ -1,3 +1,4 @@
+import { createHydratedIdentityScope, hasHydratedIdentity } from '../src/utils/identityScope.js'
 import { before } from 'mocha'
 import { useFormalTaskExecutionScope } from '../src/composables/useFormalTaskExecutionScope.js'
 import { expect } from 'chai'
@@ -260,6 +261,7 @@ const createActualHallVoiceMocks = ({
     env: { VITE_JUYITING_VOICE_ENABLED: 'true' },
     resolveLiveMapPreviewActivation, resolveHallNavigationPresentation, isEconomyPreviewBuildEnabled,
     resolveAccountDisplayName: (user, fallback = '用户') => user?.nickname || user?.username || fallback,
+    createHydratedIdentityScope, hasHydratedIdentity,
     isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: async () => null, isMultimediaDeliberationUiEnabled: () => false,
     capturePanelReturnTarget: () => null, focusHallPanel: noop, isCurrentPanelGeneration: () => true, isSafePanelFocusTarget: () => false,
     resolvePanelReturnTarget: () => null, restorePanelFocus: noop, trapPanelFocus: noop,

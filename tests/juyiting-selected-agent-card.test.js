@@ -1,3 +1,4 @@
+import { createHydratedIdentityScope, hasHydratedIdentity } from '../src/utils/identityScope.js'
 import { useFormalTaskExecutionScope } from '../src/composables/useFormalTaskExecutionScope.js'
 import { readFileSync } from 'fs'
 import { expect } from 'chai'
@@ -88,6 +89,7 @@ const createHallMocks = ({ SelectedAgentCard, counters }) => {
     resolveLiveMapPreviewActivation, isEconomyPreviewBuildEnabled,
     resolveHallNavigationPresentation: () => ({ renderedPanel: null, overlayClass: {}, floatingPanelClass: {} }),
     resolveAccountDisplayName: (user, fallback = '用户') => user?.nickname || user?.username || fallback,
+    createHydratedIdentityScope, hasHydratedIdentity,
     isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: async () => null,
     env: {}, isMultimediaDeliberationUiEnabled: () => false,
     useHallRequirementCreate: () => ({ state: Vue.ref({ error: '' }), busy: Vue.ref(false), create: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, readOriginal: () => ({ state: 'ABSENT' }), dispose: noop }),

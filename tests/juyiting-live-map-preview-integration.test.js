@@ -1,3 +1,4 @@
+import { createHydratedIdentityScope, hasHydratedIdentity } from '../src/utils/identityScope.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
@@ -160,6 +161,7 @@ const makeHallPageMocks = ({ mode, counters, voiceLocked = Vue.ref(false) }) => 
   return {
     resolveLiveMapPreviewActivation, resolveHallNavigationPresentation, useFormalTaskExecutionScope,
     resolveAccountDisplayName: (user, fallback = '用户') => user?.nickname || user?.username || fallback,
+    createHydratedIdentityScope, hasHydratedIdentity,
     isEconomyPreviewBuildEnabled: () => false,
     isEconomyPreviewCapability: () => false,
     loadEconomyPreviewCapability: async () => null,
@@ -174,7 +176,7 @@ const makeHallPageMocks = ({ mode, counters, voiceLocked = Vue.ref(false) }) => 
     useHallPointAndStartControlledBridge: () => ({ state: Vue.ref({ intent: null, status: 'IDLE' }), busy: Vue.ref(false), selectContext: () => false, start: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, dispose: noop, invalidate: noop }),
     useHallPointAndStart: () => ({ state: Vue.ref({ intent: null, status: 'IDLE' }), busy: Vue.ref(false), start: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, observeOriginal: asyncNoop, stopObservation: noop, dispose: noop }),
  agentApi: {}, chatApi: {}, juyitingGame: {}, log: { warn: noop }, roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
-    useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({}), useRouter: () => ({ push: noop }), onBeforeRouteLeave: noop,
+    useGlobalStore: () => ({ user: { id: 'owner-preview', tenantId: 'tenant-preview' }, setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({ token: async () => 'preview-token', oauthClientId: 'client-preview', authorizationGeneration: 1 }), useRouter: () => ({ push: noop }), onBeforeRouteLeave: noop,
     useHallData: () => data, useHallQuickMatter: () => ({ busy: Vue.ref(false), message: Vue.ref(''), submit: asyncNoop }), useHallBackendSceneState: () => ({ start: asyncNoop, stop: noop, dispose: noop, reportPhase: noop }),
     useHallSceneDebugBridge: () => ({ republish: noop, stop: noop }), useHallExperienceMode: () => ({ experienceMode: mode, isMobileCoarse: Vue.ref(true), isVirtualLandscape: Vue.ref(false), orientationHint: text, orientationRequestPending: Vue.ref(false), hallViewportHeight: Vue.ref(0), requestLandscape: asyncNoop, requestPortrait: asyncNoop }),
     useHallHomeMode: () => ({ homeMode: Vue.ref('map'), isOverviewHome: Vue.ref(false), setHomeMode: noop }),
