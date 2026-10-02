@@ -1,83 +1,86 @@
 <template>
   <div class="hall-chat-composer chat-composer" :class="composerClass">
     <form class="composer-submit" @submit.prevent="submit">
-    <div class="composer-context" :class="`is-${discussionVariant}`">
-      <span class="composer-context-label">{{ contextLabel }}</span>
-      <div v-if="targetChips.length" class="composer-targets" aria-label="传话对象">
+      <div class="composer-context" :class="`is-${discussionVariant}`">
+        <span class="composer-context-label">{{ contextLabel }}</span>
+        <div v-if="targetChips.length" class="composer-targets" aria-label="传话对象">
+          <button
+            v-for="chip in targetChips"
+            :key="chip.id"
+            class="composer-target-chip"
+            :class="{ 'is-locked': chip.locked }"
+            type="button"
+            :title="chip.label"
+            :disabled="chip.locked || inputLocked"
+            @click="removeTarget(chip)"
+          >
+            <span>@{{ chip.label }}</span>
+            <var-icon v-if="!chip.locked" class="composer-target-remove" name="close-circle-outline" />
+          </button>
+        </div>
+      </div>
+
+      <div class="composer-body" :class="{ 'has-supported-voice': voiceSupported, 'has-voice-detail': voiceHasDetail }">
+        <div class="composer-input-area">
+          <textarea
+            ref="textareaRef"
+            class="composer-textarea"
+            :value="draft"
+            :disabled="inputLocked"
+            :maxlength="maxLength"
+            :placeholder="placeholder"
+            rows="1"
+            @focus="handleFocus"
+            @input="handleInput"
+            @keydown="handleKeydown"
+          ></textarea>
+          <HallVoiceControls class="composer-voice-controls" :voice="voice" @apply="$emit('voice-apply', $event)" />
+        </div>
+        <p v-if="typedPendingQuestion" class="typed-pending-question">正在回答：{{ typedPendingQuestion.question }}</p>
+        <div class="composer-actions">
+          <button
+            v-if="canClear"
+            class="composer-clear"
+            type="button"
+            title="清空话头"
+            aria-label="清空话头"
+            @click="clearDraft"
+          >
+            <var-icon name="close-circle-outline" />
+          </button>
+          <button
+            v-if="executeEnabled && discussionVariant === 'bounty'"
+            class="composer-execute"
+            type="button"
+            :disabled="!canSend"
+            title="按当前文字请求受控图像生成预览"
+            aria-label="请求受控图像生成预览"
+            @click="$emit('execute-followup')"
+          >生成图片</button>
+          <button
+            class="composer-send"
+            type="submit"
+            :disabled="!canSend"
+            :title="isStreaming || isAwaitingReply ? '回话中' : '传令'"
+            :aria-label="isStreaming || isAwaitingReply ? '回话中' : '传令'"
+          >
+            <var-icon :name="isStreaming || isAwaitingReply ? 'refresh' : 'chevron-right'" />
+          </button>
+        </div>
+      </div>
+
+      <div v-if="showMentionMenu" class="composer-mention-menu" aria-label="选择要点名的好汉">
         <button
-          v-for="chip in targetChips"
-          :key="chip.id"
-          class="composer-target-chip"
-          :class="{ 'is-locked': chip.locked }"
+          v-for="agent in orderedAgents"
+          :key="agent.agentId"
+          class="composer-mention-option"
           type="button"
-          :title="chip.label"
-          :disabled="chip.locked || inputLocked"
-          @click="removeTarget(chip)"
+          @click="selectMention(agent)"
         >
-          <span>@{{ chip.label }}</span>
-          <var-icon v-if="!chip.locked" class="composer-target-remove" name="close-circle-outline" />
+          <span>@{{ mentionLabel(agent) }}</span>
+          <small>{{ agent.status === 'online' ? '候令' : '候选' }}</small>
         </button>
       </div>
-    </div>
-
-    <div class="composer-body">
-      <textarea
-        ref="textareaRef"
-        class="composer-textarea"
-        :value="draft"
-        :disabled="inputLocked"
-        :maxlength="maxLength"
-        :placeholder="placeholder"
-        rows="1"
-        @focus="handleFocus"
-        @input="handleInput"
-        @keydown="handleKeydown"
-      ></textarea>
-      <p v-if="typedPendingQuestion" class="typed-pending-question">正在回答：{{ typedPendingQuestion.question }}</p>
-      <div class="composer-actions">
-        <button
-          v-if="canClear"
-          class="composer-clear"
-          type="button"
-          title="清空话头"
-          aria-label="清空话头"
-          @click="clearDraft"
-        >
-          <var-icon name="close-circle-outline" />
-        </button>
-        <button
-          v-if="executeEnabled && discussionVariant === 'bounty'"
-          class="composer-execute"
-          type="button"
-          :disabled="!canSend"
-          title="按当前文字请求受控图像生成预览"
-          aria-label="请求受控图像生成预览"
-          @click="$emit('execute-followup')"
-        >生成图片</button>
-        <button
-          class="composer-send"
-          type="submit"
-          :disabled="!canSend"
-          :title="isStreaming || isAwaitingReply ? '回话中' : '传令'"
-          :aria-label="isStreaming || isAwaitingReply ? '回话中' : '传令'"
-        >
-          <var-icon :name="isStreaming || isAwaitingReply ? 'refresh' : 'chevron-right'" />
-        </button>
-      </div>
-    </div>
-
-    <div v-if="showMentionMenu" class="composer-mention-menu" aria-label="选择要点名的好汉">
-      <button
-        v-for="agent in orderedAgents"
-        :key="agent.agentId"
-        class="composer-mention-option"
-        type="button"
-        @click="selectMention(agent)"
-      >
-        <span>@{{ mentionLabel(agent) }}</span>
-        <small>{{ agent.status === 'online' ? '候令' : '候选' }}</small>
-      </button>
-    </div>
 
       <div class="composer-meta">
         <span>{{ draftLength }}/{{ maxLength }}</span>
@@ -86,7 +89,6 @@
       </div>
     </form>
 
-    <HallVoiceControls :voice="voice" @apply="$emit('voice-apply', $event)" />
   </div>
 </template>
 
@@ -131,6 +133,8 @@ const composerClass = computed(() => ({
   'is-streaming': props.isStreaming,
   'has-draft': Boolean(String(props.draft || '').trim())
 }))
+const voiceSupported = computed(() => Boolean(props.voice?.supported))
+const voiceHasDetail = computed(() => voiceSupported.value && props.voice?.state !== 'idle')
 
 const selectedAgentInAgents = computed(() => props.selectedAgent && props.agents.some(agent => agent.agentId === props.selectedAgent.agentId))
 
@@ -325,6 +329,31 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
   min-width: 0;
 }
 
+.composer-input-area {
+  position: relative;
+  min-width: 0;
+}
+
+.composer-voice-controls {
+  position: absolute;
+  right: 8px;
+  bottom: 7px;
+  z-index: 1;
+}
+
+.composer-body.has-supported-voice:not(.has-voice-detail) .composer-textarea {
+  padding-right: 110px;
+}
+
+.composer-body.has-voice-detail .composer-input-area {
+  display: grid;
+  gap: 7px;
+}
+
+.composer-body.has-voice-detail .composer-voice-controls {
+  position: static;
+}
+
 .composer-textarea {
   box-sizing: border-box;
   width: 100%;
@@ -349,6 +378,8 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
 }
 
 .typed-pending-question { grid-column: 1 / -1; margin: 0 0 4px; color: #466c5a; font-size: 12px; }
+
+.composer-body.has-voice-detail .typed-pending-question { grid-column: 1 / -1; }
 
 .composer-actions {
   display: flex;
