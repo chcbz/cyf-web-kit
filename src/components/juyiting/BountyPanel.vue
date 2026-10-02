@@ -739,6 +739,11 @@ const closeTask = () => {
   emit('select-task', null)
 }
 
+const openCreateRequirement = () => {
+  showCreateForm.value = true
+  return true
+}
+
 watch(() => props.selectedTask, (task) => {
   if (!task) {
     modalTask.value = null
@@ -756,7 +761,7 @@ const back = () => {
   closeTask()
   return true
 }
-defineExpose({ openTask, canGoBack, back })
+defineExpose({ openTask, openCreateRequirement, canGoBack, back })
 </script>
 <style scoped>
 .bounty-panel {

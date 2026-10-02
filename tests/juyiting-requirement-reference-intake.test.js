@@ -153,6 +153,8 @@ describe('exact requirement/reference create contract', () => {
 const page = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
 const actualCreate = page.match(/const createTask = async \(payload, acknowledge = \(\) => \{\}\) => \{([\s\S]*?)\n\}\nconst resumeFundedCreate/)?.[1]
 if (!actualCreate) throw new Error('Actual JuyiHall create closure missing')
+const actualDefaultRequirementEntry = page.match(/const openDefaultRequirementCreate = \(\) => \{([\s\S]*?)\n\}\nconst openPrivateDraft/)?.[1]
+if (!actualDefaultRequirementEntry) throw new Error('Actual JuyiHall default requirement entry missing')
 const pageHarness = ({ ordinary = { state: 'ABSENT' }, fundedRecovery = null } = {}) => {
   const h = { ordinary: [], funded: [], toasts: [], acknowledgements: [] }
   const deps = { readRequirementCreateOriginal: () => ordinary, showToast: text => h.toasts.push(text), runCreateTask: async p => { h.funded.push(p); return true },
@@ -161,6 +163,44 @@ const pageHarness = ({ ordinary = { state: 'ABSENT' }, fundedRecovery = null } =
   h.create = new Function(...Object.keys(deps), `return async (payload, acknowledge = () => {}) => {${actualCreate}}`)(...Object.values(deps))
   return h
 }
+const defaultEntryHarness = ({ enabled = true, guard = false, open = true } = {}) => {
+  const h = { privateDrafts: 0, panels: [], createForms: 0 }
+  const activePanel = ref('')
+  const panelSessionGeneration = ref(4)
+  const bountyPanelRef = ref({ openCreateRequirement: () => { h.createForms++; return true } })
+  const entry = new Function('multimediaDeliberationUiEnabled', 'openPrivateDraft', 'guardPanelLeave', 'openPanel', 'panelSessionGeneration', 'nextTick', 'panelDisposed', 'activePanel', 'bountyPanelRef',
+    `const openDefaultRequirementCreate = () => {${actualDefaultRequirementEntry}}; return openDefaultRequirementCreate`)(enabled, () => { h.privateDrafts++; return true }, () => guard,
+    (panel, options) => { h.panels.push({ panel, options }); if (open) activePanel.value = panel; return open }, panelSessionGeneration, callback => Promise.resolve().then(callback), false, activePanel, bountyPanelRef)
+  return { h, entry }
+}
+describe('actual JuyiHall default requirement entry', () => {
+  it('uses the ordinary requirement form under the multimedia UI flag without creating, selecting an agent, or starting a provider', async () => {
+    const { h, entry } = defaultEntryHarness({ enabled: true })
+    expect(entry()).to.equal(true)
+    await Promise.resolve()
+    expect(h.panels).to.deep.equal([{ panel: 'tasks', options: { root: true } }])
+    expect(h.createForms).to.equal(1)
+    expect(h.privateDrafts).to.equal(0)
+  })
+  it('keeps the pre-flag private-draft route and blocks all routing while a guarded draft remains active', async () => {
+    const legacy = defaultEntryHarness({ enabled: false })
+    expect(legacy.entry()).to.equal(true)
+    await Promise.resolve()
+    expect(legacy.h.privateDrafts).to.equal(1)
+    expect(legacy.h.panels).to.deep.equal([])
+    const guarded = defaultEntryHarness({ enabled: true, guard: true })
+    expect(guarded.entry()).to.equal(false)
+    await Promise.resolve()
+    expect(guarded.h.panels).to.deep.equal([])
+    expect(guarded.h.createForms).to.equal(0)
+    expect(guarded.h.privateDrafts).to.equal(0)
+  })
+  it('wires every explicit default 提出需求 entry to the guarded formal requirement route', () => {
+    expect((page.match(/openDefaultRequirementCreate\(\)/g) || [])).to.have.length(3)
+    expect(page).to.include("bountyPanelRef.value?.openCreateRequirement?.()")
+  })
+})
+
 describe('actual JuyiHall ordinary/funded boundary', () => {
   it('uses atomic ordinary creation and separate funded route with definitive acknowledgements', async () => {
     const h = pageHarness()
@@ -234,6 +274,16 @@ describe('mounted Bounty requirement draft and original recovery', () => {
     }
   })
   const panel = (props = {}) => { const wrapper = mount(Panel, { props: { ...panelProps(), ...props } }); wrappers.push(wrapper); return wrapper }
+  it('opens the exposed ordinary requirement form without creating a task or starting execution', async () => {
+    const wrapper = panel()
+    expect(wrapper.find('form').exists()).to.equal(false)
+    expect(wrapper.vm.openCreateRequirement()).to.equal(true)
+    await nextTick()
+    expect(wrapper.find('form').exists()).to.equal(true)
+    expect(wrapper.getComponent(Picker).exists()).to.equal(true)
+    expect(wrapper.emitted('create-task')).to.equal(undefined)
+  })
+
   it('submits optional exact reference selection from the real pre-task form; no guessed taskId', async () => {
     const wrapper = panel(); await openDraft(wrapper); await setDraft(wrapper)
     const selector = wrapper.getComponent(Picker)
