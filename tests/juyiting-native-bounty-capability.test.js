@@ -12,13 +12,13 @@ import {
 import { createControlledImageCapabilityObservationFence } from '../src/composables/juyiting/hallControlledImageBountyCapability.js'
 
 const capability = (overrides = {}) => ({
-  schemaVersion: 1,
+  schemaVersion: 3,
   taskId: 'task-1',
   targetAgentId: 'agent-1',
   lane: 'ORDINARY_SINGLE_AGENT_ASSIGN_AND_START',
   serverLane: { state: 'READY', blockingReasons: [] },
   nativeExecution: { state: 'READY', transport: 'PERSONAL_WORKSPACE_CONVERSATION_HTTP_V1', schemaVersion: 1, supportedOperations: ['GENERATE_IMAGE'] },
-  authorization: { state: 'UNAVAILABLE', paidExecutionAuthorized: false },
+  executionAuthorization: { state: 'UNAVAILABLE', paidExecutionAuthorized: false },
   newStart: { eligible: false, blockingReasons: ['COST_AUTHORIZATION_UNAVAILABLE'] },
   requestedOperations: ['GENERATE_IMAGE'],
   initialOperation: 'GENERATE_IMAGE',
@@ -39,11 +39,16 @@ describe('native bounty capability contract', () => {
     expect(parsed).not.to.equal(null)
     expect(capabilityAllowsNewStart(parsed, { id: 'task-1' }, { agentId: 'agent-1' })).to.equal(false)
     expect(capabilityAllowsOriginalReplay(parsed, 'task-1', 'agent-1')).to.equal(true)
+    const legacyAuthorization = capability(); legacyAuthorization.authorization = legacyAuthorization.executionAuthorization; delete legacyAuthorization.executionAuthorization
+    expect(parseNativeBountyCapability(legacyAuthorization)).to.equal(null)
+    const legacySchema = capability({ schemaVersion: 1 })
+    expect(parseNativeBountyCapability(legacySchema)).to.equal(null)
+    expect(parseNativeBountyCapability(null)).to.equal(null)
   })
 
   it('has a conditional future new-start path only for a coherent legitimate server response', () => {
     const parsed = parseNativeBountyCapability(capability({
-      authorization: { state: 'READY', paidExecutionAuthorized: true },
+      executionAuthorization: { state: 'READY', paidExecutionAuthorized: true },
       newStart: { eligible: true, blockingReasons: [] }
     }))
     expect(parsed).not.to.equal(null)
@@ -94,7 +99,7 @@ describe('native bounty capability contract', () => {
     ['READY without native declaration', value => { value.nativeExecution.transport = null; value.nativeExecution.schemaVersion = null }],
     ['READY without supported operation', value => { value.nativeExecution.supportedOperations = [] }],
     ['mixed null/native declaration', value => { value.nativeExecution.schemaVersion = null }],
-    ['UNAVAILABLE paid-looking authority', value => { value.authorization.paidExecutionAuthorized = true }],
+    ['UNAVAILABLE paid-looking authority', value => { value.executionAuthorization.paidExecutionAuthorized = true }],
     ['requested operation without actual support', value => { value.nativeExecution = { state: 'UNDECLARED', transport: null, schemaVersion: null, supportedOperations: [] } }],
     ['requested operation missing exact initial action', value => { value.initialOperation = null }]
   ]) it(`rejects ${name}`, () => {
@@ -279,7 +284,7 @@ describe('actual JuyiHall native assignment routing closure', () => {
 
   it('uses the explicit clicked task/target and resolved exact references for one coherent authorized intent', async () => {
     const offer = parseNativeBountyCapability(capability({ inputRefsPolicy: 'TASK_LINKED_REFERENCE',
-      authorization: { state: 'READY', paidExecutionAuthorized: true }, newStart: { eligible: true, blockingReasons: [] } }))
+      executionAuthorization: { state: 'READY', paidExecutionAuthorized: true }, newStart: { eligible: true, blockingReasons: [] } }))
     const inputRefs = [{ fileId: 'image-1', version: 2, purpose: 'REFERENCE' }]
     const h = pageHarness({ offer, referenceResult: { state: 'READY', inputRefs } })
     expect(await h.assign({ id: 'task-1' }, { agentId: 'agent-1' })).to.equal(true)
@@ -296,7 +301,7 @@ describe('actual JuyiHall native assignment routing closure', () => {
 
   it('does not fall back to legacy or empty refs when authoritative reference resolution fails', async () => {
     const offer = parseNativeBountyCapability(capability({ inputRefsPolicy: 'TASK_LINKED_REFERENCE',
-      authorization: { state: 'READY', paidExecutionAuthorized: true }, newStart: { eligible: true, blockingReasons: [] } }))
+      executionAuthorization: { state: 'READY', paidExecutionAuthorized: true }, newStart: { eligible: true, blockingReasons: [] } }))
     const h = pageHarness({ offer, referenceResult: { state: 'BLOCKED', reason: 'CATALOG_UNAVAILABLE', inputRefs: [] } })
     expect(await h.assign({ id: 'task-1' }, { agentId: 'agent-1' })).to.equal(false)
     expect(h.native).to.have.length(0)
@@ -306,7 +311,7 @@ describe('actual JuyiHall native assignment routing closure', () => {
 
   it('fences a late reference catalog on authorization change before any native or legacy write', async () => {
     const offer = parseNativeBountyCapability(capability({ inputRefsPolicy: 'TASK_LINKED_REFERENCE',
-      authorization: { state: 'READY', paidExecutionAuthorized: true }, newStart: { eligible: true, blockingReasons: [] } }))
+      executionAuthorization: { state: 'READY', paidExecutionAuthorized: true }, newStart: { eligible: true, blockingReasons: [] } }))
     const h = pageHarness({ offer, deferReferences: true, referenceResult: { state: 'READY', inputRefs: [{ fileId: 'image-1', version: 2, purpose: 'REFERENCE' }] } })
     const pending = h.assign({ id: 'task-1' }, { agentId: 'agent-1' })
     await Promise.resolve(); await Promise.resolve()
