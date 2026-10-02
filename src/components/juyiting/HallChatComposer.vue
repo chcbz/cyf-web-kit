@@ -330,28 +330,29 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
 }
 
 .composer-input-area {
-  position: relative;
   min-width: 0;
 }
 
-.composer-voice-controls {
-  position: absolute;
-  right: 8px;
-  bottom: 7px;
-  z-index: 1;
+.composer-body.has-supported-voice:not(.has-voice-detail) .composer-input-area {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
 }
 
 .composer-body.has-supported-voice:not(.has-voice-detail) .composer-textarea {
-  padding-right: 92px;
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.composer-body.has-supported-voice:not(.has-voice-detail) .composer-voice-controls {
+  grid-column: 2;
+  grid-row: 1;
 }
 
 .composer-body.has-voice-detail .composer-input-area {
   display: grid;
   gap: 7px;
-}
-
-.composer-body.has-voice-detail .composer-voice-controls {
-  position: static;
 }
 
 .composer-textarea {
@@ -385,6 +386,10 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
   display: flex;
   align-items: stretch;
   gap: 6px;
+}
+
+.composer-body.has-voice-detail .composer-actions {
+  align-self: start;
 }
 
 .composer-clear,
