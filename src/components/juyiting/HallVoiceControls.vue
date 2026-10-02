@@ -18,7 +18,27 @@
         title="开始录音"
         @click="startRecording"
       >
-        <var-icon name="microphone" /><span class="voice-action-label">语音</span>
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <rect
+            x="9"
+            y="2"
+            width="6"
+            height="12"
+            rx="3"
+          />
+          <path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8" />
+        </svg><span class="voice-action-label">语音</span>
       </button>
       <button
         v-else-if="voice.state === 'recording'"
@@ -27,7 +47,22 @@
         aria-label="停止录音并转写"
         @click="voice.stopRecording()"
       >
-        <var-icon name="stop" /><span>停止并转写 {{ seconds }}s</span>
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <rect
+            x="6"
+            y="6"
+            width="12"
+            height="12"
+            rx="1"
+            fill="currentColor"
+          />
+        </svg><span>停止并转写 {{ seconds }}s</span>
       </button>
       <button
         ref="settingsButtonRef"
@@ -39,7 +74,21 @@
         title="语音设置"
         @click="toggleSettings"
       >
-        <var-icon name="settings" /><span class="voice-action-label">设置</span>
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path d="M10 2h4v3l2 1 2.6-1.5 2 3.5L18 9.5v5l2.6 1.5-2 3.5L16 18l-2 1v3h-4v-3l-2-1-2.6 1.5-2-3.5L6 14.5v-5L3.4 8l2-3.5L8 6l2-1Z" />
+          <circle cx="12" cy="12" r="3" />
+        </svg><span class="voice-action-label">设置</span>
       </button>
     </div>
 

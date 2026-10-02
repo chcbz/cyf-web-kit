@@ -424,6 +424,68 @@ describe('Juyi Hall voice mounted facade', () => {
     speakingControls.unmount()
   })
 
+  for (const compact of [false, true]) {
+    it(`renders real inline voice glyphs and keeps action/settings semantics (${compact ? 'compact' : 'composer'})`, async () => {
+      const HallVoiceControls = loadSfc('../src/components/juyiting/HallVoiceControls.vue')
+      const calls = []
+      const voice = Vue.reactive({
+        supported: true, state: 'idle', canRecord: true, elapsedMs: 2100, targetLabel: '宋江',
+        autoSendEnabled: false, replyVoiceEnabled: false,
+        startRecording: () => { calls.push('start'); voice.state = 'recording' },
+        stopRecording: () => { calls.push('stop'); voice.state = 'transcribing' },
+        cancel: () => {},
+        setAutoSendEnabled: value => { voice.autoSendEnabled = value },
+        setReplyVoiceEnabled: value => { voice.replyVoiceEnabled = value }
+      })
+      // No var-icon stub or substitute icon: inspect the actual compiled SVG DOM.
+      const wrapper = mount(HallVoiceControls, { attachTo: document.body, props: { compact, voice } })
+      const assertGlyph = selector => {
+        const button = wrapper.get(selector)
+        const svg = button.get('svg')
+        expect(svg.element.namespaceURI).to.equal('http://www.w3.org/2000/svg')
+        expect(svg.attributes()).to.include({ width: '18', height: '18', viewBox: '0 0 24 24', 'aria-hidden': 'true', focusable: 'false' })
+        expect(svg.findAll('path, rect, circle').length).to.be.greaterThan(0)
+        expect(button.find('var-icon, var-icon-stub, i.var-icon').exists()).to.equal(false)
+        return svg
+      }
+      try {
+        expect(wrapper.findAll('svg')).to.have.lengthOf(2)
+        const mic = assertGlyph('.voice-start')
+        expect(mic.get('rect').attributes()).to.include({ x: '9', y: '2', width: '6', height: '12', rx: '3' })
+        expect(mic.get('path').attributes('d')).to.contain('M5 10v2')
+        expect(wrapper.get('.voice-start').attributes()).to.include({ 'aria-label': '开始录音', title: '开始录音' })
+        const settings = assertGlyph('.voice-settings-trigger')
+        expect(settings.get('circle').attributes()).to.include({ cx: '12', cy: '12', r: '3' })
+        expect(settings.get('path').attributes('d')).to.contain('M10 2h4')
+        expect(wrapper.get('.voice-settings-trigger').attributes()).to.include({ 'aria-label': '语音设置', title: '语音设置', 'aria-expanded': 'false' })
+        await wrapper.get('.voice-settings-trigger').trigger('click')
+        expect(wrapper.get('.voice-settings-trigger').attributes('aria-expanded')).to.equal('true')
+        expect(wrapper.get('.voice-settings').attributes('id')).to.equal(wrapper.get('.voice-settings-trigger').attributes('aria-controls'))
+        await wrapper.get('input[type="checkbox"]').setValue(true)
+        await wrapper.get('input[aria-label="语音回答；播放内容为 AI 生成语音"]').setValue(true)
+        expect(voice.autoSendEnabled).to.equal(true)
+        expect(voice.replyVoiceEnabled).to.equal(true)
+        expect(wrapper.get('.voice-disclosure').text()).to.equal('播放内容为 AI 生成语音')
+        await wrapper.get('.voice-settings-trigger').trigger('keydown', { key: 'Escape' })
+        await Vue.nextTick()
+        expect(wrapper.find('.voice-settings').exists()).to.equal(false)
+        expect(document.activeElement).to.equal(wrapper.get('.voice-settings-trigger').element)
+        await wrapper.get('.voice-start').trigger('click')
+        expect(calls).to.deep.equal(['start'])
+        expect(wrapper.find('.voice-start').exists()).to.equal(false)
+        const stop = assertGlyph('.is-recording')
+        expect(stop.get('rect').attributes()).to.include({ x: '6', y: '6', width: '12', height: '12', fill: 'currentColor' })
+        expect(wrapper.get('.is-recording').attributes('aria-label')).to.equal('停止录音并转写')
+        expect(wrapper.get('.is-recording').text()).to.contain('停止并转写 3s')
+        assertGlyph('.voice-settings-trigger')
+        await wrapper.get('.is-recording').trigger('click')
+        expect(calls).to.deep.equal(['start', 'stop'])
+        expect(voice.state).to.equal('transcribing')
+        expect(wrapper.get('.voice-inline-status').text()).to.contain('正在转写语音')
+      } finally { wrapper.unmount() }
+    })
+  }
+
   it('confirms a reviewed transcript through the voice turn and reads the correlated reply aloud', async () => {
     class SpeakingAudio { async play () {}; pause () {} }
     const harness = browserHarness({ AudioClass: SpeakingAudio, fetchImpl: async () => wavResponse() })
