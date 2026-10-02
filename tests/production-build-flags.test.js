@@ -8,6 +8,7 @@ const keys = [
   'VITE_ECONOMY_PREVIEW_ENABLED',
   'VITE_JUYITING_VOICE_ENABLED',
   'VITE_JUYITING_MULTIMEDIA_DELIBERATION_V2_UI',
+  'VITE_JUYITING_FOLLOWUP_EXECUTE_V3_UI',
   'VITE_JUYITING_TYPED_DELIBERATION_UI'
 ]
 
@@ -28,20 +29,22 @@ const withFlags = (overrides, verify) => {
   }
 }
 
-test('production defaults reflect checked-in published flags and leave multimedia/typed UI candidate-only', () => {
+test('production defaults reflect checked-in published flags and leave multimedia/follow-up/typed UI candidate-only', () => {
   withFlags({}, flags => {
     assert.equal(flags.VITE_ECONOMY_PREVIEW_ENABLED, 'true')
     assert.equal(flags.VITE_JUYITING_VOICE_ENABLED, 'true')
     assert.equal(flags.VITE_JUYITING_MULTIMEDIA_DELIBERATION_V2_UI, undefined)
+    assert.equal(flags.VITE_JUYITING_FOLLOWUP_EXECUTE_V3_UI, undefined)
     assert.equal(flags.VITE_JUYITING_TYPED_DELIBERATION_UI, undefined)
   })
 })
 
-test('explicit candidate overrides retain precedence for both multimedia UI flags', () => {
+test('explicit candidate overrides retain precedence for all multimedia UI flags', () => {
   const overrides = {
     VITE_ECONOMY_PREVIEW_ENABLED: 'false',
     VITE_JUYITING_VOICE_ENABLED: 'true',
     VITE_JUYITING_MULTIMEDIA_DELIBERATION_V2_UI: 'true',
+    VITE_JUYITING_FOLLOWUP_EXECUTE_V3_UI: 'true',
     VITE_JUYITING_TYPED_DELIBERATION_UI: 'true'
   }
   withFlags(overrides, flags => assert.deepEqual(flags, overrides))
