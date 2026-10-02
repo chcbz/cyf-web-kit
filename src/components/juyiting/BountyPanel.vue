@@ -740,6 +740,7 @@ const closeTask = () => {
 }
 
 const openCreateRequirement = () => {
+  if (modalTask.value) closeTask()
   showCreateForm.value = true
   return true
 }

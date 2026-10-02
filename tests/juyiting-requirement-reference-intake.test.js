@@ -284,6 +284,19 @@ describe('mounted Bounty requirement draft and original recovery', () => {
     expect(wrapper.emitted('create-task')).to.equal(undefined)
   })
 
+  it('leaves an embedded task detail before exposing the ordinary requirement form without creating or starting execution', async () => {
+    const wrapper = panel({ embeddedHall: true })
+    expect(wrapper.vm.openTask({ id: 'existing-task', title: '既有榜文', status: 'open' })).to.equal(undefined)
+    await nextTick()
+    expect(wrapper.find('.bounty-source').element.style.display).to.equal('none')
+    expect(wrapper.vm.openCreateRequirement()).to.equal(true)
+    await nextTick()
+    expect(wrapper.find('.bounty-source').element.style.display).to.equal('')
+    expect(wrapper.find('form').exists()).to.equal(true)
+    expect(wrapper.emitted('select-task').at(-1)).to.deep.equal([null])
+    expect(wrapper.emitted('create-task')).to.equal(undefined)
+  })
+
   it('submits optional exact reference selection from the real pre-task form; no guessed taskId', async () => {
     const wrapper = panel(); await openDraft(wrapper); await setDraft(wrapper)
     const selector = wrapper.getComponent(Picker)
