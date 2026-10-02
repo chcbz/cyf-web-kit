@@ -371,7 +371,27 @@ describe('Juyi Hall voice mounted facade', () => {
     expect(compact.find('.voice-settings').exists()).to.equal(false)
     await compact.get('.voice-settings-trigger').trigger('click')
     expect(compact.get('.voice-disclosure').element.textContent).to.equal('播放内容为 AI 生成语音')
+
+    const settingsVoice = () => Vue.reactive({
+      supported: true, state: 'idle', canRecord: true, autoSendEnabled: false, replyVoiceEnabled: false,
+      startRecording: () => {}, setAutoSendEnabled: () => {}, setReplyVoiceEnabled: () => {}
+    })
+    const firstSettings = mount(HallVoiceControls, { attachTo: document.body, props: { voice: settingsVoice() }, global: { stubs: { 'var-icon': true } } })
+    const secondSettings = mount(HallVoiceControls, { attachTo: document.body, props: { compact: true, voice: settingsVoice() }, global: { stubs: { 'var-icon': true } } })
+    await firstSettings.get('.voice-settings-trigger').trigger('click')
+    await secondSettings.get('.voice-settings-trigger').trigger('click')
+    const firstSettingsId = firstSettings.get('.voice-settings-trigger').attributes('aria-controls')
+    const secondSettingsId = secondSettings.get('.voice-settings-trigger').attributes('aria-controls')
+    expect(firstSettingsId).to.not.equal(secondSettingsId)
+    expect(firstSettings.get('.voice-settings').attributes('id')).to.equal(firstSettingsId)
+    expect(secondSettings.get('.voice-settings').attributes('id')).to.equal(secondSettingsId)
+    await secondSettings.get('.voice-settings-trigger').trigger('pointerdown')
+    await flush()
+    expect(firstSettings.find('.voice-settings').exists()).to.equal(false)
+    expect(secondSettings.find('.voice-settings').exists()).to.equal(true)
     compact.unmount()
+    firstSettings.unmount()
+    secondSettings.unmount()
 
     await on.get('.voice-start').trigger('click')
     await flush()
@@ -1488,7 +1508,8 @@ describe('Juyi Hall TTS cleanup', () => {
     expect(revoked).to.deep.equal(['blob:strict-window-voice'])
   }))
 
-  it('revokes object URLs on play rejection and media error', async () => {
+  it('labels actual TTS playback failures without mislabeling them as transcription failures', async () => {
+    const HallVoiceControls = loadSfc('../src/components/juyiting/HallVoiceControls.vue')
     class RejectAudio { constructor () { RejectAudio.instance = this } play = async () => { throw new Error('autoplay denied') }; pause () {} }
     let harness = browserHarness({ AudioClass: RejectAudio, fetchImpl: async () => audioResponse() })
     let voice = createVoice({ browser: harness.browser }).voice
@@ -1498,6 +1519,9 @@ describe('Juyi Hall TTS cleanup', () => {
     await voice.completeReply({ content: 'reply' })
     expect(voice.state).to.equal('error')
     expect(harness.revoked).to.deep.equal(['blob:voice'])
+    let controls = mount(HallVoiceControls, { props: { voice }, global: { stubs: { 'var-icon': true } } })
+    expect(controls.get('.voice-review strong').element.textContent).to.equal('语音未完成')
+    controls.unmount()
 
     class ErrorAudio { constructor () { ErrorAudio.instance = this } play = async () => {}; pause () {} }
     harness = browserHarness({ AudioClass: ErrorAudio, fetchImpl: async () => audioResponse() })
@@ -1510,6 +1534,9 @@ describe('Juyi Hall TTS cleanup', () => {
     ErrorAudio.instance.onerror()
     expect(voice.state).to.equal('error')
     expect(harness.revoked).to.deep.equal(['blob:voice'])
+    controls = mount(HallVoiceControls, { props: { voice }, global: { stubs: { 'var-icon': true } } })
+    expect(controls.get('.voice-review strong').element.textContent).to.equal('语音服务提示（AI 朗读）')
+    controls.unmount()
   })
 
   it('requests WAV and rejects a MIME/header-invalid response before playback', async () => {

@@ -485,6 +485,10 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
     padding: 8px 10px;
   }
 
+  .composer-body.has-supported-voice:not(.has-voice-detail) .composer-textarea {
+    padding-right: 76px;
+  }
+
   .composer-context {
     align-items: flex-start;
     flex-direction: column;

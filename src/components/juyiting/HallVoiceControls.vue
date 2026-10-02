@@ -105,16 +105,17 @@
     </div>
   </div>
 </template>
-<script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-
+<script>
 let voiceSettingsSequence = 0
+</script>
+<script setup>
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId } from 'vue'
 const props = defineProps({ compact: { type: Boolean, default: false }, voice: { type: Object, default: null } })
 defineEmits(['apply'])
 const settingsOpen = ref(false)
 const controlsRef = ref(null)
 const settingsButtonRef = ref(null)
-const settingsId = `hall-voice-settings-${++voiceSettingsSequence}`
+const settingsId = `hall-voice-settings-${useId()}-${++voiceSettingsSequence}`
 const seconds = computed(() => Math.ceil((props.voice?.elapsedMs || 0) / 1000))
 const canCancelCapture = computed(() => ['requesting_permission', 'recording', 'stopping', 'transcribing', 'synthesizing', 'speaking'].includes(props.voice?.state))
 const cancelLabel = computed(() => props.voice?.state === 'synthesizing' ? '取消语音生成' : (props.voice?.state === 'speaking' ? '停止朗读' : '取消并丢弃录音'))
@@ -128,7 +129,7 @@ const inlineStatus = computed(() => ({
 }[props.voice?.state] || ''))
 const reviewTitle = computed(() => {
   if (props.voice?.detached) return '上下文已变化，请手动处理转写'
-  if (props.voice?.state === 'error') return String(props.voice?.error || '').startsWith('语音回答') ? '语音服务提示（AI 朗读）' : '语音未完成'
+  if (props.voice?.state === 'error') return /^语音(?:回答|播放)/.test(String(props.voice?.error || '')) ? '语音服务提示（AI 朗读）' : '语音未完成'
   return '语音转写'
 })
 const startRecording = () => {
@@ -143,8 +144,8 @@ const closeSettings = ({ restoreFocus = false } = {}) => {
 const handleDocumentPointerdown = event => {
   if (settingsOpen.value && !controlsRef.value?.contains(event.target)) closeSettings()
 }
-onMounted(() => document.addEventListener('pointerdown', handleDocumentPointerdown))
-onBeforeUnmount(() => document.removeEventListener('pointerdown', handleDocumentPointerdown))
+onMounted(() => document.addEventListener('pointerdown', handleDocumentPointerdown, true))
+onBeforeUnmount(() => document.removeEventListener('pointerdown', handleDocumentPointerdown, true))
 const handleKeydown = event => {
   if (event.key !== 'Escape' || !settingsOpen.value) return
   event.preventDefault()
