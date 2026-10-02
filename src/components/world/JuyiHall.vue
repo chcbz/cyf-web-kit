@@ -780,6 +780,7 @@ import { log } from '@/utils/logger'
 import { isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
 import { isEconomyPreviewCapability, loadEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
 import { resolveAccountDisplayName } from '@/utils/displayName'
+import { createHydratedIdentityScope, hasHydratedIdentity } from '@/utils/identityScope'
 import { juyitingGame } from '@/game/index.js'
 
 const emit = defineEmits(['open-onboarding'])
@@ -791,14 +792,9 @@ const router = useRouter()
 const accountAvatar = computed(() => String(globalStore.user?.avatar || '').trim())
 const accountDisplayName = computed(() => {
   const user = globalStore.user || {}
-  return resolveAccountDisplayName(user, String(globalStore.getUserId || '')) || '个人中心'
+  return resolveAccountDisplayName(user, String(user.displayName || '')) || '个人中心'
 })
-const hallIdentityScope = computed(() => {
-  const owner = String(globalStore.user?.id || globalStore.user?.openid || globalStore.getUserId || globalStore.getOpenid || '').trim()
-  const client = String(apiStore.oauthClientId || '').trim()
-  const tenant = String(globalStore.user?.tenantId || globalStore.user?.tenantCode || globalStore.user?.tenant || '').trim()
-  return owner && client ? [tenant, client, owner].filter(Boolean).join('\u0000') : ''
-})
+const hallIdentityScope = computed(() => createHydratedIdentityScope(globalStore.user, apiStore.oauthClientId))
 
 const quickMatter = useHallQuickMatter({
   identityScope: hallIdentityScope,
@@ -2795,12 +2791,15 @@ onMounted(async () => {
   // token() initiates the one OAuth redirect when identity is absent. Do not mount
   // the live hall workflow while that redirect is pending: its protected loaders
   // would otherwise race the redirect and turn authentication into a fetch error.
-  if (!await apiStore.token()) return
-  // A valid restored bearer token can survive while the in-memory profile was
-  // cleared. Hydrate it before identity-scoped drafts/capabilities are opened.
-  if (!String(globalStore.getUserId || globalStore.getOpenid || '').trim()) {
+  const initializationGeneration = apiStore.authorizationGeneration
+  const initializationIsCurrent = () => !panelDisposed && initializationGeneration === apiStore.authorizationGeneration
+  if (!await apiStore.token() || !initializationIsCurrent()) return
+  // A valid restored bearer token can survive while only the unverified local ID
+  // cache remains. Hydrate the server profile before identity-scoped state opens.
+  if (!hasHydratedIdentity(globalStore.user)) {
     try { await apiStore.getUserInfo() } catch (error) { log.warn('hall identity hydration failed:', error) }
   }
+  if (!initializationIsCurrent()) return
   permitStageMount()
   await refreshHall({ silent: true })
   startDialogueBubbles()

@@ -9,6 +9,7 @@ import { createEconomyRequestIntentStore } from '../src/composables/juyiting/eco
 import { useFormalTaskExecutionScope } from '../src/composables/useFormalTaskExecutionScope.js'
 import { useHallTaskActions } from '../src/composables/juyiting/useHallTaskActions.js'
 import { resolveAccountDisplayName } from '../src/utils/displayName.js'
+import { createHydratedIdentityScope, hasHydratedIdentity } from '../src/utils/identityScope.js'
 
 let mount
 let Vue
@@ -2638,7 +2639,7 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
     ...panelHelpers, useFormalTaskExecutionScope,
     env: {}, isMultimediaDeliberationUiEnabled: () => false, capturePanelReturnTarget: panelHelpers.capturePanelReturnTarget, focusHallPanel: panelHelpers.focusHallPanel, isCurrentPanelGeneration: panelHelpers.isCurrentPanelGeneration, isSafePanelFocusTarget: panelHelpers.isSafePanelFocusTarget, resolveLiveMapPreviewActivation, resolvePanelReturnTarget: panelHelpers.resolvePanelReturnTarget, restorePanelFocus: panelHelpers.restorePanelFocus, trapPanelFocus: panelHelpers.trapPanelFocus,
     onBeforeRouteLeave: navigation?.onBeforeRouteLeave || noop, useRouter: () => navigation?.router || ({ push: asyncNoop }), confirmHallLeave: navigation?.confirmHallLeave || (() => true), hasMeaningfulHallLeaveWork: navigation?.hasMeaningfulHallLeaveWork || (() => false), useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({ token: asyncNoop }), agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {},
-    resolveAccountDisplayName,
+    resolveAccountDisplayName, createHydratedIdentityScope, hasHydratedIdentity,
     isEconomyPreviewBuildEnabled: () => Boolean(economyCapability), isEconomyPreviewCapability: capability => Boolean(capability && capability.principalScopeFingerprint === economyCapability?.principalScopeFingerprint), loadEconomyPreviewCapability: async () => economyCapability,
     roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
     useHallData: ({ selectedAgent, selectedTask }) => { counters.owners.data += 1; selectedAgent.value = { agentId: 'agent-o04', name: 'sentinel-agent' }; selectedTask.value = counters.initialSelectedTask || { id: 'task-o04', title: 'sentinel-task' }; return hallData },
@@ -2674,21 +2675,26 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
 }
 
 describe('JuyiHall restored-identity initialization', () => {
-  it('hydrates a retained token without a profile before the initial Hall data load', async () => {
+  it('hydrates a retained token despite a cached local ID and restores the exact tenant-zero scope before Hall data loads', async () => {
     const mode = Vue.ref('portrait-command')
     const order = []
     const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
     const mocks = createActualHallMocks({ mode, mounts: { library: 0, archive: 0 }, counters })
     const originalUseHallData = mocks.useHallData
-    mocks.useGlobalStore = () => ({
-      user: {}, getUserId: '', getOpenid: '',
+    const globalStore = Vue.reactive({
+      user: {}, getUserId: 5, getOpenid: '',
       setTitle: () => {}, setShowBack: () => {}, setShowAppBar: () => {}, setShowMore: () => {}
     })
-    mocks.useApiStore = () => ({
+    const apiStore = Vue.reactive({
       authorizationGeneration: 0, oauthClientId: 'client-a',
       token: async () => 'retained-bearer-token',
-      getUserInfo: async () => { order.push('profile') }
+      getUserInfo: async () => {
+        order.push('profile')
+        globalStore.user = { id: 5, tenantId: '0', displayName: '已验证账号' }
+      }
     })
+    mocks.useGlobalStore = () => globalStore
+    mocks.useApiStore = () => apiStore
     mocks.useHallData = bindings => {
       const data = originalUseHallData(bindings)
       const loadAgents = data.loadAgents
@@ -2700,8 +2706,42 @@ describe('JuyiHall restored-identity initialization', () => {
     const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
     try {
       await flushPromises()
+      const state = wrapper.vm.$.setupState
       expect(order[0]).to.equal('profile')
       expect(order).to.include('agents')
+      expect(state.hallIdentityScope).to.equal('0\u0000client-a\u00005')
+      expect(state.accountDisplayName).to.equal('已验证账号')
+      expect(state.accountDisplayName).not.to.equal('5')
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
+  it('does not start Hall loaders after logout or account switch while profile hydration is pending', async () => {
+    const mode = Vue.ref('portrait-command')
+    const hydration = deferred()
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const mocks = createActualHallMocks({ mode, mounts: { library: 0, archive: 0 }, counters })
+    const globalStore = Vue.reactive({
+      user: {}, getUserId: 5, getOpenid: '',
+      setTitle: () => {}, setShowBack: () => {}, setShowAppBar: () => {}, setShowMore: () => {}
+    })
+    const apiStore = Vue.reactive({
+      authorizationGeneration: 7, oauthClientId: 'client-a',
+      token: async () => 'retained-bearer-token',
+      getUserInfo: async () => hydration.promise
+    })
+    mocks.useGlobalStore = () => globalStore
+    mocks.useApiStore = () => apiStore
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      apiStore.authorizationGeneration = 8
+      hydration.resolve({ id: 5, tenantId: '0' })
+      await flushPromises()
+      expect(counters.loads.agents).to.equal(0)
+      expect(counters.loads.tasks).to.equal(0)
+      expect(wrapper.vm.$.setupState.hallIdentityScope).to.equal('')
     } finally {
       wrapper.unmount()
     }
@@ -2907,7 +2947,7 @@ describe('lightweight workbench real panel navigation', () => {
       setHomeMode: value => { home.value = value }
     })
     const oldGlobal = mocks.useGlobalStore
-    mocks.useGlobalStore = () => ({ ...oldGlobal(), user: { id: 'owner-a' } })
+    mocks.useGlobalStore = () => ({ ...oldGlobal(), user: { id: 'owner-a', tenantId: 'tenant-a' } })
     mocks.useApiStore = () => ({ oauthClientId: 'client-a', authorizationGeneration: 1, token: async () => {} })
     const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
     try {
@@ -3019,7 +3059,7 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
     const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
     const mocks = createActualHallMocks({ mode, mounts: { library: 0, archive: 0 }, counters, actualBountyPanel: BountyPanel })
     const oldGlobal = mocks.useGlobalStore
-    mocks.useGlobalStore = () => ({ ...oldGlobal(), user: { id: 'owner-a' } })
+    mocks.useGlobalStore = () => ({ ...oldGlobal(), user: { id: 'owner-a', tenantId: 'tenant-a' } })
     mocks.useApiStore = () => ({ oauthClientId: 'client-a', authorizationGeneration: 1, token: async () => {} })
     const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
     try {
@@ -3032,7 +3072,7 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
       const formal = wrapper.findComponent({ name: 'FormalTaskDeliveryPanel' })
       expect(formal.props('taskId')).to.equal('task-a')
       expect(formal.props('focusDeliveryId')).to.equal('delivery-exact')
-      expect(formal.props('identityFingerprint')).to.equal('client-a\u0000owner-a:1')
+      expect(formal.props('identityFingerprint')).to.equal('tenant-a\u0000client-a\u0000owner-a:1')
       expect(state.taskReviewRef.taskVersion).to.equal('9007199254740993')
       expect(wrapper.findComponent(BountyPanel).attributes('inert')).to.equal('')
       expect(state.panelDepth).to.equal(2)
@@ -3586,7 +3626,7 @@ describe('W04 shared-source save-before-leave wiring', () => {
     const mocks = createActualHallMocks({ mode, mounts: { library: 0, archive: 0 }, counters })
     const epoch = Vue.reactive({ authorizationGeneration: 1, oauthClientId: 'client-a', token: async () => {} })
     const originalGlobal = mocks.useGlobalStore
-    mocks.useGlobalStore = () => ({ ...originalGlobal(), user: { id: 'owner-a' } })
+    mocks.useGlobalStore = () => ({ ...originalGlobal(), user: { id: 'owner-a', tenantId: 'tenant-a' } })
     mocks.useApiStore = () => epoch
     let fail = true
     let calls = 0
@@ -3692,7 +3732,7 @@ describe('A03 real Hall low-height layout wiring', () => {
     const home = Vue.ref('overview')
     const mocks = createActualHallMocks({ mode, mounts: { library: 0, archive: 0 }, counters: { panelHelpers: helpers } })
     const oldGlobal = mocks.useGlobalStore
-    mocks.useGlobalStore = () => ({ ...oldGlobal(), user: { id: 'owner-a' } })
+    mocks.useGlobalStore = () => ({ ...oldGlobal(), user: { id: 'owner-a', tenantId: 'tenant-a' } })
     mocks.useApiStore = () => ({ oauthClientId: 'client-a', authorizationGeneration: 1, token: async () => {} })
     mocks.useHallHomeMode = () => ({ homeMode: home, isOverviewHome: Vue.computed(() => home.value === 'overview'), setHomeMode: value => { home.value = value } })
     mocks.HallPortraitHome = Vue.defineComponent({ setup: (_props, { slots, expose }) => {
