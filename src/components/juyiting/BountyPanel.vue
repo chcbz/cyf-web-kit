@@ -192,18 +192,19 @@
               <span v-if="fundedClaimState.refreshPending">榜文刷新待完成，请重查；勿重复领令。<button type="button" @click="$emit('refresh-funded-claim', detailTask)">重查已确认榜文</button></span>
             </p>
             <p v-else-if="fundedClaimState?.taskId === detailTask.id && fundedClaimState.status === 'unresolved'" role="status">原领令结果未知，请由原好汉核对，不要重新取价。</p>
-            <section v-if="controlledConsentOffer?.taskId === detailTask.id" class="point-and-start-recovery controlled-image-consent" role="status">
+            <section v-if="controlledConsentForDetail" class="point-and-start-recovery controlled-image-consent" role="status">
               <strong>受控图像外部账户确认</strong>
               <p>将按当前好汉、任务关联资料和受控图像通道办理一次请求；外部账户结果与费用未知，未展示或虚构金额。</p>
               <label><input v-model="controlledConsentAcknowledged" type="checkbox" /> 我明确确认这一次受控图像请求</label>
-              <button type="button" :disabled="controlledConsentBusy || !controlledConsentAcknowledged" @click="$emit('confirm-controlled-image-consent', detailTask, controlledConsentOffer.targetAgentId)">确认并继续原点将</button>
-              <p v-if="controlledConsentOffer.error">{{ controlledConsentOffer.error }}</p>
+              <button type="button" :disabled="controlledConsentBusy || !controlledConsentAcknowledged" @click="$emit('confirm-controlled-image-consent', detailTask, controlledConsentForDetail.targetAgentId)">确认并继续原点将</button>
+              <p v-if="controlledConsentForDetail.error">{{ controlledConsentForDetail.error }}</p>
             </section>
             <section v-if="pointAndStartForDetail" class="point-and-start-recovery" role="status">
               <strong>{{ pointAndStartRecoveryTitle }}</strong>
               <p>原点将目标：{{ pointAndStartForDetail.intent.body.agentId }}；需求修订：{{ pointAndStartForDetail.intent.body.requirementRevision }}；首轮动作：{{ pointAndStartForDetail.intent.body.initialOperation }}。</p>
               <p>原授权操作：{{ pointAndStartForDetail.intent.body.requestedOperations.join('、') }}；固定资料：{{ pointAndStartInputSummary }}。</p>
               <p>{{ pointAndStartRecoveryHint }}</p>
+              <p v-if="pointAndStartForDetail.error" class="point-and-start-error" role="alert">原点将返回：{{ pointAndStartForDetail.error }}</p>
               <button
                 type="button"
                 :disabled="pointAndStartBusy"
@@ -221,7 +222,7 @@
                 <div class="matter-advice-heading"><span>办理建议</span><strong>{{ simpleMatterStatus(detailTask) }}</strong></div>
                 <p class="matter-request">{{ detailTask.description || detailTask.title }}</p>
                 <dl>
-                  <div><dt>预计成果</dt><dd>一份可预览、下载和验收的正式 PDF</dd></div>
+                  <div><dt>预计成果</dt><dd>{{ controlledImageRouteForDetail ? '受控图像成果；以实际生成和正式验收记录为准' : '由已确认通道生成并按实际交付验收；成果类型以受理能力为准' }}</dd></div>
                   <div><dt>建议承办</dt><dd>{{ preferredAgentName || '吴用或林冲' }}</dd></div>
                   <div><dt>资料</dt><dd>可选；没有资料也可在能力允许时开始办理</dd></div>
                 </dl>
@@ -255,7 +256,7 @@
                 <button type="button" @click="$emit('open-workspace')">打开百宝箱</button>
               </section>
               <TaskMaterialLinks
-                v-if="formalTaskExecutionScope"
+                v-if="formalTaskExecutionScope && (!embeddedHall || detailTask.status !== 'open') && !controlledImageRouteForDetail"
                 :key="formalTaskExecutionScope.taskId"
                 :task-id="formalTaskExecutionScope.taskId"
                 :conversation-id="formalTaskExecutionScope.conversationId"
@@ -269,6 +270,14 @@
                 @formal-execution-created="$emit('formal-execution-created', $event)"
                 @formal-execution-recovered="$emit('formal-execution-recovered', $event)"
               />
+              <section v-if="controlledImageRouteForDetail" class="controlled-image-execution-route" role="status">
+                <strong>受控图像办理</strong>
+                <p>当前事项已声明受控图像点将；请完成上方确认或核对原请求。这里不会创建 PDF 办理请求。</p>
+              </section>
+              <section v-else-if="embeddedHall && detailTask.status === 'open'" class="controlled-image-execution-route" role="status">
+                <strong>尚未开始办理</strong>
+                <p>请先明确点将并由当前能力通道给出受理结果；不会预设 PDF 成果或创建另一条执行请求。</p>
+              </section>
               <section v-if="isFundedTask(detailTask)" class="funded-preview-details" aria-label="资金悬赏详情">
                 <p class="funding-summary">已托管：{{ formatMoney(detailTask.funding.remainingMicro || detailTask.funding.grossBountyAmountMicro) }}</p>
                 <p>仅可由一位明确好汉按报价领令；组队、宋江代点和旧式点将已禁用。</p>
@@ -561,11 +570,18 @@ watch(() => [props.identityScope, props.authorizationGeneration], () => {
   controlledConsentAcknowledged.value = false
 }, { flush: 'sync' })
 const detailTask = computed(() => modalTask.value)
+const controlledConsentForDetail = computed(() => props.controlledConsentOffer?.taskId === detailTask.value?.id
+  ? props.controlledConsentOffer : null)
 watch(() => modalTask.value?.id || '', () => { controlledConsentAcknowledged.value = false }, { flush: 'sync' })
 const pointAndStartForDetail = computed(() => {
   const state = props.pointAndStartState
   return state?.intent?.taskId === detailTask.value?.id && state.intent?.body ? state : null
 })
+// The persisted, validated bridge intent is the route authority after the transient
+// consent offer is cleared or the detail is re-entered. It is never inferred from
+// task wording or an Agent name, so ordinary historical PDF tasks stay available.
+const controlledImageRouteForDetail = computed(() => Boolean(controlledConsentForDetail.value ||
+  pointAndStartForDetail.value?.intent?.controlledImageBridge?.wrapper))
 const pointAndStartRecoveryTitle = computed(() => ({
   UNKNOWN: '发现原点将，结果待核对',
   PREPARING: '原点将已受理，议事准备中',

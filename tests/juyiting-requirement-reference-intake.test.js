@@ -253,10 +253,11 @@ describe('mounted Bounty requirement draft and original recovery', () => {
     }
     Vue = await import('vue'); ({ mount } = await import('@vue/test-utils'))
     Picker = Vue.defineComponent({ name: 'HallReferenceImagePicker', props: ['modelValue', 'identityScope', 'identityEpoch', 'disabled'], emits: ['update:modelValue'], render: () => Vue.h('span', { class: 'picker-boundary' }) })
+    const TaskMaterialLinks = Vue.defineComponent({ name: 'TaskMaterialLinks', render: () => Vue.h('section', { class: 'formal-task-execution' }, '明确开始正式办理（PDF）') })
     const filename = new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url).pathname
     const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
     const silver = await import('../src/utils/silverAmount.js')
-    const imports = new Proxy({ vue: Vue, '@/utils/silverAmount': silver, './HallReferenceImagePicker.vue': Picker }, {
+    const imports = new Proxy({ vue: Vue, '@/utils/silverAmount': silver, './HallReferenceImagePicker.vue': Picker, '@/components/personal-workspace/TaskMaterialLinks.vue': TaskMaterialLinks }, {
       get: (target, name) => target[name] ?? Vue.defineComponent({ render: () => Vue.h('span') })
     })
     const code = compileScript(descriptor, { id: 'mounted-reference-intake', inlineTemplate: true }).content
@@ -295,6 +296,42 @@ describe('mounted Bounty requirement draft and original recovery', () => {
     expect(wrapper.find('form').exists()).to.equal(true)
     expect(wrapper.emitted('select-task').at(-1)).to.deep.equal([null])
     expect(wrapper.emitted('create-task')).to.equal(undefined)
+  })
+
+  it('keeps the image route after its transient offer clears, while preserving ordinary historical PDF tasks', async () => {
+    const formalTaskExecutionContext = { taskId: 'existing-task', conversationId: 'conversation-1', targetAgentId: 'agent-image', conversationConfirmed: true, formalExecutionAuthorized: true, authorizationReason: '' }
+    const open = panel({ embeddedHall: true, formalTaskExecutionContext })
+    open.vm.openTask({ id: 'existing-task', title: '画一只鸟', status: 'open' })
+    await nextTick()
+    expect(open.find('.formal-task-execution').exists()).to.equal(false)
+    expect(open.text()).to.include('不会预设 PDF 成果或创建另一条执行请求')
+    expect(open.text()).not.to.include('一份可预览、下载和验收的正式 PDF')
+
+    const bridgeIntent = { taskId: 'existing-task', body: { agentId: 'agent-image', requirementRevision: 1, requestedOperations: ['GENERATE_IMAGE'], initialOperation: 'GENERATE_IMAGE', inputRefs: [] }, controlledImageBridge: { schemaVersion: 1, wrapper: { schemaVersion: 1, assignment: {}, providerConsent: {} }, receipt: { schemaVersion: 1 } } }
+    // No controlledConsentOffer is supplied: this models its normal clear after a
+    // successful BOUND bridge response, then an explicit close/re-entry to detail.
+    const controlled = panel({ embeddedHall: true, formalTaskExecutionContext,
+      pointAndStartState: { status: 'BOUND', error: null, intent: bridgeIntent } })
+    controlled.vm.openTask({ id: 'existing-task', title: '画一只鸟', status: 'assigned' })
+    await nextTick()
+    await controlled.find('.bounty-back-button').trigger('click'); await nextTick()
+    controlled.vm.openTask({ id: 'existing-task', title: '画一只鸟', status: 'assigned' })
+    await nextTick()
+    expect(controlled.find('.formal-task-execution').exists()).to.equal(false)
+    expect(controlled.find('.controlled-image-execution-route').text()).to.include('这里不会创建 PDF 办理请求')
+    expect(controlled.text()).to.include('受控图像成果；以实际生成和正式验收记录为准')
+
+    const failed = panel({ embeddedHall: true, formalTaskExecutionContext,
+      pointAndStartState: { status: 'UNKNOWN', error: 'Controlled image bridge request unavailable', intent: bridgeIntent } })
+    failed.vm.openTask({ id: 'existing-task', title: '画一只鸟', status: 'assigned' })
+    await nextTick()
+    expect(failed.find('.point-and-start-error').text()).to.include('Controlled image bridge request unavailable')
+
+    const ordinary = panel({ embeddedHall: true, formalTaskExecutionContext })
+    ordinary.vm.openTask({ id: 'existing-task', title: '既有正式任务', status: 'assigned' })
+    await nextTick()
+    expect(ordinary.find('.formal-task-execution').exists()).to.equal(true)
+    expect(ordinary.find('.controlled-image-execution-route').exists()).to.equal(false)
   })
 
   it('submits optional exact reference selection from the real pre-task form; no guessed taskId', async () => {
