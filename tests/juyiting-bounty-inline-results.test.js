@@ -35,7 +35,8 @@ describe('scoped bounty media belongs to the conversation transcript', () => {
       messages: [{ localId: 'first', sender: 'AGENT', content: '第一稿', parts: [] }],
       senderText: () => 'Agent', renderMarkdown: text => text,
       deliberationStatus: '', isAwaitingReply: false, emptyText: '暂无',
-      conversationId: 'conversation-1', materialIdentityKey: 'owner-a', identityScope: 'tenant\u0000client\u0000owner-a'
+      conversationId: 'conversation-1', materialIdentityKey: 'owner-a', identityScope: 'tenant\u0000client\u0000owner-a',
+      isTaskDiscussion: true, typedForMessage: () => []
     }) }
     const globals = ['Element', 'HTMLElement', 'SVGElement', 'Node']
     const installed = globals.filter(name => !globalThis[name])
@@ -43,7 +44,7 @@ describe('scoped bounty media belongs to the conversation transcript', () => {
     let wrapper
     try {
       wrapper = mount(transcript, { slots: { 'bounty-results': '<section class="bounty-output-gallery">第二稿：图片</section>' },
-        global: { stubs: { HallMessageParts: true } } })
+        global: { stubs: { HallMessageParts: true, BountyTextSelectionArchive: true, BountyTypedOutcomeCard: true } } })
       const scroll = wrapper.find('.hall-messages')
       expect(scroll.exists()).to.equal(true)
       expect(scroll.findAll('.hall-message')).to.have.length(1)

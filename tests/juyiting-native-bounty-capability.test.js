@@ -9,6 +9,7 @@ import {
   loadNativeBountyCapability,
   parseNativeBountyCapability
 } from '../src/composables/juyiting/hallNativeBountyCapability.js'
+import { createControlledImageCapabilityObservationFence } from '../src/composables/juyiting/hallControlledImageBountyCapability.js'
 
 const capability = (overrides = {}) => ({
   schemaVersion: 1,
@@ -181,9 +182,16 @@ if (!actualAssign) throw new Error('Actual JuyiHall assignment closure not found
 const pageHarness = ({ original = { state: 'ABSENT' }, offer = null, defer = false, referenceResult = { state: 'READY', inputRefs: [] }, deferReferences = false } = {}) => {
   const h = { identity: 'owner-1', auth: 1, legacy: [], native: [], reads: [], catalog: [], checks: [], toasts: [] }
   const observation = createNativeCapabilityObservationFence({ getIdentityScope: () => h.identity, getAuthorizationGeneration: () => h.auth })
-  h.invalidate = observation.invalidate
+  const controlledObservation = createControlledImageCapabilityObservationFence({ getIdentityScope: () => h.identity, getAuthorizationGeneration: () => h.auth })
+  h.invalidate = () => { observation.invalidate(); controlledObservation.invalidate() }
   const deps = {
     pointAndStartIntentState: () => original,
+    controlledImageObservation: controlledObservation,
+    // Existing native-lane tests must pass an explicit disabled controlled-lane
+    // observation before they exercise the legacy/native branch. This preserves
+    // the production ordering and makes the late native capability read observable.
+    readControlledImageCapability: async () => ({ controlledObservation: 'UNDECLARED' }),
+    capabilityOffersControlledImageConsent: () => false,
     pointAndStartIntentReadLane,
     showToast: message => h.toasts.push(message),
     checkPointAndStartOriginal: async task => { h.checks.push(task.id) },
@@ -218,6 +226,10 @@ describe('actual JuyiHall native assignment routing closure', () => {
       const h = pageHarness({ defer: true })
       const task = { id: 'task-1' }; const agent = { agentId: 'agent-1' }
       const pending = h.assign(task, agent)
+      // The controlled-lane observation is awaited first in the real closure;
+      // yield only until the native capability read has installed its deferred
+      // resolver, then mutate the exact fence under test.
+      await Promise.resolve(); await Promise.resolve()
       if (change === 'auth') h.auth++
       if (change === 'identity') h.identity = 'owner-2'
       if (change === 'selection') h.invalidate()

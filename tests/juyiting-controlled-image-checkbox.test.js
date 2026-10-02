@@ -2,12 +2,9 @@
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
-import { JSDOM } from 'jsdom'
 let Vue
 let mount
 let Panel
-const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost' })
-const original = {}
 const stub = { template: '<span />' }
 const compile = async () => {
   const filename = new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url)
@@ -25,8 +22,7 @@ const task = (id, taskVersion = '6', requirementRevision = '3') => ({ id, title:
 const offer = (taskId = 'task-a', target = 'agent-a', revision = 'r1') => ({ taskId, targetAgentId: target, capability: { providerBinding: { bindingId: 'binding-a', bindingEpoch: '1', modelId: 'model-a' }, authorization: { state: 'CONSENT_REQUIRED' }, newStart: { blockingReasons: [revision] } } })
 const props = value => ({ embeddedHall: true, tasks: [], selectedTask: task('task-a'), selectedAgent: null, operableAgents: [], recommendedAgents: [], taskAbilityOptions: [], taskStatusFilters: [], controlledConsentOffer: value, abilityText: () => '', canAssign: () => false, formatTime: () => '', portraitName: () => '', portraitStyle: () => ({}), taskAgentMatchScore: () => 0, taskStateClass: () => '', taskStatusCount: () => 0, taskStatusText: () => '' })
 describe('controlled image consent checkbox component behavior', () => {
-  before(async () => { for (const key of ['SVGElement', 'Element', 'Node']) { original[key] = Object.getOwnPropertyDescriptor(globalThis, key); Object.defineProperty(globalThis, key, { configurable: true, writable: true, value: dom.window[key] }) }; globalThis.window = dom.window; globalThis.document = dom.window.document; Vue = await import('vue'); ({ mount } = await import('@vue/test-utils')); Panel = await compile() })
-  after(() => { for (const [key, value] of Object.entries(original)) { if (value) Object.defineProperty(globalThis, key, value); else delete globalThis[key] } })
+  before(async () => { Vue = await import('vue'); ({ mount } = await import('@vue/test-utils')); Panel = await compile() })
   it('resets explicit acknowledgement for a new identical offer object, real task/requirement revisions, task target changes, modal close, and auth generation', async () => {
     const wrapper = mount(Panel, { props: props(offer()) }); const open = async (id = 'task-a') => { wrapper.vm.openTask(task(id)); await Vue.nextTick(); return wrapper.find('input[type="checkbox"]') }
     let checkbox = await open(); await checkbox.setValue(true); expect(checkbox.element.checked).to.equal(true)

@@ -146,8 +146,12 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallConversationSource).to.include('mentionAgentIds,')
     expect(hallConversationSource).to.include('selectedTaskId')
     expect(hallConversationSource).to.include('const metadataSource = isVoiceSend ? (sendContext.outgoingMetadata || {}) : (outgoingMetadata?.value || {})')
-    expect(hallConversationSource).to.include('const { senderName: _legacySenderName, senderType: _legacySenderType, ...safeMetadataSource } = metadataSource')
-    expect(hallConversationSource).to.include('...safeMetadataSource,')
+    // Metadata is allowlisted at the transport boundary, so legacy display fields
+    // cannot be propagated into the durable chat request.
+    expect(hallConversationSource).to.include('const safeOutgoingMetadata = metadata => {')
+    expect(hallConversationSource).to.include("for (const key of ['libraryCitationId', 'librarySourceType'])")
+    expect(hallConversationSource).to.include('const safeMetadata = safeOutgoingMetadata(metadataSource)')
+    expect(hallConversationSource).to.include('...safeMetadata,')
     expect(hallConversationSource).not.to.include('...metadataSource,')
   })
 
@@ -162,7 +166,8 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallConversationSource).to.include('conversationScopeType: sendContext.conversationScopeType')
     expect(hallConversationSource).to.include('conversationScopeKey: sendContext.conversationScopeKey')
     expect(hallConversationSource).to.include('targetAgentIds: sendContext.targetAgentIds')
-    expect(hallConversationSource).to.include('forceNewConversation')
+    expect(hallConversationSource).to.include('const newHallConversation = ({ notify = true } = {}) => {')
+    expect(hallConversationSource).to.include('suppressedRestoreScopes.add(currentScopeSignature)')
   })
 
   it('loads hall messages by conversation scope instead of the latest juyiting conversation only', () => {
