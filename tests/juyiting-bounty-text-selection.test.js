@@ -127,6 +127,78 @@ describe('bounty persisted text selection archive', () => {
     }
   })
 
+  it('clears a rejected pre-request digest so the next save recomputes instead of replaying null', async () => {
+    const originalCrypto = Object.getOwnPropertyDescriptor(globalThis, 'crypto')
+    let digestCalls = 0
+    let submitted = 0
+    Object.defineProperty(globalThis, 'crypto', { configurable: true, value: {
+      randomUUID: () => `digest-retry-${++digestCalls}`,
+      subtle: { digest: () => {
+        const call = digestCalls
+        return call === 1 ? Promise.reject(new TypeError('digest unavailable')) : Promise.resolve(new Uint8Array(32).buffer)
+      } }
+    } })
+    const api = { execute: async request => {
+      submitted += 1
+      const selected = request.data.textSelection
+      return { data: { data: { state: 'saved', textSelection: selected, sha256: selected.sha256,
+        fileId: 'file-text-retry', version: 1 } } }
+    } }
+    const Component = new Function('Vue', 'deps', script)(Vue, { createApi: () => api })
+    const wrapper = mount(Component, { props: { conversationId: '10', identityKey: 'owner',
+      message: { localId: '7', content: '甲😀乙丙', streaming: false } } })
+    try {
+      const textarea = wrapper.find('textarea')
+      textarea.element.selectionStart = 1
+      textarea.element.selectionEnd = 4
+      await textarea.trigger('select')
+      const save = wrapper.findAll('button')[0]
+      await save.trigger('click')
+      await flushPromises()
+      await Vue.nextTick()
+      expect(submitted).to.equal(0)
+      expect(wrapper.text()).to.include('digest unavailable')
+      expect(wrapper.text()).not.to.include('重试原保存')
+      await save.trigger('click')
+      await flushPromises()
+      await Vue.nextTick()
+      expect(submitted).to.equal(1)
+      expect(wrapper.text()).to.include('文字片段已保存')
+    } finally {
+      wrapper.unmount()
+      if (originalCrypto) Object.defineProperty(globalThis, 'crypto', originalCrypto)
+      else delete globalThis.crypto
+    }
+  })
+
+  it('does not post when a pending digest resolves after unmount', async () => {
+    const originalCrypto = Object.getOwnPropertyDescriptor(globalThis, 'crypto')
+    let resolveDigest
+    let submitted = 0
+    Object.defineProperty(globalThis, 'crypto', { configurable: true, value: {
+      randomUUID: () => 'unmounted-digest',
+      subtle: { digest: () => new Promise(resolve => { resolveDigest = resolve }) }
+    } })
+    const api = { execute: async () => { submitted += 1 } }
+    const Component = new Function('Vue', 'deps', script)(Vue, { createApi: () => api })
+    const wrapper = mount(Component, { props: { conversationId: '10', identityKey: 'owner',
+      message: { localId: '7', content: '甲😀乙丙', streaming: false } } })
+    try {
+      const textarea = wrapper.find('textarea')
+      textarea.element.selectionStart = 1
+      textarea.element.selectionEnd = 4
+      await textarea.trigger('select')
+      await wrapper.findAll('button')[0].trigger('click')
+      wrapper.unmount()
+      resolveDigest(new Uint8Array(32).buffer)
+      await flushPromises()
+      expect(submitted).to.equal(0)
+    } finally {
+      if (originalCrypto) Object.defineProperty(globalThis, 'crypto', originalCrypto)
+      else delete globalThis.crypto
+    }
+  })
+
   it('does not let an already-posted old selection receipt overwrite the replacement selection', async () => {
     const originalCrypto = Object.getOwnPropertyDescriptor(globalThis, 'crypto')
     let resolveResponse

@@ -14,7 +14,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { createApi } from '../../composables/useHttp.js'
 
 const props = defineProps({
@@ -55,7 +55,8 @@ const captureSelection = () => {
 const archive = async retry => {
   if (state.value.busy || (!selection.value && !state.value.intent)) return
   const generation = archiveGeneration.value
-  let intent = state.value.intent
+  let intent = state.value.intent?.body ? state.value.intent : null
+  let requestStarted = false
   const ownsAttempt = () => archiveGeneration.value === generation && state.value.intent?.idempotencyKey === intent?.idempotencyKey
   try {
     if (!intent) {
@@ -71,6 +72,7 @@ const archive = async retry => {
     }
     if (!ownsAttempt()) return
     state.value = { state: 'saving', busy: true, message: retry ? '正在重放原保存操作…' : '正在从服务端持久正文冻结选区…', intent }
+    requestStarted = true
     const response = await api.execute({ url: `/conversations/${encodeURIComponent(props.conversationId)}/archive-operations`, method: 'POST', headers: { 'Idempotency-Key': intent.idempotencyKey }, data: intent.body, autoLoading: false, needAuth: true })
     if (!ownsAttempt()) return
     const value = response?.data?.data ?? response?.data
@@ -79,10 +81,11 @@ const archive = async retry => {
     state.value = { state: 'saved', busy: false, message: `文字片段已保存：${value.fileId} v${value.version}`, intent }
   } catch (cause) {
     if (!ownsAttempt()) return
-    const unknown = cause?.requestErrorClass === 'network' || cause instanceof TypeError || cause?.status >= 500 || cause?.response?.status >= 500
-    state.value = { state: unknown ? 'unknown' : 'error', busy: false, message: unknown ? '保存结果不明确；请重试原操作。' : (cause?.message || '文字片段保存失败。'), intent }
+    const unknown = requestStarted && (cause?.requestErrorClass === 'network' || cause instanceof TypeError || cause?.status >= 500 || cause?.response?.status >= 500)
+    state.value = { state: unknown ? 'unknown' : 'error', busy: false, message: unknown ? '保存结果不明确；请重试原操作。' : (cause?.message || '文字片段保存失败。'), intent: requestStarted ? intent : null }
   }
 }
+onBeforeUnmount(() => { archiveGeneration.value += 1 })
 watch(() => `${props.identityKey}\u0000${props.conversationId}\u0000${props.message?.localId}\u0000${props.message?.content}\u0000${props.message?.streaming}`, () => {
   selection.value = null; resetArchiveState()
 })
