@@ -342,7 +342,7 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
 }
 
 .composer-body.has-supported-voice:not(.has-voice-detail) .composer-textarea {
-  padding-right: 110px;
+  padding-right: 92px;
 }
 
 .composer-body.has-voice-detail .composer-input-area {
@@ -483,10 +483,6 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
 @media (max-width: 640px) {
   .hall-chat-composer {
     padding: 8px 10px;
-  }
-
-  .composer-body.has-supported-voice:not(.has-voice-detail) .composer-textarea {
-    padding-right: 76px;
   }
 
   .composer-context {
