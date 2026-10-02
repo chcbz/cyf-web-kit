@@ -16,6 +16,14 @@ const admin = data => json({ status: 200, code: 'OK', msg: 'ok', data })
 const deferred = () => { let resolve; let reject; const promise = new Promise((res, rej) => { resolve = res; reject = rej }); return { promise, resolve, reject } }
 const publicationResult = ({ jobId='job-1', workId='work-1', editionId='e1', draftRevision='4', readbackState='PENDING' } = {}) => ({ publicationId:`pub-${jobId}`,jobId,workId,editionId,draftRevision,manifestSha256:'a'.repeat(64),sourceSha256:'b'.repeat(64),state:'PUBLISHED',readbackState,verification:{state:'PENDING',revision:'1',verificationDigest:null,findings:[],checkedAt:null} })
 const publicationAdminOperation = ({ operationId='op-publish', key, jobId='job-1', draftId='draft-1', draftRevision='4', state='COMMITTED', verificationState='PENDING', result=publicationResult({jobId,draftRevision,readbackState:'PENDING'}) } = {}) => ({ operationId,key,state,method:'POST',path:`/archive/admin/v1/drafts/${draftId}/publish`,collectionId:'platform-classics',jobId,draftId,action:'DRAFT_PUBLISH',authorizationRevision:'3',result,verification:result?{state:verificationState,revision:verificationState==='PENDING'?'1':'2',verificationDigest:verificationState==='PENDING'?null:'c'.repeat(64),findings:verificationState==='FAILED'?['readback']:[],checkedAt:verificationState==='PENDING'?null:'2026-10-01T00:00:01Z'}:null })
+const handlingFacts = ({ jobId = 'job-1', assignmentStatus = 'ACTIVE', assignedAgentId = 'agent-current', permissionProfile = 'PUBLISH_VALIDATED', completedChapters = '0', totalKnown = true, totalChapters = '12', publicationState = 'PUBLISHED', verificationState = 'PASSED', readerTarget = { workId: 'work-1', editionId: 'edition-1' } } = {}) => ({
+  title: '水浒传校勘', collectionId: 'platform-classics', source: { sourceId: 'source-1', sourceName: '水浒传底本', sourceVersion: 'v1' },
+  assignedAgentId: assignmentStatus === 'ACTIVE' ? assignedAgentId : null, permissionProfile: assignmentStatus === 'ACTIVE' ? permissionProfile : null,
+  publicationMode: 'MANUAL', stage: 'VALIDATING', blocker: ['REVOKED', 'BINDING_CHANGED'].includes(assignmentStatus) ? 'REASSIGNMENT_REQUIRED' : null,
+  progress: { completedChapters, totalKnown, totalChapters: totalKnown ? totalChapters : null },
+  currentPublication: { state: publicationState, receipt: { publicationId: 'pub-1', jobId, workId: 'work-1', editionId: 'edition-1', draftRevision: '4', manifestSha256: 'a'.repeat(64), sourceSha256: 'b'.repeat(64) }, verification: { state: verificationState, revision: '2', verificationDigest: verificationState === 'PASSED' ? 'c'.repeat(64) : null, findings: [], checkedAt: verificationState === 'PASSED' ? '2026-10-02T00:00:01Z' : null }, readerTarget: publicationState === 'PUBLISHED' && verificationState === 'PASSED' ? readerTarget : null },
+  assignmentStatus, assignmentSnapshot: { appointmentId: 'appt-history', appointmentRevision: '1', assignedAgentId: 'agent-history', permissionProfile: 'DRAFT_ONLY' }
+})
 const flushPromises = async () => { for (let i = 0; i < 8; i += 1) { await Promise.resolve(); await Vue.nextTick(); await new Promise(resolve => setTimeout(resolve, 0)) } }
 const waitFor = async (predicate, message = 'timed out') => { for (let i = 0; i < 40; i += 1) { await flushPromises(); if (predicate()) return } throw new Error(message) }
 const button = (wrapper, text) => wrapper.findAll('button').find(item => item.text().includes(text))
@@ -35,6 +43,39 @@ const loadArchiveSfc = relativePath => {
     .replace('export default', 'return')
   return new Function('Vue', 'registerIdentityCleanup', 'archive', 'createApi', source)(Vue, registerIdentityCleanup, archive, createApi)
 }
+const loadChatPanelSfc = ArchiveMaintenanceReceiptCard => {
+  const relativePath = '../src/components/juyiting/ChatPanel.vue'
+  const filename = new URL(relativePath, import.meta.url).pathname
+  const { descriptor } = parse(readFileSync(new URL(relativePath, import.meta.url), 'utf8'), { filename })
+  const source = compileScript(descriptor, { id: 'archive-chat-facts-chat', inlineTemplate: true }).content
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_line, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
+    .replace(/^import\s+\{\s*marked\s*\}\s+from\s+['"]marked['"];?\s*$/gm, 'var marked = arguments[1]')
+    .replace(/^import\s+DOMPurify\s+from\s+['"]dompurify['"];?\s*$/gm, 'var DOMPurify = arguments[2]')
+    .replace(/^import\s+HallChatComposer\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var HallChatComposer = arguments[3]')
+    .replace(/^import\s+HallConversationHistory\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var HallConversationHistory = arguments[3]')
+    .replace(/^import\s+ArchiveMaintenanceReceiptCard\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var ArchiveMaintenanceReceiptCard = arguments[4]')
+    .replace(/^import\s+\{\s*usePersonalWorkspace\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var usePersonalWorkspace = arguments[5].usePersonalWorkspace')
+    .replace(/^import\s+\{\s*usePersonalWorkspaceConversationLinks\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var usePersonalWorkspaceConversationLinks = arguments[5].usePersonalWorkspaceConversationLinks')
+    .replace(/^import\s+\{\s*usePersonalWorkspaceTaskLinks\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var usePersonalWorkspaceTaskLinks = arguments[5].usePersonalWorkspaceTaskLinks')
+    .replace('export default', 'return')
+  const noop = () => {}; const list = Vue.ref([]); const text = Vue.ref('')
+  const empty = Vue.defineComponent({ setup: () => () => Vue.h('div') })
+  const directory = () => ({ links: list, loading: Vue.ref(false), error: text, load: async () => false, attach: async () => {}, detach: async () => {}, dispose: noop })
+  const workspace = () => ({ loading: Vue.ref(false), error: text, items: list, refresh: async () => {}, select: async () => null, dispose: noop })
+  const marked = Object.assign(value => value, { setOptions: noop })
+  return new Function('Vue', 'marked', 'DOMPurify', 'Empty', 'ArchiveMaintenanceReceiptCard', 'workspace', source)(Vue, marked, { sanitize: value => value }, empty, ArchiveMaintenanceReceiptCard, { usePersonalWorkspace: workspace, usePersonalWorkspaceConversationLinks: directory, usePersonalWorkspaceTaskLinks: directory })
+}
+const loadLibrarySfc = (ArchiveReader, ArchiveMaintenancePanel) => {
+  const relativePath = '../src/components/juyiting/LibraryPanel.vue'
+  const filename = new URL(relativePath, import.meta.url).pathname
+  const { descriptor } = parse(readFileSync(new URL(relativePath, import.meta.url), 'utf8'), { filename })
+  const source = compileScript(descriptor, { id: 'archive-chat-facts-library', inlineTemplate: true }).content
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_line, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
+    .replace(/^import\s+ArchiveReader\s+from\s+['"].\/archive\/ArchiveReader\.vue['"];?\s*$/gm, 'var ArchiveReader = arguments[1]')
+    .replace(/^import\s+ArchiveMaintenancePanel\s+from\s+['"].\/archive\/ArchiveMaintenancePanel\.vue['"];?\s*$/gm, 'var ArchiveMaintenancePanel = arguments[2]')
+    .replace('export default', 'return')
+  return new Function('Vue', 'ArchiveReader', 'ArchiveMaintenancePanel', source)(Vue, ArchiveReader, ArchiveMaintenancePanel)
+}
 const authenticatedApi = basePath => {
   const actual = createApi(basePath); const options = value => ({ ...value, authStore, needAuth: true, rum: false })
   return { ...actual, execute: value => actual.execute(options(value)), get: (path, params, value = {}) => actual.get(path, params, options(value)), post: (path, body, value = {}) => actual.post(path, body, options(value)), put: (path, body, value = {}) => actual.put(path, body, options(value)) }
@@ -45,7 +86,7 @@ const panelFixture = ({ catalogStatus = 200, capabilitiesStatus = 200, deferredR
   const calls = []; let capabilityReads = 0; let publishKey = null
   const oldSkill = { key: 'archive-maintainer', version: 'old-9', packageSha256: 'o'.repeat(64) }
   const newSkill = { key: 'archive-maintainer', version: 'new-10', packageSha256: 'n'.repeat(64) }
-  const job = { jobId: 'job-1', title: '水浒', state: 'DRAFTING', revision: '7', appointmentId: 'appt-old', operation: 'ADD_WORK', publicationMode: 'MANUAL', waitReason: 'WAITING_SOURCE', draftId: 'draft-1' }
+  const job = { jobId: 'job-1', title: '水浒', state: 'DRAFTING', revision: '7', appointmentId: 'appt-old', operation: 'ADD_WORK', publicationMode: 'MANUAL', waitReason: 'WAITING_SOURCE', draftId: 'draft-1', handling: handlingFacts() }
   const active = appointments ?? [{ appointmentId: 'appt-old', revision: '2', agentId: 'old-agent', bindingVersion: 'binding-7', status: 'ACTIVE', permissionProfile: 'PUBLISH_VALIDATED', workScopeMode: 'EXPLICIT_WORKS', workIds: ['work-1'], readiness: 'READY', requiredSkill: oldSkill }]
   const fetch = async (url, options = {}) => {
     const path = String(url).split('?')[0]; const method = options.method || 'GET'; const body = options.body ? JSON.parse(options.body) : null
@@ -183,6 +224,114 @@ describe('archive maintenance mounted Vue wiring', function () { this.timeout(10
   })
 
 
+  it('forwards the actual receipt card actions through the mounted ChatPanel without trusting message fields', async () => {
+    const Receipt = loadArchiveSfc('../src/components/juyiting/archive/ArchiveMaintenanceReceiptCard.vue'); const Chat = loadChatPanelSfc(Receipt)
+    globalThis.fetch = async () => admin({ jobId: 'job-chat', handling: handlingFacts({ jobId: 'job-chat' }) })
+    const wrapper = mount(Chat, { attachTo: document.body, props: { archiveApi: authenticatedApi('/archive/admin/v1'), mentionLabel: () => '', senderText: () => '系统', messages: [{ sender: 'SYSTEM', content: JSON.stringify({ type: 'archive_maintenance_receipt', archiveMaintenance: { jobId: 'job-chat', fakeEditionId: 'never-trusted' } }) }] } })
+    await waitFor(() => wrapper.text().includes('水浒传校勘'))
+    await button(wrapper, '查看维护单').trigger('click'); await waitFor(() => wrapper.emitted('open-maintenance-job'))
+    await button(wrapper, '打开典籍').trigger('click'); await waitFor(() => wrapper.emitted('open-archive-edition'))
+    expect(wrapper.emitted('open-maintenance-job').at(-1)[0]).to.deep.equal({ jobId: 'job-chat' })
+    expect(wrapper.emitted('open-archive-edition').at(-1)[0]).to.deep.equal({ workId: 'work-1', editionId: 'edition-1' })
+    wrapper.unmount()
+  })
+
+  it('renders only reauthorized handling facts and emits exact maintenance/reader targets', async () => {
+    const Receipt = loadArchiveSfc('../src/components/juyiting/archive/ArchiveMaintenanceReceiptCard.vue'); const api = authenticatedApi('/archive/admin/v1'); const calls = []
+    const job = { jobId: 'job-facts', handling: handlingFacts({ jobId: 'job-facts', completedChapters: '0', totalKnown: true, totalChapters: '12' }) }
+    globalThis.fetch = async (url, options = {}) => { calls.push({ path: String(url).split('?')[0], headers: options.headers }); return admin(job) }
+    const wrapper = mount(Receipt, { attachTo: document.body, props: { api, content: JSON.stringify({ type: 'archive_maintenance_receipt', archiveMaintenance: { jobId: 'job-facts' } }) } })
+    await waitFor(() => wrapper.text().includes('实际章节进度：0 / 12'))
+    expect(wrapper.text()).to.include('agent-current · PUBLISH_VALIDATED').and.include('历史任职快照：agent-history')
+    expect(calls.every(call => call.headers.Authorization === 'Bearer fixture-token')).to.equal(true)
+    await button(wrapper, '查看维护单').trigger('click'); await waitFor(() => wrapper.emitted('open-maintenance'))
+    expect(wrapper.emitted('open-maintenance').at(-1)[0]).to.deep.equal({ jobId: 'job-facts' })
+    await button(wrapper, '打开典籍').trigger('click'); await waitFor(() => wrapper.emitted('open-edition'))
+    expect(wrapper.emitted('open-edition').at(-1)[0]).to.deep.equal({ workId: 'work-1', editionId: 'edition-1' })
+    wrapper.unmount()
+  })
+
+  it('keeps revoked assignment historical-only while independently allowing a current passed reader target', async () => {
+    const Receipt = loadArchiveSfc('../src/components/juyiting/archive/ArchiveMaintenanceReceiptCard.vue'); const api = authenticatedApi('/archive/admin/v1')
+    globalThis.fetch = async () => admin({ jobId: 'job-revoked', handling: handlingFacts({ jobId: 'job-revoked', assignmentStatus: 'REVOKED', completedChapters: '3', totalKnown: false, totalChapters: null }) })
+    const wrapper = mount(Receipt, { attachTo: document.body, props: { api, content: JSON.stringify({ type: 'archive_maintenance_receipt', archiveMaintenance: { jobId: 'job-revoked' } }) } })
+    await waitFor(() => wrapper.text().includes('当前任职已失效，需要重新改派'))
+    expect(wrapper.text()).to.include('3 章完成；总章数未知').and.include('历史任职快照：agent-history').and.not.include('当前任职：agent-current')
+    expect(button(wrapper, '打开典籍')).not.to.equal(undefined)
+    wrapper.unmount()
+    globalThis.fetch = async () => admin({ jobId: 'job-binding', handling: handlingFacts({ jobId: 'job-binding', assignmentStatus: 'BINDING_CHANGED' }) })
+    const bindingChanged = mount(Receipt, { attachTo: document.body, props: { api, content: JSON.stringify({ type: 'archive_maintenance_receipt', archiveMaintenance: { jobId: 'job-binding' } }) } })
+    await waitFor(() => bindingChanged.text().includes('当前任职已失效，需要重新改派'))
+    expect(bindingChanged.text()).to.include('阻塞 REASSIGNMENT_REQUIRED').and.not.include('当前任职：agent-current')
+    bindingChanged.unmount()
+  })
+
+  it('does not expose a pending, failed, withdrawn, or identity-late handling receipt as a reader target', async () => {
+    const Receipt = loadArchiveSfc('../src/components/juyiting/archive/ArchiveMaintenanceReceiptCard.vue'); const api = authenticatedApi('/archive/admin/v1'); const late = deferred(); let phase = 'pending'
+    globalThis.fetch = async () => phase === 'late' ? late.promise : admin({ jobId: 'job-negative', handling: handlingFacts({ jobId: 'job-negative', publicationState: phase === 'withdrawn' ? 'WITHDRAWN' : 'PUBLISHED', verificationState: phase === 'failed' ? 'FAILED' : 'PENDING' }) })
+    const content = JSON.stringify({ type: 'archive_maintenance_receipt', archiveMaintenance: { jobId: 'job-negative' } })
+    const pending = mount(Receipt, { attachTo: document.body, props: { api, content } }); await waitFor(() => pending.text().includes('不可打开阅读')); expect(button(pending, '打开典籍')).to.equal(undefined); pending.unmount()
+    phase = 'failed'; const failed = mount(Receipt, { attachTo: document.body, props: { api, content } }); await waitFor(() => failed.text().includes('FAILED')); expect(button(failed, '打开典籍')).to.equal(undefined); failed.unmount()
+    phase = 'withdrawn'; const withdrawn = mount(Receipt, { attachTo: document.body, props: { api, content } }); await waitFor(() => withdrawn.text().includes('WITHDRAWN')); expect(button(withdrawn, '打开典籍')).to.equal(undefined); withdrawn.unmount()
+    phase = 'late'; const stale = mount(Receipt, { attachTo: document.body, props: { api, content } }); stopIdentityBoundWork(); late.resolve(admin({ jobId: 'job-negative', handling: handlingFacts({ jobId: 'job-negative' }) })); await flushPromises(); expect(stale.text()).not.to.include('agent-current').and.not.to.include('打开典籍'); stale.unmount()
+  })
+
+  it('does not expose malformed PASSED verification or non-positive immutable draft revision as a reader target', async () => {
+    const Receipt = loadArchiveSfc('../src/components/juyiting/archive/ArchiveMaintenanceReceiptCard.vue')
+    const variants = [
+      ['missing digest', facts => { facts.currentPublication.verification.verificationDigest = null }],
+      ['missing checkedAt', facts => { facts.currentPublication.verification.checkedAt = null }],
+      ['invalid checkedAt', facts => { facts.currentPublication.verification.checkedAt = 'not-an-instant' }],
+      ['null verification revision', facts => { facts.currentPublication.verification.revision = null }],
+      ['zero verification revision', facts => { facts.currentPublication.verification.revision = '0' }],
+      ['malformed verification revision', facts => { facts.currentPublication.verification.revision = '01' }],
+      ['null findings', facts => { facts.currentPublication.verification.findings = null }],
+      ['non-string finding', facts => { facts.currentPublication.verification.findings = ['ok', 7] }],
+      ['zero immutable draft revision', facts => { facts.currentPublication.receipt.draftRevision = '0' }]
+    ]
+    for (const [_label, mutate] of variants) {
+      const api = authenticatedApi('/archive/admin/v1')
+      const handling = handlingFacts({ jobId: 'job-malformed' }); mutate(handling)
+      globalThis.fetch = async () => admin({ jobId: 'job-malformed', handling })
+      const wrapper = mount(Receipt, { attachTo: document.body, props: { api, content: JSON.stringify({ type: 'archive_maintenance_receipt', archiveMaintenance: { jobId: 'job-malformed' } }) } })
+      await waitFor(() => wrapper.text().includes('当前发布：'))
+      expect(button(wrapper, '打开典籍'), _label).to.equal(undefined)
+      expect(wrapper.emitted('open-edition'), _label).to.equal(undefined)
+      wrapper.unmount()
+    }
+  })
+
+  it('removes an initially readable action when its click-time reauthorization returns malformed PASSED verification', async () => {
+    const Receipt = loadArchiveSfc('../src/components/juyiting/archive/ArchiveMaintenanceReceiptCard.vue')
+    const api = authenticatedApi('/archive/admin/v1'); let reads = 0
+    globalThis.fetch = async () => {
+      const handling = handlingFacts({ jobId: 'job-click-malformed' })
+      if (++reads > 1) handling.currentPublication.verification = { state: 'PASSED', revision: '0', verificationDigest: null, findings: null, checkedAt: null }
+      return admin({ jobId: 'job-click-malformed', handling })
+    }
+    const wrapper = mount(Receipt, { attachTo: document.body, props: { api, content: JSON.stringify({ type: 'archive_maintenance_receipt', archiveMaintenance: { jobId: 'job-click-malformed' } }) } })
+    await waitFor(() => button(wrapper, '打开典籍'))
+    await button(wrapper, '打开典籍').trigger('click')
+    await waitFor(() => button(wrapper, '打开典籍') === undefined)
+    expect(reads).to.equal(2)
+    expect(wrapper.emitted('open-edition')).to.equal(undefined)
+    wrapper.unmount()
+  })
+
+  it('fences receipt job A/B/A late facts and does not retain a stale current assignment', async () => {
+    const Receipt = loadArchiveSfc('../src/components/juyiting/archive/ArchiveMaintenanceReceiptCard.vue'); const api = authenticatedApi('/archive/admin/v1')
+    const firstA = deferred(), B = deferred(), secondA = deferred(); let aReads = 0, bReads = 0
+    globalThis.fetch = async url => { const path = String(url).split('?')[0]; if (path.endsWith('/jobs/job-a')) return (++aReads === 1 ? firstA : secondA).promise; bReads += 1; return B.promise }
+    const content = id => JSON.stringify({ type: 'archive_maintenance_receipt', archiveMaintenance: { jobId: id } })
+    const wrapper = mount(Receipt, { attachTo: document.body, props: { api, content: content('job-a') } })
+    await waitFor(() => aReads === 1); await wrapper.setProps({ content: content('job-b') }); await waitFor(() => bReads === 1)
+    await wrapper.setProps({ content: content('job-a') }); await waitFor(() => aReads === 2)
+    firstA.resolve(admin({ jobId: 'job-a', handling: handlingFacts({ jobId: 'job-a', assignedAgentId: 'stale-agent' }) })); B.resolve(admin({ jobId: 'job-b', handling: handlingFacts({ jobId: 'job-b', assignedAgentId: 'wrong-agent' }) })); secondA.resolve(admin({ jobId: 'job-a', handling: handlingFacts({ jobId: 'job-a', assignedAgentId: 'fresh-agent' }) }))
+    await waitFor(() => wrapper.text().includes('fresh-agent'))
+    expect(wrapper.text()).not.to.include('stale-agent').and.not.to.include('wrong-agent')
+    wrapper.unmount()
+  })
+
   it('uses real createApi.execute PATCH and exact withdraw/source operation routes', async () => {
     const calls=[]; globalThis.fetch=async (url,options={})=>{const path=String(url).split('?')[0];calls.push({path,method:options.method,body:options.body?JSON.parse(options.body):null,headers:options.headers}); if(path.endsWith('/source-snapshots'))return admin({operationId:'source-op',jobId:null,state:'PENDING'}); if(path.endsWith('/operations/source-op'))return admin({operationId:'source-op',state:'COMMITTED',result:{sourceId:'source-1'}}); return admin({})}
     const gateway=mountedGateway(); await gateway.patchDraft('draft-1',{blocks:[],excludedSourceRanges:[]},'4'); await gateway.withdraw('work-1','edition-1',{reason:'withdrawn',replacementActiveEditionId:null},'9'); const source=await gateway.prepareSource({sourceName:'x',sourceVersion:'v',rightsBasis:'r',declaredSha256:'a'.repeat(64),contentBase64:'eA=='}); await gateway.operation(source.operationId)
@@ -196,6 +345,21 @@ describe('archive maintenance mounted Vue wiring', function () { this.timeout(10
 
 describe('archive complete-management mounted paths', function () { this.timeout(10000)
   const jobSelect = wrapper => wrapper.findAll('select').find(item => item.findAll('option').some(option => option.element.value === 'job-1'))
+  it('opens an explicit receipt job through the actual LibraryPanel and maintenance panel gateway', async () => {
+    const Panel = loadArchiveSfc('../src/components/juyiting/archive/ArchiveMaintenancePanel.vue')
+    const observed = []
+    const ArchiveReader = Vue.defineComponent({ setup(_props, { expose }) { expose({ openEdition: async target => { observed.push(target); return true } }); return () => Vue.h('section', { class: 'reader-stub' }) } })
+    const Library = loadLibrarySfc(ArchiveReader, Panel); const fixture = panelFixture(); globalThis.fetch = fixture.fetch
+    const wrapper = mount(Library, { attachTo: document.body, props: { archiveGateway: mountedGateway(), formatTime: () => '' } })
+    expect(await wrapper.vm.openMaintenanceJob({ jobId: 'job-1' })).to.equal(true)
+    await waitFor(() => wrapper.text().includes('作业 job-1'))
+    expect(fixture.calls.some(call => call.path.endsWith('/jobs/job-1') && call.method === 'GET')).to.equal(true)
+    expect(wrapper.find('#library-maintenance-panel').attributes('role')).to.equal('tabpanel')
+    await wrapper.vm.openVerifiedEdition({ workId: 'work-card', editionId: 'edition-card' })
+    expect(observed).to.deep.equal([{ workId: 'work-card', editionId: 'edition-card' }])
+    wrapper.unmount()
+  })
+
   it('loads managed works for withdraw-only and hides publish controls', async () => {
     const Panel = loadArchiveSfc('../src/components/juyiting/archive/ArchiveMaintenancePanel.vue'); const fixture = panelFixture({ capabilities: () => ({ allowedActions: ['edition.withdraw'] }) }); globalThis.fetch = fixture.fetch
     const wrapper = mount(Panel, { attachTo: document.body, props: { gateway: mountedGateway() } }); await waitFor(() => fixture.calls.some(call => call.path.endsWith('/works')))

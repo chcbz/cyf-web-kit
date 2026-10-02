@@ -277,7 +277,7 @@ const loadActualHallForIntegration = (mocks, id) => {
   const relativePath = '../src/components/world/JuyiHall.vue'
   const filename = new URL(relativePath, import.meta.url).pathname
   const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8')
-    .replace('</script>', 'defineExpose({ openPanel, returnPanel, panelDepth, panelFrames })\n</script>')
+    .replace('</script>', 'defineExpose({ openPanel, returnPanel, panelDepth, panelFrames, openArchiveMaintenanceJob, openArchiveEdition })\n</script>')
   const { descriptor } = parse(source, { filename })
   const body = compileScript(descriptor, { id, inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
@@ -288,7 +288,7 @@ const loadActualHallForIntegration = (mocks, id) => {
   return new Function('Vue', 'mocks', body)(Vue, mocks)
 }
 
-const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, workspaceState = null, counters }) => {
+const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, workspaceState = null, counters, apiStore = { authorizationGeneration: 0, token: async () => false } }) => {
   const noop = () => {}
   const asyncNoop = async () => {}
   const list = Vue.ref([])
@@ -320,7 +320,7 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
     hasMeaningfulHallLeaveWork,
     registerIdentityCleanup,
     env: { VITE_JUYITING_TASK_WORKSPACE_ENABLED: workspaceState ? 'true' : undefined },
-    useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({ token: async () => false }),
+    useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => apiStore,
     agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {}, roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
     useHallData: () => hallData,
     useHallExperienceMode: () => ({ experienceMode: mode, isMobileCoarse: Vue.ref(true), orientationHint: text, orientationRequestPending: Vue.ref(false), requestLandscape: asyncNoop }),
@@ -2831,6 +2831,74 @@ describe('archive reader contract behavior', () => {
       wrapper.unmount()
     }
     expect(readerUnmounts).to.equal(1)
+  })
+
+
+  it('routes exact archive maintenance and reader targets through actual Hall and Library composition, rejecting invalid and late-identity navigation', async () => {
+    const maintenanceTargets = []
+    const readerTargets = []
+    const ArchiveReader = Vue.defineComponent({
+      setup (_props, { expose }) {
+        expose({ openEdition: async target => { readerTargets.push(target); return true } })
+        return () => Vue.h('section', { class: 'composition-reader' })
+      }
+    })
+    const ArchiveMaintenancePanel = Vue.defineComponent({
+      setup (_props, { expose }) {
+        expose({ openJobById: async jobId => { maintenanceTargets.push(jobId); return true } })
+        return () => Vue.h('section', { class: 'composition-maintenance' })
+      }
+    })
+    const LibraryPanel = loadLibraryPanelSfc(ArchiveReader, ArchiveMaintenancePanel)
+    const mode = Vue.ref('portrait-command')
+    const apiStore = Vue.reactive({ authorizationGeneration: 0, token: async () => false })
+    const counters = { hallLoads: 0 }
+    const mocks = createHallIntegrationMocks({ mode, LibraryPanel, counters, apiStore })
+    mocks.PublicDiscussionPanel = Vue.defineComponent({
+      emits: ['open-maintenance-job', 'open-archive-edition'],
+      setup (_props, { emit }) {
+        return () => Vue.h('section', { class: 'receipt-navigation-carrier' }, [
+          Vue.h('button', { type: 'button', class: 'receipt-open-maintenance', onClick: () => emit('open-maintenance-job', { jobId: 'job-card' }) }, '维护单'),
+          Vue.h('button', { type: 'button', class: 'receipt-open-edition', onClick: () => emit('open-archive-edition', { workId: 'work-card', editionId: 'edition-card' }) }, '典籍'),
+          Vue.h('button', { type: 'button', class: 'receipt-open-invalid', onClick: () => { emit('open-maintenance-job', { jobId: ' ' }); emit('open-archive-edition', { workId: 'work-card', editionId: '' }) } }, '无效')
+        ])
+      }
+    })
+    const JuyiHall = loadActualHallForIntegration(mocks, 'archive-receipt-navigation-composition')
+    const wrapper = mount(JuyiHall, { attachTo: document.body, global: { stubs: { 'var-icon': true, teleport: true } } })
+    try {
+      await settle()
+      const openReceiptChat = async () => {
+        expect(wrapper.vm.openPanel('chat', { root: true })).to.equal(true)
+        await settle()
+        await waitFor(() => wrapper.find('.receipt-navigation-carrier').exists())
+      }
+      await openReceiptChat()
+      await wrapper.get('.receipt-open-maintenance').trigger('click')
+      await waitFor(() => maintenanceTargets.length === 1)
+      expect(maintenanceTargets).to.deep.equal(['job-card'])
+      await openReceiptChat()
+      await wrapper.get('.receipt-open-edition').trigger('click')
+      await waitFor(() => readerTargets.length === 1)
+      expect(readerTargets).to.deep.equal([{ workId: 'work-card', editionId: 'edition-card' }])
+      await openReceiptChat()
+      await wrapper.get('.receipt-open-invalid').trigger('click')
+      await settle()
+      expect(maintenanceTargets).to.deep.equal(['job-card'])
+      expect(readerTargets).to.deep.equal([{ workId: 'work-card', editionId: 'edition-card' }])
+      const late = wrapper.vm.openArchiveMaintenanceJob({ jobId: 'job-late' })
+      apiStore.authorizationGeneration = 1
+      expect(await late).to.equal(false)
+      await settle()
+      expect(maintenanceTargets).to.deep.equal(['job-card'])
+      const lateEdition = wrapper.vm.openArchiveEdition({ workId: 'work-late', editionId: 'edition-late' })
+      apiStore.authorizationGeneration = 2
+      expect(await lateEdition).to.equal(false)
+      await settle()
+      expect(readerTargets).to.deep.equal([{ workId: 'work-card', editionId: 'edition-card' }])
+    } finally {
+      wrapper.unmount()
+    }
   })
 
 })

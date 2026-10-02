@@ -141,7 +141,8 @@
           <strong>{{ senderText(message) }}</strong>
           <span v-if="message.streaming" class="message-state">回话未尽</span>
         </div>
-        <ArchiveMaintenanceReceiptCard v-if="isArchiveMaintenanceReceipt(message.content, message.sender)" :content="message.content" />
+        <ArchiveMaintenanceReceiptCard v-if="isArchiveMaintenanceReceipt(message.content, message.sender)" :content="message.content" :api="archiveApi"
+          @open-maintenance="$emit('open-maintenance-job', $event)" @open-edition="$emit('open-archive-edition', $event)" />
         <div v-else class="message-content" v-html="renderMarkdown(message.content)"></div>
         <small v-if="message.statusText" class="message-status">{{ message.statusText }}</small>
       </div>
@@ -195,6 +196,7 @@ marked.setOptions({
 
 const props = defineProps({
   agents: { type: Array, default: () => [] },
+  archiveApi: { type: Object, default: null },
   connectionStatus: { type: String, default: '' },
   conversationHistory: { type: Array, default: () => [] },
   conversationHistoryDeletingId: { type: String, default: '' },
@@ -235,6 +237,8 @@ const emit = defineEmits([
   'mention-agent',
   'new-conversation',
   'open-workspace',
+  'open-maintenance-job',
+  'open-archive-edition',
   'retry-conversation',
   'select-conversation',
   'send-message',

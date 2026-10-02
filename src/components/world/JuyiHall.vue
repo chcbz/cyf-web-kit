@@ -531,6 +531,8 @@
             @mention-agent="handleMentionAgent"
             @new-conversation="handleNewHallConversation"
             @open-workspace="openBabaoBox"
+            @open-maintenance-job="openArchiveMaintenanceJob"
+            @open-archive-edition="openArchiveEdition"
             @retry-conversation="retryHallConversation"
             @select-conversation="selectHallConversation"
             @send-message="handleSendHallMessage"
@@ -576,6 +578,8 @@
             @mention-agent="handleMentionAgent"
             @new-conversation="handleNewHallConversation"
             @open-workspace="openBabaoBox"
+            @open-maintenance-job="openArchiveMaintenanceJob"
+            @open-archive-edition="openArchiveEdition"
             @retry-conversation="retryHallConversation"
             @select-conversation="selectHallConversation"
             @send-message="handleSendHallMessage"
@@ -620,6 +624,8 @@
             @mention-agent="handleMentionAgent"
             @new-conversation="handleNewHallConversation"
             @open-workspace="openBabaoBox"
+            @open-maintenance-job="openArchiveMaintenanceJob"
+            @open-archive-edition="openArchiveEdition"
             @retry-conversation="retryHallConversation"
             @select-conversation="selectHallConversation"
             @send-message="handleSendHallMessage"
@@ -2168,6 +2174,25 @@ const showRandomAgentBubble = () => {
   }, 3600)
 }
 
+
+const openArchiveMaintenanceJob = async ({ jobId } = {}) => {
+  const exactJobId = typeof jobId === 'string' ? jobId.trim() : ''
+  const authorizationEpoch = apiStore.authorizationGeneration
+  if (!exactJobId || !openPanel('library', { root: true })) return false
+  await nextTick()
+  if (apiStore.authorizationGeneration !== authorizationEpoch) return false
+  return Boolean(await libraryPanelRef.value?.openMaintenanceJob?.({ jobId: exactJobId }))
+}
+
+const openArchiveEdition = async ({ workId, editionId } = {}) => {
+  const exactWorkId = typeof workId === 'string' ? workId.trim() : ''
+  const exactEditionId = typeof editionId === 'string' ? editionId.trim() : ''
+  const authorizationEpoch = apiStore.authorizationGeneration
+  if (!exactWorkId || !exactEditionId || !openPanel('library', { root: true })) return false
+  await nextTick()
+  if (apiStore.authorizationGeneration !== authorizationEpoch) return false
+  return Boolean(await libraryPanelRef.value?.openVerifiedEdition?.({ workId: exactWorkId, editionId: exactEditionId }))
+}
 
 const openArchiveMaintenanceConversation = async ({ entry, confirmationRef, job } = {}) => {
   if (voiceInteractionLocked.value || typeof confirmationRef !== 'string' || !confirmationRef.trim()) return false

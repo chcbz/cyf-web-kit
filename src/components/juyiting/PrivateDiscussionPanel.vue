@@ -25,6 +25,8 @@
       @mention-agent="$emit('mention-agent', $event)"
       @new-conversation="$emit('new-conversation')"
       @open-workspace="$emit('open-workspace')"
+      @open-maintenance-job="$emit('open-maintenance-job', $event)"
+      @open-archive-edition="$emit('open-archive-edition', $event)"
       @retry-conversation="$emit('retry-conversation')"
       @select-conversation="$emit('select-conversation', $event)"
       @send-message="$emit('send-message')"
@@ -73,6 +75,8 @@ const emit = defineEmits([
   'mention-agent',
   'new-conversation',
   'open-workspace',
+  'open-maintenance-job',
+  'open-archive-edition',
   'retry-conversation',
   'select-conversation',
   'send-message',

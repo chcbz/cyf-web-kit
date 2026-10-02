@@ -59,7 +59,7 @@
       @start-draft="$emit('start-draft', $event)"
     />
 
-    <ArchiveMaintenancePanel v-if="activeTab === 'maintenance'" id="library-maintenance-panel"
+    <ArchiveMaintenancePanel v-if="activeTab === 'maintenance'" id="library-maintenance-panel" ref="maintenancePanelRef" :gateway="archiveGateway"
       role="tabpanel" aria-labelledby="library-maintenance-tab" @open-maintenance-entry="$emit('open-maintenance-entry', $event)" @open-edition="openVerifiedEdition" />
 
     <div
@@ -147,11 +147,19 @@ import ArchiveMaintenancePanel from './archive/ArchiveMaintenancePanel.vue'
 
 const activeTab = ref('reader')
 const readerRef = ref(null)
+const maintenancePanelRef = ref(null)
 const readerHasBack = ref(false)
 const canGoBack = computed(() => activeTab.value === 'reader' && readerHasBack.value)
 const back = () => canGoBack.value ? readerRef.value?.back() : false
 const openVerifiedEdition = async payload => { activeTab.value = 'reader'; await nextTick(); return readerRef.value?.openEdition?.(payload) }
-defineExpose({ canGoBack, back })
+const openMaintenanceJob = async ({ jobId } = {}) => {
+  const exactJobId = typeof jobId === 'string' ? jobId.trim() : ''
+  if (!exactJobId) return false
+  activeTab.value = 'maintenance'
+  await nextTick()
+  return Boolean(await maintenancePanelRef.value?.openJobById?.(exactJobId))
+}
+defineExpose({ canGoBack, back, openMaintenanceJob, openVerifiedEdition })
 const readerTab = ref(null)
 const searchTab = ref(null)
 const maintenanceTab = ref(null)
@@ -178,6 +186,7 @@ const handleTabKeydown = (event, currentTab) => {
 
 defineProps({
   embedded: { type: Boolean, default: false },
+  archiveGateway: { type: Object, default: null },
   detailAllowed: { type: Boolean, default: true },
   active: { type: Boolean, default: true },
   errorMessage: { type: String, default: '' },
