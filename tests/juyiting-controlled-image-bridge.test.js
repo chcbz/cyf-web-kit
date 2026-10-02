@@ -25,8 +25,13 @@ const start = h => h.flow.start({ task: task(), agent: { agentId: 'agent_fixture
 describe('controlled image point-and-start bridge v1', () => {
   it('accepts fixture capability only as explicit consent and identifies unavailable separately', () => {
     const c = parseControlledImageBountyCapability(copy(fixture.wire.capability)); expect(capabilityOffersControlledImageConsent(c, { id: 'task_fixture_1' }, { agentId: 'agent_fixture_1' })).to.equal(true)
-    const unavailable = copy(fixture.wire.capability); unavailable.authorization = { state: 'UNAVAILABLE', paidExecutionAuthorized: false }; unavailable.newStart = { eligible: false, blockingReasons: ['SOURCE_UNAVAILABLE'] }; unavailable.providerBinding = null; unavailable.requestedOperations = []; unavailable.initialOperation = null; unavailable.controlledExecution = { state: 'UNAVAILABLE', transport: null, schemaVersion: null, supportedOperations: [] }
+    const unavailable = copy(fixture.wire.capability); unavailable.executionAuthorization = { state: 'UNAVAILABLE', paidExecutionAuthorized: false }; unavailable.newStart = { eligible: false, blockingReasons: ['SOURCE_UNAVAILABLE'] }; unavailable.providerBinding = null; unavailable.requestedOperations = []; unavailable.initialOperation = null; unavailable.controlledExecution = { state: 'UNAVAILABLE', transport: null, schemaVersion: null, supportedOperations: [] }
     expect(parseControlledImageBountyCapability(unavailable)?.controlledObservation).to.equal('UNAVAILABLE')
+    const legacyAuthorization = copy(fixture.wire.capability); legacyAuthorization.authorization = legacyAuthorization.executionAuthorization; delete legacyAuthorization.executionAuthorization
+    expect(parseControlledImageBountyCapability(legacyAuthorization)).to.equal(null)
+    const legacySchema = copy(fixture.wire.capability); legacySchema.schemaVersion = 2
+    expect(parseControlledImageBountyCapability(legacySchema)).to.equal(null)
+    expect(parseControlledImageBountyCapability(null)).to.equal(null)
   })
   it('performs real fake issue → durable wrapper → bridge → BOUND observation exactly once', async () => {
     const h = bridge(); expect(await start(h)).to.equal(true); expect(h.calls.map(x => x.slice(0, 2))).to.deep.equal([['get', '/tasks/task_fixture_1/requirements/current'], ['get', '/tasks/task_fixture_1'], ['post', '/tasks/task_fixture_1/point-and-start-cost-consents'], ['post', '/tasks/task_fixture_1/point-and-start-controlled-image']])

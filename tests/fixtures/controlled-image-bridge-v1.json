@@ -65,7 +65,7 @@
       }
     },
     "capability": {
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "taskId": "task_fixture_1",
       "targetAgentId": "agent_fixture_1",
       "lane": "ORDINARY_SINGLE_AGENT_CONTROLLED_IMAGE_ASSIGN_AND_START",
@@ -90,10 +90,6 @@
         "maxOutboundRequestAttempts": 1,
         "precallFenceVersion": 1
       },
-      "authorization": {
-        "state": "CONSENT_REQUIRED",
-        "paidExecutionAuthorized": false
-      },
       "newStart": {
         "eligible": false,
         "blockingReasons": [
@@ -110,6 +106,10 @@
         "legacyFallbackAllowed": false,
         "unknownOrNotFoundMeans": "RECOVERY_REQUIRED",
         "replayPolicy": "EXPLICIT_USER_EXACT_ORIGINAL_KEY_AND_BODY_ONLY"
+      },
+      "executionAuthorization": {
+        "state": "CONSENT_REQUIRED",
+        "paidExecutionAuthorized": false
       }
     },
     "controlledImageBountyExecution": {
