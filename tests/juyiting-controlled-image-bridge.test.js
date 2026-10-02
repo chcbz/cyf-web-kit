@@ -31,6 +31,10 @@ describe('controlled image point-and-start bridge v1', () => {
     expect(parseControlledImageBountyCapability(legacyAuthorization)).to.equal(null)
     const legacySchema = copy(fixture.wire.capability); legacySchema.schemaVersion = 2
     expect(parseControlledImageBountyCapability(legacySchema)).to.equal(null)
+    const v2Transport = copy(fixture.wire.capability); v2Transport.controlledExecution.transport = 'PERSONAL_WORKSPACE_CONTROLLED_IMAGE_HTTP_V2'
+    expect(parseControlledImageBountyCapability(v2Transport)).to.equal(null)
+    const v1ControlledSchema = copy(fixture.wire.capability); v1ControlledSchema.controlledExecution.schemaVersion = 1
+    expect(parseControlledImageBountyCapability(v1ControlledSchema)).to.equal(null)
     expect(parseControlledImageBountyCapability(null)).to.equal(null)
   })
   it('performs real fake issue → durable wrapper → bridge → BOUND observation exactly once', async () => {
