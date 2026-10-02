@@ -343,21 +343,85 @@ describe('Juyi Hall voice mounted facade', () => {
 
     const onHarness = browserHarness()
     const onVoice = createVoice({ enabled: true, browser: onHarness.browser }).voice
-    const on = mount(HallChatComposer, { props: { draft: '', mentionLabel: () => '', voice: onVoice }, global: { stubs: { 'var-icon': true } } })
+    const on = mount(HallChatComposer, { attachTo: document.body, props: { draft: '', mentionLabel: () => '', voice: onVoice }, global: { stubs: { 'var-icon': true } } })
     expect(onVoice.supported).to.equal(true)
     expect(onVoice.canRecord).to.equal(true)
-    expect(on.find('.hall-voice-controls').exists()).to.equal(true)
-    expect(on.find('form .hall-voice-controls').exists()).to.equal(false)
-    expect(on.find('.voice-disclosure').element.textContent).to.equal('播放内容为 AI 生成语音')
-    expect(on.find('input[aria-label="语音回答；播放内容为 AI 生成语音"]').exists()).to.equal(true)
+    expect(on.find('.composer-input-area .hall-voice-controls').exists()).to.equal(true)
+    expect(on.find('.hall-chat-composer > .hall-voice-controls').exists()).to.equal(false)
+    expect(on.find('.voice-settings').exists()).to.equal(false)
+    expect(on.get('.voice-settings-trigger').attributes('aria-expanded')).to.equal('false')
     expect(on.find('textarea').attributes('disabled')).to.equal(undefined)
-    await on.find('input[type="checkbox"]').setValue(true)
+    await on.get('.voice-settings-trigger').trigger('click')
+    expect(on.get('.voice-settings-trigger').attributes('aria-expanded')).to.equal('true')
+    expect(on.get('.voice-disclosure').element.textContent).to.equal('播放内容为 AI 生成语音')
+    await on.get('input[type="checkbox"]').setValue(true)
     expect(onVoice.autoSendEnabled).to.equal(true)
+    document.body.dispatchEvent(new window.Event('pointerdown', { bubbles: true }))
+    await flush()
+    expect(on.find('.voice-settings').exists()).to.equal(false)
+    await on.get('.voice-settings-trigger').trigger('click')
+    on.get('.voice-settings-trigger').element.focus()
+    await on.get('.voice-settings-trigger').trigger('keydown', { key: 'Escape' })
+    await flush()
+    expect(on.find('.voice-settings').exists()).to.equal(false)
+    expect(document.activeElement).to.equal(on.get('.voice-settings-trigger').element)
+    onVoice.setAutoSendEnabled(false)
 
     const compact = mount(HallVoiceControls, { props: { compact: true, voice: onVoice }, global: { stubs: { 'var-icon': true } } })
-    expect(compact.find('.voice-disclosure').element.textContent).to.equal('播放内容为 AI 生成语音')
+    expect(compact.find('.voice-settings').exists()).to.equal(false)
+    await compact.get('.voice-settings-trigger').trigger('click')
+    expect(compact.get('.voice-disclosure').element.textContent).to.equal('播放内容为 AI 生成语音')
+
+    const settingsVoice = () => Vue.reactive({
+      supported: true, state: 'idle', canRecord: true, autoSendEnabled: false, replyVoiceEnabled: false,
+      startRecording: () => {}, setAutoSendEnabled: () => {}, setReplyVoiceEnabled: () => {}
+    })
+    const firstSettings = mount(HallVoiceControls, { attachTo: document.body, props: { voice: settingsVoice() }, global: { stubs: { 'var-icon': true } } })
+    const secondSettings = mount(HallVoiceControls, { attachTo: document.body, props: { compact: true, voice: settingsVoice() }, global: { stubs: { 'var-icon': true } } })
+    await firstSettings.get('.voice-settings-trigger').trigger('click')
+    await secondSettings.get('.voice-settings-trigger').trigger('click')
+    const firstSettingsId = firstSettings.get('.voice-settings-trigger').attributes('aria-controls')
+    const secondSettingsId = secondSettings.get('.voice-settings-trigger').attributes('aria-controls')
+    expect(firstSettingsId).to.not.equal(secondSettingsId)
+    expect(firstSettings.get('.voice-settings').attributes('id')).to.equal(firstSettingsId)
+    expect(secondSettings.get('.voice-settings').attributes('id')).to.equal(secondSettingsId)
+    await secondSettings.get('.voice-settings-trigger').trigger('pointerdown')
+    await flush()
+    expect(firstSettings.find('.voice-settings').exists()).to.equal(false)
+    expect(secondSettings.find('.voice-settings').exists()).to.equal(true)
     compact.unmount()
+    firstSettings.unmount()
+    secondSettings.unmount()
+
+    await on.get('.voice-start').trigger('click')
+    await flush()
+    expect(onVoice.state).to.equal('recording')
+    expect(on.find('.composer-body.has-voice-detail').exists()).to.equal(true)
+    expect(on.get('.is-recording').attributes('aria-label')).to.equal('停止录音并转写')
+    expect(on.get('.voice-inline-status').element.textContent).to.contain('正在录音')
+    const recorder = FakeRecorder.instances.at(-1)
+    recorder.ondataavailable({ data: new Blob(['voice']) })
+    onVoice.stopRecording()
+    await flush()
+    expect(onVoice.state).to.equal('review')
+    expect(on.get('.composer-body.has-voice-detail').exists()).to.equal(true)
+    expect(on.get('.voice-review strong').element.textContent).to.equal('语音转写')
+    expect(on.get('button[aria-label="确认发送语音转写"]').exists()).to.equal(true)
     on.unmount()
+
+    const serviceError = Vue.reactive({ supported: true, state: 'error', error: '语音回答失败，文字已保留', discard: () => {} })
+    const transcriptionError = Vue.reactive({ supported: true, state: 'error', error: '语音转写失败，仍可使用文字传令', discard: () => {} })
+    const serviceErrorControls = mount(HallVoiceControls, { props: { voice: serviceError }, global: { stubs: { 'var-icon': true } } })
+    const transcriptionErrorControls = mount(HallVoiceControls, { props: { voice: transcriptionError }, global: { stubs: { 'var-icon': true } } })
+    expect(serviceErrorControls.get('.voice-review strong').element.textContent).to.equal('语音服务提示（AI 朗读）')
+    expect(transcriptionErrorControls.get('.voice-review strong').element.textContent).to.equal('语音未完成')
+    const speaking = Vue.reactive({ supported: true, state: 'speaking', elapsedMs: 0, cancel: () => {} })
+    const speakingControls = mount(HallVoiceControls, { props: { voice: speaking }, global: { stubs: { 'var-icon': true } } })
+    expect(speakingControls.get('.voice-inline-status').element.textContent).to.contain('正在朗读 AI 语音回答')
+    expect(speakingControls.get('.voice-ai-note').element.textContent).to.equal('AI 生成语音')
+    serviceErrorControls.unmount()
+    transcriptionErrorControls.unmount()
+    speakingControls.unmount()
   })
 
   it('confirms a reviewed transcript through the voice turn and reads the correlated reply aloud', async () => {
@@ -1444,7 +1508,8 @@ describe('Juyi Hall TTS cleanup', () => {
     expect(revoked).to.deep.equal(['blob:strict-window-voice'])
   }))
 
-  it('revokes object URLs on play rejection and media error', async () => {
+  it('labels actual TTS playback failures without mislabeling them as transcription failures', async () => {
+    const HallVoiceControls = loadSfc('../src/components/juyiting/HallVoiceControls.vue')
     class RejectAudio { constructor () { RejectAudio.instance = this } play = async () => { throw new Error('autoplay denied') }; pause () {} }
     let harness = browserHarness({ AudioClass: RejectAudio, fetchImpl: async () => audioResponse() })
     let voice = createVoice({ browser: harness.browser }).voice
@@ -1454,6 +1519,9 @@ describe('Juyi Hall TTS cleanup', () => {
     await voice.completeReply({ content: 'reply' })
     expect(voice.state).to.equal('error')
     expect(harness.revoked).to.deep.equal(['blob:voice'])
+    let controls = mount(HallVoiceControls, { props: { voice }, global: { stubs: { 'var-icon': true } } })
+    expect(controls.get('.voice-review strong').element.textContent).to.equal('语音未完成')
+    controls.unmount()
 
     class ErrorAudio { constructor () { ErrorAudio.instance = this } play = async () => {}; pause () {} }
     harness = browserHarness({ AudioClass: ErrorAudio, fetchImpl: async () => audioResponse() })
@@ -1466,6 +1534,9 @@ describe('Juyi Hall TTS cleanup', () => {
     ErrorAudio.instance.onerror()
     expect(voice.state).to.equal('error')
     expect(harness.revoked).to.deep.equal(['blob:voice'])
+    controls = mount(HallVoiceControls, { props: { voice }, global: { stubs: { 'var-icon': true } } })
+    expect(controls.get('.voice-review strong').element.textContent).to.equal('语音服务提示（AI 朗读）')
+    controls.unmount()
   })
 
   it('requests WAV and rejects a MIME/header-invalid response before playback', async () => {
