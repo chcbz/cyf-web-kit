@@ -2219,12 +2219,12 @@ const {
 })
 const pointAndStartPresentationState = computed(() => pointAndStartState.value.intent?.taskId === controlledBridgeState.value.intent?.taskId && pointAndStartState.value.status !== 'IDLE' ? pointAndStartState.value : controlledBridgeState.value.intent ? controlledBridgeState.value : pointAndStartState.value)
 const explainPointAndStartState = () => ({
-  UNKNOWN: '原点将结果待核对；不会改走旧式点将。',
-  PREPARING: '原点将已受理，议事仍在准备；可只读核对。',
-  ADMITTED: '首轮议事已受理，正在接入原会话；不会重发首轮。',
-  HISTORICAL: '原点将已不再是当前指派，仅可核对历史事实。',
-  FAILED: '原点将已记录失败状态；请核对原操作。'
-}[pointAndStartState.value.status] || '原点将正在核对；不会创建另一条点将。')
+  UNKNOWN: '正在确认点将结果，请刷新状态。',
+  PREPARING: '正在准备会话。',
+  ADMITTED: '需求已发送，正在进入会话。',
+  HISTORICAL: '本次指派已结束，可查看历史记录。',
+  FAILED: '点将未完成，请刷新状态查看详情。'
+}[pointAndStartState.value.status] || '正在确认点将结果。')
 const checkPointAndStartOriginal = async (task) => {
   if (!task?.id) return false
   const existing = pointAndStartIntentState(task.id)

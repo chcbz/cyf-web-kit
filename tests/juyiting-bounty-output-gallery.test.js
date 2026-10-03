@@ -478,7 +478,10 @@ describe('bounty output gallery live owner scope', () => {
       expect(calls[3].data).to.deep.equal(calls[0].data)
       expect(calls[3].headers).to.deep.equal(calls[0].headers)
       expect(wrapper.text()).to.include('需求已完成')
-      expect(wrapper.text()).to.include('delivery-original')
+      expect(wrapper.text()).not.to.include('delivery-original')
+      expect(wrapper.emitted('task-completed')).to.have.length(1)
+      expect(wrapper.emitted('task-completed')[0][0].deliveryId).to.equal('delivery-original')
+      expect(wrapper.text()).not.to.match(/幂等|原键|晋升/)
       expect(wrapper.find('.finalize-button').attributes()).to.have.property('disabled')
     } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
   })

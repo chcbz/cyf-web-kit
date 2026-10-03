@@ -65,8 +65,8 @@ export function validFinalizationReceipt (value, intent) {
   return true
 }
 const stageOrder = [...stages]
-const stageLabel = receipt => ({ PROMOTING: '成果正在晋升为正式交付', READY_TO_SUBMIT: '正式成果已准备，待提交',
-  SUBMITTED: '正式交付已提交，待验收确认', ACCEPTING: '正在确认验收与需求完成', TASK_COMPLETED: '正式成果已验收，需求已完成' })[receipt.stage]
+const stageLabel = receipt => ({ PROMOTING: '正在准备成果', READY_TO_SUBMIT: '成果已准备',
+  SUBMITTED: '成果已提交', ACCEPTING: '正在验收', TASK_COMPLETED: '验收完成' })[receipt.stage]
 const statusCode = error => error?.status ?? error?.response?.status
 
 /** One immutable selected-set acceptance intent. No Provider call or automatic write on recovery. */
@@ -87,7 +87,7 @@ export function useHallBountyFinalization ({ api = createApi('/agent'), conversa
       if (storage.getItem(scopeKey.value) !== raw) throw new Error('recovery readback differs')
       return true
     } catch {
-      if (required) throw new Error('无法保存原验收操作的恢复凭据，未发送验收请求。')
+      if (required) throw new Error('无法保存验收进度，请检查浏览器存储后重试。')
       return false
     }
   }
@@ -103,10 +103,10 @@ export function useHallBountyFinalization ({ api = createApi('/agent'), conversa
       const entry = JSON.parse(raw)
       if (!exactKeys(entry, ['taskId', 'idempotencyKey', 'body', 'operationId']) || !ID(entry.taskId) || !KEY(entry.idempotencyKey) ||
         !validBody(entry.body) || entry.body.conversationId !== conversation.value || (entry.operationId !== '' && !ID(entry.operationId))) throw new Error('invalid intent')
-      status.value = { state: 'unknown', busy: false, message: '已恢复原验收操作；请先查询或继续原操作，不要创建新的验收。',
+      status.value = { state: 'unknown', busy: false, message: '验收尚未完成，可刷新状态或继续验收。',
         intent: Object.freeze({ ...entry, body: freezeBody(entry.body) }), receipt: null }
     } catch {
-      status.value = { state: 'recovery_error', busy: false, message: '此前验收恢复凭据无法核验；未丢弃原操作或发起新的验收。', intent: null, receipt: null }
+      status.value = { state: 'recovery_error', busy: false, message: '无法恢复验收进度，请联系支持。', intent: null, receipt: null }
     }
   }
   const active = (snapshot, controller) => !disposed && generation === snapshot.generation && scopeKey.value === snapshot.scopeKey && !controller.signal.aborted
@@ -116,19 +116,19 @@ export function useHallBountyFinalization ({ api = createApi('/agent'), conversa
     return unwrap(response)
   }
   const applyReceipt = (raw, snapshot) => {
-    if (!validFinalizationReceipt(raw, snapshot.intent)) throw new Error('验收回执未确认原成果集合、版本和需求完成事实。')
+    if (!validFinalizationReceipt(raw, snapshot.intent)) throw new Error('暂时无法确认验收结果，请刷新状态。')
     const prior = status.value.receipt
     if (prior && (prior.operationId !== raw.operationId || BigInt(raw.stateVersion) < BigInt(prior.stateVersion) ||
       stageOrder.indexOf(raw.stage) < stageOrder.indexOf(prior.stage) ||
       (prior.state === 'completed' && raw.state !== 'completed') ||
       (raw.stateVersion === prior.stateVersion && receiptFields.some(field => field !== 'selectedOutputs' && raw[field] !== prior[field])))) {
-      throw new Error('验收回执版本回退，未覆盖已确认状态。')
+      throw new Error('验收状态尚未更新，请稍后刷新。')
     }
     const receipt = Object.freeze({ ...raw, selectedOutputs: freezeBody(snapshot.intent.body).selectedOutputs })
     const intent = Object.freeze({ ...snapshot.intent, operationId: raw.operationId })
     const message = raw.state === 'failed'
-      ? `${stageLabel(raw)}未完成（${raw.errorCode || '服务端未确认'}）；${raw.retryable ? '可继续原操作。' : '请核对任务状态，未自动重试。'}`
-      : `${stageLabel(raw)}${raw.state === 'completed' ? `：${raw.deliveryId}` : '，尚未完成需求。'}`
+      ? (raw.retryable ? '验收未完成，可继续验收。' : '验收未完成，请查看需求状态。')
+      : `${stageLabel(raw)}。`
     status.value = { state: raw.state, busy: true, message, intent, receipt }
     persist(intent) // The original key/body was already persisted before any write.
     return receipt
@@ -137,10 +137,10 @@ export function useHallBountyFinalization ({ api = createApi('/agent'), conversa
     const code = statusCode(error)
     const unknown = code === 404 || code >= 500 || error?.requestErrorClass === 'network' || error instanceof TypeError || !code
     status.value = { ...status.value, state: unknown ? 'unknown' : 'error', busy: true,
-      message: code === 401 || code === 403 ? '当前身份无权确认验收，未显示需求完成。'
-        : code === 409 ? '任务版本或原验收操作发生冲突；请查询原状态，未创建新的操作。'
-          : unknown ? '验收结果尚不能确认；请查询或继续原操作，将保留同一幂等键与成果集合。'
-            : error?.message || '验收未完成。', intent: status.value.intent || snapshot.intent }
+      message: code === 401 || code === 403 ? '当前账号无权验收此需求。'
+        : code === 409 ? '需求状态已变化，请刷新后继续验收。'
+          : unknown ? '暂时无法确认验收结果，请刷新状态。'
+            : '验收未完成，请刷新状态。', intent: status.value.intent || snapshot.intent }
   }
   const run = async fn => {
     if (disposed || !scopeKey.value || status.value.busy || !status.value.intent) return null
@@ -160,7 +160,7 @@ export function useHallBountyFinalization ({ api = createApi('/agent'), conversa
     return applyReceipt(await request(options, snapshot, controller), snapshot)
   }
   const post = async (snapshot, controller) => {
-    status.value = { ...status.value, state: 'submitting', busy: true, message: '正在按原成果集合办理正式提交与验收…' }
+    status.value = { ...status.value, state: 'submitting', busy: true, message: '正在验收…' }
     const intent = snapshot.intent
     return applyReceipt(await request({ url: `/tasks/${encodeURIComponent(intent.taskId)}/finalizations`, method: 'POST',
       headers: { 'Idempotency-Key': intent.idempotencyKey }, data: intent.body }, snapshot, controller), snapshot)
@@ -182,10 +182,10 @@ export function useHallBountyFinalization ({ api = createApi('/agent'), conversa
     if (disposed || !scopeKey.value || status.value.busy || status.value.state === 'recovery_error') return null
     try {
       if (!exactKeys(command, ['taskId', 'body']) || !ID(command.taskId) || !validBody(command.body) || command.body.conversationId !== conversation.value) {
-        throw new Error('最终成果范围或任务版本无法安全确认，未发送验收。')
+        throw new Error('成果或需求已变化，请刷新后重新选择。')
       }
       const idempotencyKey = idempotencyKeyFactory()
-      if (!KEY(idempotencyKey)) throw new Error('验收幂等键无效，未发送请求。')
+      if (!KEY(idempotencyKey)) throw new Error('暂时无法发起验收，请重试。')
       const intent = Object.freeze({ taskId: command.taskId, idempotencyKey, body: freezeBody(command.body), operationId: '' })
       persist(intent, true)
       status.value = { state: 'idle', busy: false, message: '', intent, receipt: null }

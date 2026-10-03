@@ -10,7 +10,7 @@
       <template v-else>
         <span class="part-title">{{ part.filename || (part.kind === 'image' ? '图片' : part.kind === 'audio' ? '音频' : '文件') }}</span>
         <span v-if="part.state === 'processing'">正在准备内容…</span>
-        <span v-else-if="part.state === 'failed'" role="alert">这份内容未能生成，可继续议事或重试办理。</span>
+        <span v-else-if="part.state === 'failed'" role="alert">这份内容未能生成，请在会话中继续说明。</span>
         <template v-else-if="part.state === 'ready'">
           <HallMessageMedia :part="part" :conversation-id="conversationId" :identity-key="identityKey" />
         </template>

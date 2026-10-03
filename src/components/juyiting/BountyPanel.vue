@@ -556,25 +556,25 @@ const pointAndStartForDetail = computed(() => {
   return state?.intent?.taskId === detailTask.value?.id && state.intent?.body ? state : null
 })
 const pointAndStartRecoveryTitle = computed(() => ({
-  UNKNOWN: '发现原点将，结果待核对',
-  PREPARING: '原点将已受理，议事准备中',
-  ADMITTED: '首轮议事已受理',
-  ATTACHED: '已接入原悬赏议事',
-  HISTORICAL: '原点将已成为历史记录',
-  FAILED: '原点将记录为失败'
-}[pointAndStartForDetail.value?.status] || '原点将正在核对'))
+  UNKNOWN: '正在确认点将结果',
+  PREPARING: '正在准备会话',
+  ADMITTED: '需求已发送',
+  ATTACHED: '已进入悬赏议事',
+  HISTORICAL: '历史指派',
+  FAILED: '点将未完成'
+}[pointAndStartForDetail.value?.status] || '正在确认点将结果'))
 const pointAndStartRecoveryHint = computed(() => ({
-  UNKNOWN: '不会另建点将或改走旧式点将；只有你明确继续时，才可能按原键和原正文重放。',
-  PREPARING: '可只读重查原操作；不会重发首轮议事。',
-  ADMITTED: '可只读核对并接入同一会话；不会另开会话或重发首轮。',
-  ATTACHED: '当前显示的是原会话，不会再发送第一轮。',
-  HISTORICAL: '原指派已被撤回或替代，仅可查看真实历史。',
-  FAILED: '请核对原操作；不会以当前编辑或另一好汉替换它。'
-}[pointAndStartForDetail.value?.status] || '正在核对原点将。'))
+  UNKNOWN: '请刷新状态查看进度。',
+  PREPARING: '准备完成后即可继续交流。',
+  ADMITTED: '正在进入会话。',
+  ATTACHED: '可在会话中查看答复或继续修改。',
+  HISTORICAL: '本次指派已结束，可查看历史记录。',
+  FAILED: '请刷新状态查看详情。'
+}[pointAndStartForDetail.value?.status] || '正在确认点将结果。'))
 const pointAndStartInputSummary = computed(() => {
   const state = pointAndStartForDetail.value
   const refs = state?.projection?.inputs || state?.intent?.projection?.inputs || state?.intent?.body?.inputRefs
-  if (!refs) return '由服务端核对本次任务关联的全部资料'
+  if (!refs) return '本次需求添加的资料'
   return refs.length ? refs.map(ref => `${ref.fileId} v${ref.version}`).join('、') : '无资料'
 })
 // The parent is the only authority for task-scoped discussion/workspace facts.  A
