@@ -82,7 +82,7 @@ const authenticatedApi = basePath => {
 }
 const mountedGateway = () => createArchiveMaintenanceGateway({ adminApi: authenticatedApi('/archive/admin/v1'), readerApi: authenticatedApi('/archive/v1'), platformApi: authenticatedApi('/agent/platform-skills') })
 
-const panelFixture = ({ catalogStatus = 200, capabilitiesStatus = 200, deferredRequest, deferredInstall, capabilities, appointments } = {}) => {
+const panelFixture = ({ catalogStatus = 200, capabilitiesStatus = 200, deferredRequest, deferredInstall, capabilities, appointments, recoveryContext } = {}) => {
   const calls = []; let capabilityReads = 0; let publishKey = null
   const oldSkill = { key: 'archive-maintainer', version: 'old-9', packageSha256: 'o'.repeat(64) }
   const newSkill = { key: 'archive-maintainer', version: 'new-10', packageSha256: 'n'.repeat(64) }
@@ -96,7 +96,7 @@ const panelFixture = ({ catalogStatus = 200, capabilitiesStatus = 200, deferredR
     if (path === '/agent/platform-skills/catalog') return catalogStatus === 200 ? json([{ ...newSkill, protocol: 'zip-v1' }]) : json({ msg: 'catalog unavailable' }, catalogStatus)
     if (path.endsWith('/slot')) return admin({ revision: '3' })
     if (path.endsWith('/appointments')) return method === 'POST' ? admin({ appointmentId: 'appt-created' }) : admin(active)
-    if (path.endsWith('/recovery-context')) return admin({ jobId: 'job-1', jobRevision: '7', previousAppointment: { appointmentId: 'appt-old', revision: '1', requiredSkill: oldSkill, status: 'REVOKED' }, candidates: [{ appointmentId: 'appt-new', revision: '5', requiredSkill: newSkill, status: 'ACTIVE', agentId: 'new-agent' }] })
+    if (path.endsWith('/recovery-context')) return admin(recoveryContext || { jobId: 'job-1', jobRevision: '7', previousAppointment: { appointmentId: 'appt-old', revision: '1', requiredSkill: oldSkill, status: 'ACTIVE' }, candidates: [{ appointmentId: 'appt-new', revision: '5', requiredSkill: newSkill, status: 'ACTIVE', agentId: 'new-agent', recoveryAllowed: true, inputChanged: true }], resumeAllowed: true, latestFailure: null })
     if (path.endsWith('/jobs/job-1')) return admin(job)
     if (path.endsWith('/jobs')) return admin([job])
     if (path.endsWith('/collections/platform-classics/works')) return admin({ items: [{ workId: 'work-1', title: '水浒', activeEditionId: 'e1', pendingJobId: null }] })
@@ -140,6 +140,8 @@ describe('archive maintenance mounted Vue wiring', function () { this.timeout(10
     const formWrapper = mount(Panel, { attachTo: document.body, props: { gateway: mountedGateway() } }); await waitFor(() => formWrapper.text().includes('EXPLICIT_WORKS：明确作品'))
     const scope = formWrapper.findAll('select').find(item => item.findAll('option').some(option => option.element.value === 'EXPLICIT_WORKS')); await scope.setValue('EXPLICIT_WORKS'); await Vue.nextTick()
     const checkbox = formWrapper.find('input[type="checkbox"]'); expect(checkbox.exists()).to.equal(true); await checkbox.setValue(true)
+    await scope.setValue('COLLECTION'); await Vue.nextTick(); expect(formWrapper.findAll('input[type="checkbox"]')).to.have.length(0)
+    await scope.setValue('EXPLICIT_WORKS'); await Vue.nextTick(); const restoredCheckbox=formWrapper.find('input[type="checkbox"]'); expect(restoredCheckbox.element.checked).to.equal(false); await restoredCheckbox.setValue(true)
     const labels = formWrapper.findAll('label'); await labels.find(item => item.text().includes('Agent ID')).find('input').setValue('agent-explicit'); await labels.find(item => item.text().includes('绑定版本')).find('input').setValue('binding-9'); await button(formWrapper, '明确任职').trigger('click'); await waitFor(() => emptyFixture.calls.some(call => call.path.endsWith('/appointments') && call.method === 'POST'))
     const appointCall = emptyFixture.calls.find(call => call.path.endsWith('/appointments') && call.method === 'POST'); expect(appointCall.body).to.include({workScopeMode:'EXPLICIT_WORKS'}); expect(appointCall.body.workIds).to.deep.equal(['work-1']); formWrapper.unmount()
 
@@ -170,6 +172,29 @@ describe('archive maintenance mounted Vue wiring', function () { this.timeout(10
     await wrapper.findAll('label').find(item => item.text().includes('恢复原因')).find('input').setValue('retry safely'); await button(wrapper, '按原任职恢复').trigger('click'); await waitFor(() => fixture.calls.some(call => call.path.endsWith('/resume')))
     const reassignment = wrapper.findAll('form').find(form => form.text().includes('新任职')).find('select'); await reassignment.setValue('appt-new'); await button(wrapper, '显式改派').trigger('click'); await waitFor(() => fixture.calls.some(call => call.path.endsWith('/reassign')))
     const resume = fixture.calls.find(call => call.path.endsWith('/resume')); const reassign = fixture.calls.find(call => call.path.endsWith('/reassign')); expect(resume.body.expectedAppointmentRevision).to.equal('1'); expect(resume.body.expectedSkill.version).to.equal('old-9'); expect(reassign.body.newAppointmentRevision).to.equal('5'); expect(reassign.body.newSkill.version).to.equal('new-10'); expect(resume.headers['If-Match']).to.equal('"v7"'); wrapper.unmount()
+  })
+
+  it('fails closed on blocked root cause until a server-offered structured repair is selected', async () => {
+    const oldSkill={key:'archive-maintainer',version:'old-9',packageSha256:'o'.repeat(64)}, newSkill={key:'archive-maintainer',version:'new-10',packageSha256:'n'.repeat(64)}
+    const blocked={jobId:'job-1',jobRevision:'7',previousAppointment:{appointmentId:'appt-old',revision:'1',requiredSkill:oldSkill,status:'ACTIVE'},candidates:[{appointmentId:'appt-new',revision:'5',requiredSkill:newSkill,status:'ACTIVE',agentId:'new-agent',recoveryAllowed:false,inputChanged:false}],resumeAllowed:false,latestFailure:{failureId:'41',phase:'RUNNER',code:'RUNNER_CRASH',retryable:true,diagnostic:'Execution failed at RUNNER with RUNNER_CRASH; retryable=true; repeated root cause blocked',blockedRootCause:true,inputChangedForResume:false,allowedRepairResolutionCodes:['RUNTIME_REPAIRED']}}
+    const Panel=loadArchiveSfc('../src/components/juyiting/archive/ArchiveMaintenancePanel.vue'),fixture=panelFixture({recoveryContext:blocked});globalThis.fetch=fixture.fetch
+    const wrapper=mount(Panel,{attachTo:document.body,props:{gateway:mountedGateway()}});await waitFor(()=>wrapper.findAll('select').some(item=>item.findAll('option').some(option=>option.element.value==='job-1')))
+    const jobs=wrapper.findAll('select').find(item=>item.findAll('option').some(option=>option.element.value==='job-1'));await jobs.setValue('job-1');await jobs.trigger('change');await waitFor(()=>wrapper.text().includes('同输入同根因已连续失败两次'))
+    const reason=wrapper.findAll('label').find(item=>item.text().includes('恢复原因')).find('input');await reason.setValue('words changed only');expect(button(wrapper,'按原任职恢复').attributes('disabled')).to.equal('')
+    const reassignment=wrapper.findAll('form').find(form=>form.text().includes('新任职')).find('select');await reassignment.setValue('appt-new');expect(button(wrapper,'显式改派').attributes('disabled')).to.equal('')
+    const repair=wrapper.findAll('label').find(item=>item.text().includes('待服务器核验的真实修复')).find('select');await repair.setValue('RUNTIME_REPAIRED');expect(button(wrapper,'按原任职恢复').attributes('disabled')).to.equal(undefined)
+    await button(wrapper,'按原任职恢复').trigger('click');await waitFor(()=>fixture.calls.some(call=>call.path.endsWith('/resume')))
+    const call=fixture.calls.find(item=>item.path.endsWith('/resume'));expect(call.body.repairResolution).to.deep.equal({failureId:'41',resolutionCode:'RUNTIME_REPAIRED'});expect(call.headers['If-Match']).to.equal('"v7"');wrapper.unmount()
+  })
+
+  it('allows only the server-approved changed reassignment candidate without a repair token', async () => {
+    const oldSkill={key:'archive-maintainer',version:'old-9',packageSha256:'o'.repeat(64)}, newSkill={key:'archive-maintainer',version:'new-10',packageSha256:'n'.repeat(64)}
+    const changed={jobId:'job-1',jobRevision:'7',previousAppointment:{appointmentId:'appt-old',revision:'1',requiredSkill:oldSkill,status:'REVOKED'},candidates:[{appointmentId:'appt-new',revision:'5',requiredSkill:newSkill,status:'ACTIVE',agentId:'new-agent',recoveryAllowed:true,inputChanged:true}],resumeAllowed:false,latestFailure:{failureId:'42',phase:'RUNNER',code:'RUNNER_CRASH',retryable:true,diagnostic:'bounded diagnostic',blockedRootCause:true,inputChangedForResume:false,allowedRepairResolutionCodes:['RUNTIME_REPAIRED']}}
+    const Panel=loadArchiveSfc('../src/components/juyiting/archive/ArchiveMaintenancePanel.vue'),fixture=panelFixture({recoveryContext:changed});globalThis.fetch=fixture.fetch
+    const wrapper=mount(Panel,{attachTo:document.body,props:{gateway:mountedGateway()}});await waitFor(()=>wrapper.findAll('select').some(item=>item.findAll('option').some(option=>option.element.value==='job-1')))
+    const jobs=wrapper.findAll('select').find(item=>item.findAll('option').some(option=>option.element.value==='job-1'));await jobs.setValue('job-1');await jobs.trigger('change');await waitFor(()=>wrapper.text().includes('输入已变化'))
+    const reassignment=wrapper.findAll('form').find(form=>form.text().includes('新任职')).find('select');await reassignment.setValue('appt-new');expect(button(wrapper,'显式改派').attributes('disabled')).to.equal(undefined);await button(wrapper,'显式改派').trigger('click');await waitFor(()=>fixture.calls.some(call=>call.path.endsWith('/reassign')))
+    const call=fixture.calls.find(item=>item.path.endsWith('/reassign'));expect(call.body).not.to.have.property('repairResolution');expect(call.body.newAppointmentId).to.equal('appt-new');wrapper.unmount()
   })
 
   it('keeps mounted PENDING unknown intent/key/body until authoritative COMMITTED reconciliation', async () => {
