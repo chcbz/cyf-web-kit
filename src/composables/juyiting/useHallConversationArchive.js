@@ -45,7 +45,9 @@ const validIdempotencyKey = value => typeof value === 'string' && /^[A-Za-z0-9._
 const validPart = part => part && part.state === 'ready' && ['text', 'image', 'audio', 'file'].includes(part.kind) &&
   ID(part.assetId) && revisionOf(part.revision)
 const operationItem = (value, expected) => value && typeof value === 'object' && !Array.isArray(value) &&
-  Object.keys(value).every(key => ['assetId', 'revision', 'state', 'fileId', 'version', 'errorCode', 'message'].includes(key)) &&
+  Object.keys(value).every(key => ['sourceKind', 'assetId', 'revision', 'textSelection', 'state', 'fileId', 'version', 'errorCode', 'message'].includes(key)) &&
+  // Current receipts discriminate assetRef/textSelection; legacy asset receipts omit the discriminator.
+  (!Object.hasOwn(value, 'sourceKind') || value.sourceKind === 'assetRef') && value.textSelection == null &&
   value.assetId === expected.assetId && revisionOf(value.revision) === expected.revision && itemStates.has(value.state) &&
   (value.fileId == null || ID(value.fileId)) && (value.version == null || (Number.isInteger(value.version) && value.version >= 1 && value.version <= MAX_FILE_VERSION)) &&
   (value.errorCode == null || typeof value.errorCode === 'string') && (value.message == null || typeof value.message === 'string')

@@ -28,6 +28,36 @@ const loadParts = archive => {
 }
 
 describe('JYT-MMD-W2 conversation archive operations', () => {
+  it('accepts the real typed assetRef server receipt and recovers its original operation after reload', async () => {
+    const stored = new Map(); const calls = []
+    const storage = { getItem: key => stored.get(key) ?? null, setItem: (key, value) => stored.set(key, value) }
+    const body = receipt('saved', { sourceKind: 'assetRef', textSelection: null, fileId: 'workspace-file-1', version: 1 })
+    const api = { execute: async options => { calls.push(options); return { data: { status: 200, location: null, data: body, msg: 'ok', code: 'E0' } } } }
+    const args = { api, storage, conversationId: Vue.ref('conversation-1'), identityScope: Vue.ref('tenant-client-owner'), idempotencyKeyFactory: () => 'typed-archive-original-key' }
+    const first = useHallConversationArchive(args)
+    try {
+      await first.save(part())
+      expect(first.statusFor(part()).state).to.equal('saved')
+      expect(first.statusFor(part()).item.fileId).to.equal('workspace-file-1')
+    } finally { first.dispose() }
+    const resumed = useHallConversationArchive({ ...args, idempotencyKeyFactory: () => { throw new Error('no new save') } })
+    try {
+      await resumed.save(part())
+      expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET'])
+      expect(resumed.statusFor(part()).state).to.equal('saved')
+    } finally { resumed.dispose() }
+  })
+
+  it('rejects typed text receipts, non-null selections and unknown fields for an asset save', async () => {
+    for (const extra of [{ sourceKind: 'textSelection', textSelection: null },
+      { sourceKind: 'assetRef', textSelection: { text: 'not this asset' } },
+      { sourceKind: 'assetRef', textSelection: null, unexpected: true }]) {
+      const api = { execute: async () => ({ data: receipt('saved', { fileId: 'workspace-file-1', version: 1, ...extra }) }) }
+      const archives = useHallConversationArchive({ api, storage: null, conversationId: Vue.ref('conversation-1'), identityEpoch: Vue.ref('owner-a'), idempotencyKeyFactory: () => 'typed-archive-negative-key' })
+      try { await archives.save(part()); expect(archives.statusFor(part()).state).to.equal('error') } finally { archives.dispose() }
+    }
+  })
+
   it('posts only the persisted asset reference, then shows saved only after a validated status receipt', async () => {
     const calls = []
     const api = { execute: async options => {
