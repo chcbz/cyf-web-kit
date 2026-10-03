@@ -108,7 +108,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       return projection
     } catch (cause) {
       // 404 means this catalog request is ordinary durable CHAT; it is not a typed UI failure.
-      if (current(captured) && cause?.status && cause.status !== 404) error.value = cause?.message || '读取结构化议事结果失败'
+      if (current(captured) && cause?.status && cause.status !== 404) error.value = '暂时无法读取答复，请刷新状态。'
       return null
     }
   }
@@ -183,11 +183,11 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       await readOne(receipt.requestId, captured, purpose)
       await onAccepted?.({ receipt, body, purpose, context: clone(context), isCurrent: () => current(captured) })
       return true
-    } catch (cause) {
+    } catch {
       if (current(captured)) {
         persistRecords(captured, readRecords(storage, captured.scope, context).map(item => item.key === record.key
           ? { ...item, purpose, status: 'UNKNOWN' } : item))
-        error.value = cause?.message || (purpose === 'INSPECT' ? '查阅受理待核对；不会改走普通议事或办理' : '议事受理结果待核对；请按原键只读恢复或显式续办')
+        error.value = '暂时无法确认发送结果，请刷新状态。'
       }
       return false
     }

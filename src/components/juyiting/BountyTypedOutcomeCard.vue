@@ -4,12 +4,10 @@
     <p class="typed-outcome-text">{{ outcome.text }}</p>
     <template v-if="outcome.kind === 'CLARIFY'">
       <p class="typed-question">{{ outcome.clarification.question }}</p>
-      <small>待补充：{{ outcome.clarification.requiredFacts.join('、') }}</small>
       <button v-if="outcome.clarification.state === 'OPEN'" type="button" @click="$emit('reply', projection)">回答此问</button>
       <small v-else class="typed-state">已收到补充</small>
     </template>
     <template v-else-if="outcome.kind === 'EXECUTION_PROPOSAL'">
-      <p class="typed-proposal">{{ operationLabel }}</p>
       <small>如需调整，请在会话中继续说明。</small>
     </template>
   </article>
@@ -22,7 +20,6 @@ defineEmits(['reply'])
 const outcome = computed(() => props.projection.outcome)
 const inspection = computed(() => props.projection?.purpose === 'INSPECT')
 const heading = computed(() => ({ ANSWER: '议事答复', CLARIFY: '需要补充', EXECUTION_PROPOSAL: 'Agent 建议' })[outcome.value?.kind] || '议事结果')
-const operationLabel = computed(() => outcome.value?.proposal?.operation === 'EDIT_IMAGE' ? '建议修改上一稿图像' : '建议生成一张图像')
 </script>
 
 <style scoped>

@@ -19,9 +19,15 @@ export const hasVerifiedConversationImage = messages => Array.isArray(messages) 
   )
 )
 
-const mediaNotice = messages => hasVerifiedConversationImage(messages)
-  ? '已收到可领取的会话图片资产；可在消息中预览或下载，但这不等于办理、验收或悬赏完成。'
-  : '尚未收到可领取的会话图片资产，正在等待服务端确认；文字回话、议事规划或执行状态不代表“画鸟”已完成。'
+const hasReadyMedia = messages => Array.isArray(messages) && messages.some(message =>
+  Array.isArray(message?.parts) && message.parts.some(part =>
+    part?.state === 'ready' && typeof part?.assetId === 'string' && part.assetId.length > 0 &&
+    ['image', 'audio', 'file'].includes(safeMediaKind(part))
+  )
+)
+const mediaNotice = messages => hasReadyMedia(messages)
+  ? '收到的内容可在会话中预览、下载。'
+  : '结果会显示在会话中。'
 
 /**
  * A deliberately small, default-off v2 surface. The current request
@@ -41,10 +47,10 @@ export const bountyDeliberationPresentation = ({ enabled = false, capability, re
   if (requestState === 'PLANNING' && hasExecuteStep && (!Array.isArray(turns) || turns.length === 0)) {
     return {
       route: 'EXECUTE',
-      routeLabel: '执行办理',
+      routeLabel: '处理中',
       state: 'PLANNING',
-      title: '悬赏议事 v2',
-      phase: '执行办理正在规划；尚未产生可领取媒体。',
+      title: '悬赏议事',
+      phase: 'Agent 正在处理需求。',
       mediaNotice: mediaNotice(messages)
     }
   }

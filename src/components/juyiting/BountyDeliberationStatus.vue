@@ -3,10 +3,9 @@
     v-if="presentation"
     class="bounty-deliberation-status"
     aria-live="polite"
-    aria-label="悬赏议事 v2 状态"
+    aria-label="需求进度"
   >
     <strong>{{ presentation.title }}</strong>
-    <span>类型：{{ presentation.routeLabel }} · 状态：{{ presentation.state }}</span>
     <p>{{ presentation.phase }}</p>
     <small>{{ presentation.mediaNotice }}</small>
   </aside>

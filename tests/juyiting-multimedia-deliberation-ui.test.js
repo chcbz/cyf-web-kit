@@ -35,8 +35,9 @@ describe('Juyi Hall multimedia deliberation v2 presentation', () => {
 
   it('shows action-proposal EXECUTE PLANNING from controlled server steps without inventing a CHAT route', () => {
     const presentation = present({ request: executePlanningRequest(), turns: [] })
-    expect(presentation).to.include({ route: 'EXECUTE', routeLabel: '执行办理', state: 'PLANNING' })
-    expect(presentation.phase).to.include('尚未产生可领取媒体')
+    expect(presentation).to.include({ route: 'EXECUTE', routeLabel: '处理中', state: 'PLANNING' })
+    expect(presentation.phase).to.equal('Agent 正在处理需求。')
+    expect(JSON.stringify(presentation)).not.to.match(/画鸟|受控|办理|可领取|悬赏议事 v2/)
   })
 
   it('is replay-stable for a durable proposal and never infers v2 from a CHAT revision or route', () => {
@@ -53,9 +54,19 @@ describe('Juyi Hall multimedia deliberation v2 presentation', () => {
     const missingAsset = [{ parts: [{ kind: 'image', state: 'ready', assetId: '', mime: 'image/png' }] }]
     const actualAsset = [{ parts: [{ kind: 'image', state: 'ready', assetId: 'asset-1', mime: 'image/png' }] }]
     expect(hasVerifiedConversationImage(missingAsset)).to.equal(false)
-    expect(present({ request: executePlanningRequest(), turns: [], messages: missingAsset }).mediaNotice).to.include('尚未收到')
+    expect(present({ request: executePlanningRequest(), turns: [], messages: missingAsset }).mediaNotice).to.equal('结果会显示在会话中。')
     expect(hasVerifiedConversationImage(actualAsset)).to.equal(true)
-    expect(present({ request: executePlanningRequest(), turns: [], messages: actualAsset }).mediaNotice).to.include('已收到可领取')
+    expect(present({ request: executePlanningRequest(), turns: [], messages: actualAsset }).mediaNotice).to.equal('收到的内容可在会话中预览、下载。')
+  })
+
+  it('uses the same concise availability message for audio and files without claiming completion', () => {
+    for (const [kind, mime] of [['audio', 'audio/wav'], ['file', 'application/pdf']]) {
+      const messages = [{ parts: [{ kind, mime, state: 'ready', assetId: 'asset-mixed' }] }]
+      const presentation = present({ request: executePlanningRequest(), turns: [], messages })
+      expect(presentation.mediaNotice).to.equal('收到的内容可在会话中预览、下载。')
+      expect(presentation.state).to.equal('PLANNING')
+      expect(presentation.mediaNotice).not.to.match(/图片|完成|验收/)
+    }
   })
 
   it('shows no v2 request state after an identity switch has cleared its owner-scoped projection', () => {
