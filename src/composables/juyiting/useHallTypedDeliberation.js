@@ -67,7 +67,8 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   const sameFinalBinding = (one, two) => one?.requestId === two?.requestId && one?.turnId === two?.turnId &&
     one?.outcome?.outcomeId === two?.outcome?.outcomeId && one?.outcome?.finalDigest === two?.outcome?.finalDigest &&
     one?.outcome?.taskId === two?.outcome?.taskId && one?.outcome?.assignmentRevision === two?.outcome?.assignmentRevision &&
-    one?.outcome?.assistantMessageId === two?.outcome?.assistantMessageId && one?.outcome?.kind === two?.outcome?.kind
+    one?.outcome?.assistantMessageId === two?.outcome?.assistantMessageId && one?.outcome?.kind === two?.outcome?.kind &&
+    one?.schemaVersion === two?.schemaVersion && one?.requestRevision === two?.requestRevision && one?.purpose === two?.purpose
   const persistRecords = (captured, records) => {
     if (!writeRecords(storage, captured.scope, captured.context, records)) return false
     storageRevision.value++
@@ -78,6 +79,8 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     const previous = projections.value.find(item => item.requestId === projection.requestId)
     if (previous && previous.state === 'READY' && projection.state === 'PENDING') return false
     if (previous?.state === 'READY' && projection.state === 'READY' && !sameFinalBinding(previous, projection)) return false
+    if (previous?.state === 'READY' && projection.state === 'READY' && projection.outcome?.kind !== 'CLARIFY' &&
+      JSON.stringify(previous.outcome) !== JSON.stringify(projection.outcome)) return false
     const previousClarification = previous?.outcome?.kind === 'CLARIFY' ? previous.outcome.clarification : null
     const clarification = projection?.outcome?.kind === 'CLARIFY' ? projection.outcome.clarification : null
     if (previousClarification && clarification) {
@@ -152,7 +155,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     const pending = selectedPending.value
     const purpose = inspection ? 'INSPECT' : 'CHAT'
     if (purpose === 'INSPECT' && !pending && (!Array.isArray(sourceSelectors) || sourceSelectors.length === 0)) {
-      if (current(captured)) error.value = '请明确选择本轮交给当前 Agent 查阅的资料；未发送'
+      if (current(captured)) error.value = '请选择要添加的资料。'
       return false
     }
     const body = discussionBody(pending ? { intent: 'CLARIFICATION_REPLY', taskId: context.taskId, assignmentRevision: context.assignmentRevision,
@@ -160,10 +163,10 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       pendingQuestionId: pending.pendingQuestionId, expectedPendingQuestionStateVersion: pending.expectedPendingQuestionStateVersion, sourceSelectors }
       : { intent: 'DISCUSSION', taskId: context.taskId, assignmentRevision: context.assignmentRevision, content, sourceSelectors })
     const key = secureKey()
-    if (!body || !key) { if (current(captured)) error.value = '议事输入或安全请求键不符合冻结合同；未发送'; return false }
+    if (!body || !key) { if (current(captured)) error.value = '暂时无法发送，请检查内容和资料后重试。'; return false }
     const record = { key, purpose, body: clone(body), context: clone(context), status: 'POSTING' }
     const records = readRecords(storage, captured.scope, context)
-    if (!persistRecords(captured, [...records, record])) { if (current(captured)) error.value = '原议事键持久化失败；未发送'; return false }
+    if (!persistRecords(captured, [...records, record])) { if (current(captured)) error.value = '无法保存发送状态，请稍后重试。'; return false }
     busy.value = true; error.value = ''
     try { return await postOriginal(record, captured) }
     finally { if (current(captured)) busy.value = false }
@@ -206,7 +209,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
           ? { ...item, purpose: 'INSPECT', status: 'ACCEPTED', receipt: clone(receipt) } : item))
         await readOne(receipt.requestId, captured, 'INSPECT')
       } catch (cause) {
-        if (current(captured) && cause?.status && cause.status !== 404) error.value = cause?.message || '查阅恢复读取失败'
+        if (current(captured) && cause?.status && cause.status !== 404) error.value = '暂时无法读取处理状态，请刷新。'
       }
     }))
     return current(captured)

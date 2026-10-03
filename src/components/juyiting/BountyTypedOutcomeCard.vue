@@ -19,7 +19,7 @@ const props = defineProps({ projection: { type: Object, required: true } })
 defineEmits(['reply'])
 const outcome = computed(() => props.projection.outcome)
 const inspection = computed(() => props.projection?.purpose === 'INSPECT')
-const heading = computed(() => ({ ANSWER: '议事答复', CLARIFY: '需要补充', EXECUTION_PROPOSAL: 'Agent 建议' })[outcome.value?.kind] || '议事结果')
+const heading = computed(() => ({ ANSWER: '议事答复', CLARIFY: '需要补充', EXECUTION_PROPOSAL: 'Agent 建议', ACTION_REQUEST: '正在处理' })[outcome.value?.kind] || '议事结果')
 </script>
 
 <style scoped>
