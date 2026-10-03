@@ -16,6 +16,15 @@ const emptyWorkspace = () => ({
   items: Vue.ref([]), nextCursor: Vue.ref(null), listState: Vue.ref('empty'), loading: Vue.ref(false), error: Vue.ref(''), detail: Vue.ref(null),
   refresh: async () => true, loadMore: async () => false, select: async () => null, dispose: () => {}
 })
+const loadMaterialPicker = (workspace, save) => {
+  const filename = new URL('../src/components/juyiting/HallMaterialPicker.vue', import.meta.url).pathname
+  const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
+  const code = compileScript(descriptor, { id: 'hall-material-picker-mount', inlineTemplate: true }).content
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_line, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]@\/composables\/usePersonalWorkspace['"];?\s*$/gm, 'var { usePersonalWorkspace, savePersonalWorkspaceBlob } = deps')
+    .replace('export default', 'return')
+  return new Function('Vue', 'deps', code)(Vue, { usePersonalWorkspace: () => workspace, savePersonalWorkspaceBlob: save })
+}
 const load = (api, workspace = emptyWorkspace(), save = () => {}) => {
   const filename = new URL('../src/components/juyiting/HallOverview.vue', import.meta.url).pathname
   const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
@@ -23,8 +32,9 @@ const load = (api, workspace = emptyWorkspace(), save = () => {}) => {
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_line, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]@\/composables\/juyiting\/useHallOverview['"];?\s*$/gm, 'var { canOpenHallItem, HALL_SOURCES, useHallOverview } = deps')
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]@\/composables\/usePersonalWorkspace['"];?\s*$/gm, 'var { usePersonalWorkspace, savePersonalWorkspaceBlob } = deps')
+    .replace(/^import HallMaterialPicker from ['"]\.\/HallMaterialPicker\.vue['"];?\s*$/gm, 'var HallMaterialPicker = deps.HallMaterialPicker')
     .replace('export default', 'return')
-  return new Function('Vue', 'deps', code)(Vue, { canOpenHallItem, HALL_SOURCES, useHallOverview: options => useHallOverview({ ...options, api }), usePersonalWorkspace: () => workspace, savePersonalWorkspaceBlob: save })
+  return new Function('Vue', 'deps', code)(Vue, { HallMaterialPicker: loadMaterialPicker(workspace, save), canOpenHallItem, HALL_SOURCES, useHallOverview: options => useHallOverview({ ...options, api }), usePersonalWorkspace: () => workspace, savePersonalWorkspaceBlob: save })
 }
 const summary = (sourceType, sourceId, nextAction) => ({ ref: { sourceType, sourceId }, title: sourceId,
   status: { code: 'QUEUED', evidenceSource: 'PERSISTED', observedAt: 100 }, targetAgent: null, nextAction, allowedActions: [nextAction], updatedAt: 100 })
@@ -134,7 +144,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
 
       await wrapper.get('textarea').setValue('整理活动方案')
       await wrapper.get('.overview-quick-request').trigger('submit')
-      expect(wrapper.emitted('quick-request')[0][0]).to.deep.equal({ request: '整理活动方案', materials: [{ fileId: 'file-a', version: 1, role: 'INPUT', displayName: '活动底稿' }] })
+      expect(wrapper.emitted('quick-request')[0][0]).to.deep.equal({ request: '整理活动方案', materials: [{ fileId: 'file-a', version: 1 }] })
       await wrapper.setProps({ identityScope: 'tenant\u0000client\u0000owner-b', identityEpoch: 2 })
       expect(wrapper.find('.quick-material-summary').exists()).to.equal(false)
     } finally { wrapper.unmount() }
@@ -167,7 +177,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       expect(wrapper.get('.quick-material-summary').text()).to.include('application/pdf')
       await wrapper.get('textarea').setValue('整理活动方案')
       await wrapper.get('.overview-quick-request').trigger('submit')
-      expect(wrapper.emitted('quick-request')[0][0]).to.deep.equal({ request: '整理活动方案', materials: [{ fileId: 'file-pdf', version: 2, role: 'INPUT', displayName: '执行说明' }] })
+      expect(wrapper.emitted('quick-request')[0][0]).to.deep.equal({ request: '整理活动方案', materials: [{ fileId: 'file-pdf', version: 2 }] })
     } finally { wrapper.unmount() }
   })
 
@@ -207,7 +217,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       await wrapper.get('.quick-material-confirm').trigger('click')
       await wrapper.get('textarea').setValue('结合全部资料整理方案，不生成图片')
       await wrapper.get('.overview-quick-request').trigger('submit')
-      expect(wrapper.emitted('quick-request')[0][0].materials).to.deep.equal(files.map(file => ({ fileId: file.fileId, version: 1, role: 'INPUT', displayName: file.displayName })))
+      expect(wrapper.emitted('quick-request')[0][0].materials).to.deep.equal(files.map(file => ({ fileId: file.fileId, version: 1 })))
       expect(saves.map(content => content.filename)).to.deep.equal(types.map(type => type[0]))
       expect(calls.every(call => call.method === 'GET')).to.equal(true)
       expect(calls.filter(call => call.url === '/personal-workspace/files')[0].params).to.deep.equal({ state: 'ACTIVE' })

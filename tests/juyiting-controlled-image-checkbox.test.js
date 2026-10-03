@@ -15,7 +15,7 @@ const compile = async () => {
     .replace(/^import\s+([^\s]+)\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_m, name, path) => `const ${name} = imports[${JSON.stringify(path)}]`)
     .replace('export default', 'return')
   return new Function('imports', code)({ vue: Vue, './BountyActionIcon.vue': stub, './WorkItemPlanPanel.vue': stub,
-    './TeamRecommendationPanel.vue': stub, './HallDraftEditor.vue': stub, './HallReferenceImagePicker.vue': stub,
+    './TeamRecommendationPanel.vue': stub, './HallDraftEditor.vue': stub, './HallMaterialPicker.vue': stub,
     '@/components/personal-workspace/TaskMaterialLinks.vue': stub, '@/utils/silverAmount': silver })
 }
 const task = (id, taskVersion = '6', requirementRevision = '3') => ({ id, title: id, description: '', status: 'open', taskVersion, requirementRevision })

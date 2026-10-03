@@ -101,8 +101,8 @@
           :identity-scope="hallIdentityScope"
           :identity-epoch="apiStore.authorizationGeneration"
           :agents="operableRosterAgents"
-          :quick-pending="quickMatter.busy.value"
-          :quick-message="quickMatter.message.value"
+          :quick-pending="requirementCreateBusy"
+          :quick-message="requirementCreateState.error || ''"
           @quick-request="handleQuickRequest"
           @set-home-mode="setHomeMode"
           @open-board="openPanel('tasks')"
@@ -750,7 +750,7 @@ import { useHallBountyRequestCatalog } from '@/composables/juyiting/useHallBount
 import { useHallTypedDeliberation } from '@/composables/juyiting/useHallTypedDeliberation'
 import { typedLong } from '@/composables/juyiting/hallTypedDeliberation'
 import { capabilityAllowsNewStart, capabilityAllowsOriginalReplay, createNativeCapabilityObservationFence, loadNativeBountyCapability, pointAndStartIntentReadLane } from '@/composables/juyiting/hallNativeBountyCapability'
-import { useHallQuickMatter } from '@/composables/juyiting/useHallQuickMatter'
+import { useHallDrafts } from '@/composables/juyiting/useHallDrafts'
 import { useTaskWorkspace } from '@/composables/juyiting/useTaskWorkspace'
 import { createDisabledTaskWorkspaceBinding, isTaskWorkspaceBuildEnabled } from '@/composables/juyiting/taskWorkspaceFeature'
 import { useTaskWorkspaceView } from '@/composables/juyiting/useTaskWorkspaceView'
@@ -797,7 +797,8 @@ const accountDisplayName = computed(() => {
 })
 const hallIdentityScope = computed(() => createHydratedIdentityScope(globalStore.user, apiStore.oauthClientId))
 
-const quickMatter = useHallQuickMatter({
+// Existing unresolved draft writes are protected by the shared recovery store; new requirements never use TASK_CREATE + per-file links.
+const hallDraftRecovery = useHallDrafts({
   identityScope: hallIdentityScope,
   identityEpoch: () => apiStore.authorizationGeneration
 })
@@ -1713,15 +1714,17 @@ const openOverviewItem = ref => {
 }
 
 const handleQuickRequest = async request => {
-  const result = await quickMatter.submit(request)
-  if (!result?.task) return false
-  const task = result.task
-  tasks.value = [task, ...tasks.value.filter(item => item.id !== task.id)]
-  selectedTask.value = task
+  if (typeof request?.request !== 'string' || !request.request.trim()) return false
+  const identity = hallIdentityScope.value
+  const epoch = apiStore.authorizationGeneration
+  const created = await createTask({ title: request.request, description: request.request, attachments: request.materials ?? [] })
+  if (identity !== hallIdentityScope.value || epoch !== apiStore.authorizationGeneration) return false
+  if (!created) {
+    if (requirementCreateState.value.intent) openPanel('tasks', { root: true })
+    return false
+  }
   hallReadRevision.value += 1
-  await selectTask(task)
-  await openOverviewTask(task)
-  showToast(quickMatter.message.value || '事项已建立。下一步可选择承办好汉或补充资料；尚未开始执行。')
+  await openOverviewTask(selectedTask.value)
   return true
 }
 
@@ -1975,25 +1978,32 @@ const {
   actorScopeKey: hallIdentityScope,
   identityEpoch: () => apiStore.authorizationGeneration,
   storage: requirementCreateStorage,
+  schemaVersion: 2,
   onCommitted: (receipt, fence) => {
     if (!fence.isCurrent()) return false
     tasks.value = [receipt.task, ...tasks.value.filter(task => task.id !== receipt.taskId)]
     selectedTask.value = receipt.task
     markTaskCreated(receipt.task)
     playSuccess()
-    showToast('榜文及精确参考资料已确认；点将后才开始办理。')
+    showToast('榜文及所选资料已确认；点将后才开始办理。')
     return true
   }
 })
 const createTask = async (payload, acknowledge = () => {}) => {
   // Preserve the funded lane, but never let it replace a pending ordinary
-  // creation operation, or reinterpret private references as funding authority.
+  // creation operation, or reinterpret selected materials as funding authority.
   let created = false
   try {
+    const pendingDraft = hallDraftRecovery.unresolvedIntent.value
+    if (pendingDraft?.kind === 'TASK_CREATE') {
+      showToast('原事项创建仍待核对，请先打开原草稿；未创建另一份事项。')
+      openOverviewItem({ sourceType: 'DRAFT', sourceId: pendingDraft.draftId })
+      return false
+    }
     if (payload?.grossBountyAmountMicro) {
       const original = readRequirementCreateOriginal()
-      if (original.state !== 'ABSENT' || payload.inputRefs?.length) {
-        showToast('请先核对原张榜；资金榜不提交普通榜参考图。')
+      if (original.state !== 'ABSENT' || payload.attachments?.length || payload.inputRefs?.length) {
+        showToast('请先核对原张榜；资金榜不提交普通榜资料。')
       } else {
         created = await runCreateTask(payload)
         if (created) markTaskCreated(selectedTask.value)

@@ -157,7 +157,7 @@ const actualDefaultRequirementEntry = page.match(/const openDefaultRequirementCr
 if (!actualDefaultRequirementEntry) throw new Error('Actual JuyiHall default requirement entry missing')
 const pageHarness = ({ ordinary = { state: 'ABSENT' }, fundedRecovery = null } = {}) => {
   const h = { ordinary: [], funded: [], toasts: [], acknowledgements: [] }
-  const deps = { readRequirementCreateOriginal: () => ordinary, showToast: text => h.toasts.push(text), runCreateTask: async p => { h.funded.push(p); return true },
+  const deps = { hallDraftRecovery: { unresolvedIntent: ref(null) }, openOverviewItem: () => {}, readRequirementCreateOriginal: () => ordinary, showToast: text => h.toasts.push(text), runCreateTask: async p => { h.funded.push(p); return true },
     markTaskCreated: () => {}, selectedTask: ref({ id: 'funded-task' }), fundedCreateRecovery: ref(fundedRecovery),
     runRequirementCreate: async p => { h.ordinary.push(p); return true }, requirementCreateState: ref({ error: null }) }
   h.create = new Function(...Object.keys(deps), `return async (payload, acknowledge = () => {}) => {${actualCreate}}`)(...Object.values(deps))
@@ -219,7 +219,7 @@ describe('actual JuyiHall ordinary/funded boundary', () => {
     expect(h.funded).to.deep.equal([]); expect(h.ordinary).to.deep.equal([])
   })
   it('compiles actual changed SFCs and wires exact recovery handlers', () => {
-    for (const name of ['world/JuyiHall.vue', 'juyiting/BountyPanel.vue']) {
+    for (const name of ['world/JuyiHall.vue', 'juyiting/BountyPanel.vue', 'juyiting/HallMaterialPicker.vue']) {
       const filename = new URL(`../src/components/${name}`, import.meta.url).pathname
       const { descriptor, errors } = parse(readFileSync(filename, 'utf8'), { filename }); expect(errors).to.deep.equal([])
       const script = compileScript(descriptor, { id: 'reference-intake' })
@@ -229,6 +229,7 @@ describe('actual JuyiHall ordinary/funded boundary', () => {
   })
 })
 
+const material = (version = 2) => ({ fileId: 'pwf_document', version })
 // Compile and mount the actual parent SFC; the selection child is a bounded
 // emission stub here. Its real workspace/Blob ACL tests belong to picker suite.
 let Vue, mount, Panel, Picker
@@ -252,12 +253,12 @@ describe('mounted Bounty requirement draft and original recovery', () => {
       Object.defineProperty(globalThis, key, { configurable: true, writable: true, value: window[key] })
     }
     Vue = await import('vue'); ({ mount } = await import('@vue/test-utils'))
-    Picker = Vue.defineComponent({ name: 'HallReferenceImagePicker', props: ['modelValue', 'identityScope', 'identityEpoch', 'disabled'], emits: ['update:modelValue'], render: () => Vue.h('span', { class: 'picker-boundary' }) })
+    Picker = Vue.defineComponent({ name: 'HallMaterialPicker', props: ['modelValue', 'identityScope', 'identityEpoch', 'disabled'], emits: ['update:modelValue'], render: () => Vue.h('span', { class: 'picker-boundary' }) })
     const TaskMaterialLinks = Vue.defineComponent({ name: 'TaskMaterialLinks', render: () => Vue.h('section', { class: 'formal-task-execution' }, '明确开始正式办理（PDF）') })
     const filename = new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url).pathname
     const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
     const silver = await import('../src/utils/silverAmount.js')
-    const imports = new Proxy({ vue: Vue, '@/utils/silverAmount': silver, './HallReferenceImagePicker.vue': Picker, '@/components/personal-workspace/TaskMaterialLinks.vue': TaskMaterialLinks }, {
+    const imports = new Proxy({ vue: Vue, '@/utils/silverAmount': silver, './HallMaterialPicker.vue': Picker, '@/components/personal-workspace/TaskMaterialLinks.vue': TaskMaterialLinks }, {
       get: (target, name) => target[name] ?? Vue.defineComponent({ render: () => Vue.h('span') })
     })
     const code = compileScript(descriptor, { id: 'mounted-reference-intake', inlineTemplate: true }).content
@@ -339,26 +340,26 @@ describe('mounted Bounty requirement draft and original recovery', () => {
     const selector = wrapper.getComponent(Picker)
     expect(selector.props('identityScope')).to.equal(scopeA)
     expect(selector.props('identityEpoch')).to.equal(1)
-    selector.vm.$emit('update:modelValue', [image()]); await nextTick()
+    selector.vm.$emit('update:modelValue', [material()]); await nextTick()
     await wrapper.find('form').trigger('submit')
     const [body, acknowledge] = wrapper.emitted('create-task')[0]
-    expect(body).to.deep.equal({ title: '画一只鸟', description: '照片风格', requiredAbilities: [], inputRefs: [image()] })
+    expect(body).to.deep.equal({ title: '画一只鸟', description: '照片风格', requiredAbilities: [], attachments: [material()] })
     expect(body).not.to.have.property('taskId')
     acknowledge(true); await nextTick(); expect(wrapper.find('form').exists()).to.equal(false)
   })
   it('allows a no-reference draft and retains edited text/reference after an older success', async () => {
     const wrapper = panel(); await openDraft(wrapper); await setDraft(wrapper)
     await wrapper.find('form').trigger('submit')
-    const [body, acknowledge] = wrapper.emitted('create-task')[0]; expect(body.inputRefs).to.deep.equal([])
+    const [body, acknowledge] = wrapper.emitted('create-task')[0]; expect(body.attachments).to.deep.equal([])
     await wrapper.find('[name="taskTitle"]').setValue('新稿：画一只蓝鸟')
-    wrapper.getComponent(Picker).vm.$emit('update:modelValue', [image(3)]); await nextTick()
+    wrapper.getComponent(Picker).vm.$emit('update:modelValue', [material(3)]); await nextTick()
     acknowledge(true); await nextTick()
     expect(wrapper.find('form').exists()).to.equal(true); expect(wrapper.find('[name="taskTitle"]').element.value).to.equal('新稿：画一只蓝鸟')
-    expect(wrapper.getComponent(Picker).props('modelValue')).to.deep.equal([image(3)])
+    expect(wrapper.getComponent(Picker).props('modelValue')).to.deep.equal([material(3)])
   })
   it('identity changes clear the old draft and late acknowledgement cannot clear a new actor draft', async () => {
     const wrapper = panel(); await openDraft(wrapper); await setDraft(wrapper)
-    wrapper.getComponent(Picker).vm.$emit('update:modelValue', [image()]); await nextTick()
+    wrapper.getComponent(Picker).vm.$emit('update:modelValue', [material()]); await nextTick()
     await wrapper.find('form').trigger('submit'); const oldAck = wrapper.emitted('create-task')[0][1]
     await wrapper.setProps({ identityScope: scopeB, authorizationGeneration: 2 })
     expect(wrapper.find('[name="taskTitle"]').element.value).to.equal(''); expect(wrapper.getComponent(Picker).props('modelValue')).to.deep.equal([])
@@ -379,11 +380,11 @@ describe('mounted Bounty requirement draft and original recovery', () => {
   })
   it('never submits hidden ordinary refs as a funded draft', async () => {
     const wrapper = panel(); await openDraft(wrapper); await setDraft(wrapper)
-    wrapper.getComponent(Picker).vm.$emit('update:modelValue', [image()]); await nextTick()
+    wrapper.getComponent(Picker).vm.$emit('update:modelValue', [material()]); await nextTick()
     await wrapper.find('.funded-create-toggle input').setValue(true)
     await wrapper.find('[name="grossBountyAmountMicro"]').setValue('5')
     await wrapper.find('form').trigger('submit')
     expect(wrapper.emitted('create-task')).to.equal(undefined)
-    expect(wrapper.text()).to.include('资金榜暂不支持普通榜参考图')
+    expect(wrapper.text()).to.include('资金榜暂不支持普通榜资料')
   })
 })

@@ -50,7 +50,7 @@
         <template v-if="requirementCreateState.intent">
           <p>原榜文：{{ requirementCreateState.intent.body.title }}</p>
           <p>原需求：{{ requirementCreateState.intent.body.description || '未填写' }}</p>
-          <p>精确参考资料：{{ requirementCreateInputSummary }}</p>
+          <p>精确资料：{{ requirementCreateInputSummary }}</p>
           <p>当前编辑稿不会替换原需求；核对不会再次创建或启动 Agent。</p>
           <button type="button" :disabled="requirementCreateBusy" @click="$emit('check-requirement-create')">核对原张榜</button>
           <button v-if="!requirementCreateState.intent.receipt" type="button" :disabled="requirementCreateBusy" @click="$emit('resume-requirement-create')">确认继续原张榜</button>
@@ -62,15 +62,15 @@
         <input v-model="taskForm.title" name="taskTitle" placeholder="榜文名目" />
         <textarea v-model="taskForm.description" name="taskDescription" placeholder="榜文缘由"></textarea>
         <input v-model.trim="taskForm.requiredAbilities" name="requiredAbilities" placeholder="所需本领，逗号分隔" />
-        <HallReferenceImagePicker
-          class="task-reference-picker"
+        <HallMaterialPicker
+          class="task-material-picker"
           v-if="!taskForm.funded && identityScope"
-          v-model="taskReferenceInputs"
+          v-model="taskMaterials"
           :identity-scope="identityScope"
           :identity-epoch="authorizationGeneration"
           :disabled="createPending || requirementCreateBusy"
         />
-        <small v-else-if="taskReferenceInputs.length" role="status">资金榜暂不支持普通榜参考图；请切回普通榜移除资料，再选择资金悬赏。</small>
+        <small v-else-if="taskMaterials.length" role="status">资金榜暂不支持普通榜资料；请切回普通榜移除资料，再选择资金悬赏。</small>
         <label v-if="fundedPreviewEnabled" class="funded-create-toggle">
           <input v-model="taskForm.funded" type="checkbox" /> 资金悬赏（开发预览）
         </label>
@@ -94,7 +94,7 @@
           <button type="button" @click="$emit('resume-funded-create')">确认按原请求恢复</button>
           <button type="button" @click="$emit('cancel-funded-create-recovery')">暂不恢复</button>
         </section>
-        <button type="submit" :disabled="createPending || requirementCreateBusy || !taskForm.title.trim() || (taskForm.funded && (!validGrossAmount || taskReferenceInputs.length))">{{ createPending ? '张榜中…' : '张榜悬赏' }}</button>
+        <button type="submit" :disabled="createPending || requirementCreateBusy || !taskForm.title.trim() || (taskForm.funded && (!validGrossAmount || taskMaterials.length))">{{ createPending ? '张榜中…' : '张榜悬赏' }}</button>
       </form>
 
       <HallDraftEditor
@@ -455,7 +455,7 @@ import BountyActionIcon from './BountyActionIcon.vue'
 import WorkItemPlanPanel from './WorkItemPlanPanel.vue'
 import TeamRecommendationPanel from './TeamRecommendationPanel.vue'
 import HallDraftEditor from './HallDraftEditor.vue'
-import HallReferenceImagePicker from './HallReferenceImagePicker.vue'
+import HallMaterialPicker from './HallMaterialPicker.vue'
 import TaskMaterialLinks from '@/components/personal-workspace/TaskMaterialLinks.vue'
 import { formatSilverMicro, isCanonicalMicroAmount } from '@/utils/silverAmount'
 
@@ -540,7 +540,7 @@ const modalTask = ref(null)
 const controlledConsentAcknowledged = ref(false)
 const showCreateForm = ref(false)
 const createPending = ref(false)
-const taskReferenceInputs = ref([])
+const taskMaterials = ref([])
 let createAttempt = 0
 const selectedAssigneeIds = ref([])
 const taskForm = ref({
@@ -551,8 +551,9 @@ const taskForm = ref({
   grossBountyAmountMicro: ''
 })
 const requirementCreateInputSummary = computed(() => {
-  const refs = props.requirementCreateState?.intent?.body?.inputRefs || []
-  return refs.length ? refs.map(item => `${item.fileId} v${item.version}`).join('、') : '无参考图'
+  const intent = props.requirementCreateState?.intent
+  const refs = (intent?.schemaVersion === 2 ? intent.body?.attachments : intent?.body?.inputRefs) || []
+  return refs.length ? refs.map(item => `${item.fileId} v${item.version}`).join('、') : '无资料'
 })
 // A late success can only clear the exact submitting draft under the same
 // authenticated actor; editing during POST preserves the newer draft.
@@ -563,7 +564,7 @@ watch(() => [props.controlledConsentOffer, props.controlledConsentOffer?.taskId,
 watch(() => [props.identityScope, props.authorizationGeneration], () => {
   createAttempt++
   createPending.value = false
-  taskReferenceInputs.value = []
+  taskMaterials.value = []
   taskForm.value = { title: '', description: '', requiredAbilities: '', funded: false, grossBountyAmountMicro: '' }
   modalTask.value = null
   selectedAssigneeIds.value = []
@@ -700,7 +701,7 @@ const taskAssigneeIds = (task) => {
 
 const submitCreateTask = () => {
   if (!taskForm.value.title.trim()) return
-  if (taskForm.value.funded && (!validGrossAmount.value || taskReferenceInputs.value.length)) return
+  if (taskForm.value.funded && (!validGrossAmount.value || taskMaterials.value.length)) return
   const payload = {
     title: taskForm.value.title,
     description: taskForm.value.description,
@@ -713,19 +714,19 @@ const submitCreateTask = () => {
     payload.grossBountyAmountMicro = taskForm.value.grossBountyAmountMicro
     payload.settlementPolicy = 'GROSS_INCLUSIVE'
   } else {
-    payload.inputRefs = taskReferenceInputs.value.map(item => ({ ...item }))
+    payload.attachments = taskMaterials.value.map(({ fileId, version }) => ({ fileId, version }))
   }
   if (createPending.value || props.requirementCreateBusy) return
   const attempt = ++createAttempt
-  const originalDraft = JSON.stringify({ form: taskForm.value, refs: taskReferenceInputs.value })
+  const originalDraft = JSON.stringify({ form: taskForm.value, refs: taskMaterials.value })
   createPending.value = true
   emit('create-task', payload, (created) => {
     if (attempt !== createAttempt) return
     createPending.value = false
     // Reset only after the parent receives a definitive success acknowledgement.
     // Recoverable/ambiguous failures retain the exact funded draft for retry.
-    if (created && originalDraft === JSON.stringify({ form: taskForm.value, refs: taskReferenceInputs.value })) {
-      taskReferenceInputs.value = []
+    if (created && originalDraft === JSON.stringify({ form: taskForm.value, refs: taskMaterials.value })) {
+      taskMaterials.value = []
       taskForm.value = { title: '', description: '', requiredAbilities: '', funded: false, grossBountyAmountMicro: '' }
       showCreateForm.value = false
     }
@@ -847,7 +848,7 @@ button:disabled {
 .task-search input,
 .task-search select,
 .task-create-form input,
-.task-reference-picker { grid-column: 1 / -1; min-width: 0; }
+.task-material-picker { grid-column: 1 / -1; min-width: 0; }
 
 .task-create-form { max-height: min(55vh, 30rem); overflow-y: auto; }
 
