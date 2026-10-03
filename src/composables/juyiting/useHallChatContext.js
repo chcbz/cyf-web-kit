@@ -6,6 +6,18 @@ export const taskAssigneeIds = (task) => {
   return task.assignedAgentId ? [task.assignedAgentId] : []
 }
 
+// Bounty participants are separate from the private conversation subject.
+// Only the current, roster-filtered single target may enter a per-Agent interaction.
+export const bountyInteractionTargetId = (context) => {
+  if (context?.mode !== 'bounty' || context.conversationScopeType !== 'bounty' ||
+    typeof context.taskId !== 'string' || !context.taskId ||
+    context.conversationScopeKey !== `task:${context.taskId}` ||
+    !Array.isArray(context.targetAgentIds) || context.targetAgentIds.length !== 1 ||
+    !Array.isArray(context.participantAgentIds)) return ''
+  const target = context.targetAgentIds[0]
+  return typeof target === 'string' && target && context.participantAgentIds.includes(target) ? target : ''
+}
+
 export const useHallChatContext = ({
   agents,
   portraitShortName,

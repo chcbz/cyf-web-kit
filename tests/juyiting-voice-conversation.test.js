@@ -1,3 +1,4 @@
+import { bountyInteractionTargetId } from '../src/composables/juyiting/useHallChatContext.js'
 import { createHydratedIdentityScope, hasHydratedIdentity } from '../src/utils/identityScope.js'
 import { before } from 'mocha'
 import { useFormalTaskExecutionScope } from '../src/composables/useFormalTaskExecutionScope.js'
@@ -280,6 +281,7 @@ const createActualHallVoiceMocks = ({
     useHallBackendSceneState: () => ({ start: asyncNoop, stop: noop, dispose: noop, reportPhase: noop }),
     useHallSceneDebugBridge: () => ({ republish: noop, stop: noop }),
     useHallSound: () => ({ playAgentSelect: noop, playError: noop, playPanelOpen: noop, playRefresh: noop, playSend: noop, playSuccess: noop, playTap: noop, setSoundEnabled: noop, setSoundSuppressed: noop, soundEnabled: Vue.ref(false) }),
+    bountyInteractionTargetId,
     useHallChatContext: () => ({
       chatContext: Vue.ref(validContext()), conversationAgent: Vue.ref(selectedAgentFixture), conversationTask: Vue.ref(null), chatMentionAgentIds: list, chatMentionAgents: agentList, chatMode: Vue.ref('public'), chatTargetText: Vue.ref('众好汉'),
       enterBountyDiscussion: noop, enterPrivateConversation: noop, resetToPublic: noop, setMentionAgent: noop

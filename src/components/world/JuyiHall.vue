@@ -718,7 +718,7 @@ import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { useGlobalStore } from '@/stores/global'
 import { useApiStore } from '@/stores/api'
 import { agentApi, chatApi } from '@/composables/useHttp'
-import { useHallChatContext } from '@/composables/juyiting/useHallChatContext'
+import { useHallChatContext, bountyInteractionTargetId } from '@/composables/juyiting/useHallChatContext'
 import { useHallBackendSceneState } from '@/composables/juyiting/useHallBackendSceneState'
 import { useHallCommandQueue } from '@/composables/juyiting/useHallCommandQueue'
 import { useHallConversation } from '@/composables/juyiting/useHallConversation'
@@ -2117,7 +2117,7 @@ const typedDeliberationEnabled = computed(() => typedDeliberationBuildEnabled &&
 const followupCurrentContext = () => ({
   conversationId: conversationId.value,
   taskId: conversationTask.value?.id || '',
-  targetAgentId: conversationAgent.value?.agentId || ''
+  targetAgentId: bountyInteractionTargetId(chatContext.value)
 })
 const followupStorage = (() => {
   try { return typeof window !== 'undefined' ? window.sessionStorage : null } catch { return null }
@@ -2126,7 +2126,7 @@ let typedDeliberation = null
 const bountyRequestCatalog = useHallBountyRequestCatalog({
   chatApi, identityScope: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
   getContext: () => ({ conversationId: conversationId.value, taskId: conversationTask.value?.id || '',
-    targetAgentId: conversationAgent.value?.agentId || '', assignmentRevision: activeRequest.value?.steps?.find(step => step.targetAgentId === conversationAgent.value?.agentId)?.assignmentRevision || '' }),
+    targetAgentId: bountyInteractionTargetId(chatContext.value), assignmentRevision: activeRequest.value?.steps?.find(step => step.targetAgentId === bountyInteractionTargetId(chatContext.value))?.assignmentRevision || '' }),
   getContextGeneration: () => followupContextGeneration.value, enabled: () => multimediaDeliberationUiEnabled && chatMode.value === 'bounty'
 })
 notifyBountyRequestCatalog = () => {
@@ -2162,7 +2162,7 @@ const typedAssignmentRevision = () => typedLong(conversationTask.value?.assignme
 const typedConversationGeneration = () => typedLong(activeRequest.value?.conversationGeneration) ||
   typedLong(bountyRequestCatalog.entries.value?.[0]?.request?.conversationGeneration) || ''
 const typedDeliberationContext = () => ({ conversationId: conversationId.value, taskId: conversationTask.value?.id || '',
-  targetAgentId: conversationAgent.value?.agentId || '', assignmentRevision: typedAssignmentRevision(),
+  targetAgentId: bountyInteractionTargetId(chatContext.value), assignmentRevision: typedAssignmentRevision(),
   conversationGeneration: typedConversationGeneration() })
 const typedDeliberationStorage = (() => { try { return typeof window !== 'undefined' ? window.sessionStorage : null } catch { return null } })()
 typedDeliberation = useHallTypedDeliberation({
@@ -2448,9 +2448,9 @@ watch([() => apiStore.authorizationGeneration, hallIdentityScope, () => selected
 const followupTaskFence = computed(() => [selectedTask.value?.id, selectedTask.value?.taskVersion,
   selectedTask.value?.requirementRevision, selectedTask.value?.revision].map(value => value == null ? '' : String(value)).join('\u0000'))
 watch([followupTaskFence, () => apiStore.authorizationGeneration, hallIdentityScope, () => conversationId.value,
-  () => activeRequest.value?.conversationGeneration, () => conversationAgent.value?.agentId, () => chatMode.value], invalidateFollowupContext, { flush: 'sync' })
+  () => activeRequest.value?.conversationGeneration, () => bountyInteractionTargetId(chatContext.value), () => chatMode.value], invalidateFollowupContext, { flush: 'sync' })
 watch([followupTaskFence, () => apiStore.authorizationGeneration, hallIdentityScope, () => conversationId.value,
-  () => conversationAgent.value?.agentId, () => chatMode.value], () => {
+  () => bountyInteractionTargetId(chatContext.value), () => chatMode.value], () => {
   bountyRequestCatalog.reset()
   if (chatMode.value === 'bounty' && conversationId.value) {
     void bountyRequestCatalog.refresh()
