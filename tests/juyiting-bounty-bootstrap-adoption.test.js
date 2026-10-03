@@ -301,8 +301,8 @@ describe('actual Hall conversation adopts the exact admitted bounty bootstrap', 
     })
   }
 
-  for (const eventScope of ['current', 'foreign-conversation', 'historical-request']) {
-    it(`real SSE execution_abandoned ${eventScope} is only a scoped authoritative readback hint`, async () => {
+  for (const eventType of ['execution_abandoned', 'execution_terminal', 'action_started', 'action_failed', 'target_capability_unavailable', 'cancel_requested']) for (const eventScope of ['current', 'foreign-conversation', 'historical-request']) {
+    it(`real SSE ${eventType} ${eventScope} is only a scoped authoritative readback hint`, async () => {
       const originalFetch = global.fetch
       let controller; let reads = 0
       const { hall, apiStore, calls, selectedTask } = harness({ get: async path => {
@@ -324,7 +324,7 @@ describe('actual Hall conversation adopts the exact admitted bounty bootstrap', 
         // History rehydration may assign a fresh presentation timestamp, not a new message.
         const messageFacts = () => hall.messages.value.map(({ localId, sender, content, parts }) => ({ localId, sender, content, parts }))
         const beforeMessages = messageFacts()
-        const event = { type: 'execution_abandoned',
+        const event = { type: eventType,
           conversationId: eventScope === 'foreign-conversation' ? '43' : reference().conversationId,
           requestId: eventScope === 'historical-request' ? 'older-request' : reference().initialRequestId,
           stepId: 'step-1', eventSequence: '1', eventVersion: '1', receipt: { state: 'CANCELLED' } }

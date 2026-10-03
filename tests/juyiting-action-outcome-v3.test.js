@@ -30,7 +30,7 @@ describe('ordinary v3 Agent outcome projection', () => {
   })
 
   it('renders full multiline document answers instead of enforcing the old image instruction limit', () => {
-    const value = action(); value.outcome.kind = 'ANSWER'; value.outcome.action = null
+    const value = action(); value.outcome.kind = 'ANSWER'; value.outcome.action = null; value.actionProgress = null
     value.outcome.text = `说明\n${'内容'.repeat(3000)}\n完成🌏`
     expect(typedOutcomeProjection(value, context).outcome.text).to.equal(value.outcome.text)
     value.outcome.text = '\ud800'
@@ -54,7 +54,7 @@ describe('ordinary v3 Agent outcome projection', () => {
   })
 
   it('accepts natural clarification and only valid open or answered question versions', () => {
-    const value = action(); value.outcome.kind = 'CLARIFY'; value.outcome.action = null
+    const value = action(); value.outcome.kind = 'CLARIFY'; value.outcome.action = null; value.actionProgress = null
     value.outcome.clarification = { pendingQuestionId: 'question', state: 'OPEN', stateVersion: '0', question: '用于哪里？', requiredFacts: ['用途'], replyRequestId: null }
     expect(typedOutcomeProjection(value, context).outcome.clarification.requiredFacts).to.deep.equal(['用途'])
     value.outcome.clarification.stateVersion = '1'
@@ -66,7 +66,7 @@ describe('ordinary v3 Agent outcome projection', () => {
   })
 
   it('keeps the exact mixed-input receipt on inspection reads and never claims pending material was read', () => {
-    const value = action(); value.route = 'INSPECT'; value.outcome.kind = 'ANSWER'; value.outcome.action = null
+    const value = action(); value.route = 'INSPECT'; value.outcome.kind = 'ANSWER'; value.outcome.action = null; value.actionProgress = null
     value.inspection = { authorizationId: 'inspection', manifestDigest: digest('a'), sourceRefIds: ['source-text', 'source-audio'],
       inputSummary: { inputDigest: digest('b'), sources: [
         { sourceRefId: 'source-text', sha256: 'a'.repeat(64), byteLength: '9007199254740993', carrier: 'DIRECT_TEXT', contributionDigest: digest('c') },
@@ -107,10 +107,86 @@ describe('ordinary v3 Agent outcome projection', () => {
     } finally { lane.dispose() }
   })
 
+  it('validates progress identity and nullable child union independently from the immutable outcome', () => {
+    for (const mutate of [
+      value => { delete value.actionProgress },
+      value => { value.actionProgress.actionRequestId = 'foreign' },
+      value => { value.actionProgress.dispatchVersion = '01' },
+      value => { value.actionProgress.dispatchVersion = '9223372036854775808' },
+      value => { value.actionProgress.childStateVersion = '0' },
+      value => { value.actionProgress.childRoute = 'EXECUTE' },
+      value => { value.actionProgress.state = 'COMPLETED' },
+      value => { value.outcome.kind = 'ANSWER'; value.outcome.action = null }
+    ]) {
+      const value = action(); mutate(value)
+      expect(typedOutcomeProjection(value, context)).to.equal(null)
+    }
+  })
+
+  it('refreshes queued/running/completed without rewriting final, regressing state or creating another request', async () => {
+    let value = action(); let posts = 0
+    const lane = useHallTypedDeliberation({ chatApi: { get: async () => ({ data: clone(value) }), create: async () => { posts++ } },
+      actorScopeKey: Vue.ref('owner'), authorizationGeneration: Vue.ref(1), getContext: () => context, getContextGeneration: () => 1,
+      getCatalogEntries: () => [], enabled: () => true })
+    try {
+      await lane.readOne('request')
+      value.actionProgress = { ...value.actionProgress, state: 'RUNNING', dispatchVersion: '2', childRequestId: 'child', childRoute: 'EXECUTE', childStateVersion: '0' }
+      expect(await lane.readOne('request')).not.to.equal(null)
+      const running = clone(value)
+      value.actionProgress.state = 'COMPLETED'; value.actionProgress.childStateVersion = '1'
+      expect(await lane.readOne('request')).not.to.equal(null)
+      const complete = clone(value)
+      for (const mutate of [
+        item => { item.actionProgress = running.actionProgress },
+        item => { item.actionProgress.childStateVersion = '0' },
+        item => { item.actionProgress.dispatchVersion = '1' },
+        item => { item.actionProgress.childRequestId = 'other' },
+        item => { item.actionProgress.state = 'FAILED'; item.actionProgress.childStateVersion = '2' },
+        item => { item.outcome.action.instruction = 'forged same final' },
+        item => { item.conversationId = 'foreign' }
+      ]) {
+        value = clone(complete); mutate(value)
+        expect(await lane.readOne('request')).to.equal(null)
+        expect(lane.cards.value[0].actionProgress).to.deep.equal(complete.actionProgress)
+        expect(lane.cards.value[0].outcome).to.deep.equal(complete.outcome)
+      }
+      expect(posts).to.equal(0)
+    } finally { lane.dispose() }
+  })
+
+  it('ignores an older in-flight GET that finishes after the terminal response', async () => {
+    const pending = []
+    const lane = useHallTypedDeliberation({ chatApi: { get: () => new Promise(resolve => pending.push(resolve)) },
+      actorScopeKey: Vue.ref('owner'), authorizationGeneration: Vue.ref(1), getContext: () => context, getContextGeneration: () => 1,
+      getCatalogEntries: () => [], enabled: () => true })
+    try {
+      const earlier = lane.readOne('request'), later = lane.readOne('request')
+      const completed = action(); completed.actionProgress = { ...completed.actionProgress, state: 'COMPLETED', dispatchVersion: '2',
+        childRequestId: 'child', childRoute: 'INSPECT', childStateVersion: '4' }
+      pending[1]({ data: completed }); await later
+      pending[0]({ data: action() }); expect(await earlier).to.equal(null)
+      expect(lane.cards.value[0].actionProgress.state).to.equal('COMPLETED')
+    } finally { lane.dispose() }
+  })
+
+  it('renders concise terminal text, hides the obsolete processing prose, and adds no confirmation', () => {
+    for (const [state, heading] of [['COMPLETED', '本轮完成'], ['FAILED', '未完成'], ['CANCELLED', '已取消']]) {
+      const value = action(); value.actionProgress = { ...value.actionProgress, state, dispatchVersion: '2', childRequestId: 'child',
+        childRoute: 'EXECUTE', childStateVersion: '1' }
+      const wrapper = mount(card(), { props: { projection: typedOutcomeProjection(value, context) } })
+      try {
+        expect(wrapper.text()).to.include(heading)
+        expect(wrapper.text()).not.to.include('处理中')
+        expect(wrapper.findAll('button')).to.have.length(0)
+        expect(wrapper.text()).not.to.match(/EXECUTE|受控|Provider|dispatchVersion/)
+      } finally { wrapper.unmount() }
+    }
+  })
+
   it('shows a simple processing card, not another confirmation or tool panel', () => {
     const wrapper = mount(card(), { props: { projection: typedOutcomeProjection(action(), context) } })
     try {
-      expect(wrapper.text()).to.include('正在处理')
+      expect(wrapper.text()).to.include('等待处理')
       expect(wrapper.findAll('button')).to.have.length(0)
       for (const internal of ['write-document', 'ACTION_REQUEST', '受控', 'Provider', 'START', '整理文档']) expect(wrapper.text()).not.to.include(internal)
     } finally { wrapper.unmount() }

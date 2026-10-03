@@ -111,7 +111,7 @@ export const inspectionAccepted = (value, body, conversationId) => {
 export const outcomeCardKey = value => `${value.requestId}\u0000${value.turnId}\u0000${value.outcome?.outcomeId || ''}`
 
 // Ordinary v3 outcomes are display data. Hydration must never trigger a tool or a payment request.
-const actionProjectionFields = [...projectionFields, 'route', 'inspection']
+const actionProjectionFields = [...projectionFields, 'route', 'inspection', 'actionProgress']
 const actionOutcomeFields = ['outcomeContractVersion', 'outcomeId', 'taskId', 'assignmentRevision', 'assistantMessageId', 'finalDigest', 'kind', 'text', 'clarification', 'action']
 const actionFields = ['actionRequestId', 'actionId', 'instruction', 'sourceRefIds']
 const prose = value => {
@@ -155,6 +155,30 @@ const actionInspection = (value, state) => {
       typeof source.sha256 === 'string' && /^[a-f0-9]{64}$/.test(source.sha256) && typedLong(source.byteLength, { allowZero: true }) &&
       ['DIRECT_TEXT', 'LOCAL_IMAGE', 'LOCAL_AUDIO', 'PARSED_TEXT'].includes(source.carrier) && digest(source.contributionDigest))
 }
+const progressFields = ['actionRequestId', 'state', 'dispatchVersion', 'childRequestId', 'childRoute', 'childStateVersion']
+const actionProgressValid = (progress, outcome) => {
+  if (outcome?.kind !== 'ACTION_REQUEST') return progress === null
+  if (!exactKeys(progress, progressFields) || progress.actionRequestId !== outcome.action.actionRequestId ||
+    !typedLong(progress.dispatchVersion, { allowZero: true })) return false
+  if (progress.childRequestId === null) return progress.childRoute === null && progress.childStateVersion === null &&
+    ['QUEUED', 'FAILED'].includes(progress.state)
+  return Boolean(typedId(progress.childRequestId) && ['INSPECT', 'EXECUTE'].includes(progress.childRoute) &&
+    typedLong(progress.childStateVersion, { allowZero: true }) && ['RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED'].includes(progress.state))
+}
+// Both values have already passed the strict read-wire parser. No status can authorize execution.
+export const actionProgressAdvances = (before, after) => {
+  if (before === null || before === undefined) return true
+  if (!after || before.actionRequestId !== after.actionRequestId || BigInt(after.dispatchVersion) < BigInt(before.dispatchVersion)) return false
+  if (['COMPLETED', 'FAILED', 'CANCELLED'].includes(before.state) && before.state !== after.state) return false
+  if (before.childRequestId !== null) {
+    if (before.childRequestId !== after.childRequestId || before.childRoute !== after.childRoute ||
+      BigInt(after.childStateVersion) < BigInt(before.childStateVersion)) return false
+    if (after.childStateVersion === before.childStateVersion && before.state !== after.state) return false
+  } else if (before.state === 'FAILED' && after.childRequestId !== null) return false
+  if (before.dispatchVersion === after.dispatchVersion && before.childStateVersion === after.childStateVersion &&
+    progressFields.some(key => before[key] !== after[key])) return false
+  return true
+}
 export const actionOutcomeProjection = (value, context = {}, route = 'CHAT') => {
   if (!exactKeys(value, actionProjectionFields) || value.schemaVersion !== 3 || value.route !== route || !['CHAT', 'INSPECT'].includes(route) ||
     !typedId(value.conversationId) || !typedLong(value.conversationGeneration) || !typedId(value.requestId) || !typedLong(value.requestRevision) ||
@@ -163,9 +187,9 @@ export const actionOutcomeProjection = (value, context = {}, route = 'CHAT') => 
     if (context[key] && value[key] !== context[key]) return null
   }
   if (route === 'CHAT' ? value.inspection !== null : !actionInspection(value.inspection, value.state)) return null
-  if (value.state === 'PENDING') return value.outcome === null ? freeze({ ...value, purpose: route }) : null
+  if (value.state === 'PENDING') return value.outcome === null && value.actionProgress === null ? freeze({ ...value, purpose: route }) : null
   if ((context.taskId && value.outcome?.taskId !== context.taskId) ||
     (context.assignmentRevision && value.outcome?.assignmentRevision !== context.assignmentRevision)) return null
   const normalized = actionOutcome(value.outcome)
-  return normalized ? freeze({ ...value, outcome: normalized, purpose: route }) : null
+  return normalized && actionProgressValid(value.actionProgress, normalized) ? freeze({ ...value, outcome: normalized, purpose: route }) : null
 }

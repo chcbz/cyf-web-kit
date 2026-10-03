@@ -8,8 +8,14 @@ const proposal = requestId => ({ schemaVersion: 1, conversationId: '7', conversa
   outcomeId: `outcome-${requestId}`, taskId: 'task-1', assignmentRevision: '4', assistantMessageId: '102', finalDigest: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', kind: 'EXECUTION_PROPOSAL', text: '可生成蓝鸟', clarification: null, proposal: { proposalId: `proposal-${requestId}`, state: 'PROPOSED', stateVersion: '0', operation: 'GENERATE_IMAGE', instruction: '画一只蓝色小鸟', sourceRefIds: [], sourceSelectors: [], parent: null } } })
 const store = () => { const values = new Map(); return { getItem: key => values.get(key) || null, setItem: (key, value) => values.set(key, value) } }
 const receipt = (intent, requestId, pendingQuestionId = null) => ({ schemaVersion: 1, intent, requestId, userMessageId: '100', turnIds: [`turn-${requestId}`], state: 'ADMITTED', stateVersion: '0', eventCursor: '9007199254740993', statusUrl: `/chat/requests/${requestId}`, typedOutcomeUrl: `/chat/conversations/7/requests/${requestId}/typed-outcome`, replay: false, pendingQuestionId })
+const originalCrypto = Object.getOwnPropertyDescriptor(globalThis, 'crypto')
+const restoreCrypto = () => {
+  if (originalCrypto) Object.defineProperty(globalThis, 'crypto', originalCrypto)
+  else delete globalThis.crypto
+}
 describe('typed natural discussion interaction adapter', () => {
-  beforeEach(() => { globalThis.crypto = { randomUUID: () => '00000000-0000-4000-8000-000000000001' } })
+  beforeEach(() => { Object.defineProperty(globalThis, 'crypto', { configurable: true, writable: true, value: { randomUUID: () => '00000000-0000-4000-8000-000000000001' } }) })
+  afterEach(restoreCrypto)
   it('posts exact DISCUSSION then only reads the typed projection; selected OPEN reply posts a new CHAT CAS body', async () => {
     const calls = []; const context = ref({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' })
     const api = { create: async (path, body, options) => { calls.push(['POST', path, body, options.headers['Idempotency-Key']]); return { data: { data: receipt(body.intent, body.intent === 'DISCUSSION' ? 'request-1' : 'request-2', body.pendingQuestionId) } } },
@@ -92,7 +98,7 @@ describe('typed natural discussion interaction adapter', () => {
     expect(await lane.readOne('request-monotone')).to.not.equal(null)
     expect(lane.selectedPending.value).to.equal(null)
     expect(lane.projections.value[0].outcome.clarification.state).to.equal('ANSWERED')
-    expect(await lane.readOne('request-monotone')).to.not.equal(null)
+    expect(await lane.readOne('request-monotone')).to.equal(null) // Rejected stale response is not an accepted read.
     expect(lane.projections.value[0].outcome.clarification.state).to.equal('ANSWERED')
     expect(await lane.readOne('request-historical')).to.not.equal(null)
     expect(lane.projections.value.find(item => item.requestId === 'request-historical').outcome.assignmentRevision).to.equal('1')
@@ -114,7 +120,8 @@ describe('typed natural discussion interaction adapter', () => {
 })
 
 describe('typed inspection interaction adapter', () => {
-  beforeEach(() => { globalThis.crypto = { randomUUID: () => '00000000-0000-4000-8000-000000000002' } })
+  beforeEach(() => { Object.defineProperty(globalThis, 'crypto', { configurable: true, writable: true, value: { randomUUID: () => '00000000-0000-4000-8000-000000000002' } }) })
+  afterEach(restoreCrypto)
   it('uses explicit selected inspection admission and v2 outcome only, with no CHAT fallback', async () => {
     const calls = []; const context = ref({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' })
     const source = { kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'file-1', version: '7', purpose: 'REFERENCE', assetId: null, assetRevision: null }

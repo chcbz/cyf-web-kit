@@ -1,5 +1,5 @@
 import { computed, ref, unref, watch } from 'vue'
-import { discussionAccepted, discussionBody, inspectionAccepted, inspectionOutcomeProjection, outcomeCardKey, typedId, typedLong, typedOutcomeProjection } from './hallTypedDeliberation.js'
+import { actionProgressAdvances, discussionAccepted, discussionBody, inspectionAccepted, inspectionOutcomeProjection, outcomeCardKey, typedId, typedLong, typedOutcomeProjection } from './hallTypedDeliberation.js'
 
 const unwrap = response => response?.data?.data ?? response?.data ?? response
 const clone = value => JSON.parse(JSON.stringify(value))
@@ -81,6 +81,8 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     if (previous?.state === 'READY' && projection.state === 'READY' && !sameFinalBinding(previous, projection)) return false
     if (previous?.state === 'READY' && projection.state === 'READY' && projection.outcome?.kind !== 'CLARIFY' &&
       JSON.stringify(previous.outcome) !== JSON.stringify(projection.outcome)) return false
+    if (previous?.schemaVersion === 3 && projection.schemaVersion === 3 &&
+      !actionProgressAdvances(previous.actionProgress, projection.actionProgress)) return false
     const previousClarification = previous?.outcome?.kind === 'CLARIFY' ? previous.outcome.clarification : null
     const clarification = projection?.outcome?.kind === 'CLARIFY' ? projection.outcome.clarification : null
     if (previousClarification && clarification) {
@@ -107,8 +109,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
         ? inspectionOutcomeProjection(raw, { conversationId: captured.context.conversationId, conversationGeneration: captured.context.conversationGeneration, taskId: captured.context.taskId, requestId })
         : typedOutcomeProjection(raw, { conversationId: captured.context.conversationId, conversationGeneration: captured.context.conversationGeneration, taskId: captured.context.taskId, requestId })
       if (!projection) return null
-      apply(projection, captured)
-      return projection
+      return apply(projection, captured) ? projection : null
     } catch (cause) {
       // 404 means this catalog request is ordinary durable CHAT; it is not a typed UI failure.
       if (current(captured) && cause?.status && cause.status !== 404) error.value = '暂时无法读取答复，请刷新状态。'
@@ -238,10 +239,10 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   const cards = computed(() => projections.value.filter(item => item.state === 'READY' && item.outcome).map(item => Object.freeze({ ...item, key: outcomeCardKey(item) })))
   const inspectionStatus = computed(() => {
     storageRevision.value
-    if (projections.value.some(item => item.purpose === 'INSPECT' && item.state === 'PENDING')) return '正在查阅资料；受理或目录可用不表示已读。'
+    if (projections.value.some(item => item.purpose === 'INSPECT' && item.state === 'PENDING')) return '正在查阅资料…'
     const ready = new Set(projections.value.filter(item => item.purpose === 'INSPECT' && item.state === 'READY').map(item => item.requestId))
     return readRecords(storage, scope.value, getContext?.() || {}).some(record => recordPurpose(record) === 'INSPECT' && record.status === 'ACCEPTED' && !ready.has(record.receipt?.requestId))
-      ? '查阅已受理，正在等待 Agent 查阅；尚未表示已读。' : ''
+      ? '等待查阅资料…' : ''
   })
   const invalidate = () => { generation++; busy.value = false; projections.value = []; selectedPending.value = null; error.value = '' }
   const stopScope = watch(scope, invalidate, { flush: 'sync' })
