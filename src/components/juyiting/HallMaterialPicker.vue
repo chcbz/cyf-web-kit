@@ -9,16 +9,16 @@
       ><var-icon name="paperclip" aria-hidden="true" />添加资料（可选）<span v-if="selectedMaterials.length">{{ selectedMaterials.length }}</span></button>
       <slot></slot>
     </div>
-    <ul v-if="selectedMaterials.length" class="quick-material-summary" aria-label="已选固定版本资料">
+    <ul v-if="selectedMaterials.length" class="quick-material-summary" aria-label="已选资料">
       <li v-for="material in selectedMaterials" :key="materialKey(material)">
-        <span><strong>{{ material.displayName }}</strong><small>{{ material.contentMimeType }} · 固定 v{{ material.version }}</small></span>
+        <span><strong>{{ material.displayName }}</strong><small>v{{ material.version }}</small></span>
         <button type="button" :disabled="disabled" @click="previewSelectedMaterial(material)">预览</button>
         <button
           type="button"
           :disabled="disabled"
-          :aria-label="`取消选择 ${material.displayName} v${material.version}`"
+          :aria-label="`移除 ${material.displayName} v${material.version}`"
           @click="removeSelectedMaterial(material)"
-        >取消</button>
+        >移除</button>
       </li>
     </ul>
     <Teleport to="body">
@@ -26,9 +26,9 @@
         v-if="materialPickerOpen"
         class="quick-material-picker"
         role="region"
-        aria-label="为新事项选择资料"
+        aria-label="选择资料"
       >
-        <header><button type="button" @click="cancelQuickMaterialPicker">返回</button><div><h3>为新事项选择资料</h3><p>图片、文档、音频等均可选择。每份资料固定到明确版本；返回不会改变已确认选择。</p></div></header>
+        <header><button type="button" @click="cancelQuickMaterialPicker">返回</button><div><h3>选择资料</h3><p>从工作空间选择图片、文档或音频。</p></div></header>
         <div class="quick-material-picker-body">
           <p v-if="workspace.listState.value === 'loading'" role="status">正在读取你的资料…</p>
           <p v-else-if="workspace.error.value" class="quick-request-error" role="alert">{{ workspace.error.value }}</p>
@@ -41,36 +41,36 @@
               @click="selectQuickMaterialFile(file.fileId)"
             ><strong>{{ file.displayName }}</strong><small>最新 v{{ file.latestVersion }}</small></button>
           </div>
-          <p v-else-if="workspace.listState.value === 'empty'">百宝箱暂无资料；可不选资料直接建立事项。</p>
+          <p v-else-if="workspace.listState.value === 'empty'">暂无资料，也可以直接提需求。</p>
           <button
             v-if="workspace.nextCursor.value"
             type="button"
             :disabled="workspace.loading.value"
             @click="loadMoreQuickMaterials"
-          >读取更多资料</button>
+          >加载更多</button>
         </div>
         <footer>
           <div v-if="pickerDetail" class="quick-material-fields">
-            <label><span>固定版本</span><select v-model.number="pickerVersion"><option v-for="version in pickerDetail.versions" :key="version.version" :value="version.version">v{{ version.version }} · {{ version.originalFilename }}</option></select></label>
+            <label><span>版本</span><select v-model.number="pickerVersion"><option v-for="version in pickerDetail.versions" :key="version.version" :value="version.version">v{{ version.version }} · {{ version.originalFilename }}</option></select></label>
             <button type="button" :disabled="!pickerVersion" @click="previewQuickMaterial">预览</button><button type="button" :disabled="!pickerVersion" @click="downloadQuickMaterial">下载</button><button
               type="button"
               class="primary"
               :disabled="!pickerVersion"
               @click="stageQuickMaterial"
-            >加入选择</button>
+            >添加</button>
           </div>
-          <section v-if="materialPreview.kind !== 'none'" class="quick-material-preview" v-bind="{ 'aria-label': '资料固定版本预览', 'aria-live': 'polite' }">
+          <section v-if="materialPreview.kind !== 'none'" class="quick-material-preview" v-bind="{ 'aria-label': '资料预览', 'aria-live': 'polite' }">
             <div v-if="materialPreview.kind === 'parts'"><button type="button" :disabled="materialPreview.selectedIndex === 0" @click="workspace.selectPreviewPart(materialPreview.selectedIndex - 1)">上一项</button><span>{{ materialPreview.selectedIndex + 1 }}/{{ materialPreview.parts.length }}</span><button type="button" :disabled="materialPreview.selectedIndex >= materialPreview.parts.length - 1" @click="workspace.selectPreviewPart(materialPreview.selectedIndex + 1)">下一项</button></div>
-            <img v-if="materialPreviewPart?.kind === 'image'" :src="materialPreviewPart.url" alt="资料固定版本预览" />
-            <audio v-else-if="materialPreviewPart?.kind === 'audio'" :src="materialPreviewPart.url" v-bind="{ controls: true, preload: 'none', 'aria-label': '资料固定版本音频预览' }"></audio>
+            <img v-if="materialPreviewPart?.kind === 'image'" :src="materialPreviewPart.url" alt="资料预览" />
+            <audio v-else-if="materialPreviewPart?.kind === 'audio'" :src="materialPreviewPart.url" v-bind="{ controls: true, preload: 'none', 'aria-label': '音频预览' }"></audio>
             <pre v-else-if="materialPreviewPart?.kind === 'text'" v-text="materialPreviewPart.text"></pre>
             <p v-if="materialPreview.message">{{ materialPreview.message }}</p>
           </section>
-          <ul v-if="draftMaterials.length" class="quick-material-draft" aria-label="待确认资料">
-            <li v-for="material in draftMaterials" :key="materialKey(material)"><span>{{ material.displayName }} · {{ material.contentMimeType }} · 固定 v{{ material.version }}</span><button type="button" @click="removeDraftMaterial(material)">移除</button></li>
+          <ul v-if="draftMaterials.length" class="quick-material-draft" aria-label="已选资料">
+            <li v-for="material in draftMaterials" :key="materialKey(material)"><span>{{ material.displayName }} · v{{ material.version }}</span><button type="button" @click="removeDraftMaterial(material)">移除</button></li>
           </ul>
-          <button type="button" class="quick-material-confirm" @click="confirmQuickMaterials">确认选择（{{ draftMaterials.length }}）</button>
-          <button type="button" @click="cancelQuickMaterialPicker">取消，不更改原选择</button>
+          <button type="button" class="quick-material-confirm" @click="confirmQuickMaterials">完成（{{ draftMaterials.length }}）</button>
+          <button type="button" @click="cancelQuickMaterialPicker">取消</button>
         </footer>
       </section>
     </Teleport>
@@ -146,7 +146,7 @@ const previewSelectedMaterial = async material => {
   await selectQuickMaterialFile(material.fileId)
   if (identity !== materialIdentityKey.value || !materialPickerOpen.value || pickerFileId.value !== material.fileId) return
   if (!pickerDetail.value?.versions.some(version => version.version === material.version)) {
-    workspace.error.value = '所选固定版本暂不可读取，未替换为最新版本。'
+    workspace.error.value = '这个版本暂时无法打开，请稍后重试。'
     return
   }
   pickerVersion.value = material.version
@@ -159,7 +159,7 @@ const stageQuickMaterial = () => {
   if (!detail || !Number.isSafeInteger(version) || !detail.versions.some(item => item.version === version)) return
   const material = { fileId: detail.file.fileId, version, displayName: detail.file.displayName, contentMimeType: detail.versions.find(item => item.version === version).contentMimeType }
   const others = draftMaterials.value.filter(item => materialKey(item) !== materialKey(material))
-  if (others.length >= 32) { workspace.error.value = '一次需求最多选择 32 份固定版本资料。'; return }
+  if (others.length >= 32) { workspace.error.value = '最多添加 32 份资料。'; return }
   draftMaterials.value = [...others, material]
 }
 const removeDraftMaterial = material => { draftMaterials.value = draftMaterials.value.filter(item => materialKey(item) !== materialKey(material)) }
