@@ -271,6 +271,52 @@ describe('actual Hall conversation adopts the exact admitted bounty bootstrap', 
     })
   }
 
+  for (const eventScope of ['current', 'foreign-conversation', 'historical-request']) {
+    it(`real SSE execution_abandoned ${eventScope} is only a scoped authoritative readback hint`, async () => {
+      const originalFetch = global.fetch
+      let controller; let reads = 0
+      const { hall, apiStore, calls, selectedTask } = harness({ get: async path => {
+        calls.push(['get', path]); reads++
+        const view = requestView()
+        const cancelled = eventScope === 'current' && reads > 1
+        Object.assign(view, { state: cancelled ? 'CANCELLED' : 'RUNNING', stateVersion: cancelled ? '1' : '0' })
+        Object.assign(view.steps[0], { state: cancelled ? 'CANCELLED' : 'RUNNING', stateVersion: cancelled ? '3' : '2',
+          executionId: 'execution-1', executionState: cancelled ? 'CANCELLED' : 'RUNNING' })
+        return { data: view }
+      } })
+      apiStore.token = async () => 'token'
+      global.fetch = async () => new Response(new ReadableStream({ start: value => { controller = value } }), {
+        status: 200, headers: { 'Content-Type': 'text/event-stream' }
+      })
+      try {
+        expect(await hall.adoptBountyBootstrap(reference())).to.equal(true)
+        await new Promise(resolve => setImmediate(resolve))
+        // History rehydration may assign a fresh presentation timestamp, not a new message.
+        const messageFacts = () => hall.messages.value.map(({ localId, sender, content, parts }) => ({ localId, sender, content, parts }))
+        const beforeMessages = messageFacts()
+        const event = { type: 'execution_abandoned',
+          conversationId: eventScope === 'foreign-conversation' ? '43' : reference().conversationId,
+          requestId: eventScope === 'historical-request' ? 'older-request' : reference().initialRequestId,
+          stepId: 'step-1', eventSequence: '1', eventVersion: '1', receipt: { state: 'CANCELLED' } }
+        controller.enqueue(new TextEncoder().encode(`id: 1\ndata: ${JSON.stringify(event)}\n\n`))
+        await new Promise(resolve => setImmediate(resolve))
+        await new Promise(resolve => setImmediate(resolve))
+        // A foreign-conversation frame is rejected by the parser and resyncs the CURRENT scope.
+        // This existing recovery must not be mistaken for accepting the foreign receipt.
+        expect(reads).to.equal(eventScope === 'historical-request' ? 1 : 2)
+        expect(calls.filter(call => call[0] === 'get').every(call => call[1] === '/requests/initial-request-1')).to.equal(true)
+        expect(calls.filter(call => call[0] === 'content').every(call => call[2] === reference().conversationId)).to.equal(true)
+        expect(hall.activeRequest.value.state).to.equal(eventScope === 'current' ? 'CANCELLED' : 'RUNNING')
+        expect(hall.isConversationBusy.value).to.equal(eventScope !== 'current')
+        expect(messageFacts()).to.deep.equal(beforeMessages)
+        expect(selectedTask.value).to.deep.equal({ id: 'task-1' })
+        expect(calls.filter(call => ['post', 'stream', 'list'].includes(call[0]))).to.deep.equal([])
+      } finally {
+        hall.disposeHallConversation(); global.fetch = originalFetch
+      }
+    })
+  }
+
   it('never adopts the old bootstrap after a different active request exists', async () => {
     const { hall, calls } = harness()
     hall.activeRequest.value = { requestId: 'newer-request', state: 'COMPLETED' }

@@ -604,6 +604,7 @@
             :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
+            @execution-settled="refreshExecutionRequest"
             @cancel-deliberation="cancelDeliberation"
             @cancel-legacy-transport="cancelLegacyHallReply"
             @clear-target="handleClearChatTarget"
@@ -2077,6 +2078,7 @@ const {
   pendingAgentName,
   replyEventSequence,
   retryHallConversation,
+  refreshExecutionRequest,
   sendHallMessage,
   senderText,
   selectHallConversation,

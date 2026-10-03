@@ -364,7 +364,16 @@ export const useHallConversation = ({
     return !canonicalWireString(event.stateVersion ?? event.agentDelivery?.stateVersion, { allowZero: true })
   }
 
+  const refreshExecutionRequest = event => {
+    if (disposed || event?.conversationId !== conversationId.value || !typedId(event?.requestId)) return false
+    onRequestCatalogHint?.(event)
+    if (event.requestId === activeRequest.value?.requestId) scheduleAuthoritativeRequestReadback(event.requestId, { immediate: true })
+    return true
+  }
+
   const appendHallEventMessage = (event, { deferServerResync = false } = {}) => {
+    // Receipt/journal events never replace a request projection or create a successful deliverable.
+    if (event?.type === 'execution_abandoned') return refreshExecutionRequest(event)
     const needsReadback = needsUnversionedTurnReadback(event)
     const durableHandled = applyDeliberationEvent(event)
     const messageEvent = event?.type === 'agent_message_delta' || event?.type === 'agent_message' || event?.type === 'resync_required' || ['part.processing', 'part.ready', 'part.failed'].includes(event?.type)
@@ -1108,7 +1117,7 @@ export const useHallConversation = ({
       }
       // Stream replies can also carry replayed media events. Never consume a scoped
       // part as a status-only request update; the same reducer handles SSE and stream.
-      if (isMessagePartEvent(event)) return appendHallEventMessage(event)
+      if (isMessagePartEvent(event) || event.type === 'execution_abandoned') return appendHallEventMessage(event)
       if (event.agentDelivery || event.type === 'chat_request_replay' || (event.requestId && !['agent_message_delta', 'agent_message', 'resync_required'].includes(event.type))) {
         const handled = applyDeliberationEvent(event)
         const deliveryState = String(event.agentDelivery?.state || event.state || '').toUpperCase()
@@ -1825,6 +1834,7 @@ export const useHallConversation = ({
 
   return {
     adoptBountyBootstrap,
+    refreshExecutionRequest,
     adoptTypedDiscussionReceipt,
     isAdoptingBountyBootstrap,
     cancelHallReplyTurn,

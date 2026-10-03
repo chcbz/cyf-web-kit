@@ -8,6 +8,13 @@
       </div>
     </div>
     <BountyDeliberationStatus :presentation="v2Presentation" />
+    <BountyExecutionTermination
+      :enabled="deliberationV2Enabled"
+      :requests="requestCatalog.length ? requestCatalog.map(entry => entry.request) : activeRequest ? [activeRequest] : []"
+      :conversation-id="conversationId"
+      :identity-key="`${identityEpoch}\u0000${identityScope}`"
+      @settled="$emit('execution-settled', $event)"
+    />
     <p v-if="typedInspectionStatus" class="typed-inspection-status" role="status">{{ typedInspectionStatus }}</p>
     <button
       v-if="typedRecoveryAvailable"
@@ -74,6 +81,7 @@
 import { computed } from 'vue'
 import ChatPanel from './ChatPanel.vue'
 import BountyDeliberationStatus from './BountyDeliberationStatus.vue'
+import BountyExecutionTermination from './BountyExecutionTermination.vue'
 import BountyExecutionOutputs from './BountyExecutionOutputs.vue'
 import BountyFollowupConsentPanel from './BountyFollowupConsentPanel.vue'
 import { bountyDeliberationPresentation } from '../../composables/juyiting/hallMultimediaDeliberationUi.js'
@@ -123,6 +131,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits([
+  'execution-settled',
   'cancel-deliberation',
   'cancel-legacy-transport',
   'clear-target',
