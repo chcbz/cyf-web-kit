@@ -151,7 +151,7 @@ const actionInspection = (value, state) => {
   const summary = value.inputSummary
   return exactKeys(summary, inspectionSummaryFields) && digest(summary.inputDigest) && Array.isArray(summary.sources) &&
     summary.sources.length === value.sourceRefIds.length && summary.sources.every((source, index) =>
-      exactKeys(source, inspectionReceiptSourceFields) && source.sourceRefId === value.sourceRefIds[index] &&
+    exactKeys(source, inspectionReceiptSourceFields) && source.sourceRefId === value.sourceRefIds[index] &&
       typeof source.sha256 === 'string' && /^[a-f0-9]{64}$/.test(source.sha256) && typedLong(source.byteLength, { allowZero: true }) &&
       ['DIRECT_TEXT', 'LOCAL_IMAGE', 'LOCAL_AUDIO', 'PARSED_TEXT'].includes(source.carrier) && digest(source.contributionDigest))
 }

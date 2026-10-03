@@ -92,7 +92,7 @@ describe('ordinary v3 Agent outcome projection', () => {
   })
 
   it('hydrates and refreshes actions with GET only and rejects rewriting an immutable final', async () => {
-    let value = action(); let gets = 0; let posts = 0; let proposals = 0
+    const value = action(); let gets = 0; let posts = 0; let proposals = 0
     const lane = useHallTypedDeliberation({ chatApi: { get: async () => { gets++; return { data: { data: clone(value) } } }, create: async () => { posts++ } },
       actorScopeKey: Vue.ref('owner'), authorizationGeneration: Vue.ref(1), getContext: () => context, getContextGeneration: () => 1,
       getCatalogEntries: () => [], enabled: () => true, onProposal: () => { proposals++ } })
