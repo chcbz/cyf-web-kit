@@ -2,7 +2,7 @@
   <section v-if="enabled && (scopedSteps.length || finalizeState.intent || finalizeState.message)" class="bounty-output-gallery" aria-label="悬赏议事成果">
     <strong>议事成果</strong>
     <p v-if="error" role="alert">{{ error }} <button type="button" @click="refresh">重新读取</button></p>
-    <p v-else-if="!items.length" role="status">{{ loading ? '正在读取已提交成果…' : '尚无已校验的成果；生成完成后将在此显示。' }}</p>
+    <p v-else-if="!items.length" role="status">{{ loading ? '正在读取已提交成果…' : '结果完成后会显示在这里。' }}</p>
     <div v-for="item in items" :key="outputItemKey(item)" class="bounty-output">
       <label class="result-choice"><input v-model="selectedKeys" type="checkbox" :value="outputItemKey(item)" :disabled="!currentWritable(item) || !!finalizeState.intent || finalizeState.busy || finalizeState.state === 'recovery_error'" /> 最终成果</label>
       <strong>{{ previewKind(item.contentMimeType) === 'image' ? '图片' : previewKind(item.contentMimeType) === 'audio' ? '音频' : previewKind(item.contentMimeType) === 'text' ? '文本' : '文件' }}</strong>
@@ -19,16 +19,13 @@
         <audio v-else-if="previewKind(item.contentMimeType) === 'audio'" :src="previewUrls[outputItemKey(item)]" controls preload="none" aria-label="议事生成音频" />
         <span v-else>此格式请下载查看。</span>
       </template>
-      <form v-if="previewKind(item.contentMimeType) === 'image'" class="image-rework" @submit.prevent="editImage(item)">
-        <label>引用此稿修改 <input v-model="editDrafts[outputItemKey(item)]" maxlength="4000" placeholder="例如：把羽毛改成蓝色" /></label>
-        <button type="submit" :disabled="!followupEnabled || !currentWritable(item) || !outputAssetPart(item) || !editDrafts[outputItemKey(item)]?.trim()">{{ followupEnabled ? '请求受控修改预览' : '受控修改未启用' }}</button>
-      </form>
+      <small>需要调整？直接在会话中告诉 Agent。</small>
     </div>
-    <button v-if="selectedKeys.length || finalizeState.intent" type="button" class="finalize-button" :disabled="finalizeState.busy || finalizeState.state === 'completed' || finalizeState.state === 'recovery_error' || (finalizeState.receipt?.state === 'failed' && !finalizeState.receipt.retryable)" @click="finalizeSelected">{{ finalizeState.busy ? '正在确认原验收操作…' : finalizeState.state === 'completed' ? '需求已完成' : finalizeState.intent ? '继续原验收' : `验收选中的 ${selectedKeys.length} 项成果` }}</button>
+    <button v-if="selectedKeys.length || finalizeState.intent" type="button" class="finalize-button" :disabled="finalizeState.busy || finalizeState.state === 'completed' || finalizeState.state === 'recovery_error' || (finalizeState.receipt?.state === 'failed' && !finalizeState.receipt.retryable)" @click="finalizeSelected">{{ finalizeState.busy ? '正在验收…' : finalizeState.state === 'completed' ? '需求已完成' : finalizeState.intent ? '继续验收' : `验收选中的 ${selectedKeys.length} 项成果` }}</button>
     <button v-if="finalizeState.intent" type="button" class="finalize-status-button" :disabled="finalizeState.busy" @click="finalizations.check">查询验收状态</button>
-    <small v-if="finalizeState.intent">原验收已固定 {{ finalizeState.intent.body.selectedOutputs.length }} 项成果；查询不会重新生成、提交或验收。</small>
+    <small v-if="finalizeState.intent">本次验收已选择 {{ finalizeState.intent.body.selectedOutputs.length }} 项成果；可刷新查看进度。</small>
     <p v-if="finalizeState.message" :role="finalizeState.state === 'completed' ? 'status' : 'alert'">{{ finalizeState.message }}</p>
-    <small>这里只使用服务端按所属人校验并持久保存的真实字节；个人保存与正式验收是独立操作。</small>
+    <small>可以先预览、下载或保存；满意后再验收完成。</small>
     <div v-if="expandedUrl" class="image-overlay" role="dialog" aria-modal="true" aria-label="放大查看议事图片" @click.self="expandedUrl = ''" @keydown.esc="expandedUrl = ''">
       <button type="button" @click="expandedUrl = ''">关闭</button><img :src="expandedUrl" alt="放大后的议事图片" />
     </div>
@@ -42,11 +39,11 @@ import { saveOutputBlob } from '../../utils/outputDownload.js'
 import { useHallConversationArchive } from '../../composables/juyiting/useHallConversationArchive.js'
 import { useHallBountyFinalization, safeFinalizationVersion } from '../../composables/juyiting/useHallBountyFinalization.js'
 
-const emit = defineEmits(['request-followup-edit', 'task-completed'])
+const emit = defineEmits(['task-completed'])
 const props = defineProps({
   enabled: { type: Boolean, default: false }, request: { type: Object, default: null },
   conversationId: { type: String, default: '' }, identityKey: { type: String, default: '' },
-  followupEnabled: { type: Boolean, default: false }, catalog: { type: Array, default: () => [] },
+  catalog: { type: Array, default: () => [] },
   taskVersion: { type: [String, Number], default: '' }
 })
 const api = createApi('/chat')
@@ -63,7 +60,7 @@ const catalogRequests = computed(() => Array.isArray(props.catalog) && props.cat
 const scopedSteps = computed(() => requestSnapshots.value.flatMap(request => scopedExecutionSteps(request, props.conversationId)))
 const items = ref([]); const loading = ref(false); const error = ref('')
 const previewUrls = ref({}); const textPreviews = ref({}); const itemErrors = ref({})
-const editDrafts = ref({}); const selectedKeys = ref([])
+const selectedKeys = ref([])
 const expandedUrl = ref('')
 const finalizations = useHallBountyFinalization({ api: agentApi,
   conversationId: () => props.enabled ? props.conversationId : null, identityKey: () => props.identityKey
@@ -97,7 +94,7 @@ const cleanup = () => {
   for (const url of Object.values(previewUrls.value)) URL.revokeObjectURL(url)
   requestSnapshots.value = []; items.value = []; previewUrls.value = {}; textPreviews.value = {}
   archives.reset()
-  itemErrors.value = {}; editDrafts.value = {}; selectedKeys.value = []
+  itemErrors.value = {}; selectedKeys.value = []
   expandedUrl.value = ''; loading.value = false; error.value = ''
 }
 const fetchRequest = async (requestId, controller) => {
@@ -186,16 +183,6 @@ const finalizeSelected = async () => {
       outputId: item.outputId, sha256: item.sha256, title: item.outputId, purpose: '用户选定最终成果' }))
   } })
 }
-const editImage = item => {
-  if (!props.followupEnabled || !currentWritable(item)) return
-  const content = editDrafts.value[outputItemKey(item)]?.trim()
-  const asset = outputAssetPart(item)
-  if (!content || !asset || !exactOutputId(item.requestId) || !exactOutputId(item.stepId)) return
-  // The verified catalogue gives the browser only a nested asset reference and its
-  // producer request/step. Hall owns context GET, preview, consent and schema-3 admit.
-  emit('request-followup-edit', Object.freeze({ content, assetRef: Object.freeze({ assetId: asset.assetId, revision: asset.revision }),
-    continuationOf: Object.freeze({ requestId: item.requestId, stepId: item.stepId }) }))
-}
 watch(() => `${props.enabled}\u0000${props.identityKey}\u0000${props.conversationId}\u0000${catalogRequests.value.map(request => request.requestId).join('\u0001')}`, () => {
   cleanup()
   if (validRootRequest()) {
@@ -212,11 +199,9 @@ onBeforeUnmount(cleanup)
 .bounty-output-gallery { display: grid; gap: 8px; padding: 10px; background: #f7fbf7; }
 .bounty-output { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border: 1px solid #c9d9d2; border-radius: 7px; padding: 8px; }
 .bounty-output img { display: block; max-width: min(100%, 400px); max-height: 360px; object-fit: contain; }
-.bounty-output audio, .bounty-output-text, .image-rework, .bounty-output > p { flex-basis: 100%; max-width: 100%; }
+.bounty-output audio, .bounty-output-text, .bounty-output > p { flex-basis: 100%; max-width: 100%; }
 .bounty-output-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .image-preview { flex-basis: 100%; padding: 0; border: 0; background: transparent; cursor: zoom-in; }
-.image-rework { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.image-rework label { flex: 1 1 260px; } .image-rework input { width: 100%; min-height: 36px; }
 .result-choice { margin-right: auto; } .finalize-button { min-height: 40px; }
 .image-overlay { position: fixed; inset: 0; z-index: 1200; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 18px; background: rgba(9, 19, 19, .9); }
 .image-overlay img { max-width: 95vw; max-height: 84vh; object-fit: contain; }

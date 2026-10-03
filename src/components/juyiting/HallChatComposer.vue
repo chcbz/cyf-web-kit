@@ -49,20 +49,11 @@
             <var-icon name="close-circle-outline" />
           </button>
           <button
-            v-if="executeEnabled && discussionVariant === 'bounty'"
-            class="composer-execute"
-            type="button"
-            :disabled="!canSend"
-            title="按当前文字请求受控图像生成预览"
-            aria-label="请求受控图像生成预览"
-            @click="$emit('execute-followup')"
-          >生成图片</button>
-          <button
             class="composer-send"
             type="submit"
             :disabled="!canSend"
-            :title="isStreaming || isAwaitingReply ? '回话中' : '传令'"
-            :aria-label="isStreaming || isAwaitingReply ? '回话中' : '传令'"
+            :title="isStreaming || isAwaitingReply ? '处理中' : '发送'"
+            :aria-label="isStreaming || isAwaitingReply ? '处理中' : '发送'"
           >
             <var-icon :name="isStreaming || isAwaitingReply ? 'refresh' : 'chevron-right'" />
           </button>
@@ -100,7 +91,6 @@ const props = defineProps({
   agents: { type: Array, default: () => [] },
   discussionVariant: { type: String, default: 'public' },
   draft: { type: String, default: '' },
-  executeEnabled: { type: Boolean, default: false },
   interactionLocked: { type: Boolean, default: false },
   isAwaitingReply: { type: Boolean, default: false },
   isStreaming: { type: Boolean, default: false },
@@ -115,7 +105,6 @@ const props = defineProps({
 
 const emit = defineEmits([
   'clear-target',
-  'execute-followup',
   'mention-agent',
   'send-message',
   'update:draft',

@@ -128,12 +128,12 @@ describe('bounty output gallery live owner scope', () => {
     globalThis.clearTimeout = id => { if (id !== 999) oldClear(id) }
     let wrapper
     try {
-      wrapper = mount(Component, { props: { enabled: true, followupEnabled: true, identityKey: 'owner-a', conversationId: 'conversation-1', request: { requestId: 'request-1', conversationId: 'conversation-1' } } })
+      wrapper = mount(Component, { props: { enabled: true, identityKey: 'owner-a', conversationId: 'conversation-1', request: { requestId: 'request-1', conversationId: 'conversation-1' } } })
       await flushPromises()
-      await wrapper.find('.image-rework input').setValue('改成蓝色')
-      await wrapper.find('.image-rework').trigger('submit')
+      expect(wrapper.find('.image-rework').exists()).to.equal(false)
+      expect(wrapper.text()).to.include('直接在会话中告诉 Agent')
       expect(writes).to.deep.equal([])
-      expect(wrapper.emitted('request-followup-edit')).to.deep.equal([[{ content: '改成蓝色', assetRef: { assetId: 'ast_step-1', revision: '1' }, continuationOf: { requestId: 'request-1', stepId: 'step-1' } }]])
+      expect(wrapper.emitted('request-followup-edit')).to.equal(undefined)
     } finally {
       wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear
     }
@@ -284,7 +284,7 @@ describe('bounty output gallery live owner scope', () => {
       await wrapper.find('input[type="checkbox"]').setValue(true)
       await wrapper.find('.finalize-button').trigger('click')
       await flushPromises()
-      expect(wrapper.text()).to.include('正在确认原验收操作')
+      expect(wrapper.text()).to.include('正在验收')
       await wrapper.setProps({ identityKey: 'owner-b' })
       await flushPromises()
       finishWrite({ data: { data: { stage: 'TASK_COMPLETED', deliveryState: 'accepted', deliveryId: 'delivery-a' } } })
@@ -468,7 +468,7 @@ describe('bounty output gallery live owner scope', () => {
       wrapper.unmount(); wrapper = mount(Component, { props: { ...props, taskVersion: '12' } }); await flushPromises()
       expect(calls).to.have.length(1)
       expect(wrapper.find('input[type="checkbox"]').element.checked).to.equal(true)
-      expect(wrapper.find('.finalize-button').text()).to.equal('继续原验收')
+      expect(wrapper.find('.finalize-button').text()).to.equal('继续验收')
       await wrapper.find('.finalize-status-button').trigger('click'); await flushPromises()
       expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET'])
       expect(wrapper.text()).not.to.include('需求已完成')
@@ -544,14 +544,14 @@ describe('bounty output gallery live owner scope', () => {
     globalThis.clearTimeout = id => { if (id !== 999) oldClear(id) }
     let wrapper
     try {
-      wrapper = mount(Component, { props: { enabled: true, followupEnabled: true, identityKey: 'owner-a', taskVersion: '9',
+      wrapper = mount(Component, { props: { enabled: true, identityKey: 'owner-a', taskVersion: '9',
         conversationId: 'conversation-1', request: catalog[1].request, catalog } })
       await flushPromises()
       const cards = wrapper.findAll('.bounty-output')
       expect(cards).to.have.length(2)
       expect(reads).to.include.members(['/requests/request-old', '/requests/request-current'])
       expect(cards[0].find('input[type="checkbox"]').attributes()).to.have.property('disabled')
-      expect(cards[0].find('.image-rework button').attributes()).to.have.property('disabled')
+      expect(cards[0].find('.image-rework').exists()).to.equal(false)
       expect(cards[1].find('input[type="checkbox"]').attributes()).not.to.have.property('disabled')
       for (const card of cards) await card.findAll('button').find(button => button.text() === '下载').trigger('click')
       for (let attempt = 0; attempt < 20 && downloads.length < 2; attempt++) {

@@ -21,14 +21,7 @@
       type="button"
       class="typed-recovery"
       @click="$emit('typed-resume')"
-    >按原键继续未确认议事</button>
-    <BountyFollowupConsentPanel
-      :enabled="followupExecuteEnabled"
-      :state="followupState"
-      :busy="followupBusy"
-      @confirm="$emit('confirm-followup', $event)"
-      @check-original="$emit('check-followup-original', $event)"
-    />
+    >刷新处理状态</button>
     <ChatPanel
       v-model:draft="draftProxy"
       discussion-variant="bounty"
@@ -37,7 +30,6 @@
       :subtitle="bountySubtitle"
       title="榜文议事"
       :voice="voice"
-      :execute-enabled="followupExecuteEnabled"
       :typed-outcomes="typedOutcomes"
       :typed-pending-question="typedPendingQuestion"
       :typed-enabled="typedEnabled"
@@ -46,7 +38,6 @@
       @cancel-legacy-transport="$emit('cancel-legacy-transport')"
       @clear-target="$emit('clear-target', $event)"
       @delete-conversation="$emit('delete-conversation', $event)"
-      @execute-followup="$emit('execute-followup')"
       @load-history="$emit('load-history')"
       @load-more-history="$emit('load-more-history')"
       @load-messages="$emit('load-messages')"
@@ -58,18 +49,15 @@
       @send-message="$emit('send-message', $event)"
       @voice-apply="$emit('voice-apply', $event)"
       @typed-reply="$emit('typed-reply', $event)"
-      @typed-confirm-proposal="$emit('typed-confirm-proposal', $event)"
     >
       <template #bounty-results>
         <BountyExecutionOutputs
           :enabled="deliberationV2Enabled"
-          :followup-enabled="followupExecuteEnabled"
           :request="activeRequest"
           :catalog="requestCatalog"
           :conversation-id="conversationId"
           :identity-key="`${identityEpoch}\u0000${identityScope}`"
           :task-version="selectedTask?.taskVersion ?? selectedTask?.version"
-          @request-followup-edit="$emit('request-followup-edit', $event)"
           @task-completed="$emit('task-completed', $event)"
         />
       </template>
@@ -83,7 +71,6 @@ import ChatPanel from './ChatPanel.vue'
 import BountyDeliberationStatus from './BountyDeliberationStatus.vue'
 import BountyExecutionTermination from './BountyExecutionTermination.vue'
 import BountyExecutionOutputs from './BountyExecutionOutputs.vue'
-import BountyFollowupConsentPanel from './BountyFollowupConsentPanel.vue'
 import { bountyDeliberationPresentation } from '../../composables/juyiting/hallMultimediaDeliberationUi.js'
 
 const props = defineProps({
@@ -102,9 +89,6 @@ const props = defineProps({
   conversationBusy: { type: Boolean, default: false },
   deliberationStatus: { type: String, default: '' },
   deliberationV2Enabled: { type: Boolean, default: false },
-  followupExecuteEnabled: { type: Boolean, default: false },
-  followupState: { type: Object, default: () => ({ status: 'IDLE' }) },
-  followupBusy: { type: Boolean, default: false },
   typedOutcomes: { type: Array, default: () => [] },
   typedPendingQuestion: { type: Object, default: null },
   typedEnabled: { type: Boolean, default: false },
@@ -136,10 +120,6 @@ const emit = defineEmits([
   'cancel-legacy-transport',
   'clear-target',
   'delete-conversation',
-  'execute-followup',
-  'confirm-followup',
-  'check-followup-original',
-  'request-followup-edit',
   'load-history',
   'load-more-history',
   'load-messages',
@@ -153,7 +133,6 @@ const emit = defineEmits([
   'update:draft',
   'voice-apply',
   'typed-reply',
-  'typed-confirm-proposal',
   'typed-resume'
 ])
 

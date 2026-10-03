@@ -83,8 +83,8 @@
     <section v-if="materialPickerOpen" class="material-reference-picker" aria-label="引用议事资料">
       <div class="material-reference-heading">
         <div>
-          <strong>{{ isTaskDiscussion ? '当前事项固定资料' : '引用资料' }}</strong>
-          <small>{{ isTaskDiscussion ? '来自当前任务的真实资料目录；不会写入普通消息，也不会自动开始执行。' : '引用固定到当前话头及所选版本；不会把资料内容或假摘要写入消息。' }}</small>
+          <strong>{{ isTaskDiscussion ? '本次需求的资料' : '引用资料' }}</strong>
+          <small>{{ isTaskDiscussion ? '图片、文档、音频等都可以作为资料，由 Agent 按需求使用。' : '引用固定到当前话头及所选版本；不会把资料内容或假摘要写入消息。' }}</small>
         </div>
         <button type="button" aria-label="收起引用资料" @click="materialPickerOpen = false">
           <var-icon name="close" />
@@ -97,13 +97,13 @@
         <p v-if="materialError" class="material-reference-error" role="alert">{{ materialError }}</p>
         <div v-if="materialLoading" class="material-reference-state">正在查找百宝箱资料…</div>
         <div v-if="isTaskDiscussion" class="task-material-directory">
-          <p v-if="!activeMaterialLinks.length" class="material-reference-state">当前事项没有已确认的 INPUT/REFERENCE 固定版本资料。可返回事项详情选择资料。</p>
+          <p v-if="!activeMaterialLinks.length" class="material-reference-state">暂未添加资料，不影响继续讨论。</p>
           <article v-for="link in activeMaterialLinks" :key="link.relationId" class="task-material-reference">
             <div><strong>{{ materialName(link) }}</strong><small>v{{ link.version }} · {{ link.role === 'INPUT' ? '用于办理' : '参考资料' }}</small></div>
-            <p>{{ link.role === 'INPUT' ? '议事时 Agent 会收到这份资料的标识、固定版本和用途；明确开始办理并勾选后，才会获得文件读取授权。' : '议事时 Agent 会收到这份资料的标识、固定版本和用途；明确开始办理并勾选后，才会获得文件读取授权。' }}</p>
-            <label v-if="typedEnabled && link.role === 'REFERENCE'" class="typed-source-selector"><input type="checkbox" :checked="typedSelectedSourceIds.has(`${link.fileId}\u0000${link.version}`)" @change="toggleTypedSource(link, $event.target.checked)" /> 将此固定版本交给当前 Agent 本轮查阅</label>
+            <p>可随消息发送，Agent 会按需求使用。</p>
+            <label v-if="typedEnabled" class="typed-source-selector"><input type="checkbox" :checked="typedSelectedSourceIds.has(`${link.fileId}\u0000${link.version}`)" @change="toggleTypedSource(link, $event.target.checked)" /> 随本条消息发送</label>
           </article>
-          <p class="material-reference-notice">勾选资料并发送即明确请求本轮查阅；资料目录本身不授予机器读取。界面不保证 Agent 已就绪或已读，实际可用性由服务端受理时校验。</p>
+          <p class="material-reference-notice">资料可选；直接描述你想要的结果即可。</p>
         </div>
         <template v-else>
           <div v-if="!workspace.items.value?.length" class="material-reference-state">
@@ -171,7 +171,6 @@
           :key="projection.key"
           :projection="projection"
           @reply="$emit('typed-reply', $event)"
-          @confirm-proposal="$emit('typed-confirm-proposal', $event)"
         />
         <small v-if="message.statusText" class="message-status">{{ message.statusText }}</small>
       </div>
@@ -190,7 +189,6 @@
       :agents="agents"
       :discussion-variant="discussionVariant"
       :draft="draft"
-      :execute-enabled="executeEnabled"
       :interaction-locked="conversationBusy"
       :is-awaiting-reply="isAwaitingReply"
       :is-streaming="isStreaming"
@@ -201,9 +199,8 @@
       :typed-pending-question="typedPendingQuestion"
       :voice="voice"
       @clear-target="$emit('clear-target', $event)"
-      @execute-followup="$emit('execute-followup')"
       @mention-agent="$emit('mention-agent', $event)"
-      @send-message="$emit('send-message', typedEnabled && discussionVariant === 'bounty' ? { sourceSelectors: typedSourceSelectors, inspection: typedSourceSelectors.length > 0 } : undefined)"
+      @send-message="$emit('send-message', typedEnabled && discussionVariant === 'bounty' ? { sourceSelectors: typedSourceSelectors } : undefined)"
       @update:draft="$emit('update:draft', $event)"
       @voice-apply="$emit('voice-apply', $event)"
     />
@@ -245,7 +242,6 @@ const props = defineProps({
   legacyCancelAvailable: { type: Boolean, default: false },
   conversationId: { type: String, default: '' },
   discussionVariant: { type: String, default: 'public' },
-  executeEnabled: { type: Boolean, default: false },
   draft: { type: String, default: '' },
   emptyText: { type: String, default: '厅中暂无话头，可先传一句。' },
   eventStreamRecovering: { type: Boolean, default: false },
@@ -275,7 +271,6 @@ const emit = defineEmits([
   'cancel-legacy-transport',
   'clear-target',
   'delete-conversation',
-  'execute-followup',
   'load-history',
   'load-more-history',
   'load-messages',
@@ -288,7 +283,6 @@ const emit = defineEmits([
   'update:draft',
   'voice-apply',
   'typed-reply',
-  'typed-confirm-proposal'
 ])
 
 const messageBoxRef = ref(null)
@@ -322,9 +316,9 @@ const activeMaterialLinks = computed(() => selectedMaterialDirectory.value.links
 const linkedFileIds = computed(() => new Set(activeMaterialLinks.value.map(link => `${link.fileId}:${link.version}`)))
 const linkFor = file => activeMaterialLinks.value.find(link => link.fileId === file.fileId && link.version === file.latestVersion)
 const materialName = link => materialNames.value[link.fileId] || workspace.items.value.find(file => file.fileId === link.fileId)?.displayName || `资料 ${link.fileId}`
-const typedSourceSelectors = computed(() => activeMaterialLinks.value.filter(link => typedSelectedSourceIds.value.has(`${link.fileId}\u0000${link.version}`) && link.role === 'REFERENCE').map(link => ({ kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: link.fileId, version: String(link.version), purpose: 'REFERENCE', assetId: null, assetRevision: null })))
+const typedSourceSelectors = computed(() => activeMaterialLinks.value.filter(link => typedSelectedSourceIds.value.has(`${link.fileId}\u0000${link.version}`) ).map(link => ({ kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: link.fileId, version: String(link.version), purpose: link.role, assetId: null, assetRevision: null })))
 const toggleTypedSource = (link, selected) => {
-  if (!props.typedEnabled || !link || link.role !== 'REFERENCE') return
+  if (!props.typedEnabled || !link || !['INPUT', 'REFERENCE'].includes(link.role)) return
   const next = new Set(typedSelectedSourceIds.value); const key = `${link.fileId}\u0000${link.version}`
   if (selected) next.add(key); else next.delete(key)
   typedSelectedSourceIds.value = next

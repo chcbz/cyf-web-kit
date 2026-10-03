@@ -563,9 +563,6 @@
             :active-turns="activeTurns"
             :capability-state="capabilityState"
             :deliberation-v2-enabled="multimediaDeliberationUiEnabled"
-            :followup-execute-enabled="followupExecuteEnabled"
-            :followup-state="followupState"
-            :followup-busy="followupBusy"
             :typed-outcomes="typedDeliberation.cards.value"
             :typed-pending-question="typedDeliberation.selectedPending.value"
             :typed-enabled="typedDeliberationEnabled"
@@ -606,12 +603,7 @@
             @cancel-legacy-transport="cancelLegacyHallReply"
             @clear-target="handleClearChatTarget"
             @delete-conversation="deleteHallConversation"
-            @execute-followup="handleFollowupGenerate"
-            @confirm-followup="confirmFollowup"
-            @check-followup-original="checkFollowupOriginal"
-            @request-followup-edit="handleFollowupEdit"
             @typed-reply="handleTypedReply"
-            @typed-confirm-proposal="handleTypedProposal"
             @typed-resume="handleTypedResume"
             @load-history="loadHallConversationHistory({ force: true })"
             @load-more-history="loadMoreHallConversationHistory"
@@ -739,7 +731,6 @@ import { useHallPointAndStart } from '@/composables/juyiting/useHallPointAndStar
 import { createPointAndStartIntentStore } from '@/composables/juyiting/hallPointAndStartIntent'
 import { pointAndStartRecoveryLane } from '@/composables/juyiting/hallPointAndStartRecoveryLane'
 import { useHallPointAndStartControlledBridge } from '@/composables/juyiting/useHallPointAndStartControlledBridge'
-import { useHallBountyFollowup } from '@/composables/juyiting/useHallBountyFollowup'
 import { useHallBountyRequestCatalog } from '@/composables/juyiting/useHallBountyRequestCatalog'
 import { useHallTypedDeliberation } from '@/composables/juyiting/useHallTypedDeliberation'
 import { typedLong } from '@/composables/juyiting/hallTypedDeliberation'
@@ -802,8 +793,7 @@ const selectedTask = ref(null)
 const economyPreviewEnabled = ref(false)
 const workItemPlanEnabled = import.meta.env.VITE_JUYITING_WORK_ITEM_PLAN_ENABLED === 'true'
 const multimediaDeliberationUiEnabled = isMultimediaDeliberationUiEnabled(import.meta.env.VITE_JUYITING_MULTIMEDIA_DELIBERATION_V2_UI)
-// Separate default-off F1 surface; a v2 presentation flag never advertises a v3 owner path by itself.
-const followupExecuteBuildEnabled = import.meta.env.VITE_JUYITING_FOLLOWUP_EXECUTE_V3_UI === 'true'
+// Typed discussion is the single ordinary request entry for multimedia tasks.
 const typedDeliberationBuildEnabled = import.meta.env.VITE_JUYITING_TYPED_DELIBERATION_UI === 'true'
 const economyPreviewCapability = ref(null)
 const economyPreviewChecked = ref(false)
@@ -2116,16 +2106,7 @@ const {
 })
 
 const followupContextGeneration = ref(0)
-const followupExecuteEnabled = computed(() => followupExecuteBuildEnabled && multimediaDeliberationUiEnabled && chatMode.value === 'bounty')
 const typedDeliberationEnabled = computed(() => typedDeliberationBuildEnabled && multimediaDeliberationUiEnabled && chatMode.value === 'bounty')
-const followupCurrentContext = () => ({
-  conversationId: conversationId.value,
-  taskId: conversationTask.value?.id || '',
-  targetAgentId: bountyInteractionTargetId(chatContext.value)
-})
-const followupStorage = (() => {
-  try { return typeof window !== 'undefined' ? window.sessionStorage : null } catch { return null }
-})()
 let typedDeliberation = null
 const bountyRequestCatalog = useHallBountyRequestCatalog({
   chatApi, identityScope: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
@@ -2137,31 +2118,7 @@ notifyBountyRequestCatalog = () => {
   bountyRequestCatalog.hint()
   typedDeliberation?.refresh?.()
 }
-const {
-  state: followupState,
-  busy: followupBusy,
-  prepareGenerate: prepareFollowupGenerate,
-  prepareEdit: prepareFollowupEdit,
-  confirm: confirmFollowup,
-  checkOriginal: checkFollowupOriginal,
-  invalidate: invalidateFollowup,
-  dispose: disposeFollowup
-} = useHallBountyFollowup({
-  chatApi,
-  actorScopeKey: hallIdentityScope,
-  authorizationGeneration: () => apiStore.authorizationGeneration,
-  getContext: followupCurrentContext,
-  getContextGeneration: () => followupContextGeneration.value,
-  storage: followupStorage,
-  enabled: () => followupExecuteEnabled.value,
-  onAdmitted: async ({ receipt, isCurrent }) => {
-    if (!isCurrent?.()) return false
-    bountyRequestCatalog.hint()
-    showToast(`受控图像办理已受理（${receipt.requestId}）；不会改走旧传令。`)
-    return true
-  }
-})
-const invalidateFollowupContext = () => { followupContextGeneration.value++; invalidateFollowup(); typedDeliberation?.invalidate?.() }
+const invalidateFollowupContext = () => { followupContextGeneration.value++; typedDeliberation?.invalidate?.() }
 const typedAssignmentRevision = () => typedLong(conversationTask.value?.assignmentRevision, { allowZero: true })
 const typedConversationGeneration = () => typedLong(activeRequest.value?.conversationGeneration) ||
   typedLong(bountyRequestCatalog.entries.value?.[0]?.request?.conversationGeneration) || ''
@@ -2176,20 +2133,14 @@ typedDeliberation = useHallTypedDeliberation({
   enabled: () => typedDeliberationEnabled.value,
   onAccepted: async ({ receipt, purpose, context, isCurrent }) => {
     if (!isCurrent?.()) return false
-    if (purpose === 'INSPECT') { bountyRequestCatalog.hint(); showToast('查阅已受理，正在等待 Agent 查阅；受理不表示已读。'); return true }
+    if (purpose === 'INSPECT') { bountyRequestCatalog.hint(); showToast('Agent 正在处理资料。'); return true }
     const adopted = await adoptTypedDiscussionReceipt({ receipt, context, isCurrent })
     if (!isCurrent?.()) return false
     bountyRequestCatalog.hint()
     showToast(adopted
-      ? (receipt.intent === 'CLARIFICATION_REPLY' ? '补充已受理，已按原话头核对本轮自然答复。' : '议事已受理，已按原话头核对本轮自然答复。')
-      : '议事已受理，正在保留原话头等待只读核对；不会重复发送。')
+      ? (receipt.intent === 'CLARIFICATION_REPLY' ? '已发送补充。' : '已发送。')
+      : '消息已提交，正在确认处理状态。')
     return adopted
-  },
-  onProposal: async ({ kind, content, inputRefs, assetRef, continuationOf }) => {
-    if (!typedDeliberationEnabled.value) return false
-    if (kind === 'GENERATE_IMAGE') return prepareFollowupGenerate({ content, inputRefs })
-    if (kind === 'EDIT_IMAGE') return prepareFollowupEdit({ content, assetRef, continuationOf })
-    return false
   }
 })
 
@@ -2540,9 +2491,7 @@ const handleSendHallMessage = async (typedInput = {}) => {
   playSend()
   if (typedDeliberationEnabled.value) {
     const sourceSelectors = Array.isArray(typedInput?.sourceSelectors) ? typedInput.sourceSelectors : []
-    const accepted = await typedDeliberation.submit(typedInput?.inspection === true
-      ? { content: draft.value, sourceSelectors, inspection: true }
-      : { content: draft.value, sourceSelectors })
+    const accepted = await typedDeliberation.submit({ content: draft.value, sourceSelectors })
     if (accepted) setDraft('')
     else if (typedDeliberation.error.value) showToast(typedDeliberation.error.value)
     return accepted
@@ -2552,7 +2501,7 @@ const handleSendHallMessage = async (typedInput = {}) => {
 const handleTypedReply = projection => {
   if (!typedDeliberationEnabled.value || !typedDeliberation.choosePending(projection)) return false
   setDraft('')
-  showToast('请在下方输入框补充此问；不会开始办理。')
+  showToast('请在输入框补充说明。')
   return true
 }
 const handleTypedResume = async () => {
@@ -2561,27 +2510,6 @@ const handleTypedResume = async () => {
   if (!resumed && typedDeliberation.error.value) showToast(typedDeliberation.error.value)
   return resumed
 }
-const handleTypedProposal = async projection => {
-  if (!typedDeliberationEnabled.value) return false
-  const accepted = await typedDeliberation.confirmProposal(projection)
-  if (accepted) showToast('已取得本次受控图像预览，请逐项核对后明确确认。')
-  return accepted
-}
-
-// F1 EXECUTE is explicit and Hall-owned. Plain composer submit remains the existing stream route.
-const handleFollowupGenerate = async () => {
-  if (!followupExecuteEnabled.value) return false
-  const accepted = await prepareFollowupGenerate({ content: draft.value })
-  if (accepted) showToast('已取得本次受控图像预览，请逐项核对后明确确认。')
-  return accepted
-}
-const handleFollowupEdit = async ({ content, assetRef, continuationOf } = {}) => {
-  if (!followupExecuteEnabled.value) return false
-  const accepted = await prepareFollowupEdit({ content, assetRef, continuationOf })
-  if (accepted) showToast('已取得本次上一稿修改预览，请逐项核对后明确确认。')
-  return accepted
-}
-
 const handleMentionAgent = (agent) => {
   if (!chatMentionAgents.value.some(item => item.agentId === agent?.agentId)) {
     showToast('只可点名自家好汉')
@@ -2717,7 +2645,6 @@ onUnmounted(() => {
   disposeRequirementCreate()
   disposePointAndStart()
   disposeControlledBridge()
-  disposeFollowup()
   typedDeliberation?.dispose?.()
   disposeHallConversation()
   hallBackendSceneState?.dispose()

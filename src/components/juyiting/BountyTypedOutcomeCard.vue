@@ -1,6 +1,6 @@
 <template>
   <article class="typed-outcome-card" :class="`typed-${outcome.kind.toLowerCase()}`">
-    <header><strong>{{ heading }}</strong><small>{{ inspection ? '查阅结果（不等于资料理解已验）' : '结构化议事结果' }}</small></header>
+    <header><strong>{{ heading }}</strong><small>{{ inspection ? '资料答复' : 'Agent 答复' }}</small></header>
     <p class="typed-outcome-text">{{ outcome.text }}</p>
     <template v-if="outcome.kind === 'CLARIFY'">
       <p class="typed-question">{{ outcome.clarification.question }}</p>
@@ -10,8 +10,7 @@
     </template>
     <template v-else-if="outcome.kind === 'EXECUTION_PROPOSAL'">
       <p class="typed-proposal">{{ operationLabel }}</p>
-      <small>提议不会自行办理、扣费或开始 Provider 请求；确认后仍需核对预览并明确同意。</small>
-      <button type="button" @click="$emit('confirm-proposal', projection)">确认办理并查看预览</button>
+      <small>如需调整，请在会话中继续说明。</small>
     </template>
   </article>
 </template>
@@ -19,10 +18,10 @@
 <script setup>
 import { computed } from 'vue'
 const props = defineProps({ projection: { type: Object, required: true } })
-defineEmits(['reply', 'confirm-proposal'])
+defineEmits(['reply'])
 const outcome = computed(() => props.projection.outcome)
 const inspection = computed(() => props.projection?.purpose === 'INSPECT')
-const heading = computed(() => ({ ANSWER: '议事答复', CLARIFY: '需要补充', EXECUTION_PROPOSAL: '办理提议' })[outcome.value?.kind] || '议事结果')
+const heading = computed(() => ({ ANSWER: '议事答复', CLARIFY: '需要补充', EXECUTION_PROPOSAL: 'Agent 建议' })[outcome.value?.kind] || '议事结果')
 const operationLabel = computed(() => outcome.value?.proposal?.operation === 'EDIT_IMAGE' ? '建议修改上一稿图像' : '建议生成一张图像')
 </script>
 

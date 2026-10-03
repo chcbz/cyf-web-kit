@@ -16,46 +16,24 @@ const handler = name => {
   if (!node) throw new Error(`missing ${name}`)
   return script.slice(node.init.start, node.init.end)
 }
-const callback = (callee, property) => {
-  const node = declarations.find(item => item.init?.callee?.name === callee)
-  const option = node?.init?.arguments?.[0]?.properties?.find(item => item.key?.name === property)
-  if (!option) throw new Error(`missing ${callee}.${property}`)
-  return script.slice(option.value.start, option.value.end)
-}
-
-describe('actual JuyiHall F1 follow-up handlers', () => {
-  it('routes explicit composer GENERATE and output-card EDIT only to the Hall follow-up composable', async () => {
-    const enabled = ref(true); const draft = ref('画一只鸟'); const calls = []; const toasts = []
-    const generate = new Function('followupExecuteEnabled', 'prepareFollowupGenerate', 'draft', 'showToast', `return (${handler('handleFollowupGenerate')})`)(enabled, async payload => { calls.push(['generate', payload]); return true }, draft, text => toasts.push(text))
-    const edit = new Function('followupExecuteEnabled', 'prepareFollowupEdit', 'showToast', `return (${handler('handleFollowupEdit')})`)(enabled, async payload => { calls.push(['edit', payload]); return true }, text => toasts.push(text))
-    expect(await generate()).to.equal(true)
-    expect(await edit({ content: '改为黄昏', assetRef: { assetId: 'asset_fixture', revision: '1' }, continuationOf: { requestId: 'request_fixture', stepId: 'step_fixture' } })).to.equal(true)
-    expect(calls).to.deep.equal([
-      ['generate', { content: '画一只鸟' }],
-      ['edit', { content: '改为黄昏', assetRef: { assetId: 'asset_fixture', revision: '1' }, continuationOf: { requestId: 'request_fixture', stepId: 'step_fixture' } }]
-    ])
-    expect(toasts).to.have.length(2)
+describe('ordinary JuyiHall request routing', () => {
+  it('sends drawing, editing and other requests through the same discussion handler', async () => {
+    const draft = ref(''); const calls = []
+    const send = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled', 'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', `return (${handler('handleSendHallMessage')})`)(
+      { close: () => {} }, { cancel: () => {} }, () => {}, ref(true),
+      { submit: async payload => { calls.push(payload); return true }, error: ref('') }, draft, value => { draft.value = value }, () => {}, () => { throw new Error('unexpected legacy send') })
+    const source = { kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'f', version: '1', purpose: 'INPUT', assetId: null, assetRevision: null }
+    for (const content of ['画一只鸟', '把上一张改成蓝色', '整理这份文档']) {
+      draft.value = content
+      expect(await send({ sourceSelectors: [source], inspection: true })).to.equal(true)
+      expect(calls.at(-1)).to.deep.equal({ content, sourceSelectors: [source] })
+      expect(draft.value).to.equal('')
+    }
+    expect(calls).to.have.length(3)
   })
-
-  it('does not route explicit F1 controls when their default-off flag is disabled', async () => {
-    const enabled = ref(false); const draft = ref('画一只鸟'); let calls = 0
-    const generate = new Function('followupExecuteEnabled', 'prepareFollowupGenerate', 'draft', 'showToast', `return (${handler('handleFollowupGenerate')})`)(enabled, async () => { calls++; return true }, draft, () => {})
-    expect(await generate()).to.equal(false)
-    expect(calls).to.equal(0)
+  it('has no separate image generation, preview-consent or proposal-confirmation handler', () => {
+    for (const name of ['useHallBountyFollowup', 'handleFollowupGenerate', 'handleFollowupEdit', 'handleTypedProposal', 'confirmFollowup']) expect(source).not.to.include(name)
   })
-
-  it('uses the actual F1 admitted callback only as a catalog read hint, never a synthetic result', async () => {
-    const calls = []; const toasts = []
-    const onAdmitted = new Function('bountyRequestCatalog', 'showToast', `return (${callback('useHallBountyFollowup', 'onAdmitted')})`)({
-      hint: () => { calls.push('hint'); return true }
-    }, value => toasts.push(value))
-    expect(await onAdmitted({ receipt: { requestId: 'request-f1' }, isCurrent: () => true })).to.equal(true)
-    expect(calls).to.deep.equal(['hint'])
-    expect(toasts).to.deep.equal(['受控图像办理已受理（request-f1）；不会改走旧传令。'])
-    expect(await onAdmitted({ receipt: { requestId: 'request-late' }, isCurrent: () => false })).to.equal(false)
-    expect(calls).to.deep.equal(['hint'])
-  })
-
 })
 
 describe('real bounty entry binds per-Agent interactions independently of private selection', () => {
@@ -68,14 +46,14 @@ describe('real bounty entry binds per-Agent interactions independently of privat
     return { hall, agents, selectedAgent, selectedTask }
   }
   const actualContext = hall => new Function('conversationId', 'conversationTask', 'conversationAgent',
-    'chatContext', 'bountyInteractionTargetId', `return (${handler('followupCurrentContext')})`)(
-    ref('1760458004760'), hall.conversationTask, hall.conversationAgent, hall.chatContext, bountyInteractionTargetId)
+    'chatContext', 'bountyInteractionTargetId', 'typedAssignmentRevision', 'typedConversationGeneration', `return (${handler('typedDeliberationContext')})`)(
+    ref('1760458004760'), hall.conversationTask, hall.conversationAgent, hall.chatContext, bountyInteractionTargetId, () => '1', () => '1')
 
   it('uses the exact task participant after enterBountyDiscussion with intentionally null private Agent', () => {
     const { hall, selectedAgent } = contextHarness()
     expect(hall.conversationAgent.value).to.equal(null)
     expect(selectedAgent.value).to.equal(null)
-    expect(actualContext(hall)()).to.deep.equal({ conversationId: '1760458004760', taskId: '417', targetAgentId: 'agent-417' })
+    expect(actualContext(hall)()).to.deep.equal({ conversationId: '1760458004760', taskId: '417', targetAgentId: 'agent-417', assignmentRevision: '1', conversationGeneration: '1' })
     selectedAgent.value = { agentId: 'agent-other' }
     expect(actualContext(hall)().targetAgentId).to.equal('agent-417')
   })
