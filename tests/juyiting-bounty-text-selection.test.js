@@ -1,5 +1,7 @@
 import { expect } from 'chai'
+import { before, after } from 'mocha'
 import { readFileSync } from 'node:fs'
+import { createHash, webcrypto } from 'node:crypto'
 import * as Vue from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import { compileScript, parse } from '@vue/compiler-sfc'
@@ -11,6 +13,16 @@ const script = compileScript(descriptor, { id: 'bounty-text-selection-test', inl
     (_, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
   .replace(/^import\s+\{\s*createApi\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { createApi } = deps')
   .replace('export default', 'return')
+
+const receipt = (selection, fileId = 'file-text-1', state = 'saved', extra = {}) => ({
+  operationId: `arc_${'a'.repeat(32)}`, state, revision: '3',
+  items: [{ sourceKind: 'textSelection', assetId: null, revision: null,
+    textSelection: { ...selection, messageRevision: '9' },
+    state: state === 'partial_failed' ? 'failed' : state,
+    fileId: state === 'saved' ? fileId : null, version: state === 'saved' ? 1 : null,
+    errorCode: null, message: null }], ...extra
+})
+const response = value => ({ data: { data: value } })
 
 describe('bounty persisted text selection archive', () => {
   const previous = new Map()
@@ -25,9 +37,8 @@ describe('bounty persisted text selection archive', () => {
     let submitted
     const api = { execute: async request => {
       submitted = request
-      const selection = request.data.textSelection
-      return { data: { data: { state: 'saved', textSelection: selection, sha256: selection.sha256,
-        fileId: 'file-text-1', version: 1 } } }
+      const selection = request.data.items[0].textSelection
+      return response(receipt(selection))
     } }
     const Component = new Function('Vue', 'deps', script)(Vue, { createApi: () => api })
     const wrapper = mount(Component, { props: { conversationId: '10', identityKey: 'owner',
@@ -40,10 +51,14 @@ describe('bounty persisted text selection archive', () => {
       await wrapper.findAll('button')[0].trigger('click')
       await flushPromises()
       await Vue.nextTick()
-      expect(submitted.data.outputRef).to.equal(null)
-      expect(submitted.data.textSelection.messageId).to.equal('7')
-      expect(submitted.data.textSelection.startCodePoint).to.equal(1)
-      expect(submitted.data.textSelection.endCodePoint).to.equal(3)
+      expect(submitted.data).to.have.all.keys('mode', 'items')
+      expect(submitted.data.mode).to.equal('create')
+      expect(submitted.data.items).to.have.length(1)
+      expect(submitted.data.items[0]).to.have.all.keys('textSelection')
+      expect(submitted.data.items[0].textSelection).to.have.all.keys('messageId', 'startCodePoint', 'endCodePoint', 'sha256')
+      expect(submitted.data.items[0].textSelection.messageId).to.equal('7')
+      expect(submitted.data.items[0].textSelection.startCodePoint).to.equal(1)
+      expect(submitted.data.items[0].textSelection.endCodePoint).to.equal(3)
       expect(submitted.data).not.to.have.property('text')
       expect(wrapper.text()).to.include('文字片段已保存')
     } finally {
@@ -63,9 +78,8 @@ describe('bounty persisted text selection archive', () => {
     } })
     const api = { execute: async request => {
       submitted.push(request)
-      const selection = request.data.textSelection
-      return { data: { data: { state: 'saved', textSelection: selection, sha256: selection.sha256,
-        fileId: 'file-text-race', version: 1 } } }
+      const selection = request.data.items[0].textSelection
+      return response(receipt(selection, 'file-text-race'))
     } }
     const Component = new Function('Vue', 'deps', script)(Vue, { createApi: () => api })
     const wrapper = mount(Component, { props: { conversationId: '10', identityKey: 'owner',
@@ -140,9 +154,8 @@ describe('bounty persisted text selection archive', () => {
     } })
     const api = { execute: async request => {
       submitted += 1
-      const selected = request.data.textSelection
-      return { data: { data: { state: 'saved', textSelection: selected, sha256: selected.sha256,
-        fileId: 'file-text-retry', version: 1 } } }
+      const selected = request.data.items[0].textSelection
+      return response(receipt(selected, 'file-text-retry'))
     } }
     const Component = new Function('Vue', 'deps', script)(Vue, { createApi: () => api })
     const wrapper = mount(Component, { props: { conversationId: '10', identityKey: 'owner',
@@ -225,9 +238,8 @@ describe('bounty persisted text selection archive', () => {
       textarea.element.selectionStart = 4
       textarea.element.selectionEnd = 5
       await textarea.trigger('select')
-      const archived = submitted[0].data.textSelection
-      resolveResponse({ data: { data: { state: 'saved', textSelection: archived, sha256: archived.sha256,
-        fileId: 'file-text-late', version: 1 } } })
+      const archived = submitted[0].data.items[0].textSelection
+      resolveResponse(response(receipt(archived, 'file-text-late')))
       await flushPromises()
       await Vue.nextTick()
       expect(wrapper.text()).to.include('已选择 1 个字符')
@@ -271,5 +283,138 @@ describe('bounty persisted text selection archive', () => {
       if (originalCrypto) Object.defineProperty(globalThis, 'crypto', originalCrypto)
       else delete globalThis.crypto
     }
+  })
+
+  const exercise = async (execute, verify, { selectionStart = 1, selectionEnd = 4, crypto = null } = {}) => {
+    const originalCrypto = Object.getOwnPropertyDescriptor(globalThis, 'crypto')
+    const counts = { uuid: 0, digest: 0 }
+    let actualDigest
+    const actualCrypto = crypto && { randomUUID: () => crypto.randomUUID(),
+      subtle: { digest: (...args) => { actualDigest = crypto.subtle.digest(...args); return actualDigest } } }
+    Object.defineProperty(globalThis, 'crypto', { configurable: true, value: actualCrypto || {
+      randomUUID: () => `canonical-intent-${++counts.uuid}`,
+      subtle: { digest: async () => { counts.digest++; return new Uint8Array(32).buffer } }
+    } })
+    const requests = []
+    const Component = new Function('Vue', 'deps', script)(Vue, { createApi: () => ({ execute: async request => {
+      requests.push(JSON.parse(JSON.stringify(request)))
+      return execute(request, requests.length)
+    } }) })
+    const wrapper = mount(Component, { props: { conversationId: '10', identityKey: 'owner',
+      message: { localId: '7', content: '甲😀乙丙', streaming: false } } })
+    try {
+      const textarea = wrapper.find('textarea')
+      textarea.element.selectionStart = selectionStart; textarea.element.selectionEnd = selectionEnd
+      await textarea.trigger('select')
+      await wrapper.findAll('button')[0].trigger('click')
+      if (actualDigest) await actualDigest
+      await flushPromises(); await Vue.nextTick()
+      await verify({ wrapper, requests, counts })
+    } finally {
+      wrapper.unmount()
+      if (originalCrypto) Object.defineProperty(globalThis, 'crypto', originalCrypto)
+      else delete globalThis.crypto
+    }
+  }
+
+  for (const state of ['pending', 'saving']) it(`handles 202 ${state} as unconfirmed and resumes the exact original intent`, async () => {
+    await exercise((request, count) => ({ status: count === 1 ? 202 : 200,
+      ...response(receipt(request.data.items[0].textSelection, 'text-created', count === 1 ? state : 'saved',
+        { revision: String(count + 1) })) }), async ({ wrapper, requests, counts }) => {
+      expect(wrapper.text()).to.include('尚未确认完成')
+      expect(wrapper.text()).not.to.include('文字片段已保存')
+      expect(wrapper.findAll('button')[0].attributes('disabled')).to.equal('')
+      await wrapper.findAll('button')[1].trigger('click'); await flushPromises()
+      expect(requests).to.have.length(2)
+      expect(requests[1].data).to.deep.equal(requests[0].data)
+      expect(requests[1].headers).to.deep.equal(requests[0].headers)
+      expect(counts).to.deep.equal({ uuid: 1, digest: 1 })
+      expect(wrapper.text()).to.include('文字片段已保存：text-created v1')
+    })
+  })
+
+  it('replays a network-unknown save with the same canonical body and idempotency key', async () => {
+    await exercise((request, count) => {
+      if (count === 1) throw Object.assign(new Error('response lost'), { requestErrorClass: 'network' })
+      return response(receipt(request.data.items[0].textSelection))
+    }, async ({ wrapper, requests, counts }) => {
+      expect(wrapper.text()).to.include('保存结果不明确')
+      await wrapper.findAll('button')[1].trigger('click'); await flushPromises()
+      expect(requests[1]).to.deep.equal(requests[0])
+      expect(counts.uuid).to.equal(1)
+      expect(wrapper.text()).to.include('文字片段已保存')
+    })
+  })
+
+  const malformed = {
+    'legacy top-level receipt': value => ({ state: 'saved', textSelection: value.items[0].textSelection,
+      sha256: value.items[0].textSelection.sha256, fileId: 'legacy', version: 1 }),
+    'wrong source kind': value => { value.items[0].sourceKind = 'assetRef'; return value },
+    'missing frozen message revision': value => { delete value.items[0].textSelection.messageRevision; return value },
+    'numeric frozen message revision': value => { value.items[0].textSelection.messageRevision = 9; return value },
+    'wrong message': value => { value.items[0].textSelection.messageId = '8'; return value },
+    'wrong start': value => { value.items[0].textSelection.startCodePoint = 0; return value },
+    'wrong end': value => { value.items[0].textSelection.endCodePoint = 4; return value },
+    'wrong digest': value => { value.items[0].textSelection.sha256 = 'f'.repeat(64); return value },
+    'multiple receipt items': value => { value.items.push(structuredClone(value.items[0])); return value },
+    'root/item state mismatch': value => { value.items[0].state = 'pending'; return value },
+    'missing operation': value => { delete value.operationId; return value },
+    'missing row revision': value => { delete value.revision; return value },
+    'empty file': value => { value.items[0].fileId = ''; return value },
+    'nonintegral version': value => { value.items[0].version = 1.5; return value }
+  }
+  for (const [name, mutate] of Object.entries(malformed)) it(`does not claim saved for ${name}`, async () => {
+    await exercise(request => response(mutate(receipt(request.data.items[0].textSelection))), ({ wrapper, requests }) => {
+      expect(requests).to.have.length(1)
+      expect(wrapper.text()).to.include('保存结果不明确')
+      expect(wrapper.text()).not.to.include('文字片段已保存')
+      expect(wrapper.findAll('button')[1].text()).to.equal('重试原保存')
+    })
+  })
+
+  for (const drift of ['operation', 'messageRevision', 'backwardRevision']) it(`refuses ${drift} drift after a pending receipt`, async () => {
+    await exercise((request, count) => {
+      const value = receipt(request.data.items[0].textSelection, 'should-not-appear', count === 1 ? 'saving' : 'saved',
+        { revision: count === 1 ? '9007199254740993' : '9007199254740994' })
+      if (count === 2 && drift === 'operation') value.operationId = `arc_${'b'.repeat(32)}`
+      if (count === 2 && drift === 'messageRevision') value.items[0].textSelection.messageRevision = '10'
+      if (count === 2 && drift === 'backwardRevision') value.revision = '9007199254740992'
+      return response(value)
+    }, async ({ wrapper, requests }) => {
+      await wrapper.findAll('button')[1].trigger('click'); await flushPromises()
+      expect(requests).to.have.length(2)
+      expect(wrapper.text()).to.include('保存结果不明确')
+      expect(wrapper.text()).not.to.include('should-not-appear')
+    })
+  })
+
+  it('reports a confirmed partial_failed item as not saved', async () => {
+    await exercise(request => {
+      const value = receipt(request.data.items[0].textSelection, null, 'partial_failed')
+      value.items[0].errorCode = 'WORKSPACE_CONFLICT'; value.items[0].message = '该文字片段未保存'
+      return response(value)
+    }, ({ wrapper }) => {
+      expect(wrapper.text()).to.include('该文字片段未保存')
+      expect(wrapper.text()).not.to.include('文字片段已保存')
+      expect(wrapper.text()).not.to.include('保存结果不明确')
+    })
+  })
+
+  it('hashes the real UTF-8 selected bytes without submitting body text or message revision', async () => {
+    await exercise(request => response(receipt(request.data.items[0].textSelection)), ({ requests, wrapper }) => {
+      expect(requests[0].data).to.deep.equal({ mode: 'create', items: [{ textSelection: {
+        messageId: '7', startCodePoint: 1, endCodePoint: 3,
+        sha256: createHash('sha256').update('😀乙', 'utf8').digest('hex')
+      } }] })
+      expect(wrapper.text()).to.include('文字片段已保存')
+    }, { crypto: webcrypto })
+  })
+
+  for (const [selectionStart, selectionEnd] of [[1, 2], [2, 3]]) it(`rejects split surrogate boundaries ${selectionStart}:${selectionEnd} without posting`, async () => {
+    await exercise(() => { throw Error('must not post') }, ({ wrapper, requests, counts }) => {
+      expect(wrapper.text()).to.include('请选择完整字符')
+      expect(requests).to.have.length(0)
+      expect(counts.digest).to.equal(0)
+    }, { selectionStart, selectionEnd })
   })
 })
