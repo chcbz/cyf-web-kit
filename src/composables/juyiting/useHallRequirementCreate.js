@@ -1,5 +1,5 @@
 import { computed, ref, unref, watch } from 'vue'
-import { createRequirementCreateIntentStore, requirementCreateBody, requirementCreateReceipt } from './hallRequirementCreateIntent.js'
+import { createRequirementCreateIntentStore, requirementCreateBody, requirementMaterialsBody, requirementReceiptForIntent } from './hallRequirementCreateIntent.js'
 
 const valueOf = value => typeof value === 'function' ? value() : unref(value)
 const clone = value => JSON.parse(JSON.stringify(value))
@@ -22,8 +22,9 @@ const storageError = state => state === 'CORRUPT'
 
 /** Creates a task and its references through the atomic owner endpoint, never
  * independent /tasks + link POSTs. Mount/identity refresh only reconcile GET. */
-export const useHallRequirementCreate = ({ agentApi, actorScopeKey, identityEpoch = 0, storage = null,
+export const useHallRequirementCreate = ({ agentApi, actorScopeKey, identityEpoch = 0, storage = null, schemaVersion = 1,
   createIdempotencyKey = () => globalThis.crypto.randomUUID(), onCommitted = () => true } = {}) => {
+  if (![1, 2].includes(schemaVersion)) throw new TypeError('Unsupported requirement create schema')
   const scope = computed(() => valueOf(actorScopeKey))
   const authEpoch = computed(() => valueOf(identityEpoch))
   const state = ref(initial())
@@ -47,7 +48,7 @@ export const useHallRequirementCreate = ({ agentApi, actorScopeKey, identityEpoc
   }
   const adopt = async (value, intent, c) => {
     if (!current(c)) return false
-    const receipt = requirementCreateReceipt(unwrap(value), intent)
+    const receipt = requirementReceiptForIntent(unwrap(value), intent)
     if (!receipt) throw new Error('张榜回执与原需求或精确资料不一致；请核对原操作，未另行创建。')
     const confirmed = persist({ ...intent, receipt }, c)
     if (!current(c)) return false
@@ -59,10 +60,11 @@ export const useHallRequirementCreate = ({ agentApi, actorScopeKey, identityEpoc
     state.value = initial()
     return true
   }
-  const query = intent => agentApi.get('/tasks/creation-operations/request', undefined, {
+  const route = intent => `/tasks/creation-operations${intent.schemaVersion === 2 ? '/v2' : ''}`
+  const query = intent => agentApi.get(`${route(intent)}/request`, undefined, {
     autoLoading: false, needAuth: true, headers: { 'Idempotency-Key': intent.key }
   })
-  const send = intent => agentApi.create('/tasks/creation-operations', clone(intent.body), {
+  const send = intent => agentApi.create(route(intent), clone(intent.body), {
     autoLoading: false, needAuth: true, headers: { 'Idempotency-Key': intent.key }
   })
   const run = async (action, getIntent) => {
@@ -92,9 +94,9 @@ export const useHallRequirementCreate = ({ agentApi, actorScopeKey, identityEpoc
       return null
     }
     if (read.state !== 'ABSENT') return null
-    const body = requirementCreateBody(payload)
-    if (!body) { state.value = { ...initial(), status: 'INVALID_DRAFT', error: '请提供完整需求及精确参考图版本。' }; return null }
-    try { return persist({ schemaVersion: 1, key: createIdempotencyKey(), body, receipt: null }, c) } catch {
+    const body = schemaVersion === 2 ? requirementMaterialsBody(payload) : requirementCreateBody(payload)
+    if (!body) { state.value = { ...initial(), status: 'INVALID_DRAFT', error: '请提供完整需求及精确资料版本。' }; return null }
+    try { return persist({ schemaVersion, key: createIdempotencyKey(), body, receipt: null }, c) } catch {
       readOriginal(); return null
     }
   })
