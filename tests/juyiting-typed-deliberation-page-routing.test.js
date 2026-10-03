@@ -37,19 +37,11 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
     await actual({ sourceSelectors: [{ kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'file-1', version: '7', purpose: 'REFERENCE', assetId: null, assetRevision: null }] })
     expect(calls.at(-2)).to.deep.equal(['typed', { content: '画一只鸟', sourceSelectors: [{ kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'file-1', version: '7', purpose: 'REFERENCE', assetId: null, assetRevision: null }] }])
   })
-  it('uses actual page proposal callback to enter existing preview preparation, never issue/admit directly', async () => {
-    const enabled = ref(true); const calls = []
-    const onProposal = new Function('typedDeliberationEnabled', 'prepareFollowupGenerate', 'prepareFollowupEdit', `return (${option('useHallTypedDeliberation', 'onProposal')})`)(enabled,
-      async payload => { calls.push(['generate', payload]); return true }, async payload => { calls.push(['edit', payload]); return true })
-    expect(await onProposal({ kind: 'GENERATE_IMAGE', content: '画鸟', inputRefs: [], projection: {} })).to.equal(true)
-    expect(await onProposal({ kind: 'EDIT_IMAGE', content: '改鸟', assetRef: { assetId: 'asset-1', revision: '1' }, continuationOf: { requestId: 'request-1', stepId: 'step-1' }, projection: {} })).to.equal(true)
-    expect(calls).to.deep.equal([
-      ['generate', { content: '画鸟', inputRefs: [] }],
-      ['edit', { content: '改鸟', assetRef: { assetId: 'asset-1', revision: '1' }, continuationOf: { requestId: 'request-1', stepId: 'step-1' } }]
-    ])
-    enabled.value = false
-    expect(await onProposal({ kind: 'GENERATE_IMAGE', content: '不应办理', inputRefs: [] })).to.equal(false)
-    expect(calls).to.have.length(2)
+  it('does not expose a proposal-confirmation or image-preview branch on normal requests', () => {
+    expect(() => option('useHallTypedDeliberation', 'onProposal')).to.throw('missing useHallTypedDeliberation.onProposal')
+    expect(source).not.to.include('prepareFollowupGenerate')
+    expect(source).not.to.include('prepareFollowupEdit')
+    expect(source).not.to.include('@typed-confirm-proposal')
   })
 
   it('evaluates the actual page template expressions to values and forwards selector payload through the mounted bounty panel', async () => {
