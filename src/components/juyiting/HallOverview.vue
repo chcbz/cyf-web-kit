@@ -19,37 +19,43 @@
             </span>
           </label>
           <div class="quick-request-actions">
-            <button type="button" class="quick-material-open" :disabled="quickPending || !enabled" @click="openQuickMaterialPicker('materials')"><var-icon name="paperclip" aria-hidden="true" />资料（可选）<span v-if="selectedMaterials.length">{{ selectedMaterials.length }}</span></button>
-            <button type="button" class="quick-reference-open" :disabled="quickPending || !enabled" @click="openQuickMaterialPicker('reference-image')"><var-icon name="image-outline" aria-hidden="true" />参考图（可选）</button>
+            <button type="button" class="quick-material-open" :disabled="quickPending || !enabled" @click="openQuickMaterialPicker"><var-icon name="paperclip" aria-hidden="true" />添加资料（可选）<span v-if="selectedMaterials.length">{{ selectedMaterials.length }}</span></button>
             <button class="primary" type="submit" :disabled="quickPending || !quickRequest.trim()"><var-icon name="send" aria-hidden="true" />{{ quickPending ? '正在建立事项…' : '开始办事' }}</button>
           </div>
           <ul v-if="selectedMaterials.length" class="quick-material-summary" aria-label="已选固定版本资料">
             <li v-for="material in selectedMaterials" :key="materialKey(material)">
-              <span><strong>{{ material.displayName }}</strong><small>{{ material.selectionKind === 'reference-image' ? '参考图' : material.role === 'INPUT' ? '用于办理' : '仅供参考' }} · 固定 v{{ material.version }}</small></span>
+              <span><strong>{{ material.displayName }}</strong><small>{{ material.contentMimeType }} · 固定 v{{ material.version }}</small></span>
+              <button type="button" :disabled="quickPending" @click="previewSelectedMaterial(material)">预览</button>
               <button type="button" :disabled="quickPending" :aria-label="`取消选择 ${material.displayName} v${material.version}`" @click="removeSelectedMaterial(material)">取消</button>
             </li>
           </ul>
           <p v-if="quickMessage" :class="{ 'quick-request-error': quickMessage.includes('未关联') || quickMessage.includes('待核对') }" role="status">{{ quickMessage }}</p>
           <Teleport to="body">
             <section v-if="materialPickerOpen" class="quick-material-picker" role="region" aria-labelledby="quick-material-picker-title">
-              <header><button type="button" @click="cancelQuickMaterialPicker">返回</button><div><h3 id="quick-material-picker-title">{{ referenceImagePicker ? '为新事项选择参考图' : '为新事项选择资料' }}</h3><p>{{ referenceImagePicker ? '只显示当前工作空间中的图片。每张参考图固定到明确版本；返回不会改变已确认选择。' : '每份资料固定到明确版本；返回不会改变已确认选择。' }}</p></div></header>
+              <header><button type="button" @click="cancelQuickMaterialPicker">返回</button><div><h3 id="quick-material-picker-title">为新事项选择资料</h3><p>图片、文档、音频等均可选择。每份资料固定到明确版本；返回不会改变已确认选择。</p></div></header>
               <div class="quick-material-picker-body">
                 <p v-if="workspace.listState.value === 'loading'" role="status">正在读取你的资料…</p>
                 <p v-else-if="workspace.error.value" class="quick-request-error" role="alert">{{ workspace.error.value }}</p>
-                <div v-else-if="workspace.items.value.length" class="quick-material-files" :aria-label="referenceImagePicker ? '可选参考图片' : '可选资料'">
+                <div v-else-if="workspace.items.value.length" class="quick-material-files" aria-label="可选资料">
                   <button v-for="file in workspace.items.value" :key="file.fileId" type="button" :class="{ selected: pickerFileId === file.fileId }" @click="selectQuickMaterialFile(file.fileId)"><strong>{{ file.displayName }}</strong><small>最新 v{{ file.latestVersion }}</small></button>
                 </div>
-                <p v-else-if="workspace.listState.value === 'empty'">{{ referenceImagePicker ? '百宝箱暂无可选参考图片；可不选直接建立事项。' : '百宝箱暂无资料；可不选资料直接建立事项。' }}</p>
+                <p v-else-if="workspace.listState.value === 'empty'">百宝箱暂无资料；可不选资料直接建立事项。</p>
                 <button v-if="workspace.nextCursor.value" type="button" :disabled="workspace.loading.value" @click="loadMoreQuickMaterials">读取更多资料</button>
               </div>
               <footer>
                 <div v-if="pickerDetail" class="quick-material-fields">
                   <label><span>固定版本</span><select v-model.number="pickerVersion"><option v-for="version in pickerDetail.versions" :key="version.version" :value="version.version">v{{ version.version }} · {{ version.originalFilename }}</option></select></label>
-                  <template v-if="referenceImagePicker"><p class="quick-reference-note">将作为参考图关联到此事项，不会开放整个工作空间。</p><button type="button" class="primary" :disabled="!pickerVersion" @click="stageQuickMaterial">加入参考图</button></template>
-                  <template v-else><label><span>资料用途</span><select v-model="pickerRole"><option value="INPUT">用于办理</option><option value="REFERENCE">仅供参考</option></select></label><button type="button" class="primary" :disabled="!pickerVersion" @click="stageQuickMaterial">加入选择</button></template>
+                  <button type="button" :disabled="!pickerVersion" @click="previewQuickMaterial">预览</button><button type="button" :disabled="!pickerVersion" @click="downloadQuickMaterial">下载</button><button type="button" class="primary" :disabled="!pickerVersion" @click="stageQuickMaterial">加入选择</button>
                 </div>
+                <section v-if="materialPreview.kind !== 'none'" class="quick-material-preview" v-bind="{ 'aria-label': '资料固定版本预览', 'aria-live': 'polite' }">
+                  <div v-if="materialPreview.kind === 'parts'"><button type="button" :disabled="materialPreview.selectedIndex === 0" @click="workspace.selectPreviewPart(materialPreview.selectedIndex - 1)">上一项</button><span>{{ materialPreview.selectedIndex + 1 }}/{{ materialPreview.parts.length }}</span><button type="button" :disabled="materialPreview.selectedIndex >= materialPreview.parts.length - 1" @click="workspace.selectPreviewPart(materialPreview.selectedIndex + 1)">下一项</button></div>
+                  <img v-if="materialPreviewPart?.kind === 'image'" :src="materialPreviewPart.url" alt="资料固定版本预览" />
+                  <audio v-else-if="materialPreviewPart?.kind === 'audio'" :src="materialPreviewPart.url" v-bind="{ controls: true, preload: 'none', 'aria-label': '资料固定版本音频预览' }"></audio>
+                  <pre v-else-if="materialPreviewPart?.kind === 'text'" v-text="materialPreviewPart.text"></pre>
+                  <p v-if="materialPreview.message">{{ materialPreview.message }}</p>
+                </section>
                 <ul v-if="draftMaterials.length" class="quick-material-draft" aria-label="待确认资料">
-                  <li v-for="material in draftMaterials" :key="materialKey(material)"><span>{{ material.displayName }} · {{ material.selectionKind === 'reference-image' ? '参考图' : material.role === 'INPUT' ? '用于办理' : '仅供参考' }} · 固定 v{{ material.version }}</span><button type="button" @click="removeDraftMaterial(material)">移除</button></li>
+                  <li v-for="material in draftMaterials" :key="materialKey(material)"><span>{{ material.displayName }} · {{ material.contentMimeType }} · 固定 v{{ material.version }}</span><button type="button" @click="removeDraftMaterial(material)">移除</button></li>
                 </ul>
                 <button type="button" class="quick-material-confirm" @click="confirmQuickMaterials">确认选择（{{ draftMaterials.length }}）</button>
                 <button type="button" @click="cancelQuickMaterialPicker">取消，不更改原选择</button>
@@ -97,7 +103,7 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { canOpenHallItem, HALL_SOURCES, useHallOverview } from '@/composables/juyiting/useHallOverview'
-import { usePersonalWorkspace } from '@/composables/usePersonalWorkspace'
+import { savePersonalWorkspaceBlob, usePersonalWorkspace } from '@/composables/usePersonalWorkspace'
 
 const props = defineProps({
   identityScope: { type: String, default: '' },
@@ -119,48 +125,66 @@ const selectedMaterials = ref([])
 const draftMaterials = ref([])
 const pickerFileId = ref('')
 const pickerVersion = ref(null)
-const pickerRole = ref('INPUT')
-const pickerMode = ref('materials')
-const referenceImagePicker = computed(() => pickerMode.value === 'reference-image')
-const imageMime = value => typeof value === 'string' && ['image/png', 'image/jpeg'].includes(value.split(';', 1)[0].trim().toLowerCase())
 const pickerDetail = computed(() => {
   const detail = workspace.detail.value
   if (detail?.file?.fileId !== pickerFileId.value || detail.file.state !== 'ACTIVE' || !Array.isArray(detail.versions)) return null
-  const versions = referenceImagePicker.value
-    ? detail.versions.filter(version => imageMime(version?.contentMimeType))
-    : detail.versions
+  const versions = detail.versions
   return versions.length ? { ...detail, versions } : null
 })
 const materialKey = material => `${material.fileId}:${material.version}:${material.role}`
-const resetMaterialPicker = () => { pickerFileId.value = ''; pickerVersion.value = null; pickerRole.value = 'INPUT'; workspace.detail.value = null }
-const openQuickMaterialPicker = async (mode = 'materials') => {
+const resetMaterialPicker = () => { pickerFileId.value = ''; pickerVersion.value = null; workspace.detail.value = null; workspace.revokePreview?.() }
+const openQuickMaterialPicker = async () => {
   if (!props.enabled || !props.identityScope || props.quickPending) return
-  pickerMode.value = mode === 'reference-image' ? 'reference-image' : 'materials'
   draftMaterials.value = selectedMaterials.value.map(material => ({ ...material }))
   resetMaterialPicker()
   materialPickerOpen.value = true
-  await workspace.refresh(referenceImagePicker.value ? { state: 'ACTIVE', mediaFamily: 'IMAGE' } : { state: 'ACTIVE' })
+  await workspace.refresh({ state: 'ACTIVE' })
 }
-const cancelQuickMaterialPicker = () => { materialPickerOpen.value = false; draftMaterials.value = []; pickerMode.value = 'materials'; resetMaterialPicker() }
-const loadMoreQuickMaterials = () => workspace.loadMore(referenceImagePicker.value ? { state: 'ACTIVE', mediaFamily: 'IMAGE' } : { state: 'ACTIVE' })
+const cancelQuickMaterialPicker = () => { materialPickerOpen.value = false; draftMaterials.value = []; resetMaterialPicker() }
+const loadMoreQuickMaterials = () => workspace.loadMore({ state: 'ACTIVE' })
 const selectQuickMaterialFile = async fileId => {
   const operationIdentity = materialIdentityKey.value
   const detail = await workspace.select(fileId)
   if (!detail || materialIdentityKey.value !== operationIdentity || !materialPickerOpen.value || detail.file.state !== 'ACTIVE') return
   const versions = Array.isArray(detail.versions)
-    ? (referenceImagePicker.value ? detail.versions.filter(version => imageMime(version?.contentMimeType)) : detail.versions)
+    ? detail.versions
     : []
   if (!versions.length) return
   pickerFileId.value = detail.file.fileId
   pickerVersion.value = versions.some(version => version.version === detail.latestVersion?.version) ? detail.latestVersion.version : versions[versions.length - 1].version
   const existing = draftMaterials.value.find(material => material.fileId === detail.file.fileId)
-  if (existing) { pickerVersion.value = existing.version; pickerRole.value = existing.role }
+  if (existing) pickerVersion.value = existing.version
+}
+// Neutral product selection; INPUT below is only the existing task-link adapter role.
+const materialPreview = computed(() => workspace.preview?.value || { kind: 'none' })
+const materialPreviewPart = computed(() => materialPreview.value.kind === 'parts'
+  ? materialPreview.value.parts[materialPreview.value.selectedIndex] : materialPreview.value)
+const previewQuickMaterial = () => workspace.previewVersion(pickerVersion.value)
+const downloadQuickMaterial = async () => {
+  const identity = materialIdentityKey.value
+  const content = await workspace.download(pickerVersion.value)
+  if (!content || identity !== materialIdentityKey.value || !materialPickerOpen.value) return
+  try { savePersonalWorkspaceBlob(content) } catch (cause) { workspace.error.value = cause.message }
+}
+watch(pickerVersion, () => workspace.revokePreview?.(), { flush: 'sync' })
+const previewSelectedMaterial = async material => {
+  const identity = materialIdentityKey.value
+  await openQuickMaterialPicker()
+  if (identity !== materialIdentityKey.value || !materialPickerOpen.value) return
+  await selectQuickMaterialFile(material.fileId)
+  if (identity !== materialIdentityKey.value || !materialPickerOpen.value || pickerFileId.value !== material.fileId) return
+  if (!pickerDetail.value?.versions.some(version => version.version === material.version)) {
+    workspace.error.value = '所选固定版本暂不可读取，未替换为最新版本。'
+    return
+  }
+  pickerVersion.value = material.version
+  await previewQuickMaterial()
 }
 const stageQuickMaterial = () => {
   const detail = pickerDetail.value
   const version = Number(pickerVersion.value)
   if (!detail || !Number.isSafeInteger(version) || !detail.versions.some(item => item.version === version)) return
-  const material = { fileId: detail.file.fileId, version, role: referenceImagePicker.value ? 'REFERENCE' : pickerRole.value, displayName: detail.file.displayName, selectionKind: referenceImagePicker.value ? 'reference-image' : 'material' }
+  const material = { fileId: detail.file.fileId, version, role: 'INPUT', displayName: detail.file.displayName, contentMimeType: detail.versions.find(item => item.version === version).contentMimeType }
   draftMaterials.value = [...draftMaterials.value.filter(item => item.fileId !== material.fileId), material]
 }
 const removeDraftMaterial = material => { draftMaterials.value = draftMaterials.value.filter(item => materialKey(item) !== materialKey(material)) }
@@ -168,7 +192,6 @@ const confirmQuickMaterials = () => {
   selectedMaterials.value = draftMaterials.value.map(material => ({ ...material }))
   materialPickerOpen.value = false
   draftMaterials.value = []
-  pickerMode.value = 'materials'
   resetMaterialPicker()
 }
 const removeSelectedMaterial = material => { selectedMaterials.value = selectedMaterials.value.filter(item => materialKey(item) !== materialKey(material)) }
@@ -240,6 +263,9 @@ onBeforeUnmount(() => workspace.dispose())
 </script>
 
 <style scoped>
+.quick-material-preview { max-height: 300px; overflow: auto; min-width: 0; }
+.quick-material-preview img, .quick-material-preview audio { max-width: 100%; }
+.quick-material-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .hall-overview { padding:32px clamp(16px,6vw,86px); background:#fff9ec; color:#3c2b1d; font-size:16px; box-sizing:border-box; }
 .hall-overview h2,.hall-overview h3,.hall-overview p { margin:0; }
 .overview-hero { display:flex; gap:24px; align-items:center; justify-content:space-between; padding-bottom:28px; border-bottom:1px solid #d9c5a4; }
@@ -375,10 +401,16 @@ onBeforeUnmount(() => workspace.dispose())
 </style>
 
 <style scoped>
+.quick-material-preview { max-height: 300px; overflow: auto; min-width: 0; }
+.quick-material-preview img, .quick-material-preview audio { max-width: 100%; }
+.quick-material-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .overview-quick-request{align-items:flex-start!important}.overview-quick-request .overview-start-copy{width:100%}.quick-request-field{display:block;margin-top:14px}.quick-request-input{position:relative;display:block}.quick-request-field textarea{display:block;width:100%;min-height:92px;box-sizing:border-box;padding:13px 14px 34px;border:1px solid #ccd2c5;border-radius:10px;background:#fff;color:#242e2b;font:400 16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;resize:none}.quick-request-field textarea:focus{outline:3px solid #923f3033;border-color:#923f30}.quick-request-field small{position:absolute;right:12px;bottom:9px;padding-left:4px;border-radius:3px;background:var(--hall-surface,#fff);color:#7a827d;font-size:12px;line-height:1;pointer-events:none}.quick-request-actions{display:flex;justify-content:space-between;gap:10px;margin-top:14px}.quick-request-actions button{display:inline-flex;align-items:center;justify-content:center;gap:6px}.quick-request-actions .primary{margin-left:auto}.quick-request-error{color:#a13f35!important}.overview-tabs button,.overview-tabs button:hover,.overview-tabs button[aria-pressed=true]{background:transparent!important;box-shadow:none!important}.overview-tabs button[aria-pressed=true]{color:var(--hall-brand,#923f30)!important;border-bottom-color:var(--hall-brand,#923f30)!important}@media(max-width:600px){.overview-quick-request{display:block!important}.overview-quick-request .overview-start-mark{display:none!important}.quick-request-actions button{flex:1 1 0;padding-inline:8px}}
 </style>
 
 <style scoped>
+.quick-material-preview { max-height: 300px; overflow: auto; min-width: 0; }
+.quick-material-preview img, .quick-material-preview audio { max-width: 100%; }
+.quick-material-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .quick-material-open>span{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:#923f30;color:#fff;font-size:11px}.quick-material-summary,.quick-material-draft{display:grid;gap:7px;margin:12px 0 0;padding:0;list-style:none}.quick-material-summary li,.quick-material-draft li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;border:1px solid #e3e5dc;border-radius:8px;background:#f8f6f0}.quick-material-summary li>span{display:grid;min-width:0}.quick-material-summary strong,.quick-material-summary small{overflow-wrap:anywhere}.quick-material-summary small{color:#68716b;font-size:11px}.quick-material-summary button,.quick-material-draft button{min-height:34px!important;padding:5px 9px!important;flex:none}
 .quick-material-picker{--material-ground:#f3f3ed;--material-paper:#fffefa;--material-ink:#242e2b;--material-muted:#68716b;--material-line:#d8d8ce;--material-brand:#923f30;--material-brand-surface:#f6eee8;position:fixed;inset:0;z-index:1400;display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:100%;height:100%;height:100dvh;box-sizing:border-box;background:var(--material-ground);color:var(--material-ink);font:400 14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif}.quick-material-picker header{display:flex;align-items:center;gap:12px;padding:max(12px,env(safe-area-inset-top)) 16px 12px;border-bottom:1px solid var(--material-line);background:var(--material-paper);box-shadow:0 1px 2px rgba(36,46,43,.04)}.quick-material-picker h3,.quick-material-picker p{margin:0}.quick-material-picker h3{font-size:18px;line-height:1.35}.quick-material-picker header p{margin-top:3px;color:var(--material-muted);font-size:13px;line-height:1.5}.quick-material-picker button,.quick-material-picker select{min-height:42px;border:1px solid var(--material-line);border-radius:8px;background:var(--material-paper);color:var(--material-ink);font:inherit}.quick-material-picker header>button{flex:none;min-width:56px}.quick-material-picker button{padding:8px 12px;cursor:pointer}.quick-material-picker button.primary,.quick-material-confirm{background:var(--material-brand)!important;border-color:var(--material-brand)!important;color:var(--material-paper)!important}.quick-material-picker-body{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:16px max(16px,env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}.quick-material-files{display:grid;gap:10px}.quick-material-files button{display:grid;gap:4px;width:100%;min-height:64px;padding:12px 14px;text-align:left;box-shadow:0 1px 2px rgba(36,46,43,.04)}.quick-material-files button.selected{border-color:var(--material-brand);background:var(--material-brand-surface)}.quick-material-files small{color:var(--material-muted)}.quick-material-picker footer{display:grid;gap:10px;padding:12px max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));border-top:1px solid var(--material-line);background:var(--material-paper);box-shadow:0 -8px 24px rgba(36,46,43,.08)}.quick-material-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:10px;align-items:end}.quick-reference-note{margin:0;color:var(--material-muted);font-size:12px;line-height:1.5}.quick-material-fields label{display:grid;gap:5px;color:var(--material-muted);font-size:12px}.quick-material-fields select{min-width:0;padding:0 10px}.quick-material-picker button:focus-visible,.quick-material-picker select:focus-visible{outline:3px solid color-mix(in srgb,var(--material-brand) 52%,transparent);outline-offset:2px}@media(max-width:600px){.quick-material-fields{grid-template-columns:1fr}.quick-material-picker footer{max-height:48dvh;overflow-y:auto}}
 </style>

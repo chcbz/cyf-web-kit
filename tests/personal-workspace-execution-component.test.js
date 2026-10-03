@@ -42,6 +42,47 @@ const executionMock = () => {
 }
 
 describe('personal workspace execution receipt presentation', () => {
+  for (const embedded of [true, false]) {
+    it(`renders authorized audio with controls and no autoplay in ${embedded ? 'embedded' : 'full'} workspace`, async () => {
+      const workspace = workspaceMock(); const execution = executionMock()
+      workspace.items.value[0].mediaFamily = 'AUDIO'
+      const select = workspace.select
+      workspace.select = async id => {
+        const value = await select(id)
+        value.file.displayName = 'song.mp3'
+        value.versions[0].contentMimeType = 'audio/mpeg'
+        value.versions[0].originalFilename = 'song.mp3'
+        return value
+      }
+      workspace.previewVersion = async () => { workspace.preview.value = { kind: 'audio', url: 'blob:authorized-audio', parts: [{ kind: 'audio', url: 'blob:authorized-audio' }], selectedIndex: 0 }; return workspace.preview.value }
+      const component = new Function('Vue', 'deps', script)(Vue, {
+        deliveryTypeText, useApiStore: () => ({ authorizationGeneration: 1, oauthClientId: 'web-client' }),
+        useGlobalStore: () => ({ user: { id: 'owner-a', tenantId: 'tenant-a' } }),
+        usePersonalWorkspace: () => workspace, usePersonalWorkspaceExecution: () => execution, savePersonalWorkspaceBlob: () => {}
+      })
+      const wrapper = mount(component, { props: { embedded } })
+      try {
+        await flushPromises()
+        if (embedded) await wrapper.get('.treasure-file-row button').trigger('click')
+        else {
+          await wrapper.findAll('.box-actions button').find(button => button.text().includes('资料柜')).trigger('click')
+          await wrapper.get('.file-row').trigger('click'); await flushPromises()
+          await wrapper.findAll('.detail-tabs button').find(button => button.text() === '版本与预览').trigger('click')
+          await wrapper.findAll('.version-actions button').find(button => button.text() === '预览').trigger('click')
+        }
+        await flushPromises()
+        const audio = wrapper.get('audio')
+        assert.equal(audio.attributes('src'), 'blob:authorized-audio')
+        assert.equal(audio.attributes('controls'), '')
+        assert.equal(audio.attributes('preload'), 'none')
+        assert.equal(audio.attributes('autoplay'), undefined)
+        workspace.preview.value = { kind: 'parts', parts: [{ kind: 'audio', url: 'blob:audio-part' }], selectedIndex: 0 }
+        await Vue.nextTick()
+        assert.equal(wrapper.get('audio').attributes('src'), 'blob:audio-part')
+      } finally { wrapper.unmount() }
+    })
+  }
+
   it('mounts the delivery receipt at submission location, shows terminal errors, and keeps file selection navigation working', async () => {
     const workspace = workspaceMock(); const execution = executionMock(); let executionOptions
     const component = new Function('Vue', 'deps', script)(Vue, {
