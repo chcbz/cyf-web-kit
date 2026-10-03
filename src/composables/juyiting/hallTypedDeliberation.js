@@ -14,7 +14,7 @@ const selectorFields = ['kind', 'fileId', 'version', 'purpose', 'assetId', 'asse
 export const sourceSelector = value => {
   if (!exactKeys(value, selectorFields)) return null
   if (value.kind === 'TASK_LINKED_WORKSPACE_VERSION' && typedId(value.fileId) && typedLong(value.version) &&
-    value.purpose === 'REFERENCE' && value.assetId === null && value.assetRevision === null) return freeze(value)
+    ['INPUT', 'REFERENCE'].includes(value.purpose) && value.assetId === null && value.assetRevision === null) return freeze(value)
   if (value.kind === 'CURRENT_CONVERSATION_ASSET' && value.fileId === null && value.version === null && value.purpose === null &&
     typedId(value.assetId) && typedLong(value.assetRevision)) return freeze(value)
   return null
@@ -23,7 +23,7 @@ export const discussionBody = ({ intent, taskId, assignmentRevision, content, pa
   expectedParentStateVersion = null, pendingQuestionId = null, expectedPendingQuestionStateVersion = null, sourceSelectors = [] }) => {
   if (!['DISCUSSION', 'CLARIFICATION_REPLY'].includes(intent) || !typedId(taskId) || !typedLong(assignmentRevision, { allowZero: true }) ||
     typeof content !== 'string' || !content.trim() || Array.from(content).length > 4000 || isoControl(content) ||
-    !Array.isArray(sourceSelectors) || sourceSelectors.length > 16) return null
+    !Array.isArray(sourceSelectors) || sourceSelectors.length > 32) return null
   const selectors = sourceSelectors.map(sourceSelector)
   if (selectors.some(value => !value)) return null
   const body = {

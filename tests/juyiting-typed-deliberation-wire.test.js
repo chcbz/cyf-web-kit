@@ -16,6 +16,16 @@ describe('typed natural deliberation frozen wire', () => {
     expect(body.sourceSelectors).to.deep.equal([selector])
     expect(discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content: '请参考此稿。', sourceSelectors: [{ ...selector, extra: true }] })).to.equal(null)
   })
+  it('carries up to 32 unified materials with exact roles instead of coercing everything to reference', () => {
+    const sourceSelectors = Array.from({ length: 32 }, (_, i) => ({ kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: `file-${i}`,
+      version: '7', purpose: i % 2 ? 'REFERENCE' : 'INPUT', assetId: null, assetRevision: null }))
+    const command = { intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content: '查看这些资料', sourceSelectors }
+    expect(discussionBody(command).sourceSelectors).to.deep.equal(sourceSelectors)
+    expect(discussionBody({ ...command, sourceSelectors: [...sourceSelectors, { ...sourceSelectors[0], fileId: 'extra' }] })).to.equal(null)
+    for (const purpose of ['OUTPUT', 'input', 'REFERENCE ']) {
+      expect(discussionBody({ ...command, sourceSelectors: [{ ...sourceSelectors[0], purpose }] })).to.equal(null)
+    }
+  })
   it('rejects noncanonical long values, C0/C1 controls, and malformed nullable lineage', () => {
     expect(discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '04', content: '画鸟' })).to.equal(null)
     expect(discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content: '画\n鸟' })).to.equal(null)
