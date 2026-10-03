@@ -1,4 +1,4 @@
-/* global before, after */
+/* global before */
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
@@ -19,17 +19,39 @@ const compile = async () => {
     '@/components/personal-workspace/TaskMaterialLinks.vue': stub, '@/utils/silverAmount': silver })
 }
 const task = (id, taskVersion = '6', requirementRevision = '3') => ({ id, title: id, description: '', status: 'open', taskVersion, requirementRevision })
-const offer = (taskId = 'task-a', target = 'agent-a', revision = 'r1') => ({ taskId, targetAgentId: target, capability: { providerBinding: { bindingId: 'binding-a', bindingEpoch: '1', modelId: 'model-a' }, authorization: { state: 'CONSENT_REQUIRED' }, newStart: { blockingReasons: [revision] } } })
-const props = value => ({ embeddedHall: true, tasks: [], selectedTask: task('task-a'), selectedAgent: null, operableAgents: [], recommendedAgents: [], taskAbilityOptions: [], taskStatusFilters: [], controlledConsentOffer: value, abilityText: () => '', canAssign: () => false, formatTime: () => '', portraitName: () => '', portraitStyle: () => ({}), taskAgentMatchScore: () => 0, taskStateClass: () => '', taskStatusCount: () => 0, taskStatusText: () => '' })
-describe('controlled image consent checkbox component behavior', () => {
+const props = () => ({ embeddedHall: true, tasks: [], selectedTask: task('task-a'), selectedAgent: { agentId: 'agent-a' },
+  operableAgents: [{ agentId: 'agent-a', name: '吴用', canOperate: true, status: 'online' }], recommendedAgents: [],
+  taskAbilityOptions: [], taskStatusFilters: [], abilityText: () => '', canAssign: () => true,
+  formatTime: () => '', portraitName: () => '', portraitStyle: () => ({}), taskAgentMatchScore: () => 0,
+  taskStateClass: () => '', taskStatusCount: () => 0, taskStatusText: () => '' })
+describe('unified generic point detail replaces drawing-specific confirmation', () => {
   before(async () => { Vue = await import('vue'); ({ mount } = await import('@vue/test-utils')); Panel = await compile() })
-  it('resets explicit acknowledgement for a new identical offer object, real task/requirement revisions, task target changes, modal close, and auth generation', async () => {
-    const wrapper = mount(Panel, { props: props(offer()) }); const open = async (id = 'task-a') => { wrapper.vm.openTask(task(id)); await Vue.nextTick(); return wrapper.find('input[type="checkbox"]') }
-    let checkbox = await open(); await checkbox.setValue(true); expect(checkbox.element.checked).to.equal(true)
-    await wrapper.setProps({ controlledConsentOffer: offer() }); await Vue.nextTick(); checkbox = wrapper.find('input[type="checkbox"]'); expect(checkbox.element.checked).to.equal(false)
-    await checkbox.setValue(true); await wrapper.setProps({ selectedTask: task('task-a', '7', '4') }); await Vue.nextTick(); checkbox = wrapper.find('input[type="checkbox"]'); expect(checkbox.element.checked).to.equal(false)
-    await checkbox.setValue(true); await wrapper.setProps({ selectedTask: task('task-b', '1', '1'), controlledConsentOffer: offer('task-b', 'agent-b') }); await Vue.nextTick(); wrapper.vm.openTask(task('task-b', '1', '1')); await Vue.nextTick(); checkbox = wrapper.find('input[type="checkbox"]'); expect(checkbox.element.checked).to.equal(false)
-    await checkbox.setValue(true); wrapper.vm.back(); await Vue.nextTick(); checkbox = await open('task-b'); expect(checkbox.element.checked).to.equal(false)
-    await checkbox.setValue(true); await wrapper.setProps({ authorizationGeneration: 1 }); await Vue.nextTick(); checkbox = await open('task-b'); expect(checkbox.element.checked).to.equal(false); wrapper.unmount()
+  it('ordinary detail offers explicit point, not a provider/image checkbox or predicted PDF', async () => {
+    const wrapper = mount(Panel, { props: props() })
+    try {
+      wrapper.vm.openTask(task('task-a')); await Vue.nextTick()
+      expect(wrapper.find('.controlled-image-consent').exists()).to.equal(false)
+      expect(wrapper.find('input[type="checkbox"]').exists()).to.equal(false)
+      expect(wrapper.text()).not.to.include('受控图像外部账户确认')
+      expect(wrapper.text()).to.include('文本、图片、音频或文件')
+      const button = wrapper.findAll('button').find(item => item.text() === '交给吴用')
+      expect(Boolean(button)).to.equal(true); await button.trigger('click')
+      expect(wrapper.emitted('assign-task')[0][1].agentId).to.equal('agent-a')
+      expect(wrapper.emitted('confirm-controlled-image-consent')).to.equal(undefined)
+    } finally { wrapper.unmount() }
+  })
+  it('generic receipt displays all mixed materials neutrally without purpose or operation selector', async () => {
+    const state = { status: 'PREPARING', intent: { schemaVersion: 2, taskId: 'task-a',
+      body: { targetAgentId: 'agent-a', expectedTaskVersion: '6', requirementRevision: '3' } },
+    projection: { inputs: ['image', 'document', 'audio', 'text'].map(fileId => ({ fileId, version: 2, purpose: 'INPUT' })) } }
+    const wrapper = mount(Panel, { props: { ...props(), pointAndStartState: state } })
+    try {
+      wrapper.vm.openTask(task('task-a')); await Vue.nextTick()
+      const text = wrapper.find('.point-and-start-recovery').text()
+      for (const file of ['image', 'document', 'audio', 'text']) expect(text).to.include(`${file} v2`)
+      expect(text).to.include('agent-a'); expect(text).not.to.include('INPUT'); expect(text).not.to.include('GENERATE_IMAGE')
+      await wrapper.find('.point-and-start-recovery button').trigger('click')
+      expect(wrapper.emitted('check-point-and-start')[0][0].id).to.equal('task-a')
+    } finally { wrapper.unmount() }
   })
 })

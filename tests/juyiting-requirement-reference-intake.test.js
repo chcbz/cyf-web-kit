@@ -299,13 +299,13 @@ describe('mounted Bounty requirement draft and original recovery', () => {
     expect(wrapper.emitted('create-task')).to.equal(undefined)
   })
 
-  it('keeps the image route after its transient offer clears, while preserving ordinary historical PDF tasks', async () => {
+  it('Hall detail consistently uses multimedia discussion rather than a separate PDF execution entry', async () => {
     const formalTaskExecutionContext = { taskId: 'existing-task', conversationId: 'conversation-1', targetAgentId: 'agent-image', conversationConfirmed: true, formalExecutionAuthorized: true, authorizationReason: '' }
     const open = panel({ embeddedHall: true, formalTaskExecutionContext })
     open.vm.openTask({ id: 'existing-task', title: '画一只鸟', status: 'open' })
     await nextTick()
     expect(open.find('.formal-task-execution').exists()).to.equal(false)
-    expect(open.text()).to.include('不会预设 PDF 成果或创建另一条执行请求')
+    expect(open.text()).to.include('在议事中协作交付')
     expect(open.text()).not.to.include('一份可预览、下载和验收的正式 PDF')
 
     const bridgeIntent = { taskId: 'existing-task', body: { agentId: 'agent-image', requirementRevision: 1, requestedOperations: ['GENERATE_IMAGE'], initialOperation: 'GENERATE_IMAGE', inputRefs: [] }, controlledImageBridge: { schemaVersion: 1, wrapper: { schemaVersion: 1, assignment: {}, providerConsent: {} }, receipt: { schemaVersion: 1 } } }
@@ -319,8 +319,8 @@ describe('mounted Bounty requirement draft and original recovery', () => {
     controlled.vm.openTask({ id: 'existing-task', title: '画一只鸟', status: 'assigned' })
     await nextTick()
     expect(controlled.find('.formal-task-execution').exists()).to.equal(false)
-    expect(controlled.find('.controlled-image-execution-route').text()).to.include('这里不会创建 PDF 办理请求')
-    expect(controlled.text()).to.include('受控图像成果；以实际生成和正式验收记录为准')
+    expect(controlled.find('.deliberation-execution-route').text()).to.include('反复沟通')
+    expect(controlled.text()).to.include('文本、图片、音频或文件')
 
     const failed = panel({ embeddedHall: true, formalTaskExecutionContext,
       pointAndStartState: { status: 'UNKNOWN', error: 'Controlled image bridge request unavailable', intent: bridgeIntent } })
@@ -331,8 +331,8 @@ describe('mounted Bounty requirement draft and original recovery', () => {
     const ordinary = panel({ embeddedHall: true, formalTaskExecutionContext })
     ordinary.vm.openTask({ id: 'existing-task', title: '既有正式任务', status: 'assigned' })
     await nextTick()
-    expect(ordinary.find('.formal-task-execution').exists()).to.equal(true)
-    expect(ordinary.find('.controlled-image-execution-route').exists()).to.equal(false)
+    expect(ordinary.find('.formal-task-execution').exists()).to.equal(false)
+    expect(ordinary.find('.deliberation-execution-route').exists()).to.equal(true)
   })
 
   it('submits optional exact reference selection from the real pre-task form; no guessed taskId', async () => {

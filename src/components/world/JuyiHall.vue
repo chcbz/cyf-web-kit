@@ -318,8 +318,6 @@
             :requirement-create-busy="requirementCreateBusy"
             :point-and-start-state="pointAndStartPresentationState"
             :point-and-start-busy="pointAndStartBusy || controlledBridgeBusy"
-            :controlled-consent-offer="controlledConsentOffer"
-            :controlled-consent-busy="controlledBridgeBusy"
             :format-time="formatTime"
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
@@ -357,7 +355,6 @@
             @resume-funded-create="resumeFundedCreate"
             @check-point-and-start="checkPointAndStartOriginal"
             @resume-point-and-start="resumePointAndStartOriginal"
-            @confirm-controlled-image-consent="confirmControlledImageConsent"
             @cancel-funded-create-recovery="showToast('原资金榜请求仍会保留；请在准备好后明确恢复。')"
             @cancel-funding="cancelFunding"
             @load-settlement="loadSettlement"
@@ -739,17 +736,14 @@ import { useHallSound } from '@/composables/juyiting/useHallSound'
 import { useHallTaskActions } from '@/composables/juyiting/useHallTaskActions'
 import { useHallRequirementCreate } from '@/composables/juyiting/useHallRequirementCreate'
 import { useHallPointAndStart } from '@/composables/juyiting/useHallPointAndStart'
-import { useHallTaskLinkedReferenceInputs } from '@/composables/juyiting/hallTaskLinkedReferenceInputs'
 import { createPointAndStartIntentStore } from '@/composables/juyiting/hallPointAndStartIntent'
 import { pointAndStartRecoveryLane } from '@/composables/juyiting/hallPointAndStartRecoveryLane'
-import { providerConsentAcknowledgement } from '@/composables/juyiting/hallPointAndStartProviderConsent'
-import { capabilityOffersControlledImageConsent, createControlledImageCapabilityObservationFence, loadControlledImageBountyCapability } from '@/composables/juyiting/hallControlledImageBountyCapability'
 import { useHallPointAndStartControlledBridge } from '@/composables/juyiting/useHallPointAndStartControlledBridge'
 import { useHallBountyFollowup } from '@/composables/juyiting/useHallBountyFollowup'
 import { useHallBountyRequestCatalog } from '@/composables/juyiting/useHallBountyRequestCatalog'
 import { useHallTypedDeliberation } from '@/composables/juyiting/useHallTypedDeliberation'
 import { typedLong } from '@/composables/juyiting/hallTypedDeliberation'
-import { capabilityAllowsNewStart, capabilityAllowsOriginalReplay, createNativeCapabilityObservationFence, loadNativeBountyCapability, pointAndStartIntentReadLane } from '@/composables/juyiting/hallNativeBountyCapability'
+import { pointAndStartIntentReadLane } from '@/composables/juyiting/hallNativeBountyCapability'
 import { useHallDrafts } from '@/composables/juyiting/useHallDrafts'
 import { useTaskWorkspace } from '@/composables/juyiting/useTaskWorkspace'
 import { createDisabledTaskWorkspaceBinding, isTaskWorkspaceBuildEnabled } from '@/composables/juyiting/taskWorkspaceFeature'
@@ -2199,23 +2193,6 @@ typedDeliberation = useHallTypedDeliberation({
   }
 })
 
-const controlledImageCapability = ref(null)
-const controlledConsentOffer = ref(null)
-const controlledImageObservation = createControlledImageCapabilityObservationFence({
-  getIdentityScope: () => hallIdentityScope.value,
-  getAuthorizationGeneration: () => apiStore.authorizationGeneration
-})
-const readControlledImageCapability = async (taskId, targetAgentId, observation = controlledImageObservation.capture()) => {
-  let capability = null
-  try { capability = await loadControlledImageBountyCapability({ agentApi, taskId, targetAgentId }) } catch (error) {
-    if (observation.isCurrent()) log.warn('controlled image capability is unavailable:', error)
-    return null
-  }
-  if (!observation.isCurrent() || !capability) return null
-  controlledImageCapability.value = Object.freeze({ ...capability, identityScope: observation.identityScope, authorizationGeneration: observation.authorizationGeneration, isCurrent: observation.isCurrent })
-  return controlledImageCapability.value
-}
-const pointAndStartCapability = ref(null)
 // Every user-visible task/target/auth context change fences in-flight original
 // projection reads. The one canonical task replacement performed by a verified
 // admission is marked below, so its own reactive write cannot cancel adoption.
@@ -2227,39 +2204,12 @@ const preserveAdmittedPointAndStartContext = task => { admittedPointAndStartTask
 const pointAndStartStorage = (() => {
   try { return typeof window !== 'undefined' ? window.localStorage : null } catch { return null }
 })()
-const pointAndStartObservation = createNativeCapabilityObservationFence({
-  getIdentityScope: () => hallIdentityScope.value,
-  getAuthorizationGeneration: () => apiStore.authorizationGeneration
-})
-const pointAndStartReferenceInputs = useHallTaskLinkedReferenceInputs({
-  identityEpoch: computed(() => `${hallIdentityScope.value}\u0000${apiStore.authorizationGeneration}`)
-})
-const pointAndStartOfferMatches = (capability, taskId, agentId, generation = apiStore.authorizationGeneration, scope = hallIdentityScope.value) =>
-  capability?.taskId === taskId && capability?.targetAgentId === agentId &&
-  capability?.authorizationGeneration === generation && capability?.identityScope === scope && capability?.isCurrent?.() === true
 const pointAndStartIntentState = (taskId) => createPointAndStartIntentStore({
   storage: pointAndStartStorage,
   scope: hallIdentityScope.value,
   taskId
 }).read()
-const clearPointAndStartCapability = () => { pointAndStartContextGeneration.value++; pointAndStartObservation.invalidate(); controlledImageObservation.invalidate(); pointAndStartReferenceInputs.invalidate(); invalidateControlledBridge(); stopPointAndStartObservation(); pointAndStartCapability.value = null; controlledImageCapability.value = null; controlledConsentOffer.value = null }
-const readPointAndStartCapability = async (taskId, targetAgentId, observation = pointAndStartObservation.capture()) => {
-  const { identityScope, authorizationGeneration } = observation
-  let capability = null
-  try { capability = await loadNativeBountyCapability({ agentApi, taskId, targetAgentId }) } catch (error) {
-    if (observation.isCurrent()) {
-      log.warn('native bounty capability is unavailable:', error)
-    }
-    return null
-  }
-  if (!observation.isCurrent() || !capability) return null
-  pointAndStartCapability.value = Object.freeze({ ...capability, identityScope, authorizationGeneration, isCurrent: observation.isCurrent })
-  return pointAndStartCapability.value
-}
-const canUsePointAndStartOffer = (task, agent) => pointAndStartOfferMatches(pointAndStartCapability.value, task?.id, agent?.agentId) &&
-  capabilityAllowsNewStart(pointAndStartCapability.value, task, agent)
-const canReplayPointAndStartOriginal = (task, agent) => pointAndStartOfferMatches(pointAndStartCapability.value, task?.id, agent?.agentId) &&
-  capabilityAllowsOriginalReplay(pointAndStartCapability.value, task?.id, agent?.agentId)
+const clearPointAndStartCapability = () => { pointAndStartContextGeneration.value++; invalidateControlledBridge(); stopPointAndStartObservation() }
 const attachAdmittedPointAndStart = async ({ task, targetAgentId, reference, isCurrent }) => {
   if (!isCurrent?.() || panelDisposed || task?.id !== reference?.taskId || targetAgentId !== reference?.targetAgentId) return false
   // Admission receives only the canonical TaskDTO. Never synthesize assignment
@@ -2278,8 +2228,6 @@ const attachAdmittedPointAndStart = async ({ task, targetAgentId, reference, isC
 const {
   state: controlledBridgeState,
   busy: controlledBridgeBusy,
-  selectContext: selectControlledBridgeContext,
-  start: startControlledBridge,
   checkOriginal: checkControlledBridgeOriginal,
   resumeOriginal: resumeControlledBridgeOriginal,
   dispose: disposeControlledBridge,
@@ -2298,19 +2246,6 @@ const {
     if (isCurrent?.()) observePointAndStart(intent.taskId)
   }
 })
-const confirmControlledImageConsent = async (task, targetAgentId) => {
-  const offer = controlledConsentOffer.value
-  if (!offer || offer.taskId !== task?.id || offer.targetAgentId !== targetAgentId || !capabilityOffersControlledImageConsent(offer.capability, task, { agentId: targetAgentId })) return false
-  const current = operableRosterAgents.value.find(agent => agent?.agentId === targetAgentId)
-  if (!current || !canAssign(task, current) || !selectControlledBridgeContext({ taskId: task.id, targetAgentId })) return false
-  const refs = await pointAndStartReferenceInputs.resolve({ taskId: task.id, inputRefsPolicy: offer.capability.inputRefsPolicy, isCurrent: () => offer.observation.isCurrent() })
-  if (!offer.observation.isCurrent() || refs.state !== 'READY') { showToast('参考资料未能核对，未办理。'); return false }
-  const started = await startControlledBridge({ task, agent: current, requestedOperations: offer.capability.requestedOperations,
-    initialOperation: offer.capability.initialOperation, inputRefs: refs.inputRefs,
-    providerBinding: { bindingId: offer.capability.providerBinding.bindingId, bindingEpoch: offer.capability.providerBinding.bindingEpoch }, acknowledgement: providerConsentAcknowledgement })
-  if (!started) showToast('受控图像原点将待核对；不会改走旧式点将。')
-  return started
-}
 const {
   state: pointAndStartState,
   busy: pointAndStartBusy,
@@ -2324,8 +2259,6 @@ const {
   agentApi,
   actorScopeKey: hallIdentityScope,
   storage: pointAndStartStorage,
-  isSupported: canUsePointAndStartOffer,
-  canReplayOriginal: canReplayPointAndStartOriginal,
   getContextGeneration: () => pointAndStartContextGeneration.value,
   canAssign: (task, agent) => {
     const current = operableRosterAgents.value.find(item => item?.agentId === agent?.agentId)
@@ -2351,15 +2284,7 @@ const checkPointAndStartOriginal = async (task) => {
 const resumePointAndStartOriginal = async (task) => {
   const intent = pointAndStartIntentState(task?.id)
   if (intent.state !== 'PRESENT') return checkPointAndStartOriginal(task)
-  const targetAgentId = intent.record.body.agentId
   if (pointAndStartRecoveryLane(intent) === 'CONTROLLED') return resumeControlledBridgeOriginal(task.id)
-  const observation = pointAndStartObservation.capture()
-  const capability = await readPointAndStartCapability(task.id, targetAgentId, observation)
-  if (!observation.isCurrent()) return false
-  if (!capability || !canReplayPointAndStartOriginal({ id: task.id }, { agentId: targetAgentId })) {
-    showToast('原点将只能只读核对；当前未取得可重放的服务端办理通道。')
-    return checkPointAndStartOriginal(task)
-  }
   return resumePointAndStart(task.id)
 }
 const assignTask = async (task, agent) => {
@@ -2386,55 +2311,10 @@ const assignTask = async (task, agent) => {
 
   const oneOrdinaryTarget = task.funding?.mode !== 'FUNDED_SINGLE_AGENT' && targetAgents.length === 1
   if (oneOrdinaryTarget) {
-    const target = targetAgents[0]
-    const clickedTaskId = task.id
-    const clickedTargetId = target.agentId
-    const controlledObservation = controlledImageObservation.capture()
-    const controlledCapability = await readControlledImageCapability(clickedTaskId, clickedTargetId, controlledObservation)
-    if (!controlledObservation.isCurrent() || task.id !== clickedTaskId || target.agentId !== clickedTargetId) return false
-    if (controlledCapability?.controlledObservation !== 'UNDECLARED') {
-      if (capabilityOffersControlledImageConsent(controlledCapability, task, target)) {
-        controlledConsentOffer.value = { taskId: clickedTaskId, targetAgentId: clickedTargetId, capability: controlledCapability, observation: controlledObservation, error: null }
-        selectControlledBridgeContext({ taskId: clickedTaskId, targetAgentId: clickedTargetId })
-        showToast('请在事项详情中明确确认一次受控图像外部账户请求。')
-        return false
-      }
-      showToast('受控图像通道当前不可按此原点将办理；未改走旧式点将。')
-      return false
-    }
-    const observation = pointAndStartObservation.capture()
-    const capability = await readPointAndStartCapability(clickedTaskId, clickedTargetId, observation)
-    if (!observation.isCurrent() || task.id !== clickedTaskId || target.agentId !== clickedTargetId) return false
-    if (capability && canUsePointAndStartOffer(task, target)) {
-      const referenceInputs = await pointAndStartReferenceInputs.resolve({
-        taskId: clickedTaskId,
-        inputRefsPolicy: capability.inputRefsPolicy,
-        isCurrent: () => observation.isCurrent() && task.id === clickedTaskId && target.agentId === clickedTargetId
-      })
-      if (!observation.isCurrent() || task.id !== clickedTaskId || target.agentId !== clickedTargetId || referenceInputs.state === 'STALE') return false
-      if (referenceInputs.state !== 'READY') {
-        showToast('参考资料未能核对，未办理。')
-        return false
-      }
-      if (referenceInputs.inputRefs.length) showToast(`已核对 ${referenceInputs.inputRefs.length} 张任务参考图的精确版本，将按任务关联办理。`)
-      const started = await startPointAndStart({
-        task,
-        agent: target,
-        requestedOperations: capability.requestedOperations,
-        initialOperation: capability.initialOperation,
-        inputRefs: referenceInputs.inputRefs
-      })
-      if (!started) showToast(explainPointAndStartState())
-      return started
-    }
-    if (capability && capability.nativeExecution.state !== 'UNDECLARED') {
-      const reasons = capability.newStart.blockingReasons
-      showToast(reasons.includes('COST_AUTHORIZATION_UNAVAILABLE')
-        ? '本目标的自动办理尚缺本次生成的费用授权；未生成，也未改走传统点将。'
-        : `本目标暂不能自动办理（${reasons.join('、') || capability.nativeExecution.state}）；未另建点将。`)
-      return false
-    }
-    showToast('当前未确认目标支持自动办理；本次仅传统点将，不会自动生成或交付。')
+    const started = await startPointAndStart({ task, agent: targetAgents[0] })
+    if (!started) showToast(explainPointAndStartState())
+    if (pointAndStartState.value.status === 'PREPARING') observePointAndStart(task.id)
+    return started
   }
 
   taskWorkspaceBinding.clearExplicitActor()
@@ -2835,7 +2715,6 @@ onUnmounted(() => {
   hallVoice?.dispose()
   clearPointAndStartCapability()
   disposeRequirementCreate()
-  pointAndStartReferenceInputs.dispose()
   disposePointAndStart()
   disposeControlledBridge()
   disposeFollowup()

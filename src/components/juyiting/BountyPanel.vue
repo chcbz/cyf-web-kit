@@ -192,17 +192,10 @@
               <span v-if="fundedClaimState.refreshPending">榜文刷新待完成，请重查；勿重复领令。<button type="button" @click="$emit('refresh-funded-claim', detailTask)">重查已确认榜文</button></span>
             </p>
             <p v-else-if="fundedClaimState?.taskId === detailTask.id && fundedClaimState.status === 'unresolved'" role="status">原领令结果未知，请由原好汉核对，不要重新取价。</p>
-            <section v-if="controlledConsentForDetail" class="point-and-start-recovery controlled-image-consent" role="status">
-              <strong>受控图像外部账户确认</strong>
-              <p>将按当前好汉、任务关联资料和受控图像通道办理一次请求；外部账户结果与费用未知，未展示或虚构金额。</p>
-              <label><input v-model="controlledConsentAcknowledged" type="checkbox" /> 我明确确认这一次受控图像请求</label>
-              <button type="button" :disabled="controlledConsentBusy || !controlledConsentAcknowledged" @click="$emit('confirm-controlled-image-consent', detailTask, controlledConsentForDetail.targetAgentId)">确认并继续原点将</button>
-              <p v-if="controlledConsentForDetail.error">{{ controlledConsentForDetail.error }}</p>
-            </section>
             <section v-if="pointAndStartForDetail" class="point-and-start-recovery" role="status">
               <strong>{{ pointAndStartRecoveryTitle }}</strong>
-              <p>原点将目标：{{ pointAndStartForDetail.intent.body.agentId }}；需求修订：{{ pointAndStartForDetail.intent.body.requirementRevision }}；首轮动作：{{ pointAndStartForDetail.intent.body.initialOperation }}。</p>
-              <p>原授权操作：{{ pointAndStartForDetail.intent.body.requestedOperations.join('、') }}；固定资料：{{ pointAndStartInputSummary }}。</p>
+              <p>原点将目标：{{ pointAndStartForDetail.intent.body.targetAgentId || pointAndStartForDetail.intent.body.agentId }}；需求修订：{{ pointAndStartForDetail.intent.body.requirementRevision }}。</p>
+              <p>任务资料：{{ pointAndStartInputSummary }}。</p>
               <p>{{ pointAndStartRecoveryHint }}</p>
               <p v-if="pointAndStartForDetail.error" class="point-and-start-error" role="alert">原点将返回：{{ pointAndStartForDetail.error }}</p>
               <button
@@ -222,11 +215,11 @@
                 <div class="matter-advice-heading"><span>办理建议</span><strong>{{ simpleMatterStatus(detailTask) }}</strong></div>
                 <p class="matter-request">{{ detailTask.description || detailTask.title }}</p>
                 <dl>
-                  <div><dt>预计成果</dt><dd>{{ controlledImageRouteForDetail ? '受控图像成果；以实际生成和正式验收记录为准' : '由已确认通道生成并按实际交付验收；成果类型以受理能力为准' }}</dd></div>
+                  <div><dt>预计成果</dt><dd>在议事中协作完成文本、图片、音频或文件，按实际交付验收</dd></div>
                   <div><dt>建议承办</dt><dd>{{ preferredAgentName || '吴用或林冲' }}</dd></div>
-                  <div><dt>资料</dt><dd>可选；没有资料也可在能力允许时开始办理</dd></div>
+                  <div><dt>资料</dt><dd>可选；没有资料也可以点将议事</dd></div>
                 </dl>
-                <p class="matter-fee-note">创建事项不会执行。实际开始办理和返工前会再次确认 Agent、资料与外部 Provider 可能产生的未知费用。</p>
+                <p class="matter-fee-note">点将后自动建立悬赏议事，将需求和资料交给所选 Agent；由 Agent 判断直接答复、查阅资料或澄清。执行遵循已有授权，不因点将自动扩大付费权限。</p>
                 <div v-if="detailTask.status === 'open' && preferredAgents.length" class="matter-agent-actions">
                   <button v-for="agent in preferredAgents" :key="agent.agentId" type="button" :disabled="!canAssign(detailTask, agent)" @click="$emit('assign-task', detailTask, agent)">交给{{ agentDisplayName(agent) }}</button>
                 </div>
@@ -251,12 +244,12 @@
               <section v-if="!embeddedHall" class="workspace-shortcut" aria-label="榜文百宝箱入口">
                 <div>
                   <strong>资料与交付</strong>
-                  <p>文件、版本和交付件统一收在百宝箱；正式办理只在下方按当前榜文的会话与工作项授权启动。</p>
+                  <p>资料和成果可在议事中预览、下载；需要保留时存入工作空间，最终按选定交付件验收。</p>
                 </div>
                 <button type="button" @click="$emit('open-workspace')">打开百宝箱</button>
               </section>
               <TaskMaterialLinks
-                v-if="formalTaskExecutionScope && (!embeddedHall || detailTask.status !== 'open') && !controlledImageRouteForDetail"
+                v-if="formalTaskExecutionScope && !embeddedHall"
                 :key="formalTaskExecutionScope.taskId"
                 :task-id="formalTaskExecutionScope.taskId"
                 :conversation-id="formalTaskExecutionScope.conversationId"
@@ -270,13 +263,9 @@
                 @formal-execution-created="$emit('formal-execution-created', $event)"
                 @formal-execution-recovered="$emit('formal-execution-recovered', $event)"
               />
-              <section v-if="controlledImageRouteForDetail" class="controlled-image-execution-route" role="status">
-                <strong>受控图像办理</strong>
-                <p>当前事项已声明受控图像点将；请完成上方确认或核对原请求。这里不会创建 PDF 办理请求。</p>
-              </section>
-              <section v-else-if="embeddedHall && detailTask.status === 'open'" class="controlled-image-execution-route" role="status">
-                <strong>尚未开始办理</strong>
-                <p>请先明确点将并由当前能力通道给出受理结果；不会预设 PDF 成果或创建另一条执行请求。</p>
+              <section v-if="embeddedHall" class="deliberation-execution-route" role="status">
+                <strong>在议事中协作交付</strong>
+                <p>点将后自动进入悬赏议事。你可以继续补充文字和资料，与 Agent 反复沟通，再选择满意的内容保存或提交验收。</p>
               </section>
               <section v-if="isFundedTask(detailTask)" class="funded-preview-details" aria-label="资金悬赏详情">
                 <p class="funding-summary">已托管：{{ formatMoney(detailTask.funding.remainingMicro || detailTask.funding.grossBountyAmountMicro) }}</p>
@@ -488,8 +477,6 @@ const props = defineProps({
   requirementCreateBusy: { type: Boolean, default: false },
   pointAndStartState: { type: Object, default: null },
   pointAndStartBusy: { type: Boolean, default: false },
-  controlledConsentOffer: { type: Object, default: null },
-  controlledConsentBusy: { type: Boolean, default: false },
   abilityText: { type: Function, required: true },
   canAssign: { type: Function, required: true },
   formatTime: { type: Function, required: true },
@@ -521,7 +508,6 @@ const emit = defineEmits([
   'resume-funded-create',
   'check-point-and-start',
   'resume-point-and-start',
-  'confirm-controlled-image-consent',
   'cancel-funded-create-recovery',
   'discuss-task',
   'load-settlement',
@@ -537,7 +523,6 @@ const emit = defineEmits([
 ])
 
 const modalTask = ref(null)
-const controlledConsentAcknowledged = ref(false)
 const showCreateForm = ref(false)
 const createPending = ref(false)
 const taskMaterials = ref([])
@@ -557,10 +542,6 @@ const requirementCreateInputSummary = computed(() => {
 })
 // A late success can only clear the exact submitting draft under the same
 // authenticated actor; editing during POST preserves the newer draft.
-watch(() => [props.controlledConsentOffer, props.controlledConsentOffer?.taskId, props.controlledConsentOffer?.targetAgentId,
-  props.selectedTask?.id, props.selectedTask?.taskVersion, props.selectedTask?.requirementRevision, props.selectedTask?.revision], () => {
-  controlledConsentAcknowledged.value = false
-}, { flush: 'sync' })
 watch(() => [props.identityScope, props.authorizationGeneration], () => {
   createAttempt++
   createPending.value = false
@@ -568,21 +549,12 @@ watch(() => [props.identityScope, props.authorizationGeneration], () => {
   taskForm.value = { title: '', description: '', requiredAbilities: '', funded: false, grossBountyAmountMicro: '' }
   modalTask.value = null
   selectedAssigneeIds.value = []
-  controlledConsentAcknowledged.value = false
 }, { flush: 'sync' })
 const detailTask = computed(() => modalTask.value)
-const controlledConsentForDetail = computed(() => props.controlledConsentOffer?.taskId === detailTask.value?.id
-  ? props.controlledConsentOffer : null)
-watch(() => modalTask.value?.id || '', () => { controlledConsentAcknowledged.value = false }, { flush: 'sync' })
 const pointAndStartForDetail = computed(() => {
   const state = props.pointAndStartState
   return state?.intent?.taskId === detailTask.value?.id && state.intent?.body ? state : null
 })
-// The persisted, validated bridge intent is the route authority after the transient
-// consent offer is cleared or the detail is re-entered. It is never inferred from
-// task wording or an Agent name, so ordinary historical PDF tasks stay available.
-const controlledImageRouteForDetail = computed(() => Boolean(controlledConsentForDetail.value ||
-  pointAndStartForDetail.value?.intent?.controlledImageBridge?.wrapper))
 const pointAndStartRecoveryTitle = computed(() => ({
   UNKNOWN: '发现原点将，结果待核对',
   PREPARING: '原点将已受理，议事准备中',
@@ -600,8 +572,10 @@ const pointAndStartRecoveryHint = computed(() => ({
   FAILED: '请核对原操作；不会以当前编辑或另一好汉替换它。'
 }[pointAndStartForDetail.value?.status] || '正在核对原点将。'))
 const pointAndStartInputSummary = computed(() => {
-  const refs = pointAndStartForDetail.value?.intent?.body?.inputRefs || []
-  return refs.length ? refs.map(ref => `${ref.fileId} v${ref.version} (${ref.purpose})`).join('、') : '无（本入口当前仅支持空资料）'
+  const state = pointAndStartForDetail.value
+  const refs = state?.projection?.inputs || state?.intent?.projection?.inputs || state?.intent?.body?.inputRefs
+  if (!refs) return '由服务端核对本次任务关联的全部资料'
+  return refs.length ? refs.map(ref => `${ref.fileId} v${ref.version}`).join('、') : '无资料'
 })
 // The parent is the only authority for task-scoped discussion/workspace facts.  A
 // detail may never borrow the context of whichever task was previously selected.

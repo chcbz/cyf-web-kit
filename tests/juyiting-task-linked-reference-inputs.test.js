@@ -140,7 +140,7 @@ describe('task-linked reference input resolver', () => {
     expect(h.resolver.state.value.state).to.equal('IDLE')
   })
 
-  it('composes the real readonly adapters with the real persisted point/start hook and one exact assign body', async () => {
+  it('new point/start ignores old image-only selector arguments and uses the server-frozen task catalogue', async () => {
     const h = resolverHarness({ pages: [{ items: [taskLink()], nextCursor: null }], details: {
       'image-b': fileDetail('image-b', [version('image-b', 2), version('image-b', 3)])
     } })
@@ -150,15 +150,16 @@ describe('task-linked reference input resolver', () => {
     const calls = []
     let assigned = false
     const facts = resolved.inputRefs.map(inputFact)
+    const receipt = () => ({ schemaVersion: 1, taskId: 'task-1', targetAgentId: 'agent-1', requirementRevision: '3',
+      assignmentRevision: '7', taskVersion: '7', grantId: 'grant-1', grantVersion: '1', grantState: 'ACTIVE',
+      permittedOperations: ['DELIBERATE', 'INSPECT_INPUTS'], inputs: facts, bootstrapId: 'bootstrap-1', bootstrapState: 'PENDING',
+      stateVersion: '0', initialOperation: 'DELIBERATE', conversationId: null, initialRequestId: null, currentAssignment: true })
     const pointApi = {
       get: async path => {
         calls.push({ method: 'GET', path })
         if (path.endsWith('/requirements/current')) return { data: { taskId: 'task-1', taskVersion: '6', requirementRevision: '3',
           title: '画一只鸟', description: null, contentSha256: 'a'.repeat(64), source: 'CREATE' } }
-        if (path.endsWith('/assignment-operation')) return { data: { schemaVersion: 1, taskId: 'task-1', targetAgentId: 'agent-1',
-          requirementRevision: '3', assignmentRevision: '7', taskVersion: '7', grantId: 'grant-1', grantVersion: '1', grantState: 'ACTIVE',
-          permittedOperations: ['GENERATE_IMAGE'], inputs: facts, bootstrapId: 'bootstrap-1', bootstrapState: 'PENDING', stateVersion: '0',
-          initialOperation: 'GENERATE_IMAGE', conversationId: null, initialRequestId: null, currentAssignment: true } }
+        if (path.endsWith('/point-and-deliberate/request')) return { data: receipt() }
         return { data: assigned
           ? { id: 'task-1', taskVersion: '7', status: 'assigned', assignedAgentId: 'agent-1' }
           : { id: 'task-1', taskVersion: '6', status: 'open' } }
@@ -166,9 +167,7 @@ describe('task-linked reference input resolver', () => {
       create: async (path, body, options) => {
         calls.push({ method: 'POST', path, body, key: options.headers['Idempotency-Key'] })
         assigned = true
-        return { data: { taskId: 'task-1', targetAgentId: 'agent-1', requirementRevision: 3, assignmentRevision: 7,
-          grantId: 'grant-1', grantVersion: 1, state: 'ACTIVE', inputs: facts.map(fact => ({ ...fact, byteLength: 12 })),
-          permittedOperations: ['GENERATE_IMAGE'], paidExecutionAuthorized: true } }
+        return { data: receipt() }
       }
     }
     const flow = useHallPointAndStart({ agentApi: pointApi, actorScopeKey: ref('owner-a/client-a'), storage: memoryStorage(),
@@ -178,8 +177,9 @@ describe('task-linked reference input resolver', () => {
     expect(await flow.start({ task: { id: 'task-1', taskVersion: '6', status: 'open' }, agent: { agentId: 'agent-1' },
       requestedOperations: ['GENERATE_IMAGE'], initialOperation: 'GENERATE_IMAGE', inputRefs: resolved.inputRefs })).to.equal(true)
     const post = calls.find(call => call.method === 'POST')
-    expect(post.body.inputRefs).to.deep.equal([{ fileId: 'image-b', version: 2, purpose: 'REFERENCE' }])
+    expect(post.path).to.equal('/tasks/task-1/point-and-deliberate')
+    expect(post.body).to.deep.equal({ targetAgentId: 'agent-1', expectedTaskVersion: '6', requirementRevision: '3' })
     expect(calls.filter(call => call.method === 'POST')).to.have.length(1)
-    expect(flow.state.value.intent.body.inputRefs).to.deep.equal(post.body.inputRefs)
+    expect(flow.state.value.projection.inputs).to.deep.equal(facts)
   })
 })

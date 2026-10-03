@@ -53,6 +53,36 @@ describe('actual Hall conversation adopts the exact admitted bounty bootstrap', 
     expect(hall.isConversationBusy.value).to.equal(true)
   })
 
+  const genericView = () => {
+    const view = requestView(); view.steps = []; view.state = 'RUNNING'
+    view.turns = [{ turnId: 'turn-discuss', requestId: view.requestId, requestRevision: view.requestRevision,
+      conversationId: view.conversationId, conversationGeneration: view.conversationGeneration,
+      targetAgentId: 'agent-1', route: 'CHAT', state: 'RECEIVED', stateVersion: '0', lastDeltaSeq: '0',
+      finalMessageId: null, createdAt: '1', updatedAt: '1' }]
+    return view
+  }
+  it('generic bootstrap adopts the exact durable CHAT turn with zero execution steps and no resend', async () => {
+    const h = harness({ get: async path => { h.calls.push(['get', path]); return { data: genericView() } } })
+    expect(await h.hall.adoptBountyBootstrap({ ...reference(), initialOperation: 'DELIBERATE' })).to.equal(true)
+    expect(h.hall.activeRequest.value.steps).to.deep.equal([])
+    expect(h.hall.activeTurns.value[0].route).to.equal('CHAT')
+    expect(h.calls).to.deep.equal([['get', '/requests/initial-request-1'], ['content', '/conversation/content', '9007199254740993']])
+  })
+  for (const [label, mutate] of [
+    ['wrong target', v => { v.turns[0].targetAgentId = 'foreign' }],
+    ['wrong request', v => { v.turns[0].requestId = 'foreign' }],
+    ['missing CHAT turn', v => { v.turns = [] }],
+    ['execution route', v => { v.turns[0].route = 'EXECUTE' }],
+    ['fake execution step', v => { v.steps = requestView().steps }],
+    ['ambiguous turns', v => { v.turns.push({ ...v.turns[0], turnId: 'other' }) }]
+  ]) it(`generic bootstrap rejects ${label} without opening history`, async () => {
+    const view = genericView(); mutate(view)
+    const h = harness({ get: async () => ({ data: view }) })
+    expect(await h.hall.adoptBountyBootstrap({ ...reference(), initialOperation: 'DELIBERATE' })).to.equal(false)
+    expect(h.hall.activeRequest.value).to.equal(null)
+    expect(h.calls).to.deep.equal([])
+  })
+
   it('accepts the actual INSPECT bootstrap without forging execution linkage', async () => {
     const view = requestView()
     Object.assign(view.steps[0], { kind: 'INSPECT', executionIntentId: null, executionId: null, executionState: null })

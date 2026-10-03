@@ -9,7 +9,6 @@ import {
   loadNativeBountyCapability,
   parseNativeBountyCapability
 } from '../src/composables/juyiting/hallNativeBountyCapability.js'
-import { createControlledImageCapabilityObservationFence } from '../src/composables/juyiting/hallControlledImageBountyCapability.js'
 
 const capability = (overrides = {}) => ({
   schemaVersion: 3,
@@ -147,178 +146,80 @@ describe('native bounty capability contract', () => {
     expect(mismatched).to.equal(null)
   })
 
-  it('keeps the actual Hall script and template compilable with the shared resolver wiring', () => {
+  it('actual Hall compiles with generic point-and-deliberate instead of drawing preflight', () => {
     const parsed = parse(page, { filename: 'JuyiHall.vue' })
     expect(parsed.errors).to.deep.equal([])
-    const script = compileScript(parsed.descriptor, { id: 'task-linked-reference-hall' })
-    expect(script.content).to.include('useHallTaskLinkedReferenceInputs')
-    const template = compileTemplate({ id: 'task-linked-reference-hall', filename: 'JuyiHall.vue', source: parsed.descriptor.template.content })
-    expect(template.errors).to.deep.equal([])
-  })
-
-  it('wires native capability, exact persisted recovery, authoritative refs, and no first-turn resend into the real page', () => {
-    for (const text of [
-      'loadNativeBountyCapability({ agentApi, taskId, targetAgentId })',
-      'capabilityAllowsNewStart(pointAndStartCapability.value, task, agent)',
-      'capabilityAllowsOriginalReplay(pointAndStartCapability.value, task?.id, agent?.agentId)',
-      'useHallTaskLinkedReferenceInputs',
-      'pointAndStartReferenceInputs.resolve({',
-      'inputRefs: referenceInputs.inputRefs',
-      'pointAndStartIntentReadLane(original)',
-      'hallIdentityScope, () => selectedAgent.value?.agentId], clearPointAndStartCapability',
-      'if (!observation.isCurrent() || task.id !== clickedTaskId || target.agentId !== clickedTargetId) return false',
-      'original.state === \'PRESENT\' || original.state === \'CORRUPT\'',
-      'await checkPointAndStartOriginal(task)',
-      'return adoptBountyBootstrap(reference)',
-      'disposePointAndStart()'
-    ]) expect(page).to.include(text)
-    const assignTask = page.match(/const assignTask = async \(task, agent\) => \{([\s\S]*?)\n\}/)?.[1] || ''
-    expect(assignTask).not.to.include('multimediaDeliberationUiEnabled')
+    const script = compileScript(parsed.descriptor, { id: 'generic-point-hall' })
+    expect(script.content).not.to.include('useHallTaskLinkedReferenceInputs')
+    expect(script.content).not.to.include('loadControlledImageBountyCapability')
+    expect(script.content).not.to.include('loadNativeBountyCapability')
+    expect(compileTemplate({ id: 'generic-point-hall', filename: 'JuyiHall.vue', source: parsed.descriptor.template.content }).errors).to.deep.equal([])
+    expect(panel).not.to.include('confirm-controlled-image-consent')
+    expect(panel).not.to.include('本入口当前仅支持空资料')
     expect(panel).to.include("$emit('check-point-and-start', detailTask)")
-    expect(panel).to.include("$emit('resume-point-and-start', detailTask)")
-    expect(panel).to.include('不会另建点将或改走旧式点将')
   })
 })
 
-// Execute the actual page assignment closure with boundary dependencies. This
-// verifies write routing, not a full Vue mount/browser/Provider acceptance.
+// Execute the real page closure with recording boundaries, not a copied handler.
 const actualAssign = page.match(/const assignTask = async \(task, agent\) => \{([\s\S]*?)\n\}\n\nwatch\(/)?.[1]
 if (!actualAssign) throw new Error('Actual JuyiHall assignment closure not found')
-const pageHarness = ({ original = { state: 'ABSENT' }, offer = null, defer = false, referenceResult = { state: 'READY', inputRefs: [] }, deferReferences = false } = {}) => {
-  const h = { identity: 'owner-1', auth: 1, legacy: [], native: [], reads: [], catalog: [], checks: [], toasts: [] }
-  const observation = createNativeCapabilityObservationFence({ getIdentityScope: () => h.identity, getAuthorizationGeneration: () => h.auth })
-  const controlledObservation = createControlledImageCapabilityObservationFence({ getIdentityScope: () => h.identity, getAuthorizationGeneration: () => h.auth })
-  h.invalidate = () => { observation.invalidate(); controlledObservation.invalidate() }
-  const deps = {
-    pointAndStartIntentState: () => original,
-    controlledImageObservation: controlledObservation,
-    // Existing native-lane tests must pass an explicit disabled controlled-lane
-    // observation before they exercise the legacy/native branch. This preserves
-    // the production ordering and makes the late native capability read observable.
-    readControlledImageCapability: async () => ({ controlledObservation: 'UNDECLARED' }),
-    capabilityOffersControlledImageConsent: () => false,
-    pointAndStartIntentReadLane,
-    showToast: message => h.toasts.push(message),
-    checkPointAndStartOriginal: async task => { h.checks.push(task.id) },
-    economyPreviewEnabled: { value: true },
-    canAssign: () => true,
-    pointAndStartObservation: observation,
-    readPointAndStartCapability: async (taskId, targetAgentId) => {
-      h.reads.push({ taskId, targetAgentId })
-      if (defer) return new Promise(resolve => { h.resolve = () => resolve(offer) })
-      return offer
-    },
-    canUsePointAndStartOffer: (task, agent) => capabilityAllowsNewStart(offer, task, agent),
-    pointAndStartReferenceInputs: { resolve: async request => {
-      h.catalog.push(request)
-      if (deferReferences) return new Promise(resolve => { h.resolveReferences = () => resolve(request.isCurrent() ? referenceResult : { state: 'STALE', inputRefs: [] }) })
-      return request.isCurrent() ? referenceResult : { state: 'STALE', inputRefs: [] }
-    } },
-    startPointAndStart: async intent => { h.native.push(intent); return true },
-    explainPointAndStartState: () => 'pending',
-    taskWorkspaceBinding: { clearExplicitActor: () => {} },
-    runAssignTask: async (task, agent) => { h.legacy.push({ taskId: task.id, agent }); return true },
-    tasks: { value: [] },
-    markTaskAssigned: () => {}
+const pageHarness = ({ original = { state: 'ABSENT' }, started = true, status = 'ATTACHED', economy = false } = {}) => {
+  const calls = []; const deps = {
+    pointAndStartIntentState: () => original, pointAndStartIntentReadLane,
+    showToast: text => calls.push(['toast', text]), checkPointAndStartOriginal: async task => calls.push(['check', task.id]),
+    economyPreviewEnabled: { value: economy }, canAssign: (task, agent) => task.status === 'open' && agent.canOperate !== false,
+    startPointAndStart: async value => { calls.push(['generic', value]); return started },
+    pointAndStartState: { value: { status } }, observePointAndStart: id => calls.push(['observe', id]),
+    explainPointAndStartState: () => '核对原点将', taskWorkspaceBinding: { clearExplicitActor: () => {} },
+    runAssignTask: async (task, target) => { calls.push(['other-workflow', task, target]); return true },
+    tasks: { value: [] }, markTaskAssigned: () => {}
   }
-  h.assign = new Function(...Object.keys(deps), `return async (task, agent) => {${actualAssign}}`)(...Object.values(deps))
-  return h
+  return { calls, assign: new Function(...Object.keys(deps), `return async (task, agent) => {${actualAssign}}`)(...Object.values(deps)) }
 }
 
-describe('actual JuyiHall native assignment routing closure', () => {
-  for (const change of ['auth', 'identity', 'selection', 'target']) {
-    it(`does not fall through to legacy/native writes after a late ${change} change`, async () => {
-      const h = pageHarness({ defer: true })
-      const task = { id: 'task-1' }; const agent = { agentId: 'agent-1' }
-      const pending = h.assign(task, agent)
-      // The controlled-lane observation is awaited first in the real closure;
-      // yield only until the native capability read has installed its deferred
-      // resolver, then mutate the exact fence under test.
-      await Promise.resolve(); await Promise.resolve()
-      if (change === 'auth') h.auth++
-      if (change === 'identity') h.identity = 'owner-2'
-      if (change === 'selection') h.invalidate()
-      if (change === 'target') agent.agentId = 'agent-2'
-      h.resolve()
-      expect(await pending).to.equal(false)
-      expect(h.legacy).to.have.length(0)
-      expect(h.native).to.have.length(0)
-    })
-  }
-
-  it('cannot treat unavailable original storage as an absent request', async () => {
-    const h = pageHarness({ original: { state: 'UNAVAILABLE' } })
-    expect(await h.assign({ id: 'task-1' }, { agentId: 'agent-1' })).to.equal(false)
-    expect(h.reads).to.have.length(0)
-    expect(h.catalog).to.have.length(0)
-    expect(h.legacy).to.have.length(0)
-    expect(h.native).to.have.length(0)
+describe('actual page generic point routing', () => {
+  const task = () => ({ id: 'task-1', status: 'open' })
+  const target = () => ({ agentId: 'explicit-agent', canOperate: true })
+  it('ordinary explicit target always enters generic discussion without image/provider preflight', async () => {
+    const h = pageHarness(); const t = task(); const a = target()
+    expect(await h.assign(t, a)).to.equal(true)
+    expect(h.calls).to.deep.equal([['generic', { task: t, agent: a }]])
   })
-
-  it('honors the durable original before funded or multi-agent lane checks', async () => {
-    const h = pageHarness({ original: { state: 'PRESENT' } })
-    expect(await h.assign({ id: 'task-1', funding: { mode: 'FUNDED_SINGLE_AGENT' } }, [{ agentId: 'agent-1' }, { agentId: 'agent-2' }])).to.equal(false)
-    expect(h.checks).to.deep.equal(['task-1'])
-    expect(h.reads).to.have.length(0)
-    expect(h.catalog).to.have.length(0)
-    expect(h.legacy).to.have.length(0)
-    expect(h.native).to.have.length(0)
+  it('a generic admission error never falls back to an old assignment', async () => {
+    const h = pageHarness({ started: false, status: 'UNKNOWN' })
+    expect(await h.assign(task(), target())).to.equal(false)
+    expect(h.calls.filter(c => c[0] === 'generic')).to.have.length(1)
+    expect(h.calls.some(c => c[0] === 'other-workflow')).to.equal(false)
   })
-
-  it('reports a declared native target missing legitimate cost authority instead of silently doing legacy assignment', async () => {
-    const h = pageHarness({ offer: parseNativeBountyCapability(capability()) })
-    expect(await h.assign({ id: 'task-1' }, { agentId: 'agent-1' })).to.equal(false)
-    expect(h.legacy).to.have.length(0)
-    expect(h.native).to.have.length(0)
-    expect(h.toasts.join()).to.include('费用授权')
+  it('pending bootstrap starts read-only observation for the same task', async () => {
+    const h = pageHarness({ status: 'PREPARING' })
+    expect(await h.assign(task(), target())).to.equal(true)
+    expect(h.calls.at(-1)).to.deep.equal(['observe', 'task-1'])
   })
-
-  it('preserves a clearly described legacy-only lane for an undeclared older target', async () => {
-    const offer = parseNativeBountyCapability(capability({ nativeExecution: { state: 'UNDECLARED', transport: null, schemaVersion: null, supportedOperations: [] }, requestedOperations: [], initialOperation: null }))
-    const h = pageHarness({ offer })
-    expect(await h.assign({ id: 'task-1' }, { agentId: 'agent-1' })).to.equal(true)
-    expect(h.legacy).to.have.length(1)
-    expect(h.native).to.have.length(0)
-    expect(h.toasts.join()).to.include('不会自动生成或交付')
+  it('acknowledged pending admission still observes after a transient GET failure without resending', async () => {
+    const h = pageHarness({ started: false, status: 'PREPARING' })
+    expect(await h.assign(task(), target())).to.equal(false)
+    expect(h.calls.filter(c => c[0] === 'generic')).to.have.length(1)
+    expect(h.calls.at(-1)).to.deep.equal(['observe', 'task-1'])
+    expect(h.calls.some(c => c[0] === 'other-workflow')).to.equal(false)
   })
-
-  it('uses the explicit clicked task/target and resolved exact references for one coherent authorized intent', async () => {
-    const offer = parseNativeBountyCapability(capability({ inputRefsPolicy: 'TASK_LINKED_REFERENCE',
-      executionAuthorization: { state: 'READY', paidExecutionAuthorized: true }, newStart: { eligible: true, blockingReasons: [] } }))
-    const inputRefs = [{ fileId: 'image-1', version: 2, purpose: 'REFERENCE' }]
-    const h = pageHarness({ offer, referenceResult: { state: 'READY', inputRefs } })
-    expect(await h.assign({ id: 'task-1' }, { agentId: 'agent-1' })).to.equal(true)
-    expect(h.legacy).to.have.length(0)
-    expect(h.catalog).to.have.length(1)
-    expect(h.catalog[0].taskId).to.equal('task-1')
-    expect(h.catalog[0].inputRefsPolicy).to.equal('TASK_LINKED_REFERENCE')
-    expect(h.native).to.have.length(1)
-    expect(h.native[0].task.id).to.equal('task-1')
-    expect(h.native[0].agent.agentId).to.equal('agent-1')
-    expect(h.native[0].inputRefs).to.deep.equal(inputRefs)
-    expect(h.toasts.join()).to.include('1 张任务参考图的精确版本')
+  for (const state of ['PRESENT', 'CORRUPT', 'UNAVAILABLE']) it(`${state} original cannot be bypassed by fresh point`, async () => {
+    const h = pageHarness({ original: { state } })
+    expect(await h.assign(task(), target())).to.equal(false)
+    expect(h.calls.some(c => ['generic', 'other-workflow'].includes(c[0]))).to.equal(false)
+    if (state === 'PRESENT') expect(h.calls).to.deep.equal([['check', 'task-1']])
   })
-
-  it('does not fall back to legacy or empty refs when authoritative reference resolution fails', async () => {
-    const offer = parseNativeBountyCapability(capability({ inputRefsPolicy: 'TASK_LINKED_REFERENCE',
-      executionAuthorization: { state: 'READY', paidExecutionAuthorized: true }, newStart: { eligible: true, blockingReasons: [] } }))
-    const h = pageHarness({ offer, referenceResult: { state: 'BLOCKED', reason: 'CATALOG_UNAVAILABLE', inputRefs: [] } })
-    expect(await h.assign({ id: 'task-1' }, { agentId: 'agent-1' })).to.equal(false)
-    expect(h.native).to.have.length(0)
-    expect(h.legacy).to.have.length(0)
-    expect(h.toasts).to.deep.equal(['参考资料未能核对，未办理。'])
+  it('missing explicit target, denied roster authority or stale task never writes', async () => {
+    const h = pageHarness()
+    for (const [t, a] of [[task(), null], [task(), {}], [task(), { ...target(), canOperate: false }], [{ ...task(), status: 'assigned' }, target()]]) {
+      expect(await h.assign(t, a)).to.equal(false)
+    }
+    expect(h.calls).to.deep.equal([])
   })
-
-  it('fences a late reference catalog on authorization change before any native or legacy write', async () => {
-    const offer = parseNativeBountyCapability(capability({ inputRefsPolicy: 'TASK_LINKED_REFERENCE',
-      executionAuthorization: { state: 'READY', paidExecutionAuthorized: true }, newStart: { eligible: true, blockingReasons: [] } }))
-    const h = pageHarness({ offer, deferReferences: true, referenceResult: { state: 'READY', inputRefs: [{ fileId: 'image-1', version: 2, purpose: 'REFERENCE' }] } })
-    const pending = h.assign({ id: 'task-1' }, { agentId: 'agent-1' })
-    await Promise.resolve(); await Promise.resolve()
-    h.auth += 1
-    h.resolveReferences()
-    expect(await pending).to.equal(false)
-    expect(h.native).to.have.length(0)
-    expect(h.legacy).to.have.length(0)
+  it('funded and multi-agent workflows are not silently turned into ordinary grants', async () => {
+    const h = pageHarness({ economy: true }); const a = target()
+    expect(await h.assign({ ...task(), funding: { mode: 'FUNDED_SINGLE_AGENT' } }, a)).to.equal(true)
+    expect(await h.assign(task(), [a, { agentId: 'second' }])).to.equal(true)
+    expect(h.calls.map(c => c[0])).to.deep.equal(['other-workflow', 'other-workflow'])
   })
 })

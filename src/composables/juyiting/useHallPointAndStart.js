@@ -1,7 +1,7 @@
 import { computed, ref, unref, watch } from 'vue'
 import { bountyBootstrapReference } from './hallBountyBootstrap.js'
-import { createPointAndStartIntentStore, exactPointAndStartId, exactPointAndStartScope, pointAndStartBody,
-  pointAndStartGrant, pointAndStartLong, pointAndStartProjection } from './hallPointAndStartIntent.js'
+import { createPointAndStartIntentStore, exactPointAndStartId, exactPointAndStartScope, pointAndDeliberateBody,
+  pointAndStartReadPath, pointAndStartTarget, pointAndStartLong, pointAndStartProjection } from './hallPointAndStartIntent.js'
 
 const unwrap = result => {
   const envelope = result && Object.hasOwn(result, 'code') ? result : result?.data ?? result
@@ -21,10 +21,10 @@ const initialState = () => ({ status: 'IDLE', intent: null, projection: null, er
 const statusForProjection = projection => !projection ? 'UNKNOWN' : !projection.currentAssignment ? 'HISTORICAL' :
   projection.bootstrapState === 'ADMITTED' ? 'ADMITTED' : projection.bootstrapState === 'DEAD' ? 'FAILED' : 'PREPARING'
 
-/** Negotiation is supplied by the server-capability integration, never the UI flag.
- * This source slice does not advertise support or authorize fees/tools itself. */
+/** Ordinary point-and-deliberate only. Existing records remain readable in their
+ * original slot; new requests never negotiate a drawing lane or paid authority. */
 export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
-  isSupported = () => false, canReplayOriginal = () => false, canAssign = () => false, createIdempotencyKey = () => globalThis.crypto.randomUUID(),
+  canAssign = () => false, createIdempotencyKey = () => globalThis.crypto.randomUUID(),
   getContextGeneration = () => 0, onAdmitted = async () => false }) => {
   const scope = computed(() => unref(typeof actorScopeKey === 'function' ? actorScopeKey() : actorScopeKey))
   const state = ref(initialState())
@@ -52,7 +52,7 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
   const options = key => ({ autoLoading: false, ...(key ? { headers: { 'Idempotency-Key': key } } : {}) })
   const get = async (path, key) => unwrap(await agentApi.get(path, undefined, options(key)))
   const project = async (intent, captured, epoch, contextEpoch) => {
-    const value = await get(`/tasks/${encodeURIComponent(intent.taskId)}/assignment-operation`, intent.key)
+    const value = await get(pointAndStartReadPath(intent), intent.key)
     if (!current(captured, epoch, contextEpoch)) return null
     const projection = pointAndStartProjection(value, intent, intent.projection)
     if (!projection) throw new Error('原点将投影不匹配或版本回退；未再次办理')
@@ -62,31 +62,32 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
     const task = await get(`/tasks/${encodeURIComponent(intent.taskId)}`)
     if (!current(captured, epoch, contextEpoch)) return null
     if (task?.id !== intent.taskId || !pointAndStartLong(task.taskVersion, true) ||
-      BigInt(task.taskVersion) < BigInt(projection.taskVersion) || task.assignedAgentId !== intent.body.agentId ||
+      BigInt(task.taskVersion) < BigInt(projection.taskVersion) || task.assignedAgentId !== pointAndStartTarget(intent) ||
       !['assigned', 'running', 'submitted', 'completed'].includes(task.status)) throw new Error('点将已确认，当前榜文快照尚未核对；未补发首轮')
     // A newer task snapshot may reflect reassignment; recheck the original action
     // before attaching, instead of treating taskVersion as assignmentRevision.
     if (task.taskVersion !== projection.taskVersion) {
-      const fresh = pointAndStartProjection(await get(`/tasks/${encodeURIComponent(intent.taskId)}/assignment-operation`, intent.key), intent, projection)
+      const fresh = pointAndStartProjection(await get(pointAndStartReadPath(intent), intent.key), intent, projection)
       if (!current(captured, epoch, contextEpoch)) return null
       if (!fresh || !fresh.currentAssignment || fresh.taskVersion !== task.taskVersion) throw new Error('榜文已变化；请只读重查原点将')
       intent = persist(captured, { ...intent, projection: fresh })
       state.value = { ...state.value, intent, projection: fresh }
     }
     if (!current(captured, epoch, contextEpoch)) return null
-    const adopted = await onAdmitted({ task: clone(task), targetAgentId: intent.body.agentId,
+    const adopted = await onAdmitted({ task: clone(task), targetAgentId: pointAndStartTarget(intent),
       reference: bountyBootstrapReference(intent.projection), isCurrent: () => current(captured, epoch, contextEpoch) })
     if (!current(captured, epoch, contextEpoch)) return null
     state.value = { ...state.value, status: adopted === true ? 'ATTACHED' : 'ADMITTED' }
     return intent
   }
   const send = async (intent, captured, epoch, contextEpoch) => {
-    const result = unwrap(await agentApi.create(`/tasks/${encodeURIComponent(intent.taskId)}/assign`, clone(intent.body), options(intent.key)))
+    if (intent.schemaVersion !== 2) throw new Error('历史点将仅可核对；不会改成新的议事请求')
+    const result = unwrap(await agentApi.create(`/tasks/${encodeURIComponent(intent.taskId)}/point-and-deliberate`, clone(intent.body), options(intent.key)))
     if (!current(captured, epoch, contextEpoch)) return null
-    const grant = pointAndStartGrant(result, intent)
-    if (!grant) throw new Error('原点将回执未能匹配；保留原键核对，不重新点将')
-    intent = persist(captured, { ...intent, grant, postAcknowledged: true })
-    state.value = { status: 'CONFIRMED', intent, projection: intent.projection || null, error: null }
+    const projection = pointAndStartProjection(result, intent, intent.projection)
+    if (!projection) throw new Error('点将回执未能匹配；保留原键核对，不重新点将')
+    intent = persist(captured, { ...intent, projection, postAcknowledged: true })
+    state.value = { status: statusForProjection(projection), intent, projection, error: null }
     return project(intent, captured, epoch, contextEpoch)
   }
   const run = async (taskId, action) => {
@@ -124,16 +125,14 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
     void tick()
     return true
   }
-  const start = ({ task, agent, requestedOperations, initialOperation, inputRefs = [] }) => {
+  const start = ({ task, agent }) => {
     // Capture the explicit clicked target and selection before any asynchronous
     // read. Editing the draft while GET runs must never alter the admitted body.
     const taskId = task?.id
     const targetId = agent?.agentId
-    let ops, refs
-    try { ops = clone(requestedOperations); refs = clone(inputRefs) } catch { return Promise.resolve(false) }
     return run(taskId, async (captured, epoch, contextEpoch) => {
-      if (isSupported(task, agent) !== true || task?.funding?.mode === 'FUNDED_SINGLE_AGENT' ||
-      !exactPointAndStartId(targetId)) throw new Error('此榜或目标尚未协商支持新办理流程')
+      if (task?.funding?.mode === 'FUNDED_SINGLE_AGENT' ||
+      !exactPointAndStartId(targetId)) throw new Error('此需求须指定一个可点将的普通任务目标')
       const old = readIntent(captured, taskId)
       if (old) {
         const consentPending = Boolean(old.providerConsent)
@@ -152,13 +151,13 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
       !(requirement.description === null || typeof requirement.description === 'string') ||
       !/^[a-f0-9]{64}$/.test(requirement.contentSha256) || !['CREATE', 'RECONFIRM'].includes(requirement.source) ||
       canonical?.id !== taskId || canonical.taskVersion !== requirement.taskVersion ||
-      canonical.status !== 'open' || canAssign(canonical, agent) !== true || isSupported(canonical, agent) !== true) throw new Error('真实需求修订、榜文版本或目标准入未能核对')
-      const body = pointAndStartBody({ agentId: targetId, taskVersion: requirement.taskVersion,
-        requirementRevision: requirement.requirementRevision, requestedOperations: ops, initialOperation, inputRefs: refs })
-      if (!body) throw new Error('动作、资料或版本超出当前写合同；未发送点将')
+      canonical.status !== 'open' || canonical.funding?.mode === 'FUNDED_SINGLE_AGENT' || canAssign(canonical, agent) !== true) throw new Error('真实需求修订、榜文版本或目标准入未能核对')
+      const body = pointAndDeliberateBody({ targetAgentId: targetId, expectedTaskVersion: requirement.taskVersion,
+        requirementRevision: requirement.requirementRevision })
+      if (!body) throw new Error('目标或版本无效；未发送点将')
       const key = createIdempotencyKey()
       if (!exactPointAndStartId(key)) throw new Error('原点将键无效；未发送点将')
-      const intent = persist(captured, { schemaVersion: 1, taskId, key, body, postAcknowledged: false })
+      const intent = persist(captured, { schemaVersion: 2, taskId, key, body, postAcknowledged: false })
       state.value = { status: 'SENDING', intent, projection: null, error: null }
       return send(intent, captured, epoch, contextEpoch)
     })
@@ -176,7 +175,7 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
     try { return await project(intent, captured, epoch, contextEpoch) } catch (error) {
       if (!current(captured, epoch, contextEpoch)) return false
       if (error?.status !== 404 || error?.code !== 'ASSIGNMENT_OPERATION_UNAVAILABLE' ||
-        intent.providerConsent || intent.postAcknowledged || intent.projection || canReplayOriginal({ id: taskId }, { agentId: intent.body.agentId }) !== true) throw error
+        intent.schemaVersion !== 2 || intent.providerConsent || intent.postAcknowledged || intent.projection) throw error
       return send(intent, captured, epoch, contextEpoch)
     }
   })

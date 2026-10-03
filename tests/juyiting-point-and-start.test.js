@@ -2,7 +2,7 @@ import { expect } from 'chai'
 import { ref } from 'vue'
 import { setImmediate } from 'node:timers'
 import { useHallPointAndStart } from '../src/composables/juyiting/useHallPointAndStart.js'
-import { createPointAndStartIntentStore, pointAndStartBody, pointAndStartProjection } from '../src/composables/juyiting/hallPointAndStartIntent.js'
+import { createPointAndStartIntentStore, pointAndStartBody, pointAndDeliberateBody, pointAndStartProjection } from '../src/composables/juyiting/hallPointAndStartIntent.js'
 
 const copy = value => JSON.parse(JSON.stringify(value))
 const storage = () => {
@@ -13,18 +13,15 @@ const req = () => ({ taskId: 'task-1', taskVersion: '6', requirementRevision: '3
   description: null, contentSha256: 'a'.repeat(64), source: 'CREATE' })
 const task = () => ({ id: 'task-1', taskVersion: '6', status: 'open' })
 const canonical = () => ({ id: 'task-1', taskVersion: '7', status: 'assigned', assignedAgentId: 'agent-1', title: '画一只鸟' })
-const grant = () => ({ taskId: 'task-1', targetAgentId: 'agent-1', requirementRevision: 3,
-  assignmentRevision: 7, grantId: 'grant-1', grantVersion: 1, state: 'ACTIVE', inputs: [],
-  permittedOperations: ['GENERATE_IMAGE', 'EDIT_IMAGE'], paidExecutionAuthorized: false })
+const grant = () => projection()
 const projection = () => ({ schemaVersion: 1, taskId: 'task-1', targetAgentId: 'agent-1', requirementRevision: '3',
   assignmentRevision: '7', taskVersion: '7', grantId: 'grant-1', grantVersion: '1', grantState: 'ACTIVE',
-  permittedOperations: ['GENERATE_IMAGE', 'EDIT_IMAGE'], inputs: [], bootstrapId: 'bootstrap-1',
-  bootstrapState: 'ADMITTED', stateVersion: '2', initialOperation: 'GENERATE_IMAGE',
+  permittedOperations: ['DELIBERATE', 'INSPECT_INPUTS'], inputs: [], bootstrapId: 'bootstrap-1',
+  bootstrapState: 'ADMITTED', stateVersion: '2', initialOperation: 'DELIBERATE',
   conversationId: '9007199254740993', initialRequestId: 'initial-1', currentAssignment: true })
-const args = () => ({ task: task(), agent: { agentId: 'agent-1' }, requestedOperations: ['GENERATE_IMAGE', 'EDIT_IMAGE'], initialOperation: 'GENERATE_IMAGE' })
-const record = () => ({ schemaVersion: 1, taskId: 'task-1', key: 'original-key', postAcknowledged: false,
-  body: pointAndStartBody({ agentId: 'agent-1', taskVersion: '6', requirementRevision: '3',
-    requestedOperations: args().requestedOperations, initialOperation: 'GENERATE_IMAGE' }) })
+const args = () => ({ task: task(), agent: { agentId: 'agent-1' } })
+const record = () => ({ schemaVersion: 2, taskId: 'task-1', key: 'original-key', postAcknowledged: false,
+  body: pointAndDeliberateBody({ targetAgentId: 'agent-1', expectedTaskVersion: '6', requirementRevision: '3' }) })
 const instances = []
 const harness = (overrides = {}) => {
   const memory = overrides.storage || storage()
@@ -36,7 +33,7 @@ const harness = (overrides = {}) => {
     get: async (path, query, opts) => {
       calls.push(['get', path, opts?.headers?.['Idempotency-Key']])
       if (path.endsWith('/requirements/current')) return { data: req() }
-      if (path.endsWith('/assignment-operation')) return { data: projection() }
+      if (path.endsWith('/point-and-deliberate/request')) return { data: projection() }
       return { data: sent ? canonical() : task() }
     },
     create: async (path, body, opts) => {
@@ -50,7 +47,7 @@ const harness = (overrides = {}) => {
     }, ...overrides.api
   }
   const flow = useHallPointAndStart({ agentApi: api, actorScopeKey: scope, storage: memory,
-    canAssign: current => current.status === 'open', isSupported: () => true, canReplayOriginal: () => true,
+    canAssign: current => current.status === 'open',
     createIdempotencyKey: () => 'original-key', onAdmitted: async value => { admitted.push(value); return true }, ...overrides.options })
   instances.push(flow)
   return { flow, calls, memory, scope, admitted, seed: value => createPointAndStartIntentStore({ storage: memory,
@@ -67,7 +64,7 @@ describe('persisted exact point-and-start source contract', () => {
     expect(await flow.start(original)).to.equal(true)
     expect(calls.map(c => c[0])).to.deep.equal(['get', 'get', 'post', 'get', 'get'])
     expect(calls[2][2]).to.deep.equal(record().body)
-    expect(calls[3]).to.deep.equal(['get', '/tasks/task-1/assignment-operation', 'original-key'])
+    expect(calls[3]).to.deep.equal(['get', '/tasks/task-1/point-and-deliberate/request', 'original-key'])
     expect(flow.state.value.status).to.equal('ATTACHED')
     expect(admitted[0].reference.conversationId).to.equal('9007199254740993')
     expect(admitted[0].task).to.deep.equal(canonical())
@@ -80,25 +77,25 @@ describe('persisted exact point-and-start source contract', () => {
     const facts = { ...input, contentMimeType: 'image/png', byteLength: '12', contentHash: 'b'.repeat(64) }
     let taskReads = 0
     const h = harness({ api: {
-      get: async path => ({ data: path.endsWith('/requirements/current') ? req() : path.endsWith('/assignment-operation')
+      get: async path => ({ data: path.endsWith('/requirements/current') ? req() : path.endsWith('/point-and-deliberate/request')
         ? { ...projection(), inputs: [facts] } : taskReads++ === 0 ? task() : canonical() }),
-      create: async (path, body) => { h.calls.push(['post', path, copy(body)]); return { data: { ...grant(), inputs: [{ ...facts, byteLength: 12 }] } } }
+      create: async (path, body) => { h.calls.push(['post', path, copy(body)]); return { data: { ...grant(), inputs: [{ ...facts, byteLength: '12' }] } } }
     } })
     expect(await h.flow.start({ ...args(), inputRefs: [input] })).to.equal(true)
-    expect(h.calls.find(c => c[0] === 'post')[2].inputRefs).to.deep.equal([input])
+    expect(h.calls.find(c => c[0] === 'post')[2]).to.deep.equal(record().body)
     expect(h.flow.state.value.projection.inputs).to.deep.equal([facts])
   })
 
-  it('server negotiation defaults off, even for a valid task', async () => {
-    const h = harness({ options: { isSupported: () => false } })
-    expect(await h.flow.start(args())).to.equal(false)
-    expect(h.calls).to.deep.equal([])
+  it('image capability negotiation is not a prerequisite for generic discussion', async () => {
+    const h = harness({ options: { isSupported: () => { throw new Error('must not query drawing capability') } } })
+    expect(await h.flow.start(args())).to.equal(true)
+    expect(h.calls.some(c => /capability|consent|provider/.test(c[1]))).to.equal(false)
   })
 
   for (const [name, mutate] of [
     ['no trustworthy requirement', r => { delete r.requirementRevision }],
     ['numeric revision', r => { r.requirementRevision = 3 }],
-    ['unsafe numeric write revision', r => { r.requirementRevision = '9007199254740993' }],
+    ['overflow revision', r => { r.requirementRevision = '9223372036854775808' }],
     ['mismatched task root version', r => { r.taskVersion = '5' }],
     ['missing immutable hash', r => { r.contentSha256 = '' }],
     ['bad source', r => { r.source = 'TASK_PLAN' }]
@@ -137,7 +134,7 @@ describe('persisted exact point-and-start source contract', () => {
     expect(h.flow.state.value.status).to.equal('UNKNOWN')
     const original = copy(h.flow.state.value.intent)
     h.flow.dispose()
-    const next = harness({ storage: memory, api: { get: async path => ({ data: path.endsWith('/assignment-operation') ? projection() : canonical() }) } })
+    const next = harness({ storage: memory, api: { get: async path => ({ data: path.endsWith('/point-and-deliberate/request') ? projection() : canonical() }) } })
     expect(await next.flow.checkOriginal('task-1')).to.equal(true)
     expect(next.calls.every(c => c[0] === 'get')).to.equal(true)
     expect(next.flow.state.value.intent.body).to.deep.equal(original.body)
@@ -148,7 +145,7 @@ describe('persisted exact point-and-start source contract', () => {
     const h = harness(); h.seed()
     expect(await h.flow.start({ ...args(), agent: { agentId: 'other' } })).to.equal(false)
     expect(h.calls).to.have.length(0)
-    expect(h.flow.state.value.intent.body.agentId).to.equal('agent-1')
+    expect(h.flow.state.value.intent.body.targetAgentId).to.equal('agent-1')
   })
 
   for (const [status, code] of [[404, 'ASSIGNMENT_OPERATION_UNAVAILABLE'], [401, 'AUTH_REQUIRED'], [403, 'FORBIDDEN'], [500, 'ASSIGNMENT_OPERATION_INTEGRITY_ERROR'], [503, 'ASSIGNMENT_OPERATION_SOURCE_UNAVAILABLE']]) {
@@ -162,10 +159,10 @@ describe('persisted exact point-and-start source contract', () => {
   it('explicit recovery after exact action404 replays original body/key only', async () => {
     let reads = 0
     const h = harness({ api: { get: async path => {
-      if (path.endsWith('/assignment-operation') && reads++ === 0) {
+      if (path.endsWith('/point-and-deliberate/request') && reads++ === 0) {
         const e = new Error('not yet observed'); e.status = 404; e.code = 'ASSIGNMENT_OPERATION_UNAVAILABLE'; throw e
       }
-      return { data: path.endsWith('/assignment-operation') ? projection() : canonical() }
+      return { data: path.endsWith('/point-and-deliberate/request') ? projection() : canonical() }
     } } }); h.seed()
     expect(await h.flow.resumeOriginal('task-1')).to.equal(true)
     expect(h.calls.filter(c => c[0] === 'post')).to.have.length(1)
@@ -175,26 +172,25 @@ describe('persisted exact point-and-start source contract', () => {
   it('explicit recovery replays persisted reference versions even when an external catalog could have changed', async () => {
     const input = { fileId: 'image-original', version: 2, purpose: 'REFERENCE' }
     const facts = { ...input, contentMimeType: 'image/png', byteLength: '12', contentHash: 'c'.repeat(64) }
-    const original = { ...record(), body: pointAndStartBody({ agentId: 'agent-1', taskVersion: '6', requirementRevision: '3',
-      requestedOperations: args().requestedOperations, initialOperation: 'GENERATE_IMAGE', inputRefs: [input] }) }
+    const original = record()
     let actionReads = 0
     const h = harness({ api: {
       get: async path => {
-        if (path.endsWith('/assignment-operation') && actionReads++ === 0) {
+        if (path.endsWith('/point-and-deliberate/request') && actionReads++ === 0) {
           throw Object.assign(new Error('not yet observed'), { status: 404, code: 'ASSIGNMENT_OPERATION_UNAVAILABLE' })
         }
-        return { data: path.endsWith('/assignment-operation') ? { ...projection(), inputs: [facts] } : canonical() }
+        return { data: path.endsWith('/point-and-deliberate/request') ? { ...projection(), inputs: [facts] } : canonical() }
       },
       create: async (path, body, options) => {
         h.calls.push(['post', path, copy(body), options.headers['Idempotency-Key']])
-        return { data: { ...grant(), inputs: [{ ...facts, byteLength: 12 }] } }
+        return { data: { ...grant(), inputs: [{ ...facts, byteLength: '12' }] } }
       }
     } })
     h.seed(original)
 
     expect(await h.flow.resumeOriginal('task-1')).to.equal(true)
-    expect(h.calls.find(call => call[0] === 'post')[2].inputRefs).to.deep.equal([input])
-    expect(h.flow.state.value.intent.body.inputRefs).to.deep.equal([input])
+    expect(h.calls.find(call => call[0] === 'post')[2]).to.deep.equal(original.body)
+    expect(h.flow.state.value.projection.inputs).to.deep.equal([facts])
   })
 
   it('confirmed POST + projection404 cannot erase facts or trigger replay', async () => {
@@ -230,7 +226,7 @@ describe('persisted exact point-and-start source contract', () => {
     expect(await sending).to.equal(false)
     expect(h.flow.state.value.status).to.equal('IDLE')
     expect(h.admitted).to.have.length(0)
-    expect(h.calls.some(c => c[1].endsWith('/assignment-operation'))).to.equal(false)
+    expect(h.calls.some(c => c[1].endsWith('/point-and-deliberate/request'))).to.equal(false)
     h.scope.value = 'owner-a/client-a'
     expect(h.seed().record.key).to.equal('original-key')
   })
@@ -239,11 +235,11 @@ describe('persisted exact point-and-start source contract', () => {
     let resolve, reads = 0
     const h = harness({ api: { get: async path => {
       if (path.endsWith('/requirements/current')) return new Promise(done => { resolve = done })
-      return { data: path.endsWith('/assignment-operation') ? projection() : reads++ === 0 ? task() : canonical() }
+      return { data: path.endsWith('/point-and-deliberate/request') ? projection() : reads++ === 0 ? task() : canonical() }
     } } })
     const original = args()
     const running = h.flow.start(original)
-    original.requestedOperations.splice(0, 2, 'INSPECT_INPUTS')
+    original.requestedOperations = ['GENERATE_IMAGE']
     original.inputRefs = [{ fileId: 'new', version: 1, purpose: 'REFERENCE' }]
     resolve({ data: req() })
     expect(await running).to.equal(true)
@@ -265,7 +261,7 @@ describe('persisted exact point-and-start source contract', () => {
     let reads = 0
     const h = harness({ api: { get: async path => {
       if (path.endsWith('/requirements/current')) return { data: req() }
-      if (path.endsWith('/assignment-operation')) return { data: projection() }
+      if (path.endsWith('/point-and-deliberate/request')) return { data: projection() }
       if (reads++ === 0) return { data: task() }
       if (reads === 2) throw new Error('snapshot offline')
       return { data: canonical() }
@@ -273,14 +269,14 @@ describe('persisted exact point-and-start source contract', () => {
     expect(await h.flow.start(args())).to.equal(false)
     expect(h.flow.state.value.status).to.equal('ADMITTED')
     expect(h.flow.state.value.intent.postAcknowledged).to.equal(true)
-    expect(h.flow.state.value.intent.grant.grantId).to.equal('grant-1')
+    expect(h.flow.state.value.intent.projection.grantId).to.equal('grant-1')
     expect(await h.flow.checkOriginal('task-1')).to.equal(true)
     expect(h.calls.filter(c => c[0] === 'post')).to.have.length(1)
   })
 
   it('newer canonical root requires fresh original-assignment verification before attaching', async () => {
     let actionReads = 0
-    const h = harness({ api: { get: async path => ({ data: path.endsWith('/assignment-operation')
+    const h = harness({ api: { get: async path => ({ data: path.endsWith('/point-and-deliberate/request')
       ? { ...projection(), taskVersion: actionReads++ === 0 ? '7' : '8' }
       : { ...canonical(), taskVersion: '8' } }) } }); h.seed()
     expect(await h.flow.checkOriginal('task-1')).to.equal(true)
@@ -291,7 +287,7 @@ describe('persisted exact point-and-start source contract', () => {
 
   it('same-target but changed assignment epoch fails fresh read and never attaches an old request', async () => {
     let actionReads = 0
-    const h = harness({ api: { get: async path => ({ data: path.endsWith('/assignment-operation')
+    const h = harness({ api: { get: async path => ({ data: path.endsWith('/point-and-deliberate/request')
       ? { ...projection(), taskVersion: actionReads++ === 0 ? '7' : '8', currentAssignment: actionReads === 1 }
       : { ...canonical(), taskVersion: '8' } }) } }); h.seed()
     expect(await h.flow.checkOriginal('task-1')).to.equal(false)
@@ -318,6 +314,38 @@ describe('persisted exact point-and-start source contract', () => {
     expect(h.admitted).to.have.length(0)
   })
 
+  it('old in-flight operation occupies the same slot and stays read-only without conversion', async () => {
+    const old = { schemaVersion: 1, taskId: 'task-1', key: 'old-key', postAcknowledged: false,
+      body: pointAndStartBody({ agentId: 'agent-1', taskVersion: '6', requirementRevision: '3',
+        requestedOperations: ['GENERATE_IMAGE'], initialOperation: 'GENERATE_IMAGE' }) }
+    const h = harness({ api: { get: async path => {
+      h.calls.push(['get', path])
+      throw Object.assign(new Error('unknown'), { status: 404, code: 'ASSIGNMENT_OPERATION_UNAVAILABLE' })
+    } } })
+    h.seed(old)
+    expect(await h.flow.start(args())).to.equal(false)
+    expect(await h.flow.resumeOriginal('task-1')).to.equal(false)
+    expect(h.calls).to.deep.equal([['get', '/tasks/task-1/assignment-operation']])
+    expect(h.seed(record()).state).to.equal('CORRUPT')
+    expect(h.flow.state.value.intent).to.deep.equal(old)
+  })
+
+  it('server-frozen mixed catalogue accepts 32 versions without requesting image roles from browser', async () => {
+    const inputs = Array.from({ length: 32 }, (_, index) => ({ fileId: `file-${index}`, version: 1, purpose: 'INPUT',
+      contentMimeType: ['image/png', 'application/pdf', 'audio/ogg', 'text/plain'][index % 4], byteLength: '12', contentHash: 'd'.repeat(64) }))
+    let taskReads = 0
+    const h = harness({ api: {
+      get: async path => ({ data: path.endsWith('/requirements/current') ? req() : path.endsWith('/point-and-deliberate/request')
+        ? { ...projection(), inputs } : taskReads++ === 0 ? task() : canonical() }),
+      create: async (path, body) => { h.calls.push(['post', path, body]); return { data: { ...projection(), inputs } } }
+    } })
+    expect(await h.flow.start(args())).to.equal(true)
+    expect(h.calls.find(c => c[0] === 'post')[2]).to.deep.equal(record().body)
+    expect(h.flow.state.value.projection.inputs).to.have.length(32)
+    const altered = [...inputs]; altered[0] = { ...altered[0], version: 2 }
+    expect(pointAndStartProjection({ ...projection(), inputs: altered }, record(), h.flow.state.value.projection)).to.equal(null)
+  })
+
   it('single composable blocks double click and disposal fences pending reads', async () => {
     let resolve
     const h = harness({ api: { get: async () => new Promise(done => { resolve = done }) } })
@@ -329,7 +357,7 @@ describe('persisted exact point-and-start source contract', () => {
   })
 })
 
-describe('independent action/grant/root fences', () => {
+describe('independent generic action/grant/root fences', () => {
   for (const [name, mutate] of [
     ['foreign task', p => { p.taskId = 'foreign' }],
     ['wrong target', p => { p.targetAgentId = 'foreign' }],
@@ -351,6 +379,16 @@ describe('independent action/grant/root fences', () => {
     const p = projection()
     expect(pointAndStartProjection({ ...p, conversationId: '88' }, record(), p)).to.equal(null)
     expect(pointAndStartProjection({ ...p, stateVersion: '3', bootstrapState: 'RETRY', conversationId: null, initialRequestId: null }, record(), p)).to.equal(null)
+  })
+  it('new body keeps long decimal versions as strings and rejects authority fields in persisted records', () => {
+    expect(pointAndDeliberateBody({ targetAgentId: 'agent-1', expectedTaskVersion: '9007199254740993', requirementRevision: '9223372036854775807' }))
+      .to.deep.equal({ targetAgentId: 'agent-1', expectedTaskVersion: '9007199254740993', requirementRevision: '9223372036854775807' })
+    const memory = storage(); const store = createPointAndStartIntentStore({ storage: memory, scope: 'owner', taskId: 'task-1' })
+    for (const changed of [{ ...record(), body: { ...record().body, paidExecutionAuthorized: true } },
+      { ...record(), providerConsent: {} }, { ...record(), controlledImageBridge: {} }, { ...record(), grant: null }]) {
+      expect(store.write(changed).state).to.equal('UNAVAILABLE')
+    }
+    expect(store.read().state).to.equal('ABSENT')
   })
   it('noncanonical/unsafe version never becomes an inaccurate write number', () => {
     expect(pointAndStartBody({ agentId: 'agent-1', taskVersion: '9007199254740993', requirementRevision: '3', requestedOperations: ['GENERATE_IMAGE'], initialOperation: 'GENERATE_IMAGE' })).to.equal(null)

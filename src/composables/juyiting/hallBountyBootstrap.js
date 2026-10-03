@@ -19,11 +19,11 @@ export const bountyBootstrapReference = value => {
       !conversation(value.conversationId)) return null
   return Object.freeze({ taskId: value.taskId, targetAgentId: value.targetAgentId,
     initialRequestId: value.initialRequestId, assignmentRevision: value.assignmentRevision,
-    conversationId: value.conversationId })
+    conversationId: value.conversationId, ...(value.initialOperation === 'DELIBERATE' ? { initialOperation: 'DELIBERATE' } : {}) })
 }
 
 export const sameBountyBootstrapReference = (a, b) => Boolean(a && b &&
-  ['taskId', 'targetAgentId', 'initialRequestId', 'assignmentRevision', 'conversationId'].every(key => a[key] === b[key]))
+  ['taskId', 'targetAgentId', 'initialRequestId', 'assignmentRevision', 'conversationId', 'initialOperation'].every(key => a[key] === b[key]))
 
 export const bountyBootstrapContextMatches = (context, task, agent, reference) => Boolean(reference &&
   context?.conversationScopeType === 'bounty' && context.conversationScopeKey === `task:${reference.taskId}` &&
@@ -34,20 +34,22 @@ export const bountyBootstrapContextMatches = (context, task, agent, reference) =
 
 // Validate the actual RequestView contract before touching any conversation state.
 export const validateBountyBootstrapRequest = (view, reference) => {
+  const generic = reference?.initialOperation === 'DELIBERATE'
   if (!reference || !view || view.requestId !== reference.initialRequestId ||
       view.conversationId !== reference.conversationId || !long(view.requestRevision) ||
       !long(view.conversationGeneration, true) || !long(view.userMessageId) ||
       !long(view.stateVersion, true) || !wireState(view.state) ||
-      !Array.isArray(view.turns) || !Array.isArray(view.steps) || view.steps.length !== 1) return null
+      !Array.isArray(view.turns) || !Array.isArray(view.steps) ||
+      (generic ? view.steps.length !== 0 || view.turns.length !== 1 || view.turns[0]?.route !== 'CHAT' : view.steps.length !== 1)) return null
   const step = view.steps[0]
-  if (!step || !exactTextId(step.stepId) || !long(step.stepNumber) ||
+  if (!generic && (!step || !exactTextId(step.stepId) || !long(step.stepNumber) ||
       step.taskId !== reference.taskId || step.assignmentRevision !== reference.assignmentRevision ||
       step.targetAgentId !== reference.targetAgentId || !['EXECUTE', 'INSPECT'].includes(step.kind) ||
-      !wireState(step.state) || !long(step.stateVersion, true)) return null
-  if (step.kind === 'EXECUTE') {
+      !wireState(step.state) || !long(step.stateVersion, true))) return null
+  if (step?.kind === 'EXECUTE') {
     if (!exactTextId(step.executionIntentId) || !wireState(step.executionState) ||
         (step.executionId !== null && !exactTextId(step.executionId))) return null
-  } else if (step.executionIntentId !== null || step.executionId !== null || step.executionState !== null) return null
+  } else if (!generic && (step.executionIntentId !== null || step.executionId !== null || step.executionState !== null)) return null
   const turnIds = new Set()
   for (const turn of view.turns) {
     if (!turn || !exactTextId(turn.turnId) || turnIds.has(turn.turnId) ||
@@ -62,7 +64,7 @@ export const validateBountyBootstrapRequest = (view, reference) => {
   return { requestId: view.requestId, requestRevision: view.requestRevision, conversationId: view.conversationId,
     conversationGeneration: view.conversationGeneration, userMessageId: view.userMessageId,
     state: view.state, stateVersion: view.stateVersion, turns: view.turns.map(turn => ({ ...turn })),
-    steps: [{ stepId: step.stepId, stepNumber: step.stepNumber, taskId: step.taskId,
+    steps: generic ? [] : [{ stepId: step.stepId, stepNumber: step.stepNumber, taskId: step.taskId,
       assignmentRevision: step.assignmentRevision, targetAgentId: step.targetAgentId,
       kind: step.kind, state: step.state, stateVersion: step.stateVersion,
       executionIntentId: step.executionIntentId, executionId: step.executionId, executionState: step.executionState }] }
@@ -75,6 +77,14 @@ export const bootstrapReadbackIsCurrent = (current, next) => {
       current.userMessageId !== next.userMessageId || !long(current.stateVersion, true) ||
       BigInt(next.stateVersion) < BigInt(current.stateVersion) ||
       (next.stateVersion === current.stateVersion && next.state !== current.state)) return false
+  for (const old of current.turns || []) {
+    const turn = next.turns.find(item => item.turnId === old.turnId)
+    if (!turn || ['requestId', 'requestRevision', 'conversationId', 'conversationGeneration', 'targetAgentId', 'route'].some(key => old[key] !== turn[key]) ||
+      !long(old.stateVersion, true) || BigInt(turn.stateVersion) < BigInt(old.stateVersion) ||
+      (old.lastDeltaSeq != null && BigInt(turn.lastDeltaSeq) < BigInt(old.lastDeltaSeq)) ||
+      (old.finalMessageId && old.finalMessageId !== turn.finalMessageId) ||
+      (old.stateVersion === turn.stateVersion && old.state !== turn.state)) return false
+  }
   for (const old of current.steps || []) {
     const step = next.steps.find(item => item.stepId === old.stepId)
     if (!step || !long(old.stateVersion, true) || BigInt(step.stateVersion) < BigInt(old.stateVersion) ||
