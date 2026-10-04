@@ -121,3 +121,25 @@ describe('actual API-generated text relation read projections', () => {
     }
   })
 })
+
+describe('API-verified clarified text delivery replay', () => {
+  it('ignores clarification messages and reconstructs all explicit modes from the original text basis', async () => {
+    const groups = JSON.parse(readFileSync(new URL('./fixtures/juyiting/clarified-text-delivery-v3.json', import.meta.url), 'utf8'))
+    for (const group of groups) {
+      const items = []
+      for (const projection of [group.updated, ...group.clarifications, group.initial]) {
+        const turn = { ...originalRequest(projection), turnId: projection.turnId, route: 'CHAT', state: 'FINAL_PERSISTED',
+          finalMessageId: projection.outcome.assistantMessageId, contextSnapshotId: projection.outcome.messageSource?.snapshotId }
+        const item = await completedTextItem(projection, originalRequest(projection), turn, 'task')
+        if (projection.outcome.kind === 'CLARIFY') expect(item).to.equal(null)
+        else items.push(item)
+      }
+      const delivery = currentOutputDelivery(items)
+      expect(delivery.map(item => item.requestId), group.mode).to.deep.equal(group.mode === 'APPEND' ? ['request', 'clarified'] : ['clarified'])
+      expect(delivery.at(-1).text).to.equal(group.updated.outcome.text)
+      expect(delivery.at(-1).messageSource).to.deep.equal(group.updated.outcome.messageSource)
+      expect(delivery.at(-1).deliveryRelation.parentOutcomeId).to.equal(group.initial.outcome.outcomeId)
+      expect(delivery.at(-1).deliveryRelation.parentOutcomeId).not.to.equal(group.admissionFacts.parentOutcomeId)
+    }
+  })
+})

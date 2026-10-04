@@ -232,3 +232,40 @@ describe('explicit text follow-up admission basis', () => {
     }
   })
 })
+
+describe('clarified text original-CAS recovery', () => {
+  it('freezes the immediate question CAS while the resulting delivery still targets the original text', async () => {
+    const group = JSON.parse(readFileSync(new URL('./fixtures/juyiting/clarified-text-delivery-v3.json', import.meta.url), 'utf8'))[1]
+    // Emulate the earlier OPEN read; the exported actual final read has already answered this question.
+    const open = structuredClone(group.clarifications.at(-1))
+    Object.assign(open.outcome.clarification, { state: 'OPEN', stateVersion: '0', replyRequestId: null })
+    const context = { conversationId: '42', conversationGeneration: '1', taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' }
+    const storage = store(); const posts = []; let attempt = 0
+    const api = { get: async path => ({ data: { data: path.includes(`/requests/${group.initial.requestId}/`) ? group.initial :
+      path.includes(`/requests/${group.updated.requestId}/`) ? group.updated : open } }), create: async (_path, body, options) => {
+      posts.push(structuredClone({ body, key: options.headers['Idempotency-Key'] }))
+      if (++attempt === 1) throw new Error('lost clarification receipt')
+      return { data: { data: { schemaVersion: 1, intent: 'CLARIFICATION_REPLY', requestId: group.updated.requestId,
+        userMessageId: '10', turnIds: [group.updated.turnId], state: 'ADMITTED', stateVersion: '0', eventCursor: '1',
+        statusUrl: `/chat/requests/${group.updated.requestId}`, typedOutcomeUrl: `/chat/conversations/42/requests/${group.updated.requestId}/typed-outcome`,
+        replay: true, pendingQuestionId: group.admissionFacts.pendingQuestionId } } }
+    } }
+    const makeLane = () => useHallTypedDeliberation({ chatApi: api, actorScopeKey: ref('owner-clarified'), authorizationGeneration: ref(1),
+      getContext: () => context, getContextGeneration: () => 1, getCatalogEntries: () => [], storage, enabled: () => true })
+    let lane = makeLane()
+    try {
+      await lane.readOne(group.initial.requestId); await lane.readOne(open.requestId)
+      expect(lane.choosePending(lane.projections.value.find(value => value.requestId === open.requestId))).to.equal(true)
+      expect(await lane.submit({ content: '替换原文，不追加。' })).to.equal(false)
+      expect(posts[0].body).to.deep.include({ intent: 'CLARIFICATION_REPLY', parentOutcomeId: open.outcome.outcomeId,
+        pendingQuestionId: group.admissionFacts.pendingQuestionId, expectedParentStateVersion: '0', expectedPendingQuestionStateVersion: '0' })
+      expect(posts[0].body.parentOutcomeId).not.to.equal(group.initial.outcome.outcomeId)
+      lane.dispose(); lane = makeLane()
+      await lane.recover(); expect(posts).to.have.length(1)
+      expect(await lane.resumeUnknown()).to.equal(true); expect(posts).to.have.length(2); expect(posts[1]).to.deep.equal(posts[0])
+      const final = lane.projections.value.find(value => value.requestId === group.updated.requestId)
+      expect(final.outcome.deliveryRelation).to.deep.equal(group.updated.outcome.deliveryRelation)
+      expect(final.outcome.deliveryRelation.parentOutcomeId).to.equal(group.initial.outcome.outcomeId)
+    } finally { lane.dispose() }
+  })
+})
