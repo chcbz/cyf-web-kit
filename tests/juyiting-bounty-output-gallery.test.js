@@ -1,5 +1,6 @@
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
 import * as Vue from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -9,7 +10,7 @@ import { readOutputRecovery, writeOutputRecovery } from '../src/composables/juyi
 import { useHallConversationArchive } from '../src/composables/juyiting/useHallConversationArchive.js'
 import { useHallBountyFinalization, safeFinalizationVersion } from '../src/composables/juyiting/useHallBountyFinalization.js'
 
-const filename = new URL('../src/components/juyiting/BountyExecutionOutputs.vue', import.meta.url).pathname
+const filename = fileURLToPath(new URL('../src/components/juyiting/BountyExecutionOutputs.vue', import.meta.url))
 const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
 const script = compileScript(descriptor, { id: 'hall-bounty-live-output-test', inlineTemplate: true }).content
   .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm,

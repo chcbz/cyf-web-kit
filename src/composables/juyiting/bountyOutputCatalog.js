@@ -8,6 +8,10 @@ const assetRefValid = ref => ref && typeof ref === 'object' && !Array.isArray(re
   typeof ref.assetId === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(ref.assetId) &&
   typeof ref.revision === 'string' && /^[1-9][0-9]{0,18}$/.test(ref.revision) && BigInt(ref.revision) <= 9223372036854775807n
 
+const replacementValid = ref => ref && typeof ref === 'object' && !Array.isArray(ref) &&
+  Object.keys(ref).length === 4 && Object.keys(ref).every(key => ['requestId', 'stepId', 'outputId', 'sha256'].includes(key)) &&
+  [ref.requestId, ref.stepId, ref.outputId].every(exactOutputId) && typeof ref.sha256 === 'string' && HASH.test(ref.sha256)
+
 // Only the server's persisted asset reference can enter the existing archive client.
 export function outputAssetPart (item) {
   if (!assetRefValid(item?.assetRef)) return null
@@ -32,6 +36,7 @@ export function outputCatalogItems (items, requestId, stepId) {
         typeof item.sha256 !== 'string' || !HASH.test(item.sha256) ||
         !Number.isSafeInteger(item.byteLength) || item.byteLength < 0) return false
     if (item.assetRef != null && !assetRefValid(item.assetRef)) return false
+    if (item.replaces != null && (!replacementValid(item.replaces) || item.replaces.requestId === requestId)) return false
     const expected = `${prefix}${encodeURIComponent(item.outputId)}`
     if (item.downloadUrl !== `${expected}?download=true` ||
         (item.previewUrl != null && item.previewUrl !== expected) ||
@@ -40,6 +45,7 @@ export function outputCatalogItems (items, requestId, stepId) {
     seen.add(item.outputId)
     return true
   }).map(item => Object.freeze({ ...item, requestId, stepId,
+    replaces: item.replaces == null ? null : Object.freeze({ ...item.replaces }),
     assetRef: item.assetRef == null ? null : Object.freeze({ assetId: item.assetRef.assetId, revision: item.assetRef.revision }) }))
 }
 
@@ -68,3 +74,29 @@ const DOWNLOAD_EXTENSIONS = new Map([
 ])
 export const downloadMimeType = mime => DOWNLOAD_EXTENSIONS.has(mime) ? mime : 'application/octet-stream'
 export const outputDownloadName = item => `${exactOutputId(item?.outputId) ? item.outputId : 'output'}.${DOWNLOAD_EXTENSIONS.get(item?.contentMimeType) || 'bin'}`
+
+/** Apply only explicit server edit relations to an already explicit delivery list.
+ * The caller must supply its persisted initial references. This never seeds a list
+ * from history, MIME, arrival order or the active request. Missing/branched parents
+ * require clarification rather than silently appending or choosing a latest draft.
+ */
+export function applyOutputReplacements (current, edits) {
+  if (!Array.isArray(current) || !Array.isArray(edits) || !current.length) throw new Error('本次交付来源尚未明确。')
+  const result = [...current]
+  const keys = new Set()
+  for (const item of result) {
+    if (![item?.requestId, item?.stepId, item?.outputId].every(exactOutputId) || (typeof item?.sha256 !== 'string' || !HASH.test(item.sha256)) || keys.has(outputItemKey(item))) throw new Error('本次交付来源无效。')
+    keys.add(outputItemKey(item))
+  }
+  // The caller's explicit edit order is persisted causal order, not network completion order.
+  for (const edit of edits) {
+    if (![edit?.requestId, edit?.stepId, edit?.outputId].every(exactOutputId) || (typeof edit?.sha256 !== 'string' || !HASH.test(edit.sha256)) || !replacementValid(edit?.replaces)) throw new Error('改稿未关联明确的原成果。')
+    const parentKey = outputItemKey(edit.replaces)
+    const index = result.findIndex(item => outputItemKey(item) === parentKey && item.sha256 === edit.replaces.sha256)
+    if (index < 0 || keys.has(outputItemKey(edit))) throw new Error('改稿对象已变化，请在会话中明确要使用的稿件。')
+    keys.delete(parentKey); keys.add(outputItemKey(edit))
+    result[index] = edit
+  }
+  return Object.freeze(result.map(item => Object.freeze({ ...item,
+    replaces: item.replaces == null ? null : Object.freeze({ ...item.replaces }) })))
+}

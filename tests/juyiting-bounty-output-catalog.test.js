@@ -1,5 +1,5 @@
 import { expect } from 'chai'
-import { outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart } from '../src/composables/juyiting/bountyOutputCatalog.js'
+import { outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, applyOutputReplacements } from '../src/composables/juyiting/bountyOutputCatalog.js'
 
 const requestId = 'request-1'
 const stepId = 'step-1'
@@ -82,4 +82,54 @@ describe('scoped bounty output catalog', () => {
     }
   })
 
+})
+
+describe('explicit output replacement projection', () => {
+  const item = (requestId, outputId, sha256, replaces = null) => Object.freeze({ requestId, stepId: 'step-1', outputId, sha256, contentMimeType: 'image/png', replaces })
+  const first = item('first', 'bird', 'a'.repeat(64))
+  const other = item('first', 'tree', 'b'.repeat(64))
+  const edit = item('edit', 'blue-bird', 'c'.repeat(64), { requestId: 'first', stepId: 'step-1', outputId: 'bird', sha256: first.sha256 })
+  it('replaces just the exact edited item, retaining other outputs and historical bytes', () => {
+    const original = Object.freeze([first, other])
+    const result = applyOutputReplacements(original, [edit])
+    expect(result).to.deep.equal([edit, other])
+    expect(original).to.deep.equal([first, other])
+    expect(Object.isFrozen(result)).to.equal(true)
+  })
+  it('reconstructs multi-round edits from persisted refs after refresh without latest-by-type inference', () => {
+    const later = item('later', 'green-bird', 'd'.repeat(64), { requestId: edit.requestId, stepId: edit.stepId, outputId: edit.outputId, sha256: edit.sha256 })
+    const sources = JSON.parse(JSON.stringify({ initial: [first, other], edits: [edit, later] }))
+    expect(applyOutputReplacements(sources.initial, sources.edits)).to.deep.equal([later, other])
+    const accepted = applyOutputReplacements([first, other], [edit])
+    applyOutputReplacements([first, other], [edit, later])
+    expect(accepted).to.deep.equal([edit, other])
+  })
+  it('never unions history, accepts an ambiguous branch, or silently substitutes changed bytes', () => {
+    for (const edits of [[first], [{ ...edit, replaces: { ...edit.replaces, sha256: 'f'.repeat(64) } }], [edit, { ...edit, requestId: 'branch' }], [edit, edit]]) {
+      expect(() => applyOutputReplacements([first, other], edits)).to.throw()
+    }
+    expect(() => applyOutputReplacements([], [edit])).to.throw()
+    expect(applyOutputReplacements([first, other], [])).to.deep.equal([first, other])
+  })
+  it('pins the displayed source bytes independently of mutable network records', () => {
+    const initial = JSON.parse(JSON.stringify([first, other]))
+    const edits = JSON.parse(JSON.stringify([edit]))
+    const displayed = applyOutputReplacements(initial, edits)
+    initial[1].sha256 = 'f'.repeat(64)
+    edits[0].sha256 = 'e'.repeat(64)
+    edits[0].replaces.sha256 = 'd'.repeat(64)
+    expect(displayed).to.deep.equal([edit, other])
+    expect(Object.isFrozen(displayed[0])).to.equal(true)
+    expect(Object.isFrozen(displayed[0].replaces)).to.equal(true)
+    expect(() => applyOutputReplacements([{ ...first, sha256: [first.sha256] }], [])).to.throw()
+  })
+  it('accepts only exact optional server replacement refs in the existing catalog', () => {
+    const replacement = { requestId: 'prior-request', stepId: 'prior-step', outputId: 'prior-output', sha256: 'b'.repeat(64) }
+    const parsed = outputCatalogItems([output({ replaces: replacement })], requestId, stepId)[0]
+    expect(parsed.replaces).to.deep.equal(replacement)
+    expect(Object.isFrozen(parsed.replaces)).to.equal(true)
+    for (const replaces of [ { ...replacement, requestId }, { ...replacement, sha256: 'bad' }, { ...replacement, outputId: '../escape' }, { ...replacement, runId: 'invented' }, 'output-1' ]) {
+      expect(outputCatalogItems([output({ replaces })], requestId, stepId)).to.deep.equal([])
+    }
+  })
 })

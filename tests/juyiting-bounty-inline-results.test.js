@@ -12,7 +12,7 @@ describe('scoped bounty media belongs to the conversation transcript', () => {
     const bounty = source('BountyDiscussionPanel')
     const messages = chat.indexOf('<div ref="messageBoxRef" class="hall-messages">')
     const composer = chat.indexOf('<HallChatComposer', messages)
-    const results = chat.indexOf('<slot name="bounty-results" />')
+    const results = chat.search(/<slot\b[^>]*\bname="bounty-results"/)
     expect(messages).to.be.greaterThan(-1)
     expect(results).to.be.greaterThan(messages)
     expect(results).to.be.lessThan(composer)
@@ -27,7 +27,7 @@ describe('scoped bounty media belongs to the conversation transcript', () => {
   it('mounts the real transcript section with inline results after the last message', () => {
     const chat = source('ChatPanel')
     const begin = chat.indexOf('<div ref="messageBoxRef" class="hall-messages">')
-    const end = chat.indexOf('\n\n    <HallChatComposer', begin)
+    const end = chat.indexOf('<HallChatComposer', begin)
     expect(begin).to.be.greaterThan(-1)
     expect(end).to.be.greaterThan(begin)
     const template = chat.slice(begin, end).trim()
@@ -36,7 +36,7 @@ describe('scoped bounty media belongs to the conversation transcript', () => {
       senderText: () => 'Agent', renderMarkdown: text => text,
       deliberationStatus: '', isAwaitingReply: false, emptyText: '暂无',
       conversationId: 'conversation-1', materialIdentityKey: 'owner-a', identityScope: 'tenant\u0000client\u0000owner-a',
-      isTaskDiscussion: true, typedForMessage: () => []
+      isTaskDiscussion: true, taskId: 'task-1', materialName: () => '资料', typedForMessage: () => []
     }) }
     const globals = ['Element', 'HTMLElement', 'SVGElement', 'Node']
     const installed = globals.filter(name => !globalThis[name])

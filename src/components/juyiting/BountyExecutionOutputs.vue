@@ -19,6 +19,7 @@
         <audio v-else-if="previewKind(item.contentMimeType) === 'audio'" :src="previewUrls[outputItemKey(item)]" controls preload="none" aria-label="议事生成音频" />
         <span v-else>此格式请下载查看。</span>
       </template>
+      <small v-if="item.replaces">改稿关联：{{ item.replaces.outputId }}（原稿仍保留）</small>
       <small>需要调整？直接在会话中告诉 Agent。</small>
     </div>
     <button v-if="selectedKeys.length || finalizeState.intent" type="button" class="finalize-button" :disabled="finalizeState.busy || finalizeState.state === 'completed' || finalizeState.state === 'recovery_error' || (finalizeState.receipt?.state === 'failed' && !finalizeState.receipt.retryable)" @click="finalizeSelected">{{ finalizeState.busy ? '正在验收…' : finalizeState.state === 'completed' ? '需求已完成' : finalizeState.intent ? '继续验收' : `验收选中的 ${selectedKeys.length} 项成果` }}</button>
