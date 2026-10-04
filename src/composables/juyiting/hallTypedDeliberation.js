@@ -22,10 +22,10 @@ export const sourceSelector = value => {
 export const discussionBody = ({ intent, taskId, assignmentRevision, content, parentOutcomeId = null,
   expectedParentStateVersion = null, pendingQuestionId = null, expectedPendingQuestionStateVersion = null, sourceSelectors = [] }) => {
   if (!['DISCUSSION', 'CLARIFICATION_REPLY'].includes(intent) || !typedId(taskId) || !typedLong(assignmentRevision, { allowZero: true }) ||
-    typeof content !== 'string' || !content.trim() || Array.from(content).length > 4000 || isoControl(content) ||
+    typeof content !== 'string' || Array.from(content).length > 4000 || (isoControl(content) && Boolean(content.trim())) ||
     !Array.isArray(sourceSelectors) || sourceSelectors.length > 32) return null
   const selectors = sourceSelectors.map(sourceSelector)
-  if (selectors.some(value => !value)) return null
+  if (selectors.some(value => !value) || (!content.trim() && !selectors.length)) return null
   const body = {
     schemaVersion: 1, intent, taskId, expectedAssignmentRevision: assignmentRevision, content,
     parentOutcomeId, expectedParentStateVersion, pendingQuestionId, expectedPendingQuestionStateVersion,

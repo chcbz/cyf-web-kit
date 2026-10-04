@@ -5,6 +5,18 @@ import { discussionAccepted, discussionBody, typedOutcomeProjection } from '../s
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/juyiting/typed-deliberation-atomic-followup-v1.json', import.meta.url)))
 const clone = value => JSON.parse(JSON.stringify(value))
 describe('typed natural deliberation frozen wire', () => {
+  it('preserves empty/whitespace user bodies only with exact nonempty attachments', () => {
+    const selector = { kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'file-1', version: '7', purpose: 'INPUT', assetId: null, assetRevision: null }
+    for (const content of ['', '  ', ' \t\n']) {
+      const command = { intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content, sourceSelectors: [selector] }
+      expect(discussionBody(command).content).to.equal(content)
+      expect(discussionBody({ ...command, sourceSelectors: [] })).to.equal(null)
+      expect(discussionBody({ ...command, sourceSelectors: [{ ...selector, purpose: 'OUTPUT' }] })).to.equal(null)
+      const reply = { ...command, intent: 'CLARIFICATION_REPLY', parentOutcomeId: 'outcome-1', expectedParentStateVersion: '0', pendingQuestionId: 'question-1', expectedPendingQuestionStateVersion: '0' }
+      expect(discussionBody(reply).content).to.equal(content)
+      expect(discussionBody({ ...reply, sourceSelectors: [] })).to.equal(null)
+    }
+  })
   it('copies the frozen fixture byte-exact and emits only the exact ten-key discussion body', () => {
     const body = discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content: fixture.golden.discussion.content })
     expect(body).to.deep.equal(fixture.golden.discussion)

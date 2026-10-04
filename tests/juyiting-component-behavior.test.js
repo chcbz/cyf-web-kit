@@ -1958,6 +1958,25 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.emitted('discuss-task')).to.equal(undefined)
   })
 
+  it('shows exact attachment cards for blank task messages without adding user prose or leaking into private chat', async () => {
+    const wrapper = mount(ChatPanel, { global: { stubs }, props: {
+      agents: [], draft: '', discussionVariant: 'bounty', selectedTask: { id: 'task-1' },
+      mentionLabel: agent => agent.name, senderText: message => message.sender,
+      messages: [{ localId: '101', sender: 'USER', content: '', typedTaskId: 'task-1', typedSourceSelectors: [
+        { kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'file-1', version: '7', purpose: 'INPUT', assetId: null, assetRevision: null }
+      ] }]
+    } })
+    const cards = wrapper.get('[aria-label="本条消息资料"]')
+    expect(cards.text()).to.include('资料 file-1')
+    expect(cards.text()).to.include('版本 7')
+    expect(wrapper.find('.message-content').exists()).to.equal(false)
+    expect(wrapper.text()).not.to.include('请处理附件')
+    await wrapper.setProps({ selectedTask: { id: 'other-task' } })
+    expect(wrapper.find('[aria-label="本条消息资料"]').exists()).to.equal(false)
+    await wrapper.setProps({ selectedTask: { id: 'task-1' }, discussionVariant: 'private' })
+    expect(wrapper.find('[aria-label="本条消息资料"]').exists()).to.equal(false)
+  })
+
   it('keeps persistent command templates out of ChatPanel', async () => {
     const wrapper = mount(ChatPanel, {
       global: { stubs },

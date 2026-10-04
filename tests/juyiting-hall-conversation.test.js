@@ -27,6 +27,15 @@ const deferred = () => {
 }
 
 describe('useHallConversation scoped message loading', () => {
+  it('retains attachment-only USER messages with exact scoped references and no invented text', () => {
+    const source = { kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'file-1', version: '7', purpose: 'INPUT', assetId: null, assetRevision: null }
+    const message = normalizeHallMessage({ id: '101', messageType: 'USER', senderType: 'user', jiacn: 'owner', content: '',
+      metadata: JSON.stringify({ conversationScopeType: 'bounty', selectedTaskId: 'task-1', typedSourceSelectors: [source] }) }, 'owner')
+    expect(message.content).to.equal('')
+    expect(message.typedTaskId).to.equal('task-1')
+    expect(message.typedSourceSelectors).to.deep.equal([source])
+    expect(normalizeHallMessage({ id: '102', senderType: 'user', content: '', metadata: { conversationScopeType: 'private', typedSourceSelectors: [source] } }, 'owner').typedSourceSelectors).to.deep.equal([])
+  })
   it('does not fetch or schedule SSE recovery when token acquisition returns null', async () => {
     const originalFetch = global.fetch
     const originalSetTimeout = window.setTimeout

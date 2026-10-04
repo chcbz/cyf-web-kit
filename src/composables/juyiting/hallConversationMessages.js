@@ -1,3 +1,4 @@
+import { sourceSelector, typedId } from './hallTypedDeliberation.js'
 import { applyMessagePartEvent, isMessagePartEvent, mergeMessageParts } from './hallMessageParts.js'
 import { isOwnMessage, normalizeDisplayName, resolveAccountDisplayName, resolveDisplayName } from '../../utils/displayName.js'
 
@@ -50,6 +51,10 @@ export const normalizeHallMessage = (item, identity) => {
     ownerJiacn: item.ownerJiacn,
     isSelf,
     content: item.content || '',
+    typedTaskId: sender === 'USER' && metadata.conversationScopeType === 'bounty' ? typedId(metadata.selectedTaskId) : '',
+    typedSourceSelectors: sender === 'USER' && metadata.conversationScopeType === 'bounty' &&
+      Array.isArray(metadata.typedSourceSelectors) && metadata.typedSourceSelectors.length <= 32
+      ? metadata.typedSourceSelectors.map(sourceSelector).filter(Boolean) : [],
     parts: mergeMessageParts([], Array.isArray(item.parts) ? item.parts : []),
     timestamp: item.createTime || metadata.timestamp || Date.now(),
     streaming: false,

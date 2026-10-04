@@ -59,7 +59,15 @@
           <strong>{{ senderText(message) }}</strong>
           <span v-if="message.streaming" class="message-state">回话未尽</span>
         </div>
-        <div class="message-content" v-html="renderMarkdown(message.content)"></div>
+        <div v-if="message.content" class="message-content" v-html="renderMarkdown(message.content)"></div>
+        <div v-if="isTaskDiscussion && message.typedTaskId === taskId && message.typedSourceSelectors?.length" class="message-parts" aria-label="本条消息资料">
+          <article v-for="(source, index) in message.typedSourceSelectors" :key="index" class="task-material-reference">
+            <template v-if="source.kind === 'TASK_LINKED_WORKSPACE_VERSION'">
+              <strong>{{ materialName(source) }}</strong><span>版本 {{ source.version }} · {{ source.purpose === 'INPUT' ? '输入资料' : '参考资料' }}</span>
+            </template>
+            <template v-else><strong>会话资料 {{ source.assetId }}</strong><span>修订 {{ source.assetRevision }}</span></template>
+          </article>
+        </div>
         <BountyTextSelectionArchive
           v-if="isTaskDiscussion"
           :conversation-id="conversationId"
@@ -95,6 +103,7 @@
       :agents="agents"
       :discussion-variant="discussionVariant"
       :draft="draft"
+      :has-typed-attachments="typedEnabled && discussionVariant === 'bounty' && typedSourceSelectors.length > 0"
       :interaction-locked="conversationBusy"
       :is-awaiting-reply="isAwaitingReply"
       :is-streaming="isStreaming"

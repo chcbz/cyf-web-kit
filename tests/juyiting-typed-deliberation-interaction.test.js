@@ -43,6 +43,30 @@ describe('typed natural discussion interaction adapter', () => {
     expect(proposals).to.deep.equal([{ kind: 'GENERATE_IMAGE', content: '画一只蓝色小鸟', inputRefs: [], continuationOf: null, projection: proposal('request-3') }])
     lane.dispose()
   })
+  it('recovers attachment-only requests with byte-identical original body, sources and key', async () => {
+    const context = ref({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' })
+    const calls = []; let attempts = 0
+    const selector = { kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'file-1', version: '7', purpose: 'INPUT', assetId: null, assetRevision: null }
+    const lane = useHallTypedDeliberation({ chatApi: { create: async (_path, body, options) => {
+      calls.push({ body, key: options.headers['Idempotency-Key'] }); attempts++
+      if (attempts === 1) throw new Error('ack lost')
+      return { data: { data: receipt(body.intent, 'request-9') } }
+    }, get: async () => ({ data: { data: clarify('request-9') } }) },
+    actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context.value, getContextGeneration: () => 1, getCatalogEntries: () => [], storage: store(), enabled: () => true })
+    try {
+      expect(await lane.submit({ content: '' })).to.equal(false)
+      expect(calls).to.have.length(0)
+      expect(await lane.submit({ content: '  ', sourceSelectors: [selector] })).to.equal(false)
+      selector.version = '8'
+      expect(await lane.recover()).to.equal(true)
+      expect(calls).to.have.length(1)
+      expect(await lane.resumeUnknown()).to.equal(true)
+      expect(calls).to.have.length(2)
+      expect(calls[1]).to.deep.equal(calls[0])
+      expect(calls[1].body.content).to.equal('  ')
+      expect(calls[1].body.sourceSelectors[0].version).to.equal('7')
+    } finally { lane.dispose() }
+  })
   it('persists an unknown original key and only re-POSTs that same key after explicit resume', async () => {
     const context = ref({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }); const keys = []; let attempts = 0
     const lane = useHallTypedDeliberation({ chatApi: { create: async (_path, body, options) => { keys.push(options.headers['Idempotency-Key']); attempts++; if (attempts === 1) throw new Error('ack lost'); return { data: { data: receipt(body.intent, 'request-9') } } }, get: async () => ({ data: { data: clarify('request-9') } }) },

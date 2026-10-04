@@ -118,6 +118,7 @@ const props = defineProps({
   agents: { type: Array, default: () => [] },
   discussionVariant: { type: String, default: 'public' },
   draft: { type: String, default: '' },
+  hasTypedAttachments: { type: Boolean, default: false },
   interactionLocked: { type: Boolean, default: false },
   isAwaitingReply: { type: Boolean, default: false },
   isStreaming: { type: Boolean, default: false },
@@ -173,7 +174,7 @@ const isFocused = ref(false)
 
 const draftLength = computed(() => String(props.draft || '').length)
 const inputLocked = computed(() => props.interactionLocked || props.isStreaming || props.isAwaitingReply || Boolean(props.voice?.voiceInteractionLocked))
-const canSend = computed(() => Boolean(String(props.draft || '').trim()) && !inputLocked.value)
+const canSend = computed(() => (Boolean(String(props.draft || '').trim()) || (props.discussionVariant === 'bounty' && props.hasTypedAttachments)) && !inputLocked.value)
 const composerClass = computed(() => ({
   'is-streaming': props.isStreaming,
   'has-draft': Boolean(String(props.draft || '').trim())

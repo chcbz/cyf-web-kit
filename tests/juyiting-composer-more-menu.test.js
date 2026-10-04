@@ -14,6 +14,20 @@ const Composer = new Function('Vue', script)(Vue)
 const create = props => mount(Composer, { attachTo: document.body, props: { mentionLabel: () => '', draft: '保留我的草稿', ...props }, global: { stubs: { 'var-icon': true } } })
 
 describe('Juyi Hall simple composer more menu', () => {
+  it('allows attachment-only bounty input, but not empty, private, public or locked sends', async () => {
+    for (const discussionVariant of ['public', 'private', 'bounty']) {
+      const wrapper = create({ draft: '  ', discussionVariant, hasTypedAttachments: true })
+      try {
+        expect(wrapper.get('.composer-send').attributes('disabled')).to.equal(discussionVariant === 'bounty' ? undefined : '')
+        await wrapper.get('form').trigger('submit')
+        expect(Boolean(wrapper.emitted('send-message'))).to.equal(discussionVariant === 'bounty')
+        await wrapper.setProps({ hasTypedAttachments: false })
+        expect(wrapper.get('.composer-send').attributes('disabled')).to.equal('')
+        await wrapper.setProps({ hasTypedAttachments: true, interactionLocked: true })
+        expect(wrapper.get('.composer-send').attributes('disabled')).to.equal('')
+      } finally { wrapper.unmount() }
+    }
+  })
   it('starts closed and opens materials without changing or submitting the draft', async () => {
     const wrapper = create()
     try {
