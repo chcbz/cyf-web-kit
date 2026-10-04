@@ -100,3 +100,23 @@ export function applyOutputReplacements (current, edits) {
   return Object.freeze(result.map(item => Object.freeze({ ...item,
     replaces: item.replaces == null ? null : Object.freeze({ ...item.replaces }) })))
 }
+
+/** A committed manifest is one explicit batch. With multiple independent batches
+ * the conversation must clarify delivery intent; never union history or pick a latest batch.
+ * Edits are resolved by exact parent hashes, independent of response arrival order. */
+export function currentOutputDelivery (catalog) {
+  if (!Array.isArray(catalog) || !catalog.length) return Object.freeze([])
+  const originals = catalog.filter(item => !item.replaces)
+  const roots = new Set(originals.map(item => JSON.stringify([item.requestId, item.stepId])))
+  if (roots.size !== 1) throw new Error('本次交付范围尚不明确，请回到议事说明要交付哪些成果。')
+  let current = applyOutputReplacements(originals, [])
+  let pending = catalog.filter(item => item.replaces)
+  while (pending.length) {
+    const available = pending.filter(edit => current.some(item => outputItemKey(item) === outputItemKey(edit.replaces) && item.sha256 === edit.replaces.sha256))
+    const parents = available.map(edit => outputItemKey(edit.replaces))
+    if (!available.length || new Set(parents).size !== parents.length) throw new Error('改稿关联有歧义，请在议事中明确本次使用的稿件。')
+    current = applyOutputReplacements(current, available)
+    pending = pending.filter(edit => !available.includes(edit))
+  }
+  return current
+}

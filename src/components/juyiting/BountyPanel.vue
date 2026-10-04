@@ -259,7 +259,7 @@
               <section v-if="!embeddedHall" class="workspace-shortcut" aria-label="榜文百宝箱入口">
                 <div>
                   <strong>资料与交付</strong>
-                  <p>资料和成果可在议事中预览、下载；需要保留时存入工作空间，最终按选定交付件验收。</p>
+                  <p>资料和成果可在议事中预览、下载；需要保留时存入工作空间，在事项详情核对本次成果并验收。</p>
                 </div>
                 <button type="button" @click="$emit('open-workspace')">打开百宝箱</button>
               </section>
@@ -280,7 +280,7 @@
               />
               <section v-if="embeddedHall" class="deliberation-execution-route" role="status">
                 <strong>在议事中协作交付</strong>
-                <p>点将后自动进入悬赏议事。你可以继续补充文字和资料，与 Agent 反复沟通，再选择满意的内容保存或提交验收。</p>
+                <p>点将后自动进入悬赏议事。你可以继续补充文字和资料，与 Agent 反复沟通，在事项详情核对本次成果并确认验收，保存可选。</p>
               </section>
               <section v-if="isFundedTask(detailTask)" class="funded-preview-details" aria-label="资金悬赏详情">
                 <p class="funding-summary">已托管：{{ formatMoney(detailTask.funding.remainingMicro || detailTask.funding.grossBountyAmountMicro) }}</p>

@@ -372,8 +372,31 @@
             @set-status-filter="setTaskStatusFilter"
           />
 
+          <BountyAcceptancePanel
+            v-if="renderedPanel === 'tasks' && formalTaskRef && hallIdentityScope && multimediaDeliberationUiEnabled && !taskReviewRef && formalTaskRef.funding?.mode !== 'FUNDED_SINGLE_AGENT'"
+            :key="formalTaskRef.id"
+            :task-id="formalTaskRef.id"
+            :identity-key="`${apiStore.authorizationGeneration}\u0000${hallIdentityScope}`"
+            :task-version="formalTaskRef.taskVersion ?? formalTaskRef.version"
+            :conversation-id="chatMode === 'bounty' && conversationTask?.id === formalTaskRef.id ? conversationId : ''"
+            @continue-modification="continueBountyModification(formalTaskRef, $event)"
+            @task-completed="loadTasks"
+          >
+            <template #legacy>
+              <FormalTaskDeliveryPanel
+                :key="formalTaskRef.id"
+                :task-id="formalTaskRef.id"
+                :identity-fingerprint="`${hallIdentityScope}:${apiStore.authorizationGeneration}`"
+                :focus-delivery-id="''"
+                :execution-context="formalTaskExecutionContext"
+                :selected-agent-id="selectedAgent?.agentId || ''"
+                @discuss-task="discussTask(formalTaskRef)"
+                @rework-created="hallReadRevision += 1"
+              />
+            </template>
+          </BountyAcceptancePanel>
           <FormalTaskDeliveryPanel
-            v-if="renderedPanel === 'tasks' && formalTaskRef && hallIdentityScope"
+            v-else-if="renderedPanel === 'tasks' && formalTaskRef && hallIdentityScope"
             :key="formalTaskRef.id"
             :task-id="formalTaskRef.id"
             :identity-fingerprint="`${hallIdentityScope}:${apiStore.authorizationGeneration}`"
@@ -751,6 +774,7 @@ import ArtifactOutcomePanel from '@/components/juyiting/ArtifactOutcomePanel.vue
 import { portraitName, portraitRole, portraitShortName, portraitStyle, roleClass } from '@/composables/juyiting/useWaterMarginRoles'
 import AgentPanel from '@/components/juyiting/AgentPanel.vue'
 import BountyDiscussionPanel from '@/components/juyiting/BountyDiscussionPanel.vue'
+import BountyAcceptancePanel from '@/components/juyiting/BountyAcceptancePanel.vue'
 import BountyPanel from '@/components/juyiting/BountyPanel.vue'
 import HallPortraitHome from '@/components/juyiting/HallPortraitHome.vue'
 import HallStage from '@/components/juyiting/HallStage.vue'
@@ -1752,6 +1776,32 @@ const openFormalResults = task => {
   formalTaskRef.value = task
   taskReviewRef.value = null
   return true
+}
+// Return only to the scoped existing discussion; never point, create, or send on navigation.
+const continueBountyModification = async (task, source) => {
+  if (!task?.id || (source && source.taskId !== task.id) || !openPanel('chat')) return false
+  const identity = `${apiStore.authorizationGeneration}\u0000${hallIdentityScope.value}`
+  const sameDiscussion = chatMode.value === 'bounty' && conversationTask.value?.id === task.id
+  if (sameDiscussion && conversationId.value && (!source?.conversationId || conversationId.value === source.conversationId)) return true
+  if (isConversationBusy.value) { showToast('议事仍在处理中，请稍后返回原会话。'); return false }
+  if (!sameDiscussion) enterBountyDiscussion(task)
+  const current = () => identity === `${apiStore.authorizationGeneration}\u0000${hallIdentityScope.value}` && conversationTask.value?.id === task.id && chatMode.value === 'bounty'
+  await loadHallConversationHistory({ force: true })
+  if (!current()) return false
+  if (source?.conversationId) {
+    while (current() && !conversationHistory.value.some(row => row.id === source.conversationId) && conversationHistoryHasMore.value && !conversationHistoryError.value) {
+      const count = conversationHistory.value.length
+      await loadMoreHallConversationHistory()
+      if (conversationHistory.value.length === count) break
+    }
+    if (!current()) return false
+    const restored = await selectHallConversation(source.conversationId)
+    if (!restored) showToast('原议事暂不可读取，请重试；未创建新会话或重新执行。')
+    return restored
+  }
+  if (conversationHistory.value.length === 1 && !conversationHistoryHasMore.value) return selectHallConversation(conversationHistory.value[0].id)
+  showToast('请从话头记录返回原议事；未猜选最新会话。')
+  return false
 }
 const openTaskWorkspace = () => {
   if (!taskWorkspaceEnabled || !taskWorkspaceSubject.value?.taskId || !taskWorkspaceSubject.value?.actorAgentId) return

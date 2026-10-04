@@ -1,5 +1,5 @@
 import { expect } from 'chai'
-import { outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, applyOutputReplacements } from '../src/composables/juyiting/bountyOutputCatalog.js'
+import { outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, currentOutputDelivery, applyOutputReplacements } from '../src/composables/juyiting/bountyOutputCatalog.js'
 
 const requestId = 'request-1'
 const stepId = 'step-1'
@@ -130,6 +130,34 @@ describe('explicit output replacement projection', () => {
     expect(Object.isFrozen(parsed.replaces)).to.equal(true)
     for (const replaces of [ { ...replacement, requestId }, { ...replacement, sha256: 'bad' }, { ...replacement, outputId: '../escape' }, { ...replacement, runId: 'invented' }, 'output-1' ]) {
       expect(outputCatalogItems([output({ replaces })], requestId, stepId)).to.deep.equal([])
+    }
+  })
+})
+
+describe('current manifest delivery projection', () => {
+  const root = (outputId, mime = 'image/png') => ({ requestId: 'root', stepId: 'batch', outputId,
+    sha256: 'a'.repeat(64), contentMimeType: mime, replaces: null })
+  const replace = (parent, requestId) => ({ ...parent, requestId, outputId: `${requestId}-output`, sha256: 'b'.repeat(64),
+    replaces: { requestId: parent.requestId, stepId: parent.stepId, outputId: parent.outputId, sha256: parent.sha256 } })
+  it('reconstructs a shuffled exact edit chain while retaining every unaffected mixed-format output', () => {
+    const image = root('bird'); const audio = root('audio', 'audio/mpeg'); const file = root('document', 'application/pdf')
+    const edit = replace(image, 'blue'); const later = replace(edit, 'green')
+    expect(currentOutputDelivery([later, image, audio, edit, file])).to.deep.equal([later, audio, file])
+    expect(currentOutputDelivery(JSON.parse(JSON.stringify([later, image, audio, edit, file])))).to.deep.equal([later, audio, file])
+    expect(Object.isFrozen(currentOutputDelivery([image]))).to.equal(true)
+  })
+  it('has no deliverables for an empty catalog and never unions unrelated root manifests', () => {
+    expect(currentOutputDelivery([])).to.deep.equal([])
+    const first = root('one')
+    for (const second of [{ ...root('two'), requestId: 'other' }, { ...root('two'), stepId: 'other-batch' }]) {
+      expect(() => currentOutputDelivery([first, second])).to.throw('本次交付范围尚不明确')
+    }
+  })
+  it('refuses sibling drafts, broken hashes, missing parents, cycles and duplicate source keys', () => {
+    const first = root('one'); const edit = replace(first, 'blue')
+    for (const catalog of [[first, edit, replace(first, 'green')], [first, { ...edit, replaces: { ...edit.replaces, sha256: 'f'.repeat(64) } }],
+      [edit], [first, first], [first, { ...edit, replaces: { ...edit.replaces, requestId: 'missing' } }]]) {
+      expect(() => currentOutputDelivery(catalog)).to.throw()
     }
   })
 })
