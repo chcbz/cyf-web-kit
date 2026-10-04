@@ -5,12 +5,18 @@
     <p v-else-if="!displayItems.length" role="status">{{ loading ? '正在读取已提交成果…' : deliveryMessage || '结果完成后会显示在这里。' }}</p>
     <div v-for="item in displayItems" :key="outputItemKey(item)" class="bounty-output">
       <strong>{{ previewKind(item.contentMimeType) === 'image' ? '图片' : previewKind(item.contentMimeType) === 'audio' ? '音频' : previewKind(item.contentMimeType) === 'text' ? '文本' : '文件' }}</strong>
+      <p v-if="item.messageSource" class="bounty-output-text">{{ item.text }}</p>
       <span>{{ item.contentMimeType }} · {{ item.byteLength }} 字节</span>
       <button v-if="item.previewUrl && previewKind(item.contentMimeType) !== 'file'" type="button" @click="loadPreview(item)">预览</button>
       <button type="button" @click="download(item)">下载</button>
-      <button type="button" :disabled="!outputAssetPart(item) || archiveState(item).busy || archiveState(item).state === 'saved'" @click="archive(item)">{{ archiveState(item).state === 'saved' ? '已保存到工作空间' : archiveState(item).busy ? '正在保存…' : !outputAssetPart(item) ? '等待资产登记' : '保存到工作空间' }}</button>
+      <button
+        v-if="!item.messageSource"
+        type="button"
+        :disabled="!outputAssetPart(item) || archiveState(item).busy || archiveState(item).state === 'saved'" 
+        @click="archive(item)"
+      >{{ archiveState(item).state === 'saved' ? '已保存到工作空间' : archiveState(item).busy ? '正在保存…' : !outputAssetPart(item) ? '等待资产登记' : '保存到工作空间' }}</button>
       <button v-if="archiveState(item).state === 'unknown'" type="button" @click="archive(item)">重试原保存</button>
-      <p v-if="archiveState(item).message" :role="['saved', 'waiting_asset', 'pending', 'saving'].includes(archiveState(item).state) ? 'status' : 'alert'">{{ archiveState(item).message }}</p>
+      <p v-if="!item.messageSource && archiveState(item).message" :role="['saved', 'waiting_asset', 'pending', 'saving'].includes(archiveState(item).state) ? 'status' : 'alert'">{{ archiveState(item).message }}</p>
       <p v-if="itemErrors[outputItemKey(item)]" role="alert">{{ itemErrors[outputItemKey(item)] }}</p>
       <p v-if="textPreviews[outputItemKey(item)]" class="bounty-output-text">{{ textPreviews[outputItemKey(item)] }}</p>
       <template v-if="previewUrls[outputItemKey(item)]">
@@ -40,7 +46,7 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { createApi } from '../../composables/useHttp.js'
-import { exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, currentOutputDelivery } from '../../composables/juyiting/bountyOutputCatalog.js'
+import { exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, currentOutputDelivery, completedTextItem } from '../../composables/juyiting/bountyOutputCatalog.js'
 import { saveOutputBlob } from '../../utils/outputDownload.js'
 import { useHallConversationArchive } from '../../composables/juyiting/useHallConversationArchive.js'
 import { useHallBountyFinalization, safeFinalizationVersion } from '../../composables/juyiting/useHallBountyFinalization.js'
@@ -51,7 +57,7 @@ const props = defineProps({
   enabled: { type: Boolean, default: false }, request: { type: Object, default: null },
   conversationId: { type: String, default: '' }, identityKey: { type: String, default: '' },
   catalog: { type: Array, default: () => [] },
-  taskVersion: { type: [String, Number], default: '' }
+  taskVersion: { type: [String, Number], default: '' }, taskId: { type: String, default: '' }
 })
 const api = createApi('/chat')
 const agentApi = createApi('/agent')
@@ -132,6 +138,16 @@ const list = async () => {
     if (generation !== epoch || controller.signal.aborted) return
     requestSnapshots.value = snapshots
     const catalog = []
+    if (props.acceptance && props.taskId) for (const request of snapshots) {
+      for (const turn of request.turns || []) {
+        if (turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state)) continue
+        const response = await api.get(`/conversations/${encodeURIComponent(props.conversationId)}/requests/${encodeURIComponent(request.requestId)}/typed-outcome`, {},
+          { autoLoading: false, needAuth: true, signal: controller.signal })
+        const text = await completedTextItem(response?.data?.data ?? response?.data, request, turn, props.taskId)
+        if (controller.signal.aborted || generation !== epoch) return
+        if (text) catalog.push(text)
+      }
+    }
     for (const step of scopedSteps.value) {
       try {
         const response = await api.get(`/requests/${encodeURIComponent(step.requestId)}/steps/${encodeURIComponent(step.stepId)}/outputs`, {}, { autoLoading: false, needAuth: true, signal: controller.signal })
@@ -173,7 +189,7 @@ const loadPreview = async item => {
     patchMap(itemErrors, key, '')
   } catch (cause) { if (generation === epoch) patchMap(itemErrors, key, cause?.message || '预览失败') }
 }
-const download = async item => { const key = outputItemKey(item); const generation = epoch; try { const blob = await bytes(item, false); if (blob && generation === epoch) saveOutputBlob({ blob, item: { name: outputDownloadName(item) } }) } catch (cause) { if (generation === epoch) patchMap(itemErrors, key, cause?.message || '下载失败') } }
+const download = async item => { const key = outputItemKey(item); const generation = epoch; try { const blob = item.messageSource ? new Blob([item.text], { type: 'text/plain' }) : await bytes(item, false); if (blob && generation === epoch) saveOutputBlob({ blob, item: { name: item.messageSource ? '文字成果.txt' : outputDownloadName(item) } }) } catch (cause) { if (generation === epoch) patchMap(itemErrors, key, cause?.message || '下载失败') } }
 const archive = async item => {
   const part = outputAssetPart(item)
   if (part && props.enabled && props.identityKey) await archives.save(part)
@@ -185,7 +201,7 @@ const finalizeSelected = async () => {
   if (!displayItems.value.length || finalizeState.value.state === 'recovery_error') return
   const invalid = message => { finalizeState.value = { ...finalizeState.value, state: 'error', busy: false, message } }
   const selected = [...displayItems.value]
-  const steps = selected.map(stepFor)
+  const steps = selected.map(item => item.messageSource ? item : stepFor(item))
   if (steps.some(step => !step)) return invalid('最终成果范围已变化，请刷新后核对。')
   const assignmentRevisions = steps.map(step => safeFinalizationVersion(step.assignmentRevision))
   if (assignmentRevisions.some(value => value == null) || new Set(assignmentRevisions).size !== 1) return invalid('任务指派版本无法安全确认，请刷新后重试。')
@@ -196,11 +212,12 @@ const finalizeSelected = async () => {
   return finalizations.submit({ taskId: taskIds[0], body: {
     expectedTaskVersion: taskVersion, expectedAssignmentRevision: assignmentRevisions[0],
     conversationId: props.conversationId, summary: '聚义厅本次成果验收',
-    selectedOutputs: selected.map(item => ({ requestId: item.requestId, stepId: item.stepId,
-      outputId: item.outputId, sha256: item.sha256, title: item.outputId, purpose: '本次确认交付成果' }))
+    selectedOutputs: selected.map(item => item.messageSource
+      ? { requestId: item.requestId, messageSource: item.messageSource, sha256: item.sha256, title: item.title, purpose: item.purpose }
+      : { requestId: item.requestId, stepId: item.stepId, outputId: item.outputId, sha256: item.sha256, title: item.outputId, purpose: '本次确认交付成果' })
   } })
 }
-watch(() => `${props.enabled}\u0000${props.identityKey}\u0000${props.conversationId}\u0000${catalogRequests.value.map(request => request.requestId).join('\u0001')}`, () => {
+watch(() => `${props.enabled}\u0000${props.identityKey}\u0000${props.conversationId}\u0000${props.taskId}\u0000${catalogRequests.value.map(request => request.requestId).join('\u0001')}`, () => {
   cleanup()
   if (validRootRequest()) {
     // Legacy schema-2 edit records remain untouched in session storage. They are not

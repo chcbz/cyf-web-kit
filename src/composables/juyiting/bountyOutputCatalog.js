@@ -1,3 +1,5 @@
+import { typedOutcomeProjection } from './hallTypedDeliberation.js'
+
 /** Browser-safe projection of the owner-authorized conversation output catalog. */
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/
 const HASH = /^[0-9a-f]{64}$/
@@ -52,6 +54,8 @@ export function outputCatalogItems (items, requestId, stepId) {
 // A run can reuse output_1 in a later EXECUTE step. Cache keys must include the
 // authoritative request and step rather than the output identifier alone.
 export function outputItemKey (item) {
+  if (item?.messageSource) return JSON.stringify(['COMPLETED_MESSAGE', item.requestId, item.messageSource.turnId,
+    item.messageSource.messageId, item.messageSource.snapshotId, item.messageSource.finalDigest])
   return JSON.stringify([item?.requestId, item?.stepId, item?.outputId])
 }
 
@@ -106,6 +110,11 @@ export function applyOutputReplacements (current, edits) {
  * Edits are resolved by exact parent hashes, independent of response arrival order. */
 export function currentOutputDelivery (catalog) {
   if (!Array.isArray(catalog) || !catalog.length) return Object.freeze([])
+  const texts = catalog.filter(item => item.messageSource)
+  if (texts.length) {
+    if (catalog.length !== 1) throw new Error('本次图文或多轮文字交付关联尚不明确，请回到议事说明本次成果。')
+    return Object.freeze([...texts])
+  }
   const originals = catalog.filter(item => !item.replaces)
   const roots = new Set(originals.map(item => JSON.stringify([item.requestId, item.stepId])))
   if (roots.size !== 1) throw new Error('本次交付范围尚不明确，请回到议事说明要交付哪些成果。')
@@ -119,4 +128,27 @@ export function currentOutputDelivery (catalog) {
     pending = pending.filter(edit => !available.includes(edit))
   }
   return current
+}
+
+/** Only a persisted, explicitly marked CHAT final can seed a text deliverable.
+ * The original turn supplies snapshot/message identity. Never pick a latest ANSWER,
+ * turn display prose into an output, or invent an execution/step identifier. */
+export async function completedTextItem (raw, request, turn, taskId) {
+  const value = typedOutcomeProjection(raw, { conversationId: request.conversationId,
+    conversationGeneration: request.conversationGeneration, requestId: request.requestId,
+    requestRevision: request.requestRevision, turnId: turn.turnId, taskId })
+  if (!value) throw new Error('文字成果来源回执不匹配。')
+  if (value.schemaVersion !== 3 || value.state !== 'READY' || value.outcome?.deliverable !== true) return null
+  const source = value.outcome.messageSource
+  if (request.state !== 'COMPLETED' || turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state) ||
+    source.messageId !== turn.finalMessageId || source.snapshotId !== turn.contextSnapshotId ||
+    turn.requestId !== request.requestId || turn.requestRevision !== request.requestRevision ||
+    turn.conversationId !== request.conversationId || turn.conversationGeneration !== request.conversationGeneration ||
+    !exactOutputId(taskId) || value.outcome.taskId !== taskId ||
+    ![request.requestId, source.turnId, source.snapshotId].every(exactOutputId)) throw new Error('文字成果与原消息快照不一致。')
+  const bytes = new TextEncoder().encode(value.outcome.text)
+  const sha256 = Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes)), byte => byte.toString(16).padStart(2, '0')).join('')
+  return Object.freeze({ requestId: request.requestId, messageSource: Object.freeze({ ...source }), sha256,
+    contentMimeType: 'text/plain', byteLength: bytes.length, text: value.outcome.text,
+    taskId, assignmentRevision: value.outcome.assignmentRevision, title: '文字成果', purpose: '本次确认交付成果' })
 }

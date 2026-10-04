@@ -127,9 +127,16 @@ const prose = value => {
 }
 const actionId = value => prose(value) && value.length <= 512 && !isoControl(value)
 const actionOutcome = value => {
-  if (!exactKeys(value, actionOutcomeFields) || value.outcomeContractVersion !== 3 || !typedId(value.outcomeId) ||
+  const marked = own(value || {}, 'deliverable')
+  const fields = marked ? [...actionOutcomeFields, 'deliverable', ...(value.deliverable === true ? ['messageSource'] : [])] : actionOutcomeFields
+  if (!exactKeys(value, fields) || (marked && typeof value.deliverable !== 'boolean') || value.outcomeContractVersion !== 3 || !typedId(value.outcomeId) ||
     !typedId(value.taskId) || !typedLong(value.assignmentRevision, { allowZero: true }) || !typedLong(value.assistantMessageId) ||
     !digest(value.finalDigest) || !prose(value.text) || value.text.length > 200000) return null
+  if (value.deliverable === true) {
+    const source = value.messageSource
+    if (value.kind !== 'ANSWER' || !exactKeys(source, ['turnId', 'messageId', 'snapshotId', 'finalDigest']) ||
+      !typedId(source.turnId) || !typedId(source.snapshotId) || source.messageId !== value.assistantMessageId || source.finalDigest !== value.finalDigest) return null
+  }
   if (value.kind === 'ANSWER' && value.clarification === null && value.action === null) return freeze(value)
   const c = value.clarification
   if (value.kind === 'CLARIFY' && value.action === null && exactKeys(c, clarificationFields) && typedId(c.pendingQuestionId) &&
@@ -191,5 +198,6 @@ export const actionOutcomeProjection = (value, context = {}, route = 'CHAT') => 
   if ((context.taskId && value.outcome?.taskId !== context.taskId) ||
     (context.assignmentRevision && value.outcome?.assignmentRevision !== context.assignmentRevision)) return null
   const normalized = actionOutcome(value.outcome)
+  if (normalized?.deliverable === true && (route !== 'CHAT' || normalized.messageSource.turnId !== value.turnId)) return null
   return normalized && actionProgressValid(value.actionProgress, normalized) ? freeze({ ...value, outcome: normalized, purpose: route }) : null
 }

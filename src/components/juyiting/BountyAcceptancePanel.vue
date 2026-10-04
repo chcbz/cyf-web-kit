@@ -14,6 +14,7 @@
       :conversation-id="source.scope.value.conversationId"
       :identity-key="identityKey"
       :task-version="taskVersion"
+      :task-id="taskId"
       @continue-modification="$emit('continue-modification', source.scope.value)"
       @task-completed="$emit('task-completed', $event)"
     />
