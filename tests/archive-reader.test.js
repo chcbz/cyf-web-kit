@@ -486,6 +486,37 @@ afterEach(() => {
 })
 
 describe('archive reader contract behavior', () => {
+  it('loads all bookshelf pages with dedupe and stops repeated or identity-late cursors', async () => {
+    const calls = []
+    const pages = {
+      first: { items: [{ workId: 'work-a', title: '甲', activeEditionId: 'edition-a' }, { workId: 'work-b', title: '乙', activeEditionId: 'edition-b' }], nextCursor: 'cursor-b' },
+      'cursor-b': { items: [{ workId: 'work-b', title: '乙', activeEditionId: 'edition-b' }, { workId: 'work-c', title: '丙', activeEditionId: 'edition-c' }], nextCursor: null }
+    }
+    const api = { get: async (path, params, options) => { calls.push({ path, params, options }); return response(pages[params.cursor || 'first']) } }
+    const mounted = mountReader(api)
+    const items = await mounted.reader.loadWorks()
+    expect(items.map(item => item.workId)).to.deep.equal(['work-a', 'work-b', 'work-c'])
+    expect(calls.map(call => call.params)).to.deep.equal([{ limit: 100 }, { limit: 100, cursor: 'cursor-b' }])
+    mounted.wrapper.unmount()
+
+    const repeated = mountReader({ get: async () => response({ items: [{ workId: 'work-a' }], nextCursor: 'same' }) })
+    let repeatedFailure
+    try { await repeated.reader.loadWorks() } catch (error) { repeatedFailure = error }
+    expect(repeatedFailure?.message).to.include('分页游标没有前进')
+    repeated.wrapper.unmount()
+
+    const latePage = deferred(); let reads = 0
+    const late = mountReader({ get: async () => { reads += 1; return reads === 1
+      ? response({ items: [{ workId: 'work-a' }], nextCursor: 'late' })
+      : latePage.promise } })
+    const pending = late.reader.loadWorks()
+    await waitFor(() => reads === 2)
+    stopIdentityBoundWork()
+    latePage.resolve(response({ items: [{ workId: 'work-secret' }], nextCursor: null }))
+    expect(await pending).to.deep.equal([])
+    expect(late.reader.works.value).to.deep.equal([])
+    late.wrapper.unmount()
+  })
   it('selects a second published work without reviving an old delayed block', async () => {
     const delayedOld = deferred()
     const base = makeApi({ getBlock: blockId => blockId === chapterOne.blockId

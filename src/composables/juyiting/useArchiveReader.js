@@ -219,14 +219,30 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
 
   const loadWorks = async (signal) => {
     const generation = identityGeneration
-    const result = await api.get('/works', undefined, { autoLoading: false, signal })
-    const snapshot = unwrap(result)
-    if (!Array.isArray(snapshot?.items)) throw new Error('典籍书架响应不完整')
+    const merged = new Map()
+    const seenCursors = new Set()
+    let cursor = null
+    do {
+      const params = { limit: 100, ...(cursor ? { cursor } : {}) }
+      const result = await api.get('/works', params, { autoLoading: false, signal })
+      if (!isCurrentIdentity(generation) || signal?.aborted) return []
+      const snapshot = unwrap(result)
+      if (!Array.isArray(snapshot?.items) || (snapshot.nextCursor != null && (typeof snapshot.nextCursor !== 'string' || !snapshot.nextCursor || snapshot.nextCursor.trim() !== snapshot.nextCursor))) throw new Error('典籍书架响应不完整')
+      for (const item of snapshot.items) {
+        if (!item?.workId) throw new Error('典籍书架响应不完整')
+        merged.set(item.workId, item)
+      }
+      const next = snapshot.nextCursor || null
+      if (next && (next === cursor || seenCursors.has(next) || snapshot.items.length === 0)) throw new Error('典籍书架分页游标没有前进')
+      if (next) seenCursors.add(next)
+      cursor = next
+    } while (cursor)
+    const items = [...merged.values()]
     if (isCurrentIdentity(generation) && !signal?.aborted) {
-      works.value = snapshot.items
+      works.value = items
       worksFetched = true
     }
-    return snapshot.items
+    return items
   }
 
   const selectWork = async (workId, editionId = null) => {

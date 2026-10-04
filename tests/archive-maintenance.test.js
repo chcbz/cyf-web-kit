@@ -82,24 +82,24 @@ const authenticatedApi = basePath => {
 }
 const mountedGateway = () => createArchiveMaintenanceGateway({ adminApi: authenticatedApi('/archive/admin/v1'), readerApi: authenticatedApi('/archive/v1'), platformApi: authenticatedApi('/agent/platform-skills') })
 
-const panelFixture = ({ catalogStatus = 200, capabilitiesStatus = 200, deferredRequest, deferredInstall, capabilities, appointments, recoveryContext } = {}) => {
+const panelFixture = ({ catalogStatus = 200, capabilitiesStatus = 200, deferredRequest, deferredInstall, capabilities, appointments, recoveryContext, appointmentPages, jobPages, workPages } = {}) => {
   const calls = []; let capabilityReads = 0; let publishKey = null
   const oldSkill = { key: 'archive-maintainer', version: 'old-9', packageSha256: 'o'.repeat(64) }
   const newSkill = { key: 'archive-maintainer', version: 'new-10', packageSha256: 'n'.repeat(64) }
   const job = { jobId: 'job-1', title: '水浒', state: 'DRAFTING', revision: '7', appointmentId: 'appt-old', operation: 'ADD_WORK', publicationMode: 'MANUAL', waitReason: 'WAITING_SOURCE', draftId: 'draft-1', handling: handlingFacts() }
   const active = appointments ?? [{ appointmentId: 'appt-old', revision: '2', agentId: 'old-agent', bindingVersion: 'binding-7', status: 'ACTIVE', permissionProfile: 'PUBLISH_VALIDATED', workScopeMode: 'EXPLICIT_WORKS', workIds: ['work-1'], readiness: 'READY', requiredSkill: oldSkill }]
   const fetch = async (url, options = {}) => {
-    const path = String(url).split('?')[0]; const method = options.method || 'GET'; const body = options.body ? JSON.parse(options.body) : null
-    calls.push({ path, method, body, headers: options.headers })
+    const requestUrl = new URL(String(url), 'https://fixture.invalid'); const path = requestUrl.pathname; const params = Object.fromEntries(requestUrl.searchParams.entries()); const method = options.method || 'GET'; const body = options.body ? JSON.parse(options.body) : null
+    calls.push({ path, params, method, body, headers: options.headers })
     if (options.headers?.Authorization !== 'Bearer fixture-token') return json({ msg: 'missing auth' }, 401)
     if (path.endsWith('/capabilities')) { capabilityReads += 1; return capabilitiesStatus === 200 ? admin(capabilities ? capabilities(capabilityReads) : { allowedActions: ['appoint', 'source.prepare', 'job.create', 'job.read', 'job.manage', 'draft.write', 'validate', 'publish'] }) : json({ msg: 'authentication expired' }, capabilitiesStatus) }
     if (path === '/agent/platform-skills/catalog') return catalogStatus === 200 ? json([{ ...newSkill, protocol: 'zip-v1' }]) : json({ msg: 'catalog unavailable' }, catalogStatus)
     if (path.endsWith('/slot')) return admin({ revision: '3' })
-    if (path.endsWith('/appointments')) return method === 'POST' ? admin({ appointmentId: 'appt-created' }) : admin(active)
+    if (path.endsWith('/appointments')) return method === 'POST' ? admin({ appointmentId: 'appt-created' }) : admin(appointmentPages ? appointmentPages[params.cursor || 'first'] : { items: active, nextCursor: null })
     if (path.endsWith('/recovery-context')) return admin(recoveryContext || { jobId: 'job-1', jobRevision: '7', previousAppointment: { appointmentId: 'appt-old', revision: '1', requiredSkill: oldSkill, status: 'ACTIVE' }, candidates: [{ appointmentId: 'appt-new', revision: '5', requiredSkill: newSkill, status: 'ACTIVE', agentId: 'new-agent', recoveryAllowed: true, inputChanged: true }], resumeAllowed: true, latestFailure: null })
     if (path.endsWith('/jobs/job-1')) return admin(job)
-    if (path.endsWith('/jobs')) return admin([job])
-    if (path.endsWith('/collections/platform-classics/works')) return admin({ items: [{ workId: 'work-1', title: '水浒', activeEditionId: 'e1', pendingJobId: null }] })
+    if (path.endsWith('/jobs')) return admin(jobPages ? jobPages[params.cursor || 'first'] : { items: [job], nextCursor: null })
+    if (path.endsWith('/collections/platform-classics/works')) return admin(workPages ? workPages[params.cursor || 'first'] : { items: [{ workId: 'work-1', title: '水浒', activeEditionId: 'e1', pendingJobId: null }], nextCursor: null })
     if (path.endsWith('/events')) return admin([])
     if (path.endsWith('/draft')) return method === 'PUT' ? admin({ draftId:'draft-1', revision: '5', state:'EDITING', content:{ blocks: [], excludedSourceRanges: [] } }) : admin({ draftId:'draft-1', revision: '4', state: 'EDITING', content: { blocks: [], excludedSourceRanges: [] } })
     if (path.endsWith('/drafts/draft-1/validation')) return admin({ validationId:'validation-1', draftId:'draft-1', outcome: 'PASSED', draftRevision: '4', findings: [] })
@@ -151,6 +151,48 @@ describe('archive maintenance mounted Vue wiring', function () { this.timeout(10
 
     const exactSha='d'.repeat(64); const sameVersionFixture=panelFixture({appointments:[{appointmentId:'appt-current',revision:'4',agentId:'agent-current',bindingVersion:'binding-current',status:'ACTIVE',permissionProfile:'DRAFT_ONLY',workScopeMode:'COLLECTION',workIds:[],readiness:'READY',requiredSkill:{key:'archive-maintainer',version:'new-10',packageSha256:exactSha}}]}); globalThis.fetch=sameVersionFixture.fetch
     const sameVersionWrapper=mount(Panel,{attachTo:document.body,props:{gateway:mountedGateway()}}); await waitFor(()=>sameVersionWrapper.text().includes('绑定 binding-current')); expect(sameVersionWrapper.text()).to.include(`技能 archive-maintainer@new-10 · 包 SHA-256 ${exactSha}`).and.not.include(`包 SHA-256 ${'n'.repeat(64)}`); sameVersionWrapper.unmount()
+  })
+
+  it('reads every bounded admin page, exposes work 101, resets job filter and fences a late page', async () => {
+    const Panel = loadArchiveSfc('../src/components/juyiting/archive/ArchiveMaintenancePanel.vue')
+    const firstWorks = Array.from({ length: 100 }, (_, index) => ({ workId: `work-${String(index + 1).padStart(3, '0')}`, title: `作品${index + 1}`, activeEditionId: `e${index + 1}`, pendingJobId: null }))
+    const fixture = panelFixture({
+      appointments: [],
+      workPages: {
+        first: { items: firstWorks, nextCursor: 'after-100' },
+        'after-100': { items: [firstWorks.at(-1), { workId: 'work-101', title: '作品101', activeEditionId: 'e101', pendingJobId: null }], nextCursor: null }
+      }
+    })
+    globalThis.fetch = fixture.fetch
+    const wrapper = mount(Panel, { attachTo: document.body, props: { gateway: mountedGateway() } })
+    await waitFor(() => fixture.calls.some(call => call.path.endsWith('/works') && call.params.cursor === 'after-100'))
+    const scope = wrapper.findAll('select').find(item => item.findAll('option').some(option => option.element.value === 'EXPLICIT_WORKS'))
+    await scope.setValue('EXPLICIT_WORKS'); await Vue.nextTick()
+    expect(wrapper.text()).to.include('作品101')
+    expect(wrapper.findAll('input[type="checkbox"]')).to.have.length(101)
+
+    const state = wrapper.findAll('select').find(item => item.findAll('option').some(option => option.element.value === 'FAILED'))
+    await state.setValue('FAILED'); await state.trigger('change')
+    await waitFor(() => fixture.calls.some(call => call.path.endsWith('/jobs') && call.params.state === 'FAILED'))
+    const filtered = fixture.calls.filter(call => call.path.endsWith('/jobs') && call.params.state === 'FAILED').at(-1)
+    expect(filtered.params.cursor).to.equal(undefined)
+    wrapper.unmount()
+
+    const late = deferred(); let lateRequested = false
+    const lateFixture = panelFixture({ appointments: [], workPages: { first: { items: firstWorks, nextCursor: 'late-page' } } })
+    const normal = lateFixture.fetch
+    globalThis.fetch = (url, options) => {
+      const requestUrl = new URL(String(url), 'https://fixture.invalid')
+      if (requestUrl.pathname.endsWith('/works') && requestUrl.searchParams.get('cursor') === 'late-page') { lateRequested = true; return late.promise }
+      return normal(url, options)
+    }
+    const lateWrapper = mount(Panel, { attachTo: document.body, props: { gateway: mountedGateway() } })
+    await waitFor(() => lateRequested)
+    stopIdentityBoundWork()
+    late.resolve(admin({ items: [{ workId: 'work-secret', title: '不应回填', activeEditionId: 'secret' }], nextCursor: null }))
+    await flushPromises()
+    expect(lateWrapper.text()).not.to.include('不应回填')
+    lateWrapper.unmount()
   })
 
   it('isolates catalog 404 while existing revoke and cancel still work', async () => {
@@ -479,13 +521,13 @@ it('fences same-work edition races and binds withdrawal to the visible selected 
 
 it('fences work A-B-A history and comparison reverse completions', async function () { this.timeout(10000)
   const Panel=loadArchiveSfc('../src/components/juyiting/archive/ArchiveMaintenancePanel.vue'); const fixture=panelFixture({capabilities:()=>({allowedActions:['edition.withdraw']})}); const normal=fixture.fetch; const aOld=deferred(),b=deferred(),aNew=deferred();let aReads=0
-  globalThis.fetch=async(url,options={})=>{const path=String(url).split('?')[0],method=options.method||'GET';if(path.endsWith('/collections/platform-classics/works'))return admin({items:[{workId:'work-a',title:'A',activeEditionId:'e1'},{workId:'work-b',title:'B',activeEditionId:'b1'}]});if(path.endsWith('/works/work-a/editions')&&method==='GET')return (++aReads===1?aOld:aNew).promise;if(path.endsWith('/works/work-b/editions')&&method==='GET')return b.promise;return normal(url,options)}
+  globalThis.fetch=async(url,options={})=>{const path=String(url).split('?')[0],method=options.method||'GET';if(path.endsWith('/collections/platform-classics/works'))return admin({items:[{workId:'work-a',title:'A',activeEditionId:'e1'},{workId:'work-b',title:'B',activeEditionId:'b1'}],nextCursor:null});if(path.endsWith('/works/work-a/editions')&&method==='GET')return (++aReads===1?aOld:aNew).promise;if(path.endsWith('/works/work-b/editions')&&method==='GET')return b.promise;return normal(url,options)}
   const wrapper=mount(Panel,{attachTo:document.body,props:{gateway:mountedGateway()}});await waitFor(()=>wrapper.findAll('select').some(item=>item.findAll('option').some(option=>option.element.value==='work-a')),'work A missing');const works=wrapper.findAll('select').find(item=>item.findAll('option').some(option=>option.element.value==='work-a'));await works.setValue('work-a');await works.setValue('work-b');await works.setValue('work-a');aNew.resolve(admin({workId:'work-a',workRevision:'9',activeEditionId:'e1-new',editions:[]}));await waitFor(()=>wrapper.text().includes('e1-new'),'latest A history missing');b.resolve(admin({workId:'work-b',workRevision:'4',activeEditionId:'b1',editions:[]}));aOld.resolve(admin({workId:'work-a',workRevision:'1',activeEditionId:'e1-old',editions:[]}));await flushPromises();expect(wrapper.text()).to.include('e1-new').and.not.include('e1-old');wrapper.unmount()
 
   const comparisonFixture=panelFixture({capabilities:()=>({allowedActions:['edition.withdraw']})}); const fallback=comparisonFixture.fetch; const c2=deferred(),c3=deferred()
   const version=id=>({publicationId:`p-${id}`,collectionId:'platform-classics',workId:'work-a',editionId:id,draftRevision:'4',manifestSha256:id==='e1'?'1'.repeat(64):id==='e2'?'2'.repeat(64):'3'.repeat(64),sourceSha256:'s'.repeat(64),state:'PUBLISHED',actorType:'HUMAN',actorId:'manager',authorizationRevision:'3',publishedAt:'2026-10-01T00:00:00Z',withdrawal:null,verification:{state:'PASSED',revision:'1',verificationDigest:'v'.repeat(64),findings:[],checkedAt:'2026-10-01T00:00:01Z'}})
   const summary=id=>({blockType:'CHAPTER',blockId:`${id}-c1`,number:1,title:`${id} title`,paragraphCount:1,utf8ByteLength:6,etag:'e'.repeat(64)});const catalog=id=>({representationSchemaVersion:1,workId:'work-a',title:'A',activeEdition:{editionId:id,manifestSha256:version(id).manifestSha256,sourceSha256:'s'.repeat(64),prefaceParagraphCount:0,chapterParagraphCount:1,readerParagraphCount:1,readerUtf8ByteLength:6,preface:null,chapters:[summary(id)]}});const block=id=>({representationSchemaVersion:1,editionId:id,manifestSha256:version(id).manifestSha256,...summary(id),paragraphs:[{paragraphId:`${id}-p1`,ordinal:1,text:`${id}正文`,utf8ByteLength:6,sha256:id==='e1'?'a'.repeat(64):id==='e2'?'b'.repeat(64):'c'.repeat(64)}]})
-  globalThis.fetch=async(url,options={})=>{const path=String(url).split('?')[0],method=options.method||'GET';if(path.endsWith('/collections/platform-classics/works'))return admin({items:[{workId:'work-a',title:'A',activeEditionId:'e1'}]});if(path.endsWith('/works/work-a/editions')&&method==='GET')return admin({workId:'work-a',workRevision:'10',activeEditionId:'e1',editions:[version('e1'),version('e2'),version('e3')]});if(path.endsWith('/works/work-a/editions/e1'))return admin(version('e1'));if(path.endsWith('/works/work-a/editions/e2'))return c2.promise;if(path.endsWith('/works/work-a/editions/e3'))return c3.promise;const catalogMatch=path.match(/\/archive\/v1\/editions\/(e1|e2|e3)\/catalog$/);if(catalogMatch)return admin(catalog(catalogMatch[1]));const blockMatch=path.match(/\/archive\/v1\/editions\/(e1|e2|e3)\/chapters\/(e1|e2|e3)-c1$/);if(blockMatch)return admin(block(blockMatch[1]));return fallback(url,options)}
+  globalThis.fetch=async(url,options={})=>{const path=String(url).split('?')[0],method=options.method||'GET';if(path.endsWith('/collections/platform-classics/works'))return admin({items:[{workId:'work-a',title:'A',activeEditionId:'e1'}],nextCursor:null});if(path.endsWith('/works/work-a/editions')&&method==='GET')return admin({workId:'work-a',workRevision:'10',activeEditionId:'e1',editions:[version('e1'),version('e2'),version('e3')]});if(path.endsWith('/works/work-a/editions/e1'))return admin(version('e1'));if(path.endsWith('/works/work-a/editions/e2'))return c2.promise;if(path.endsWith('/works/work-a/editions/e3'))return c3.promise;const catalogMatch=path.match(/\/archive\/v1\/editions\/(e1|e2|e3)\/catalog$/);if(catalogMatch)return admin(catalog(catalogMatch[1]));const blockMatch=path.match(/\/archive\/v1\/editions\/(e1|e2|e3)\/chapters\/(e1|e2|e3)-c1$/);if(blockMatch)return admin(block(blockMatch[1]));return fallback(url,options)}
   const comparison=mount(Panel,{attachTo:document.body,props:{gateway:mountedGateway()}});await waitFor(()=>comparison.findAll('select').some(item=>item.findAll('option').some(option=>option.element.value==='work-a')));const workSelect=comparison.findAll('select').find(item=>item.findAll('option').some(option=>option.element.value==='work-a'));await workSelect.setValue('work-a');await waitFor(()=>button(comparison,'e1'));await button(comparison,'e1').trigger('click');await waitFor(()=>comparison.text().includes('比较版本'));const compare=comparison.findAll('select').find(item=>item.findAll('option').some(option=>option.element.value==='e3'));await compare.setValue('e2');await compare.setValue('e3');c3.resolve(admin(version('e3')));await waitFor(()=>comparison.text().includes('e1 ↔ e3'),'latest comparison missing');c2.resolve(admin(version('e2')));await flushPromises();expect(comparison.text()).to.include('e1 ↔ e3').and.include('e1正文').and.include('e3正文').and.not.include('e1 ↔ e2');comparison.unmount()
 })
 
@@ -600,8 +642,8 @@ it('fences delayed publication POST, operation GET and by-key recovery across jo
     calls.push({path,method,body,headers:options.headers})
     if(options.headers?.Authorization!=='Bearer fixture-token')return json({msg:'missing auth'},401)
     if(path.endsWith('/capabilities'))return admin({allowedActions:['job.read','job.manage','draft.write','validate','publish']})
-    if(path.endsWith('/collections/platform-classics/jobs'))return admin(Object.values(jobs))
-    if(path.endsWith('/collections/platform-classics/works'))return admin({items:[]})
+    if(path.endsWith('/collections/platform-classics/jobs'))return admin({items:Object.values(jobs),nextCursor:null})
+    if(path.endsWith('/collections/platform-classics/works'))return admin({items:[],nextCursor:null})
     for(const suffix of ['a','b']){
       const jobId=`job-${suffix}`,draftId=`draft-${suffix}`
       if(path.endsWith(`/jobs/${jobId}`))return admin(jobs[jobId])
