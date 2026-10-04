@@ -170,3 +170,145 @@ describe('MMD finalization immutable owner acceptance', () => {
     } finally { client.dispose() }
   })
 })
+
+const textSelection = () => ({ requestId: 'text-request-1', sha256: 'c'.repeat(64), title: '文字成果', purpose: '最终成果',
+  messageSource: { turnId: 'text-turn-1', messageId: '9223372036854775807', snapshotId: 'snapshot-1', finalDigest: `sha256:${'d'.repeat(64)}` } })
+const textBody = (mixed = false) => ({ ...body(), summary: '文字直接验收',
+  selectedOutputs: mixed ? [body().selectedOutputs[0], textSelection()] : [textSelection()] })
+const sendBody = (client, original) => client.submit({ taskId: 'task-1', body: original })
+
+describe('MMD completed-message finalization wire and recovery', () => {
+  for (const mixed of [false, true]) it(`submits ${mixed ? 'ordered mixed media/text' : 'text-only'} without invented output IDs and freezes nested refs`, async () => {
+    const original = textBody(mixed)
+    let finish
+    const { client, calls, storage } = setup(() => new Promise(resolve => { finish = resolve }))
+    try {
+      const pending = sendBody(client, original)
+      const selected = calls[0].data.selectedOutputs.at(-1)
+      expect(Object.keys(selected).sort()).to.deep.equal(['requestId', 'sha256', 'title', 'purpose', 'messageSource'].sort())
+      expect(selected.messageSource.messageId).to.equal('9223372036854775807')
+      expect(Object.isFrozen(selected.messageSource)).to.equal(true)
+      const frozen = JSON.parse([...storage.values.values()][0]).body
+      original.selectedOutputs.at(-1).messageSource.snapshotId = 'later-snapshot'
+      expect(selected.messageSource.snapshotId).to.equal('snapshot-1')
+      finish({ data: completed({}, frozen) })
+      expect((await pending).state).to.equal('completed')
+      expect(client.status.value.receipt.selectedOutputs).to.deep.equal(frozen.selectedOutputs)
+      expect(calls).to.have.length(1)
+    } finally { client.dispose() }
+  })
+  it('compares every actual message ref and preserves order rather than accepting a newer text receipt', () => {
+    const original = textBody(true); const command = { ...intent(), body: original }
+    expect(validFinalizationReceipt(completed({}, original), command)).to.equal(true)
+    for (const [field, value] of [['turnId', 'other-turn'], ['messageId', '101'], ['snapshotId', 'other-snapshot'], ['finalDigest', `sha256:${'e'.repeat(64)}`]]) {
+      const changed = structuredClone(original); changed.selectedOutputs[1].messageSource[field] = value
+      expect(validFinalizationReceipt(completed({}, changed), command), field).to.equal(false)
+    }
+    const reversed = structuredClone(original); reversed.selectedOutputs.reverse()
+    expect(validFinalizationReceipt(completed({}, reversed), command)).to.equal(false)
+    const media = structuredClone(original); media.selectedOutputs[1] = { ...body().selectedOutputs[0], requestId: 'text-request-1' }
+    expect(validFinalizationReceipt(completed({}, media), command)).to.equal(false)
+    const reordered = structuredClone(original)
+    reordered.selectedOutputs[1].messageSource = Object.fromEntries(Object.entries(reordered.selectedOutputs[1].messageSource).reverse())
+    expect(validFinalizationReceipt(completed({}, reordered), command)).to.equal(true)
+  })
+  it('rejects numeric/zero/padded/overflow message IDs and incomplete/hybrid source authority before requesting', async () => {
+    const { client, calls } = setup(() => { throw new Error('must not request') })
+    try {
+      for (const id of [101, 9007199254740992, 0, '0', '01', ' 101', '101 ', '-1', '1.0', '9223372036854775808', null]) {
+        const invalid = textBody(); invalid.selectedOutputs[0].messageSource.messageId = id
+        expect(await sendBody(client, invalid), String(id)).to.equal(null)
+      }
+      for (const field of ['turnId', 'messageId', 'snapshotId', 'finalDigest']) {
+        const invalid = textBody(); delete invalid.selectedOutputs[0].messageSource[field]
+        expect(await sendBody(client, invalid), field).to.equal(null)
+      }
+      for (const patch of [{ stepId: 'fake-step' }, { outputId: 'fake-output' }, { executionId: 'fake-execution' },
+        { runId: 'fake-run' }, { grantId: 'fake-grant' }, { sourceKind: 'COMPLETED_MESSAGE' }, { stepId: null, outputId: null }]) {
+        const invalid = textBody(); Object.assign(invalid.selectedOutputs[0], patch)
+        expect(await sendBody(client, invalid), JSON.stringify(patch)).to.equal(null)
+      }
+      for (const patch of [{ finalDigest: 'd'.repeat(64) }, { finalDigest: `sha256:${'D'.repeat(64)}` }, { turnId: '../other' },
+        { snapshotId: '' }, { messageId: '101', grantId: 'fake-grant' }]) {
+        const invalid = textBody(); Object.assign(invalid.selectedOutputs[0].messageSource, patch)
+        expect(await sendBody(client, invalid), JSON.stringify(patch)).to.equal(null)
+      }
+      expect(calls).to.have.length(0)
+      expect(client.status.value.intent).to.equal(null)
+    } finally { client.dispose() }
+  })
+  it('rejects duplicate actual text message even with a changed snapshot, digest or title', async () => {
+    const { client, calls } = setup(() => { throw new Error('must not request') })
+    try {
+      for (const field of ['snapshotId', 'finalDigest', 'title']) {
+        const duplicate = textBody(); const second = textSelection()
+        if (field === 'title') second.title = '另一标题'
+        else second.messageSource[field] = field === 'snapshotId' ? 'snapshot-2' : `sha256:${'e'.repeat(64)}`
+        duplicate.selectedOutputs.push(second)
+        expect(await sendBody(client, duplicate)).to.equal(null)
+      }
+      expect(calls).to.have.length(0)
+    } finally { client.dispose() }
+  })
+  it('text acknowledgement loss/remount reads only, then explicitly replays the original mixed key and nested refs', async () => {
+    const original = textBody(true)
+    const { client, calls, api, storage } = setup(() => { throw new TypeError('lost acknowledgement') })
+    await sendBody(client, original); client.dispose()
+    original.selectedOutputs[1].messageSource.snapshotId = 'later-snapshot'
+    const frozen = calls[0].data
+    const recovered = useHallBountyFinalization({ api, storage, conversationId: 'conversation-1', identityKey: 'owner-a',
+      idempotencyKeyFactory: () => { throw new Error('must not replace original key') } })
+    try {
+      expect(recovered.status.value.intent.body).to.deep.equal(frozen)
+      expect(Object.isFrozen(recovered.status.value.intent.body.selectedOutputs[1].messageSource)).to.equal(true)
+      api.execute = async request => { calls.push(request); if (request.method === 'GET') throw error(404); return { data: completed({}, frozen) } }
+      await recovered.check()
+      expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET'])
+      await sendBody(recovered, textBody())
+      expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET', 'GET', 'POST'])
+      expect(calls[3].data).to.deep.equal(frozen)
+      expect(calls[3].headers).to.deep.equal(calls[0].headers)
+      expect(recovered.status.value.state).to.equal('completed')
+    } finally { recovered.dispose() }
+  })
+  it('changed nested message refs in a server receipt leave original text intent unresolved', async () => {
+    const original = textBody(); const changed = textBody()
+    changed.selectedOutputs[0].messageSource.snapshotId = 'different-snapshot'
+    const { client, calls } = setup(() => ({ data: completed({}, changed) }))
+    try {
+      expect(await sendBody(client, original)).to.equal(null)
+      expect(client.status.value.state).to.equal('unknown')
+      expect(client.status.value.receipt).to.equal(null)
+      expect(client.status.value.intent.body.selectedOutputs[0].messageSource.snapshotId).to.equal('snapshot-1')
+      await client.check()
+      expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET'])
+    } finally { client.dispose() }
+  })
+  it('owner switching fences a late text receipt and restores only that owner original refs', async () => {
+    const owner = ref('owner-a'); const original = textBody(); let finish
+    const { client, calls } = setup(() => new Promise(resolve => { finish = resolve }), { identityKey: owner })
+    try {
+      const pending = sendBody(client, original); owner.value = 'owner-b'
+      expect(calls[0].signal.aborted).to.equal(true)
+      finish({ data: completed({}, original) }); await pending
+      expect(client.status.value.state).to.equal('idle')
+      expect(client.status.value.intent).to.equal(null)
+      owner.value = 'owner-a'
+      expect(client.status.value.state).to.equal('unknown')
+      expect(client.status.value.intent.body).to.deep.equal(original)
+      expect(Object.isFrozen(client.status.value.intent.body.selectedOutputs[0].messageSource)).to.equal(true)
+    } finally { client.dispose() }
+  })
+  it('does not recover corrupted or fabricated stored message refs into a new operation', async () => {
+    const storage = memory()
+    const original = textBody(); original.selectedOutputs[0].messageSource.messageId = 9007199254740992
+    storage.setItem('juyiting:finalization:v1:owner-a:conversation-1', JSON.stringify({ taskId: 'task-1',
+      idempotencyKey: 'finalization-original-key-0001', operationId: '', body: original }))
+    const { client, calls } = setup(() => { throw new Error('must not request') }, { storage })
+    try {
+      expect(client.status.value.state).to.equal('recovery_error')
+      await sendBody(client, textBody()); await client.check(); await client.resume()
+      expect(calls).to.have.length(0)
+    } finally { client.dispose() }
+  })
+})

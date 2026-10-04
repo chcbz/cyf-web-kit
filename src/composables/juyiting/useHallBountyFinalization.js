@@ -15,17 +15,28 @@ const exactKeys = (value, fields) => value && typeof value === 'object' && !Arra
   Object.keys(value).length === fields.length && Object.keys(value).every(key => fields.includes(key))
 const text = (value, limit) => typeof value === 'string' && value.trim() === value && value.length > 0 && [...value].length <= limit
 const selectionFields = ['requestId', 'stepId', 'outputId', 'sha256', 'title', 'purpose']
+const textSelectionFields = ['requestId', 'messageSource', 'sha256', 'title', 'purpose']
+const messageFields = ['turnId', 'messageId', 'snapshotId', 'finalDigest']
+const validMessageSource = source => exactKeys(source, messageFields) && ID(source.turnId) &&
+  decimal(source.messageId, true) && ID(source.snapshotId) &&
+  typeof source.finalDigest === 'string' && /^sha256:[0-9a-f]{64}$/.test(source.finalDigest)
 const bodyFields = ['expectedTaskVersion', 'expectedAssignmentRevision', 'conversationId', 'summary', 'selectedOutputs']
-const validSelection = item => exactKeys(item, selectionFields) && ['requestId', 'stepId', 'outputId'].every(key => ID(item[key])) &&
-  HASH(item.sha256) && text(item.title, 255) && text(item.purpose, 255)
-const sourceKey = item => JSON.stringify([item.requestId, item.stepId, item.outputId])
+const validSelection = item => ((exactKeys(item, selectionFields) && ID(item.stepId) && ID(item.outputId)) ||
+  (exactKeys(item, textSelectionFields) && validMessageSource(item.messageSource))) &&
+  ID(item.requestId) && HASH(item.sha256) && text(item.title, 255) && text(item.purpose, 255)
+// The actual persisted message is unique even if a caller changes its snapshot/digest.
+const sourceKey = item => item.messageSource
+  ? JSON.stringify(['COMPLETED_MESSAGE', item.requestId, item.messageSource.turnId, item.messageSource.messageId])
+  : JSON.stringify([item.requestId, item.stepId, item.outputId])
 const validBody = body => exactKeys(body, bodyFields) &&
   typeof body.expectedTaskVersion === 'number' && safeFinalizationVersion(body.expectedTaskVersion) != null &&
   typeof body.expectedAssignmentRevision === 'number' && safeFinalizationVersion(body.expectedAssignmentRevision) != null &&
   ID(body.conversationId) && text(body.summary, 4000) && Array.isArray(body.selectedOutputs) &&
   body.selectedOutputs.length >= 1 && body.selectedOutputs.length <= 99 && body.selectedOutputs.every(validSelection) &&
   new Set(body.selectedOutputs.map(sourceKey)).size === body.selectedOutputs.length
-const freezeBody = body => Object.freeze({ ...body, selectedOutputs: Object.freeze(body.selectedOutputs.map(item => Object.freeze({ ...item }))) })
+const freezeSelection = item => Object.freeze(item.messageSource
+  ? { ...item, messageSource: Object.freeze({ ...item.messageSource }) } : { ...item })
+const freezeBody = body => Object.freeze({ ...body, selectedOutputs: Object.freeze(body.selectedOutputs.map(freezeSelection)) })
 const browserStorage = () => { try { return globalThis.sessionStorage || globalThis.window?.sessionStorage || null } catch { return null } }
 const uuid = () => {
   const value = globalThis.crypto?.randomUUID?.()
@@ -42,7 +53,11 @@ const receiptFields = ['operationId', 'taskId', 'conversationId', 'state', 'stat
   'expectedTaskVersion', 'expectedAssignmentRevision', 'selectedOutputs', 'deliveryId', 'deliveryState',
   'taskState', 'taskVersion', 'errorCode', 'retryable']
 const selectionMatches = (actual, expected) => Array.isArray(actual) && actual.length === expected.length && actual.every((item, i) =>
-  validSelection(item) && selectionFields.every(field => item[field] === expected[i][field]))
+  validSelection(item) && validSelection(expected[i]) &&
+    ((item.messageSource && expected[i].messageSource &&
+      textSelectionFields.filter(field => field !== 'messageSource').every(field => item[field] === expected[i][field]) &&
+      messageFields.every(field => item.messageSource[field] === expected[i].messageSource[field])) ||
+      (!item.messageSource && !expected[i].messageSource && selectionFields.every(field => item[field] === expected[i][field]))))
 export function validFinalizationReceipt (value, intent) {
   if (!exactKeys(value, receiptFields) || !ID(value.operationId) || !ID(value.taskId) ||
     value.taskId !== intent.taskId || value.conversationId !== intent.body.conversationId ||
