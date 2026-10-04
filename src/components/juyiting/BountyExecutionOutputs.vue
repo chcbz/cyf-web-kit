@@ -12,7 +12,7 @@
       <button
         v-if="!item.messageSource"
         type="button"
-        :disabled="!outputAssetPart(item) || archiveState(item).busy || archiveState(item).state === 'saved'" 
+        :disabled="!outputAssetPart(item) || archiveState(item).busy || archiveState(item).state === 'saved'"
         @click="archive(item)"
       >{{ archiveState(item).state === 'saved' ? '已保存到工作空间' : archiveState(item).busy ? '正在保存…' : !outputAssetPart(item) ? '等待资产登记' : '保存到工作空间' }}</button>
       <button v-if="archiveState(item).state === 'unknown'" type="button" @click="archive(item)">重试原保存</button>
