@@ -2011,11 +2011,12 @@ describe('JuyiHall component behavior', () => {
         mentionLabel: agent => agent.name, senderText: message => message.sender
       }
     })
-    await wrapper.find('[aria-label="引用资料"]').trigger('click')
+    await wrapper.find('.composer-more').trigger('click')
+    await wrapper.find('.composer-add-materials').trigger('click')
     expect(wrapper.text()).to.include('请先发送一条消息建立话头，再从百宝箱引用资料。')
   })
 
-  it('integrates mentions and clearing into the ChatPanel composer', async () => {
+  it('integrates mentions and the more menu into the ChatPanel composer', async () => {
     const agents = [
       { agentId: 'wuyong', name: 'Wu Yong' },
       { agentId: 'linchong', name: 'Lin Chong' }
@@ -2058,9 +2059,12 @@ describe('JuyiHall component behavior', () => {
       }
     })
 
-    expect(clearWrapper.find('.composer-clear').exists(), 'clear button appears with draft').to.equal(true)
-    await clearWrapper.find('.composer-clear').trigger('click')
-    expect(clearWrapper.emitted('update:draft').at(-1)).to.deep.equal([''])
+    expect(clearWrapper.find('.composer-clear').exists(), 'no permanent clear action').to.equal(false)
+    await clearWrapper.find('.composer-more').trigger('click')
+    expect(clearWrapper.find('.composer-more-panel').element.style.display).not.to.equal('none')
+    expect(clearWrapper.find('.composer-textarea').element.value).to.equal('@Lin Chong ready')
+    clearWrapper.unmount()
+    wrapper.unmount()
   })
 
   it('renders variant-specific target chips in ChatPanel composer', () => {
@@ -3092,7 +3096,7 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
     } finally { wrapper.unmount() }
   })
 
-  it('W05 opens a distinct formal draft from the real bounty toolbar and returns without clearing original input or orientation', async () => {
+  it('W05 keeps the legacy formal draft route separate from the single requirement toolbar and returns without clearing original input or orientation', async () => {
     const mode = Vue.ref('portrait-command')
     const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
     const mocks = createActualHallMocks({ mode, mounts: { library: 0, archive: 0 }, counters, actualBountyPanel: BountyPanel })
@@ -3107,10 +3111,11 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
       state.openPanel('tasks')
       await Vue.nextTick()
       const bounty = wrapper.findComponent(BountyPanel)
-      await bounty.findAll('button').find(button => button.text() === '张榜').trigger('click')
+      await bounty.findAll('button').find(button => button.text() === '提出需求').trigger('click')
       await bounty.find('input[name="taskTitle"]').setValue('原张榜尚未提交的名目')
       const source = bounty.element
-      await bounty.findAll('button').find(button => button.text() === '起草正式任务').trigger('click')
+      expect(bounty.findAll('button').some(button => button.text() === '起草正式任务')).to.equal(false)
+      state.openPanel('formalDraft', { restore: true })
       await Vue.nextTick()
       expect(state.panelFrames).to.deep.equal(['tasks', 'formalDraft'])
       expect(wrapper.find('.formal-draft-probe').text()).to.equal('TASK_CREATE')
@@ -3566,9 +3571,9 @@ describe('W11 R9 actual JuyiHall stale funded acknowledgement', () => {
         const writeDraft = async draft => {
           await wrapper.find('input[name="taskTitle"]').setValue(draft.title)
           await wrapper.find('textarea[name="taskDescription"]').setValue(draft.description)
-          await wrapper.find('input[name="requiredAbilities"]').setValue(draft.requiredAbilities.join(','))
           const funded = wrapper.find('.funded-create-toggle input')
           if (!funded.element.checked) await funded.setChecked(true)
+          await wrapper.find('input[name="requiredAbilities"]').setValue(draft.requiredAbilities.join(','))
           await wrapper.find('input[name="grossBountyAmountMicro"]').setValue(draft.grossBountyAmountMicro)
         }
         try {

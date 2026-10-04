@@ -1,5 +1,5 @@
 <template>
-  <div class="hall-chat-composer chat-composer" :class="composerClass">
+  <div ref="composerRef" class="hall-chat-composer chat-composer" :class="composerClass">
     <form class="composer-submit" @submit.prevent="submit">
       <div class="composer-context" :class="`is-${discussionVariant}`">
         <span class="composer-context-label">{{ contextLabel }}</span>
@@ -34,19 +34,21 @@
             @input="handleInput"
             @keydown="handleKeydown"
           ></textarea>
-          <HallVoiceControls class="composer-voice-controls" :voice="voice" @apply="$emit('voice-apply', $event)" />
+
         </div>
         <p v-if="typedPendingQuestion" class="typed-pending-question">正在回答：{{ typedPendingQuestion.question }}</p>
         <div class="composer-actions">
           <button
-            v-if="canClear"
-            class="composer-clear"
+            ref="moreButtonRef"
+            class="composer-more"
             type="button"
-            title="清空话头"
-            aria-label="清空话头"
-            @click="clearDraft"
+            title="更多操作"
+            aria-label="更多操作"
+            :aria-expanded="String(moreOpen)"
+            :aria-controls="moreId"
+            @click="moreOpen = !moreOpen"
           >
-            <var-icon name="close-circle-outline" />
+            <var-icon name="plus" />
           </button>
           <button
             class="composer-send"
@@ -59,6 +61,31 @@
           </button>
         </div>
       </div>
+
+      <section
+        v-show="moreOpen || voiceHasDetail"
+        :id="moreId"
+        class="composer-more-panel"
+        aria-label="资料与语音"
+      >
+        <div v-show="moreOpen" class="composer-more-actions">
+          <slot name="actions"></slot>
+          <button
+            class="composer-add-materials"
+            type="button"
+            :disabled="inputLocked"
+            @click="openMaterials"
+          >添加资料</button>
+          <button type="button" :disabled="inputLocked" @click="openWorkspace">工作空间</button>
+        </div>
+        <div v-show="moreOpen"><slot name="materials"></slot></div>
+        <HallVoiceControls
+          class="composer-voice-controls"
+          :draft-only="true"
+          :voice="voice"
+          @apply="$emit('voice-apply', $event)"
+        />
+      </section>
 
       <div v-if="showMentionMenu" class="composer-mention-menu" aria-label="选择要点名的好汉">
         <button
@@ -84,7 +111,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import HallVoiceControls from './HallVoiceControls.vue'
 
 const props = defineProps({
@@ -100,7 +127,8 @@ const props = defineProps({
   targetText: { type: String, default: '众好汉' },
   maxLength: { type: Number, default: 1200 },
   voice: { type: Object, default: null },
-  typedPendingQuestion: { type: Object, default: null }
+  typedPendingQuestion: { type: Object, default: null },
+  contextKey: { type: String, default: '' }
 })
 
 const emit = defineEmits([
@@ -108,15 +136,43 @@ const emit = defineEmits([
   'mention-agent',
   'send-message',
   'update:draft',
-  'voice-apply'
+  'voice-apply',
+  'open-materials',
+  'open-workspace'
 ])
 
+const composerRef = ref(null)
+const moreButtonRef = ref(null)
+const moreOpen = ref(false)
+const moreId = `hall-composer-more-${useId()}`
 const textareaRef = ref(null)
+const closeMore = () => {
+  if (!moreOpen.value) return
+  moreOpen.value = false
+  nextTick(() => moreButtonRef.value?.focus())
+}
+const handleOutside = event => {
+  if (!composerRef.value?.contains(event.target)) closeMore()
+}
+const handleEscape = event => {
+  if (event.key !== 'Escape' || !moreOpen.value || event.defaultPrevented) return
+  event.preventDefault()
+  closeMore()
+}
+const openMaterials = () => { emit('open-materials') }
+const openWorkspace = () => { closeMore(); emit('open-workspace') }
+onMounted(() => {
+  document.addEventListener('pointerdown', handleOutside)
+  document.addEventListener('keydown', handleEscape)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleOutside)
+  document.removeEventListener('keydown', handleEscape)
+})
 const isFocused = ref(false)
 
 const draftLength = computed(() => String(props.draft || '').length)
 const inputLocked = computed(() => props.interactionLocked || props.isStreaming || props.isAwaitingReply || Boolean(props.voice?.voiceInteractionLocked))
-const canClear = computed(() => Boolean(String(props.draft || '').length) && !inputLocked.value)
 const canSend = computed(() => Boolean(String(props.draft || '').trim()) && !inputLocked.value)
 const composerClass = computed(() => ({
   'is-streaming': props.isStreaming,
@@ -204,11 +260,6 @@ const handleKeydown = (event) => {
   submit()
 }
 
-const clearDraft = () => {
-  emit('update:draft', '')
-  nextTick(resizeTextarea)
-}
-
 const removeTarget = (chip) => {
   if (chip.locked) return
   emit('clear-target', chip.id)
@@ -227,10 +278,25 @@ const submit = () => {
   emit('send-message')
 }
 
+watch(() => props.contextKey, () => { moreOpen.value = false })
+
 watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
 </script>
 
 <style scoped>
+.composer-more-panel {
+  display: grid;
+  gap: 8px;
+  max-height: 45vh;
+  overflow-y: auto;
+  padding: 10px;
+  border: 1px solid #d7c3a2;
+  border-radius: 8px;
+  background: #fffdf6;
+}
+.composer-more-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.composer-more-actions button { padding: 8px 12px; border: 1px solid #d7c3a2; border-radius: 6px; background: #fffaf0; color: #5b432a; cursor: pointer; }
+
 .hall-chat-composer {
   position: relative;
   display: flex;
@@ -381,7 +447,7 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
   align-self: start;
 }
 
-.composer-clear,
+.composer-more,
 .composer-send {
   display: inline-flex;
   align-items: center;
@@ -394,7 +460,7 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
   cursor: pointer;
 }
 
-.composer-clear {
+.composer-more {
   border: 1px solid #d7c3a2;
   background: #fffdf6;
   color: #765f40;
@@ -414,7 +480,7 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
   font-size: 12px;
 }
 
-.composer-clear:disabled,
+.composer-more:disabled,
 .composer-send:disabled {
   cursor: not-allowed;
   opacity: 0.5;
@@ -489,7 +555,7 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
     width: 100%;
   }
 
-  .composer-clear,
+  .composer-more,
   .composer-send {
     width: 38px;
   }

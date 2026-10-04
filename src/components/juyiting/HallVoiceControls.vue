@@ -99,7 +99,7 @@
       aria-label="语音设置"
       role="group"
     >
-      <label class="voice-toggle">
+      <label v-if="!draftOnly" class="voice-toggle">
         <input
           :checked="voice.autoSendEnabled"
           type="checkbox"
@@ -146,7 +146,12 @@
       <p>{{ voice.transcript || voice.error }}</p>
       <button v-if="voice.transcript && voice.detached" type="button" @click="voice.adoptCurrentContext()">按当前议事采用</button>
       <div v-if="voice.transcript && !voice.detached">
-        <button type="button" aria-label="确认发送语音转写" @click="voice.sendTranscript()">确认发送</button>
+        <button
+          v-if="!draftOnly"
+          type="button"
+          aria-label="确认发送语音转写"
+          @click="voice.sendTranscript()"
+        >确认发送</button>
         <button type="button" @click="$emit('apply', 'append')">追加</button>
         <button type="button" @click="$emit('apply', 'replace')">替换</button>
       </div>
@@ -158,9 +163,9 @@
 let voiceSettingsSequence = 0
 </script>
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId } from 'vue'
-const props = defineProps({ compact: { type: Boolean, default: false }, voice: { type: Object, default: null } })
-defineEmits(['apply'])
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
+const props = defineProps({ draftOnly: { type: Boolean, default: false }, compact: { type: Boolean, default: false }, voice: { type: Object, default: null } })
+const emit = defineEmits(['apply'])
 const settingsOpen = ref(false)
 const controlsRef = ref(null)
 const settingsButtonRef = ref(null)
@@ -183,8 +188,12 @@ const reviewTitle = computed(() => {
 })
 const startRecording = () => {
   settingsOpen.value = false
-  void props.voice.startRecording()
+  if (props.draftOnly) void props.voice.startRecording({ draftOnly: true })
+  else void props.voice.startRecording()
 }
+watch(() => props.voice?.state, state => {
+  if (props.draftOnly && state === 'review' && props.voice?.transcript && !props.voice?.detached) emit('apply', 'append')
+})
 const toggleSettings = () => { settingsOpen.value = !settingsOpen.value }
 const closeSettings = ({ restoreFocus = false } = {}) => {
   settingsOpen.value = false

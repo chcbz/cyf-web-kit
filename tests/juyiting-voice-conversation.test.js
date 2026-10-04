@@ -330,6 +330,33 @@ before(async () => {
 })
 
 describe('Juyi Hall voice mounted facade', () => {
+  it('puts composer transcription into the editable draft even when HUD auto-send is enabled', async () => {
+    const harness = browserHarness()
+    let sends = 0
+    const state = createVoice({ browser: harness.browser, draft: '已有草稿', onSendVoice: async () => { sends += 1; return true } })
+    state.voice.setAutoSendEnabled(true)
+    let editableDraft = '已有草稿'
+    const HallVoiceControls = loadSfc('../src/components/juyiting/HallVoiceControls.vue')
+    const wrapper = mount(HallVoiceControls, { props: { draftOnly: true, voice: state.voice }, attrs: {
+      onApply: mode => {
+        const next = state.voice.applyTranscript(mode)
+        if (typeof next === 'string') { editableDraft = next; state.setDraft(next); state.voice.discard() }
+      }
+    } })
+    try {
+      await wrapper.get('.voice-start').trigger('click')
+      await flush()
+      const recorder = FakeRecorder.instances.at(-1)
+      recorder.ondataavailable({ data: new Blob(['voice']) })
+      state.voice.stopRecording()
+      await flush()
+      expect(editableDraft).to.equal('已有草稿\n林教头请看榜文')
+      expect(sends).to.equal(0)
+      expect(state.voice.state).to.equal('idle')
+      expect(state.voice.autoSendEnabled).to.equal(true)
+    } finally { wrapper.unmount(); state.voice.dispose() }
+  })
+
   it('keeps text chat usable with flag off and renders correct controls with flag on', async () => {
     const HallVoiceControls = loadSfc('../src/components/juyiting/HallVoiceControls.vue')
     const HallChatComposer = loadSfc('../src/components/juyiting/HallChatComposer.vue', { HallVoiceControls })
@@ -351,7 +378,10 @@ describe('Juyi Hall voice mounted facade', () => {
     const on = mount(HallChatComposer, { attachTo: document.body, props: { draft: '', mentionLabel: () => '', voice: onVoice }, global: { stubs: { 'var-icon': true } } })
     expect(onVoice.supported).to.equal(true)
     expect(onVoice.canRecord).to.equal(true)
-    expect(on.find('.composer-input-area .hall-voice-controls').exists()).to.equal(true)
+    expect(on.find('.composer-more-panel .hall-voice-controls').exists()).to.equal(true)
+    expect(on.get('.composer-more-panel').element.style.display).to.equal('none')
+    await on.get('.composer-more').trigger('click')
+    expect(on.get('.composer-more-panel').element.style.display).not.to.equal('none')
     expect(on.find('.hall-chat-composer > .hall-voice-controls').exists()).to.equal(false)
     expect(on.find('.voice-settings').exists()).to.equal(false)
     expect(on.get('.voice-settings-trigger').attributes('aria-expanded')).to.equal('false')
@@ -359,8 +389,10 @@ describe('Juyi Hall voice mounted facade', () => {
     await on.get('.voice-settings-trigger').trigger('click')
     expect(on.get('.voice-settings-trigger').attributes('aria-expanded')).to.equal('true')
     expect(on.get('.voice-disclosure').element.textContent).to.equal('播放内容为 AI 生成语音')
-    await on.get('input[type="checkbox"]').setValue(true)
-    expect(onVoice.autoSendEnabled).to.equal(true)
+    expect(on.find('.voice-settings').text()).not.to.contain('自动发送')
+    await on.get('input[aria-label="语音回答；播放内容为 AI 生成语音"]').setValue(true)
+    expect(onVoice.replyVoiceEnabled).to.equal(true)
+    expect(onVoice.autoSendEnabled).to.equal(false)
     document.body.dispatchEvent(new window.Event('pointerdown', { bubbles: true }))
     await flush()
     expect(on.find('.voice-settings').exists()).to.equal(false)
@@ -398,6 +430,7 @@ describe('Juyi Hall voice mounted facade', () => {
     firstSettings.unmount()
     secondSettings.unmount()
 
+    await on.get('.composer-more').trigger('click')
     await on.get('.voice-start').trigger('click')
     await flush()
     expect(onVoice.state).to.equal('recording')
@@ -411,7 +444,8 @@ describe('Juyi Hall voice mounted facade', () => {
     expect(onVoice.state).to.equal('review')
     expect(on.get('.composer-body.has-voice-detail').exists()).to.equal(true)
     expect(on.get('.voice-review strong').element.textContent).to.equal('语音转写')
-    expect(on.get('button[aria-label="确认发送语音转写"]').exists()).to.equal(true)
+    expect(on.find('button[aria-label="确认发送语音转写"]').exists()).to.equal(false)
+    expect(on.emitted('voice-apply')).to.deep.equal([['append']])
     on.unmount()
 
     const serviceError = Vue.reactive({ supported: true, state: 'error', error: '语音回答失败，文字已保留', discard: () => {} })

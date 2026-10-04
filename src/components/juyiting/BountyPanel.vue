@@ -29,17 +29,21 @@
         <div class="task-create-actions">
           <button class="new-task-button" type="button" @click="showCreateForm = !showCreateForm">
             <BountyActionIcon name="plus" />
-            <span>张榜</span>
+            <span>提出需求</span>
           </button>
           <button
-            v-if="embeddedHall"
+            v-if="!embeddedHall"
             class="new-task-button"
             type="button"
             @click="$emit('start-formal-draft')"
           >
             <span>起草正式任务</span>
           </button>
-          <button class="new-task-button" type="button" @click="embeddedHall ? $emit('start-private-draft') : showDraftEditor = !showDraftEditor">
+          <button
+            v-if="!embeddedHall"
+            class="new-task-button"
+            type="button"
+            @click="embeddedHall ? $emit('start-private-draft') : showDraftEditor = !showDraftEditor">
             <span>{{ showDraftEditor ? '收起草稿' : '起草交办' }}</span>
           </button>
         </div>
@@ -59,9 +63,19 @@
       </section>
 
       <form v-if="showCreateForm" class="task-create-form" @submit.prevent="submitCreateTask">
-        <input v-model="taskForm.title" name="taskTitle" placeholder="榜文名目" />
-        <textarea v-model="taskForm.description" name="taskDescription" placeholder="榜文缘由"></textarea>
-        <input v-model.trim="taskForm.requiredAbilities" name="requiredAbilities" placeholder="所需本领，逗号分隔" />
+        <input v-model="taskForm.title" name="taskTitle" placeholder="需求标题" />
+        <textarea
+          v-model="taskForm.description"
+          name="taskDescription"
+          placeholder="说明你希望得到什么结果（必填）"
+          required
+        ></textarea>
+        <input
+          v-if="!embeddedHall || taskForm.funded"
+          v-model.trim="taskForm.requiredAbilities"
+          name="requiredAbilities"
+          placeholder="所需本领，逗号分隔"
+        />
         <HallMaterialPicker
           class="task-material-picker"
           v-if="!taskForm.funded && identityScope"
@@ -94,7 +108,7 @@
           <button type="button" @click="$emit('resume-funded-create')">确认按原请求恢复</button>
           <button type="button" @click="$emit('cancel-funded-create-recovery')">暂不恢复</button>
         </section>
-        <button type="submit" :disabled="createPending || requirementCreateBusy || !taskForm.title.trim() || (taskForm.funded && (!validGrossAmount || taskMaterials.length))">{{ createPending ? '张榜中…' : '张榜悬赏' }}</button>
+        <button type="submit" :disabled="createPending || requirementCreateBusy || !taskForm.title.trim() || !taskForm.description.trim() || (taskForm.funded && (!validGrossAmount || taskMaterials.length))">{{ createPending ? '正在提交…' : taskForm.funded ? '张榜悬赏' : '提出需求' }}</button>
       </form>
 
       <HallDraftEditor
@@ -674,7 +688,7 @@ const taskAssigneeIds = (task) => {
 }
 
 const submitCreateTask = () => {
-  if (!taskForm.value.title.trim()) return
+  if (!taskForm.value.title.trim() || !taskForm.value.description.trim()) return
   if (taskForm.value.funded && (!validGrossAmount.value || taskMaterials.value.length)) return
   const payload = {
     title: taskForm.value.title,

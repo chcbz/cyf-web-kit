@@ -1,7 +1,7 @@
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 
-const source = path => readFileSync(new URL(path, import.meta.url), 'utf8')
+const source = path => readFileSync(new URL(path, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 const hall = source('../src/components/world/JuyiHall.vue')
 const bounty = source('../src/components/juyiting/BountyPanel.vue')
 const catalog = source('../src/components/juyiting/PersonaCatalogPanel.vue')

@@ -8,29 +8,6 @@
       </div>
       <div class="toolbar-actions">
         <button
-          class="icon-button material-reference-entry"
-          type="button"
-          :title="isTaskDiscussion ? '查看事项固定资料' : '引用百宝箱资料'"
-          :aria-label="isTaskDiscussion ? '事项资料' : '引用资料'"
-          :aria-expanded="materialPickerOpen ? 'true' : 'false'"
-          :disabled="voice?.voiceInteractionLocked"
-          @click="toggleMaterialPicker"
-        >
-          <var-icon name="book-open-page-variant-outline" />
-          <span>{{ isTaskDiscussion ? '事项资料' : '引用资料' }}</span>
-        </button>
-        <button
-          class="icon-button workspace-entry"
-          type="button"
-          title="打开百宝箱"
-          aria-label="打开百宝箱"
-          :disabled="voice?.voiceInteractionLocked"
-          @click="$emit('open-workspace')"
-        >
-          <var-icon name="briefcase-variant-outline" />
-          <span>百宝箱</span>
-        </button>
-        <button
           v-if="durableCancelTarget"
           class="icon-button"
           type="button"
@@ -46,87 +23,11 @@
           aria-label="停止旧版回话等待"
           @click="$emit('cancel-legacy-transport')"
         ><var-icon name="close" /></button>
-        <button
-          class="icon-button"
-          type="button"
-          title="重取回话"
-          aria-label="重取回话"
-          :disabled="conversationBusy || voice?.voiceInteractionLocked"
-          @click="$emit('load-messages')"
-        >
-          <var-icon name="refresh" />
-        </button>
-        <button
-          class="icon-button"
-          type="button"
-          title="话头记录"
-          aria-label="话头记录"
-          :aria-expanded="historyOpen ? 'true' : 'false'"
-          :disabled="Boolean(conversationHistoryDeletingId) || voice?.voiceInteractionLocked"
-          @click="toggleHistory"
-        >
-          <var-icon name="history" />
-        </button>
-        <button
-          class="icon-button primary"
-          type="button"
-          title="另起话头"
-          aria-label="另起话头"
-          :disabled="conversationBusy || voice?.voiceInteractionLocked"
-          @click="$emit('new-conversation')"
-        >
-          <var-icon name="plus" />
-        </button>
+
       </div>
     </div>
 
-    <section v-if="materialPickerOpen" class="material-reference-picker" aria-label="引用议事资料">
-      <div class="material-reference-heading">
-        <div>
-          <strong>{{ isTaskDiscussion ? '本次需求的资料' : '引用资料' }}</strong>
-          <small>{{ isTaskDiscussion ? '图片、文档、音频等都可以作为资料，由 Agent 按需求使用。' : '引用固定到当前话头及所选版本；不会把资料内容或假摘要写入消息。' }}</small>
-        </div>
-        <button type="button" aria-label="收起引用资料" @click="materialPickerOpen = false">
-          <var-icon name="close" />
-        </button>
-      </div>
-      <p v-if="!hasMaterialScope" class="material-reference-notice">
-        {{ isTaskDiscussion ? '未确认当前事项标识，不能读取或展示资料。' : '请先发送一条消息建立话头，再从百宝箱引用资料。' }}
-      </p>
-      <template v-else>
-        <p v-if="materialError" class="material-reference-error" role="alert">{{ materialError }}</p>
-        <div v-if="materialLoading" class="material-reference-state">正在查找百宝箱资料…</div>
-        <div v-if="isTaskDiscussion" class="task-material-directory">
-          <p v-if="!activeMaterialLinks.length" class="material-reference-state">暂未添加资料，不影响继续讨论。</p>
-          <article v-for="link in activeMaterialLinks" :key="link.relationId" class="task-material-reference">
-            <div><strong>{{ materialName(link) }}</strong><small>v{{ link.version }} · {{ link.role === 'INPUT' ? '用于办理' : '参考资料' }}</small></div>
-            <p>可随消息发送，Agent 会按需求使用。</p>
-            <label v-if="typedEnabled" class="typed-source-selector"><input type="checkbox" :checked="typedSelectedSourceIds.has(`${link.fileId}\u0000${link.version}`)" @change="toggleTypedSource(link, $event.target.checked)" /> 随本条消息发送</label>
-          </article>
-          <p class="material-reference-notice">资料可选；直接描述你想要的结果即可。</p>
-        </div>
-        <template v-else>
-          <div v-if="!workspace.items.value?.length" class="material-reference-state">
-            百宝箱暂无可引用资料。
-            <button type="button" @click="$emit('open-workspace')">去百宝箱添加</button>
-          </div>
-          <ul v-else class="material-reference-list">
-            <li v-for="file in workspace.items.value" :key="file.fileId">
-              <div class="material-reference-file">
-                <strong :title="file.displayName">{{ file.displayName }}</strong>
-                <small>版本 {{ file.latestVersion }}</small>
-              </div>
-              <button v-if="linkedFileIds.has(`${file.fileId}:${file.latestVersion}`)" type="button" class="material-reference-linked" :disabled="materialActionBusy" @click="removeMaterialReference(linkFor(file))">移除引用</button>
-              <button v-else type="button" :disabled="materialActionBusy" @click="addMaterialReference(file)">引用</button>
-            </li>
-          </ul>
-          <div v-if="activeMaterialLinks.length" class="active-material-references">
-            <span>本话头已引用：</span>
-            <button v-for="link in activeMaterialLinks" :key="link.relationId" type="button" :disabled="materialActionBusy" @click="removeMaterialReference(link)">{{ materialName(link) }} · v{{ link.version }} <var-icon name="close" /></button>
-          </div>
-        </template>
-      </template>
-    </section>
+
 
     <HallConversationHistory
       v-if="historyOpen"
@@ -159,7 +60,12 @@
           <span v-if="message.streaming" class="message-state">回话未尽</span>
         </div>
         <div class="message-content" v-html="renderMarkdown(message.content)"></div>
-        <BountyTextSelectionArchive v-if="isTaskDiscussion" :conversation-id="conversationId" :identity-key="materialIdentityKey" :message="message" />
+        <BountyTextSelectionArchive
+          v-if="isTaskDiscussion"
+          :conversation-id="conversationId"
+          :identity-key="materialIdentityKey"
+          :message="message"
+        />
         <HallMessageParts
           :parts="message.parts"
           :conversation-id="conversationId"
@@ -174,7 +80,7 @@
         />
         <small v-if="message.statusText" class="message-status">{{ message.statusText }}</small>
       </div>
-      <slot name="bounty-results" />
+      <slot name="bounty-results"></slot>
       <p v-if="deliberationStatus" class="deliberation-status">{{ deliberationStatus }}</p>
       <div v-if="isAwaitingReply" class="hall-message SYSTEM is-pending">
         <strong>{{ pendingAuthor }}</strong>
@@ -197,13 +103,116 @@
       :selected-agent="selectedAgent"
       :target-text="targetText"
       :typed-pending-question="typedPendingQuestion"
+      :context-key="`${materialIdentityKey}\u0000${taskId}\u0000${conversationId}`"
       :voice="voice"
       @clear-target="$emit('clear-target', $event)"
       @mention-agent="$emit('mention-agent', $event)"
       @send-message="$emit('send-message', typedEnabled && discussionVariant === 'bounty' ? { sourceSelectors: typedSourceSelectors } : undefined)"
       @update:draft="$emit('update:draft', $event)"
       @voice-apply="$emit('voice-apply', $event)"
-    />
+      @open-materials="toggleMaterialPicker"
+      @open-workspace="$emit('open-workspace')"
+    >
+      <template #actions>
+        <button
+          class="icon-button"
+          type="button"
+          title="重取回话"
+          aria-label="重取回话"
+          :disabled="conversationBusy || voice?.voiceInteractionLocked"
+          @click="$emit('load-messages')"
+        >
+          <var-icon name="refresh" />
+        </button>
+        <button
+          class="icon-button"
+          type="button"
+          title="话头记录"
+          aria-label="话头记录"
+          :aria-expanded="historyOpen ? 'true' : 'false'"
+          :disabled="Boolean(conversationHistoryDeletingId) || voice?.voiceInteractionLocked"
+          @click="toggleHistory"
+        >
+          <var-icon name="history" />
+        </button>
+        <button
+          class="icon-button primary"
+          type="button"
+          title="另起话头"
+          aria-label="另起话头"
+          :disabled="conversationBusy || voice?.voiceInteractionLocked"
+          @click="$emit('new-conversation')"
+        >
+          <var-icon name="plus" />
+        </button>
+      </template>
+      <template #materials>
+        <section v-if="materialPickerOpen" class="material-reference-picker" aria-label="引用议事资料">
+          <div class="material-reference-heading">
+            <div>
+              <strong>{{ isTaskDiscussion ? '本次需求的资料' : '引用资料' }}</strong>
+              <small>{{ isTaskDiscussion ? '图片、文档、音频等都可以作为资料，由 Agent 按需求使用。' : '引用固定到当前话头及所选版本；不会把资料内容或假摘要写入消息。' }}</small>
+            </div>
+            <button type="button" aria-label="收起引用资料" @click="materialPickerOpen = false">
+              <var-icon name="close" />
+            </button>
+          </div>
+          <p v-if="!hasMaterialScope" class="material-reference-notice">
+            {{ isTaskDiscussion ? '未确认当前事项标识，不能读取或展示资料。' : '请先发送一条消息建立话头，再从百宝箱引用资料。' }}
+          </p>
+          <template v-else>
+            <p v-if="materialError" class="material-reference-error" role="alert">{{ materialError }}</p>
+            <div v-if="materialLoading" class="material-reference-state">正在查找百宝箱资料…</div>
+            <div v-if="isTaskDiscussion" class="task-material-directory">
+              <p v-if="!activeMaterialLinks.length" class="material-reference-state">暂未添加资料，不影响继续讨论。</p>
+              <article v-for="link in activeMaterialLinks" :key="link.relationId" class="task-material-reference">
+                <div><strong>{{ materialName(link) }}</strong><small>v{{ link.version }} · {{ link.role === 'INPUT' ? '用于办理' : '参考资料' }}</small></div>
+                <p>可随消息发送，Agent 会按需求使用。</p>
+                <label v-if="typedEnabled" class="typed-source-selector"><input type="checkbox" :checked="typedSelectedSourceIds.has(`${link.fileId}\u0000${link.version}`)" @change="toggleTypedSource(link, $event.target.checked)" /> 随本条消息发送</label>
+              </article>
+              <p class="material-reference-notice">资料可选；直接描述你想要的结果即可。</p>
+            </div>
+            <template v-else>
+              <div v-if="!workspace.items.value?.length" class="material-reference-state">
+                百宝箱暂无可引用资料。
+                <button type="button" @click="$emit('open-workspace')">去百宝箱添加</button>
+              </div>
+              <ul v-else class="material-reference-list">
+                <li v-for="file in workspace.items.value" :key="file.fileId">
+                  <div class="material-reference-file">
+                    <strong :title="file.displayName">{{ file.displayName }}</strong>
+                    <small>版本 {{ file.latestVersion }}</small>
+                  </div>
+                  <button
+                    v-if="linkedFileIds.has(`${file.fileId}:${file.latestVersion}`)"
+                    type="button"
+                    class="material-reference-linked"
+                    :disabled="materialActionBusy"
+                    @click="removeMaterialReference(linkFor(file))"
+                  >移除引用</button>
+                  <button
+                    v-else
+                    type="button"
+                    :disabled="materialActionBusy"
+                    @click="addMaterialReference(file)"
+                  >引用</button>
+                </li>
+              </ul>
+              <div v-if="activeMaterialLinks.length" class="active-material-references">
+                <span>本话头已引用：</span>
+                <button
+                  v-for="link in activeMaterialLinks"
+                  :key="link.relationId"
+                  type="button"
+                  :disabled="materialActionBusy"
+                  @click="removeMaterialReference(link)"
+                >{{ materialName(link) }} · v{{ link.version }} <var-icon name="close" /></button>
+              </div>
+            </template>
+          </template>
+        </section>
+      </template>
+    </HallChatComposer>
   </div>
 </template>
 

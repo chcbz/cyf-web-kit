@@ -129,6 +129,7 @@ export const useHallVoiceConversation = ({
   const voiceTurnActiveRef = ref(false)
   const supportedRef = ref(browserSupported)
   let generation = 0
+  let draftOnlyCapture = false
   let mediaStream = null
   let pcmRecorder = null
   let recorderInitController = null
@@ -284,7 +285,7 @@ export const useHallVoiceConversation = ({
       const text = String(response?.data?.data?.text || response?.data?.text || '').trim()
       if (!text) throw new Error('未识别到语音内容')
       transcriptRef.value = text
-      if (autoSendEnabledRef.value && matchesFrozen() && !isReplyBusy()) startCountdown(current)
+      if (!draftOnlyCapture && autoSendEnabledRef.value && matchesFrozen() && !isReplyBusy()) startCountdown(current)
       else openReview(!matchesFrozen())
       return true
     } catch (cause) {
@@ -301,8 +302,9 @@ export const useHallVoiceConversation = ({
     }
   }
 
-  const startRecording = async () => {
+  const startRecording = async ({ draftOnly = false } = {}) => {
     if (!canRecordRef.value) return false
+    draftOnlyCapture = draftOnly === true
     invalidateAsyncWork()
     closeReplyTurn('superseded_by_capture')
     const current = generation

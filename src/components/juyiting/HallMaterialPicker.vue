@@ -51,7 +51,7 @@
         </div>
         <footer>
           <div v-if="pickerDetail" class="quick-material-fields">
-            <label><span>版本</span><select v-model.number="pickerVersion"><option v-for="version in pickerDetail.versions" :key="version.version" :value="version.version">v{{ version.version }} · {{ version.originalFilename }}</option></select></label>
+            <span class="quick-material-version">已固定 v{{ pickerVersion }} · 版本管理在工作空间</span>
             <button type="button" :disabled="!pickerVersion" @click="previewQuickMaterial">预览</button><button type="button" :disabled="!pickerVersion" @click="downloadQuickMaterial">下载</button><button
               type="button"
               class="primary"

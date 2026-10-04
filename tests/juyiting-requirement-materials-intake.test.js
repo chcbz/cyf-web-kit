@@ -121,7 +121,7 @@ describe('neutral materials v2 atomic creation and immutable dual-version recove
   })
 })
 
-const page = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+const page = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 const quickCreateBody = page.match(/const handleQuickRequest = async request => \{([\s\S]*?)\n\}\n\nconst openOverviewTask/)?.[1]
 if (!quickCreateBody) throw new Error('Actual quick creation closure missing')
 describe('new product entry wiring, no quick legacy task/link writes', () => {
@@ -147,7 +147,7 @@ describe('new product entry wiring, no quick legacy task/link writes', () => {
     expect(h.calls).to.have.length(1)
     expect(h.calls[0].path).to.equal('/tasks/creation-operations/v2')
     expect(h.calls[0].body).to.deep.equal(requirementMaterialsBody({ title: text, description: text, attachments: attachments() }))
-    expect(opens).to.deep.equal([{ id: 'task-1' }]); expect(panels).to.deep.equal([])
+    expect(opens).to.deep.equal([]); expect(panels).to.deep.equal([['agents']])
     h.dispose()
   })
   it('quick unknown response opens original recovery without falling back to task/link writes', async () => {

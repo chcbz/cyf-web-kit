@@ -280,9 +280,13 @@
             :agent-filter="agentFilter"
             :loading="rosterLoading"
             :error-message="rosterError"
+            :has-pending-task="Boolean(pendingPointAndDeliberateTask)"
+            :point-and-start-busy="pointAndStartBusy || controlledBridgeBusy"
+            :can-point-and-deliberate="canPointAndDeliberateAgent"
+            :can-start-conversation="canStartAgentConversation"
             @set-agent-filter="setAgentFilter"
             @select-agent="selectAgent"
-            :can-start-conversation="canStartAgentConversation"
+            @point-and-deliberate="handlePointAndDeliberateAgent"
             @start-conversation="handleStartAgentConversation"
             @open-catalog="openPanel('catalog')"
           />
@@ -346,7 +350,7 @@
             @assign-task="assignTask"
             @archive-task="archiveTask"
             @brief-selected-task="briefSelectedTask"
-            @create-task="createTask"
+            @create-task="createRequirementAndChooseAgent"
             @check-requirement-create="checkRequirementCreate"
             @resume-requirement-create="resumeRequirementCreate"
             @start-private-draft="openPrivateDraft()"
@@ -1708,7 +1712,7 @@ const handleQuickRequest = async request => {
     return false
   }
   hallReadRevision.value += 1
-  await openOverviewTask(selectedTask.value)
+  openPanel('agents')
   return true
 }
 
@@ -2001,6 +2005,11 @@ const createTask = async (payload, acknowledge = () => {}) => {
   } finally { acknowledge(created) }
   return created
 }
+const createRequirementAndChooseAgent = async (payload, acknowledge) => {
+  const created = await createTask(payload, acknowledge)
+  if (created && !payload?.grossBountyAmountMicro) openPanel('agents')
+  return created
+}
 const resumeFundedCreate = async () => {
   const created = await runResumeFundedCreate()
   if (created) markTaskCreated(selectedTask.value)
@@ -2238,6 +2247,20 @@ const resumePointAndStartOriginal = async (task) => {
   if (pointAndStartRecoveryLane(intent) === 'CONTROLLED') return resumeControlledBridgeOriginal(task.id)
   return resumePointAndStart(task.id)
 }
+// Reuse the selected canonical task; private chat never changes this context.
+const pendingPointAndDeliberateTask = computed(() => {
+  const task = selectedTask.value
+  if (!task?.id || task.funding?.mode === 'FUNDED_SINGLE_AGENT') return null
+  if (String(task.status || '').toLowerCase() !== 'open') return null
+  if (task.assignedAgentId || task.assignedAgentIds?.length) return null
+  return task
+})
+const canPointAndDeliberateAgent = agent => Boolean(pendingPointAndDeliberateTask.value && agent?.agentId && canAssign(pendingPointAndDeliberateTask.value, agent))
+const handlePointAndDeliberateAgent = agent => {
+  if (!canPointAndDeliberateAgent(agent)) return false
+  return assignTask(pendingPointAndDeliberateTask.value, agent)
+}
+
 const assignTask = async (task, agent) => {
   if (!task?.id) return false
   // A durable v2 original always wins over every normal lane. This check happens

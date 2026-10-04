@@ -1,12 +1,13 @@
 import { expect } from 'chai'
 import { after, before } from 'mocha'
 import { readFileSync, existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import * as Vue from 'vue'
 import { mount } from '@vue/test-utils'
 import { compileScript, parse } from '@vue/compiler-sfc'
 const root = new URL('../src/components/juyiting/', import.meta.url)
 const compile = (name, extra = '') => {
-  const filename = new URL(name, root).pathname
+  const filename = fileURLToPath(new URL(name, root))
   const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
   const script = compileScript(descriptor, { id: 'ordinary-request-ui', inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)

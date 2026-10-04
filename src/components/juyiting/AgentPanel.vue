@@ -57,6 +57,13 @@
             <span v-if="!(selectedAgent.abilities || []).length">未录本领</span>
           </div>
           <button
+            v-if="hasPendingTask"
+            class="point-and-deliberate"
+            type="button"
+            :disabled="pointAndStartBusy || !canPointAndDeliberate(selectedAgent)"
+            @click="$emit('point-and-deliberate', selectedAgent)"
+          >{{ pointAndStartBusy ? '正在点将…' : '点将并议事' }}</button>
+          <button
             v-if="canStartConversation(selectedAgent)"
             type="button"
             @click="$emit('start-conversation', selectedAgent)"
@@ -71,6 +78,9 @@
 
 <script setup>
 defineProps({
+  hasPendingTask: { type: Boolean, default: false },
+  pointAndStartBusy: { type: Boolean, default: false },
+  canPointAndDeliberate: { type: Function, default: () => false },
   canStartConversation: { type: Function, default: () => false },
   agents: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
@@ -87,7 +97,7 @@ defineProps({
   statusText: { type: Function, required: true }
 })
 
-defineEmits(['set-agent-filter', 'select-agent', 'start-conversation', 'open-catalog'])
+defineEmits(['set-agent-filter', 'select-agent', 'start-conversation', 'open-catalog', 'point-and-deliberate'])
 </script>
 
 <style scoped>
