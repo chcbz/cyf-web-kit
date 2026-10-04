@@ -43,7 +43,8 @@
             v-if="!embeddedHall"
             class="new-task-button"
             type="button"
-            @click="embeddedHall ? $emit('start-private-draft') : showDraftEditor = !showDraftEditor">
+            @click="embeddedHall ? $emit('start-private-draft') : showDraftEditor = !showDraftEditor"
+          >
             <span>{{ showDraftEditor ? '收起草稿' : '起草交办' }}</span>
           </button>
         </div>
