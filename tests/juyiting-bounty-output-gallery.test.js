@@ -688,6 +688,60 @@ describe('bounty output gallery live owner scope', () => {
     } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
   })
 
+  it('renders API-generated text append/replace/reset and freezes exactly the displayed source list on acceptance', async () => {
+    const groups = JSON.parse(readFileSync(new URL('./fixtures/juyiting/text-delivery-relations-v3.json', import.meta.url), 'utf8'))
+    const oldTimeout = globalThis.setTimeout; const oldClear = globalThis.clearTimeout
+    globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : oldTimeout(fn, delay, ...args)
+    globalThis.clearTimeout = id => { if (id !== 999) oldClear(id) }
+    let wrapper
+    try {
+      for (const group of groups) {
+        const sources = [group.updated, group.initial]
+        const requests = sources.map(raw => ({ requestId: raw.requestId, requestRevision: raw.requestRevision, conversationId: raw.conversationId,
+          conversationGeneration: raw.conversationGeneration, state: 'COMPLETED', stateVersion: '1', steps: [], turns: [{
+            turnId: raw.turnId, requestId: raw.requestId, requestRevision: raw.requestRevision, conversationId: raw.conversationId,
+            conversationGeneration: raw.conversationGeneration, route: 'CHAT', state: 'FINAL_PERSISTED',
+            finalMessageId: raw.outcome.assistantMessageId, contextSnapshotId: raw.outcome.messageSource.snapshotId }] }))
+        const calls = []
+        const chatApi = { get: async path => {
+          const request = requests.find(request => path === `/requests/${request.requestId}`)
+          if (request) return { data: { data: request } }
+          const raw = sources.find(raw => path === `/conversations/${raw.conversationId}/requests/${raw.requestId}/typed-outcome`)
+          if (raw) return { data: { data: raw } }
+          throw new Error(`unexpected source read ${path}`)
+        }, execute: async () => { throw new Error('must not execute tools or invent output files') } }
+        const agentApi = { execute: async options => { calls.push(options); throw new TypeError('unknown acceptance ACK') } }
+        const Component = new Function('Vue', 'deps', script)(Vue, {
+          createApi: base => base === '/agent' ? agentApi : chatApi, exactOutputId, outputCatalogItems, outputItemKey, previewKind,
+          scopedExecutionSteps, downloadMimeType, outputDownloadName, currentOutputDelivery, outputAssetPart, completedTextItem,
+          useHallConversationArchive, useHallBountyFinalization, safeFinalizationVersion, saveOutputBlob: () => {}
+        })
+        const props = { enabled: true, acceptance: true, taskId: 'task', taskVersion: '9', conversationId: '42', identityKey: `owner-text-${group.mode}`,
+          request: requests[0], catalog: requests.map(request => ({ request })) }
+        wrapper = mount(Component, { props }); await flushPromises()
+        const count = group.mode === 'APPEND' ? 2 : 1
+        for (let i = 0; i < 20 && wrapper.findAll('.bounty-output-text').length !== count; i++) {
+          await new Promise(resolve => oldTimeout(resolve, 5)); await flushPromises()
+        }
+        expect(wrapper.findAll('.bounty-output-text'), group.mode).to.have.length(count)
+        expect(wrapper.findAll('.bounty-output-text').at(-1).text()).to.equal('修改原文')
+        await wrapper.find('.finalize-button').trigger('click'); await flushPromises()
+        const selected = calls[0].data.selectedOutputs
+        expect(selected.map(item => item.requestId)).to.deep.equal(group.mode === 'APPEND' ? ['request', 'child'] : ['child'])
+        expect(selected.at(-1).messageSource).to.deep.equal(group.updated.outcome.messageSource)
+        expect(selected.at(-1).sha256).to.equal(createHash('sha256').update(group.updated.outcome.text).digest('hex'))
+        expect(calls).to.have.length(1)
+        wrapper.unmount(); wrapper = mount(Component, { props }); await flushPromises()
+        for (let i = 0; i < 20 && wrapper.findAll('.bounty-output-text').length !== count; i++) {
+          await new Promise(resolve => oldTimeout(resolve, 5)); await flushPromises()
+        }
+        expect(wrapper.findAll('.bounty-output-text')).to.have.length(count)
+        expect(calls).to.have.length(1); expect(wrapper.text()).to.include(`本次验收已冻结 ${count} 项`)
+        wrapper.unmount(); wrapper = null
+      }
+    } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
+  })
+
   it('does not offer fake acceptance for empty, unrelated, or ambiguous deliverables', async () => {
     const oldTimeout = globalThis.setTimeout; const oldClear = globalThis.clearTimeout
     const chatApi = { get: async path => path === '/requests/request-1'

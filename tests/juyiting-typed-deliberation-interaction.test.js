@@ -1,5 +1,6 @@
 import { expect } from 'chai'
 import { ref } from 'vue'
+import { readFileSync } from 'node:fs'
 import { useHallTypedDeliberation } from '../src/composables/juyiting/useHallTypedDeliberation.js'
 
 const clarify = requestId => ({ schemaVersion: 1, conversationId: '7', conversationGeneration: '1', requestId, requestRevision: '1', turnId: `turn-${requestId}`, state: 'READY', outcome: {
@@ -187,4 +188,47 @@ describe('typed inspection interaction adapter', () => {
     lane.dispose()
   })
 
+})
+
+describe('explicit text follow-up admission basis', () => {
+  const raw = () => JSON.parse(readFileSync(new URL('./fixtures/juyiting/completed-message-delivery-v3.json', import.meta.url), 'utf8'))
+  const value = (id, deliverable = true) => {
+    const item = raw(); item.requestId = id; item.turnId = `turn-${id}`; item.outcome.outcomeId = `outcome-${id}`
+    item.outcome.deliverable = deliverable
+    if (deliverable) item.outcome.messageSource.turnId = item.turnId
+    else delete item.outcome.messageSource
+    return item
+  }
+  it('binds the terminal causal text parent rather than a newer greeting and freezes original unknown body', async () => {
+    const one = value('one'); const two = value('two'); const greeting = value('greeting', false)
+    two.outcome.deliveryRelation = { mode: 'APPEND', parentOutcomeId: one.outcome.outcomeId, parentFinalDigest: one.outcome.finalDigest }
+    const values = [two, greeting, one]; const calls = []
+    const context = ref({ conversationId: '42', conversationGeneration: '1', taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' })
+    const lane = useHallTypedDeliberation({ chatApi: { get: async path => ({ data: { data: values.find(v => path.includes(`/requests/${v.requestId}/`)) } }),
+      create: async (_path, body, options) => { calls.push({ body, key: options.headers['Idempotency-Key'] }); throw new Error('unknown ACK') } },
+    actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context.value, getContextGeneration: () => 1,
+    getCatalogEntries: () => values.map(v => ({ request: { requestId: v.requestId, steps: [] } })), storage: store(), enabled: () => true })
+    try {
+      expect(await lane.refresh()).to.equal(true); expect(await lane.submit({ content: '把这一段改短' })).to.equal(false)
+      expect(calls[0].body.parentOutcomeId).to.equal(two.outcome.outcomeId)
+      expect(calls[0].body.expectedParentStateVersion).to.equal('0')
+      two.outcome.outcomeId = 'changed-after-send'
+      await lane.resumeUnknown(); expect(calls[1]).to.deep.equal(calls[0])
+    } finally { lane.dispose() }
+  })
+  it('does not choose a parent from independent roots, incomplete reads or a media catalog', async () => {
+    for (const mode of ['roots', 'unresolved', 'media']) {
+      const values = [value('one'), value('two')]; const calls = []
+      if (mode === 'unresolved') values[1] = { ...values[1], state: 'PENDING', outcome: null }
+      if (mode === 'media') values.splice(1)
+      const lane = useHallTypedDeliberation({ chatApi: { get: async path => ({ data: { data: values.find(v => path.includes(`/requests/${v.requestId}/`)) } }),
+        create: async (_path, body) => { calls.push(body); throw new Error('unknown ACK') } }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1),
+      getContext: () => ({ conversationId: '42', conversationGeneration: '1', taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' }), getContextGeneration: () => 1,
+      getCatalogEntries: () => values.map(v => ({ request: { requestId: v.requestId, steps: mode === 'media' ? [{ kind: 'EXECUTE' }] : [] } })), storage: store(), enabled: () => true })
+      try {
+        await lane.refresh(); await lane.submit({ content: '继续讨论' }); expect(calls).to.have.length(1)
+        expect(calls[0].parentOutcomeId, mode).to.equal(null)
+      } finally { lane.dispose() }
+    }
+  })
 })

@@ -128,8 +128,9 @@ const prose = value => {
 const actionId = value => prose(value) && value.length <= 512 && !isoControl(value)
 const actionOutcome = value => {
   const marked = own(value || {}, 'deliverable')
+  const relation = own(value || {}, 'deliveryRelation')
   const fields = marked ? [...actionOutcomeFields, 'deliverable', ...(value.deliverable === true ? ['messageSource'] : [])] : actionOutcomeFields
-  if (!exactKeys(value, fields) || (marked && typeof value.deliverable !== 'boolean') || value.outcomeContractVersion !== 3 || !typedId(value.outcomeId) ||
+  if (!exactKeys(value, [...fields, ...(relation ? ['deliveryRelation'] : [])]) || (marked && typeof value.deliverable !== 'boolean') || value.outcomeContractVersion !== 3 || !typedId(value.outcomeId) ||
     !typedId(value.taskId) || !typedLong(value.assignmentRevision, { allowZero: true }) || !typedLong(value.assistantMessageId) ||
     !digest(value.finalDigest) || !prose(value.text) || value.text.length > 200000) return null
   if (value.deliverable === true) {
@@ -137,6 +138,9 @@ const actionOutcome = value => {
     if (value.kind !== 'ANSWER' || !exactKeys(source, ['turnId', 'messageId', 'snapshotId', 'finalDigest']) ||
       !typedId(source.turnId) || !typedId(source.snapshotId) || source.messageId !== value.assistantMessageId || source.finalDigest !== value.finalDigest) return null
   }
+  if (relation && (value.deliverable !== true || !exactKeys(value.deliveryRelation, ['mode', 'parentOutcomeId', 'parentFinalDigest']) ||
+    !['APPEND', 'REPLACE', 'RESET'].includes(value.deliveryRelation.mode) || !typedId(value.deliveryRelation.parentOutcomeId) ||
+    !digest(value.deliveryRelation.parentFinalDigest) || value.deliveryRelation.parentOutcomeId === value.outcomeId)) return null
   if (value.kind === 'ANSWER' && value.clarification === null && value.action === null) return freeze(value)
   const c = value.clarification
   if (value.kind === 'CLARIFY' && value.action === null && exactKeys(c, clarificationFields) && typedId(c.pendingQuestionId) &&

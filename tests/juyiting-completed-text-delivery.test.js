@@ -2,7 +2,7 @@ import { expect } from 'chai'
 import { Buffer } from 'node:buffer'
 import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { completedTextItem, currentOutputDelivery, outputItemKey } from '../src/composables/juyiting/bountyOutputCatalog.js'
+import { completedTextItem, currentOutputDelivery, textDeliveryProjection, outputItemKey } from '../src/composables/juyiting/bountyOutputCatalog.js'
 import { typedOutcomeProjection } from '../src/composables/juyiting/hallTypedDeliberation.js'
 
 const fixture = () => JSON.parse(readFileSync(new URL('./fixtures/juyiting/completed-message-delivery-v3.json', import.meta.url), 'utf8'))
@@ -74,5 +74,50 @@ describe('explicit persisted completed text deliverable', () => {
     expect(typedOutcomeProjection(raw)).to.equal(null)
     const falseMarker = fixture(); falseMarker.outcome.deliverable = false
     expect(typedOutcomeProjection(falseMarker)).to.equal(null)
+  })
+})
+
+describe('explicit text delivery causal replay', () => {
+  const item = (id, parent = null, mode = null) => ({ outcomeId: id, requestId: `request-${id}`, text: `原文-${id}`,
+    messageSource: { turnId: `turn-${id}`, messageId: '9', snapshotId: `snapshot-${id}`, finalDigest: `sha256:${id === 'one' ? 'a' : id === 'two' ? 'b' : 'c'}`.padEnd(71, id === 'one' ? 'a' : id === 'two' ? 'b' : 'c') },
+    deliveryRelation: parent ? { mode, parentOutcomeId: parent.outcomeId, parentFinalDigest: parent.messageSource.finalDigest } : null })
+  it('append keeps previous work, replace changes only its exact parent, reset discards previous delivery', () => {
+    const one = item('one'); const two = item('two', one, 'APPEND'); const three = item('three', two, 'REPLACE')
+    expect(currentOutputDelivery([three, one, two])).to.deep.equal([one, three])
+    expect(textDeliveryProjection([two, one]).basis).to.deep.equal({ outcomeId: two.outcomeId, finalDigest: two.messageSource.finalDigest })
+    const reset = item('three', two, 'RESET')
+    expect(currentOutputDelivery([reset, one, two])).to.deep.equal([reset])
+    expect(Object.isFrozen(currentOutputDelivery([two, one]))).to.equal(true)
+  })
+  it('rejects independent roots, missing parents, altered digests, forks and disconnected cycles', () => {
+    const one = item('one'); const two = item('two', one, 'APPEND'); const three = item('three', one, 'REPLACE')
+    for (const list of [[one, item('two')], [two], [one, two, three], [one, { ...two, deliveryRelation: { ...two.deliveryRelation, parentFinalDigest: `sha256:${'f'.repeat(64)}` } }], [one, one]]) {
+      expect(() => currentOutputDelivery(list)).to.throw()
+    }
+    const cycleTwo = item('two'); const cycleThree = item('three', cycleTwo, 'APPEND')
+    cycleTwo.deliveryRelation = { mode: 'APPEND', parentOutcomeId: cycleThree.outcomeId, parentFinalDigest: cycleThree.messageSource.finalDigest }
+    expect(() => currentOutputDelivery([one, cycleTwo, cycleThree])).to.throw('不完整')
+  })
+  it('only precise true-marked relation metadata passes the original typed reader', () => {
+    const value = fixture(); value.outcome.deliveryRelation = { mode: 'APPEND', parentOutcomeId: 'parent', parentFinalDigest: `sha256:${'a'.repeat(64)}` }
+    expect(typedOutcomeProjection(value)?.outcome.deliveryRelation).to.deep.equal(value.outcome.deliveryRelation)
+    for (const patch of [{ mode: 'LATEST' }, { parentFinalDigest: 'bad' }, { parentOutcomeId: value.outcome.outcomeId }, { authority: 'fake' }]) {
+      const bad = structuredClone(value); Object.assign(bad.outcome.deliveryRelation, patch); expect(typedOutcomeProjection(bad)).to.equal(null)
+    }
+  })
+})
+
+describe('actual API-generated text relation read projections', () => {
+  it('rebuilds append/replace/reset from real service reads with exact original snapshots and UTF8', async () => {
+    const groups = JSON.parse(readFileSync(new URL('./fixtures/juyiting/text-delivery-relations-v3.json', import.meta.url), 'utf8'))
+    for (const group of groups) {
+      const items = []
+      for (const projection of [group.initial, group.updated]) items.push(await completedTextItem(projection, originalRequest(projection), originalTurn(projection), 'task'))
+      const actual = currentOutputDelivery(items.reverse())
+      expect(actual.map(item => item.requestId), group.mode).to.deep.equal(group.mode === 'APPEND' ? ['request', 'child'] : ['child'])
+      expect(actual.at(-1).text).to.equal('修改原文  ')
+      expect(actual.at(-1).messageSource).to.deep.equal(group.updated.outcome.messageSource)
+      expect(textDeliveryProjection(items).basis).to.deep.equal({ outcomeId: group.updated.outcome.outcomeId, finalDigest: group.updated.outcome.finalDigest })
+    }
   })
 })

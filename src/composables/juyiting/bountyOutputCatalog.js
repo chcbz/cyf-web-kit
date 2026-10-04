@@ -112,8 +112,8 @@ export function currentOutputDelivery (catalog) {
   if (!Array.isArray(catalog) || !catalog.length) return Object.freeze([])
   const texts = catalog.filter(item => item.messageSource)
   if (texts.length) {
-    if (catalog.length !== 1) throw new Error('本次图文或多轮文字交付关联尚不明确，请回到议事说明本次成果。')
-    return Object.freeze([...texts])
+    if (catalog.length !== texts.length) throw new Error('本次图文或多轮文字交付关联尚不明确，请回到议事说明本次成果。')
+    return textDeliveryProjection(texts).items
   }
   const originals = catalog.filter(item => !item.replaces)
   const roots = new Set(originals.map(item => JSON.stringify([item.requestId, item.stepId])))
@@ -148,7 +148,43 @@ export async function completedTextItem (raw, request, turn, taskId) {
     ![request.requestId, source.turnId, source.snapshotId].every(exactOutputId)) throw new Error('文字成果与原消息快照不一致。')
   const bytes = new TextEncoder().encode(value.outcome.text)
   const sha256 = Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes)), byte => byte.toString(16).padStart(2, '0')).join('')
-  return Object.freeze({ requestId: request.requestId, messageSource: Object.freeze({ ...source }), sha256,
+  return Object.freeze({ requestId: request.requestId, outcomeId: value.outcome.outcomeId,
+    deliveryRelation: value.outcome.deliveryRelation == null ? null : Object.freeze({ ...value.outcome.deliveryRelation }), messageSource: Object.freeze({ ...source }), sha256,
     contentMimeType: 'text/plain', byteLength: bytes.length, text: value.outcome.text,
     taskId, assignmentRevision: value.outcome.assignmentRevision, title: '文字成果', purpose: '本次确认交付成果' })
+}
+
+/** Replay only explicit persisted text relations. The terminal causal node is the
+ * basis for a follow-up, not the latest message or the latest item by MIME. */
+export function textDeliveryProjection (texts) {
+  if (!Array.isArray(texts) || !texts.length) return Object.freeze({ items: Object.freeze([]), basis: null })
+  const nodes = new Map()
+  for (const text of texts) {
+    if (!exactOutputId(text?.outcomeId) || nodes.has(text.outcomeId) || !/^sha256:[0-9a-f]{64}$/.test(text.messageSource?.finalDigest || '')) throw new Error('文字交付关联尚不明确。')
+    nodes.set(text.outcomeId, text)
+  }
+  const roots = texts.filter(text => !text.deliveryRelation)
+  if (roots.length !== 1) throw new Error('多轮文字交付关联尚不明确，请回到议事说明本次成果。')
+  const children = new Map()
+  for (const text of texts.filter(text => text.deliveryRelation)) {
+    const relation = text.deliveryRelation; const parent = nodes.get(relation.parentOutcomeId)
+    if (!parent || parent.messageSource.finalDigest !== relation.parentFinalDigest || !['APPEND', 'REPLACE', 'RESET'].includes(relation.mode) || children.has(parent.outcomeId)) throw new Error('文字改稿关联有歧义，请回到议事明确本次成果。')
+    children.set(parent.outcomeId, text)
+  }
+  let node = roots[0]; let result = [node]; const visited = new Set([node.outcomeId])
+  while (children.has(node.outcomeId)) {
+    const child = children.get(node.outcomeId)
+    if (visited.has(child.outcomeId)) throw new Error('文字交付关联有歧义。')
+    visited.add(child.outcomeId)
+    if (child.deliveryRelation.mode === 'APPEND') result.push(child)
+    else if (child.deliveryRelation.mode === 'RESET') result = [child]
+    else {
+      const index = result.findIndex(item => item.outcomeId === node.outcomeId)
+      if (index < 0) throw new Error('文字改稿对象已变化。')
+      result[index] = child
+    }
+    node = child
+  }
+  if (visited.size !== texts.length) throw new Error('文字交付关联不完整，请回到议事明确本次成果。')
+  return Object.freeze({ items: Object.freeze([...result]), basis: Object.freeze({ outcomeId: node.outcomeId, finalDigest: node.messageSource.finalDigest }) })
 }

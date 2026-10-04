@@ -1,4 +1,5 @@
 import { computed, ref, unref, watch } from 'vue'
+import { textDeliveryProjection } from './bountyOutputCatalog.js'
 import { actionProgressAdvances, discussionAccepted, discussionBody, inspectionAccepted, inspectionOutcomeProjection, outcomeCardKey, typedId, typedLong, typedOutcomeProjection } from './hallTypedDeliberation.js'
 
 const unwrap = response => response?.data?.data ?? response?.data ?? response
@@ -159,10 +160,23 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       if (current(captured)) error.value = '请选择要添加的资料。'
       return false
     }
+    let deliveryParent = null
+    const catalog = getCatalogEntries?.() || []
+    const unresolved = catalog.some(entry => !entry?.request?.turns?.some(turn => turn.route === 'INSPECT') &&
+      !projections.value.some(value => value.requestId === entry?.request?.requestId && value.state === 'READY'))
+    if (!pending && purpose === 'CHAT' && !unresolved && !catalog.some(entry => entry?.request?.steps?.some(step => step.kind === 'EXECUTE'))) {
+      const finals = projections.value.filter(value => value.schemaVersion === 3 && value.state === 'READY' && value.route === 'CHAT' &&
+        value.outcome?.deliverable === true && value.outcome.assignmentRevision === context.assignmentRevision)
+      try {
+        deliveryParent = textDeliveryProjection(finals.map(value => ({ outcomeId: value.outcome.outcomeId,
+          messageSource: value.outcome.messageSource, deliveryRelation: value.outcome.deliveryRelation }))).basis
+      } catch { /* Multiple independent roots or branches are not a parent choice. */ }
+    }
     const body = discussionBody(pending ? { intent: 'CLARIFICATION_REPLY', taskId: context.taskId, assignmentRevision: context.assignmentRevision,
       content, parentOutcomeId: pending.parentOutcomeId, expectedParentStateVersion: pending.expectedParentStateVersion,
       pendingQuestionId: pending.pendingQuestionId, expectedPendingQuestionStateVersion: pending.expectedPendingQuestionStateVersion, sourceSelectors }
-      : { intent: 'DISCUSSION', taskId: context.taskId, assignmentRevision: context.assignmentRevision, content, sourceSelectors })
+      : { intent: 'DISCUSSION', taskId: context.taskId, assignmentRevision: context.assignmentRevision, content, sourceSelectors,
+        parentOutcomeId: deliveryParent?.outcomeId ?? null, expectedParentStateVersion: deliveryParent ? '0' : null })
     const key = secureKey()
     if (!body || !key) { if (current(captured)) error.value = '暂时无法发送，请检查内容和资料后重试。'; return false }
     const record = { key, purpose, body: clone(body), context: clone(context), status: 'POSTING' }
