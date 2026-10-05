@@ -1,5 +1,5 @@
 import { computed, ref, unref, watch } from 'vue'
-import { textDeliveryProjection } from './bountyOutputCatalog.js'
+import { currentOutputDelivery, exactOutputId, outputAssetPart, outputCatalogItems, textDeliveryProjection } from './bountyOutputCatalog.js'
 import { actionProgressAdvances, discussionAccepted, discussionBody, inspectionAccepted, inspectionOutcomeProjection, outcomeCardKey, typedId, typedLong, typedOutcomeProjection } from './hallTypedDeliberation.js'
 
 const unwrap = response => response?.data?.data ?? response?.data ?? response
@@ -149,6 +149,44 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       expectedPendingQuestionStateVersion: clarification.stateVersion, question: clarification.question, purpose: projection.purpose || 'CHAT' })
     return true
   }
+  // A single explicit manifest/edit chain supplies context, not delivery intent or tool authority.
+  // Independent roots, pending projections and late assets remain unresolved; never pick latest MIME.
+  const currentMediaSources = async (catalog, captured) => {
+    const context = captured.context
+    const steps = []
+    for (const entry of catalog) {
+      const request = entry?.request
+      if (!request || request.conversationId !== context.conversationId || request.conversationGeneration !== context.conversationGeneration ||
+        !exactOutputId(request.requestId) || !Array.isArray(request.steps) || !Array.isArray(request.turns)) return []
+      for (const step of request.steps.filter(step => step.kind === 'EXECUTE')) {
+        if (!['OUTPUT_COMMITTED', 'COMPLETED'].includes(request.state) || step.state !== 'OUTPUT_COMMITTED' || step.executionState !== 'OUTPUT_COMMITTED' ||
+          !exactOutputId(step.stepId) || !exactOutputId(step.executionId) || step.taskId !== context.taskId ||
+          step.targetAgentId !== context.targetAgentId || step.assignmentRevision !== context.assignmentRevision) return []
+        steps.push({ requestId: request.requestId, stepId: step.stepId })
+      }
+      if (request.turns.length && !projections.value.some(value => value.requestId === request.requestId && value.state === 'READY')) return []
+    }
+    if (!steps.length || projections.value.some(value => value.state === 'PENDING' || value.outcome?.deliverable === true)) return []
+    const outputs = []
+    try {
+      for (const step of steps) {
+        const raw = unwrap(await chatApi.get(`/requests/${encodeURIComponent(step.requestId)}/steps/${encodeURIComponent(step.stepId)}/outputs`, {}, { autoLoading: false, needAuth: true }))
+        if (!current(captured)) return []
+        const items = outputCatalogItems(raw, step.requestId, step.stepId)
+        if (!Array.isArray(raw) || !items.length || items.length !== raw.length) return [] // Never silently drop an invalid part of a manifest.
+        outputs.push(...items)
+      }
+      const delivery = currentOutputDelivery(outputs)
+      if (!delivery.length || delivery.length > 32) return []
+      const seen = new Set()
+      return delivery.map(item => {
+        const asset = outputAssetPart(item)
+        if (!asset || asset.assetId.length > 64 || seen.has(asset.assetId)) throw new Error('Ambiguous asset source')
+        seen.add(asset.assetId)
+        return { kind: 'CURRENT_CONVERSATION_ASSET', fileId: null, version: null, purpose: null, assetId: asset.assetId, assetRevision: asset.revision }
+      })
+    } catch { return [] } // Context lookup failure does not manufacture sources or retry a tool.
+  }
   const submit = async ({ content, sourceSelectors = [], inspection = false } = {}) => {
     if (busy.value || !enabled?.()) return false
     const captured = capture(); const context = captured.context
@@ -161,7 +199,13 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       return false
     }
     let deliveryParent = null
-    const catalog = getCatalogEntries?.() || []
+    const catalog = clone(getCatalogEntries?.() || [])
+    if (!pending && purpose === 'CHAT' && Array.isArray(sourceSelectors) && sourceSelectors.length === 0 && typeof content === 'string' && content.trim()) {
+      busy.value = true
+      try { sourceSelectors = await currentMediaSources(catalog, captured) }
+      finally { if (current(captured)) busy.value = false }
+      if (!current(captured) || JSON.stringify(catalog) !== JSON.stringify(getCatalogEntries?.() || [])) return false
+    }
     const unresolved = catalog.some(entry => !entry?.request?.turns?.some(turn => turn.route === 'INSPECT') &&
       !projections.value.some(value => value.requestId === entry?.request?.requestId && value.state === 'READY'))
     if (!pending && purpose === 'CHAT' && !unresolved && !catalog.some(entry => entry?.request?.steps?.some(step => step.kind === 'EXECUTE'))) {

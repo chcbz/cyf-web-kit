@@ -269,3 +269,139 @@ describe('clarified text original-CAS recovery', () => {
     } finally { lane.dispose() }
   })
 })
+
+describe('exact completed media sources for natural discussion', () => {
+  const context = () => ({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' })
+  const entry = (id = 'original') => ({ request: { requestId: id, conversationId: '7', conversationGeneration: '1', state: 'OUTPUT_COMMITTED', turns: [], steps: [
+    { kind: 'EXECUTE', stepId: 'step-1', executionId: `execution-${id}`, state: 'OUTPUT_COMMITTED', executionState: 'OUTPUT_COMMITTED', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }
+  ] } })
+  const output = (requestId, outputId = 'bird', overrides = {}) => ({ outputId, contentMimeType: 'image/png', sha256: 'a'.repeat(64), byteLength: 15,
+    previewUrl: `/chat/requests/${requestId}/steps/step-1/outputs/${outputId}`, downloadUrl: `/chat/requests/${requestId}/steps/step-1/outputs/${outputId}?download=true`,
+    assetRef: { assetId: `asset-${requestId}-${outputId}`, revision: '1' }, ...overrides })
+  const selector = assetId => ({ kind: 'CURRENT_CONVERSATION_ASSET', fileId: null, version: null, purpose: null, assetId, assetRevision: '1' })
+  const harness = ({ catalog = [entry()], outputs = { original: [output('original')] }, storage = store(), identity = ref('owner'), get = null } = {}) => {
+    const calls = []; const ctx = ref(context())
+    const lane = useHallTypedDeliberation({ chatApi: {
+      get: async path => { calls.push(['GET', path]); if (get) return get(path); const id = path.split('/')[2]; return { data: { data: outputs[id] } } },
+      create: async (path, body, options) => { calls.push(['POST', path, structuredClone(body), options.headers['Idempotency-Key']]); throw new Error('unknown ACK') }
+    }, actorScopeKey: identity, authorizationGeneration: ref(1), getContext: () => ctx.value, getContextGeneration: () => 1,
+    getCatalogEntries: () => catalog, storage, enabled: () => true })
+    return { lane, calls, ctx, catalog }
+  }
+  beforeEach(() => { Object.defineProperty(globalThis, 'crypto', { configurable: true, writable: true, value: { randomUUID: () => '00000000-0000-4000-8000-000000000003' } }) })
+  afterEach(restoreCrypto)
+
+  it('uses the same persisted asset selector and original producer as the actual API context export', async () => {
+    const exported = JSON.parse(readFileSync(new URL('./fixtures/juyiting/media-context-v3.json', import.meta.url), 'utf8'))
+    const source = exported.sourceCatalog[0]; const catalog = [entry(source.parentRequestId)]
+    catalog[0].request.steps[0].stepId = source.parentStepId
+    const item = output(source.parentRequestId, 'bird', { sha256: source.contentHash, byteLength: Number(source.byteLength),
+      assetRef: { assetId: exported.selector.assetId, revision: exported.selector.assetRevision },
+      previewUrl: `/chat/requests/${source.parentRequestId}/steps/${source.parentStepId}/outputs/bird`,
+      downloadUrl: `/chat/requests/${source.parentRequestId}/steps/${source.parentStepId}/outputs/bird?download=true` })
+    const { lane, calls } = harness({ catalog, outputs: { [source.parentRequestId]: [item] } })
+    try {
+      await lane.submit({ content: '修改原图' })
+      expect(calls.at(-1)[2].sourceSelectors).to.deep.equal([exported.selector])
+      expect(exported.facts.availableSources[0].sourceRefId).to.equal(source.sourceRefId)
+    } finally { lane.dispose() }
+  })
+  it('does not infer a media context when a typed final is pending or a marked text deliverable is also present', async () => {
+    for (const mode of ['pending', 'mixed']) {
+      const catalog = [entry()]
+      catalog.push({ request: { requestId: 'text', conversationId: '7', conversationGeneration: '1', state: 'COMPLETED', turns: [{ route: 'CHAT' }], steps: [] } })
+      const value = mode === 'pending' ? { ...clarify('text'), state: 'PENDING', outcome: null } : JSON.parse(readFileSync(new URL('./fixtures/juyiting/completed-message-delivery-v3.json', import.meta.url), 'utf8'))
+      if (mode === 'mixed') { value.requestId = 'text'; value.conversationId = '7'; value.outcome.taskId = 'task-1'; value.outcome.assignmentRevision = '4' }
+      const { lane, calls } = harness({ catalog, get: async () => ({ data: { data: value } }) })
+      try {
+        expect(await lane.readOne('text')).to.not.equal(null); calls.length = 0
+        await lane.submit({ content: '继续修改' }); expect(calls.map(call => call[0])).to.deep.equal(['POST'])
+        expect(calls[0][2].sourceSelectors).to.deep.equal([])
+      } finally { lane.dispose() }
+    }
+  })
+  it('advertises every exact asset in one committed manifest, without saving or executing anything', async () => {
+    const { lane, calls } = harness({ outputs: { original: [output('original'), output('original', 'tree', { sha256: 'b'.repeat(64) })] } })
+    try {
+      await lane.submit({ content: '把原图的小鸟改成蓝色' })
+      expect(calls.map(call => call[0])).to.deep.equal(['GET', 'POST'])
+      expect(calls[0][1]).to.equal('/requests/original/steps/step-1/outputs')
+      expect(calls[1][1]).to.equal('/conversations/7/interactions/discussion')
+      expect(calls[1][2].sourceSelectors).to.deep.equal([selector('asset-original-bird'), selector('asset-original-tree')])
+      expect(calls[1][2].parentOutcomeId).to.equal(null)
+    } finally { lane.dispose() }
+  })
+  it('uses exact causal replacement bytes and retains unaffected parts independently of network order', async () => {
+    const edited = output('edited', 'blue', { sha256: 'c'.repeat(64), replaces: { requestId: 'original', stepId: 'step-1', outputId: 'bird', sha256: 'a'.repeat(64) } })
+    const { lane, calls } = harness({ catalog: [entry('edited'), entry()], outputs: { original: [output('original'), output('original', 'tree', { sha256: 'b'.repeat(64) })], edited: [edited] } })
+    try {
+      await lane.submit({ content: '再改一次' })
+      expect(calls.at(-1)[2].sourceSelectors).to.deep.equal([selector('asset-edited-blue'), selector('asset-original-tree')])
+    } finally { lane.dispose() }
+  })
+  it('freezes the original asset IDs and key across remount, GET-only recovery and explicit resume after catalog drift', async () => {
+    const storage = store(); const first = harness({ storage })
+    await first.lane.submit({ content: '修改原图' }); const posted = first.calls.at(-1); first.lane.dispose()
+    const second = harness({ storage, catalog: [entry('new')], outputs: { new: [output('new')] } })
+    try {
+      await second.lane.recover(); expect(second.calls).to.deep.equal([])
+      await second.lane.resumeUnknown(); expect(second.calls).to.deep.equal([posted])
+    } finally { second.lane.dispose() }
+  })
+  it('does not override explicit input, INSPECT admission or a selected clarification CAS', async () => {
+    for (const mode of ['explicit', 'inspect', 'clarify']) {
+      const { lane, calls } = harness({ get: async () => ({ data: { data: clarify('question') } }) })
+      try {
+        if (mode === 'clarify') { await lane.readOne('question'); lane.choosePending(lane.projections.value[0]); calls.length = 0 }
+        const sourceSelectors = mode === 'clarify' ? [] : [selector('chosen-asset')]
+        await lane.submit({ content: '继续', sourceSelectors, inspection: mode === 'inspect' })
+        expect(calls).to.have.length(1)
+        expect(calls[0][2].sourceSelectors).to.deep.equal(sourceSelectors)
+        expect(calls[0][2].intent).to.equal(mode === 'clarify' ? 'CLARIFICATION_REPLY' : 'DISCUSSION')
+      } finally { lane.dispose() }
+    }
+  })
+  it('does not auto-select any partial, independent, forked or unreadable manifest', async () => {
+    for (const mode of ['late-asset', 'invalid', 'duplicate', 'empty', 'read-error', 'roots', 'fork', 'missing-parent']) {
+      const catalog = [entry()]; const outputs = { original: [output('original')] }
+      if (mode === 'late-asset') outputs.original.push(output('original', 'tree', { assetRef: null }))
+      if (mode === 'invalid') outputs.original.push(output('original', 'tree', { sha256: 'bad' }))
+      if (mode === 'duplicate') outputs.original.push(output('original'))
+      if (mode === 'empty') outputs.original = []
+      if (['roots', 'fork', 'missing-parent'].includes(mode)) {
+        catalog.push(entry('edited')); outputs.edited = [output('edited', 'blue')]
+        if (mode !== 'roots') outputs.edited[0].replaces = { requestId: mode === 'missing-parent' ? 'missing' : 'original', stepId: 'step-1', outputId: 'bird', sha256: 'a'.repeat(64) }
+        if (mode === 'fork') { catalog.push(entry('branch')); outputs.branch = [output('branch', 'red', { replaces: outputs.edited[0].replaces })] }
+      }
+      const { lane, calls } = harness({ catalog, outputs, get: mode === 'read-error' ? async () => { throw new Error('unavailable') } : null })
+      try { await lane.submit({ content: '继续' }); expect(calls.at(-1)[2].sourceSelectors, mode).to.deep.equal([]) }
+      finally { lane.dispose() }
+    }
+  })
+  it('rejects foreign task, target, assignment, generation, incomplete producers and unresolved typed reads as source candidates', async () => {
+    for (const mode of ['taskId', 'targetAgentId', 'assignmentRevision', 'conversationGeneration', 'state', 'executionState', 'unresolved']) {
+      const catalog = [entry()]
+      if (mode === 'conversationGeneration') catalog[0].request.conversationGeneration = '2'
+      else if (mode === 'unresolved') catalog[0].request.turns = [{ route: 'CHAT' }]
+      else catalog[0].request.steps[0][mode] = 'foreign'
+      const { lane, calls } = harness({ catalog })
+      try { await lane.submit({ content: '继续' }); expect(calls.map(call => call[0]), mode).to.deep.equal(['POST']); expect(calls[0][2].sourceSelectors).to.deep.equal([]) }
+      finally { lane.dispose() }
+    }
+  })
+  it('keeps blank content rejected, blocks duplicate submits during reads and fences identity/catalog drift before POST', async () => {
+    for (const mode of ['identity', 'catalog']) {
+      const identity = ref('owner'); let resolve
+      const { lane, calls, catalog } = harness({ identity, get: () => new Promise(done => { resolve = done }) })
+      try {
+        expect(await lane.submit({ content: ' ' })).to.equal(false); expect(calls).to.deep.equal([])
+        const pending = lane.submit({ content: '改成蓝色' })
+        expect(await lane.submit({ content: 'duplicate' })).to.equal(false); expect(calls).to.have.length(1)
+        if (mode === 'identity') identity.value = 'other'
+        else catalog[0].request.steps[0].assignmentRevision = '5'
+        resolve({ data: { data: [output('original')] } })
+        expect(await pending).to.equal(false); expect(calls.map(call => call[0])).to.deep.equal(['GET'])
+      } finally { lane.dispose() }
+    }
+  })
+})
