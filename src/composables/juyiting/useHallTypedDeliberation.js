@@ -1,5 +1,5 @@
 import { computed, ref, unref, watch } from 'vue'
-import { currentOutputDelivery, exactOutputId, outputAssetPart, outputCatalogItems, textDeliveryProjection } from './bountyOutputCatalog.js'
+import { currentDeliveryProjection, completedExecutionDelivery, exactOutputId, outputAssetPart, outputCatalogItems, textDeliveryProjection } from './bountyOutputCatalog.js'
 import { actionProgressAdvances, discussionAccepted, discussionBody, inspectionAccepted, inspectionOutcomeProjection, outcomeCardKey, typedId, typedLong, typedOutcomeProjection } from './hallTypedDeliberation.js'
 
 const unwrap = response => response?.data?.data ?? response?.data ?? response
@@ -151,41 +151,60 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   }
   // A single explicit manifest/edit chain supplies context, not delivery intent or tool authority.
   // Independent roots, pending projections and late assets remain unresolved; never pick latest MIME.
-  const currentMediaSources = async (catalog, captured) => {
+  const currentMediaContext = async (catalog, captured) => {
     const context = captured.context
     const steps = []
     for (const entry of catalog) {
       const request = entry?.request
       if (!request || request.conversationId !== context.conversationId || request.conversationGeneration !== context.conversationGeneration ||
-        !exactOutputId(request.requestId) || !Array.isArray(request.steps) || !Array.isArray(request.turns)) return []
+        !exactOutputId(request.requestId) || !Array.isArray(request.steps) || !Array.isArray(request.turns)) return { sourceSelectors: [], basis: null }
       for (const step of request.steps.filter(step => step.kind === 'EXECUTE')) {
         if (!['OUTPUT_COMMITTED', 'COMPLETED'].includes(request.state) || step.state !== 'OUTPUT_COMMITTED' || step.executionState !== 'OUTPUT_COMMITTED' ||
           !exactOutputId(step.stepId) || !exactOutputId(step.executionId) || step.taskId !== context.taskId ||
-          step.targetAgentId !== context.targetAgentId || step.assignmentRevision !== context.assignmentRevision) return []
+          step.targetAgentId !== context.targetAgentId || step.assignmentRevision !== context.assignmentRevision) return { sourceSelectors: [], basis: null }
         steps.push({ requestId: request.requestId, stepId: step.stepId })
       }
-      if (request.turns.length && !projections.value.some(value => value.requestId === request.requestId && value.state === 'READY')) return []
+      if (request.turns.length && !projections.value.some(value => value.requestId === request.requestId && value.state === 'READY')) return { sourceSelectors: [], basis: null }
     }
-    if (!steps.length || projections.value.some(value => value.state === 'PENDING' || value.outcome?.deliverable === true)) return []
+    if (!steps.length || projections.value.some(value => value.state === 'PENDING')) return { sourceSelectors: [], basis: null }
+    if (projections.value.some(value => value.outcome?.deliverable === true) && !projections.value.some(value =>
+      value.state === 'READY' && value.outcome?.kind === 'ACTION_REQUEST' && value.actionProgress?.childRoute === 'EXECUTE')) return { sourceSelectors: [], basis: null }
     const outputs = []
     try {
       for (const step of steps) {
         const raw = unwrap(await chatApi.get(`/requests/${encodeURIComponent(step.requestId)}/steps/${encodeURIComponent(step.stepId)}/outputs`, {}, { autoLoading: false, needAuth: true }))
-        if (!current(captured)) return []
+        if (!current(captured)) return { sourceSelectors: [], basis: null }
         const items = outputCatalogItems(raw, step.requestId, step.stepId)
-        if (!Array.isArray(raw) || !items.length || items.length !== raw.length) return [] // Never silently drop an invalid part of a manifest.
+        if (!Array.isArray(raw) || !items.length || items.length !== raw.length) return { sourceSelectors: [], basis: null } // Never silently drop an invalid part of a manifest.
         outputs.push(...items)
       }
-      const delivery = currentOutputDelivery(outputs)
-      if (!delivery.length || delivery.length > 32) return []
+      const actions = []; const texts = []
+      const snapshots = catalog.map(entry => entry.request)
+      for (const value of projections.value.filter(value => value.state === 'READY' && value.schemaVersion === 3 && value.route === 'CHAT')) {
+        const request = snapshots.find(request => request.requestId === value.requestId)
+        if (!request || value.outcome.taskId !== context.taskId || value.outcome.assignmentRevision !== context.assignmentRevision) return { sourceSelectors: [], basis: null }
+        if (value.outcome.deliverable === true) texts.push({ requestId: value.requestId, outcomeId: value.outcome.outcomeId,
+          messageSource: value.outcome.messageSource, deliveryRelation: value.outcome.deliveryRelation })
+        if (value.outcome.kind === 'ACTION_REQUEST') {
+          const turn = request.turns.find(turn => turn.turnId === value.turnId)
+          if (!turn) return { sourceSelectors: [], basis: null }
+          const raw = { ...value }; delete raw.purpose
+          const action = completedExecutionDelivery(raw, request, turn, snapshots, context.taskId)
+          if (action) actions.push(action)
+        }
+      }
+      const projection = currentDeliveryProjection([...texts, ...outputs], actions)
+      const media = projection.items.filter(item => !item.messageSource)
+      if (!media.length || media.length > 32 || media.some(item => !outputAssetPart(item))) return { sourceSelectors: [], basis: projection.basis }
       const seen = new Set()
-      return delivery.map(item => {
+      const sourceSelectors = media.map(item => {
         const asset = outputAssetPart(item)
         if (!asset || asset.assetId.length > 64 || seen.has(asset.assetId)) throw new Error('Ambiguous asset source')
         seen.add(asset.assetId)
         return { kind: 'CURRENT_CONVERSATION_ASSET', fileId: null, version: null, purpose: null, assetId: asset.assetId, assetRevision: asset.revision }
       })
-    } catch { return [] } // Context lookup failure does not manufacture sources or retry a tool.
+      return { sourceSelectors, basis: projection.basis }
+    } catch { return { sourceSelectors: [], basis: null } } // Context lookup failure does not manufacture sources or retry a tool.
   }
   const submit = async ({ content, sourceSelectors = [], inspection = false } = {}) => {
     if (busy.value || !enabled?.()) return false
@@ -200,15 +219,23 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     }
     let deliveryParent = null
     const catalog = clone(getCatalogEntries?.() || [])
-    if (!pending && purpose === 'CHAT' && Array.isArray(sourceSelectors) && sourceSelectors.length === 0 && typeof content === 'string' && content.trim()) {
+    const explicitSources = Array.isArray(sourceSelectors) && sourceSelectors.length > 0
+    const completedMediaBasis = projections.value.some(value => value.state === 'READY' && value.outcome?.kind === 'ACTION_REQUEST' &&
+      value.actionProgress?.state === 'COMPLETED' && value.actionProgress?.childRoute === 'EXECUTE')
+    if (!pending && purpose === 'CHAT' && Array.isArray(sourceSelectors) && typeof content === 'string' &&
+      ((!explicitSources && content.trim()) || (explicitSources && completedMediaBasis))) {
       busy.value = true
-      try { sourceSelectors = await currentMediaSources(catalog, captured) }
+      try {
+        const available = await currentMediaContext(catalog, captured)
+        if (!explicitSources) sourceSelectors = available.sourceSelectors
+        deliveryParent = available.basis
+      }
       finally { if (current(captured)) busy.value = false }
       if (!current(captured) || JSON.stringify(catalog) !== JSON.stringify(getCatalogEntries?.() || [])) return false
     }
     const unresolved = catalog.some(entry => !entry?.request?.turns?.some(turn => turn.route === 'INSPECT') &&
       !projections.value.some(value => value.requestId === entry?.request?.requestId && value.state === 'READY'))
-    if (!pending && purpose === 'CHAT' && !unresolved && !catalog.some(entry => entry?.request?.steps?.some(step => step.kind === 'EXECUTE'))) {
+    if (!deliveryParent && !pending && purpose === 'CHAT' && !unresolved && !catalog.some(entry => entry?.request?.steps?.some(step => step.kind === 'EXECUTE'))) {
       const finals = projections.value.filter(value => value.schemaVersion === 3 && value.state === 'READY' && value.route === 'CHAT' &&
         value.outcome?.deliverable === true && value.outcome.assignmentRevision === context.assignmentRevision)
       try {

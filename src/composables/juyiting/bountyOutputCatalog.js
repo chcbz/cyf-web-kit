@@ -109,7 +109,7 @@ export function applyOutputReplacements (current, edits) {
  * the conversation must clarify delivery intent; never union history or pick a latest batch.
  * Edits are resolved by exact parent hashes, independent of response arrival order. */
 export function currentOutputDelivery (catalog, executionDeliveries = []) {
-  if (executionDeliveries.length) return explicitExecutionDelivery(catalog, executionDeliveries)
+  if (executionDeliveries.length) return explicitExecutionDelivery(catalog, executionDeliveries).items
   if (!Array.isArray(catalog) || !catalog.length) return Object.freeze([])
   const texts = catalog.filter(item => item.messageSource)
   if (texts.length) {
@@ -205,15 +205,16 @@ export function completedExecutionDelivery (raw, request, turn, snapshots, taskI
     conversationGeneration: request.conversationGeneration, requestId: request.requestId,
     requestRevision: request.requestRevision, turnId: turn.turnId, taskId })
   if (!value) throw new Error('媒体交付来源回执不匹配。')
-  if (value.schemaVersion !== 3 || value.state !== 'READY' || value.outcome?.kind !== 'ACTION_REQUEST' || !value.outcome.deliveryRelation) return null
+  if (value.schemaVersion !== 3 || value.state !== 'READY' || value.outcome?.kind !== 'ACTION_REQUEST') return null
   const outcome = value.outcome; const progress = value.actionProgress
+  if (!outcome.deliveryRelation && progress.childRoute !== 'EXECUTE') return null
   if (request.state !== 'COMPLETED' || turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state) ||
     turn.finalMessageId !== outcome.assistantMessageId || !exactOutputId(turn.contextSnapshotId) ||
     turn.requestId !== request.requestId || turn.requestRevision !== request.requestRevision ||
     turn.conversationId !== request.conversationId || turn.conversationGeneration !== request.conversationGeneration ||
     !exactOutputId(taskId) || outcome.taskId !== taskId) throw new Error('媒体交付与原动作快照不一致。')
   const node = { outcomeId: outcome.outcomeId, finalDigest: outcome.finalDigest,
-    deliveryRelation: Object.freeze({ ...outcome.deliveryRelation }), requestId: progress.childRequestId, stepId: null }
+    deliveryRelation: outcome.deliveryRelation ? Object.freeze({ ...outcome.deliveryRelation }) : null, requestId: progress.childRequestId, stepId: null }
   if (progress.childRoute != null && progress.childRoute !== 'EXECUTE') throw new Error('查阅动作不是媒体交付。')
   if (progress.state !== 'COMPLETED') return Object.freeze(node)
   const children = snapshots.filter(child => child.requestId === progress.childRequestId)
@@ -242,7 +243,7 @@ function explicitExecutionDelivery (catalog, executionDeliveries) {
   for (const action of executionDeliveries) {
     if (!action?.stepId) throw new Error('本次媒体成果尚未完成，完成后可验收。')
     const relation = action.deliveryRelation
-    if (!relation || !['APPEND', 'RESET'].includes(relation.mode) || Object.keys(relation).length !== 3 ||
+    if ((relation && (!['APPEND', 'RESET'].includes(relation.mode) || Object.keys(relation).length !== 3)) ||
       ![action.requestId, action.stepId].every(exactOutputId)) throw new Error('媒体交付意图不明确。')
     const batch = catalog.filter(item => !item.messageSource && item.requestId === action.requestId && item.stepId === action.stepId)
     if (!batch.length || batch.some(item => item.replaces || !exactOutputId(item.outputId) || !HASH.test(item.sha256) || assigned.has(outputItemKey(item)))) throw new Error('本次媒体清单尚未明确。')
@@ -275,11 +276,19 @@ function explicitExecutionDelivery (catalog, executionDeliveries) {
       const digest = relation.targetFinalDigest ?? current.finalDigest
       if (Object.hasOwn(relation, 'targetOutcomeId') !== Object.hasOwn(relation, 'targetFinalDigest')) throw new Error('交付改稿对象不匹配。')
       const index = retained.findIndex(node => node.outcomeId === target && node.finalDigest === digest)
-      if (index < 0) throw new Error('交付改稿对象已变化。')
+      if (index < 0 || retained[index].items.length !== 1 || !retained[index].items[0].messageSource || next.items.length !== 1 || !next.items[0].messageSource) throw new Error('交付改稿对象已变化。')
       retained[index] = next
     }
     current = next
   }
   if (visited.size !== nodes.length) throw new Error('交付关联不完整。')
-  return Object.freeze(retained.flatMap(node => node.items))
+  return Object.freeze({ items: Object.freeze(retained.flatMap(node => node.items)),
+    basis: Object.freeze({ outcomeId: current.outcomeId, finalDigest: current.finalDigest }) })
+}
+
+/** Same exact projection supplies a natural follow-up basis, not the latest visible card. */
+export function currentDeliveryProjection (catalog, executionDeliveries = []) {
+  if (executionDeliveries.length) return explicitExecutionDelivery(catalog, executionDeliveries)
+  if (catalog.length && catalog.every(item => item.messageSource)) return textDeliveryProjection(catalog)
+  return Object.freeze({ items: currentOutputDelivery(catalog), basis: null })
 }

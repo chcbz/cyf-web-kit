@@ -426,3 +426,83 @@ describe('retained earlier text causal admission recovery', () => {
     } finally { lane.dispose() }
   })
 })
+
+describe('actual mixed media basis natural discussion and frozen original recovery', () => {
+  const group = JSON.parse(readFileSync(new URL('./fixtures/juyiting/media-basis-delivery-v3.json', import.meta.url), 'utf8'))
+  const context = { conversationId: '42', conversationGeneration: '1', taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' }
+  const values = [group.initial, group.mediaOne, group.mediaTwo, group.updated]
+  const textRequest = raw => ({ requestId: raw.requestId, requestRevision: raw.requestRevision, conversationId: '42', conversationGeneration: '1',
+    state: 'COMPLETED', steps: [], turns: [{ turnId: raw.turnId, requestId: raw.requestId, requestRevision: raw.requestRevision,
+      conversationId: '42', conversationGeneration: '1', targetAgentId: 'agent', route: 'CHAT', state: 'FINAL_PERSISTED',
+      finalMessageId: raw.outcome.assistantMessageId, contextSnapshotId: raw.outcome.messageSource?.snapshotId || `${raw.requestId}-snapshot` }] })
+  const children = group.manifests.map(manifest => ({ requestId: manifest.requestId, requestRevision: '1', conversationId: '42', conversationGeneration: '1',
+    state: 'OUTPUT_COMMITTED', stateVersion: '2', turns: [], steps: [{ kind: 'EXECUTE', stepId: manifest.stepId, executionId: manifest.executionId,
+      state: 'OUTPUT_COMMITTED', executionState: 'OUTPUT_COMMITTED', taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' }] }))
+  const expected = group.manifests.flatMap((manifest, i) => manifest.outputs.map(output => ({ kind: 'CURRENT_CONVERSATION_ASSET', fileId: null,
+    version: null, purpose: null, assetId: `asset-${i}-${output.outputId}`, assetRevision: '1' })))
+  const create = (storage, sources = values, missingAsset = false) => {
+    const catalog = [...sources.map(textRequest), ...children].map(request => ({ request })); const calls = []
+    const lane = useHallTypedDeliberation({ chatApi: { get: async path => {
+      calls.push(['GET', path])
+      const raw = sources.find(value => path.includes(`/requests/${value.requestId}/`))
+      if (raw) return { data: { data: raw } }
+      const index = group.manifests.findIndex(value => path === `/requests/${value.requestId}/steps/${value.stepId}/outputs`)
+      if (index < 0) throw new Error('unexpected lookup ' + path)
+      const manifest = group.manifests[index]
+      return { data: { data: manifest.outputs.map(output => { const url = `/chat${path}/${output.outputId}`
+        return { ...output, previewUrl: url, downloadUrl: `${url}?download=true`, assetRef: missingAsset ? null : { assetId: `asset-${index}-${output.outputId}`, revision: '1' } }
+      }) } }
+    }, create: async (path, body, options) => { calls.push(['POST', path, body, options.headers['Idempotency-Key']]); throw new Error('unknown ACK') } },
+    actorScopeKey: ref('owner-mixed-natural'), authorizationGeneration: ref(1), getContext: () => context, getContextGeneration: () => 1,
+    getCatalogEntries: () => catalog, storage, enabled: () => true })
+    return { lane, calls }
+  }
+  it('uses terminal media final and exact retained manifests, then keeps all media when earlier text changes', async () => {
+    for (const sources of [values.slice(0, 3), values]) {
+      const { lane, calls } = create(store(), sources)
+      try {
+        for (const raw of sources) expect(await lane.readOne(raw.requestId)).not.to.equal(null)
+        await lane.submit({ content: '仅修改原文字，保留全部图片' })
+        const posted = calls.find(call => call[0] === 'POST')
+        expect(posted[2].sourceSelectors).to.deep.equal(expected)
+        expect(posted[2].parentOutcomeId).to.equal(sources.at(-1).outcome.outcomeId)
+        expect(posted[2].expectedParentStateVersion).to.equal('0')
+      } finally { lane.dispose() }
+    }
+  })
+  it('keeps explicitly chosen attachment sources and a verified media causal basis, including attachment-only admission', async () => {
+    for (const content of ['按新资料修改', '  ']) {
+      const { lane, calls } = create(store(), values.slice(0, 3))
+      const selected = { kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'chosen-file', version: '7', purpose: 'REFERENCE', assetId: null, assetRevision: null }
+      try {
+        for (const raw of values.slice(0, 3)) await lane.readOne(raw.requestId)
+        await lane.submit({ content, sourceSelectors: [selected] })
+        expect(calls.at(-1)[2].content).to.equal(content)
+        expect(calls.at(-1)[2].sourceSelectors).to.deep.equal([selected])
+        expect(calls.at(-1)[2].parentOutcomeId).to.equal(group.mediaTwo.outcome.outcomeId)
+      } finally { lane.dispose() }
+    }
+  })
+  it('retains verified causal basis without requiring save when a durable asset is late', async () => {
+    const { lane, calls } = create(store(), values, true)
+    try {
+      for (const raw of values) await lane.readOne(raw.requestId)
+      await lane.submit({ content: '继续改文字' })
+      expect(calls.at(-1)[2].sourceSelectors).to.deep.equal([])
+      expect(calls.at(-1)[2].parentOutcomeId).to.equal(group.updated.outcome.outcomeId)
+    } finally { lane.dispose() }
+  })
+  it('does GET-only recovery and freezes the same key/body/media refs despite remount and a later text outcome', async () => {
+    const storage = store(); const first = create(storage)
+    for (const raw of values) await first.lane.readOne(raw.requestId)
+    await first.lane.submit({ content: '修改较早文字' }); const posted = first.calls.at(-1); first.lane.dispose()
+    const second = create(storage, [...values, group.appended])
+    try {
+      for (const raw of [...values, group.appended]) await second.lane.readOne(raw.requestId)
+      const writes = () => second.calls.filter(call => call[0] === 'POST')
+      await second.lane.recover(); expect(writes()).to.have.length(0)
+      await second.lane.resumeUnknown(); expect(writes()).to.deep.equal([posted])
+      expect(writes()[0][2].sourceSelectors).to.deep.equal(expected)
+    } finally { second.lane.dispose() }
+  })
+})

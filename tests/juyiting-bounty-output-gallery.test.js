@@ -950,4 +950,80 @@ describe('bounty output gallery live owner scope', () => {
     })
   }
 
+  it('mounted actual media causal edit retains four media sources and freezes the exact mixed acceptance through remount', async () => {
+    const group = JSON.parse(readFileSync(new URL('./fixtures/juyiting/media-basis-delivery-v3.json', import.meta.url), 'utf8'))
+    const request = raw => ({ requestId: raw.requestId, requestRevision: raw.requestRevision, conversationId: raw.conversationId,
+      conversationGeneration: raw.conversationGeneration, state: 'COMPLETED', steps: [], turns: [{ turnId: raw.turnId,
+        requestId: raw.requestId, requestRevision: raw.requestRevision, conversationId: raw.conversationId,
+        conversationGeneration: raw.conversationGeneration, targetAgentId: 'agent', route: 'CHAT', state: 'FINAL_PERSISTED',
+        finalMessageId: raw.outcome.assistantMessageId, contextSnapshotId: raw.outcome.messageSource?.snapshotId || `${raw.requestId}-snapshot` }] })
+    const values = [group.initial, group.mediaOne, group.mediaTwo, group.updated]
+    const children = group.manifests.map(manifest => ({ requestId: manifest.requestId, requestRevision: '1', conversationId: '42', conversationGeneration: '1',
+      state: 'OUTPUT_COMMITTED', stateVersion: '2', turns: [], steps: [{ stepId: manifest.stepId, executionId: manifest.executionId,
+        kind: 'EXECUTE', state: 'OUTPUT_COMMITTED', executionState: 'OUTPUT_COMMITTED', taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' }] }))
+    const child = children[1]
+    const outputs = group.manifests.flatMap(manifest => manifest.outputs.map(output => ({ ...output, requestId: manifest.requestId, stepId: manifest.stepId })))
+    let addLate = false; const late = { ...child, requestId: 'unlinked-mixed-late' }
+    const snapshots = [...values.map(request), ...children]; const reads = []; const writes = []
+    const api = { get: async path => { reads.push(path)
+      if (path.endsWith('/typed-outcome')) return { data: { data: values.find(value => path.includes(`/requests/${value.requestId}/`)) } }
+      if (path.endsWith('/outputs')) {
+        const manifest = group.manifests.find(value => path.includes(`/requests/${value.requestId}/`)) || group.manifests[1]
+        const requestId = path.includes('/unlinked-mixed-late/') ? late.requestId : manifest.requestId
+        return { data: { data: manifest.outputs.map(output => { const url = `/chat/requests/${requestId}/steps/${manifest.stepId}/outputs/${output.outputId}`
+          return { ...output, previewUrl: url, downloadUrl: `${url}?download=true`, assetRef: null }
+        }) } }
+      }
+      const snapshot = [...snapshots, ...(addLate ? [late] : [])].find(value => path === `/requests/${value.requestId}`)
+      if (snapshot) return { data: { data: snapshot } }
+      throw new Error('unexpected GET ' + path)
+    } }
+    const agentApi = { execute: async value => {
+      if (value.method === 'GET') { reads.push(value.url); throw { response: { status: 404 } } }
+      writes.push(value); throw new TypeError('unknown original ACK')
+    } }
+    const Component = new Function('Vue', 'deps', script)(Vue, {
+      createApi: base => base === '/agent' ? agentApi : api, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps,
+      downloadMimeType, outputDownloadName, currentOutputDelivery, outputAssetPart, completedTextItem, completedExecutionDelivery,
+      useHallConversationArchive, useHallBountyFinalization, safeFinalizationVersion, saveOutputBlob: () => {}
+    })
+    const oldTimeout = globalThis.setTimeout; const oldClear = globalThis.clearTimeout
+    globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : oldTimeout(fn, delay, ...args)
+    globalThis.clearTimeout = id => { if (id !== 999) oldClear(id) }
+    let catalog = snapshots.map((request, index) => ({ ordinal: String(index + 1), request }))
+    const props = { enabled: true, acceptance: true, taskId: 'task', taskVersion: '9', conversationId: '42', identityKey: 'owner-mixed-media-basis',
+      request: child, catalog }
+    const count = 5
+    let wrapper
+    const settle = async () => { for (let i = 0; i < 30 && wrapper.findAll('.bounty-output').length !== count; i++) {
+      await new Promise(resolve => oldTimeout(resolve, 5)); await flushPromises()
+    } }
+    try {
+      wrapper = mount(Component, { props }); await flushPromises(); await settle()
+      expect(wrapper.findAll('.bounty-output')).to.have.length(count)
+      expect(wrapper.findAll('.bounty-output-text')).to.have.length(1)
+      expect(wrapper.find('.bounty-output-text').text()).to.equal('澄清后的文字')
+      expect(wrapper.findAll('.bounty-output').some(item => item.text().includes(group.initial.outcome.text))).to.equal(false)
+      expect(writes).to.have.length(0)
+      await wrapper.find('.finalize-button').trigger('click'); await flushPromises()
+      expect(writes).to.have.length(1)
+      const original = JSON.parse(JSON.stringify(writes[0].data)); const key = writes[0].headers['Idempotency-Key']
+      const selected = original.selectedOutputs
+      expect(selected[0].messageSource).to.deep.equal(group.updated.outcome.messageSource)
+      expect(selected[0].sha256).to.equal(createHash('sha256').update(group.updated.outcome.text).digest('hex'))
+      expect(Object.hasOwn(selected[0], 'stepId')).to.equal(false)
+      expect(selected.slice(1).map(item => [item.requestId, item.stepId, item.outputId, item.sha256])).to.deep.equal(
+        outputs.map(item => [item.requestId, item.stepId, item.outputId, item.sha256]))
+      addLate = true; catalog = [...catalog, { ordinal: '4', request: late }]
+      await wrapper.setProps({ catalog, request: late }); await flushPromises(); await settle()
+      expect(wrapper.findAll('.bounty-output')).to.have.length(count); expect(writes).to.have.length(1)
+      wrapper.unmount(); wrapper = mount(Component, { props: { ...props, catalog, request: late } }); await flushPromises(); await settle()
+      expect(wrapper.findAll('.bounty-output')).to.have.length(count); expect(writes).to.have.length(1)
+      await wrapper.find('.finalize-button').trigger('click'); await flushPromises()
+      expect(writes).to.have.length(2); expect(writes[1].data).to.deep.equal(original)
+      expect(writes[1].headers['Idempotency-Key']).to.equal(key)
+      expect(reads.filter(path => path.endsWith('/outputs'))).not.to.have.length(0)
+    } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
+  })
+
 })
