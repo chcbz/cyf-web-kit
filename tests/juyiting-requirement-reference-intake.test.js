@@ -1,6 +1,7 @@
 import { expect } from 'chai'
 import { before, after } from 'mocha'
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { ref, nextTick } from 'vue'
 import { parse, compileScript, compileTemplate } from '@vue/compiler-sfc'
 import { createRequirementCreateIntentStore, requirementCreateBody, requirementCreateReceipt, requirementReferenceInputs } from '../src/composables/juyiting/hallRequirementCreateIntent.js'
@@ -150,8 +151,8 @@ describe('exact requirement/reference create contract', () => {
   })
 })
 
-const page = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
-const actualCreate = page.match(/const createTask = async \(payload, acknowledge = \(\) => \{\}\) => \{([\s\S]*?)\n\}\nconst resumeFundedCreate/)?.[1]
+const page = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+const actualCreate = page.match(/const createTask = async \(payload, acknowledge = \(\) => \{\}\) => \{([\s\S]*?)\n\}\nconst createRequirementAndChooseAgent/)?.[1]
 if (!actualCreate) throw new Error('Actual JuyiHall create closure missing')
 const actualDefaultRequirementEntry = page.match(/const openDefaultRequirementCreate = \(\) => \{([\s\S]*?)\n\}\nconst openPrivateDraft/)?.[1]
 if (!actualDefaultRequirementEntry) throw new Error('Actual JuyiHall default requirement entry missing')
@@ -220,7 +221,7 @@ describe('actual JuyiHall ordinary/funded boundary', () => {
   })
   it('compiles actual changed SFCs and wires exact recovery handlers', () => {
     for (const name of ['world/JuyiHall.vue', 'juyiting/BountyPanel.vue', 'juyiting/HallMaterialPicker.vue']) {
-      const filename = new URL(`../src/components/${name}`, import.meta.url).pathname
+      const filename = fileURLToPath(new URL(`../src/components/${name}`, import.meta.url))
       const { descriptor, errors } = parse(readFileSync(filename, 'utf8'), { filename }); expect(errors).to.deep.equal([])
       const script = compileScript(descriptor, { id: 'reference-intake' })
       expect(compileTemplate({ source: descriptor.template.content, filename, id: 'reference-intake', compilerOptions: { bindingMetadata: script.bindings } }).errors).to.deep.equal([])
@@ -241,7 +242,7 @@ const action = (wrapper, text) => {
   const found = wrapper.findAll('button').find(button => button.text() === text)
   expect(found, `missing button ${text}`).to.exist; return found
 }
-const openDraft = async wrapper => { await action(wrapper, '张榜').trigger('click') }
+const openDraft = async wrapper => { await wrapper.get('.new-task-button').trigger('click') }
 const setDraft = async (wrapper, title = '画一只鸟') => {
   await wrapper.find('[name="taskTitle"]').setValue(title)
   await wrapper.find('[name="taskDescription"]').setValue('照片风格')
@@ -255,7 +256,7 @@ describe('mounted Bounty requirement draft and original recovery', () => {
     Vue = await import('vue'); ({ mount } = await import('@vue/test-utils'))
     Picker = Vue.defineComponent({ name: 'HallMaterialPicker', props: ['modelValue', 'identityScope', 'identityEpoch', 'disabled'], emits: ['update:modelValue'], render: () => Vue.h('span', { class: 'picker-boundary' }) })
     const TaskMaterialLinks = Vue.defineComponent({ name: 'TaskMaterialLinks', render: () => Vue.h('section', { class: 'formal-task-execution' }, '明确开始正式办理（PDF）') })
-    const filename = new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url).pathname
+    const filename = fileURLToPath(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url))
     const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
     const silver = await import('../src/utils/silverAmount.js')
     const imports = new Proxy({ vue: Vue, '@/utils/silverAmount': silver, './HallMaterialPicker.vue': Picker, '@/components/personal-workspace/TaskMaterialLinks.vue': TaskMaterialLinks }, {
@@ -366,7 +367,7 @@ describe('mounted Bounty requirement draft and original recovery', () => {
     await setDraft(wrapper, '另一个用户的新稿'); await wrapper.find('form').trigger('submit')
     oldAck(true); await nextTick()
     expect(wrapper.find('[name="taskTitle"]').element.value).to.equal('另一个用户的新稿')
-    expect(action(wrapper, '张榜中…').attributes()).to.have.property('disabled')
+    expect(action(wrapper, '正在提交…').attributes()).to.have.property('disabled')
     wrapper.emitted('create-task')[1][1](false); await nextTick()
     expect(wrapper.find('[name="taskTitle"]').element.value).to.equal('另一个用户的新稿')
   })

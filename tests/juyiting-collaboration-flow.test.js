@@ -234,7 +234,8 @@ describe('JuyiHall collaboration flow contract', () => {
   })
 
   it('supports task management actions from the bounty board', () => {
-    expect(hallSource).to.include('@create-task="createTask"')
+    expect(hallSource).to.include('@create-task="createRequirementAndChooseAgent"')
+    expect(hallSource).to.match(/const createRequirementAndChooseAgent = async \(payload, acknowledge\) => \{\s*const created = await createTask\(payload, acknowledge\)\s*if \(created && !payload\?\.grossBountyAmountMicro\) openPanel\('agents'\)/)
     expect(hallSource).to.include('@archive-task="archiveTask"')
     expect(hallSource).to.include('@discuss-task="discussTask"')
     expect(hallSource).to.include('chatMentionAgents')
