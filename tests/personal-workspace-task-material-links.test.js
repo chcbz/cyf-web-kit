@@ -210,11 +210,10 @@ describe('W06 workspace bounty material links', () => {
     const hall = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
     assert.match(hall, /:formal-task-execution-context="formalTaskExecutionContext"/)
     assert.match(bounty, /formalTaskExecutionScope\.taskId/)
-    // Ordinary historical formal tasks retain the PDF material controls; the exact
-    // controlled-image route and an unassigned embedded task do not expose them.
-    assert.match(bounty, /v-if="formalTaskExecutionScope && \(!embeddedHall \|\| detailTask\.status !== 'open'\) && !controlledImageRouteForDetail"/)
-    assert.match(bounty, /const controlledImageRouteForDetail = computed\(/)
-    assert.match(bounty, /pointAndStartForDetail\.value\?\.intent\?\.controlledImageBridge\?\.wrapper/)
+    // Standalone formal-task PDF controls remain. Embedded matters use the
+    // ordinary discussion route, without a second manual execution entry.
+    assert.match(bounty, /v-if="formalTaskExecutionScope && !embeddedHall"/)
+    assert.match(bounty, /v-if="embeddedHall" class="deliberation-execution-route"/)
     assert.match(bounty, /workspace-shortcut/)
     assert.match(bounty, /open-workspace/)
     assert.match(bounty, /@click="\$emit\('discuss-task', detailTask, assignedAgentForTask\(detailTask\)\)"/)

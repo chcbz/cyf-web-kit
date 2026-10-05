@@ -1,5 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { before, after, afterEach, describe, it } from 'mocha'
 import * as Vue from 'vue'
 import { mount } from '@vue/test-utils'
@@ -11,7 +12,7 @@ import { useHallRequirementCreate } from '../src/composables/juyiting/useHallReq
 const scope = '0\u0000client-a\u0000owner-a'
 const mimeTypes = ['image/png', 'application/pdf', 'audio/mpeg', 'text/plain']
 const files = mimeTypes.map((mime, index) => ({ fileId: `pwf_material_${index}`, displayName: `资料${index}`, state: 'ACTIVE', latestVersion: 3, metadataRevision: 1 }))
-const attachments = files.map(file => ({ fileId: file.fileId, version: 2 }))
+const attachments = files.map(file => ({ fileId: file.fileId, version: 3 }))
 const detailFor = index => {
   const file = files[index], contentMimeType = mimeTypes[index]
   const versions = [2, 3].map(version => ({ fileId: file.fileId, version, originalFilename: `material-${index}-v${version}`, contentMimeType, byteLength: 5 }))
@@ -25,7 +26,7 @@ const flush = async () => {
   for (let step = 0; step < 20; step += 1) { await Promise.resolve(); await Vue.nextTick() }
 }
 function compileComponent (relativePath, imports) {
-  const filename = new URL(relativePath, import.meta.url).pathname
+  const filename = fileURLToPath(new URL(relativePath, import.meta.url))
   const { descriptor, errors } = parse(readFileSync(filename, 'utf8'), { filename })
   assert.deepEqual(errors, [])
   const code = compileScript(descriptor, { id: relativePath, inlineTemplate: true }).content
@@ -40,7 +41,7 @@ const button = (wrapper, label) => {
   assert.ok(found, `missing ${label}`)
   return found
 }
-function fixture () {
+function fixture (panelProps = {}) {
   const calls = [], created = [], revoked = [], rows = new Map(), adopted = []
   const api = { execute: async request => {
     calls.push(request)
@@ -50,8 +51,8 @@ function fixture () {
     for (let index = 0; index < files.length; index++) {
       const file = files[index], mime = mimeTypes[index]
       if (request.url === `/personal-workspace/files/${file.fileId}`) return { data: detailFor(index), headers: { etag: '"materials:1"' } }
-      if (request.url === `/personal-workspace/files/${file.fileId}/versions/2/preview`) return { data: { state: 'READY', parts: [{ partId: 'content', contentMimeType: mime === 'application/pdf' ? 'text/plain' : mime }], partial: false } }
-      if (request.url === `/personal-workspace/files/${file.fileId}/versions/2/preview/parts/content`) return { data: new Blob(['media'], { type: mime === 'application/pdf' ? 'text/plain' : mime }) }
+      if (request.url === `/personal-workspace/files/${file.fileId}/versions/3/preview`) return { data: { state: 'READY', parts: [{ partId: 'content', contentMimeType: mime === 'application/pdf' ? 'text/plain' : mime }], partial: false } }
+      if (request.url === `/personal-workspace/files/${file.fileId}/versions/3/preview/parts/content`) return { data: new Blob(['media'], { type: mime === 'application/pdf' ? 'text/plain' : mime }) }
     }
     throw new Error(`unexpected workspace request ${request.url}`)
   } }
@@ -70,15 +71,16 @@ function fixture () {
     vue: Vue, '@/composables/usePersonalWorkspace': { usePersonalWorkspace: options => usePersonalWorkspace({ ...options, api, urlApi }), savePersonalWorkspaceBlob: () => {} }
   })
   const stub = Vue.defineComponent({ render: () => Vue.h('span') })
+  const TaskMaterialLinks = Vue.defineComponent({ name: 'TaskMaterialLinks', render: () => Vue.h('section', { class: 'formal-material-controls' }) })
   const Panel = compileComponent('../src/components/juyiting/BountyPanel.vue', new Proxy({
-    vue: Vue, '@/utils/silverAmount': silver, './HallMaterialPicker.vue': Picker
+    vue: Vue, '@/utils/silverAmount': silver, './HallMaterialPicker.vue': Picker, '@/components/personal-workspace/TaskMaterialLinks.vue': TaskMaterialLinks
   }, { get: (target, name) => target[name] ?? stub }))
-  const wrapper = mount(Panel, { global: { stubs: { teleport: true } }, props: { ...props, onCreateTask: async (body, acknowledge) => acknowledge(await create.create(body)) } })
+  const wrapper = mount(Panel, { global: { stubs: { teleport: true } }, props: { ...props, ...panelProps, onCreateTask: async (body, acknowledge) => acknowledge(await create.create(body)) } })
   wrappers.push(wrapper)
-  return { wrapper, calls, created, revoked, rows, adopted }
+  return { wrapper, calls, created, revoked, rows, adopted, Picker }
 }
 async function openDraft (wrapper) {
-  await button(wrapper, '张榜').trigger('click')
+  await button(wrapper, '提出需求').trigger('click')
   await wrapper.find('[name="taskTitle"]').setValue(' 画一只鸟🦜 ')
   await wrapper.find('[name="taskDescription"]').setValue('照片风格\n完整原文')
 }
@@ -97,17 +99,18 @@ describe('real Bounty + shared neutral picker + v2 atomic creation integration',
       else delete globalThis[key]
     }
   })
-  it('mixes four media types at old fixed versions then atomically creates from the real form', async () => {
+  it('fixes the current versions of four media types without a version chooser, then creates atomically', async () => {
     const f = fixture()
     await openDraft(f.wrapper)
     await button(f.wrapper, '添加资料（可选）').trigger('click'); await flush()
     for (let index = 0; index < files.length; index++) {
       await f.wrapper.findAll('.quick-material-files button')[index].trigger('click'); await flush()
-      await f.wrapper.get('.quick-material-fields select').setValue('2')
+      assert.equal(f.wrapper.find('.quick-material-fields select').exists(), false)
+      assert.match(f.wrapper.get('.quick-material-version').text(), /已固定 v3/)
       await f.wrapper.findAll('.quick-material-fields button').find(item => item.text() === '预览').trigger('click'); await flush()
       if (index === 0) assert.equal(f.wrapper.get('.quick-material-preview img').attributes('src'), 'blob:exact-image/png')
       if (index === 2) assert.equal(f.wrapper.get('.quick-material-preview audio').attributes('src'), 'blob:exact-audio/mpeg')
-      await button(f.wrapper, '加入选择').trigger('click')
+      await button(f.wrapper, '添加').trigger('click')
     }
     await f.wrapper.get('.quick-material-confirm').trigger('click'); await flush()
     assert.equal(f.calls.filter(call => call.method !== 'GET').length, 0)
@@ -121,6 +124,17 @@ describe('real Bounty + shared neutral picker + v2 atomic creation integration',
     assert.equal(f.rows.size, 0)
     assert.equal(f.wrapper.find('form').exists(), false)
     assert.deepEqual(f.revoked, f.created)
+  })
+  it('keeps standalone formal controls, while embedded matters route only through discussion', async () => {
+    const f = fixture({ tasks: [{ id: 'task-route', title: '核对入口', status: 'running', assignedAgentId: 'agent-a' }] })
+    await f.wrapper.get('.task-card').trigger('click'); await flush()
+    assert.equal(f.wrapper.find('.formal-material-controls').exists(), true)
+    assert.equal(f.wrapper.find('.workspace-shortcut').exists(), true)
+    await f.wrapper.setProps({ embeddedHall: true }); await flush()
+    assert.equal(f.wrapper.find('.formal-material-controls').exists(), false)
+    assert.equal(f.wrapper.find('.workspace-shortcut').exists(), false)
+    assert.match(f.wrapper.get('.deliberation-execution-route').text(), /保存可选/)
+    assert.equal(f.calls.filter(call => call.method === 'POST').length, 0)
   })
   it('submits no-material requirement without reading workspace or creating grants/executions', async () => {
     const f = fixture()
