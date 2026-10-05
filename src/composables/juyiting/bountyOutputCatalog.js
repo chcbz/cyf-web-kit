@@ -108,7 +108,8 @@ export function applyOutputReplacements (current, edits) {
 /** A committed manifest is one explicit batch. With multiple independent batches
  * the conversation must clarify delivery intent; never union history or pick a latest batch.
  * Edits are resolved by exact parent hashes, independent of response arrival order. */
-export function currentOutputDelivery (catalog) {
+export function currentOutputDelivery (catalog, executionDeliveries = []) {
+  if (executionDeliveries.length) return explicitExecutionDelivery(catalog, executionDeliveries)
   if (!Array.isArray(catalog) || !catalog.length) return Object.freeze([])
   const texts = catalog.filter(item => item.messageSource)
   if (texts.length) {
@@ -193,4 +194,92 @@ export function textDeliveryProjection (texts) {
   }
   if (visited.size !== texts.length) throw new Error('文字交付关联不完整，请回到议事明确本次成果。')
   return Object.freeze({ items: Object.freeze([...result]), basis: Object.freeze({ outcomeId: node.outcomeId, finalDigest: node.messageSource.finalDigest }) })
+}
+
+/** Join only the actual v3 action progress child to its completed EXECUTE step.
+ * Planning prose and an output's arrival alone cannot manufacture a delivery node.
+ * Null step means the explicit requested batch is not ready, never old-work acceptance.
+ */
+export function completedExecutionDelivery (raw, request, turn, snapshots, taskId) {
+  const value = typedOutcomeProjection(raw, { conversationId: request.conversationId,
+    conversationGeneration: request.conversationGeneration, requestId: request.requestId,
+    requestRevision: request.requestRevision, turnId: turn.turnId, taskId })
+  if (!value) throw new Error('媒体交付来源回执不匹配。')
+  if (value.schemaVersion !== 3 || value.state !== 'READY' || value.outcome?.kind !== 'ACTION_REQUEST' || !value.outcome.deliveryRelation) return null
+  const outcome = value.outcome; const progress = value.actionProgress
+  if (request.state !== 'COMPLETED' || turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state) ||
+    turn.finalMessageId !== outcome.assistantMessageId || !exactOutputId(turn.contextSnapshotId) ||
+    turn.requestId !== request.requestId || turn.requestRevision !== request.requestRevision ||
+    turn.conversationId !== request.conversationId || turn.conversationGeneration !== request.conversationGeneration ||
+    !exactOutputId(taskId) || outcome.taskId !== taskId) throw new Error('媒体交付与原动作快照不一致。')
+  const node = { outcomeId: outcome.outcomeId, finalDigest: outcome.finalDigest,
+    deliveryRelation: Object.freeze({ ...outcome.deliveryRelation }), requestId: progress.childRequestId, stepId: null }
+  if (progress.childRoute != null && progress.childRoute !== 'EXECUTE') throw new Error('查阅动作不是媒体交付。')
+  if (progress.state !== 'COMPLETED') return Object.freeze(node)
+  const children = snapshots.filter(child => child.requestId === progress.childRequestId)
+  if (children.length !== 1) return Object.freeze(node) // Late catalog page: keep polling, no guessed child.
+  const child = children[0]; const steps = child.steps || []
+  if (child.state !== 'OUTPUT_COMMITTED' || child.requestRevision !== '1' || child.stateVersion !== progress.childStateVersion ||
+    child.conversationId !== request.conversationId || child.conversationGeneration !== request.conversationGeneration ||
+    steps.length !== 1 || steps[0].kind !== 'EXECUTE' || steps[0].state !== 'OUTPUT_COMMITTED' ||
+    steps[0].executionState !== 'OUTPUT_COMMITTED' || steps[0].taskId !== taskId ||
+    steps[0].assignmentRevision !== outcome.assignmentRevision || steps[0].targetAgentId !== turn.targetAgentId ||
+    !exactOutputId(steps[0].stepId) || !exactOutputId(steps[0].executionId)) throw new Error('媒体交付执行来源不一致。')
+  return Object.freeze({ ...node, stepId: steps[0].stepId })
+}
+
+/** Replay original final metadata for text + explicitly requested independent batches.
+ * No persisted collection, new API, history union, latest MIME or action prose output.
+ * Legacy media-only manifests keep their original exact replacement projection.
+ */
+function explicitExecutionDelivery (catalog, executionDeliveries) {
+  if (!Array.isArray(catalog) || !Array.isArray(executionDeliveries)) throw new Error('交付来源无效。')
+  const texts = catalog.filter(item => item.messageSource)
+  const nodes = texts.map(item => ({ outcomeId: item.outcomeId, finalDigest: item.messageSource.finalDigest,
+    deliveryRelation: item.deliveryRelation, items: [item] }))
+  const assigned = new Set(texts.map(outputItemKey))
+  if (assigned.size !== texts.length) throw new Error('交付来源重复。')
+  for (const action of executionDeliveries) {
+    if (!action?.stepId) throw new Error('本次媒体成果尚未完成，完成后可验收。')
+    const relation = action.deliveryRelation
+    if (!relation || !['APPEND', 'RESET'].includes(relation.mode) || Object.keys(relation).length !== 3 ||
+      ![action.requestId, action.stepId].every(exactOutputId)) throw new Error('媒体交付意图不明确。')
+    const batch = catalog.filter(item => !item.messageSource && item.requestId === action.requestId && item.stepId === action.stepId)
+    if (!batch.length || batch.some(item => item.replaces || !exactOutputId(item.outputId) || !HASH.test(item.sha256) || assigned.has(outputItemKey(item)))) throw new Error('本次媒体清单尚未明确。')
+    for (const item of batch) { const key = outputItemKey(item); if (assigned.has(key)) throw new Error('交付来源重复。'); assigned.add(key) }
+    nodes.push({ ...action, items: batch })
+  }
+  if (assigned.size !== catalog.length) throw new Error('存在未关联本次交付的成果，请回到议事明确。')
+  const byId = new Map(); const children = new Map()
+  for (const node of nodes) {
+    if (!exactOutputId(node.outcomeId) || !/^sha256:[0-9a-f]{64}$/.test(node.finalDigest || '') || byId.has(node.outcomeId)) throw new Error('交付关联来源无效。')
+    byId.set(node.outcomeId, node)
+  }
+  const roots = nodes.filter(node => !node.deliveryRelation)
+  if (roots.length !== 1) throw new Error('本次交付范围尚不明确。')
+  for (const node of nodes.filter(node => node.deliveryRelation)) {
+    const relation = node.deliveryRelation; const parent = byId.get(relation.parentOutcomeId)
+    if (!parent || parent.finalDigest !== relation.parentFinalDigest || children.has(parent.outcomeId) ||
+      !['APPEND', 'REPLACE', 'RESET'].includes(relation.mode)) throw new Error('交付关联有歧义。')
+    children.set(parent.outcomeId, node)
+  }
+  let current = roots[0]; let retained = [current]; const visited = new Set([current.outcomeId])
+  while (children.has(current.outcomeId)) {
+    const next = children.get(current.outcomeId); const relation = next.deliveryRelation
+    if (visited.has(next.outcomeId)) throw new Error('交付关联有歧义。')
+    visited.add(next.outcomeId)
+    if (relation.mode === 'APPEND') retained.push(next)
+    else if (relation.mode === 'RESET') retained = [next]
+    else {
+      const target = relation.targetOutcomeId ?? current.outcomeId
+      const digest = relation.targetFinalDigest ?? current.finalDigest
+      if (Object.hasOwn(relation, 'targetOutcomeId') !== Object.hasOwn(relation, 'targetFinalDigest')) throw new Error('交付改稿对象不匹配。')
+      const index = retained.findIndex(node => node.outcomeId === target && node.finalDigest === digest)
+      if (index < 0) throw new Error('交付改稿对象已变化。')
+      retained[index] = next
+    }
+    current = next
+  }
+  if (visited.size !== nodes.length) throw new Error('交付关联不完整。')
+  return Object.freeze(retained.flatMap(node => node.items))
 }

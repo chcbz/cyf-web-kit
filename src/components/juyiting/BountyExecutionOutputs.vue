@@ -46,7 +46,7 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { createApi } from '../../composables/useHttp.js'
-import { exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, currentOutputDelivery, completedTextItem } from '../../composables/juyiting/bountyOutputCatalog.js'
+import { exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, currentOutputDelivery, completedTextItem, completedExecutionDelivery } from '../../composables/juyiting/bountyOutputCatalog.js'
 import { saveOutputBlob } from '../../utils/outputDownload.js'
 import { useHallConversationArchive } from '../../composables/juyiting/useHallConversationArchive.js'
 import { useHallBountyFinalization, safeFinalizationVersion } from '../../composables/juyiting/useHallBountyFinalization.js'
@@ -71,6 +71,7 @@ const catalogRequests = computed(() => Array.isArray(props.catalog) && props.cat
   ? props.catalog.map(entry => entry?.request).filter(Boolean)
   : (props.request ? [props.request] : []))
 const scopedSteps = computed(() => requestSnapshots.value.flatMap(request => scopedExecutionSteps(request, props.conversationId)))
+const executionDeliveries = ref([])
 const items = ref([]); const loading = ref(false); const error = ref('')
 const previewUrls = ref({}); const textPreviews = ref({}); const itemErrors = ref({})
 const expandedUrl = ref('')
@@ -87,7 +88,7 @@ const deliveryProjection = computed(() => {
     const list = frozen.map(source => items.value.find(item => outputItemKey(item) === outputItemKey(source) && item.sha256 === source.sha256))
     return list.every(Boolean) ? { items: list, message: '' } : { items: [], message: '正在读取本次验收冻结的原成果；不会换用新稿。' }
   }
-  try { return { items: currentOutputDelivery(items.value), message: '' } }
+  try { return { items: currentOutputDelivery(items.value, executionDeliveries.value), message: '' } }
   catch (cause) { return { items: [], message: cause.message } }
 })
 const displayItems = computed(() => deliveryProjection.value.items)
@@ -117,7 +118,7 @@ const cleanup = () => {
   epoch++; if (timer != null) clearTimeout(timer); timer = null; abort?.abort(); abort = null
   for (const controller of inFlight) controller.abort(); inFlight.clear()
   for (const url of Object.values(previewUrls.value)) URL.revokeObjectURL(url)
-  requestSnapshots.value = []; items.value = []; previewUrls.value = {}; textPreviews.value = {}
+  requestSnapshots.value = []; items.value = []; executionDeliveries.value = []; previewUrls.value = {}; textPreviews.value = {}
   archives.reset()
   itemErrors.value = {}
   expandedUrl.value = ''; loading.value = false; error.value = ''
@@ -137,7 +138,7 @@ const list = async () => {
     for (const id of ids) snapshots.push(await fetchRequest(id, controller))
     if (generation !== epoch || controller.signal.aborted) return
     requestSnapshots.value = snapshots
-    const catalog = []
+    const catalog = []; const deliveries = []
     if (props.acceptance && props.taskId) for (const request of snapshots) {
       for (const turn of request.turns || []) {
         if (turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state)) continue
@@ -146,6 +147,8 @@ const list = async () => {
         const text = await completedTextItem(response?.data?.data ?? response?.data, request, turn, props.taskId)
         if (controller.signal.aborted || generation !== epoch) return
         if (text) catalog.push(text)
+        const delivery = completedExecutionDelivery(response?.data?.data ?? response?.data, request, turn, snapshots, props.taskId)
+        if (delivery) deliveries.push(delivery)
       }
     }
     for (const step of scopedSteps.value) {
@@ -160,7 +163,7 @@ const list = async () => {
     if (generation !== epoch || controller.signal.aborted) return
     const current = new Map(catalog.map(item => [outputItemKey(item), item.sha256]))
     for (const previous of items.value) if (current.get(outputItemKey(previous)) !== previous.sha256 && previewUrls.value[outputItemKey(previous)]) URL.revokeObjectURL(previewUrls.value[outputItemKey(previous)])
-    items.value = catalog; error.value = ''
+    items.value = catalog; executionDeliveries.value = deliveries; error.value = ''
   } catch (cause) { if (!controller.signal.aborted && generation === epoch) error.value = cause?.message || '读取成果失败' }
   finally { if (generation === epoch) { abort = null; loading.value = false; if (validRootRequest() && !error.value) timer = setTimeout(list, 2500) } }
 }
