@@ -506,3 +506,59 @@ describe('actual mixed media basis natural discussion and frozen original recove
     } finally { second.lane.dispose() }
   })
 })
+
+describe('actual mixed individual media edit natural sources and frozen recovery', () => {
+  const group = JSON.parse(readFileSync(new URL('./fixtures/juyiting/mixed-media-edit-v3.json', import.meta.url), 'utf8'))
+  const context = { conversationId: '42', conversationGeneration: '1', taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' }
+  const values = [group.initial, group.mediaOne, group.mediaTwo, group.editOne, group.textEdit, group.editTwo]
+  const textRequest = raw => ({ requestId: raw.requestId, requestRevision: raw.requestRevision, conversationId: '42', conversationGeneration: '1',
+    state: 'COMPLETED', steps: [], turns: [{ turnId: raw.turnId, requestId: raw.requestId, requestRevision: raw.requestRevision,
+      conversationId: '42', conversationGeneration: '1', targetAgentId: 'agent', route: 'CHAT', state: 'FINAL_PERSISTED',
+      finalMessageId: raw.outcome.assistantMessageId, contextSnapshotId: raw.outcome.messageSource?.snapshotId || `${raw.requestId}-snapshot` }] })
+  const children = group.manifests.map(manifest => ({ requestId: manifest.requestId, requestRevision: '1', conversationId: '42', conversationGeneration: '1',
+    state: 'OUTPUT_COMMITTED', stateVersion: '2', turns: [], steps: [{ kind: 'EXECUTE', stepId: manifest.stepId, executionId: manifest.executionId,
+      state: 'OUTPUT_COMMITTED', executionState: 'OUTPUT_COMMITTED', taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' }] }))
+  const expected = group.targetsFinal.filter(target => target.outputSource).map(target => {
+    const source = target.outputSource; const i = group.manifests.findIndex(manifest => manifest.requestId === source.requestId)
+    return { kind: 'CURRENT_CONVERSATION_ASSET', fileId: null, version: null, purpose: null, assetId: `asset-${i}-${source.outputId}`, assetRevision: '1' }
+  })
+  const create = (storage, sources = values, missingAsset = false) => {
+    const catalog = [...sources.map(textRequest), ...children].map(request => ({ request })); const calls = []
+    const lane = useHallTypedDeliberation({ chatApi: { get: async path => {
+      calls.push(['GET', path])
+      const raw = sources.find(value => path.includes(`/requests/${value.requestId}/`))
+      if (raw) return { data: { data: raw } }
+      const index = group.manifests.findIndex(value => path === `/requests/${value.requestId}/steps/${value.stepId}/outputs`)
+      if (index < 0) throw new Error('unexpected lookup ' + path)
+      const manifest = group.manifests[index]
+      return { data: { data: manifest.outputs.map(output => { const url = `/chat${path}/${output.outputId}`
+        return { ...output, previewUrl: url, downloadUrl: `${url}?download=true`, assetRef: missingAsset ? null : { assetId: `asset-${index}-${output.outputId}`, revision: '1' } }
+      }) } }
+    }, create: async (path, body, options) => { calls.push(['POST', path, body, options.headers['Idempotency-Key']]); throw new Error('unknown ACK') } },
+    actorScopeKey: ref('owner-mixed-natural'), authorizationGeneration: ref(1), getContext: () => context, getContextGeneration: () => 1,
+    getCatalogEntries: () => catalog, storage, enabled: () => true })
+    return { lane, calls }
+  }
+  it('offers only the five still-retained exact media assets after two edits and a text revision', async () => {
+    const { lane, calls } = create(store())
+    try {
+      for (const raw of values) await lane.readOne(raw.requestId)
+      await lane.submit({ content: '继续修改，不合并历史草稿' })
+      expect(calls.at(-1)[2].sourceSelectors).to.deep.equal(expected)
+      expect(calls.at(-1)[2].parentOutcomeId).to.equal(group.editTwo.outcome.outcomeId)
+    } finally { lane.dispose() }
+  })
+  it('does GET-only recovery and freezes the same key/body/media refs despite remount and a later text outcome', async () => {
+    const storage = store(); const first = create(storage)
+    for (const raw of values) await first.lane.readOne(raw.requestId)
+    await first.lane.submit({ content: '修改较早文字' }); const posted = first.calls.at(-1); first.lane.dispose()
+    const second = create(storage, [...values, { ...group.textEdit, requestId: 'unrelated-late' }])
+    try {
+      for (const raw of [...values, { ...group.textEdit, requestId: 'unrelated-late' }]) await second.lane.readOne(raw.requestId)
+      const writes = () => second.calls.filter(call => call[0] === 'POST')
+      await second.lane.recover(); expect(writes()).to.have.length(0)
+      await second.lane.resumeUnknown(); expect(writes()).to.deep.equal([posted])
+      expect(writes()[0][2].sourceSelectors).to.deep.equal(expected)
+    } finally { second.lane.dispose() }
+  })
+})

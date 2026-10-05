@@ -126,3 +126,38 @@ describe('actual API completed media causal basis and retained mixed delivery', 
     expect(completedExecutionDelivery(root, request(root), turn(root), mixedChildren, 'task')).to.equal(null)
   })
 })
+
+const edits = JSON.parse(readFileSync(new URL('./fixtures/juyiting/mixed-media-edit-v3.json', import.meta.url), 'utf8'))
+const editChildren = edits.manifests.map(manifest => ({ requestId: manifest.requestId, requestRevision: '1', conversationId: '42',
+  conversationGeneration: '1', state: 'OUTPUT_COMMITTED', stateVersion: '2', turns: [], steps: [{ kind: 'EXECUTE', stepId: manifest.stepId,
+    executionId: manifest.executionId, state: 'OUTPUT_COMMITTED', executionState: 'OUTPUT_COMMITTED', taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' }] }))
+const editOutputs = edits.manifests.flatMap(manifest => manifest.outputs.map(output => ({ ...output, requestId: manifest.requestId, stepId: manifest.stepId })))
+const editActions = [edits.mediaOne, edits.mediaTwo, edits.editOne, edits.editTwo].map(raw => completedExecutionDelivery(raw, request(raw), turn(raw), editChildren, 'task'))
+const refs = items => items.filter(item => !item.messageSource).map(item => [item.requestId, item.stepId, item.outputId, item.sha256])
+const advertisedRefs = targets => targets.filter(target => target.outputSource).map(target => [target.outputSource.requestId, target.outputSource.stepId,
+  target.outputSource.outputId, target.outputSource.sha256])
+describe('actual API mixed individual media replacement lineage', () => {
+  it('replaces one exact media output, retains all sibling batches and text, then supports earlier text edit and a second media edit', async () => {
+    const original = await text(edits.initial); const updated = await text(edits.textEdit)
+    const beforeText = currentDeliveryProjection([original, ...editOutputs.slice(0, 5)], editActions.slice(0, 3))
+    expect(beforeText.items[0]).to.deep.equal(original)
+    expect(refs(beforeText.items)).to.deep.equal(advertisedRefs(edits.targetsAfterEdit))
+    const projection = currentDeliveryProjection([updated, ...editOutputs.slice().reverse(), original], editActions.slice().reverse())
+    expect(projection.items[0]).to.deep.equal(updated)
+    expect(refs(projection.items).sort()).to.deep.equal(advertisedRefs(edits.targetsFinal).sort())
+    expect(projection.basis).to.deep.equal({ outcomeId: edits.editTwo.outcome.outcomeId, finalDigest: edits.editTwo.outcome.finalDigest })
+    expect(projection.items).to.have.length(6)
+    expect(projection.items.some(item => item.requestId === edits.editOne.actionProgress.childRequestId)).to.equal(false)
+  })
+  it('rejects stale, unknown, same-batch, discarded and duplicate replacement targets without switching to history', async () => {
+    const original = await text(edits.initial); const changedIndex = editOutputs.findIndex(output => output.outputId === 'blue')
+    for (const patch of [{ sha256: 'e'.repeat(64) }, { requestId: 'foreign' }, { requestId: editOutputs[changedIndex].requestId }]) {
+      const outputs = clone(editOutputs.slice(0, 5)); Object.assign(outputs[changedIndex].replaces, patch)
+      expect(() => currentDeliveryProjection([original, ...outputs], editActions.slice(0, 3))).to.throw()
+    }
+    const duplicate = { ...editOutputs[changedIndex], outputId: 'duplicate' }
+    expect(() => currentDeliveryProjection([original, ...editOutputs.slice(0, 5), duplicate], editActions.slice(0, 3))).to.throw()
+    const reset = clone(editActions.slice(0, 3)); reset[1].deliveryRelation.mode = 'RESET'
+    expect(() => currentDeliveryProjection([original, ...editOutputs.slice(0, 5)], reset)).to.throw()
+  })
+})

@@ -246,7 +246,7 @@ function explicitExecutionDelivery (catalog, executionDeliveries) {
     if ((relation && (!['APPEND', 'RESET'].includes(relation.mode) || Object.keys(relation).length !== 3)) ||
       ![action.requestId, action.stepId].every(exactOutputId)) throw new Error('媒体交付意图不明确。')
     const batch = catalog.filter(item => !item.messageSource && item.requestId === action.requestId && item.stepId === action.stepId)
-    if (!batch.length || batch.some(item => item.replaces || !exactOutputId(item.outputId) || !HASH.test(item.sha256) || assigned.has(outputItemKey(item)))) throw new Error('本次媒体清单尚未明确。')
+    if (!batch.length || batch.some(item => (item.replaces != null && (!replacementValid(item.replaces) || item.replaces.requestId === action.requestId)) || !exactOutputId(item.outputId) || !HASH.test(item.sha256) || assigned.has(outputItemKey(item)))) throw new Error('本次媒体清单尚未明确。')
     for (const item of batch) { const key = outputItemKey(item); if (assigned.has(key)) throw new Error('交付来源重复。'); assigned.add(key) }
     nodes.push({ ...action, items: batch })
   }
@@ -264,14 +264,28 @@ function explicitExecutionDelivery (catalog, executionDeliveries) {
       !['APPEND', 'REPLACE', 'RESET'].includes(relation.mode)) throw new Error('交付关联有歧义。')
     children.set(parent.outcomeId, node)
   }
-  let current = roots[0]; let retained = [current]; const visited = new Set([current.outcomeId])
+  const parts = node => node.items.map(item => ({ ...node, items: [item] }))
+  let current = roots[0]
+  if (current.items.some(item => item.replaces)) throw new Error('本次媒体清单尚未明确。')
+  let retained = parts(current); const visited = new Set([current.outcomeId])
   while (children.has(current.outcomeId)) {
     const next = children.get(current.outcomeId); const relation = next.deliveryRelation
     if (visited.has(next.outcomeId)) throw new Error('交付关联有歧义。')
     visited.add(next.outcomeId)
-    if (relation.mode === 'APPEND') retained.push(next)
-    else if (relation.mode === 'RESET') retained = [next]
-    else {
+    if (['APPEND', 'RESET'].includes(relation.mode)) {
+      const replacements = new Map(); const additions = []
+      // Bind every edit to the preceding retained list, never another output from this same batch.
+      for (const part of parts(next)) {
+        const item = part.items[0]
+        if (!item.replaces) { additions.push(part); continue }
+        const index = retained.findIndex(node => !node.items[0].messageSource &&
+          outputItemKey(node.items[0]) === outputItemKey(item.replaces) && node.items[0].sha256 === item.replaces.sha256)
+        if (index < 0 || replacements.has(index)) throw new Error('本次媒体清单尚未明确，改稿对象已变化。')
+        replacements.set(index, part)
+      }
+      if (relation.mode === 'RESET') retained = parts(next)
+      else { for (const [index, part] of replacements) retained[index] = part; retained.push(...additions) }
+    } else {
       const target = relation.targetOutcomeId ?? current.outcomeId
       const digest = relation.targetFinalDigest ?? current.finalDigest
       if (Object.hasOwn(relation, 'targetOutcomeId') !== Object.hasOwn(relation, 'targetFinalDigest')) throw new Error('交付改稿对象不匹配。')
