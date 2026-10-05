@@ -169,6 +169,7 @@ export function textDeliveryProjection (texts) {
   for (const text of texts.filter(text => text.deliveryRelation)) {
     const relation = text.deliveryRelation; const parent = nodes.get(relation.parentOutcomeId)
     if (!parent || parent.messageSource.finalDigest !== relation.parentFinalDigest || !['APPEND', 'REPLACE', 'RESET'].includes(relation.mode) || children.has(parent.outcomeId)) throw new Error('文字改稿关联有歧义，请回到议事明确本次成果。')
+    if ((Object.hasOwn(relation, 'targetOutcomeId') || Object.hasOwn(relation, 'targetFinalDigest')) && relation.mode !== 'REPLACE') throw new Error('文字改稿对象不匹配。')
     children.set(parent.outcomeId, text)
   }
   let node = roots[0]; let result = [node]; const visited = new Set([node.outcomeId])
@@ -179,7 +180,12 @@ export function textDeliveryProjection (texts) {
     if (child.deliveryRelation.mode === 'APPEND') result.push(child)
     else if (child.deliveryRelation.mode === 'RESET') result = [child]
     else {
-      const index = result.findIndex(item => item.outcomeId === node.outcomeId)
+      const relation = child.deliveryRelation
+      const target = relation.targetOutcomeId ?? node.outcomeId
+      const targetDigest = relation.targetFinalDigest ?? node.messageSource.finalDigest
+      if ((Object.hasOwn(relation, 'targetOutcomeId') !== Object.hasOwn(relation, 'targetFinalDigest')) ||
+        (Object.hasOwn(relation, 'targetOutcomeId') && (!exactOutputId(target) || !/^sha256:[0-9a-f]{64}$/.test(targetDigest)))) throw new Error('文字改稿对象不匹配。')
+      const index = result.findIndex(item => item.outcomeId === target && item.messageSource.finalDigest === targetDigest)
       if (index < 0) throw new Error('文字改稿对象已变化。')
       result[index] = child
     }

@@ -405,3 +405,24 @@ describe('exact completed media sources for natural discussion', () => {
     }
   })
 })
+
+describe('retained earlier text causal admission recovery', () => {
+  it('advertises the terminal causal basis even when the replaced item is displayed earlier than the untouched append', async () => {
+    const group = JSON.parse(readFileSync(new URL('./fixtures/juyiting/retained-text-delivery-v3.json', import.meta.url), 'utf8'))
+    const values = [group.appended, group.question, group.updated, group.initial]; const calls = []
+    const lane = useHallTypedDeliberation({ chatApi: {
+      get: async path => ({ data: { data: values.find(value => path.includes(`/requests/${value.requestId}/`)) } }),
+      create: async (_path, body, options) => { calls.push({ body: structuredClone(body), key: options.headers['Idempotency-Key'] }); throw new Error('unknown ACK') }
+    }, actorScopeKey: ref('owner-retained'), authorizationGeneration: ref(1),
+    getContext: () => ({ conversationId: '42', conversationGeneration: '1', taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' }),
+    getContextGeneration: () => 1, getCatalogEntries: () => values.map(value => ({ request: { requestId: value.requestId, steps: [] } })), storage: store(), enabled: () => true })
+    try {
+      expect(await lane.refresh()).to.equal(true)
+      await lane.submit({ content: '继续修改第一段' })
+      expect(calls[0].body.parentOutcomeId).to.equal(group.updated.outcome.outcomeId)
+      expect(calls[0].body.parentOutcomeId).not.to.equal(group.appended.outcome.outcomeId)
+      expect(calls[0].body.expectedParentStateVersion).to.equal('0')
+      await lane.resumeUnknown(); expect(calls[1]).to.deep.equal(calls[0])
+    } finally { lane.dispose() }
+  })
+})

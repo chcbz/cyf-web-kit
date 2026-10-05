@@ -138,9 +138,12 @@ const actionOutcome = value => {
     if (value.kind !== 'ANSWER' || !exactKeys(source, ['turnId', 'messageId', 'snapshotId', 'finalDigest']) ||
       !typedId(source.turnId) || !typedId(source.snapshotId) || source.messageId !== value.assistantMessageId || source.finalDigest !== value.finalDigest) return null
   }
-  if (relation && (value.deliverable !== true || !exactKeys(value.deliveryRelation, ['mode', 'parentOutcomeId', 'parentFinalDigest']) ||
+  const targeted = relation && (own(value.deliveryRelation || {}, 'targetOutcomeId') || own(value.deliveryRelation || {}, 'targetFinalDigest'))
+  if (relation && (value.deliverable !== true || !exactKeys(value.deliveryRelation, ['mode', 'parentOutcomeId', 'parentFinalDigest', ...(targeted ? ['targetOutcomeId', 'targetFinalDigest'] : [])]) ||
     !['APPEND', 'REPLACE', 'RESET'].includes(value.deliveryRelation.mode) || !typedId(value.deliveryRelation.parentOutcomeId) ||
     !digest(value.deliveryRelation.parentFinalDigest) || value.deliveryRelation.parentOutcomeId === value.outcomeId)) return null
+  if (targeted && (value.deliveryRelation.mode !== 'REPLACE' || !typedId(value.deliveryRelation.targetOutcomeId) ||
+    !digest(value.deliveryRelation.targetFinalDigest) || value.deliveryRelation.targetOutcomeId === value.outcomeId)) return null
   if (value.kind === 'ANSWER' && value.clarification === null && value.action === null) return freeze(value)
   const c = value.clarification
   if (value.kind === 'CLARIFY' && value.action === null && exactKeys(c, clarificationFields) && typedId(c.pendingQuestionId) &&
