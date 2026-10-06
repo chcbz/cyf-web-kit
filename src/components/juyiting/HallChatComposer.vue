@@ -35,31 +35,33 @@
             @keydown="handleKeydown"
           ></textarea>
 
+          <div class="composer-actions">
+            <button
+              ref="moreButtonRef"
+              class="composer-more"
+              type="button"
+              title="更多操作"
+              aria-label="更多操作"
+              :aria-expanded="String(moreOpen)"
+              :aria-controls="moreId"
+              @click="moreOpen = !moreOpen"
+            >
+              <var-icon name="plus" />
+            </button>
+            <div ref="voiceActionRef" class="composer-inline-voice"></div>
+            <button
+              class="composer-send"
+              type="submit"
+              :disabled="!canSend"
+              :title="isStreaming || isAwaitingReply ? '处理中' : '发送'"
+              :aria-label="isStreaming || isAwaitingReply ? '处理中' : '发送'"
+            >
+              <var-icon :name="isStreaming || isAwaitingReply ? 'refresh' : 'chevron-right'" />
+            </button>
+          </div>
         </div>
         <p v-if="typedPendingQuestion" class="typed-pending-question">正在回答：{{ typedPendingQuestion.question }}</p>
-        <div class="composer-actions">
-          <button
-            ref="moreButtonRef"
-            class="composer-more"
-            type="button"
-            title="更多操作"
-            aria-label="更多操作"
-            :aria-expanded="String(moreOpen)"
-            :aria-controls="moreId"
-            @click="moreOpen = !moreOpen"
-          >
-            <var-icon name="plus" />
-          </button>
-          <button
-            class="composer-send"
-            type="submit"
-            :disabled="!canSend"
-            :title="isStreaming || isAwaitingReply ? '处理中' : '发送'"
-            :aria-label="isStreaming || isAwaitingReply ? '处理中' : '发送'"
-          >
-            <var-icon :name="isStreaming || isAwaitingReply ? 'refresh' : 'chevron-right'" />
-          </button>
-        </div>
+
       </div>
 
       <section
@@ -69,18 +71,18 @@
         aria-label="资料与语音"
       >
         <div v-show="moreOpen" class="composer-more-actions">
-          <slot name="actions"></slot>
           <button
             class="composer-add-materials"
             type="button"
             :disabled="inputLocked"
             @click="openMaterials"
           >添加资料</button>
-          <button type="button" :disabled="inputLocked" @click="openWorkspace">工作空间</button>
         </div>
         <div v-show="moreOpen"><slot name="materials"></slot></div>
         <HallVoiceControls
           class="composer-voice-controls"
+          :recording-target="voiceActionRef"
+          :settings-visible="moreOpen"
           :draft-only="true"
           :voice="voice"
           @apply="$emit('voice-apply', $event)"
@@ -146,6 +148,7 @@ const composerRef = ref(null)
 const moreButtonRef = ref(null)
 const moreOpen = ref(false)
 const moreId = `hall-composer-more-${useId()}`
+const voiceActionRef = ref(null)
 const textareaRef = ref(null)
 const closeMore = () => {
   if (!moreOpen.value) return
@@ -380,58 +383,39 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
 
 .composer-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
 }
 
 .composer-input-area {
   min-width: 0;
+  padding: 6px;
+  border: 1px solid #d7c3a2;
+  border-radius: 12px;
+  background: #fffdf6;
 }
 
-.composer-body.has-supported-voice:not(.has-voice-detail) .composer-input-area {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 8px;
-}
-
-.composer-body.has-supported-voice:not(.has-voice-detail) .composer-textarea {
-  grid-column: 1;
-  grid-row: 1;
-}
-
-.composer-body.has-supported-voice:not(.has-voice-detail) .composer-voice-controls {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-.composer-body.has-voice-detail .composer-input-area {
-  display: grid;
-  gap: 7px;
+.composer-input-area:focus-within {
+  border-color: #7f4a22;
+  box-shadow: 0 0 0 2px rgba(127, 74, 34, 0.12);
 }
 
 .composer-textarea {
+  display: block;
   box-sizing: border-box;
   width: 100%;
   min-height: 42px;
   max-height: 132px;
   min-width: 0;
   resize: none;
-  padding: 11px 12px;
-  border: 1px solid #d7c3a2;
-  border-radius: 8px;
-  background: #fffdf6;
+  padding: 8px 6px;
+  border: 0;
+  background: transparent;
   color: #3f2815;
   font: inherit;
   line-height: 1.45;
   outline: none;
   overflow-y: auto;
-}
-
-.composer-textarea:focus {
-  border-color: #7f4a22;
-  box-shadow: 0 0 0 2px rgba(127, 74, 34, 0.12);
 }
 
 .typed-pending-question { grid-column: 1 / -1; margin: 0 0 4px; color: #466c5a; font-size: 12px; }
@@ -440,12 +424,42 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
 
 .composer-actions {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   gap: 6px;
 }
 
-.composer-body.has-voice-detail .composer-actions {
-  align-self: start;
+.composer-inline-voice {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.composer-inline-voice :deep(button) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 42px;
+  padding: 6px 8px;
+  border: 1px solid #d7c3a2;
+  border-radius: 8px;
+  background: #fffdf6;
+  color: #654122;
+  font: inherit;
+  cursor: pointer;
+}
+
+.composer-inline-voice :deep(button:disabled) {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.composer-inline-voice :deep(.is-recording) {
+  background: #8d2d22;
+  color: #fff;
+}
+
+.composer-inline-voice :deep(.voice-action-label) {
+  display: inline;
 }
 
 .composer-more,
@@ -485,6 +499,47 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
 .composer-send:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+.composer-more-panel {
+  position: absolute;
+  right: 12px;
+  bottom: calc(100% - 4px);
+  left: 12px;
+  z-index: 3;
+  display: grid;
+  gap: 8px;
+  max-height: min(50vh, 320px);
+  overflow-y: auto;
+  padding: 10px;
+  border: 1px solid #d7c3a2;
+  border-radius: 10px;
+  background: #fffdf6;
+  box-shadow: 0 10px 24px rgba(54, 35, 18, 0.18);
+}
+
+.composer-more-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.composer-add-materials {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid #d7c3a2;
+  border-radius: 7px;
+  background: #fffdf6;
+  color: #654122;
+  font: inherit;
+  cursor: pointer;
+}
+
+.composer-voice-controls :deep(.voice-settings) {
+  position: static;
+  width: 100%;
+  box-sizing: border-box;
+  box-shadow: none;
 }
 
 .composer-mention-menu {

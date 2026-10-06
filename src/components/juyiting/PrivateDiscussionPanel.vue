@@ -1,12 +1,5 @@
 <template>
   <section class="private-discussion-panel discussion-panel">
-    <div class="discussion-brief">
-      <var-icon name="account-circle" />
-      <div>
-        <strong>密议</strong>
-        <small>{{ privateSubtitle }}</small>
-      </div>
-    </div>
     <ChatPanel
       v-model:draft="draftProxy"
       discussion-variant="private"
@@ -136,33 +129,4 @@ const chatProps = computed(() => ({
   background: #fffaf0;
 }
 
-.discussion-brief {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 10px;
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(124, 31, 27, 0.14);
-  background: #f7ecd7;
-  color: #3f2815;
-}
-
-.discussion-brief :deep(.var-icon) {
-  align-self: center;
-  color: #7c1f1b;
-  font-size: 24px;
-}
-
-.discussion-brief strong,
-.discussion-brief small {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.discussion-brief small {
-  margin-top: 3px;
-  color: #765f40;
-  font-size: 12px;
-}
 </style>

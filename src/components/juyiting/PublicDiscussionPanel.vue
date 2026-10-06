@@ -1,12 +1,5 @@
 <template>
   <section class="public-discussion-panel discussion-panel">
-    <div class="discussion-brief">
-      <var-icon name="message-text-outline" />
-      <div>
-        <strong>厅前公议</strong>
-        <small>厅前面向众好汉，未点名时由宋江分拨。</small>
-      </div>
-    </div>
     <ChatPanel
       v-model:draft="draftProxy"
       discussion-variant="public"
@@ -130,33 +123,4 @@ const chatProps = computed(() => ({
   background: #fffaf0;
 }
 
-.discussion-brief {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 10px;
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(116, 75, 35, 0.12);
-  background: #f5ead6;
-  color: #3f2815;
-}
-
-.discussion-brief :deep(.var-icon) {
-  align-self: center;
-  color: #7f4a22;
-  font-size: 24px;
-}
-
-.discussion-brief strong,
-.discussion-brief small {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.discussion-brief small {
-  margin-top: 3px;
-  color: #765f40;
-  font-size: 12px;
-}
 </style>

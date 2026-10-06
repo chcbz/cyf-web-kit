@@ -8,6 +8,37 @@
       </div>
       <div class="toolbar-actions">
         <button
+          class="icon-button"
+          type="button"
+          title="重取回话"
+          aria-label="重取回话"
+          :disabled="conversationBusy || voice?.voiceInteractionLocked"
+          @click="$emit('load-messages')"
+        >
+          <var-icon name="refresh" />
+        </button>
+        <button
+          class="icon-button"
+          type="button"
+          title="话头记录"
+          aria-label="话头记录"
+          :aria-expanded="historyOpen ? 'true' : 'false'"
+          :disabled="Boolean(conversationHistoryDeletingId) || voice?.voiceInteractionLocked"
+          @click="toggleHistory"
+        >
+          <var-icon name="history" />
+        </button>
+        <button
+          class="icon-button primary"
+          type="button"
+          title="另起话头"
+          aria-label="另起话头"
+          :disabled="conversationBusy || voice?.voiceInteractionLocked"
+          @click="$emit('new-conversation')"
+        >
+          <var-icon name="plus" />
+        </button>
+        <button
           v-if="durableCancelTarget"
           class="icon-button"
           type="button"
@@ -122,39 +153,6 @@
       @open-materials="toggleMaterialPicker"
       @open-workspace="$emit('open-workspace')"
     >
-      <template #actions>
-        <button
-          class="icon-button"
-          type="button"
-          title="重取回话"
-          aria-label="重取回话"
-          :disabled="conversationBusy || voice?.voiceInteractionLocked"
-          @click="$emit('load-messages')"
-        >
-          <var-icon name="refresh" />
-        </button>
-        <button
-          class="icon-button"
-          type="button"
-          title="话头记录"
-          aria-label="话头记录"
-          :aria-expanded="historyOpen ? 'true' : 'false'"
-          :disabled="Boolean(conversationHistoryDeletingId) || voice?.voiceInteractionLocked"
-          @click="toggleHistory"
-        >
-          <var-icon name="history" />
-        </button>
-        <button
-          class="icon-button primary"
-          type="button"
-          title="另起话头"
-          aria-label="另起话头"
-          :disabled="conversationBusy || voice?.voiceInteractionLocked"
-          @click="$emit('new-conversation')"
-        >
-          <var-icon name="plus" />
-        </button>
-      </template>
       <template #materials>
         <section v-if="materialPickerOpen" class="material-reference-picker" aria-label="引用议事资料">
           <div class="material-reference-heading">

@@ -1,12 +1,5 @@
 <template>
   <section class="bounty-discussion-panel discussion-panel">
-    <div class="discussion-brief">
-      <var-icon name="format-list-checkbox" />
-      <div>
-        <strong>榜文议事</strong>
-        <small>{{ bountySubtitle }}</small>
-      </div>
-    </div>
     <BountyDeliberationStatus :presentation="v2Presentation" />
     <BountyExecutionTermination
       :enabled="deliberationV2Enabled"
@@ -197,35 +190,6 @@ const chatProps = computed(() => ({
   background: #fffaf0;
 }
 
-.discussion-brief {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 10px;
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(35, 72, 62, 0.16);
-  background: #e8f2ed;
-  color: #213d34;
-}
-
-.discussion-brief :deep(.var-icon) {
-  align-self: center;
-  color: #23483e;
-  font-size: 24px;
-}
-
-.discussion-brief strong,
-.discussion-brief small {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.discussion-brief small {
-  margin-top: 3px;
-  color: #4f6c61;
-  font-size: 12px;
-}
 </style>
 
 <style scoped>

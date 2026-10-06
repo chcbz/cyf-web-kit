@@ -28,6 +28,17 @@ describe('Juyi Hall simple composer more menu', () => {
       } finally { wrapper.unmount() }
     }
   })
+  it('groups the textarea, plus, voice target and send inside one input frame', () => {
+    const wrapper = create()
+    try {
+      const frame = wrapper.get('.composer-input-area')
+      expect(frame.find('textarea').exists()).to.equal(true)
+      expect(frame.find('.composer-more').exists()).to.equal(true)
+      expect(frame.find('.composer-inline-voice').exists()).to.equal(true)
+      expect(frame.find('.composer-send').exists()).to.equal(true)
+      expect(wrapper.text()).not.to.contain('工作空间')
+    } finally { wrapper.unmount() }
+  })
   it('starts closed and opens materials without changing or submitting the draft', async () => {
     const wrapper = create()
     try {

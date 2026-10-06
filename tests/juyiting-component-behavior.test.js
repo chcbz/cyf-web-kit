@@ -1977,6 +1977,38 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.find('[aria-label="本条消息资料"]').exists()).to.equal(false)
   })
 
+  it('keeps conversation actions in the upper toolbar and preserves their events', async () => {
+    const wrapper = mount(ChatPanel, { global: { stubs }, props: {
+      mentionLabel: agent => agent.name, senderText: message => message.sender
+    } })
+    try {
+      const toolbar = wrapper.get('.panel-toolbar')
+      await toolbar.get('[aria-label="重取回话"]').trigger('click')
+      expect(wrapper.emitted('load-messages')).to.have.length(1)
+      await toolbar.get('[aria-label="另起话头"]').trigger('click')
+      expect(wrapper.emitted('new-conversation')).to.have.length(1)
+      await toolbar.get('[aria-label="话头记录"]').trigger('click')
+      expect(toolbar.get('[aria-label="话头记录"]').attributes('aria-expanded')).to.equal('true')
+      expect(wrapper.get('.hall-chat-composer').find('[aria-label="重取回话"]').exists()).to.equal(false)
+      await wrapper.setProps({ conversationBusy: true })
+      expect(toolbar.get('[aria-label="重取回话"]').attributes('disabled')).to.equal('')
+      expect(toolbar.get('[aria-label="另起话头"]').attributes('disabled')).to.equal('')
+    } finally { wrapper.unmount() }
+  })
+
+  it('removes only the redundant discussion brief, retaining task controls', () => {
+    for (const name of ['PublicDiscussionPanel', 'PrivateDiscussionPanel', 'BountyDiscussionPanel']) {
+      const source = readFileSync(new URL(`../src/components/juyiting/${name}.vue`, import.meta.url), 'utf8')
+      expect(source).not.to.contain('discussion-brief')
+      expect(source).to.contain('<ChatPanel')
+      if (name === 'BountyDiscussionPanel') {
+        expect(source).to.contain('<BountyDeliberationStatus')
+        expect(source).to.contain('<BountyExecutionTermination')
+        expect(source).to.contain('@click="$emit(\'typed-resume\')"')
+      }
+    }
+  })
+
   it('keeps persistent command templates out of ChatPanel', async () => {
     const wrapper = mount(ChatPanel, {
       global: { stubs },
