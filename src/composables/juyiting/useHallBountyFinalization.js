@@ -52,8 +52,16 @@ const stages = new Set(['PROMOTING', 'READY_TO_SUBMIT', 'SUBMITTED', 'ACCEPTING'
 const receiptFields = ['operationId', 'taskId', 'conversationId', 'state', 'stateVersion', 'stage',
   'expectedTaskVersion', 'expectedAssignmentRevision', 'selectedOutputs', 'deliveryId', 'deliveryState',
   'taskState', 'taskVersion', 'errorCode', 'retryable']
+// Receipt serialization can retain the DTO's nullable step/output slots for text.
+// Validate them as null, never turn them into source IDs or relax the request union.
+const validReceiptSelection = item => {
+  if (validSelection(item)) return true
+  if (!exactKeys(item, [...textSelectionFields, 'stepId', 'outputId']) || item.stepId !== null || item.outputId !== null) return false
+  const { stepId, outputId, ...selected } = item
+  return validSelection(selected)
+}
 const selectionMatches = (actual, expected) => Array.isArray(actual) && actual.length === expected.length && actual.every((item, i) =>
-  validSelection(item) && validSelection(expected[i]) &&
+  validReceiptSelection(item) && validSelection(expected[i]) &&
     ((item.messageSource && expected[i].messageSource &&
       textSelectionFields.filter(field => field !== 'messageSource').every(field => item[field] === expected[i][field]) &&
       messageFields.every(field => item.messageSource[field] === expected[i].messageSource[field])) ||
