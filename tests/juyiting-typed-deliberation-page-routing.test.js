@@ -28,7 +28,7 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
   it('routes the one bounty composer through typed DISCUSSION only when the strict default-off flag is enabled', async () => {
     const enabled = ref(true); const draft = ref('画一只鸟'); const calls = []; const typed = { error: ref(''), submit: async body => { calls.push(['typed', body]); return true } }
     const send = async () => { calls.push(['legacy']); return true }
-    const actual = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled', 'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', `return (${handler('handleSendHallMessage')})`)({ close: () => {} }, { cancel: () => {} }, () => {}, enabled, typed, draft, value => calls.push(['draft', value]), () => {}, send)
+    const actual = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled', 'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', 'typedAssignmentRevision', `return (${handler('handleSendHallMessage')})`)({ close: () => {} }, { cancel: () => {} }, () => {}, enabled, typed, draft, value => calls.push(['draft', value]), () => {}, send, () => '4')
     expect(await actual()).to.equal(true)
     expect(calls).to.deep.equal([['typed', { content: '画一只鸟', sourceSelectors: [] }], ['draft', '']])
     enabled.value = false
@@ -37,6 +37,23 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
     enabled.value = true
     await actual({ sourceSelectors: [{ kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'file-1', version: '7', purpose: 'REFERENCE', assetId: null, assetRevision: null }] })
     expect(calls.at(-2)).to.deep.equal(['typed', { content: '画一只鸟', sourceSelectors: [{ kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'file-1', version: '7', purpose: 'REFERENCE', assetId: null, assetRevision: null }] }])
+  })
+  it('read-only recovers the original binding and fences identity changes before sending', async () => {
+    for (const switchIdentity of [false, true]) {
+      const calls = []; const identity = ref('owner-a'); const draft = ref('追加文字')
+      const task = ref({ id: '423' }); let revision = ''
+      const actual = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled',
+        'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', 'typedAssignmentRevision',
+        'conversationTask', 'hallIdentityScope', 'apiStore', 'conversationId', 'bountyInteractionTargetId',
+        'chatContext', 'checkPointAndStartOriginal', `return (${handler('handleSendHallMessage')})`)(
+        { close() {} }, { cancel() {} }, () => {}, ref(true),
+        { error: ref(''), submit: async () => { calls.push('POST'); return true } }, draft,
+        () => {}, () => {}, () => { throw new Error('legacy lane forbidden') }, () => revision,
+        task, identity, { authorizationGeneration: 1 }, ref('7'), () => 'agent-a', ref({}),
+        async () => { calls.push('GET-original'); revision = '1'; if (switchIdentity) identity.value = 'owner-b' })
+      expect(await actual()).to.equal(!switchIdentity)
+      expect(calls).to.deep.equal(switchIdentity ? ['GET-original'] : ['GET-original', 'POST'])
+    }
   })
   it('does not expose a proposal-confirmation or image-preview branch on normal requests', () => {
     expect(() => option('useHallTypedDeliberation', 'onProposal')).to.throw('missing useHallTypedDeliberation.onProposal')

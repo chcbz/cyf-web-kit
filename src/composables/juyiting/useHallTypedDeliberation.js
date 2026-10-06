@@ -210,7 +210,10 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     if (busy.value || !enabled?.()) return false
     const captured = capture(); const context = captured.context
     if (!current(captured) || !typedId(context.conversationId) || !typedId(context.taskId) || !typedId(context.targetAgentId) ||
-      !typedLong(context.assignmentRevision, { allowZero: true })) return false
+      !typedLong(context.assignmentRevision, { allowZero: true })) {
+      if (current(captured)) error.value = '当前指派上下文尚未核对，请核对原点将后重试；未发送消息。'
+      return false
+    }
     const pending = selectedPending.value
     const purpose = inspection ? 'INSPECT' : 'CHAT'
     if (purpose === 'INSPECT' && !pending && (!Array.isArray(sourceSelectors) || sourceSelectors.length === 0)) {

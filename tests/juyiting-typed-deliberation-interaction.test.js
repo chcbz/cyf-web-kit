@@ -17,6 +17,17 @@ const restoreCrypto = () => {
 describe('typed natural discussion interaction adapter', () => {
   beforeEach(() => { Object.defineProperty(globalThis, 'crypto', { configurable: true, writable: true, value: { randomUUID: () => '00000000-0000-4000-8000-000000000001' } }) })
   afterEach(restoreCrypto)
+  it('reports a missing current assignment context instead of silently dropping the draft', async () => {
+    const calls = []
+    const lane = useHallTypedDeliberation({ chatApi: { create: async () => calls.push('POST') },
+      actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => ({
+        conversationId: '7', taskId: '423', targetAgentId: 'agent-a', assignmentRevision: ''
+      }), getContextGeneration: () => 1, getCatalogEntries: () => [], storage: store(), enabled: () => true })
+    expect(await lane.submit({ content: '追加文字' })).to.equal(false)
+    expect(calls).to.deep.equal([])
+    expect(lane.error.value).to.include('未发送消息')
+    lane.dispose()
+  })
   it('posts exact DISCUSSION then only reads the typed projection; selected OPEN reply posts a new CHAT CAS body', async () => {
     const calls = []; const context = ref({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' })
     const api = { create: async (path, body, options) => { calls.push(['POST', path, body, options.headers['Idempotency-Key']]); return { data: { data: receipt(body.intent, body.intent === 'DISCUSSION' ? 'request-1' : 'request-2', body.pendingQuestionId) } } },

@@ -755,6 +755,7 @@ import { useHallSound } from '@/composables/juyiting/useHallSound'
 import { useHallTaskActions } from '@/composables/juyiting/useHallTaskActions'
 import { useHallRequirementCreate } from '@/composables/juyiting/useHallRequirementCreate'
 import { useHallPointAndStart } from '@/composables/juyiting/useHallPointAndStart'
+import { currentBountyAssignmentRevision } from '@/composables/juyiting/hallBountyAssignmentContext'
 import { createPointAndStartIntentStore } from '@/composables/juyiting/hallPointAndStartIntent'
 import { pointAndStartRecoveryLane } from '@/composables/juyiting/hallPointAndStartRecoveryLane'
 import { useHallPointAndStartControlledBridge } from '@/composables/juyiting/useHallPointAndStartControlledBridge'
@@ -2170,7 +2171,7 @@ let typedDeliberation = null
 const bountyRequestCatalog = useHallBountyRequestCatalog({
   chatApi, identityScope: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
   getContext: () => ({ conversationId: conversationId.value, taskId: conversationTask.value?.id || '',
-    targetAgentId: bountyInteractionTargetId(chatContext.value), assignmentRevision: activeRequest.value?.steps?.find(step => step.targetAgentId === bountyInteractionTargetId(chatContext.value))?.assignmentRevision || '' }),
+    targetAgentId: bountyInteractionTargetId(chatContext.value), assignmentRevision: typedAssignmentRevision() }),
   getContextGeneration: () => followupContextGeneration.value, enabled: () => multimediaDeliberationUiEnabled && chatMode.value === 'bounty'
 })
 notifyBountyRequestCatalog = () => {
@@ -2178,7 +2179,10 @@ notifyBountyRequestCatalog = () => {
   typedDeliberation?.refresh?.()
 }
 const invalidateFollowupContext = () => { followupContextGeneration.value++; typedDeliberation?.invalidate?.() }
-const typedAssignmentRevision = () => typedLong(conversationTask.value?.assignmentRevision, { allowZero: true })
+const typedAssignmentRevision = () => currentBountyAssignmentRevision({
+  task: conversationTask.value, targetAgentId: bountyInteractionTargetId(chatContext.value),
+  conversationId: conversationId.value, state: pointAndStartState.value
+})
 const typedConversationGeneration = () => typedLong(activeRequest.value?.conversationGeneration) ||
   typedLong(bountyRequestCatalog.entries.value?.[0]?.request?.conversationGeneration) || ''
 const typedDeliberationContext = () => ({ conversationId: conversationId.value, taskId: conversationTask.value?.id || '',
@@ -2564,6 +2568,14 @@ const handleSendHallMessage = async (typedInput = {}) => {
   playSend()
   if (typedDeliberationEnabled.value) {
     const sourceSelectors = Array.isArray(typedInput?.sourceSelectors) ? typedInput.sourceSelectors : []
+    if (!typedAssignmentRevision() && conversationTask.value?.id) {
+      const fence = [hallIdentityScope.value, apiStore.authorizationGeneration, conversationTask.value.id,
+        conversationId.value, bountyInteractionTargetId(chatContext.value), draft.value]
+      await checkPointAndStartOriginal(conversationTask.value)
+      const current = [hallIdentityScope.value, apiStore.authorizationGeneration, conversationTask.value?.id,
+        conversationId.value, bountyInteractionTargetId(chatContext.value), draft.value]
+      if (fence.some((value, index) => value !== current[index])) return false
+    }
     const accepted = await typedDeliberation.submit({ content: draft.value, sourceSelectors })
     if (accepted) setDraft('')
     else if (typedDeliberation.error.value) showToast(typedDeliberation.error.value)
