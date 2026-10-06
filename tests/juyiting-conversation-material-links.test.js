@@ -9,8 +9,10 @@ const workspaceSource = readFileSync(new URL('../src/components/workspace/Person
 describe('Juyi Hall conversation material references', () => {
   it('shows task-scoped fixed versions from the real task directory without turning them into chat text', () => {
     assert.match(source, /@open-workspace="\$emit\('open-workspace'\)"/)
-    assert.match(composerSource, /@click="openWorkspace">工作空间<\/button>/)
-    assert.match(composerSource, /const openWorkspace = \(\) => \{ closeMore\(\); emit\('open-workspace'\) \}/)
+    assert.match(composerSource, /class="composer-add-materials"[\s\S]*?@click="openMaterials"[\s\S]*?>添加资料<\/button>/)
+    assert.doesNotMatch(composerSource, /@click="openWorkspace">工作空间<\/button>/)
+    assert.match(source, /@click="\$emit\('open-workspace'\)">去百宝箱添加<\/button>/)
+    assert.match(composerSource, /const openMaterials = \(\) => \{ emit\('open-materials'\) \}/)
     assert.match(source, /\$emit\('open-workspace'\)/)
     assert.match(source, /usePersonalWorkspaceConversationLinks/)
     assert.match(source, /usePersonalWorkspaceTaskLinks/)
