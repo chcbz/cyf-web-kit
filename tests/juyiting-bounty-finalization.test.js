@@ -312,3 +312,50 @@ describe('MMD completed-message finalization wire and recovery', () => {
     } finally { client.dispose() }
   })
 })
+
+
+describe('real API text receipt nullable DTO source slots', () => {
+  const dtoReceipt = original => completed({ selectedOutputs: original.selectedOutputs.map(item => item.messageSource
+    ? { ...item, stepId: null, outputId: null } : item) }, original)
+  it('recognizes completed pure text and mixed receipts without changing frozen request sources', async () => {
+    for (const mixed of [false, true]) {
+      const original = textBody(mixed)
+      const { client, calls } = setup(() => ({ data: dtoReceipt(original) }))
+      try {
+        await client.submit({ taskId: 'task-1', body: original })
+        expect(client.status.value.state).to.equal('completed')
+        expect(client.status.value.receipt.selectedOutputs).to.deep.equal(original.selectedOutputs)
+        expect(calls[0].data).to.deep.equal(original)
+        expect(calls).to.have.length(1)
+      } finally { client.dispose() }
+    }
+  })
+  it('keeps original unknown intent and resolves completion via GET only', async () => {
+    const original = textBody(true)
+    const { client, calls } = setup((request, count) => {
+      if (count === 1) throw new TypeError('lost acknowledgement')
+      expect(request.method).to.equal('GET')
+      return { data: dtoReceipt(original) }
+    })
+    try {
+      await client.submit({ taskId: 'task-1', body: original })
+      const key = client.status.value.intent.idempotencyKey
+      await client.check()
+      expect(client.status.value.state).to.equal('completed')
+      expect(client.status.value.intent.idempotencyKey).to.equal(key)
+      expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET'])
+    } finally { client.dispose() }
+  })
+  it('rejects invented IDs, partial null slots, extra fields, changed digests and reordered selection', () => {
+    const original = textBody(true); const command = { ...intent(), body: original }
+    expect(validFinalizationReceipt(dtoReceipt(original), command)).to.equal(true)
+    for (const patch of [{ stepId: 'invented' }, { outputId: 'invented' }, { unexpected: null }, { sha256: 'f'.repeat(64) }]) {
+      const changed = dtoReceipt(original); changed.selectedOutputs[1] = { ...changed.selectedOutputs[1], ...patch }
+      expect(validFinalizationReceipt(changed, command)).to.equal(false)
+    }
+    const partial = dtoReceipt(original); delete partial.selectedOutputs[1].outputId
+    expect(validFinalizationReceipt(partial, command)).to.equal(false)
+    const reordered = dtoReceipt(original); reordered.selectedOutputs.reverse()
+    expect(validFinalizationReceipt(reordered, command)).to.equal(false)
+  })
+})
