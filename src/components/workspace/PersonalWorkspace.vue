@@ -397,6 +397,8 @@ onMounted(() => {
 onBeforeUnmount(() => { workspace.dispose(); execution.dispose() })
 </script>
 
+<style scoped src="../juyiting/hall-view-tabs.css"></style>
+
 <style scoped>
 /* In Hall this is content of the one work window, not an app behind stacked cards. */
 .is-hall-treasure .modal-stage {

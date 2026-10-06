@@ -146,6 +146,8 @@ watch([() => props.enabled, () => props.identityScope, () => props.identityEpoch
 watch(() => [props.identityScope, props.identityEpoch], () => { quickRequest.value = ''; selectedMaterials.value = [] }, { flush: 'sync' })
 </script>
 
+<style scoped src="./hall-view-tabs.css"></style>
+
 <style scoped>
 .quick-material-preview { max-height: 300px; overflow: auto; min-width: 0; }
 .quick-material-preview img, .quick-material-preview audio { max-width: 100%; }
