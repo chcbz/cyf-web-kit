@@ -19,9 +19,9 @@ const handler = name => {
 describe('ordinary JuyiHall request routing', () => {
   it('sends drawing, editing and other requests through the same discussion handler', async () => {
     const draft = ref(''); const calls = []
-    const send = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled', 'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', `return (${handler('handleSendHallMessage')})`)(
+    const send = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled', 'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', 'typedAssignmentRevision', `return (${handler('handleSendHallMessage')})`)(
       { close: () => {} }, { cancel: () => {} }, () => {}, ref(true),
-      { submit: async payload => { calls.push(payload); return true }, error: ref('') }, draft, value => { draft.value = value }, () => {}, () => { throw new Error('unexpected legacy send') })
+      { submit: async payload => { calls.push(payload); return true }, error: ref('') }, draft, value => { draft.value = value }, () => {}, () => { throw new Error('unexpected legacy send') }, () => '1')
     const source = { kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'f', version: '1', purpose: 'INPUT', assetId: null, assetRevision: null }
     for (const content of ['画一只鸟', '把上一张改成蓝色', '整理这份文档']) {
       draft.value = content
