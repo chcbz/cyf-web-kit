@@ -25,7 +25,7 @@ const statusForProjection = projection => !projection ? 'UNKNOWN' : !projection.
  * original slot; new requests never negotiate a drawing lane or paid authority. */
 export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
   canAssign = () => false, createIdempotencyKey = () => globalThis.crypto.randomUUID(),
-  getContextGeneration = () => 0, onAdmitted = async () => false }) => {
+  getContextGeneration = () => 0, onAssignmentConfirmed = async () => {}, onAdmitted = async () => false }) => {
   const scope = computed(() => unref(typeof actorScopeKey === 'function' ? actorScopeKey() : actorScopeKey))
   const state = ref(initialState())
   const busy = ref(false)
@@ -33,11 +33,12 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
   let disposed = false
   let observationTimer = null
   let observationTaskId = null
+  const confirmedAssignments = new Set()
   const contextGeneration = computed(() => getContextGeneration())
   const stopObservation = () => { if (observationTimer !== null) clearTimeout(observationTimer); observationTimer = null; observationTaskId = null }
   const current = (captured, epoch, contextEpoch) => !disposed && scope.value === captured && generation === epoch &&
     contextGeneration.value === contextEpoch
-  const stopWatch = watch([scope, contextGeneration], () => { generation++; stopObservation(); state.value = initialState(); busy.value = false }, { flush: 'sync' })
+  const stopWatch = watch([scope, contextGeneration], () => { generation++; confirmedAssignments.clear(); stopObservation(); state.value = initialState(); busy.value = false }, { flush: 'sync' })
   const store = (captured, taskId) => createPointAndStartIntentStore({ storage, scope: captured, taskId })
   const readIntent = (captured, taskId) => {
     const read = store(captured, taskId).read()
@@ -58,6 +59,16 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
     if (!projection) throw new Error('原点将投影不匹配或版本回退；未再次办理')
     intent = persist(captured, { ...intent, projection })
     state.value = { status: statusForProjection(projection), intent, projection, error: null }
+    if (projection.currentAssignment && projection.bootstrapState !== 'ADMITTED') {
+      const assignmentKey = `${projection.taskId}:${projection.assignmentRevision}:${projection.targetAgentId}`
+      if (!confirmedAssignments.has(assignmentKey)) {
+        confirmedAssignments.add(assignmentKey)
+        onAssignmentConfirmed({ taskId: projection.taskId, assignmentRevision: projection.assignmentRevision,
+          targetAgentId: projection.targetAgentId, bootstrapState: projection.bootstrapState,
+          isCurrent: () => current(captured, epoch, contextEpoch) })
+        if (!current(captured, epoch, contextEpoch)) return null
+      }
+    }
     if (!projection.currentAssignment || projection.bootstrapState !== 'ADMITTED') return intent
     const task = await get(`/tasks/${encodeURIComponent(intent.taskId)}`)
     if (!current(captured, epoch, contextEpoch)) return null

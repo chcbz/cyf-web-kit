@@ -29,6 +29,7 @@ const harness = (overrides = {}) => {
   const calls = []
   let sent = false
   const admitted = []
+  const confirmed = []
   const api = {
     get: async (path, query, opts) => {
       calls.push(['get', path, opts?.headers?.['Idempotency-Key']])
@@ -48,9 +49,9 @@ const harness = (overrides = {}) => {
   }
   const flow = useHallPointAndStart({ agentApi: api, actorScopeKey: scope, storage: memory,
     canAssign: current => current.status === 'open',
-    createIdempotencyKey: () => 'original-key', onAdmitted: async value => { admitted.push(value); return true }, ...overrides.options })
+    createIdempotencyKey: () => 'original-key', onAssignmentConfirmed: async value => { confirmed.push(value) }, onAdmitted: async value => { admitted.push(value); return true }, ...overrides.options })
   instances.push(flow)
-  return { flow, calls, memory, scope, admitted, seed: value => createPointAndStartIntentStore({ storage: memory,
+  return { flow, calls, memory, scope, admitted, confirmed, seed: value => createPointAndStartIntentStore({ storage: memory,
     scope: scope.value, taskId: 'task-1' }).write(value || record()) }
 }
 const pause = () => new Promise(resolve => setImmediate(resolve))
@@ -205,7 +206,10 @@ describe('persisted exact point-and-start source contract', () => {
     const value = { ...projection(), bootstrapState: 'PENDING', stateVersion: '0', conversationId: null, initialRequestId: null }
     const h = harness({ api: { get: async () => ({ data: value }) } }); h.seed()
     expect(await h.flow.resumeOriginal('task-1')).to.equal(true)
+    expect(await h.flow.checkOriginal('task-1')).to.equal(true)
     expect(h.flow.state.value.status).to.equal('PREPARING')
+    expect(h.confirmed).to.have.length(1)
+    expect(h.confirmed[0]).to.include({ taskId: 'task-1', assignmentRevision: '7', targetAgentId: 'agent-1', bootstrapState: 'PENDING' })
     expect(h.admitted).to.have.length(0)
     expect(h.calls.filter(c => c[0] === 'post')).to.have.length(0)
   })

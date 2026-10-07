@@ -2280,6 +2280,9 @@ const {
     const current = operableRosterAgents.value.find(item => item?.agentId === agent?.agentId)
     return Boolean(current && canAssign(task, current))
   },
+  onAssignmentConfirmed: ({ isCurrent }) => {
+    if (isCurrent?.() && !panelDisposed) hallReadRevision.value += 1
+  },
   onAdmitted: attachAdmittedPointAndStart
 })
 const pointAndStartPresentationState = computed(() => pointAndStartState.value.intent?.taskId === controlledBridgeState.value.intent?.taskId && pointAndStartState.value.status !== 'IDLE' ? pointAndStartState.value : controlledBridgeState.value.intent ? controlledBridgeState.value : pointAndStartState.value)
