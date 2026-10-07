@@ -151,7 +151,7 @@ describe('1.13.2 Babao-box workspace entry', () => {
     const composer = readFileSync(new URL('../src/components/juyiting/HallChatComposer.vue', import.meta.url), 'utf8')
     expect(source).to.include('@open-workspace="$emit(\'open-workspace\')"')
     expect(composer).to.include('@click="openMaterials"')
-    expect(composer).to.include('>添加资料</button>')
+    expect(composer).to.match(/class="composer-add-materials"[\s\S]*?aria-label="添加资料"[\s\S]*?:disabled="inputLocked"[\s\S]*?@click="openMaterials"[\s\S]*?<svg[\s\S]*?stroke-width="1.8"[\s\S]*?<\/button>/)
     expect(composer).to.not.include('@click="openWorkspace">工作空间</button>')
     expect(source).to.include('@click="$emit(\'open-workspace\')">去百宝箱添加</button>')
     expect(composer).to.include("emit('open-materials')")
