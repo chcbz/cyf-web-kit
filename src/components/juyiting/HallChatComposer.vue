@@ -44,6 +44,7 @@
               aria-label="更多操作"
               :aria-expanded="String(moreOpen)"
               :aria-controls="moreId"
+              :disabled="actionsDisabled"
               @click="moreOpen = !moreOpen"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14" /></svg>
@@ -84,6 +85,7 @@
           :recording-target="voiceActionRef"
           :settings-visible="moreOpen"
           :draft-only="true"
+          :disabled="actionsDisabled"
           :voice="voice"
           @apply="$emit('voice-apply', $event)"
         />
@@ -133,7 +135,8 @@ const props = defineProps({
   maxLength: { type: Number, default: 1200 },
   voice: { type: Object, default: null },
   typedPendingQuestion: { type: Object, default: null },
-  contextKey: { type: String, default: '' }
+  contextKey: { type: String, default: '' },
+  actionsDisabled: { type: Boolean, default: false }
 })
 
 const emit = defineEmits([

@@ -46,6 +46,7 @@
       <template #bounty-results>
         <BountyExecutionOutputs
           :enabled="deliberationV2Enabled"
+          :task-completed="selectedTask?.status === 'completed'"
           :request="activeRequest"
           :catalog="requestCatalog"
           :conversation-id="conversationId"

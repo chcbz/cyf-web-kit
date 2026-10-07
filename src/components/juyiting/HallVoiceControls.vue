@@ -14,7 +14,7 @@
           v-if="voice.state === 'idle'"
           type="button"
           class="voice-start"
-          :disabled="!voice.canRecord"
+          :disabled="disabled || !voice.canRecord"
           aria-label="开始录音"
           title="开始录音"
           @click="startRecording"
@@ -137,8 +137,8 @@
     </div>
     <div v-if="voice.state === 'pending_send'" class="voice-countdown" role="status">
       {{ (voice.countdownMs / 1000).toFixed(1) }} 秒后发送
-      <button type="button" @click="voice.cancel({ preserveReview: true })">取消</button>
-      <button type="button" @click="voice.sendTranscript()">立即发送</button>
+      <button type="button" :disabled="disabled" @click="voice.cancel({ preserveReview: true })">取消</button>
+      <button type="button" :disabled="disabled" @click="voice.sendTranscript()">立即发送</button>
     </div>
     <div v-if="['sending', 'waiting_reply'].includes(voice.state)" class="voice-sending" role="status">
       <span>传令可能已经送达；停止等待不会撤回文字发送。</span>
@@ -152,13 +152,14 @@
         <button
           v-if="!draftOnly"
           type="button"
+          :disabled="disabled"
           aria-label="确认发送语音转写"
           @click="voice.sendTranscript()"
         >确认发送</button>
-        <button type="button" @click="$emit('apply', 'append')">追加</button>
-        <button type="button" @click="$emit('apply', 'replace')">替换</button>
+        <button type="button" :disabled="disabled" @click="$emit('apply', 'append')">追加</button>
+        <button type="button" :disabled="disabled" @click="$emit('apply', 'replace')">替换</button>
       </div>
-      <button type="button" @click="voice.discard()">丢弃</button>
+      <button type="button" :disabled="disabled" @click="voice.discard()">丢弃</button>
     </div>
   </div>
 </template>
@@ -167,7 +168,7 @@ let voiceSettingsSequence = 0
 </script>
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
-const props = defineProps({ recordingTarget: { type: Object, default: null }, settingsVisible: { type: Boolean, default: true }, draftOnly: { type: Boolean, default: false }, compact: { type: Boolean, default: false }, voice: { type: Object, default: null } })
+const props = defineProps({ recordingTarget: { type: Object, default: null }, settingsVisible: { type: Boolean, default: true }, draftOnly: { type: Boolean, default: false }, disabled: { type: Boolean, default: false }, compact: { type: Boolean, default: false }, voice: { type: Object, default: null } })
 const emit = defineEmits(['apply'])
 const settingsOpen = ref(false)
 const controlsRef = ref(null)
@@ -195,7 +196,7 @@ const startRecording = () => {
   else void props.voice.startRecording()
 }
 watch(() => props.voice?.state, state => {
-  if (props.draftOnly && state === 'review' && props.voice?.transcript && !props.voice?.detached) emit('apply', 'append')
+  if (props.draftOnly && !props.disabled && state === 'review' && props.voice?.transcript && !props.voice?.detached) emit('apply', 'append')
 })
 const toggleSettings = () => { settingsOpen.value = !settingsOpen.value }
 const closeSettings = ({ restoreFocus = false } = {}) => {

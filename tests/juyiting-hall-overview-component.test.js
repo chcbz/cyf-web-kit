@@ -100,8 +100,48 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       await request.setValue('整理一份明天活动的执行方案')
       expect(create.attributes('disabled')).to.equal(undefined)
       await create.trigger('submit')
-      expect(wrapper.emitted('quick-request')).to.deep.equal([[{ request: '整理一份明天活动的执行方案', materials: [] }]])
+      expect(wrapper.emitted('quick-request')[0][0]).to.deep.equal({ request: '整理一份明天活动的执行方案', materials: [] })
+      expect(wrapper.emitted('quick-request')[0]).to.have.length(2)
+      expect(request.element.value).to.equal('整理一份明天活动的执行方案')
+      wrapper.emitted('quick-request')[0][1](false)
+      expect(request.element.value).to.equal('整理一份明天活动的执行方案')
+      wrapper.emitted('quick-request')[0][1](true)
+      await settle()
+      expect(request.element.value).to.equal('')
       expect(calls.map(call => [call.method, call.url])).to.deep.equal([['GET', '/hall/overview']])
+    } finally { wrapper.unmount() }
+  })
+
+  it('refreshes the existing server overview source when the owner advances its refresh key', async () => {
+    const calls = []
+    const wrapper = mount(load({ execute: async options => { calls.push(options); return response() } }), { props })
+    try {
+      await settle()
+      expect(calls.map(call => call.url)).to.deep.equal(['/hall/overview'])
+      await wrapper.setProps({ refreshKey: 1 })
+      await settle()
+      expect(calls.map(call => call.url)).to.deep.equal(['/hall/overview', '/hall/overview'])
+      expect(calls.every(call => call.method === 'GET')).to.equal(true)
+    } finally { wrapper.unmount() }
+  })
+
+  it('clears only the exact quick-request edit generation acknowledged as committed', async () => {
+    const wrapper = mount(load({ execute: async () => response() }), { props })
+    try {
+      await settle()
+      const request = wrapper.find('.overview-quick-request textarea')
+      await request.setValue('原始需求')
+      await wrapper.get('.overview-quick-request').trigger('submit')
+      const settleCreate = wrapper.emitted('quick-request')[0][1]
+      await request.setValue('提交期间的新编辑')
+      settleCreate(true)
+      await settle()
+      expect(request.element.value).to.equal('提交期间的新编辑')
+      await wrapper.get('.overview-quick-request').trigger('submit')
+      const settleNewRequest = wrapper.emitted('quick-request')[1][1]
+      settleNewRequest(true)
+      await settle()
+      expect(request.element.value).to.equal('')
     } finally { wrapper.unmount() }
   })
 

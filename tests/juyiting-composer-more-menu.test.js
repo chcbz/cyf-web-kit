@@ -80,6 +80,17 @@ describe('Juyi Hall simple composer more menu', () => {
       expect(wrapper.get('.composer-more').attributes('disabled')).to.equal(undefined)
     } finally { wrapper.unmount() }
   })
+  it('disables the action menu only for a server-completed task', async () => {
+    const wrapper = create({ actionsDisabled: true, interactionLocked: true })
+    try {
+      expect(wrapper.get('.composer-more').attributes('disabled')).to.equal('')
+      expect(wrapper.get('.composer-add-materials').attributes('disabled')).to.equal('')
+      expect(wrapper.get('.composer-send').attributes('disabled')).to.equal('')
+      await wrapper.setProps({ actionsDisabled: false, interactionLocked: false, isAwaitingReply: true })
+      expect(wrapper.get('.composer-more').attributes('disabled')).to.equal(undefined)
+    } finally { wrapper.unmount() }
+  })
+
   it('closes on Escape or outside click and restores focus', async () => {
     const wrapper = create()
     try {

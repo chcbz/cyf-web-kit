@@ -85,9 +85,19 @@ const emit = defineEmits(['open-item', 'open-task', 'quick-request', 'start-draf
 const model = useHallOverview({ identityScope: () => props.identityScope, identityEpoch: () => props.identityEpoch })
 const quickRequest = ref('')
 const selectedMaterials = ref([])
+const quickRequestGeneration = ref(0)
+const onQuickRequestInput = () => { quickRequestGeneration.value++ }
+watch(quickRequest, onQuickRequestInput, { flush: 'sync' })
+watch(selectedMaterials, onQuickRequestInput, { deep: true, flush: 'sync' })
 const submitQuickRequest = () => {
   const value = quickRequest.value
-  if (value.trim() && !props.quickPending) emit('quick-request', { request: value, materials: selectedMaterials.value.map(({ fileId, version }) => ({ fileId, version })) })
+  const generation = quickRequestGeneration.value
+  const materials = selectedMaterials.value.map(({ fileId, version }) => ({ fileId, version }))
+  if (value.trim() && !props.quickPending) emit('quick-request', { request: value, materials }, succeeded => {
+    if (succeeded !== true || generation !== quickRequestGeneration.value) return
+    if (quickRequest.value === value) quickRequest.value = ''
+    if (JSON.stringify(selectedMaterials.value.map(({ fileId, version }) => ({ fileId, version }))) === JSON.stringify(materials)) selectedMaterials.value = []
+  })
 }
 const archiveView = ref(false)
 const selectedView = ref('recent')

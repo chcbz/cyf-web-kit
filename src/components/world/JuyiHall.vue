@@ -378,6 +378,7 @@
             :task-id="formalTaskRef.id"
             :identity-key="`${apiStore.authorizationGeneration}\u0000${hallIdentityScope}`"
             :task-version="formalTaskRef.taskVersion ?? formalTaskRef.version"
+            :task-completed="formalTaskRef.status === 'completed'"
             :conversation-id="chatMode === 'bounty' && conversationTask?.id === formalTaskRef.id ? conversationId : ''"
             @continue-modification="continueBountyModification(formalTaskRef, $event)"
             @task-completed="loadTasks"
@@ -1726,12 +1727,13 @@ const openOverviewItem = ref => {
   return true
 }
 
-const handleQuickRequest = async request => {
+const handleQuickRequest = async (request, settle = () => {}) => {
   if (typeof request?.request !== 'string' || !request.request.trim()) return false
   const identity = hallIdentityScope.value
   const epoch = apiStore.authorizationGeneration
   const created = await createTask({ title: request.request, description: request.request, attachments: request.materials ?? [] })
   if (identity !== hallIdentityScope.value || epoch !== apiStore.authorizationGeneration) return false
+  settle(created === true)
   if (!created) {
     if (requirementCreateState.value.intent) openPanel('tasks', { root: true })
     return false
@@ -2231,6 +2233,7 @@ const attachAdmittedPointAndStart = async ({ task, targetAgentId, reference, isC
   if (!target) return false
   tasks.value = tasks.value.map(item => item?.id === task.id ? task : item)
   preserveAdmittedPointAndStartContext(task)
+  hallReadRevision.value += 1
   selectedTask.value = task
   if (!openPanel('chat')) return false
   enterBountyDiscussion(task)

@@ -122,7 +122,7 @@ describe('neutral materials v2 atomic creation and immutable dual-version recove
 })
 
 const page = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
-const quickCreateBody = page.match(/const handleQuickRequest = async request => \{([\s\S]*?)\n\}\n\nconst openOverviewTask/)?.[1]
+const quickCreateBody = page.match(/const handleQuickRequest = async \(request, settle = \(\) => \{\}\) => \{([\s\S]*?)\n\}\n\nconst openOverviewTask/)?.[1]
 if (!quickCreateBody) throw new Error('Actual quick creation closure missing')
 describe('new product entry wiring, no quick legacy task/link writes', () => {
   it('both forms use one neutral picker and Hall config enables only atomic schema2 for new requirements', () => {
@@ -141,24 +141,47 @@ describe('new product entry wiring, no quick legacy task/link writes', () => {
     const deps = { hallIdentityScope: h.scope, apiStore: { authorizationGeneration: 1 }, createTask,
       requirementCreateState: h.state, openPanel: (...args) => panels.push(args), hallReadRevision: ref(0), selectedTask,
       openOverviewTask: task => opens.push(task) }
-    const quick = new Function(...Object.keys(deps), `return async request => {${quickCreateBody}}`)(...Object.values(deps))
+    const quick = new Function(...Object.keys(deps), `return async (request, settle = () => {}) => {${quickCreateBody}}`)(...Object.values(deps))
     const text = ' 结合图、文档与音频整理方案\n保持完整🦜 '
-    expect(await quick({ request: text, materials: attachments() })).to.equal(true)
+    const settled = []
+    expect(await quick({ request: text, materials: attachments() }, value => settled.push(value))).to.equal(true)
+    expect(settled).to.deep.equal([true])
     expect(h.calls).to.have.length(1)
     expect(h.calls[0].path).to.equal('/tasks/creation-operations/v2')
     expect(h.calls[0].body).to.deep.equal(requirementMaterialsBody({ title: text, description: text, attachments: attachments() }))
-    expect(opens).to.deep.equal([]); expect(panels).to.deep.equal([['agents']])
+    expect(opens).to.deep.equal([]); expect(panels).to.deep.equal([['agents']]); expect(deps.hallReadRevision.value).to.equal(1)
     h.dispose()
   })
+  it('does not acknowledge or refresh a commit that returns after owner identity changes', async () => {
+    let finish
+    const pending = new Promise(resolve => { finish = resolve })
+    const scope = ref(scopeA), epoch = ref(1), refreshKey = ref(0), settled = []
+    const panels = []
+    const deps = { hallIdentityScope: scope, apiStore: { get authorizationGeneration () { return epoch.value } },
+      createTask: () => pending, requirementCreateState: { value: { intent: null } },
+      openPanel: (...args) => panels.push(args), hallReadRevision: refreshKey, selectedTask: ref(null),
+      openOverviewTask: () => {} }
+    const quick = new Function(...Object.keys(deps), `return async (request, settle = () => {}) => {${quickCreateBody}}`)(...Object.values(deps))
+    const result = quick({ request: '另一位身份的事项', materials: [] }, value => settled.push(value))
+    scope.value = scopeB
+    finish(true)
+    expect(await result).to.equal(false)
+    expect(settled).to.deep.equal([])
+    expect(refreshKey.value).to.equal(0)
+    expect(panels).to.deep.equal([])
+  })
+
   it('quick unknown response opens original recovery without falling back to task/link writes', async () => {
     const h = harness({ post: () => { throw new TypeError('network') } }), panels = [], opens = []
     const deps = { hallIdentityScope: h.scope, apiStore: { authorizationGeneration: 1 }, createTask: input => h.create(input),
       requirementCreateState: h.state, openPanel: (...args) => panels.push(args), hallReadRevision: ref(0), selectedTask: ref(null),
       openOverviewTask: task => opens.push(task) }
-    const quick = new Function(...Object.keys(deps), `return async request => {${quickCreateBody}}`)(...Object.values(deps))
-    expect(await quick({ request: '整理资料', materials: attachments() })).to.equal(false)
+    const quick = new Function(...Object.keys(deps), `return async (request, settle = () => {}) => {${quickCreateBody}}`)(...Object.values(deps))
+    const settled = []
+    expect(await quick({ request: '整理资料', materials: attachments() }, value => settled.push(value))).to.equal(false)
+    expect(settled).to.deep.equal([false])
     expect(h.calls).to.have.length(1); expect(opens).to.deep.equal([])
-    expect(panels).to.deep.equal([['tasks', { root: true }]])
+    expect(panels).to.deep.equal([['tasks', { root: true }]]); expect(deps.hallReadRevision.value).to.equal(0)
     expect(h.readOriginal().record.body.attachments).to.deep.equal(attachments())
     h.dispose()
   })

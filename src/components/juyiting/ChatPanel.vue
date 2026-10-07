@@ -135,7 +135,8 @@
       :discussion-variant="discussionVariant"
       :draft="draft"
       :has-typed-attachments="typedEnabled && discussionVariant === 'bounty' && typedSourceSelectors.length > 0"
-      :interaction-locked="conversationBusy"
+      :interaction-locked="conversationBusy || serverTaskCompleted"
+      :actions-disabled="serverTaskCompleted"
       :is-awaiting-reply="isAwaitingReply"
       :is-streaming="isStreaming"
       :mention-label="mentionLabel"
@@ -154,7 +155,7 @@
       @open-workspace="$emit('open-workspace')"
     >
       <template #materials>
-        <section v-if="materialPickerOpen" class="material-reference-picker" aria-label="引用议事资料">
+        <section v-if="materialPickerOpen && !serverTaskCompleted" class="material-reference-picker" aria-label="引用议事资料">
           <div class="material-reference-heading">
             <div>
               <strong>{{ isTaskDiscussion ? '本次需求的资料' : '引用资料' }}</strong>
@@ -307,6 +308,7 @@ const materialPickerOpen = ref(false)
 const pendingAuthor = '聚义厅'
 const materialIdentityKey = computed(() => `${props.identityEpoch}\u0000${props.identityScope}`)
 const taskId = computed(() => String(props.selectedTask?.id || '').trim())
+const serverTaskCompleted = computed(() => props.discussionVariant === 'bounty' && props.selectedTask?.status === 'completed')
 const typedForMessage = message => props.typedOutcomes.filter(projection =>
   projection?.outcome?.assistantMessageId === String(message?.localId || ''))
 
@@ -358,6 +360,7 @@ const refreshMaterialReferences = async () => {
   await resolveMaterialNames(operationKey)
 }
 const toggleMaterialPicker = async () => {
+  if (serverTaskCompleted.value) { materialPickerOpen.value = false; return }
   materialPickerOpen.value = !materialPickerOpen.value
   if (materialPickerOpen.value) await refreshMaterialReferences()
 }
@@ -400,7 +403,7 @@ watch(() => props.messages, () => {
   })
 }, { deep: true })
 
-watch(() => `${materialIdentityKey.value}\u0000${taskId.value}\u0000${props.conversationId}`, () => {
+watch(() => `${materialIdentityKey.value}\u0000${taskId.value}\u0000${props.conversationId}\u0000${serverTaskCompleted.value}`, () => {
   materialPickerOpen.value = false
   materialNames.value = {}
   typedSelectedSourceIds.value = new Set()
