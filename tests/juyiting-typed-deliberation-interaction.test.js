@@ -17,6 +17,28 @@ const restoreCrypto = () => {
 describe('typed natural discussion interaction adapter', () => {
   beforeEach(() => { Object.defineProperty(globalThis, 'crypto', { configurable: true, writable: true, value: { randomUUID: () => '00000000-0000-4000-8000-000000000001' } }) })
   afterEach(restoreCrypto)
+  it('reads the fixed catalog before typed projections and admits nothing when catalog preparation fails', async () => {
+    for (const prepared of [false, true]) {
+      const calls = []
+      const lane = useHallTypedDeliberation({ chatApi: { get: async () => { calls.push('typed'); return { data: { data: clarify('request-1') } } },
+        create: async () => { calls.push('POST'); throw new Error('unknown ACK') } },
+      actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => ({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }),
+      getContextGeneration: () => 1, getCatalogEntries: () => [{ request: { requestId: 'request-1', turns: [{ route: 'CHAT' }], steps: [] } }],
+      prepareCatalog: async () => { calls.push('catalog'); return prepared }, storage: store(), enabled: () => true })
+      try {
+        await lane.submit({ content: '继续需求' })
+        expect(calls).to.deep.equal(prepared ? ['catalog', 'typed', 'POST'] : ['catalog'])
+        if (!prepared) expect(lane.error.value).to.include('未发送消息')
+      } finally { lane.dispose() }
+    }
+  })
+  it('does not carry catalog preparation or POST across an identity switch', async () => {
+    const owner = ref('owner-a'); const posts = []
+    const lane = useHallTypedDeliberation({ chatApi: { create: async () => posts.push('POST') }, actorScopeKey: owner,
+      authorizationGeneration: ref(1), getContext: () => ({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }),
+      getContextGeneration: () => 1, getCatalogEntries: () => [], prepareCatalog: async () => { owner.value = 'owner-b'; return true }, storage: store(), enabled: () => true })
+    try { expect(await lane.submit({ content: '继续需求' })).to.equal(false); expect(posts).to.deep.equal([]) } finally { lane.dispose() }
+  })
   it('reports a missing current assignment context instead of silently dropping the draft', async () => {
     const calls = []
     const lane = useHallTypedDeliberation({ chatApi: { create: async () => calls.push('POST') },
@@ -385,7 +407,14 @@ describe('exact completed media sources for natural discussion', () => {
         if (mode === 'fork') { catalog.push(entry('branch')); outputs.branch = [output('branch', 'red', { replaces: outputs.edited[0].replaces })] }
       }
       const { lane, calls } = harness({ catalog, outputs, get: mode === 'read-error' ? async () => { throw new Error('unavailable') } : null })
-      try { await lane.submit({ content: '继续' }); expect(calls.at(-1)[2].sourceSelectors, mode).to.deep.equal([]) }
+      try {
+        await lane.submit({ content: '继续' })
+        const posts = calls.filter(call => call[0] === 'POST')
+        if (['read-error', 'roots', 'fork', 'missing-parent'].includes(mode)) {
+          expect(posts, mode).to.deep.equal([])
+          expect(lane.error.value, mode).to.include('未发送消息')
+        } else expect(posts.at(-1)[2].sourceSelectors, mode).to.deep.equal([])
+      }
       finally { lane.dispose() }
     }
   })
@@ -507,6 +536,16 @@ describe('actual mixed media basis natural discussion and frozen original recove
         expect(calls.at(-1)[2].parentOutcomeId).to.equal(group.mediaTwo.outcome.outcomeId)
       } finally { lane.dispose() }
     }
+  })
+  it('never turns two independent delivery roots into a new unlinked POST', async () => {
+    const independent = JSON.parse(JSON.stringify(group.appended)); delete independent.outcome.deliveryRelation
+    const { lane, calls } = create(store(), [...values, independent])
+    try {
+      for (const raw of [...values, independent]) await lane.readOne(raw.requestId)
+      expect(await lane.submit({ content: '只改一张图片并保留文字' })).to.equal(false)
+      expect(calls.filter(call => call[0] === 'POST')).to.deep.equal([])
+      expect(lane.error.value).to.include('未发送消息')
+    } finally { lane.dispose() }
   })
   it('retains verified causal basis without requiring save when a durable asset is late', async () => {
     const { lane, calls } = create(store(), values, true)

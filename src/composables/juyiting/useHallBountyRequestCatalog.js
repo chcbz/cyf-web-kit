@@ -6,17 +6,18 @@ const query = value => Object.fromEntries(Object.entries(value).filter(([, item]
 export const useHallBountyRequestCatalog = ({ chatApi, enabled = () => false, identityScope, authorizationGeneration, getContext, getContextGeneration }) => {
   const entries = ref([]); const error = ref(''); const loading = ref(false); const generation = ref(0)
   const scope = computed(() => unref(typeof identityScope === 'function' ? identityScope() : identityScope))
-  let disposed = false; let refreshQueued = false
+  let disposed = false; let refreshQueued = false; let activeScan = null
   const capture = () => ({ generation: generation.value, scope: scope.value, auth: unref(typeof authorizationGeneration === 'function' ? authorizationGeneration() : authorizationGeneration),
     contextGeneration: getContextGeneration?.(), context: { ...(getContext?.() || {}) } })
   const current = captured => !disposed && enabled?.() && captured.generation === generation.value && captured.scope === scope.value &&
     captured.auth === unref(typeof authorizationGeneration === 'function' ? authorizationGeneration() : authorizationGeneration) &&
     captured.contextGeneration === getContextGeneration?.() && JSON.stringify(captured.context) === JSON.stringify(getContext?.() || {})
-  const reset = () => { generation.value++; entries.value = []; error.value = ''; loading.value = false }
+  const reset = () => { generation.value++; activeScan = null; entries.value = []; error.value = ''; loading.value = false }
   const refresh = async () => {
     if (loading.value) { refreshQueued = true; return false }
     const captured = capture(); const context = captured.context
     if (!enabled?.() || !context.conversationId || !context.taskId) return false
+    const scan = {}; activeScan = scan
     loading.value = true; error.value = ''
     try {
       let after = '0'; let through = null; let expectedGeneration = context.conversationGeneration || null; let next = true; let merged = entries.value
@@ -35,8 +36,10 @@ export const useHallBountyRequestCatalog = ({ chatApi, enabled = () => false, id
       entries.value = merged
       return true
     } catch (cause) { if (current(captured)) error.value = cause?.message || '读取悬赏成果索引失败'; return false } finally {
-      if (current(captured)) loading.value = false
-      if (refreshQueued) { refreshQueued = false; void refresh() }
+      if (activeScan === scan) {
+        activeScan = null; loading.value = false
+        if (refreshQueued) { refreshQueued = false; void refresh() }
+      }
     }
   }
   const hint = () => { if (!enabled?.()) return false; void refresh(); return true }

@@ -52,7 +52,7 @@ const storedBody = value => {
 
 /** Typed natural CHAT UI adapter. It owns only the frozen discussion/read wire; no model, grant, or legacy stream fallback. */
 export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorizationGeneration, getContext, getContextGeneration,
-  getCatalogEntries, storage = null, enabled = () => false, onAccepted = null, onProposal = null }) => {
+  getCatalogEntries, prepareCatalog, storage = null, enabled = () => false, onAccepted = null, onProposal = null }) => {
   const scope = computed(() => unref(typeof actorScopeKey === 'function' ? actorScopeKey() : actorScopeKey))
   const projections = ref([]); const selectedPending = ref(null); const error = ref(''); const busy = ref(false); const storageRevision = ref(0)
   let generation = 0; let disposed = false; let queued = false; let refreshing = false
@@ -207,11 +207,23 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
         return { kind: 'CURRENT_CONVERSATION_ASSET', fileId: null, version: null, purpose: null, assetId: asset.assetId, assetRevision: asset.revision }
       })
       return { sourceSelectors, basis: projection.basis }
-    } catch { return { sourceSelectors: [], basis: null } } // Context lookup failure does not manufacture sources or retry a tool.
+    } catch { return { sourceSelectors: [], basis: null, unresolvedDelivery: true } } // Do not turn an ambiguous existing collection into an unrelated new root.
   }
   const submit = async ({ content, sourceSelectors = [], inspection = false } = {}) => {
     if (busy.value || !enabled?.()) return false
     const captured = capture(); const context = captured.context
+    if (prepareCatalog) {
+      busy.value = true
+      try {
+        if (!await prepareCatalog() || !current(captured) || !await refresh()) {
+          if (current(captured)) error.value = '当前成果索引尚未核对；未发送消息，请读取完成后继续。'
+          return false
+        }
+      } catch {
+        if (current(captured)) error.value = '暂时无法核对当前成果索引；未发送消息。'
+        return false
+      } finally { if (current(captured)) busy.value = false }
+    }
     if (!current(captured) || !typedId(context.conversationId) || !typedId(context.taskId) || !typedId(context.targetAgentId) ||
       !typedLong(context.assignmentRevision, { allowZero: true })) {
       if (current(captured)) error.value = '当前指派上下文尚未核对，请核对原点将后重试；未发送消息。'
@@ -233,6 +245,10 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       busy.value = true
       try {
         const available = await currentMediaContext(catalog, captured)
+        if (available.unresolvedDelivery) {
+          if (current(captured)) error.value = '本次交付范围尚不明确；未发送消息，请先核对原成果关联。'
+          return false
+        }
         if (!explicitSources) sourceSelectors = available.sourceSelectors
         deliveryParent = available.basis
       }

@@ -87,3 +87,31 @@ it('accepts the frozen nullable execution link union and rejects foreign or inco
   badChatLink.steps[0].executionState = 'FORGED'
   expect(catalogRequest(badChatLink, scope)).to.equal(false)
 })
+
+it('releases only its own scan slot when durable conversation generation invalidates an in-flight scan', async () => {
+  const contextGeneration=ref(1); let resolveFirst; let calls=0
+  const api={get:async() => { calls++; if(calls===1)return await new Promise(resolve => {resolveFirst=resolve}); return {data:{data:page('0','1',[{ordinal:'1',request:request('one')}])}} }}
+  const lane=useHallBountyRequestCatalog({chatApi:api,enabled:() => true,identityScope:ref('owner'),authorizationGeneration:ref(1),
+    getContext:() => ({conversationId:'conversation_1',taskId:'task_1'}),getContextGeneration:() => contextGeneration.value})
+  try {
+    const first=lane.refresh(); contextGeneration.value++
+    resolveFirst({data:{data:page('0','1',[{ordinal:'1',request:request('one')}])}})
+    expect(await first).to.equal(false)
+    expect(lane.loading.value).to.equal(false)
+    expect(await lane.refresh()).to.equal(true)
+    expect(lane.entries.value).to.have.length(1)
+  } finally { lane.dispose() }
+})
+
+it('an old scan completion cannot clear the slot or loading state of the new context scan', async () => {
+  let resolveOld; let resolveNew; let calls=0
+  const api={get:async() => await new Promise(resolve => { if(++calls===1)resolveOld=resolve; else resolveNew=resolve })}
+  const lane=useHallBountyRequestCatalog({chatApi:api,enabled:() => true,identityScope:ref('owner'),authorizationGeneration:ref(1),
+    getContext:() => ({conversationId:'conversation_1',taskId:'task_1'}),getContextGeneration:() => 1})
+  try {
+    const old=lane.refresh(); lane.reset(); const next=lane.refresh()
+    const body={data:{data:page('0','1',[{ordinal:'1',request:request('one')}])}}
+    resolveOld(body); expect(await old).to.equal(false); expect(lane.loading.value).to.equal(true)
+    resolveNew(body); expect(await next).to.equal(true); expect(lane.loading.value).to.equal(false)
+  } finally {lane.dispose()}
+})
