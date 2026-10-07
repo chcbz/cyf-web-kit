@@ -2,6 +2,9 @@ const LONG_MAX = '9223372036854775807'
 const own = (value, key) => Object.prototype.hasOwnProperty.call(value, key)
 // eslint-disable-next-line no-control-regex
 const isoControl = value => /[\u0000-\u001f\u007f-\u009f]/u.test(value)
+// Line endings belong to natural-language content, never identifiers.
+// eslint-disable-next-line no-control-regex
+const forbiddenContentControl = value => /[\u0000-\u0009\u000b\u000c\u000e-\u001f\u007f-\u009f]/u.test(value)
 export const typedLong = (value, { allowZero = false } = {}) => {
   if (typeof value !== 'string' || !(allowZero ? /^(0|[1-9][0-9]*)$/ : /^[1-9][0-9]*$/).test(value)) return ''
   return value.length < LONG_MAX.length || (value.length === LONG_MAX.length && value <= LONG_MAX) ? value : ''
@@ -22,7 +25,7 @@ export const sourceSelector = value => {
 export const discussionBody = ({ intent, taskId, assignmentRevision, content, parentOutcomeId = null,
   expectedParentStateVersion = null, pendingQuestionId = null, expectedPendingQuestionStateVersion = null, sourceSelectors = [] }) => {
   if (!['DISCUSSION', 'CLARIFICATION_REPLY'].includes(intent) || !typedId(taskId) || !typedLong(assignmentRevision, { allowZero: true }) ||
-    typeof content !== 'string' || Array.from(content).length > 4000 || (isoControl(content) && Boolean(content.trim())) ||
+    typeof content !== 'string' || Array.from(content).length > 4000 || (forbiddenContentControl(content) && Boolean(content.trim())) ||
     !Array.isArray(sourceSelectors) || sourceSelectors.length > 32) return null
   const selectors = sourceSelectors.map(sourceSelector)
   if (selectors.some(value => !value) || (!content.trim() && !selectors.length)) return null

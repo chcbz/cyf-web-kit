@@ -158,6 +158,9 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       const request = entry?.request
       if (!request || request.conversationId !== context.conversationId || request.conversationGeneration !== context.conversationGeneration ||
         !exactOutputId(request.requestId) || !Array.isArray(request.steps) || !Array.isArray(request.turns)) return { sourceSelectors: [], basis: null }
+      // Inspection-only children cannot contribute or replace deliverables. Their old
+      // recovery status must not erase the exact completed CHAT/EXECUTE basis.
+      if (request.steps.length === 0 && request.turns.length > 0 && request.turns.every(turn => turn.route === 'INSPECT')) continue
       for (const step of request.steps.filter(step => step.kind === 'EXECUTE')) {
         if (!['OUTPUT_COMMITTED', 'COMPLETED'].includes(request.state) || step.state !== 'OUTPUT_COMMITTED' || step.executionState !== 'OUTPUT_COMMITTED' ||
           !exactOutputId(step.stepId) || !exactOutputId(step.executionId) || step.taskId !== context.taskId ||
@@ -166,7 +169,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       }
       if (request.turns.length && !projections.value.some(value => value.requestId === request.requestId && value.state === 'READY')) return { sourceSelectors: [], basis: null }
     }
-    if (!steps.length || projections.value.some(value => value.state === 'PENDING')) return { sourceSelectors: [], basis: null }
+    if (!steps.length || projections.value.some(value => value.route !== 'INSPECT' && value.purpose !== 'INSPECT' && value.state === 'PENDING')) return { sourceSelectors: [], basis: null }
     if (projections.value.some(value => value.outcome?.deliverable === true) && !projections.value.some(value =>
       value.state === 'READY' && value.outcome?.kind === 'ACTION_REQUEST' && value.actionProgress?.childRoute === 'EXECUTE')) return { sourceSelectors: [], basis: null }
     const outputs = []

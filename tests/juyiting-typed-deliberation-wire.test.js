@@ -40,9 +40,18 @@ describe('typed natural deliberation frozen wire', () => {
   })
   it('rejects noncanonical long values, C0/C1 controls, and malformed nullable lineage', () => {
     expect(discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '04', content: '画鸟' })).to.equal(null)
-    expect(discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content: '画\n鸟' })).to.equal(null)
+    expect(discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content: '画\u0000鸟' })).to.equal(null)
     expect(discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content: '画\u0085鸟' })).to.equal(null)
     expect(discussionBody({ intent: 'CLARIFICATION_REPLY', taskId: 'task-1', assignmentRevision: '4', content: '蓝色' })).to.equal(null)
+  })
+  it('preserves LF and CRLF in natural-language requests but keeps controls out of identifiers', () => {
+    for (const content of ['第一行\n第二行', '第一行\r\n第二行', '第一行\r第二行']) {
+      expect(discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content }).content).to.equal(content)
+    }
+    for (const content of ['画\t鸟', '画\u000b鸟', '画\u0085鸟']) {
+      expect(discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content })).to.equal(null)
+    }
+    expect(discussionBody({ intent: 'DISCUSSION', taskId: 'task\n1', assignmentRevision: '4', content: '画鸟' })).to.equal(null)
   })
   it('accepts the golden receipt without coercing its cursor above Number.MAX_SAFE_INTEGER', () => {
     const body = fixture.golden.discussion

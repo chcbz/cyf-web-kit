@@ -451,8 +451,8 @@ describe('actual mixed media basis natural discussion and frozen original recove
       state: 'OUTPUT_COMMITTED', executionState: 'OUTPUT_COMMITTED', taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' }] }))
   const expected = group.manifests.flatMap((manifest, i) => manifest.outputs.map(output => ({ kind: 'CURRENT_CONVERSATION_ASSET', fileId: null,
     version: null, purpose: null, assetId: `asset-${i}-${output.outputId}`, assetRevision: '1' })))
-  const create = (storage, sources = values, missingAsset = false) => {
-    const catalog = [...sources.map(textRequest), ...children].map(request => ({ request })); const calls = []
+  const create = (storage, sources = values, missingAsset = false, inspections = []) => {
+    const catalog = [...sources.map(textRequest), ...children, ...inspections].map(request => ({ request })); const calls = []
     const lane = useHallTypedDeliberation({ chatApi: { get: async path => {
       calls.push(['GET', path])
       const raw = sources.find(value => path.includes(`/requests/${value.requestId}/`))
@@ -468,6 +468,20 @@ describe('actual mixed media basis natural discussion and frozen original recove
     getCatalogEntries: () => catalog, storage, enabled: () => true })
     return { lane, calls }
   }
+  it('retains exact completed media basis despite historical inspection-only recovery, never across owner context', async () => {
+    const old = { requestId: 'inspection-old', requestRevision: '1', conversationId: '42', conversationGeneration: '1',
+      state: 'RUNNING', steps: [], turns: [{ turnId: 'inspect-turn', route: 'INSPECT', state: 'RECOVERY_REQUIRED' }] }
+    for (const foreign of [false, true]) {
+      const { lane, calls } = create(store(), values, false, [{ ...old, conversationId: foreign ? 'other' : '42' }])
+      try {
+        for (const raw of values) await lane.readOne(raw.requestId)
+        await lane.submit({ content: '仅修改原文字，保留全部图片' })
+        const posted = calls.find(call => call[0] === 'POST')
+        expect(posted[2].sourceSelectors).to.deep.equal(foreign ? [] : expected)
+        expect(posted[2].parentOutcomeId).to.equal(foreign ? null : values.at(-1).outcome.outcomeId)
+      } finally { lane.dispose() }
+    }
+  })
   it('uses terminal media final and exact retained manifests, then keeps all media when earlier text changes', async () => {
     for (const sources of [values.slice(0, 3), values]) {
       const { lane, calls } = create(store(), sources)
