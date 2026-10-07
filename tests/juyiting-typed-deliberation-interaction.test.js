@@ -39,6 +39,22 @@ describe('typed natural discussion interaction adapter', () => {
       getContextGeneration: () => 1, getCatalogEntries: () => [], prepareCatalog: async () => { owner.value = 'owner-b'; return true }, storage: store(), enabled: () => true })
     try { expect(await lane.submit({ content: '继续需求' })).to.equal(false); expect(posts).to.deep.equal([]) } finally { lane.dispose() }
   })
+  it('send preparation joins an existing typed refresh instead of treating it as a failed read', async () => {
+    let resolveFirst; let reads = 0; const posts = []
+    const lane = useHallTypedDeliberation({ chatApi: {
+      get: async () => ++reads === 1 ? await new Promise(resolve => { resolveFirst = resolve }) : { data: { data: clarify('request-1') } },
+      create: async (_path, body) => { posts.push(body); throw new Error('unknown ACK') }
+    }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1),
+    getContext: () => ({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }),
+    getContextGeneration: () => 1, getCatalogEntries: () => [{ request: { requestId: 'request-1', turns: [{ route: 'CHAT' }], steps: [] } }],
+    prepareCatalog: async () => true, storage: store(), enabled: () => true })
+    try {
+      const reading = lane.refresh(); const sending = lane.submit({ content: '继续需求' }); await Promise.resolve()
+      resolveFirst({ data: { data: clarify('request-1') } })
+      expect(await reading).to.equal(true); await sending
+      expect(posts).to.have.length(1)
+    } finally { lane.dispose() }
+  })
   it('reports a missing current assignment context instead of silently dropping the draft', async () => {
     const calls = []
     const lane = useHallTypedDeliberation({ chatApi: { create: async () => calls.push('POST') },

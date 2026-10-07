@@ -55,7 +55,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   getCatalogEntries, prepareCatalog, storage = null, enabled = () => false, onAccepted = null, onProposal = null }) => {
   const scope = computed(() => unref(typeof actorScopeKey === 'function' ? actorScopeKey() : actorScopeKey))
   const projections = ref([]); const selectedPending = ref(null); const error = ref(''); const busy = ref(false); const storageRevision = ref(0)
-  let generation = 0; let disposed = false; let queued = false; let refreshing = false
+  let generation = 0; let disposed = false; let queued = false; let refreshFlight = null
   const capture = () => Object.freeze({ generation, scope: scope.value,
     authorization: unref(typeof authorizationGeneration === 'function' ? authorizationGeneration() : authorizationGeneration),
     contextGeneration: getContextGeneration?.(), context: { ...(getContext?.() || {}) } })
@@ -117,13 +117,15 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       return null
     }
   }
-  const refresh = async () => {
-    if (refreshing) { queued = true; return false }
+  const refresh = () => {
+    // Read hints and send preparation join one exact in-flight projection read.
+    // Joining is not an unsuccessful read and must not reject every prepared send.
+    if (refreshFlight) { queued = true; return refreshFlight }
     const captured = capture()
     if (!current(captured) || !typedId(captured.context.conversationId) || !typedId(captured.context.taskId) ||
-      !typedLong(captured.context.assignmentRevision, { allowZero: true })) return false
-    refreshing = true; error.value = ''
-    try {
+      !typedLong(captured.context.assignmentRevision, { allowZero: true })) return Promise.resolve(false)
+    error.value = ''
+    const read = async () => {
       const catalogEntries = getCatalogEntries?.() || []
       const catalogInspectionIds = catalogEntries.filter(entry => entry?.request?.turns?.some(turn => turn?.route === 'INSPECT'))
         .map(entry => entry.request.requestId).filter(typedId)
@@ -135,11 +137,14 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       await Promise.all([...new Set(catalogChatIds)].map(requestId => readOne(requestId, captured, 'CHAT'))
         .concat(inspectionRequestIds.map(requestId => readOne(requestId, captured, 'INSPECT'))))
       return current(captured)
-    } finally {
-      if (current(captured)) refreshing = false
-      else refreshing = false
-      if (queued) { queued = false; void refresh() }
     }
+    const flight = read().finally(() => {
+      if (refreshFlight !== flight) return
+      refreshFlight = null
+      if (queued) { queued = false; void refresh() }
+    })
+    refreshFlight = flight
+    return flight
   }
   const choosePending = projection => {
     const clarification = projection?.outcome?.kind === 'CLARIFY' ? projection.outcome.clarification : null
