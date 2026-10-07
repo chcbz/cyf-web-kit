@@ -1983,6 +1983,12 @@ describe('JuyiHall component behavior', () => {
     } })
     try {
       const toolbar = wrapper.get('.panel-toolbar')
+      for (const button of toolbar.findAll('.icon-button')) {
+        expect(button.get('svg').attributes('width')).to.equal('20')
+        expect(button.get('svg').attributes('height')).to.equal('20')
+        expect(button.get('svg').attributes('stroke-width')).to.equal('1.8')
+        expect(button.attributes('title')).to.equal(button.attributes('aria-label'))
+      }
       await toolbar.get('[aria-label="重取回话"]').trigger('click')
       expect(wrapper.emitted('load-messages')).to.have.length(1)
       await toolbar.get('[aria-label="另起话头"]').trigger('click')
@@ -2062,8 +2068,12 @@ describe('JuyiHall component behavior', () => {
         mentionLabel: agent => agent.name, senderText: message => message.sender
       }
     })
-    await wrapper.find('.composer-more').trigger('click')
     await wrapper.find('.composer-add-materials').trigger('click')
+    expect(wrapper.get('.composer-more').attributes('aria-expanded')).to.equal('false')
+    const picker = wrapper.get('.material-reference-picker').element
+    for (let node = picker; node; node = node.parentElement) {
+      expect(node.style.display).not.to.equal('none')
+    }
     expect(wrapper.text()).to.include('请先发送一条消息建立话头，再从百宝箱引用资料。')
   })
 

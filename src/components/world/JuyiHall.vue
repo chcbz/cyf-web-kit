@@ -4090,7 +4090,8 @@ button.hall-room {
 .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.discussion-brief) { background: var(--work-ground); color: var(--work-ink); border-color: var(--work-line); }
 .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.discussion-brief .var-icon) { color: var(--work-brand); }
 .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar) { border-color: var(--work-line); color: var(--work-muted); }
-.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar .icon-button) { background: #f3f3ed; color: var(--work-ink); border: 1px solid var(--work-line); }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar .icon-button) { background: transparent; color: var(--work-ink); border: 0; }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar .icon-button:hover:not(:disabled)) { background: #f3f3ed; }
 .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar .context-summary strong) { color: var(--work-ink); }
 .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-messages .empty-list) { color: var(--work-muted); }
 .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-message) { background: #f2f2eb; color: var(--work-ink); box-shadow: none; }
@@ -4496,24 +4497,27 @@ button.hall-room {
   .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-panel-body) { padding-top: 10px; }
 
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar) {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    align-items: stretch;
-    gap: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: visible;
   }
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.context-summary) {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 6px;
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    min-width: 0;
+    gap: 2px 6px;
   }
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions) {
-    width: 100%;
-    padding-bottom: 2px;
-    overflow-x: auto;
+    width: auto;
+    margin-left: auto;
+    padding-bottom: 0;
+    overflow: visible;
   }
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions .icon-button) {
-    min-width: 42px;
-    height: 40px;
+    min-width: 38px;
+    height: 38px;
   }
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions .material-reference-entry),
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions .workspace-entry) {

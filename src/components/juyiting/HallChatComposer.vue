@@ -46,8 +46,16 @@
               :aria-controls="moreId"
               @click="moreOpen = !moreOpen"
             >
-              <var-icon name="plus" />
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14" /></svg>
             </button>
+            <button
+              class="composer-add-materials"
+              type="button"
+              title="添加资料"
+              aria-label="添加资料"
+              :disabled="inputLocked"
+              @click="openMaterials"
+            ><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m8 12 7-7a3 3 0 0 1 4 4l-9 9a5 5 0 0 1-7-7l9-9M7 14l8-8" /></svg></button>
             <div ref="voiceActionRef" class="composer-inline-voice"></div>
             <button
               class="composer-send"
@@ -56,7 +64,8 @@
               :title="isStreaming || isAwaitingReply ? '处理中' : '发送'"
               :aria-label="isStreaming || isAwaitingReply ? '处理中' : '发送'"
             >
-              <var-icon :name="isStreaming || isAwaitingReply ? 'refresh' : 'chevron-right'" />
+              <svg v-if="isStreaming || isAwaitingReply" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 11-2l3 3M4 16l3 3a7 7 0 0 0 11-2" /></svg>
+              <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 19V5m-6 6 6-6 6 6" /></svg>
             </button>
           </div>
         </div>
@@ -68,17 +77,8 @@
         v-show="moreOpen || voiceHasDetail"
         :id="moreId"
         class="composer-more-panel"
-        aria-label="资料与语音"
+        aria-label="语音设置与状态"
       >
-        <div v-show="moreOpen" class="composer-more-actions">
-          <button
-            class="composer-add-materials"
-            type="button"
-            :disabled="inputLocked"
-            @click="openMaterials"
-          >添加资料</button>
-        </div>
-        <div v-show="moreOpen"><slot name="materials"></slot></div>
         <HallVoiceControls
           class="composer-voice-controls"
           :recording-target="voiceActionRef"
@@ -88,6 +88,8 @@
           @apply="$emit('voice-apply', $event)"
         />
       </section>
+
+      <div class="composer-materials"><slot name="materials"></slot></div>
 
       <div v-if="showMentionMenu" class="composer-mention-menu" aria-label="选择要点名的好汉">
         <button
@@ -298,8 +300,6 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
   border-radius: 8px;
   background: #fffdf6;
 }
-.composer-more-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.composer-more-actions button { padding: 8px 12px; border: 1px solid #d7c3a2; border-radius: 6px; background: #fffaf0; color: #5b432a; cursor: pointer; }
 
 .hall-chat-composer {
   position: relative;
@@ -430,22 +430,49 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
 
 .composer-inline-voice {
   display: flex;
-  flex: 1;
+  flex: 0 0 auto;
   min-width: 0;
+  margin-left: auto;
 }
 
+.composer-more,
+.composer-add-materials,
+.composer-send,
 .composer-inline-voice :deep(button) {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  min-height: 42px;
-  padding: 6px 8px;
-  border: 1px solid #d7c3a2;
-  border-radius: 8px;
-  background: #fffdf6;
-  color: #654122;
+  justify-content: center;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  min-height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #765f40;
   font: inherit;
   cursor: pointer;
+}
+
+.composer-actions svg,
+.composer-inline-voice :deep(svg) {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+
+.composer-more:hover:not(:disabled),
+.composer-add-materials:hover:not(:disabled),
+.composer-inline-voice :deep(.voice-start:hover:not(:disabled)) {
+  background: #f2e8d8;
+}
+
+.composer-actions button:focus-visible,
+.composer-inline-voice :deep(button:focus-visible) {
+  outline: 2px solid #7f4a22;
+  outline-offset: 2px;
 }
 
 .composer-inline-voice :deep(button:disabled) {
@@ -454,35 +481,26 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
 }
 
 .composer-inline-voice :deep(.is-recording) {
+  width: auto;
+  gap: 4px;
+  padding: 0 8px;
+  border-radius: 8px;
   background: #8d2d22;
   color: #fff;
+  font-size: 12px;
 }
 
 .composer-inline-voice :deep(.voice-action-label) {
-  display: inline;
-}
-
-.composer-more,
-.composer-send {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  min-height: 42px;
-  border: 0;
-  border-radius: 8px;
-  color: #fff8e8;
-  cursor: pointer;
-}
-
-.composer-more {
-  border: 1px solid #d7c3a2;
-  background: #fffdf6;
-  color: #765f40;
+  display: none;
 }
 
 .composer-send {
   background: #7f4a22;
+  color: #fff8e8;
+}
+
+.composer-materials {
+  display: contents;
 }
 
 .composer-execute {
@@ -496,6 +514,7 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
 }
 
 .composer-more:disabled,
+.composer-add-materials:disabled,
 .composer-send:disabled {
   cursor: not-allowed;
   opacity: 0.5;
@@ -516,23 +535,6 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
   border-radius: 10px;
   background: #fffdf6;
   box-shadow: 0 10px 24px rgba(54, 35, 18, 0.18);
-}
-
-.composer-more-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.composer-add-materials {
-  min-height: 36px;
-  padding: 6px 10px;
-  border: 1px solid #d7c3a2;
-  border-radius: 7px;
-  background: #fffdf6;
-  color: #654122;
-  font: inherit;
-  cursor: pointer;
 }
 
 .composer-voice-controls :deep(.voice-settings) {
@@ -609,11 +611,6 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
 
   .composer-targets {
     width: 100%;
-  }
-
-  .composer-more,
-  .composer-send {
-    width: 38px;
   }
 
   .composer-mention-menu {

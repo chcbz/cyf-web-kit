@@ -15,7 +15,7 @@
           :disabled="conversationBusy || voice?.voiceInteractionLocked"
           @click="$emit('load-messages')"
         >
-          <var-icon name="refresh" />
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 11-2l3 3M4 16l3 3a7 7 0 0 0 11-2" /></svg>
         </button>
         <button
           class="icon-button"
@@ -26,7 +26,7 @@
           :disabled="Boolean(conversationHistoryDeletingId) || voice?.voiceInteractionLocked"
           @click="toggleHistory"
         >
-          <var-icon name="history" />
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5v5h5M3 10a9 9 0 1 1 2 8M12 7v5l3 2" /></svg>
         </button>
         <button
           class="icon-button primary"
@@ -36,7 +36,7 @@
           :disabled="conversationBusy || voice?.voiceInteractionLocked"
           @click="$emit('new-conversation')"
         >
-          <var-icon name="plus" />
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14" /></svg>
         </button>
         <button
           v-if="durableCancelTarget"
@@ -45,7 +45,7 @@
           title="取消待处理回话"
           aria-label="取消待处理回话"
           @click="$emit('cancel-deliberation', durableCancelTarget)"
-        ><var-icon name="close" /></button>
+        ><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" /></svg></button>
         <button
           v-else-if="legacyCancelAvailable"
           class="icon-button"
@@ -53,7 +53,7 @@
           title="停止旧版回话等待"
           aria-label="停止旧版回话等待"
           @click="$emit('cancel-legacy-transport')"
-        ><var-icon name="close" /></button>
+        ><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" /></svg></button>
 
       </div>
     </div>
@@ -488,13 +488,30 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  box-sizing: border-box;
+  width: 38px;
+  height: 38px;
+  padding: 0;
   flex: 0 0 auto;
   border-radius: 8px;
-  background: #efe0c6;
+  background: transparent;
   color: #4a3423;
   white-space: nowrap;
+}
+
+.icon-button svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+
+.icon-button:hover:not(:disabled) {
+  background: #f2e8d8;
+}
+
+.icon-button:focus-visible {
+  outline: 2px solid #7f4a22;
+  outline-offset: 2px;
 }
 
 .workspace-entry {
@@ -658,8 +675,7 @@ button:disabled {
 }
 
 .icon-button.primary {
-  background: #6d3f1f;
-  color: #fff8e8;
+  color: #6d3f1f;
 }
 
 .conversation-load-error {
@@ -847,7 +863,14 @@ button:disabled {
   }
 
   .context-summary {
-    gap: 6px;
+    flex-wrap: wrap;
+    gap: 2px 6px;
+  }
+
+  .context-summary strong {
+    flex-shrink: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .context-summary em {

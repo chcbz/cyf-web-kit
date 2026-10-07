@@ -39,17 +39,45 @@ describe('Juyi Hall simple composer more menu', () => {
       expect(wrapper.text()).not.to.contain('工作空间')
     } finally { wrapper.unmount() }
   })
-  it('starts closed and opens materials without changing or submitting the draft', async () => {
+  it('opens materials directly after plus without opening the menu or changing the draft', async () => {
     const wrapper = create()
     try {
       expect(wrapper.get('.composer-more-panel').element.style.display).to.equal('none')
       expect(wrapper.find('.composer-clear').exists()).to.equal(false)
-      await wrapper.get('.composer-more').trigger('click')
-      await wrapper.get('.composer-more-actions button').trigger('click')
+      await wrapper.get('.composer-add-materials').trigger('click')
       expect(wrapper.emitted('open-materials')).to.have.length(1)
       expect(wrapper.emitted('send-message')).to.equal(undefined)
       expect(wrapper.emitted('update:draft')).to.equal(undefined)
-      expect(wrapper.get('.composer-more').attributes('aria-expanded')).to.equal('true')
+      expect(wrapper.get('.composer-more').attributes('aria-expanded')).to.equal('false')
+      expect(wrapper.get('.composer-more-panel').find('.composer-add-materials').exists()).to.equal(false)
+    } finally { wrapper.unmount() }
+  })
+  it('renders the existing materials slot while plus is closed', async () => {
+    const wrapper = mount(Composer, {
+      props: { mentionLabel: () => '', draft: '原有草稿' },
+      slots: { materials: '<section class="material-reference-picker">真实资料选择器</section>' }
+    })
+    try {
+      expect(wrapper.get('.composer-more').attributes('aria-expanded')).to.equal('false')
+      const picker = wrapper.get('.composer-materials .material-reference-picker').element
+      for (let node = picker; node; node = node.parentElement) {
+        expect(node.style.display).not.to.equal('none')
+      }
+      expect(wrapper.get('.composer-more-panel').find('.material-reference-picker').exists()).to.equal(false)
+      const buttons = wrapper.get('.composer-actions').findAll('button')
+      expect(buttons.map(button => button.attributes('aria-label'))).to.deep.equal(['更多操作', '添加资料', '发送'])
+      for (const button of buttons) {
+        const icon = button.get('svg')
+        expect(icon.attributes('width')).to.equal('20')
+        expect(icon.attributes('height')).to.equal('20')
+        expect(icon.attributes('stroke-width')).to.equal('1.8')
+        expect(icon.attributes('aria-hidden')).to.equal('true')
+      }
+      await wrapper.setProps({ isAwaitingReply: true })
+      expect(wrapper.get('.composer-send').attributes('aria-label')).to.equal('处理中')
+      expect(wrapper.get('.composer-send').attributes('disabled')).to.equal('')
+      expect(wrapper.get('.composer-add-materials').attributes('disabled')).to.equal('')
+      expect(wrapper.get('.composer-more').attributes('disabled')).to.equal(undefined)
     } finally { wrapper.unmount() }
   })
   it('closes on Escape or outside click and restores focus', async () => {
@@ -80,7 +108,8 @@ describe('Juyi Hall simple composer more menu', () => {
     const wrapper = create({ voice: { supported: true, state: 'recording', voiceInteractionLocked: true } })
     try {
       expect(wrapper.get('.composer-more-panel').element.style.display).not.to.equal('none')
-      expect(wrapper.get('.composer-more-actions').element.style.display).to.equal('none')
+      expect(wrapper.find('.composer-more-actions').exists()).to.equal(false)
+      expect(wrapper.get('.composer-add-materials').attributes('disabled')).to.equal('')
       expect(wrapper.get('.voice-stub').element.style.display).not.to.equal('none')
       expect(wrapper.get('.composer-send').attributes('disabled')).to.equal('')
     } finally { wrapper.unmount() }
