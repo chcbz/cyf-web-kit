@@ -61,7 +61,9 @@ describe('V1-8 hall account navigation', () => {
   it('uses the global current user only and wires visible portrait and true-landscape entry points through JuyiHall', () => {
     expect(hallSource).to.include("import { onBeforeRouteLeave, useRouter } from 'vue-router'")
     expect(hallSource).to.include('globalStore.user?.avatar')
-    expect(hallSource).to.include("resolveAccountDisplayName(user, String(globalStore.getUserId || ''))")
+    expect(hallSource).to.include("resolveAccountDisplayName(user, String(user.displayName || ''))")
+    expect(hallSource).to.include('createHydratedIdentityScope(globalStore.user, apiStore.oauthClientId)')
+    expect(hallSource).not.to.include('globalStore.user?.id || globalStore.user?.openid || globalStore.getUserId')
     expect(hallSource).to.include(':account-avatar="accountAvatar"')
     expect(hallSource).to.include('@open-profile="openProfile"')
     expect(hallSource).to.include("router.push({ name: 'UserProfile' })")

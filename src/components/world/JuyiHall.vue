@@ -23,7 +23,7 @@
       <div class="hall-header-tools">
         <button type="button" @click="openPanel('agents', { root: isOverviewHome })">好汉</button>
         <button class="workbench-message-action" type="button" aria-label="查看消息" @click="openPanel('messages', { root: isOverviewHome })"><var-icon v-if="isOverviewHome" name="bell-outline" aria-hidden="true" /><span v-else>消息</span></button>
-        <button class="workbench-create-action" type="button" @click="openPrivateDraft()"><var-icon v-if="isOverviewHome" name="plus" aria-hidden="true" /><span>{{ isOverviewHome ? '提出需求' : '＋ 提出需求' }}</span></button>
+        <button class="workbench-create-action" type="button" @click="openDefaultRequirementCreate()"><var-icon v-if="isOverviewHome" name="plus" aria-hidden="true" /><span>{{ isOverviewHome ? '提出需求' : '＋ 提出需求' }}</span></button>
         <button class="workbench-account-action" type="button" :disabled="accountEntryDisabled" aria-label="个人中心" @click="openProfile"><var-icon v-if="isOverviewHome" name="account-circle-outline" aria-hidden="true" /><span>账户</span></button>
         <button class="workbench-mobile-more" type="button" aria-label="全部入口" :aria-expanded="workbenchMenuOpen" @click="workbenchMenuOpen = !workbenchMenuOpen"><var-icon name="menu" /></button>
       </div>
@@ -101,15 +101,15 @@
           :identity-scope="hallIdentityScope"
           :identity-epoch="apiStore.authorizationGeneration"
           :agents="operableRosterAgents"
-          :quick-pending="quickMatter.busy.value"
-          :quick-message="quickMatter.message.value"
+          :quick-pending="requirementCreateBusy"
+          :quick-message="requirementCreateState.error || ''"
           @quick-request="handleQuickRequest"
           @set-home-mode="setHomeMode"
           @open-board="openPanel('tasks')"
           @open-workspace="openBabaoBox"
           @open-agents="openPanel('agents')"
           @start-chat="startContextConversation"
-          @start-draft="openPrivateDraft()"
+          @start-draft="openDefaultRequirementCreate()"
           @open-item="openOverviewItem"
           @open-task="openOverviewTask"
         />
@@ -199,7 +199,7 @@
     </Teleport>
 
     <footer v-if="homeMode === 'map' && !isImmersiveMap" class="hall-map-actions" :inert="isPanelSessionActive || voiceInteractionLocked ? '' : null" :aria-hidden="isPanelSessionActive ? 'true' : null">
-      <button class="hall-primary" type="button" @click="openPrivateDraft()">＋ 提出需求</button>
+      <button class="hall-primary" type="button" @click="openDefaultRequirementCreate()">＋ 提出需求</button>
       <button type="button" :aria-label="conversationEntryLabel" @click="startContextConversation">{{ conversationEntryLabel }}</button>
       <span>不必先懂所有功能，就能开始办事</span>
       <button class="hall-continue" type="button" @click="setHomeMode('overview')">接着上次办 →</button>
@@ -280,9 +280,13 @@
             :agent-filter="agentFilter"
             :loading="rosterLoading"
             :error-message="rosterError"
+            :has-pending-task="Boolean(pendingPointAndDeliberateTask)"
+            :point-and-start-busy="pointAndStartBusy || controlledBridgeBusy"
+            :can-point-and-deliberate="canPointAndDeliberateAgent"
+            :can-start-conversation="canStartAgentConversation"
             @set-agent-filter="setAgentFilter"
             @select-agent="selectAgent"
-            :can-start-conversation="canStartAgentConversation"
+            @point-and-deliberate="handlePointAndDeliberateAgent"
             @start-conversation="handleStartAgentConversation"
             @open-catalog="openPanel('catalog')"
           />
@@ -314,6 +318,10 @@
             :funded-quote-preview="fundedQuotePreview"
             :funded-claim-state="fundedClaimState"
             :funded-create-recovery="fundedCreateRecovery"
+            :requirement-create-state="requirementCreateState"
+            :requirement-create-busy="requirementCreateBusy"
+            :point-and-start-state="pointAndStartPresentationState"
+            :point-and-start-busy="pointAndStartBusy || controlledBridgeBusy"
             :format-time="formatTime"
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
@@ -342,11 +350,15 @@
             @assign-task="assignTask"
             @archive-task="archiveTask"
             @brief-selected-task="briefSelectedTask"
-            @create-task="createTask"
+            @create-task="createRequirementAndChooseAgent"
+            @check-requirement-create="checkRequirementCreate"
+            @resume-requirement-create="resumeRequirementCreate"
             @start-private-draft="openPrivateDraft()"
             @open-formal-results="openFormalResults"
             @start-formal-draft="openPanel('formalDraft', { restore: true })"
             @resume-funded-create="resumeFundedCreate"
+            @check-point-and-start="checkPointAndStartOriginal"
+            @resume-point-and-start="resumePointAndStartOriginal"
             @cancel-funded-create-recovery="showToast('原资金榜请求仍会保留；请在准备好后明确恢复。')"
             @cancel-funding="cancelFunding"
             @load-settlement="loadSettlement"
@@ -360,8 +372,32 @@
             @set-status-filter="setTaskStatusFilter"
           />
 
+          <BountyAcceptancePanel
+            v-if="renderedPanel === 'tasks' && formalTaskRef && hallIdentityScope && multimediaDeliberationUiEnabled && !taskReviewRef && formalTaskRef.funding?.mode !== 'FUNDED_SINGLE_AGENT'"
+            :key="formalTaskRef.id"
+            :task-id="formalTaskRef.id"
+            :identity-key="`${apiStore.authorizationGeneration}\u0000${hallIdentityScope}`"
+            :task-version="formalTaskRef.taskVersion ?? formalTaskRef.version"
+            :task-completed="formalTaskRef.status === 'completed'"
+            :conversation-id="chatMode === 'bounty' && conversationTask?.id === formalTaskRef.id ? conversationId : ''"
+            @continue-modification="continueBountyModification(formalTaskRef, $event)"
+            @task-completed="loadTasks"
+          >
+            <template #legacy>
+              <FormalTaskDeliveryPanel
+                :key="formalTaskRef.id"
+                :task-id="formalTaskRef.id"
+                :identity-fingerprint="`${hallIdentityScope}:${apiStore.authorizationGeneration}`"
+                :focus-delivery-id="''"
+                :execution-context="formalTaskExecutionContext"
+                :selected-agent-id="selectedAgent?.agentId || ''"
+                @discuss-task="discussTask(formalTaskRef)"
+                @rework-created="hallReadRevision += 1"
+              />
+            </template>
+          </BountyAcceptancePanel>
           <FormalTaskDeliveryPanel
-            v-if="renderedPanel === 'tasks' && formalTaskRef && hallIdentityScope"
+            v-else-if="renderedPanel === 'tasks' && formalTaskRef && hallIdentityScope"
             :key="formalTaskRef.id"
             :task-id="formalTaskRef.id"
             :identity-fingerprint="`${hallIdentityScope}:${apiStore.authorizationGeneration}`"
@@ -498,6 +534,10 @@
             :inert="renderedPanel !== 'chat' ? '' : null"
             :aria-hidden="renderedPanel !== 'chat' ? 'true' : null"
             :draft="draft"
+            :active-request="activeRequest"
+            :active-turns="activeTurns"
+            :capability-state="capabilityState"
+            :deliberation-v2-enabled="multimediaDeliberationUiEnabled"
             :voice="hallVoice"
             @update:draft="setDraft"
             @voice-apply="applyVoiceTranscript"
@@ -513,6 +553,9 @@
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
             :conversation-busy="isConversationBusy"
+            :deliberation-status="deliberationStatus"
+            :durable-cancel-target="durableCancelTarget"
+            :legacy-cancel-available="canCancelLegacy"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -523,6 +566,8 @@
             :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
+            @cancel-deliberation="cancelDeliberation"
+            @cancel-legacy-transport="cancelLegacyHallReply"
             @clear-target="handleClearChatTarget"
             @delete-conversation="deleteHallConversation"
             @load-history="loadHallConversationHistory({ force: true })"
@@ -543,6 +588,16 @@
             v-show="renderedPanel === 'chat'"
             :inert="renderedPanel !== 'chat' ? '' : null"
             :aria-hidden="renderedPanel !== 'chat' ? 'true' : null"
+            :active-request="activeRequest"
+            :request-catalog="bountyRequestCatalog.entries"
+            :active-turns="activeTurns"
+            :capability-state="capabilityState"
+            :deliberation-v2-enabled="multimediaDeliberationUiEnabled"
+            :typed-outcomes="typedDeliberation.cards.value"
+            :typed-pending-question="typedDeliberation.selectedPending.value"
+            :typed-enabled="typedDeliberationEnabled"
+            :typed-recovery-available="typedDeliberation.recoveryAvailable.value"
+            :typed-inspection-status="typedDeliberation.inspectionStatus.value"
             :draft="draft"
             :voice="hallVoice"
             @update:draft="setDraft"
@@ -559,6 +614,9 @@
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
             :conversation-busy="isConversationBusy"
+            :deliberation-status="deliberationStatus"
+            :durable-cancel-target="durableCancelTarget"
+            :legacy-cancel-available="canCancelLegacy"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -570,8 +628,13 @@
             :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
+            @execution-settled="refreshExecutionRequest"
+            @cancel-deliberation="cancelDeliberation"
+            @cancel-legacy-transport="cancelLegacyHallReply"
             @clear-target="handleClearChatTarget"
             @delete-conversation="deleteHallConversation"
+            @typed-reply="handleTypedReply"
+            @typed-resume="handleTypedResume"
             @load-history="loadHallConversationHistory({ force: true })"
             @load-more-history="loadMoreHallConversationHistory"
             @load-messages="retryHallConversation"
@@ -583,6 +646,7 @@
             @retry-conversation="retryHallConversation"
             @select-conversation="selectHallConversation"
             @send-message="handleSendHallMessage"
+            @task-completed="loadTasks"
           />
 
           <PrivateDiscussionPanel
@@ -606,6 +670,9 @@
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
             :conversation-busy="isConversationBusy"
+            :deliberation-status="deliberationStatus"
+            :durable-cancel-target="durableCancelTarget"
+            :legacy-cancel-available="canCancelLegacy"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -616,6 +683,8 @@
             :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
+            @cancel-deliberation="cancelDeliberation"
+            @cancel-legacy-transport="cancelLegacyHallReply"
             @clear-target="handleClearChatTarget"
             @delete-conversation="deleteHallConversation"
             @load-history="loadHallConversationHistory({ force: true })"
@@ -673,10 +742,11 @@ import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { useGlobalStore } from '@/stores/global'
 import { useApiStore } from '@/stores/api'
 import { agentApi, chatApi } from '@/composables/useHttp'
-import { useHallChatContext } from '@/composables/juyiting/useHallChatContext'
+import { useHallChatContext, bountyInteractionTargetId } from '@/composables/juyiting/useHallChatContext'
 import { useHallBackendSceneState } from '@/composables/juyiting/useHallBackendSceneState'
 import { useHallCommandQueue } from '@/composables/juyiting/useHallCommandQueue'
 import { useHallConversation } from '@/composables/juyiting/useHallConversation'
+import { isMultimediaDeliberationUiEnabled } from '@/composables/juyiting/hallMultimediaDeliberationUi'
 import { useHallVoiceConversation } from '@/composables/juyiting/useHallVoiceConversation'
 import { confirmHallLeave, hasMeaningfulHallLeaveWork } from '@/composables/juyiting/hallAccountNavigation'
 import { createHallVoiceReplyCorrelation } from '@/composables/juyiting/hallVoiceReplyCorrelation'
@@ -691,7 +761,17 @@ import { useHallSceneState } from '@/composables/juyiting/useHallSceneState'
 import { useHallSceneDebugBridge } from '@/composables/juyiting/useHallSceneDebugBridge'
 import { useHallSound } from '@/composables/juyiting/useHallSound'
 import { useHallTaskActions } from '@/composables/juyiting/useHallTaskActions'
-import { useHallQuickMatter } from '@/composables/juyiting/useHallQuickMatter'
+import { useHallRequirementCreate } from '@/composables/juyiting/useHallRequirementCreate'
+import { useHallPointAndStart } from '@/composables/juyiting/useHallPointAndStart'
+import { currentBountyAssignmentRevision } from '@/composables/juyiting/hallBountyAssignmentContext'
+import { createPointAndStartIntentStore } from '@/composables/juyiting/hallPointAndStartIntent'
+import { pointAndStartRecoveryLane } from '@/composables/juyiting/hallPointAndStartRecoveryLane'
+import { useHallPointAndStartControlledBridge } from '@/composables/juyiting/useHallPointAndStartControlledBridge'
+import { useHallBountyRequestCatalog } from '@/composables/juyiting/useHallBountyRequestCatalog'
+import { useHallTypedDeliberation } from '@/composables/juyiting/useHallTypedDeliberation'
+import { typedLong } from '@/composables/juyiting/hallTypedDeliberation'
+import { pointAndStartIntentReadLane } from '@/composables/juyiting/hallNativeBountyCapability'
+import { useHallDrafts } from '@/composables/juyiting/useHallDrafts'
 import { useTaskWorkspace } from '@/composables/juyiting/useTaskWorkspace'
 import { createDisabledTaskWorkspaceBinding, isTaskWorkspaceBuildEnabled } from '@/composables/juyiting/taskWorkspaceFeature'
 import { useTaskWorkspaceView } from '@/composables/juyiting/useTaskWorkspaceView'
@@ -703,6 +783,7 @@ import ArtifactOutcomePanel from '@/components/juyiting/ArtifactOutcomePanel.vue
 import { portraitName, portraitRole, portraitShortName, portraitStyle, roleClass } from '@/composables/juyiting/useWaterMarginRoles'
 import AgentPanel from '@/components/juyiting/AgentPanel.vue'
 import BountyDiscussionPanel from '@/components/juyiting/BountyDiscussionPanel.vue'
+import BountyAcceptancePanel from '@/components/juyiting/BountyAcceptancePanel.vue'
 import BountyPanel from '@/components/juyiting/BountyPanel.vue'
 import HallPortraitHome from '@/components/juyiting/HallPortraitHome.vue'
 import HallStage from '@/components/juyiting/HallStage.vue'
@@ -722,6 +803,7 @@ import { log } from '@/utils/logger'
 import { isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
 import { isEconomyPreviewCapability, loadEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
 import { resolveAccountDisplayName } from '@/utils/displayName'
+import { createHydratedIdentityScope, hasHydratedIdentity } from '@/utils/identityScope'
 import { juyitingGame } from '@/game/index.js'
 
 const emit = defineEmits(['open-onboarding'])
@@ -733,16 +815,12 @@ const router = useRouter()
 const accountAvatar = computed(() => String(globalStore.user?.avatar || '').trim())
 const accountDisplayName = computed(() => {
   const user = globalStore.user || {}
-  return resolveAccountDisplayName(user, String(globalStore.getUserId || '')) || '个人中心'
+  return resolveAccountDisplayName(user, String(user.displayName || '')) || '个人中心'
 })
-const hallIdentityScope = computed(() => {
-  const owner = String(globalStore.user?.id || globalStore.user?.openid || globalStore.getUserId || globalStore.getOpenid || '').trim()
-  const client = String(apiStore.oauthClientId || '').trim()
-  const tenant = String(globalStore.user?.tenantId || globalStore.user?.tenantCode || globalStore.user?.tenant || '').trim()
-  return owner && client ? [tenant, client, owner].filter(Boolean).join('\u0000') : ''
-})
+const hallIdentityScope = computed(() => createHydratedIdentityScope(globalStore.user, apiStore.oauthClientId))
 
-const quickMatter = useHallQuickMatter({
+// Existing unresolved draft writes are protected by the shared recovery store; new requirements never use TASK_CREATE + per-file links.
+const hallDraftRecovery = useHallDrafts({
   identityScope: hallIdentityScope,
   identityEpoch: () => apiStore.authorizationGeneration
 })
@@ -751,6 +829,9 @@ const selectedAgent = ref(null)
 const selectedTask = ref(null)
 const economyPreviewEnabled = ref(false)
 const workItemPlanEnabled = import.meta.env.VITE_JUYITING_WORK_ITEM_PLAN_ENABLED === 'true'
+const multimediaDeliberationUiEnabled = isMultimediaDeliberationUiEnabled(import.meta.env.VITE_JUYITING_MULTIMEDIA_DELIBERATION_V2_UI)
+// Typed discussion is the single ordinary request entry for multimedia tasks.
+const typedDeliberationBuildEnabled = import.meta.env.VITE_JUYITING_TYPED_DELIBERATION_UI === 'true'
 const economyPreviewCapability = ref(null)
 const economyPreviewChecked = ref(false)
 const economyPreviewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
@@ -1151,6 +1232,7 @@ const {
   chatMentionAgents,
   chatMode,
   chatTargetText,
+  enterArchiveSongjiangConversation,
   enterBountyDiscussion,
   enterPrivateConversation,
   resetToPublic,
@@ -1654,16 +1736,19 @@ const openOverviewItem = ref => {
   return true
 }
 
-const handleQuickRequest = async request => {
-  const result = await quickMatter.submit(request)
-  if (!result?.task) return false
-  const task = result.task
-  tasks.value = [task, ...tasks.value.filter(item => item.id !== task.id)]
-  selectedTask.value = task
+const handleQuickRequest = async (request, settle = () => {}) => {
+  if (typeof request?.request !== 'string' || !request.request.trim()) return false
+  const identity = hallIdentityScope.value
+  const epoch = apiStore.authorizationGeneration
+  const created = await createTask({ title: request.request, description: request.request, attachments: request.materials ?? [] })
+  if (identity !== hallIdentityScope.value || epoch !== apiStore.authorizationGeneration) return false
+  settle(created === true)
+  if (!created) {
+    if (requirementCreateState.value.intent) openPanel('tasks', { root: true })
+    return false
+  }
   hallReadRevision.value += 1
-  await selectTask(task)
-  await openOverviewTask(task)
-  showToast(quickMatter.message.value || '事项已建立。下一步可选择承办好汉或补充资料；尚未开始执行。')
+  openPanel('agents')
   return true
 }
 
@@ -1678,6 +1763,18 @@ const openOverviewTask = async (task, review = null) => {
   return true
 }
 
+const openDefaultRequirementCreate = () => {
+  if (!multimediaDeliberationUiEnabled) return openPrivateDraft()
+  if (guardPanelLeave(openDefaultRequirementCreate)) return false
+  if (!openPanel('tasks', { root: true })) return false
+  const generation = panelSessionGeneration.value
+  void nextTick(() => {
+    if (!panelDisposed && activePanel.value === 'tasks' && panelSessionGeneration.value === generation) {
+      bountyPanelRef.value?.openCreateRequirement?.()
+    }
+  })
+  return true
+}
 const openPrivateDraft = (context = {}) => {
   if (guardPanelLeave(() => openPrivateDraft(context))) return false
   if (!openPanel('draft', { restore: true })) return false
@@ -1691,6 +1788,32 @@ const openFormalResults = task => {
   formalTaskRef.value = task
   taskReviewRef.value = null
   return true
+}
+// Return only to the scoped existing discussion; never point, create, or send on navigation.
+const continueBountyModification = async (task, source) => {
+  if (!task?.id || (source && source.taskId !== task.id) || !openPanel('chat')) return false
+  const identity = `${apiStore.authorizationGeneration}\u0000${hallIdentityScope.value}`
+  const sameDiscussion = chatMode.value === 'bounty' && conversationTask.value?.id === task.id
+  if (sameDiscussion && conversationId.value && (!source?.conversationId || conversationId.value === source.conversationId)) return true
+  if (isConversationBusy.value) { showToast('议事仍在处理中，请稍后返回原会话。'); return false }
+  if (!sameDiscussion) enterBountyDiscussion(task)
+  const current = () => identity === `${apiStore.authorizationGeneration}\u0000${hallIdentityScope.value}` && conversationTask.value?.id === task.id && chatMode.value === 'bounty'
+  await loadHallConversationHistory({ force: true })
+  if (!current()) return false
+  if (source?.conversationId) {
+    while (current() && !conversationHistory.value.some(row => row.id === source.conversationId) && conversationHistoryHasMore.value && !conversationHistoryError.value) {
+      const count = conversationHistory.value.length
+      await loadMoreHallConversationHistory()
+      if (conversationHistory.value.length === count) break
+    }
+    if (!current()) return false
+    const restored = await selectHallConversation(source.conversationId)
+    if (!restored) showToast('原议事暂不可读取，请重试；未创建新会话或重新执行。')
+    return restored
+  }
+  if (conversationHistory.value.length === 1 && !conversationHistoryHasMore.value) return selectHallConversation(conversationHistory.value[0].id)
+  showToast('请从话头记录返回原议事；未猜选最新会话。')
+  return false
 }
 const openTaskWorkspace = () => {
   if (!taskWorkspaceEnabled || !taskWorkspaceSubject.value?.taskId || !taskWorkspaceSubject.value?.actorAgentId) return
@@ -1889,35 +2012,70 @@ const {
   tasks
 })
 
+const requirementCreateStorage = (() => {
+  try { return typeof window !== 'undefined' ? window.localStorage : null } catch { return null }
+})()
+const {
+  state: requirementCreateState,
+  busy: requirementCreateBusy,
+  create: runRequirementCreate,
+  checkOriginal: checkRequirementCreate,
+  resumeOriginal: resumeRequirementCreate,
+  readOriginal: readRequirementCreateOriginal,
+  dispose: disposeRequirementCreate
+} = useHallRequirementCreate({
+  agentApi,
+  actorScopeKey: hallIdentityScope,
+  identityEpoch: () => apiStore.authorizationGeneration,
+  storage: requirementCreateStorage,
+  schemaVersion: 2,
+  onCommitted: (receipt, fence) => {
+    if (!fence.isCurrent()) return false
+    tasks.value = [receipt.task, ...tasks.value.filter(task => task.id !== receipt.taskId)]
+    selectedTask.value = receipt.task
+    markTaskCreated(receipt.task)
+    playSuccess()
+    showToast('榜文及所选资料已确认；点将后才开始办理。')
+    return true
+  }
+})
 const createTask = async (payload, acknowledge = () => {}) => {
-  const created = await runCreateTask(payload)
-  if (created) markTaskCreated(selectedTask.value)
-  acknowledge(created)
+  // Preserve the funded lane, but never let it replace a pending ordinary
+  // creation operation, or reinterpret selected materials as funding authority.
+  let created = false
+  try {
+    const pendingDraft = hallDraftRecovery.unresolvedIntent.value
+    if (pendingDraft?.kind === 'TASK_CREATE') {
+      showToast('原事项创建仍待核对，请先打开原草稿；未创建另一份事项。')
+      openOverviewItem({ sourceType: 'DRAFT', sourceId: pendingDraft.draftId })
+      return false
+    }
+    if (payload?.grossBountyAmountMicro) {
+      const original = readRequirementCreateOriginal()
+      if (original.state !== 'ABSENT' || payload.attachments?.length || payload.inputRefs?.length) {
+        showToast('请先核对原张榜；资金榜不提交普通榜资料。')
+      } else {
+        created = await runCreateTask(payload)
+        if (created) markTaskCreated(selectedTask.value)
+      }
+    } else if (fundedCreateRecovery.value) {
+      showToast('请先核对原资金榜；当前编辑稿未提交。')
+    } else {
+      created = await runRequirementCreate(payload)
+      if (!created && requirementCreateState.value.error) showToast(requirementCreateState.value.error)
+    }
+  } finally { acknowledge(created) }
+  return created
+}
+const createRequirementAndChooseAgent = async (payload, acknowledge) => {
+  const created = await createTask(payload, acknowledge)
+  if (created && !payload?.grossBountyAmountMicro) openPanel('agents')
   return created
 }
 const resumeFundedCreate = async () => {
   const created = await runResumeFundedCreate()
   if (created) markTaskCreated(selectedTask.value)
   return created
-}
-
-const assignTask = async (task, agent) => {
-  const targetAgents = Array.isArray(agent) ? agent : [agent].filter(Boolean)
-  const hasExplicitAgentId = item => typeof item?.agentId === 'string' && Boolean(item.agentId.trim())
-  if (!task?.id || !targetAgents.length || targetAgents.some(item => !hasExplicitAgentId(item))) return false
-  if (task.funding?.mode === 'FUNDED_SINGLE_AGENT' && !economyPreviewEnabled.value) return false
-  if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT') {
-    if (targetAgents.some(item => !canAssign(task, item))) return false
-  }
-
-  taskWorkspaceBinding.clearExplicitActor()
-  const assignmentSucceeded = await runAssignTask(task, agent)
-  if (!assignmentSucceeded) return false
-
-  const canonicalTask = tasks.value.find(item => item.id === task.id) || task
-  if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT' ||
-    (canonicalTask.status === 'assigned' && canonicalTask.assignedAgentId === targetAgents[0].agentId)) markTaskAssigned(canonicalTask, targetAgents)
-  return true
 }
 
 const autoAssignTask = async (task) => {
@@ -1946,9 +2104,21 @@ const cancelFunding = async (task) => {
 
 const loadSettlement = async (task) => runLoadSettlement(task)
 
+let notifyBountyRequestCatalog = () => {}
+
 const {
+  activeRequest,
+  activeTurns,
+  adoptBountyBootstrap,
+  adoptTypedDiscussionReceipt,
+  capabilityState,
   cancelHallReplyTurn,
+  cancelDeliberation,
+  cancelLegacyHallReply,
+  canCancelLegacy,
+  durableCancelTarget,
   chatConnectionStatus,
+  deliberationStatus,
   conversationHistory,
   conversationHistoryDeletingId,
   conversationHistoryError,
@@ -1962,6 +2132,7 @@ const {
   insertAgentMention,
   isAwaitingReply,
   isConversationBusy,
+  isSubmitting,
   isStreaming,
   loadHallConversationHistory,
   loadHallMessages,
@@ -1972,6 +2143,7 @@ const {
   pendingAgentName,
   replyEventSequence,
   retryHallConversation,
+  refreshExecutionRequest,
   sendHallMessage,
   senderText,
   selectHallConversation,
@@ -1996,8 +2168,227 @@ const {
   showToast,
   onFinalReply: payload => {
     voiceReplyCorrelation.observe(payload)
+  },
+  onDelivery: ({ agentId }) => {
+    if (agentId) markAgentSpeaking(agentId, '收到传令', 'system')
+  },
+  onRequestCatalogHint: event => notifyBountyRequestCatalog(event),
+  onTypedOutcome: event => { if (event?.requestId) void typedDeliberation?.readOne?.(event.requestId) }
+})
+
+const followupContextGeneration = ref(0)
+const typedDeliberationEnabled = computed(() => typedDeliberationBuildEnabled && multimediaDeliberationUiEnabled && chatMode.value === 'bounty')
+let typedDeliberation = null
+const bountyRequestCatalog = useHallBountyRequestCatalog({
+  chatApi, identityScope: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
+  getContext: () => ({ conversationId: conversationId.value, taskId: conversationTask.value?.id || '',
+    targetAgentId: bountyInteractionTargetId(chatContext.value), assignmentRevision: typedAssignmentRevision() }),
+  getContextGeneration: () => followupContextGeneration.value, enabled: () => multimediaDeliberationUiEnabled && chatMode.value === 'bounty'
+})
+notifyBountyRequestCatalog = async () => {
+  if (await bountyRequestCatalog.refresh()) await typedDeliberation?.refresh?.()
+}
+const invalidateFollowupContext = () => { followupContextGeneration.value++; typedDeliberation?.invalidate?.() }
+const typedAssignmentRevision = () => currentBountyAssignmentRevision({
+  task: conversationTask.value, targetAgentId: bountyInteractionTargetId(chatContext.value),
+  conversationId: conversationId.value, state: pointAndStartState.value
+})
+const typedConversationGeneration = () => typedLong(activeRequest.value?.conversationGeneration) ||
+  typedLong(bountyRequestCatalog.entries.value?.[0]?.request?.conversationGeneration) || ''
+const typedDeliberationContext = () => ({ conversationId: conversationId.value, taskId: conversationTask.value?.id || '',
+  targetAgentId: bountyInteractionTargetId(chatContext.value), assignmentRevision: typedAssignmentRevision(),
+  conversationGeneration: typedConversationGeneration() })
+const typedDeliberationStorage = (() => { try { return typeof window !== 'undefined' ? window.sessionStorage : null } catch { return null } })()
+typedDeliberation = useHallTypedDeliberation({
+  chatApi, actorScopeKey: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
+  getContext: typedDeliberationContext, getContextGeneration: () => followupContextGeneration.value,
+  getCatalogEntries: () => bountyRequestCatalog.entries.value, prepareCatalog: () => bountyRequestCatalog.refresh(), storage: typedDeliberationStorage,
+  enabled: () => typedDeliberationEnabled.value,
+  onAccepted: async ({ receipt, purpose, context, isCurrent }) => {
+    if (!isCurrent?.()) return false
+    if (purpose === 'INSPECT') { bountyRequestCatalog.hint(); showToast('Agent 正在处理资料。'); return true }
+    const adopted = await adoptTypedDiscussionReceipt({ receipt, context, isCurrent })
+    if (!isCurrent?.()) return false
+    bountyRequestCatalog.hint()
+    showToast(adopted
+      ? (receipt.intent === 'CLARIFICATION_REPLY' ? '已发送补充。' : '已发送。')
+      : '消息已提交，正在确认处理状态。')
+    return adopted
   }
 })
+
+// Every user-visible task/target/auth context change fences in-flight original
+// projection reads. The one canonical task replacement performed by a verified
+// admission is marked below, so its own reactive write cannot cancel adoption.
+const pointAndStartContextGeneration = ref(0)
+let admittedPointAndStartTaskFingerprint = null
+const pointAndStartTaskFingerprint = task => [task?.id, task?.taskVersion, task?.requirementRevision, task?.revision]
+  .map(value => value == null ? '' : String(value)).join('\u0000')
+const preserveAdmittedPointAndStartContext = task => { admittedPointAndStartTaskFingerprint = pointAndStartTaskFingerprint(task) }
+const pointAndStartStorage = (() => {
+  try { return typeof window !== 'undefined' ? window.localStorage : null } catch { return null }
+})()
+const pointAndStartIntentState = (taskId) => createPointAndStartIntentStore({
+  storage: pointAndStartStorage,
+  scope: hallIdentityScope.value,
+  taskId
+}).read()
+const clearPointAndStartCapability = () => { pointAndStartContextGeneration.value++; invalidateControlledBridge(); stopPointAndStartObservation() }
+const attachAdmittedPointAndStart = async ({ task, targetAgentId, reference, isCurrent }) => {
+  if (!isCurrent?.() || panelDisposed || task?.id !== reference?.taskId || targetAgentId !== reference?.targetAgentId) return false
+  // Admission receives only the canonical TaskDTO. Never synthesize assignment
+  // fields from a grant receipt or choose a different roster target.
+  const target = operableRosterAgents.value.find(agent => agent?.agentId === targetAgentId)
+  if (!target) return false
+  tasks.value = tasks.value.map(item => item?.id === task.id ? task : item)
+  preserveAdmittedPointAndStartContext(task)
+  hallReadRevision.value += 1
+  selectedTask.value = task
+  if (!openPanel('chat')) return false
+  enterBountyDiscussion(task)
+  await nextTick()
+  if (!isCurrent?.() || panelDisposed || selectedTask.value?.id !== task.id) return false
+  return adoptBountyBootstrap(reference)
+}
+const {
+  state: controlledBridgeState,
+  busy: controlledBridgeBusy,
+  checkOriginal: checkControlledBridgeOriginal,
+  resumeOriginal: resumeControlledBridgeOriginal,
+  dispose: disposeControlledBridge,
+  invalidate: invalidateControlledBridge
+} = useHallPointAndStartControlledBridge({
+  agentApi,
+  actorScopeKey: hallIdentityScope,
+  storage: pointAndStartStorage,
+  keys: {
+    createAssignmentKey: () => globalThis.crypto?.randomUUID?.(),
+    createIssueKey: () => globalThis.crypto?.randomUUID?.()
+  },
+  onBound: async ({ intent, isCurrent }) => {
+    // The bridge receipt is not a bootstrap request. Observe the existing original
+    // projection until it is admitted/historical/failed or this context is invalidated.
+    if (isCurrent?.()) observePointAndStart(intent.taskId)
+  }
+})
+const {
+  state: pointAndStartState,
+  busy: pointAndStartBusy,
+  start: startPointAndStart,
+  checkOriginal: checkPointAndStart,
+  resumeOriginal: resumePointAndStart,
+  observeOriginal: observePointAndStart,
+  stopObservation: stopPointAndStartObservation,
+  dispose: disposePointAndStart
+} = useHallPointAndStart({
+  agentApi,
+  actorScopeKey: hallIdentityScope,
+  storage: pointAndStartStorage,
+  getContextGeneration: () => pointAndStartContextGeneration.value,
+  canAssign: (task, agent) => {
+    const current = operableRosterAgents.value.find(item => item?.agentId === agent?.agentId)
+    return Boolean(current && canAssign(task, current))
+  },
+  onAssignmentConfirmed: ({ isCurrent }) => {
+    if (isCurrent?.() && !panelDisposed) hallReadRevision.value += 1
+  },
+  onAdmitted: attachAdmittedPointAndStart
+})
+const pointAndStartPresentationState = computed(() => pointAndStartState.value.intent?.taskId === controlledBridgeState.value.intent?.taskId && pointAndStartState.value.status !== 'IDLE' ? pointAndStartState.value : controlledBridgeState.value.intent ? controlledBridgeState.value : pointAndStartState.value)
+const explainPointAndStartState = () => ({
+  UNKNOWN: '正在确认点将结果，请刷新状态。',
+  PREPARING: '正在准备会话。',
+  ADMITTED: '需求已发送，正在进入会话。',
+  HISTORICAL: '本次指派已结束，可查看历史记录。',
+  FAILED: '点将未完成，请刷新状态查看详情。'
+}[pointAndStartState.value.status] || '正在确认点将结果。')
+const checkPointAndStartOriginal = async (task) => {
+  if (!task?.id) return false
+  const existing = pointAndStartIntentState(task.id)
+  const result = pointAndStartRecoveryLane(existing) === 'CONTROLLED' ? await checkControlledBridgeOriginal(task.id) : await checkPointAndStart(task.id)
+  if (!result && pointAndStartState.value.intent?.taskId === task.id) showToast(explainPointAndStartState())
+  return result
+}
+const resumePointAndStartOriginal = async (task) => {
+  const intent = pointAndStartIntentState(task?.id)
+  if (intent.state !== 'PRESENT') return checkPointAndStartOriginal(task)
+  if (pointAndStartRecoveryLane(intent) === 'CONTROLLED') return resumeControlledBridgeOriginal(task.id)
+  return resumePointAndStart(task.id)
+}
+// Reuse the selected canonical task; private chat never changes this context.
+const pendingPointAndDeliberateTask = computed(() => {
+  const task = selectedTask.value
+  if (!task?.id || task.funding?.mode === 'FUNDED_SINGLE_AGENT') return null
+  if (String(task.status || '').toLowerCase() !== 'open') return null
+  if (task.assignedAgentId || task.assignedAgentIds?.length) return null
+  return task
+})
+const canPointAndDeliberateAgent = agent => Boolean(pendingPointAndDeliberateTask.value && agent?.agentId && canAssign(pendingPointAndDeliberateTask.value, agent))
+const handlePointAndDeliberateAgent = agent => {
+  if (!canPointAndDeliberateAgent(agent)) return false
+  return assignTask(pendingPointAndDeliberateTask.value, agent)
+}
+
+const assignTask = async (task, agent) => {
+  if (!task?.id) return false
+  // A durable v2 original always wins over every normal lane. This check happens
+  // before funded/multi/open eligibility so a changed current snapshot cannot
+  // turn an uncertain original write into a fresh legacy assignment.
+  const original = pointAndStartIntentState(task.id)
+  if (pointAndStartIntentReadLane(original) === 'UNAVAILABLE') {
+    showToast('无法读取原点将恢复记录；未另建点将。请恢复浏览器本地存储后核对原操作。')
+    return false
+  }
+  if (original.state === 'PRESENT' || original.state === 'CORRUPT') {
+    if (original.state === 'CORRUPT') showToast('原点将恢复记录损坏；为避免重复办理，未改走旧式点将。')
+    else await checkPointAndStartOriginal(task)
+    return false
+  }
+
+  const targetAgents = Array.isArray(agent) ? agent : [agent].filter(Boolean)
+  const hasExplicitAgentId = item => typeof item?.agentId === 'string' && Boolean(item.agentId.trim())
+  if (!targetAgents.length || targetAgents.some(item => !hasExplicitAgentId(item))) return false
+  if (task.funding?.mode === 'FUNDED_SINGLE_AGENT' && !economyPreviewEnabled.value) return false
+  if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT' && targetAgents.some(item => !canAssign(task, item))) return false
+
+  const oneOrdinaryTarget = task.funding?.mode !== 'FUNDED_SINGLE_AGENT' && targetAgents.length === 1
+  if (oneOrdinaryTarget) {
+    const started = await startPointAndStart({ task, agent: targetAgents[0] })
+    if (!started) showToast(explainPointAndStartState())
+    if (pointAndStartState.value.status === 'PREPARING') observePointAndStart(task.id)
+    return started
+  }
+
+  taskWorkspaceBinding.clearExplicitActor()
+  const assignmentSucceeded = await runAssignTask(task, agent)
+  if (!assignmentSucceeded) return false
+  const canonicalTask = tasks.value.find(item => item.id === task.id) || task
+  if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT' ||
+    (canonicalTask.status === 'assigned' && canonicalTask.assignedAgentId === targetAgents[0].agentId)) markTaskAssigned(canonicalTask, targetAgents)
+  return true
+}
+
+watch(() => [selectedTask.value?.id, selectedTask.value?.taskVersion, selectedTask.value?.requirementRevision, selectedTask.value?.revision], ([taskId, taskVersion, requirementRevision, revision]) => {
+  const fingerprint = [taskId, taskVersion, requirementRevision, revision].map(value => value == null ? '' : String(value)).join('\u0000')
+  const admittedProjection = admittedPointAndStartTaskFingerprint === fingerprint
+  admittedPointAndStartTaskFingerprint = null
+  if (admittedProjection) return
+  clearPointAndStartCapability()
+  if (taskId && pointAndStartIntentState(taskId).state === 'PRESENT') void checkPointAndStartOriginal({ id: taskId })
+}, { flush: 'sync' })
+watch([() => apiStore.authorizationGeneration, hallIdentityScope, () => selectedAgent.value?.agentId], clearPointAndStartCapability, { flush: 'sync' })
+const followupTaskFence = computed(() => [selectedTask.value?.id, selectedTask.value?.taskVersion,
+  selectedTask.value?.requirementRevision, selectedTask.value?.revision].map(value => value == null ? '' : String(value)).join('\u0000'))
+watch([followupTaskFence, () => apiStore.authorizationGeneration, hallIdentityScope, () => conversationId.value,
+  () => activeRequest.value?.conversationGeneration, () => bountyInteractionTargetId(chatContext.value), () => chatMode.value], invalidateFollowupContext, { flush: 'sync' })
+watch([followupTaskFence, () => apiStore.authorizationGeneration, hallIdentityScope, () => conversationId.value,
+  () => activeRequest.value?.conversationGeneration, () => bountyInteractionTargetId(chatContext.value), () => chatMode.value], () => {
+  bountyRequestCatalog.reset()
+  if (chatMode.value === 'bounty' && conversationId.value) {
+    void bountyRequestCatalog.refresh()
+    void typedDeliberation?.recover?.()
+  }
+}, { flush: 'sync' })
 
 const formalTaskExecutionContext = useFormalTaskExecutionScope({
   selectedTask,
@@ -2035,7 +2426,7 @@ hallVoice = useHallVoiceConversation({
   },
   getDraft: () => draft.value,
   getDraftRevision: () => draftRevision.value,
-  isReplyBusy: () => isStreaming.value || isAwaitingReply.value,
+  isReplyBusy: () => Boolean(isSubmitting?.value) || isStreaming.value || isAwaitingReply.value,
   onCaptureStateChange: capturing => setSoundSuppressed?.(capturing),
   onReplyTurnTerminal: ({ reason, turnId }) => {
     const closedCurrentTurn = voiceReplyCorrelation.closeIfCurrent(turnId, reason)
@@ -2043,7 +2434,7 @@ hallVoice = useHallVoiceConversation({
   },
   onOpenReview: () => { if (!activePanel.value) openPanel('chat') },
   onSendVoice: async ({ content, contextSnapshot, draftRevision: frozenDraftRevision, turnId }) => {
-    if (isStreaming.value || isAwaitingReply.value) return false
+    if (Boolean(isSubmitting?.value) || isStreaming.value || isAwaitingReply.value) return false
     const correlationTurnId = voiceReplyCorrelation.start({
       turnId,
       baselineSequence: replyEventSequence.value,
@@ -2074,7 +2465,7 @@ const voiceInteractionLocked = computed(() => hallVoice.voiceInteractionLocked)
 const accountEntryDisabled = computed(() => isPanelSessionActive.value || voiceInteractionLocked.value)
 const hallLeaveHasMeaningfulWork = computed(() => hasMeaningfulHallLeaveWork({
   draft: draft.value,
-  isAwaitingReply: isAwaitingReply.value,
+  isAwaitingReply: isAwaitingReply.value || Boolean(isSubmitting?.value),
   isStreaming: isStreaming.value,
   voiceInteractionLocked: voiceInteractionLocked.value,
   voiceTurnActive: Boolean(hallVoice?.voiceTurnActive)
@@ -2233,16 +2624,39 @@ const handleNewHallConversation = () => {
   return true
 }
 
-const handleSendHallMessage = async () => {
+const handleSendHallMessage = async (typedInput = {}) => {
   voiceReplyCorrelation.close('manual_text_send')
   hallVoice?.cancel()
   playSend()
-  const currentContext = chatContext.value || {}
-  const targets = currentContext.targetAgentIds?.length ? currentContext.targetAgentIds : currentContext.participantAgentIds
-  targets?.slice(0, 3).forEach(agentId => markAgentSpeaking(agentId, '收到传令', 'system'))
-  await sendHallMessage()
+  if (typedDeliberationEnabled.value) {
+    const sourceSelectors = Array.isArray(typedInput?.sourceSelectors) ? typedInput.sourceSelectors : []
+    if (!typedAssignmentRevision() && conversationTask.value?.id) {
+      const fence = [hallIdentityScope.value, apiStore.authorizationGeneration, conversationTask.value.id,
+        conversationId.value, bountyInteractionTargetId(chatContext.value), draft.value]
+      await checkPointAndStartOriginal(conversationTask.value)
+      const current = [hallIdentityScope.value, apiStore.authorizationGeneration, conversationTask.value?.id,
+        conversationId.value, bountyInteractionTargetId(chatContext.value), draft.value]
+      if (fence.some((value, index) => value !== current[index])) return false
+    }
+    const accepted = await typedDeliberation.submit({ content: draft.value, sourceSelectors })
+    if (accepted) setDraft('')
+    else if (typedDeliberation.error.value) showToast(typedDeliberation.error.value)
+    return accepted
+  }
+  return sendHallMessage()
 }
-
+const handleTypedReply = projection => {
+  if (!typedDeliberationEnabled.value || !typedDeliberation.choosePending(projection)) return false
+  setDraft('')
+  showToast('请在输入框补充说明。')
+  return true
+}
+const handleTypedResume = async () => {
+  if (!typedDeliberationEnabled.value) return false
+  const resumed = await typedDeliberation.resumeUnknown()
+  if (!resumed && typedDeliberation.error.value) showToast(typedDeliberation.error.value)
+  return resumed
+}
 const handleMentionAgent = (agent) => {
   if (!chatMentionAgents.value.some(item => item.agentId === agent?.agentId)) {
     showToast('只可点名自家好汉')
@@ -2251,7 +2665,6 @@ const handleMentionAgent = (agent) => {
   playTap()
   setMentionAgent(agent)
   mentionAgent(agent)
-  markAgentSpeaking(agent, '收到传令', 'system')
 }
 
 const handleClearChatTarget = () => {
@@ -2345,12 +2758,15 @@ onMounted(async () => {
   // token() initiates the one OAuth redirect when identity is absent. Do not mount
   // the live hall workflow while that redirect is pending: its protected loaders
   // would otherwise race the redirect and turn authentication into a fetch error.
-  if (!await apiStore.token()) return
-  // A valid restored bearer token can survive while the in-memory profile was
-  // cleared. Hydrate it before identity-scoped drafts/capabilities are opened.
-  if (!String(globalStore.getUserId || globalStore.getOpenid || '').trim()) {
+  const initializationGeneration = apiStore.authorizationGeneration
+  const initializationIsCurrent = () => !panelDisposed && initializationGeneration === apiStore.authorizationGeneration
+  if (!await apiStore.token() || !initializationIsCurrent()) return
+  // A valid restored bearer token can survive while only the unverified local ID
+  // cache remains. Hydrate the server profile before identity-scoped state opens.
+  if (!hasHydratedIdentity(globalStore.user)) {
     try { await apiStore.getUserInfo() } catch (error) { log.warn('hall identity hydration failed:', error) }
   }
+  if (!initializationIsCurrent()) return
   permitStageMount()
   await refreshHall({ silent: true })
   startDialogueBubbles()
@@ -2372,6 +2788,11 @@ onUnmounted(() => {
   taskWorkspaceBinding.dispose()
   voiceReplyCorrelation.close('unmount')
   hallVoice?.dispose()
+  clearPointAndStartCapability()
+  disposeRequirementCreate()
+  disposePointAndStart()
+  disposeControlledBridge()
+  typedDeliberation?.dispose?.()
   disposeHallConversation()
   hallBackendSceneState?.dispose()
   stopHallEventStream()
@@ -3732,7 +4153,8 @@ button.hall-room {
 .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.discussion-brief) { background: var(--work-ground); color: var(--work-ink); border-color: var(--work-line); }
 .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.discussion-brief .var-icon) { color: var(--work-brand); }
 .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar) { border-color: var(--work-line); color: var(--work-muted); }
-.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar .icon-button) { background: #f3f3ed; color: var(--work-ink); border: 1px solid var(--work-line); }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar .icon-button) { background: transparent; color: var(--work-ink); border: 0; }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar .icon-button:hover:not(:disabled)) { background: #f3f3ed; }
 .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar .context-summary strong) { color: var(--work-ink); }
 .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-messages .empty-list) { color: var(--work-muted); }
 .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-message) { background: #f2f2eb; color: var(--work-ink); box-shadow: none; }
@@ -4138,24 +4560,27 @@ button.hall-room {
   .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-panel-body) { padding-top: 10px; }
 
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar) {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    align-items: stretch;
-    gap: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: visible;
   }
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.context-summary) {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 6px;
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    min-width: 0;
+    gap: 2px 6px;
   }
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions) {
-    width: 100%;
-    padding-bottom: 2px;
-    overflow-x: auto;
+    width: auto;
+    margin-left: auto;
+    padding-bottom: 0;
+    overflow: visible;
   }
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions .icon-button) {
-    min-width: 42px;
-    height: 40px;
+    min-width: 38px;
+    height: 38px;
   }
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions .material-reference-entry),
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions .workspace-entry) {

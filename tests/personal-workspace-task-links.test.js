@@ -115,6 +115,62 @@ describe('personal workspace task link adapter', () => {
     adapter.dispose()
   })
 
+  it('loads every page as one readonly directory snapshot without hiding cross-page relations', async () => {
+    const calls = []
+    const api = { execute: async options => {
+      calls.push(options)
+      return options.params?.cursor === 'next-1'
+        ? { data: { items: [link({ relationId: 'rel_b', fileId: 'file_b', role: 'REFERENCE' })], nextCursor: null } }
+        : { data: { items: [link()], nextCursor: 'next-1' } }
+    } }
+    const adapter = usePersonalWorkspaceTaskLinks({ api, taskId: ref('task_a'), identityEpoch: ref('owner-a') })
+
+    const result = await adapter.loadAll()
+
+    assert.deepEqual(result.map(item => item.relationId), ['rel_a', 'rel_b'])
+    assert.deepEqual(calls.map(call => call.params || null), [null, { cursor: 'next-1' }])
+    assert.deepEqual(adapter.links.value.map(item => item.relationId), ['rel_a', 'rel_b'])
+    assert.equal(adapter.nextCursor.value, null)
+    adapter.dispose()
+  })
+
+  for (const [name, secondPage] of [
+    ['repeated cursor', { items: [link({ relationId: 'rel_b' })], nextCursor: 'next-1' }],
+    ['cross-page relation', { items: [link()], nextCursor: null }]
+  ]) it(`rejects a ${name} instead of publishing a partial complete directory`, async () => {
+    const api = { execute: async options => options.params?.cursor
+      ? { data: secondPage }
+      : { data: { items: [link()], nextCursor: 'next-1' } } }
+    const adapter = usePersonalWorkspaceTaskLinks({ api, taskId: ref('task_a'), identityEpoch: ref('owner-a') })
+
+    assert.equal(await adapter.loadAll(), null)
+    assert.deepEqual(adapter.links.value, [])
+    assert.equal(adapter.listState.value, 'error')
+    assert.match(adapter.error.value, /重复/)
+    adapter.dispose()
+  })
+
+  it('aborts a complete-directory read when identity changes between pages', async () => {
+    const epoch = ref('owner-a')
+    const wait = deferred()
+    let calls = 0
+    const api = { execute: options => {
+      calls++
+      if (calls === 1) return Promise.resolve({ data: { items: [link()], nextCursor: 'next-1' } })
+      options.signal.addEventListener('abort', () => wait.resolve({ data: { items: [], nextCursor: null } }), { once: true })
+      return wait.promise
+    } }
+    const adapter = usePersonalWorkspaceTaskLinks({ api, taskId: ref('task_a'), identityEpoch: epoch })
+    const pending = adapter.loadAll()
+    await Promise.resolve(); await Promise.resolve()
+    epoch.value = 'owner-b'
+
+    assert.equal(await pending, null)
+    assert.deepEqual(adapter.links.value, [])
+    assert.equal(adapter.listState.value, 'idle')
+    adapter.dispose()
+  })
+
   it('maps conditional and idempotency failures without retrying or accepting an invalid local request', async () => {
     const calls = []
     const api = { execute: async options => {

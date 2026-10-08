@@ -1,9 +1,11 @@
 import { expect } from 'chai'
 import { describe, it } from 'mocha'
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import * as Vue from 'vue'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { mount, flushPromises } from '@vue/test-utils'
+import { usePersonalWorkspace } from '../src/composables/usePersonalWorkspace.js'
 import { canOpenHallItem, HALL_SOURCES, useHallOverview } from '../src/composables/juyiting/useHallOverview.js'
 
 const overviewSource = readFileSync(new URL('../src/components/juyiting/HallOverview.vue', import.meta.url), 'utf8')
@@ -15,15 +17,25 @@ const emptyWorkspace = () => ({
   items: Vue.ref([]), nextCursor: Vue.ref(null), listState: Vue.ref('empty'), loading: Vue.ref(false), error: Vue.ref(''), detail: Vue.ref(null),
   refresh: async () => true, loadMore: async () => false, select: async () => null, dispose: () => {}
 })
-const load = (api, workspace = emptyWorkspace()) => {
-  const filename = new URL('../src/components/juyiting/HallOverview.vue', import.meta.url).pathname
+const loadMaterialPicker = (workspace, save) => {
+  const filename = fileURLToPath(new URL('../src/components/juyiting/HallMaterialPicker.vue', import.meta.url))
+  const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
+  const code = compileScript(descriptor, { id: 'hall-material-picker-mount', inlineTemplate: true }).content
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_line, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]@\/composables\/usePersonalWorkspace['"];?\s*$/gm, 'var { usePersonalWorkspace, savePersonalWorkspaceBlob } = deps')
+    .replace('export default', 'return')
+  return new Function('Vue', 'deps', code)(Vue, { usePersonalWorkspace: () => workspace, savePersonalWorkspaceBlob: save })
+}
+const load = (api, workspace = emptyWorkspace(), save = () => {}) => {
+  const filename = fileURLToPath(new URL('../src/components/juyiting/HallOverview.vue', import.meta.url))
   const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
   const code = compileScript(descriptor, { id: 'hall-overview-mount', inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_line, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]@\/composables\/juyiting\/useHallOverview['"];?\s*$/gm, 'var { canOpenHallItem, HALL_SOURCES, useHallOverview } = deps')
-    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]@\/composables\/usePersonalWorkspace['"];?\s*$/gm, 'var { usePersonalWorkspace } = deps')
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]@\/composables\/usePersonalWorkspace['"];?\s*$/gm, 'var { usePersonalWorkspace, savePersonalWorkspaceBlob } = deps')
+    .replace(/^import HallMaterialPicker from ['"]\.\/HallMaterialPicker\.vue['"];?\s*$/gm, 'var HallMaterialPicker = deps.HallMaterialPicker')
     .replace('export default', 'return')
-  return new Function('Vue', 'deps', code)(Vue, { canOpenHallItem, HALL_SOURCES, useHallOverview: options => useHallOverview({ ...options, api }), usePersonalWorkspace: () => workspace })
+  return new Function('Vue', 'deps', code)(Vue, { HallMaterialPicker: loadMaterialPicker(workspace, save), canOpenHallItem, HALL_SOURCES, useHallOverview: options => useHallOverview({ ...options, api }), usePersonalWorkspace: () => workspace, savePersonalWorkspaceBlob: save })
 }
 const summary = (sourceType, sourceId, nextAction) => ({ ref: { sourceType, sourceId }, title: sourceId,
   status: { code: 'QUEUED', evidenceSource: 'PERSISTED', observedAt: 100 }, targetAgent: null, nextAction, allowedActions: [nextAction], updatedAt: 100 })
@@ -81,25 +93,70 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       const create = wrapper.findAll('button').find(button => button.text() === '开始办事')
       expect(create.attributes('disabled')).to.equal('')
       expect(create.find('var-icon').attributes('name')).to.equal('send')
-      expect(wrapper.findAll('button').find(button => button.text() === '资料（可选）').find('var-icon').attributes('name')).to.equal('paperclip')
+      expect(wrapper.findAll('button').find(button => button.text() === '添加资料（可选）').find('var-icon').attributes('name')).to.equal('paperclip')
+      expect(wrapper.findAll('button').some(button => button.text().includes('参考图'))).to.equal(false)
       expect(wrapper.find('.overview-resource-icon').attributes('name')).to.equal('file-document-outline')
       expect(create.element.compareDocumentPosition(wrapper.find('.overview-section').element) & Node.DOCUMENT_POSITION_FOLLOWING).not.to.equal(0)
       await request.setValue('整理一份明天活动的执行方案')
       expect(create.attributes('disabled')).to.equal(undefined)
       await create.trigger('submit')
-      expect(wrapper.emitted('quick-request')).to.deep.equal([[{ request: '整理一份明天活动的执行方案', materials: [] }]])
+      expect(wrapper.emitted('quick-request')[0][0]).to.deep.equal({ request: '整理一份明天活动的执行方案', materials: [] })
+      expect(wrapper.emitted('quick-request')[0]).to.have.length(2)
+      expect(request.element.value).to.equal('整理一份明天活动的执行方案')
+      wrapper.emitted('quick-request')[0][1](false)
+      expect(request.element.value).to.equal('整理一份明天活动的执行方案')
+      wrapper.emitted('quick-request')[0][1](true)
+      await settle()
+      expect(request.element.value).to.equal('')
       expect(calls.map(call => [call.method, call.url])).to.deep.equal([['GET', '/hall/overview']])
     } finally { wrapper.unmount() }
   })
 
+  it('refreshes the existing server overview source when the owner advances its refresh key', async () => {
+    const calls = []
+    const wrapper = mount(load({ execute: async options => { calls.push(options); return response() } }), { props })
+    try {
+      await settle()
+      expect(calls.map(call => call.url)).to.deep.equal(['/hall/overview'])
+      await wrapper.setProps({ refreshKey: 1 })
+      await settle()
+      expect(calls.map(call => call.url)).to.deep.equal(['/hall/overview', '/hall/overview'])
+      expect(calls.every(call => call.method === 'GET')).to.equal(true)
+    } finally { wrapper.unmount() }
+  })
+
+  it('clears only the exact quick-request edit generation acknowledged as committed', async () => {
+    const wrapper = mount(load({ execute: async () => response() }), { props })
+    try {
+      await settle()
+      const request = wrapper.find('.overview-quick-request textarea')
+      await request.setValue('原始需求')
+      await wrapper.get('.overview-quick-request').trigger('submit')
+      const settleCreate = wrapper.emitted('quick-request')[0][1]
+      await request.setValue('提交期间的新编辑')
+      settleCreate(true)
+      await settle()
+      expect(request.element.value).to.equal('提交期间的新编辑')
+      await wrapper.get('.overview-quick-request').trigger('submit')
+      const settleNewRequest = wrapper.emitted('quick-request')[1][1]
+      settleNewRequest(true)
+      await settle()
+      expect(request.element.value).to.equal('')
+    } finally { wrapper.unmount() }
+  })
 
   it('uses a real fixed-version picker, preserves confirmed selection on cancel, and clears it on identity change', async () => {
     const detail = Vue.ref(null)
+    const refreshes = []
     const workspace = {
-      items: Vue.ref([{ fileId: 'file-a', displayName: '活动底稿', latestVersion: 2 }]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), error: Vue.ref(''), detail,
-      refresh: async () => true, loadMore: async () => false,
-      select: async () => {
-        detail.value = { file: { fileId: 'file-a', displayName: '活动底稿', state: 'ACTIVE', latestVersion: 2 }, latestVersion: { version: 2 }, versions: [{ version: 1, originalFilename: 'plan-v1.pdf' }, { version: 2, originalFilename: 'plan-v2.pdf' }] }
+      items: Vue.ref([{ fileId: 'file-a', displayName: '活动底稿', latestVersion: 2 }, { fileId: 'file-b', displayName: '另一份底稿', latestVersion: 3 }]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), error: Vue.ref(''), detail,
+      refresh: async options => { refreshes.push(options); return true }, loadMore: async () => false,
+      select: async fileId => {
+        if (fileId === 'file-b') {
+          detail.value = { file: { fileId, displayName: '另一份底稿', state: 'ACTIVE', latestVersion: 3 }, latestVersion: { version: 3, contentMimeType: 'image/jpeg' }, versions: [{ version: 3, originalFilename: 'other-v3.jpg', contentMimeType: 'image/jpeg' }] }
+          return detail.value
+        }
+        detail.value = { file: { fileId: 'file-a', displayName: '活动底稿', state: 'ACTIVE', latestVersion: 2 }, latestVersion: { version: 2, contentMimeType: 'image/jpeg' }, versions: [{ version: 1, originalFilename: 'bird-v1.png', contentMimeType: 'image/png' }, { version: 2, originalFilename: 'bird-v2.jpg', contentMimeType: 'image/jpeg' }] }
         return detail.value
       }, dispose: () => {}
     }
@@ -107,30 +164,128 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
     try {
       await settle()
       await wrapper.get('.quick-material-open').trigger('click')
+      expect(refreshes).to.deep.equal([{ state: 'ACTIVE' }])
+      expect(wrapper.text()).to.include('添加资料（可选）')
+      expect(wrapper.find('.quick-reference-open').exists()).to.equal(false)
+      expect(wrapper.text()).not.to.include('资料用途')
+      expect(wrapper.get('.quick-material-picker h3').text()).to.equal('选择资料')
+      expect(wrapper.get('.quick-material-picker header p').text()).to.equal('从工作空间选择图片、文档或音频。')
+      expect(wrapper.get('.quick-material-confirm').text()).to.equal('完成（0）')
+      expect(wrapper.text()).not.to.include('受控请求')
       expect(wrapper.emitted('open-workspace')).to.equal(undefined)
       await wrapper.get('.quick-material-files button').trigger('click')
       await settle()
-      await wrapper.get('.quick-material-fields select').setValue('1')
+      expect(wrapper.findAll('.quick-material-fields select')).to.have.length(0)
+      expect(wrapper.get('.quick-material-version').text()).to.include('已固定 v2')
       await wrapper.get('.quick-material-fields .primary').trigger('click')
       await wrapper.get('.quick-material-confirm').trigger('click')
+      expect(wrapper.get('.quick-material-summary').text()).not.to.include('image/png')
+      expect(wrapper.get('.quick-material-summary').text()).not.to.include('固定')
+      expect(wrapper.get('.quick-material-summary').text()).to.include('移除')
       expect(wrapper.get('.quick-material-summary').text()).to.include('活动底稿')
-      expect(wrapper.get('.quick-material-summary').text()).to.include('v1')
+      expect(wrapper.get('.quick-material-summary').text()).to.include('v2')
 
       await wrapper.get('.quick-material-open').trigger('click')
-      await wrapper.get('.quick-material-files button').trigger('click')
+      await wrapper.findAll('.quick-material-files button')[1].trigger('click')
       await settle()
-      await wrapper.get('.quick-material-fields select').setValue('2')
+      expect(wrapper.get('.quick-material-version').text()).to.include('已固定 v3')
       await wrapper.get('.quick-material-fields .primary').trigger('click')
       await wrapper.findAll('.quick-material-picker footer>button').at(-1).trigger('click')
-      expect(wrapper.get('.quick-material-summary').text()).to.include('v1')
-      expect(wrapper.get('.quick-material-summary').text()).not.to.include('v2')
+      expect(wrapper.get('.quick-material-summary').text()).to.include('v2')
+      expect(wrapper.get('.quick-material-summary').text()).not.to.include('另一份底稿')
+      expect(wrapper.get('.quick-material-summary').text()).not.to.include('v3')
 
       await wrapper.get('textarea').setValue('整理活动方案')
       await wrapper.get('.overview-quick-request').trigger('submit')
-      expect(wrapper.emitted('quick-request')[0][0]).to.deep.equal({ request: '整理活动方案', materials: [{ fileId: 'file-a', version: 1, role: 'INPUT', displayName: '活动底稿' }] })
+      expect(wrapper.emitted('quick-request')[0][0]).to.deep.equal({ request: '整理活动方案', materials: [{ fileId: 'file-a', version: 2 }] })
       await wrapper.setProps({ identityScope: 'tenant\u0000client\u0000owner-b', identityEpoch: 2 })
       expect(wrapper.find('.quick-material-summary').exists()).to.equal(false)
     } finally { wrapper.unmount() }
+  })
+
+  it('selects non-image fixed versions through the same neutral material entry', async () => {
+    const detail = Vue.ref(null)
+    const refreshes = []
+    const workspace = {
+      items: Vue.ref([{ fileId: 'file-pdf', displayName: '执行说明', latestVersion: 3 }]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), error: Vue.ref(''), detail,
+      refresh: async options => { refreshes.push(options); return true }, loadMore: async () => false,
+      select: async () => {
+        detail.value = { file: { fileId: 'file-pdf', displayName: '执行说明', state: 'ACTIVE', latestVersion: 3 }, latestVersion: { version: 3, contentMimeType: 'application/pdf' }, versions: [{ version: 2, originalFilename: 'brief-v2.pdf', contentMimeType: 'application/pdf' }, { version: 3, originalFilename: 'brief-v3.pdf', contentMimeType: 'application/pdf' }] }
+        return detail.value
+      }, dispose: () => {}
+    }
+    const wrapper = mount(load({ execute: async () => response() }, workspace), { props, global: { stubs: { teleport: true } } })
+    try {
+      await settle()
+      await wrapper.get('.quick-material-open').trigger('click')
+      expect(refreshes).to.deep.equal([{ state: 'ACTIVE' }])
+      expect(wrapper.text()).to.include('选择资料')
+      await wrapper.get('.quick-material-files button').trigger('click')
+      await settle()
+      expect(wrapper.findAll('.quick-material-fields select')).to.have.length(0)
+      expect(wrapper.get('.quick-material-version').text()).to.include('已固定 v3')
+      await wrapper.get('.quick-material-fields .primary').trigger('click')
+      await wrapper.get('.quick-material-confirm').trigger('click')
+      expect(wrapper.get('.quick-material-summary').text()).to.include('执行说明')
+      expect(wrapper.get('.quick-material-summary').text()).not.to.include('application/pdf')
+      await wrapper.get('textarea').setValue('整理活动方案')
+      await wrapper.get('.overview-quick-request').trigger('submit')
+      expect(wrapper.emitted('quick-request')[0][0]).to.deep.equal({ request: '整理活动方案', materials: [{ fileId: 'file-pdf', version: 3 }] })
+    } finally { wrapper.unmount() }
+  })
+
+  it('mixes image/document/audio/text using the real workspace adapter, previews, downloads and removes without writes', async () => {
+    const types = [['bird.png', 'image/png', 'IMAGE'], ['brief.pdf', 'application/pdf', 'PDF'], ['song.mp3', 'audio/mpeg', 'AUDIO'], ['notes.txt', 'text/plain', 'TEXT']]
+    const calls = []; const saves = []; const revoked = []
+    const files = types.map(([name, , family], index) => ({ fileId: `file-${index}`, displayName: name, mediaFamily: family, state: 'ACTIVE', metadataRevision: 1, latestVersion: 2 }))
+    const versions = index => [1, 2].map(version => ({ fileId: `file-${index}`, version, originalFilename: types[index][0], contentMimeType: types[index][1], byteLength: 10 }))
+    const workspace = usePersonalWorkspace({ identityEpoch: Vue.ref('owner-a'), urlApi: { createObjectURL: blob => `blob:${blob.type}`, revokeObjectURL: url => revoked.push(url) }, api: { execute: async options => {
+      calls.push(options)
+      if (options.url === '/personal-workspace/files') return { items: files, nextCursor: null }
+      const index = Number(/files\/file-(\d+)/.exec(options.url)[1])
+      const mime = index === 1 ? 'text/plain' : types[index][1]
+      if (options.url.endsWith('/preview')) return { state: 'READY', parts: [{ partId: 'content', contentMimeType: mime }], partial: false }
+      if (options.url.includes('/preview/parts/')) return new Blob(['safe preview'], { type: mime })
+      if (options.url.endsWith('/content')) return new Blob(['original bytes'], { type: types[index][1] })
+      return { file: files[index], latestVersion: versions(index)[1], versions: versions(index) }
+    } } })
+    const wrapper = mount(load({ execute: async () => response() }, workspace, content => saves.push(content)), { props, global: { stubs: { teleport: true } } })
+    try {
+      await settle()
+      await wrapper.get('.quick-material-open').trigger('click'); await settle()
+      for (let index = 0; index < types.length; index += 1) {
+        await wrapper.findAll('.quick-material-files button')[index].trigger('click'); await settle()
+        expect(wrapper.find('.quick-material-fields select').exists()).to.equal(false)
+        expect(wrapper.get('.quick-material-version').text()).to.include('已固定 v2')
+        await wrapper.findAll('.quick-material-fields button').find(button => button.text() === '预览').trigger('click'); await settle()
+        const preview = wrapper.get('.quick-material-preview')
+        if (index === 0) expect(preview.get('img').attributes('src')).to.equal('blob:image/png')
+        else if (index === 2) {
+          expect(preview.get('audio').attributes('src')).to.equal('blob:audio/mpeg')
+          expect(preview.get('audio').attributes('preload')).to.equal('none')
+        } else expect(preview.get('pre').text()).to.equal('safe preview')
+        await wrapper.findAll('.quick-material-fields button').find(button => button.text() === '下载').trigger('click'); await settle()
+        await wrapper.get('.quick-material-fields .primary').trigger('click')
+      }
+      expect(wrapper.findAll('.quick-material-draft li')).to.have.length(4)
+      await wrapper.get('.quick-material-confirm').trigger('click')
+      await wrapper.get('textarea').setValue('结合全部资料整理方案，不生成图片')
+      await wrapper.get('.overview-quick-request').trigger('submit')
+      expect(wrapper.emitted('quick-request')[0][0].materials).to.deep.equal(files.map(file => ({ fileId: file.fileId, version: 2 })))
+      expect(saves.map(content => content.filename)).to.deep.equal(types.map(type => type[0]))
+      expect(calls.every(call => call.method === 'GET')).to.equal(true)
+      expect(calls.filter(call => call.url === '/personal-workspace/files')[0].params).to.deep.equal({ state: 'ACTIVE' })
+      expect(calls.filter(call => call.url.endsWith('/preview')).every(call => call.url.includes('/versions/2/'))).to.equal(true)
+      expect(revoked).to.include('blob:audio/mpeg')
+      await wrapper.findAll('.quick-material-summary li')[2].findAll('button').find(button => button.text() === '预览').trigger('click'); await settle()
+      expect(wrapper.get('.quick-material-preview audio').attributes('src')).to.equal('blob:audio/mpeg')
+      expect(wrapper.get('.quick-material-version').text()).to.include('已固定 v2')
+      expect(wrapper.find('.quick-material-fields select').exists()).to.equal(false)
+      await wrapper.findAll('.quick-material-picker footer>button').at(-1).trigger('click')
+      await wrapper.findAll('.quick-material-summary li button').find(button => button.text() === '移除').trigger('click')
+      expect(wrapper.findAll('.quick-material-summary li')).to.have.length(3)
+      expect(calls.every(call => call.method === 'GET')).to.equal(true)
+    } finally { wrapper.unmount(); workspace.dispose() }
   })
 
   it('only opens formal tasks after a canonical read and hides actions missing permission', async () => {

@@ -1,12 +1,20 @@
 <template>
   <section class="bounty-discussion-panel discussion-panel">
-    <div class="discussion-brief">
-      <var-icon name="format-list-checkbox" />
-      <div>
-        <strong>榜文议事</strong>
-        <small>{{ bountySubtitle }}</small>
-      </div>
-    </div>
+    <BountyDeliberationStatus :presentation="v2Presentation" />
+    <BountyExecutionTermination
+      :enabled="deliberationV2Enabled"
+      :requests="requestCatalog.length ? requestCatalog.map(entry => entry.request) : activeRequest ? [activeRequest] : []"
+      :conversation-id="conversationId"
+      :identity-key="`${identityEpoch}\u0000${identityScope}`"
+      @settled="$emit('execution-settled', $event)"
+    />
+    <p v-if="typedInspectionStatus" class="typed-inspection-status" role="status">{{ typedInspectionStatus }}</p>
+    <button
+      v-if="typedRecoveryAvailable"
+      type="button"
+      class="typed-recovery"
+      @click="$emit('typed-resume')"
+    >刷新处理状态</button>
     <ChatPanel
       v-model:draft="draftProxy"
       discussion-variant="bounty"
@@ -15,7 +23,12 @@
       :subtitle="bountySubtitle"
       title="榜文议事"
       :voice="voice"
+      :typed-outcomes="typedOutcomes"
+      :typed-pending-question="typedPendingQuestion"
+      :typed-enabled="typedEnabled"
       v-bind="chatProps"
+      @cancel-deliberation="$emit('cancel-deliberation', $event)"
+      @cancel-legacy-transport="$emit('cancel-legacy-transport')"
       @clear-target="$emit('clear-target', $event)"
       @delete-conversation="$emit('delete-conversation', $event)"
       @load-history="$emit('load-history')"
@@ -28,18 +41,40 @@
       @open-archive-edition="$emit('open-archive-edition', $event)"
       @retry-conversation="$emit('retry-conversation')"
       @select-conversation="$emit('select-conversation', $event)"
-      @send-message="$emit('send-message')"
+      @send-message="$emit('send-message', $event)"
       @voice-apply="$emit('voice-apply', $event)"
-    />
+      @typed-reply="$emit('typed-reply', $event)"
+    >
+      <template #bounty-results>
+        <BountyExecutionOutputs
+          :enabled="deliberationV2Enabled"
+          :task-completed="selectedTask?.status === 'completed'"
+          :request="activeRequest"
+          :catalog="requestCatalog"
+          :conversation-id="conversationId"
+          :identity-key="`${identityEpoch}\u0000${identityScope}`"
+          :task-version="selectedTask?.taskVersion ?? selectedTask?.version"
+          @task-completed="$emit('task-completed', $event)"
+        />
+      </template>
+    </ChatPanel>
   </section>
 </template>
 
 <script setup>
 import { computed } from 'vue'
 import ChatPanel from './ChatPanel.vue'
+import BountyDeliberationStatus from './BountyDeliberationStatus.vue'
+import BountyExecutionTermination from './BountyExecutionTermination.vue'
+import BountyExecutionOutputs from './BountyExecutionOutputs.vue'
+import { bountyDeliberationPresentation } from '../../composables/juyiting/hallMultimediaDeliberationUi.js'
 
 const props = defineProps({
+  activeRequest: { type: Object, default: null },
+  requestCatalog: { type: Array, default: () => [] },
+  activeTurns: { type: Array, default: () => [] },
   agents: { type: Array, default: () => [] },
+  capabilityState: { type: Object, default: null },
   connectionStatus: { type: String, default: '' },
   conversationHistory: { type: Array, default: () => [] },
   conversationHistoryDeletingId: { type: String, default: '' },
@@ -48,6 +83,15 @@ const props = defineProps({
   conversationHistoryLoading: { type: Boolean, default: false },
   conversationLoadError: { type: String, default: '' },
   conversationBusy: { type: Boolean, default: false },
+  deliberationStatus: { type: String, default: '' },
+  deliberationV2Enabled: { type: Boolean, default: false },
+  typedOutcomes: { type: Array, default: () => [] },
+  typedPendingQuestion: { type: Object, default: null },
+  typedEnabled: { type: Boolean, default: false },
+  typedRecoveryAvailable: { type: Boolean, default: false },
+  typedInspectionStatus: { type: String, default: '' },
+  durableCancelTarget: { type: Object, default: null },
+  legacyCancelAvailable: { type: Boolean, default: false },
   conversationId: { type: String, default: '' },
   identityEpoch: { type: [Number, String], default: 0 },
   identityScope: { type: String, default: '' },
@@ -67,6 +111,9 @@ const props = defineProps({
 })
 
 const emit = defineEmits([
+  'execution-settled',
+  'cancel-deliberation',
+  'cancel-legacy-transport',
   'clear-target',
   'delete-conversation',
   'load-history',
@@ -80,14 +127,25 @@ const emit = defineEmits([
   'retry-conversation',
   'select-conversation',
   'send-message',
+  'task-completed',
   'update:draft',
-  'voice-apply'
+  'voice-apply',
+  'typed-reply',
+  'typed-resume'
 ])
 
 const draftProxy = computed({
   get: () => props.draft,
   set: value => emit('update:draft', value)
 })
+
+const v2Presentation = computed(() => bountyDeliberationPresentation({
+  enabled: props.deliberationV2Enabled,
+  capability: props.capabilityState,
+  request: props.activeRequest,
+  turns: props.activeTurns,
+  messages: props.messages
+}))
 
 const bountySubtitle = computed(() => {
   const taskName = props.selectedTask?.title || props.selectedTask?.id || '当前榜文'
@@ -105,6 +163,9 @@ const chatProps = computed(() => ({
   conversationHistoryLoading: props.conversationHistoryLoading,
   conversationLoadError: props.conversationLoadError,
   conversationBusy: props.conversationBusy,
+  deliberationStatus: props.deliberationStatus,
+  durableCancelTarget: props.durableCancelTarget,
+  legacyCancelAvailable: props.legacyCancelAvailable,
   conversationId: props.conversationId,
   identityEpoch: props.identityEpoch,
   identityScope: props.identityScope,
@@ -123,6 +184,8 @@ const chatProps = computed(() => ({
 </script>
 
 <style scoped>
+.typed-recovery { align-self: flex-end; margin: 6px 12px 0; border: 1px solid #6b8d7e; border-radius: 5px; padding: 5px 8px; color: #294c3d; background: #fff; }
+
 .discussion-panel {
   display: flex;
   flex: 1;
@@ -132,33 +195,8 @@ const chatProps = computed(() => ({
   background: #fffaf0;
 }
 
-.discussion-brief {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 10px;
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(35, 72, 62, 0.16);
-  background: #e8f2ed;
-  color: #213d34;
-}
+</style>
 
-.discussion-brief :deep(.var-icon) {
-  align-self: center;
-  color: #23483e;
-  font-size: 24px;
-}
-
-.discussion-brief strong,
-.discussion-brief small {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.discussion-brief small {
-  margin-top: 3px;
-  color: #4f6c61;
-  font-size: 12px;
-}
+<style scoped>
+.typed-inspection-status{margin:8px 0;padding:8px 10px;border-left:3px solid #6f8c81;background:#f3f8f4;color:#3f6254;font-size:12px;line-height:1.5}
 </style>

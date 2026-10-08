@@ -1,3 +1,6 @@
+import { useHallDrafts } from '../src/composables/juyiting/useHallDrafts.js'
+import { bountyInteractionTargetId, useHallChatContext } from '../src/composables/juyiting/useHallChatContext.js'
+import { createHydratedIdentityScope, hasHydratedIdentity } from '../src/utils/identityScope.js'
 import { confirmHallLeave, hasMeaningfulHallLeaveWork } from '../src/composables/juyiting/hallAccountNavigation.js'
 import { expect } from 'chai'
 import { createHash } from 'crypto'
@@ -314,12 +317,24 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
   return {
     ...HallPanelHelpers,
     resolveAccountDisplayName: (user, fallback = '用户') => user?.nickname || user?.username || fallback,
+    createHydratedIdentityScope, hasHydratedIdentity,
     useRouter: () => ({ push: asyncNoop }),
     onBeforeRouteLeave: noop,
     confirmHallLeave,
     hasMeaningfulHallLeaveWork,
     registerIdentityCleanup,
-    env: { VITE_JUYITING_TASK_WORKSPACE_ENABLED: workspaceState ? 'true' : undefined },
+    env: { VITE_JUYITING_TASK_WORKSPACE_ENABLED: workspaceState ? 'true' : undefined }, isMultimediaDeliberationUiEnabled: () => false,
+    useHallDrafts,
+    useHallRequirementCreate: () => ({ state: Vue.ref({ error: '' }), busy: Vue.ref(false), create: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, readOriginal: () => ({ state: 'ABSENT' }), dispose: noop }),
+    useHallBountyRequestCatalog: () => ({ entries: Vue.ref([]), hint: noop, reset: noop, refresh: asyncNoop, dispose: noop }),
+    useHallBountyFollowup: () => ({ state: Vue.ref({}), busy: Vue.ref(false), prepareGenerate: async () => false, prepareEdit: async () => false, confirm: async () => false, checkOriginal: async () => false, invalidate: noop, dispose: noop }),
+    useHallTypedDeliberation: () => ({ refresh: asyncNoop, readOne: asyncNoop, recover: asyncNoop, invalidate: noop, dispose: noop }), typedLong: () => '',
+    createControlledImageCapabilityObservationFence: () => ({ capture: () => ({ isCurrent: () => true }), invalidate: noop }), capabilityOffersControlledImageConsent: () => false, loadControlledImageBountyCapability: async () => null,
+    useHallTaskLinkedReferenceInputs: () => ({ resolve: async () => ({ state: 'STALE', inputRefs: [] }), invalidate: noop, dispose: noop }), createPointAndStartIntentStore: () => ({ read: () => ({ state: 'ABSENT' }) }), pointAndStartRecoveryLane: () => 'NONE', providerConsentAcknowledgement: {},
+    createNativeCapabilityObservationFence: () => ({ capture: () => ({ identityScope: '', authorizationGeneration: 0, isCurrent: () => true }), invalidate: noop }), loadNativeBountyCapability: async () => null, capabilityAllowsNewStart: () => false, capabilityAllowsOriginalReplay: () => false, pointAndStartIntentReadLane: () => 'ABSENT',
+    useHallPointAndStartControlledBridge: () => ({ state: Vue.ref({ intent: null, status: 'IDLE' }), busy: Vue.ref(false), selectContext: () => false, start: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, dispose: noop, invalidate: noop }),
+    useHallPointAndStart: () => ({ state: Vue.ref({ intent: null, status: 'IDLE' }), busy: Vue.ref(false), start: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, observeOriginal: asyncNoop, stopObservation: noop, dispose: noop }),
+
     useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => apiStore,
     agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {}, roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
     useHallData: () => hallData,
@@ -331,11 +346,12 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
     useHallBackendSceneState: () => ({ start: asyncNoop, stop: noop, dispose: noop, reportPhase: noop }),
     useHallSceneDebugBridge: () => ({ sentinel: 'debug-o04', republish: noop, stop: noop }),
     useHallSound: () => ({ playAgentSelect: noop, playError: noop, playPanelOpen: noop, playRefresh: noop, playSend: noop, playSuccess: noop, playTap: noop, setSoundEnabled: noop, setSoundSuppressed: noop, soundEnabled: Vue.ref(false) }),
-    useHallChatContext: () => ({ chatContext: Vue.ref({ conversationScopeKey: 'scope-o04' }), chatMentionAgentIds: Vue.ref([]), chatMentionAgents: list, chatMode: Vue.ref('public'), chatTargetText: text, enterBountyDiscussion: noop, enterPrivateConversation: noop, resetToPublic: noop, setMentionAgent: noop }),
+    bountyInteractionTargetId,
+    useHallChatContext: () => ({ conversationAgent: Vue.ref(null), conversationTask: Vue.ref(null), chatContext: Vue.ref({ conversationScopeKey: 'scope-o04' }), chatMentionAgentIds: Vue.ref([]), chatMentionAgents: list, chatMode: Vue.ref('public'), chatTargetText: text, enterBountyDiscussion: noop, enterPrivateConversation: noop, resetToPublic: noop, setMentionAgent: noop }),
     useHallScene: () => ({ markAgentSpeaking: noop, markDiscussionStarted: noop, markLibraryCitation: noop, markLibrarySearching: noop, markRecommendedAgents: noop, markTaskArchived: noop, markTaskAssigned: noop, markTaskAutoAssigned: noop, markTaskCreated: noop, resetSceneFeedback: noop, sceneAgents: list, sceneAgentStyle: () => ({}), sceneHotspots: list, syncAfterPersonaChanged: noop }),
     useHallTaskActions: () => ({ archiveTask: asyncNoop, autoAssignTask: asyncNoop, assignTask: async () => true, createTask: asyncNoop }),
     useHallQuickMatter: () => ({ busy: Vue.ref(false), message: text, submit: asyncNoop, reconcile: asyncNoop }),
-    useHallConversation: () => ({ chatConnectionStatus: text, conversationId: Vue.ref('conversation-o04'), draft: Vue.ref('draft-o04'), draftRevision: Vue.ref(0), eventStreamRecovering: Vue.ref(false), insertAgentMention: noop, isAwaitingReply: Vue.ref(false), isStreaming: Vue.ref(false), loadHallMessages: asyncNoop, mentionAgent: noop, messages: Vue.ref([{ id: 'message-o04' }]), newHallConversation: noop, pendingAgentName: text, replyEventSequence: Vue.ref(0), sendHallMessage: asyncNoop, senderText: text, setDraft: noop, disposeHallConversation: noop, stopHallEventStream: noop, stopHallReplyPolling: noop, stopHallReplyStreaming: noop }),
+    useHallConversation: () => ({ activeRequest: Vue.ref(null), chatConnectionStatus: text, conversationId: Vue.ref('conversation-o04'), draft: Vue.ref('draft-o04'), draftRevision: Vue.ref(0), eventStreamRecovering: Vue.ref(false), insertAgentMention: noop, isAwaitingReply: Vue.ref(false), isStreaming: Vue.ref(false), loadHallMessages: asyncNoop, mentionAgent: noop, messages: Vue.ref([{ id: 'message-o04' }]), newHallConversation: noop, pendingAgentName: text, replyEventSequence: Vue.ref(0), sendHallMessage: asyncNoop, senderText: text, setDraft: noop, disposeHallConversation: noop, stopHallEventStream: noop, stopHallReplyPolling: noop, stopHallReplyStreaming: noop }),
     useHallVoiceConversation: () => ({ supported: false, voiceInteractionLocked: false, cancel: noop, dispose: noop, applyTranscript: noop }),
     createHallVoiceReplyCorrelation: () => ({ start: () => true, observe: noop, resolveConversation: () => true, close: noop }),
     useHallLibrary: () => ({ citeLibraryItem: noop, libraryErrorMessage: text, libraryHasSearched: Vue.ref(false), libraryKeyword: Vue.ref('library-filter-o04'), libraryLoading: Vue.ref(false), libraryResults: list, librarySourceType: Vue.ref('project'), searchLibrary: asyncNoop }),
@@ -2985,5 +3001,47 @@ describe('W04 explicit reading citation continuity', () => {
       expect(reader.currentLocation.value).to.deep.equal(location)
       expect(note.element.value).to.equal('私密手札，不得自动分享')
     } finally { wrapper.unmount() }
+  })
+})
+
+
+describe('develop merge explicit archive entry composition', () => {
+  it('binds the actual archive context entry and preserves the identity fence before sending a confirmation', async () => {
+    for (const revokeDuringNavigation of [false, true]) {
+      const LibraryPanel = Vue.defineComponent({ emits: ['open-maintenance-entry'], setup: () => () => Vue.h('section') })
+      const apiStore = Vue.reactive({ authorizationGeneration: 1, token: async () => false })
+      const mocks = createHallIntegrationMocks({ mode: Vue.ref('portrait-command'), LibraryPanel, counters: { hallLoads: 0 }, apiStore })
+      let context
+      mocks.useHallChatContext = options => { context = useHallChatContext(options); return context }
+      const originalConversationFixture = mocks.useHallConversation
+      const sent = []
+      mocks.useHallConversation = () => ({ ...originalConversationFixture(), sendHallMessage: async options => {
+        sent.push({ options, context: { ...context.chatContext.value } }); return true
+      } })
+      const JuyiHall = loadActualHallForIntegration(mocks, 'archive-confirmation-merged-entry')
+      const wrapper = mount(JuyiHall, { attachTo: document.body, global: { stubs: { 'var-icon': true, teleport: true } } })
+      try {
+        await settle()
+        await wrapper.get('[data-portrait-action="library"]').trigger('click')
+        await settle()
+        wrapper.findComponent(LibraryPanel).vm.$emit('open-maintenance-entry', { entry: 'songjiang', confirmationRef: ' server-confirmation ' })
+        // The actual entry must bind before navigation yields in both branches.
+        expect(context.chatContext.value.targetAgentIds).to.deep.equal(['builtin-songjiang'])
+        if (revokeDuringNavigation) {
+          apiStore.authorizationGeneration += 1
+          // The synchronous identity cleanup must discard the old subject, not keep it
+          // merely to satisfy an entry assertion after the authorization fence changed.
+          expect(context.chatContext.value.targetAgentIds).to.deep.equal([])
+        }
+        await settle()
+        expect(context.chatContext.value.targetAgentIds).to.deep.equal(revokeDuringNavigation ? [] : ['builtin-songjiang'])
+        expect(sent).to.have.length(revokeDuringNavigation ? 0 : 1)
+        if (!revokeDuringNavigation) {
+          expect(sent[0].options.archiveMaintenanceIntent).to.deep.equal({ schemaVersion: 1, confirmationRef: 'server-confirmation' })
+          expect(sent[0].context.conversationScopeType).to.equal('public')
+          expect(sent[0].context.targetAgentIds).to.deep.equal(['builtin-songjiang'])
+        }
+      } finally { wrapper.unmount() }
+    }
   })
 })

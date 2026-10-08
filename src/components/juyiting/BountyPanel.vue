@@ -29,26 +29,63 @@
         <div class="task-create-actions">
           <button class="new-task-button" type="button" @click="showCreateForm = !showCreateForm">
             <BountyActionIcon name="plus" />
-            <span>张榜</span>
+            <span>提出需求</span>
           </button>
           <button
-            v-if="embeddedHall"
+            v-if="!embeddedHall"
             class="new-task-button"
             type="button"
             @click="$emit('start-formal-draft')"
           >
             <span>起草正式任务</span>
           </button>
-          <button class="new-task-button" type="button" @click="embeddedHall ? $emit('start-private-draft') : showDraftEditor = !showDraftEditor">
+          <button
+            v-if="!embeddedHall"
+            class="new-task-button"
+            type="button"
+            @click="embeddedHall ? $emit('start-private-draft') : showDraftEditor = !showDraftEditor"
+          >
             <span>{{ showDraftEditor ? '收起草稿' : '起草交办' }}</span>
           </button>
         </div>
       </div>
 
+      <section v-if="requirementCreateState && requirementCreateState.status !== 'IDLE'" class="requirement-create-recovery" role="status">
+        <strong>原张榜操作待核对</strong>
+        <template v-if="requirementCreateState.intent">
+          <p>原榜文：{{ requirementCreateState.intent.body.title }}</p>
+          <p>原需求：{{ requirementCreateState.intent.body.description || '未填写' }}</p>
+          <p>精确资料：{{ requirementCreateInputSummary }}</p>
+          <p>当前编辑稿不会替换原需求；核对不会再次创建或启动 Agent。</p>
+          <button type="button" :disabled="requirementCreateBusy" @click="$emit('check-requirement-create')">核对原张榜</button>
+          <button v-if="!requirementCreateState.intent.receipt" type="button" :disabled="requirementCreateBusy" @click="$emit('resume-requirement-create')">确认继续原张榜</button>
+        </template>
+        <p v-if="requirementCreateState.error">{{ requirementCreateState.error }}</p>
+      </section>
+
       <form v-if="showCreateForm" class="task-create-form" @submit.prevent="submitCreateTask">
-        <input v-model.trim="taskForm.title" name="taskTitle" placeholder="榜文名目" />
-        <textarea v-model.trim="taskForm.description" name="taskDescription" placeholder="榜文缘由"></textarea>
-        <input v-model.trim="taskForm.requiredAbilities" name="requiredAbilities" placeholder="所需本领，逗号分隔" />
+        <input v-model="taskForm.title" name="taskTitle" placeholder="需求标题" />
+        <textarea
+          v-model="taskForm.description"
+          name="taskDescription"
+          placeholder="说明你希望得到什么结果（必填）"
+          required
+        ></textarea>
+        <input
+          v-if="!embeddedHall || taskForm.funded"
+          v-model.trim="taskForm.requiredAbilities"
+          name="requiredAbilities"
+          placeholder="所需本领，逗号分隔"
+        />
+        <HallMaterialPicker
+          class="task-material-picker"
+          v-if="!taskForm.funded && identityScope"
+          v-model="taskMaterials"
+          :identity-scope="identityScope"
+          :identity-epoch="authorizationGeneration"
+          :disabled="createPending || requirementCreateBusy"
+        />
+        <small v-else-if="taskMaterials.length" role="status">资金榜暂不支持普通榜资料；请切回普通榜移除资料，再选择资金悬赏。</small>
         <label v-if="fundedPreviewEnabled" class="funded-create-toggle">
           <input v-model="taskForm.funded" type="checkbox" /> 资金悬赏（开发预览）
         </label>
@@ -72,7 +109,7 @@
           <button type="button" @click="$emit('resume-funded-create')">确认按原请求恢复</button>
           <button type="button" @click="$emit('cancel-funded-create-recovery')">暂不恢复</button>
         </section>
-        <button type="submit" :disabled="createPending || !taskForm.title || (taskForm.funded && !validGrossAmount)">{{ createPending ? '张榜中…' : '张榜悬赏' }}</button>
+        <button type="submit" :disabled="createPending || requirementCreateBusy || !taskForm.title.trim() || !taskForm.description.trim() || (taskForm.funded && (!validGrossAmount || taskMaterials.length))">{{ createPending ? '正在提交…' : taskForm.funded ? '张榜悬赏' : '提出需求' }}</button>
       </form>
 
       <HallDraftEditor
@@ -170,16 +207,34 @@
               <span v-if="fundedClaimState.refreshPending">榜文刷新待完成，请重查；勿重复领令。<button type="button" @click="$emit('refresh-funded-claim', detailTask)">重查已确认榜文</button></span>
             </p>
             <p v-else-if="fundedClaimState?.taskId === detailTask.id && fundedClaimState.status === 'unresolved'" role="status">原领令结果未知，请由原好汉核对，不要重新取价。</p>
+            <section v-if="pointAndStartForDetail" class="point-and-start-recovery" role="status">
+              <strong>{{ pointAndStartRecoveryTitle }}</strong>
+              <p>原点将目标：{{ pointAndStartForDetail.intent.body.targetAgentId || pointAndStartForDetail.intent.body.agentId }}；需求修订：{{ pointAndStartForDetail.intent.body.requirementRevision }}。</p>
+              <p>任务资料：{{ pointAndStartInputSummary }}。</p>
+              <p>{{ pointAndStartRecoveryHint }}</p>
+              <p v-if="pointAndStartForDetail.error" class="point-and-start-error" role="alert">原点将返回：{{ pointAndStartForDetail.error }}</p>
+              <button
+                type="button"
+                :disabled="pointAndStartBusy"
+                @click="$emit('check-point-and-start', detailTask)"
+              >核对原点将</button>
+              <button
+                v-if="pointAndStartForDetail.status === 'UNKNOWN'"
+                type="button"
+                :disabled="pointAndStartBusy"
+                @click="$emit('resume-point-and-start', detailTask)"
+              >继续原点将</button>
+            </section>
             <div class="modal-task-info">
               <section v-if="embeddedHall" class="matter-advice-card" aria-label="办理建议">
                 <div class="matter-advice-heading"><span>办理建议</span><strong>{{ simpleMatterStatus(detailTask) }}</strong></div>
                 <p class="matter-request">{{ detailTask.description || detailTask.title }}</p>
                 <dl>
-                  <div><dt>预计成果</dt><dd>一份可预览、下载和验收的正式 PDF</dd></div>
+                  <div><dt>预计成果</dt><dd>在议事中协作完成文本、图片、音频或文件，按实际交付验收</dd></div>
                   <div><dt>建议承办</dt><dd>{{ preferredAgentName || '吴用或林冲' }}</dd></div>
-                  <div><dt>资料</dt><dd>可选；没有资料也可在能力允许时开始办理</dd></div>
+                  <div><dt>资料</dt><dd>可选；没有资料也可以点将议事</dd></div>
                 </dl>
-                <p class="matter-fee-note">创建事项不会执行。实际开始办理和返工前会再次确认 Agent、资料与外部 Provider 可能产生的未知费用。</p>
+                <p class="matter-fee-note">点将后自动建立悬赏议事，将需求和资料交给所选 Agent；由 Agent 判断直接答复、查阅资料或澄清。执行遵循已有授权，不因点将自动扩大付费权限。</p>
                 <div v-if="detailTask.status === 'open' && preferredAgents.length" class="matter-agent-actions">
                   <button v-for="agent in preferredAgents" :key="agent.agentId" type="button" :disabled="!canAssign(detailTask, agent)" @click="$emit('assign-task', detailTask, agent)">交给{{ agentDisplayName(agent) }}</button>
                 </div>
@@ -204,12 +259,12 @@
               <section v-if="!embeddedHall" class="workspace-shortcut" aria-label="榜文百宝箱入口">
                 <div>
                   <strong>资料与交付</strong>
-                  <p>文件、版本和交付件统一收在百宝箱；正式办理只在下方按当前榜文的会话与工作项授权启动。</p>
+                  <p>资料和成果可在议事中预览、下载；需要保留时存入工作空间，在事项详情核对本次成果并验收。</p>
                 </div>
                 <button type="button" @click="$emit('open-workspace')">打开百宝箱</button>
               </section>
               <TaskMaterialLinks
-                v-if="formalTaskExecutionScope"
+                v-if="formalTaskExecutionScope && !embeddedHall"
                 :key="formalTaskExecutionScope.taskId"
                 :task-id="formalTaskExecutionScope.taskId"
                 :conversation-id="formalTaskExecutionScope.conversationId"
@@ -223,6 +278,10 @@
                 @formal-execution-created="$emit('formal-execution-created', $event)"
                 @formal-execution-recovered="$emit('formal-execution-recovered', $event)"
               />
+              <section v-if="embeddedHall" class="deliberation-execution-route" role="status">
+                <strong>在议事中协作交付</strong>
+                <p>点将后自动进入悬赏议事。你可以继续补充文字和资料，与 Agent 反复沟通，在事项详情核对本次成果并确认验收，保存可选。</p>
+              </section>
               <section v-if="isFundedTask(detailTask)" class="funded-preview-details" aria-label="资金悬赏详情">
                 <p class="funding-summary">已托管：{{ formatMoney(detailTask.funding.remainingMicro || detailTask.funding.grossBountyAmountMicro) }}</p>
                 <p>仅可由一位明确好汉按报价领令；组队、宋江代点和旧式点将已禁用。</p>
@@ -400,6 +459,7 @@ import BountyActionIcon from './BountyActionIcon.vue'
 import WorkItemPlanPanel from './WorkItemPlanPanel.vue'
 import TeamRecommendationPanel from './TeamRecommendationPanel.vue'
 import HallDraftEditor from './HallDraftEditor.vue'
+import HallMaterialPicker from './HallMaterialPicker.vue'
 import TaskMaterialLinks from '@/components/personal-workspace/TaskMaterialLinks.vue'
 import { formatSilverMicro, isCanonicalMicroAmount } from '@/utils/silverAmount'
 
@@ -428,6 +488,10 @@ const props = defineProps({
   fundedQuotePreview: { type: Object, default: null },
   fundedClaimState: { type: Object, default: null },
   fundedCreateRecovery: { type: Object, default: null },
+  requirementCreateState: { type: Object, default: null },
+  requirementCreateBusy: { type: Boolean, default: false },
+  pointAndStartState: { type: Object, default: null },
+  pointAndStartBusy: { type: Boolean, default: false },
   abilityText: { type: Function, required: true },
   canAssign: { type: Function, required: true },
   formatTime: { type: Function, required: true },
@@ -450,11 +514,15 @@ const emit = defineEmits([
   'refresh-funded-claim',
   'recruit-agent',
   'create-task',
+  'check-requirement-create',
+  'resume-requirement-create',
   'start-formal-draft',
   'start-private-draft',
   'open-formal-results',
   'mark-changed',
   'resume-funded-create',
+  'check-point-and-start',
+  'resume-point-and-start',
   'cancel-funded-create-recovery',
   'discuss-task',
   'load-settlement',
@@ -472,6 +540,8 @@ const emit = defineEmits([
 const modalTask = ref(null)
 const showCreateForm = ref(false)
 const createPending = ref(false)
+const taskMaterials = ref([])
+let createAttempt = 0
 const selectedAssigneeIds = ref([])
 const taskForm = ref({
   title: '',
@@ -480,7 +550,48 @@ const taskForm = ref({
   funded: false,
   grossBountyAmountMicro: ''
 })
+const requirementCreateInputSummary = computed(() => {
+  const intent = props.requirementCreateState?.intent
+  const refs = (intent?.schemaVersion === 2 ? intent.body?.attachments : intent?.body?.inputRefs) || []
+  return refs.length ? refs.map(item => `${item.fileId} v${item.version}`).join('、') : '无资料'
+})
+// A late success can only clear the exact submitting draft under the same
+// authenticated actor; editing during POST preserves the newer draft.
+watch(() => [props.identityScope, props.authorizationGeneration], () => {
+  createAttempt++
+  createPending.value = false
+  taskMaterials.value = []
+  taskForm.value = { title: '', description: '', requiredAbilities: '', funded: false, grossBountyAmountMicro: '' }
+  modalTask.value = null
+  selectedAssigneeIds.value = []
+}, { flush: 'sync' })
 const detailTask = computed(() => modalTask.value)
+const pointAndStartForDetail = computed(() => {
+  const state = props.pointAndStartState
+  return state?.intent?.taskId === detailTask.value?.id && state.intent?.body ? state : null
+})
+const pointAndStartRecoveryTitle = computed(() => ({
+  UNKNOWN: '正在确认点将结果',
+  PREPARING: '正在准备会话',
+  ADMITTED: '需求已发送',
+  ATTACHED: '已进入悬赏议事',
+  HISTORICAL: '历史指派',
+  FAILED: '点将未完成'
+}[pointAndStartForDetail.value?.status] || '正在确认点将结果'))
+const pointAndStartRecoveryHint = computed(() => ({
+  UNKNOWN: '请刷新状态查看进度。',
+  PREPARING: '准备完成后即可继续交流。',
+  ADMITTED: '正在进入会话。',
+  ATTACHED: '可在会话中查看答复或继续修改。',
+  HISTORICAL: '本次指派已结束，可查看历史记录。',
+  FAILED: '请刷新状态查看详情。'
+}[pointAndStartForDetail.value?.status] || '正在确认点将结果。'))
+const pointAndStartInputSummary = computed(() => {
+  const state = pointAndStartForDetail.value
+  const refs = state?.projection?.inputs || state?.intent?.projection?.inputs || state?.intent?.body?.inputRefs
+  if (!refs) return '本次需求添加的资料'
+  return refs.length ? refs.map(ref => `${ref.fileId} v${ref.version}`).join('、') : '无资料'
+})
 // The parent is the only authority for task-scoped discussion/workspace facts.  A
 // detail may never borrow the context of whichever task was previously selected.
 const assignedAgentForTask = task => {
@@ -578,8 +689,8 @@ const taskAssigneeIds = (task) => {
 }
 
 const submitCreateTask = () => {
-  if (!taskForm.value.title) return
-  if (taskForm.value.funded && !validGrossAmount.value) return
+  if (!taskForm.value.title.trim() || !taskForm.value.description.trim()) return
+  if (taskForm.value.funded && (!validGrossAmount.value || taskMaterials.value.length)) return
   const payload = {
     title: taskForm.value.title,
     description: taskForm.value.description,
@@ -591,14 +702,20 @@ const submitCreateTask = () => {
   if (props.fundedPreviewEnabled && taskForm.value.funded) {
     payload.grossBountyAmountMicro = taskForm.value.grossBountyAmountMicro
     payload.settlementPolicy = 'GROSS_INCLUSIVE'
+  } else {
+    payload.attachments = taskMaterials.value.map(({ fileId, version }) => ({ fileId, version }))
   }
-  if (createPending.value) return
+  if (createPending.value || props.requirementCreateBusy) return
+  const attempt = ++createAttempt
+  const originalDraft = JSON.stringify({ form: taskForm.value, refs: taskMaterials.value })
   createPending.value = true
   emit('create-task', payload, (created) => {
+    if (attempt !== createAttempt) return
     createPending.value = false
     // Reset only after the parent receives a definitive success acknowledgement.
     // Recoverable/ambiguous failures retain the exact funded draft for retry.
-    if (created) {
+    if (created && originalDraft === JSON.stringify({ form: taskForm.value, refs: taskMaterials.value })) {
+      taskMaterials.value = []
       taskForm.value = { title: '', description: '', requiredAbilities: '', funded: false, grossBountyAmountMicro: '' }
       showCreateForm.value = false
     }
@@ -628,6 +745,12 @@ const closeTask = () => {
   emit('select-task', null)
 }
 
+const openCreateRequirement = () => {
+  if (modalTask.value) closeTask()
+  showCreateForm.value = true
+  return true
+}
+
 watch(() => props.selectedTask, (task) => {
   if (!task) {
     modalTask.value = null
@@ -645,7 +768,7 @@ const back = () => {
   closeTask()
   return true
 }
-defineExpose({ openTask, canGoBack, back })
+defineExpose({ openTask, openCreateRequirement, canGoBack, back })
 </script>
 <style scoped>
 .bounty-panel {
@@ -714,6 +837,27 @@ button:disabled {
 .task-search input,
 .task-search select,
 .task-create-form input,
+.task-material-picker { grid-column: 1 / -1; min-width: 0; }
+
+.task-create-form { max-height: min(55vh, 30rem); overflow-y: auto; }
+
+.requirement-create-recovery {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: min(35vh, 14rem);
+  margin: 0 16px 12px;
+  padding: 10px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  border: 1px solid #b99358;
+  border-radius: 8px;
+  background: #fff4da;
+  color: #4a3423;
+}
+
+.requirement-create-recovery p { margin: 6px 0; }
+.requirement-create-recovery button { margin-right: 8px; padding: 6px 10px; border-radius: 6px; }
+
 .task-create-form textarea {
   min-width: 0;
   height: 36px;
@@ -1440,6 +1584,9 @@ button:disabled {
   max-height: 100%;
   box-shadow: none;
 }
+.point-and-start-recovery { margin: 12px 0; padding: 12px; border: 1px solid #d6bb7f; border-radius: 8px; background: #fff9e9; color: #624a20; }
+.point-and-start-recovery p { margin: 6px 0; }
+.point-and-start-recovery button + button { margin-left: 8px; }
 </style>
 
 <style scoped>

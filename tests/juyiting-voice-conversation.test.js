@@ -1,3 +1,6 @@
+import { bountyInteractionTargetId } from '../src/composables/juyiting/useHallChatContext.js'
+import { createHydratedIdentityScope, hasHydratedIdentity } from '../src/utils/identityScope.js'
+import { before } from 'mocha'
 import { useFormalTaskExecutionScope } from '../src/composables/useFormalTaskExecutionScope.js'
 import { expect } from 'chai'
 import { compileScript, parse } from '@vue/compiler-sfc'
@@ -10,16 +13,17 @@ import {
   useHallVoiceConversation
 } from '../src/composables/juyiting/useHallVoiceConversation.js'
 import { useHallConversation } from '../src/composables/juyiting/useHallConversation.js'
+import { createPcm16MonoWav, validatePcm16MonoWav } from '../src/utils/pcmWavRecorder.js'
 import { identityCleanupHandlerCount, stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 import { resolveLiveMapPreviewActivation } from '../src/composables/juyiting/liveMapPreviewPolicy.js'
 import { resolveHallNavigationPresentation } from '../src/composables/juyiting/useHallPanels.js'
 import { isEconomyPreviewBuildEnabled } from '../src/utils/silverAmount.js'
 
-const flush = async () => { await Promise.resolve(); await Promise.resolve(); await Vue.nextTick() }
+const flush = async () => { for (let index = 0; index < 6; index += 1) await Promise.resolve(); await Vue.nextTick() }
 const withVoiceBrowserState = async run => {
   const originals = [
     [window, 'setTimeout'], [window, 'clearTimeout'], [navigator, 'mediaDevices'],
-    [globalThis, 'MediaRecorder'], [globalThis, 'Audio'], [globalThis, 'fetch']
+    [globalThis, 'MediaRecorder'], [globalThis, 'AudioContext'], [globalThis, 'AudioWorkletNode'], [globalThis, 'Audio'], [globalThis, 'URL'], [globalThis, 'fetch']
   ].map(([owner, key]) => ({ owner, key, descriptor: Object.getOwnPropertyDescriptor(owner, key) }))
   try { return await run() } finally {
     for (const { owner, key, descriptor } of originals) {
@@ -28,6 +32,13 @@ const withVoiceBrowserState = async run => {
     }
   }
 }
+const wavBytes = () => createPcm16MonoWav(new Uint8Array([0, 0]))
+const wavResponse = () => ({
+  ok: true,
+  headers: new Headers({ 'content-type': 'audio/wav', 'content-length': String(wavBytes().byteLength) }),
+  body: new ReadableStream({ start (controller) { controller.enqueue(wavBytes()); controller.close() } })
+})
+
 const deferred = () => {
   let resolve
   let reject
@@ -87,21 +98,67 @@ const validContext = (overrides = {}) => ({
   ...overrides
 })
 
+const installWorkletCaptureFakes = () => {
+  class FakeAudioContext {
+    constructor () {
+      this.destination = {}
+      this.audioWorklet = { addModule: async () => {} }
+    }
+    createMediaStreamSource () { return { connect: () => {}, disconnect: () => {} } }
+    createGain () { return { gain: { value: 1 }, connect: () => {}, disconnect: () => {} } }
+    async resume () {}
+    async close () {}
+  }
+  class FakeAudioWorkletNode {
+    constructor () {
+      const node = this
+      const recorder = new FakeRecorder({
+        onPcmData: data => node.port.onmessage?.({ data: { type: 'pcm', data: data.buffer } })
+      })
+      this.port = {
+        onmessage: null,
+        postMessage: ({ type }) => { if (type === 'flush') queueMicrotask(() => this.port.onmessage?.({ data: { type: 'flushed' } })) },
+        close: () => {}
+      }
+      this.connect = () => {}
+      this.disconnect = () => {}
+      this.recorder = recorder
+    }
+  }
+  globalThis.AudioContext = FakeAudioContext
+  globalThis.AudioWorkletNode = FakeAudioWorkletNode
+}
+
 class FakeRecorder {
   static instances = []
-  static isTypeSupported = type => type.startsWith('audio/webm')
-  constructor (stream, options) {
+  constructor ({ stream, onPcmData }) {
     this.stream = stream
-    this.mimeType = options.mimeType
+    this.onPcmData = onPcmData
     this.state = 'inactive'
+    this.pcm = []
+    this.disposed = false
     FakeRecorder.instances.push(this)
   }
-  start () { this.state = 'recording' }
-  stop () {
-    this.state = 'inactive'
-    const callback = this.onstop
-    queueMicrotask(() => callback?.())
+  async start () { this.state = 'recording' }
+  emitPcm (data = new Uint8Array([0, 0])) {
+    const bytes = data instanceof Uint8Array ? data : new Uint8Array(data)
+    this.onPcmData?.(bytes)
+    this.pcm.push(bytes)
   }
+  // Preserve the former deterministic recorder call-site shape while producing real WAV bytes.
+  ondataavailable (event) {
+    const size = event?.data?.size || 2
+    this.emitPcm(new Uint8Array(Math.max(2, size - (size % 2))))
+  }
+  async stop () {
+    this.state = 'inactive'
+    const total = this.pcm.reduce((sum, chunk) => sum + chunk.byteLength, 0)
+    const pcm = new Uint8Array(total || 2)
+    let offset = 0
+    this.pcm.forEach(chunk => { pcm.set(chunk, offset); offset += chunk.byteLength })
+    return new Blob([createPcm16MonoWav(pcm)], { type: 'audio/wav' })
+  }
+  async dispose () { this.disposed = true; this.state = 'inactive' }
 }
 
 const browserHarness = ({ permission, AudioClass, fetchImpl } = {}) => {
@@ -116,7 +173,6 @@ const browserHarness = ({ permission, AudioClass, fetchImpl } = {}) => {
   }
   const browser = {
     navigator: { mediaDevices: { getUserMedia: permission || (async () => makeStream()) } },
-    MediaRecorder: FakeRecorder,
     Audio: AudioClass || class { play = async () => {}; pause () {} },
     URL: { createObjectURL: () => 'blob:voice', revokeObjectURL: value => revoked.push(value) },
     fetch: fetchImpl || (async () => { throw new Error('unexpected fetch') }),
@@ -138,7 +194,7 @@ const browserHarness = ({ permission, AudioClass, fetchImpl } = {}) => {
   return { browser, documentListeners, listeners, makeStream, revoked, tracks }
 }
 
-const createVoice = ({ enabled = true, browser, chatCreate, onSendVoice, onReplyTurnTerminal, showToast = () => {}, draft = '', revision = 0, context = validContext(), replyBusy = false, captureEvents = [] } = {}) => {
+const createVoice = ({ enabled = true, browser, createRecorder = options => new FakeRecorder(options), chatCreate, onSendVoice, onReplyTurnTerminal, showToast = () => {}, draft = '', revision = 0, context = validContext(), replyBusy = false, captureEvents = [] } = {}) => {
   let currentDraft = draft
   let currentRevision = revision
   let currentContext = context
@@ -155,7 +211,8 @@ const createVoice = ({ enabled = true, browser, chatCreate, onSendVoice, onReply
     onCaptureStateChange: value => captureEvents.push(value),
     onReplyTurnTerminal,
     showToast,
-    browser
+    browser,
+    createRecorder
   })
   return { voice, setDraft: value => { currentDraft = value; currentRevision += 1 }, setContext: value => { currentContext = value } }
 }
@@ -205,7 +262,8 @@ const createActualHallVoiceMocks = ({
     env: { VITE_JUYITING_VOICE_ENABLED: 'true' },
     resolveLiveMapPreviewActivation, resolveHallNavigationPresentation, isEconomyPreviewBuildEnabled,
     resolveAccountDisplayName: (user, fallback = '用户') => user?.nickname || user?.username || fallback,
-    isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: async () => null,
+    createHydratedIdentityScope, hasHydratedIdentity,
+    isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: async () => null, isMultimediaDeliberationUiEnabled: () => false,
     capturePanelReturnTarget: () => null, focusHallPanel: noop, isCurrentPanelGeneration: () => true, isSafePanelFocusTarget: () => false,
     resolvePanelReturnTarget: () => null, restorePanelFocus: noop, trapPanelFocus: noop,
     onBeforeRouteLeave: noop, useRouter: () => ({ push: asyncNoop }),
@@ -223,12 +281,27 @@ const createActualHallVoiceMocks = ({
     useHallBackendSceneState: () => ({ start: asyncNoop, stop: noop, dispose: noop, reportPhase: noop }),
     useHallSceneDebugBridge: () => ({ republish: noop, stop: noop }),
     useHallSound: () => ({ playAgentSelect: noop, playError: noop, playPanelOpen: noop, playRefresh: noop, playSend: noop, playSuccess: noop, playTap: noop, setSoundEnabled: noop, setSoundSuppressed: noop, soundEnabled: Vue.ref(false) }),
+    bountyInteractionTargetId,
     useHallChatContext: () => ({
-      chatContext: Vue.ref(validContext()), chatMentionAgentIds: list, chatMentionAgents: agentList, chatMode: Vue.ref('public'), chatTargetText: Vue.ref('众好汉'),
+      chatContext: Vue.ref(validContext()), conversationAgent: Vue.ref(selectedAgentFixture), conversationTask: Vue.ref(null), chatMentionAgentIds: list, chatMentionAgents: agentList, chatMode: Vue.ref('public'), chatTargetText: Vue.ref('众好汉'),
       enterBountyDiscussion: noop, enterPrivateConversation: noop, resetToPublic: noop, setMentionAgent: noop
     }),
     useHallScene: () => ({ markAgentSpeaking: noop, markDiscussionStarted: noop, markLibraryCitation: noop, markLibrarySearching: noop, markRecommendedAgents: noop, markTaskArchived: noop, markTaskAssigned: noop, markTaskAutoAssigned: noop, markTaskCreated: noop, resetSceneFeedback: noop, sceneAgents: agentList, sceneAgentStyle: () => ({}), sceneHotspots: list, syncAfterPersonaChanged: noop }),
     useHallTaskActions: () => ({ archiveTask: asyncNoop, autoAssignTask: asyncNoop, assignTask: asyncNoop, createTask: asyncNoop }),
+    useHallRequirementCreate: () => ({ state: text, busy: Vue.ref(false), create: asyncNoop, checkOriginal: async () => false, resumeOriginal: async () => false, readOriginal: () => null, dispose: noop }),
+    createControlledImageCapabilityObservationFence: () => ({ capture: () => ({ identityScope: '', authorizationGeneration: 0, isCurrent: () => true }), invalidate: noop }),
+    loadControlledImageBountyCapability: async () => null, capabilityOffersControlledImageConsent: () => false,
+    useHallTaskLinkedReferenceInputs: () => ({ resolve: async () => ({ state: 'READY', inputRefs: [] }), invalidate: noop, dispose: noop }),
+    createPointAndStartIntentStore: () => ({ read: () => ({ state: 'ABSENT' }) }), pointAndStartRecoveryLane: () => 'NATIVE', providerConsentAcknowledgement: null,
+    createNativeCapabilityObservationFence: () => ({ capture: () => ({ identityScope: '', authorizationGeneration: 0, isCurrent: () => true }), invalidate: noop }),
+    loadNativeBountyCapability: async () => null, capabilityAllowsNewStart: () => false, capabilityAllowsOriginalReplay: () => false, pointAndStartIntentReadLane: () => 'ABSENT',
+    useHallPointAndStartControlledBridge: () => ({ state: Vue.ref({ status: 'IDLE', intent: null }), busy: Vue.ref(false), selectContext: () => true, start: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, dispose: noop, invalidate: noop }),
+    useHallPointAndStart: () => ({ state: Vue.ref({ status: 'IDLE', intent: null }), busy: Vue.ref(false), start: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, observeOriginal: async () => false, stopObservation: noop, dispose: noop }),
+    useHallBountyRequestCatalog: () => ({ entries: Vue.ref([]), error: text, loading: Vue.ref(false), hint: noop, refresh: async () => false, reset: noop }),
+    useHallDrafts: () => ({ unresolvedIntent: Vue.ref(null) }),
+    useHallBountyFollowup: () => ({ state: Vue.ref({ status: 'IDLE' }), busy: Vue.ref(false), prepareGenerate: async () => false, prepareEdit: async () => false, confirm: async () => false, checkOriginal: async () => false, invalidate: noop, dispose: noop }),
+    useHallTypedDeliberation: () => ({ projections: Vue.ref([]), cards: Vue.ref([]), selectedPending: Vue.ref(null), error: text, busy: Vue.ref(false), recoveryAvailable: Vue.ref(false), refresh: async () => false, readOne: async () => null, submit: async () => false, recover: async () => false, resumeUnknown: async () => false, choosePending: () => false, confirmProposal: async () => false, invalidate: noop, dispose: noop }),
+    typedLong: value => typeof value === 'string' ? value : '',
     useHallConversation: options => {
       conversationRef.value = useHallConversation(options)
       return conversationRef.value
@@ -257,6 +330,33 @@ before(async () => {
 })
 
 describe('Juyi Hall voice mounted facade', () => {
+  it('puts composer transcription into the editable draft even when HUD auto-send is enabled', async () => {
+    const harness = browserHarness()
+    let sends = 0
+    const state = createVoice({ browser: harness.browser, draft: '已有草稿', onSendVoice: async () => { sends += 1; return true } })
+    state.voice.setAutoSendEnabled(true)
+    let editableDraft = '已有草稿'
+    const HallVoiceControls = loadSfc('../src/components/juyiting/HallVoiceControls.vue')
+    const wrapper = mount(HallVoiceControls, { props: { draftOnly: true, voice: state.voice }, attrs: {
+      onApply: mode => {
+        const next = state.voice.applyTranscript(mode)
+        if (typeof next === 'string') { editableDraft = next; state.setDraft(next); state.voice.discard() }
+      }
+    } })
+    try {
+      await wrapper.get('.voice-start').trigger('click')
+      await flush()
+      const recorder = FakeRecorder.instances.at(-1)
+      recorder.ondataavailable({ data: new Blob(['voice']) })
+      state.voice.stopRecording()
+      await flush()
+      expect(editableDraft).to.equal('已有草稿\n林教头请看榜文')
+      expect(sends).to.equal(0)
+      expect(state.voice.state).to.equal('idle')
+      expect(state.voice.autoSendEnabled).to.equal(true)
+    } finally { wrapper.unmount(); state.voice.dispose() }
+  })
+
   it('keeps text chat usable with flag off and renders correct controls with flag on', async () => {
     const HallVoiceControls = loadSfc('../src/components/juyiting/HallVoiceControls.vue')
     const HallChatComposer = loadSfc('../src/components/juyiting/HallChatComposer.vue', { HallVoiceControls })
@@ -275,49 +375,226 @@ describe('Juyi Hall voice mounted facade', () => {
 
     const onHarness = browserHarness()
     const onVoice = createVoice({ enabled: true, browser: onHarness.browser }).voice
-    const on = mount(HallChatComposer, { props: { draft: '', mentionLabel: () => '', voice: onVoice }, global: { stubs: { 'var-icon': true } } })
+    const on = mount(HallChatComposer, { attachTo: document.body, props: { draft: '', mentionLabel: () => '', voice: onVoice }, global: { stubs: { 'var-icon': true } } })
     expect(onVoice.supported).to.equal(true)
     expect(onVoice.canRecord).to.equal(true)
-    expect(on.find('.hall-voice-controls').exists()).to.equal(true)
-    expect(on.find('form .hall-voice-controls').exists()).to.equal(false)
-    expect(on.find('.voice-disclosure').element.textContent).to.equal('播放内容为 AI 生成语音')
-    expect(on.find('input[aria-label="语音回答；播放内容为 AI 生成语音"]').exists()).to.equal(true)
+    await Vue.nextTick()
+    expect(on.get('.composer-input-area .voice-start').element.closest('.composer-more-panel')).to.equal(null)
+    expect(on.get('.voice-settings-trigger').element.style.display).to.equal('none')
+    expect(on.findAll('.voice-start')).to.have.length(1)
+    expect(on.text()).not.to.contain('工作空间')
+    expect(on.find('.composer-more-panel .hall-voice-controls').exists()).to.equal(true)
+    expect(on.get('.composer-more-panel').element.style.display).to.equal('none')
+    await on.get('.composer-more').trigger('click')
+    expect(on.get('.composer-more-panel').element.style.display).not.to.equal('none')
+    expect(on.get('.voice-settings-trigger').element.style.display).not.to.equal('none')
+    expect(on.find('.hall-chat-composer > .hall-voice-controls').exists()).to.equal(false)
+    expect(on.find('.voice-settings').exists()).to.equal(false)
+    expect(on.get('.voice-settings-trigger').attributes('aria-expanded')).to.equal('false')
     expect(on.find('textarea').attributes('disabled')).to.equal(undefined)
-    await on.find('input[type="checkbox"]').setValue(true)
-    expect(onVoice.autoSendEnabled).to.equal(true)
+    await on.setProps({ actionsDisabled: true, interactionLocked: true })
+    expect(on.get('.composer-input-area .voice-start').attributes('disabled')).to.equal('')
+    expect(on.get('.composer-input-area textarea').attributes('disabled')).to.equal('')
+    expect(on.get('.composer-more').attributes('disabled')).to.equal('')
+    await on.setProps({ actionsDisabled: false, interactionLocked: false })
+    await on.get('.voice-settings-trigger').trigger('click')
+    expect(on.get('.voice-settings-trigger').attributes('aria-expanded')).to.equal('true')
+    expect(on.get('.voice-disclosure').element.textContent).to.equal('播放内容为 AI 生成语音')
+    expect(on.find('.voice-settings').text()).not.to.contain('自动发送')
+    await on.get('input[aria-label="语音回答；播放内容为 AI 生成语音"]').setValue(true)
+    expect(onVoice.replyVoiceEnabled).to.equal(true)
+    expect(onVoice.autoSendEnabled).to.equal(false)
+    document.body.dispatchEvent(new window.Event('pointerdown', { bubbles: true }))
+    await flush()
+    expect(on.find('.voice-settings').exists()).to.equal(false)
+    await on.get('.voice-settings-trigger').trigger('click')
+    on.get('.voice-settings-trigger').element.focus()
+    await on.get('.voice-settings-trigger').trigger('keydown', { key: 'Escape' })
+    await flush()
+    expect(on.find('.voice-settings').exists()).to.equal(false)
+    expect(document.activeElement).to.equal(on.get('.voice-settings-trigger').element)
+    onVoice.setAutoSendEnabled(false)
 
     const compact = mount(HallVoiceControls, { props: { compact: true, voice: onVoice }, global: { stubs: { 'var-icon': true } } })
-    expect(compact.find('.voice-disclosure').element.textContent).to.equal('播放内容为 AI 生成语音')
+    expect(compact.find('.voice-settings').exists()).to.equal(false)
+    await compact.get('.voice-settings-trigger').trigger('click')
+    expect(compact.get('.voice-disclosure').element.textContent).to.equal('播放内容为 AI 生成语音')
+
+    const settingsVoice = () => Vue.reactive({
+      supported: true, state: 'idle', canRecord: true, autoSendEnabled: false, replyVoiceEnabled: false,
+      startRecording: () => {}, setAutoSendEnabled: () => {}, setReplyVoiceEnabled: () => {}
+    })
+    const firstSettings = mount(HallVoiceControls, { attachTo: document.body, props: { voice: settingsVoice() }, global: { stubs: { 'var-icon': true } } })
+    const secondSettings = mount(HallVoiceControls, { attachTo: document.body, props: { compact: true, voice: settingsVoice() }, global: { stubs: { 'var-icon': true } } })
+    await firstSettings.get('.voice-settings-trigger').trigger('click')
+    await secondSettings.get('.voice-settings-trigger').trigger('click')
+    const firstSettingsId = firstSettings.get('.voice-settings-trigger').attributes('aria-controls')
+    const secondSettingsId = secondSettings.get('.voice-settings-trigger').attributes('aria-controls')
+    expect(firstSettingsId).to.not.equal(secondSettingsId)
+    expect(firstSettings.get('.voice-settings').attributes('id')).to.equal(firstSettingsId)
+    expect(secondSettings.get('.voice-settings').attributes('id')).to.equal(secondSettingsId)
+    await secondSettings.get('.voice-settings-trigger').trigger('pointerdown')
+    await flush()
+    expect(firstSettings.find('.voice-settings').exists()).to.equal(false)
+    expect(secondSettings.find('.voice-settings').exists()).to.equal(true)
     compact.unmount()
+    firstSettings.unmount()
+    secondSettings.unmount()
+
+    await on.get('.composer-more').trigger('click')
+    await on.get('.voice-start').trigger('click')
+    await flush()
+    expect(onVoice.state).to.equal('recording')
+    expect(on.find('.composer-body.has-voice-detail').exists()).to.equal(true)
+    expect(on.get('.is-recording').attributes('aria-label')).to.equal('停止录音并转写')
+    expect(on.get('.voice-inline-status').element.textContent).to.contain('正在录音')
+    const recorder = FakeRecorder.instances.at(-1)
+    recorder.ondataavailable({ data: new Blob(['voice']) })
+    onVoice.stopRecording()
+    await flush()
+    expect(onVoice.state).to.equal('review')
+    expect(on.get('.composer-body.has-voice-detail').exists()).to.equal(true)
+    expect(on.get('.voice-review strong').element.textContent).to.equal('语音转写')
+    expect(on.find('button[aria-label="确认发送语音转写"]').exists()).to.equal(false)
+    expect(on.emitted('voice-apply')).to.deep.equal([['append']])
     on.unmount()
+
+    const serviceError = Vue.reactive({ supported: true, state: 'error', error: '语音回答失败，文字已保留', discard: () => {} })
+    const transcriptionError = Vue.reactive({ supported: true, state: 'error', error: '语音转写失败，仍可使用文字传令', discard: () => {} })
+    const serviceErrorControls = mount(HallVoiceControls, { props: { voice: serviceError }, global: { stubs: { 'var-icon': true } } })
+    const transcriptionErrorControls = mount(HallVoiceControls, { props: { voice: transcriptionError }, global: { stubs: { 'var-icon': true } } })
+    expect(serviceErrorControls.get('.voice-review strong').element.textContent).to.equal('语音服务提示（AI 朗读）')
+    expect(transcriptionErrorControls.get('.voice-review strong').element.textContent).to.equal('语音未完成')
+    const speaking = Vue.reactive({ supported: true, state: 'speaking', elapsedMs: 0, cancel: () => {} })
+    const speakingControls = mount(HallVoiceControls, { props: { voice: speaking }, global: { stubs: { 'var-icon': true } } })
+    expect(speakingControls.get('.voice-inline-status').element.textContent).to.contain('正在朗读 AI 语音回答')
+    expect(speakingControls.get('.voice-ai-note').element.textContent).to.equal('AI 生成语音')
+    serviceErrorControls.unmount()
+    transcriptionErrorControls.unmount()
+    speakingControls.unmount()
+  })
+
+  for (const compact of [false, true]) {
+    it(`renders real inline voice glyphs and keeps action/settings semantics (${compact ? 'compact' : 'composer'})`, async () => {
+      const HallVoiceControls = loadSfc('../src/components/juyiting/HallVoiceControls.vue')
+      const calls = []
+      const voice = Vue.reactive({
+        supported: true, state: 'idle', canRecord: true, elapsedMs: 2100, targetLabel: '宋江',
+        autoSendEnabled: false, replyVoiceEnabled: false,
+        startRecording: () => { calls.push('start'); voice.state = 'recording' },
+        stopRecording: () => { calls.push('stop'); voice.state = 'transcribing' },
+        cancel: () => {},
+        setAutoSendEnabled: value => { voice.autoSendEnabled = value },
+        setReplyVoiceEnabled: value => { voice.replyVoiceEnabled = value }
+      })
+      // No var-icon stub or substitute icon: inspect the actual compiled SVG DOM.
+      const wrapper = mount(HallVoiceControls, { attachTo: document.body, props: { compact, voice } })
+      const assertGlyph = selector => {
+        const button = wrapper.get(selector)
+        const svg = button.get('svg')
+        expect(svg.element.namespaceURI).to.equal('http://www.w3.org/2000/svg')
+        expect(svg.attributes()).to.include({ width: '18', height: '18', viewBox: '0 0 24 24', 'aria-hidden': 'true', focusable: 'false' })
+        expect(svg.findAll('path, rect, circle').length).to.be.greaterThan(0)
+        expect(button.find('var-icon, var-icon-stub, i.var-icon').exists()).to.equal(false)
+        return svg
+      }
+      try {
+        expect(wrapper.findAll('svg')).to.have.lengthOf(2)
+        const mic = assertGlyph('.voice-start')
+        expect(mic.get('rect').attributes()).to.include({ x: '9', y: '2', width: '6', height: '12', rx: '3' })
+        expect(mic.get('path').attributes('d')).to.contain('M5 10v2')
+        expect(wrapper.get('.voice-start').attributes()).to.include({ 'aria-label': '开始录音', title: '开始录音' })
+        const settings = assertGlyph('.voice-settings-trigger')
+        expect(settings.get('circle').attributes()).to.include({ cx: '12', cy: '12', r: '3' })
+        expect(settings.get('path').attributes('d')).to.contain('M10 2h4')
+        expect(wrapper.get('.voice-settings-trigger').attributes()).to.include({ 'aria-label': '语音设置', title: '语音设置', 'aria-expanded': 'false' })
+        await wrapper.get('.voice-settings-trigger').trigger('click')
+        expect(wrapper.get('.voice-settings-trigger').attributes('aria-expanded')).to.equal('true')
+        expect(wrapper.get('.voice-settings').attributes('id')).to.equal(wrapper.get('.voice-settings-trigger').attributes('aria-controls'))
+        await wrapper.get('input[type="checkbox"]').setValue(true)
+        await wrapper.get('input[aria-label="语音回答；播放内容为 AI 生成语音"]').setValue(true)
+        expect(voice.autoSendEnabled).to.equal(true)
+        expect(voice.replyVoiceEnabled).to.equal(true)
+        expect(wrapper.get('.voice-disclosure').text()).to.equal('播放内容为 AI 生成语音')
+        await wrapper.get('.voice-settings-trigger').trigger('keydown', { key: 'Escape' })
+        await Vue.nextTick()
+        expect(wrapper.find('.voice-settings').exists()).to.equal(false)
+        expect(document.activeElement).to.equal(wrapper.get('.voice-settings-trigger').element)
+        await wrapper.get('.voice-start').trigger('click')
+        expect(calls).to.deep.equal(['start'])
+        expect(wrapper.find('.voice-start').exists()).to.equal(false)
+        const stop = assertGlyph('.is-recording')
+        expect(stop.get('rect').attributes()).to.include({ x: '6', y: '6', width: '12', height: '12', fill: 'currentColor' })
+        expect(wrapper.get('.is-recording').attributes('aria-label')).to.equal('停止录音并转写')
+        expect(wrapper.get('.is-recording').text()).to.contain('停止并转写 3s')
+        assertGlyph('.voice-settings-trigger')
+        await wrapper.get('.is-recording').trigger('click')
+        expect(calls).to.deep.equal(['start', 'stop'])
+        expect(voice.state).to.equal('transcribing')
+        expect(wrapper.get('.voice-inline-status').text()).to.contain('正在转写语音')
+      } finally { wrapper.unmount() }
+    })
+  }
+
+  it('confirms a reviewed transcript through the voice turn and reads the correlated reply aloud', async () => {
+    class SpeakingAudio { async play () {}; pause () {} }
+    const harness = browserHarness({ AudioClass: SpeakingAudio, fetchImpl: async () => wavResponse() })
+    let sends = 0
+    const { voice } = createVoice({
+      browser: harness.browser,
+      onSendVoice: async () => { sends += 1; return true }
+    })
+    voice.setReplyVoiceEnabled(true)
+    expect(voice.autoSendEnabled).to.equal(false)
+    await transcribeToReview(voice)
+    const HallVoiceControls = loadSfc('../src/components/juyiting/HallVoiceControls.vue')
+    const wrapper = mount(HallVoiceControls, { props: { voice }, global: { stubs: { 'var-icon': true } } })
+    expect(wrapper.get('button[aria-label="确认发送语音转写"]').element.textContent).to.equal('确认发送')
+
+    await wrapper.get('button[aria-label="确认发送语音转写"]').trigger('click')
+    await flush()
+    expect(sends).to.equal(1)
+    expect(voice.state).to.equal('waiting_reply')
+    expect(voice.voiceTurnActive).to.equal(true)
+    expect(await voice.completeReply({ content: '同一 Agent 的关联回复' })).to.equal(true)
+    expect(voice.state).to.equal('speaking')
+
+    wrapper.unmount()
+    voice.dispose()
   })
 })
 
 describe('Juyi Hall voice recording format support', () => {
-  it('rejects MP4-only recorders and falls back only to WebM/Opus when MIME probing is unavailable', async () => {
-    let permissionCalls = 0
-    class Mp4OnlyRecorder extends FakeRecorder {}
-    Mp4OnlyRecorder.isTypeSupported = type => type === 'audio/mp4'
-    const mp4Harness = browserHarness({ permission: async () => { permissionCalls += 1; return mp4Harness.makeStream() } })
-    mp4Harness.browser.MediaRecorder = Mp4OnlyRecorder
-    const mp4Voice = createVoice({ browser: mp4Harness.browser }).voice
-    expect(mp4Voice.supported).to.equal(false)
-    expect(mp4Voice.state).to.equal('unsupported')
-    expect(mp4Voice.canRecord).to.equal(false)
-    expect(await mp4Voice.startRecording()).to.equal(false)
-    expect(permissionCalls).to.equal(0)
-    mp4Voice.dispose()
+  it('uploads an exact PCM16 mono 24k WAV named juyiting-voice.wav', async () => {
+    const harness = browserHarness()
+    let uploaded
+    const { voice } = createVoice({
+      browser: harness.browser,
+      chatCreate: async (path, body) => {
+        expect(path).to.equal('/speech/transcriptions')
+        uploaded = body.get('audio')
+        return { data: { data: { text: 'WAV 转写' } } }
+      }
+    })
+    await transcribeToReview(voice)
+    expect(uploaded.name).to.equal('juyiting-voice.wav')
+    expect(uploaded.type).to.equal('audio/wav')
+    expect(validatePcm16MonoWav(new Uint8Array(await uploaded.arrayBuffer()), { maxBytes: HALL_VOICE_MAX_AUDIO_BYTES })).to.equal(true)
+    voice.dispose()
+  })
 
-    class LegacyRecorder extends FakeRecorder {}
-    LegacyRecorder.isTypeSupported = undefined
-    const legacyHarness = browserHarness()
-    legacyHarness.browser.MediaRecorder = LegacyRecorder
-    const legacyVoice = createVoice({ browser: legacyHarness.browser }).voice
-    expect(legacyVoice.supported).to.equal(true)
-    expect(await legacyVoice.startRecording()).to.equal(true)
-    expect(FakeRecorder.instances.at(-1).mimeType).to.equal('audio/webm;codecs=opus')
-    legacyVoice.cancel()
-    legacyVoice.dispose()
+  it('requires AudioWorklet capture unless a deterministic recorder factory is injected', () => {
+    const harness = browserHarness()
+    const unsupported = useHallVoiceConversation({
+      apiStore: { token: async () => 'token' }, chatApi: { create: async () => ({}) }, enabled: true,
+      getContext: validContext, getDraft: () => '', getDraftRevision: () => 0, isReplyBusy: () => false,
+      browser: harness.browser
+    })
+    expect(unsupported.supported).to.equal(false)
+    const injected = createVoice({ browser: harness.browser }).voice
+    expect(injected.supported).to.equal(true)
+    unsupported.dispose()
+    injected.dispose()
   })
 })
 
@@ -348,6 +625,49 @@ describe('Juyi Hall voice lifecycle', () => {
     expect(voice.voiceInteractionLocked).to.equal(false)
     expect(harness.tracks.at(-1).stopped).to.equal(true)
     expect(captureEvents).to.deep.equal([true, false, true, false])
+  })
+
+  it('fails capture on processor error and ignores delayed WAV validation after cancellation', async () => {
+    const harness = browserHarness()
+    let processorError
+    let disposed = 0
+    const recorder = {
+      start: async () => {},
+      stop: async () => new Blob([createPcm16MonoWav(new Uint8Array([0, 0]))], { type: 'audio/wav' }),
+      dispose: async () => { disposed += 1 }
+    }
+    const { voice } = createVoice({
+      browser: harness.browser,
+      createRecorder: options => { processorError = options.onProcessorError; return recorder }
+    })
+    await voice.startRecording()
+    processorError(new Error('processor lost'))
+    expect(voice.state).to.equal('error')
+    expect(voice.error).to.equal('processor lost')
+    expect(disposed).to.equal(1)
+    voice.dispose()
+
+    const arrayBuffer = deferred()
+    let uploads = 0
+    const delayed = createVoice({
+      browser: harness.browser,
+      chatCreate: async () => { uploads += 1; return { data: { data: { text: '不应上传' } } } },
+      createRecorder: () => ({
+        start: async () => {},
+        stop: async () => ({ type: 'audio/wav', size: 46, arrayBuffer: () => arrayBuffer.promise }),
+        dispose: async () => {}
+      })
+    }).voice
+    await delayed.startRecording()
+    expect(delayed.stopRecording()).to.equal(true)
+    await flush()
+    delayed.cancel()
+    arrayBuffer.resolve(createPcm16MonoWav(new Uint8Array([0, 0])).buffer)
+    await flush()
+    expect(delayed.state).to.equal('idle')
+    expect(delayed.error).to.equal('')
+    expect(uploads).to.equal(0)
+    delayed.dispose()
   })
 
   it('aborts hidden transcribing and locks pending-send conflict review', async () => {
@@ -525,11 +845,7 @@ describe('Juyi Hall voice identity and capture controls', () => {
     expect(replyVoice.state).to.equal('idle')
     expect(replyVoice.transcript).to.equal('')
     expect(replyVoice.voiceTurnActive).to.equal(false)
-    tts.resolve({
-      ok: true,
-      headers: new Headers({ 'content-type': 'audio/mpeg', 'content-length': '3' }),
-      body: new ReadableStream({ start (controller) { controller.enqueue(new Uint8Array([1, 2, 3])); controller.close() } })
-    })
+    tts.resolve(wavResponse())
     expect(await synthesizing).to.equal(false)
     expect(replyVoice.state).to.equal('idle')
     replyVoice.dispose()
@@ -605,7 +921,7 @@ describe('Juyi Hall voice identity and capture controls', () => {
     const countdownVoice = createVoice({ browser: countdownHarness.browser }).voice
     countdownVoice.setAutoSendEnabled(true)
     await countdownVoice.startRecording()
-    let recorder = FakeRecorder.instances.at(-1)
+    const recorder = FakeRecorder.instances.at(-1)
     recorder.ondataavailable({ data: new Blob(['voice']) })
     countdownVoice.stopRecording()
     await flush()
@@ -625,11 +941,7 @@ describe('Juyi Hall voice identity and capture controls', () => {
     }
     const speakingHarness = browserHarness({
       AudioClass: SpeakingAudio,
-      fetchImpl: async () => ({
-        ok: true,
-        headers: new Headers({ 'content-type': 'audio/mpeg', 'content-length': '3' }),
-        body: new ReadableStream({ start (controller) { controller.enqueue(new Uint8Array([1, 2, 3])); controller.close() } })
-      })
+      fetchImpl: async () => wavResponse()
     })
     const speakingVoice = createVoice({ browser: speakingHarness.browser }).voice
     speakingVoice.setReplyVoiceEnabled(true)
@@ -701,6 +1013,7 @@ describe('Juyi Hall portrait voice lock', () => {
       } }
     })
     globalThis.MediaRecorder = FakeRecorder
+    installWorkletCaptureFakes()
 
     const HallVoiceControls = loadSfc('../src/components/juyiting/HallVoiceControls.vue')
     const HallVoiceHud = loadSfc('../src/components/juyiting/HallVoiceHud.vue', { HallVoiceControls })
@@ -816,12 +1129,11 @@ describe('Juyi Hall voice sending escape', () => {
     const terminals = []
     const toasts = []
     let sequence = 0
-    let voice
     const tracker = createHallVoiceReplyCorrelation({ onReply: message => voice.completeReply(message) })
     const harness = browserHarness({ fetchImpl: async () => { throw new Error('stopped sends must not synthesize') } })
     let requestSequence = 0
     harness.browser.crypto.randomUUID = () => `voice-request-${++requestSequence}`
-    ;({ voice } = createVoice({
+    const { voice } = createVoice({
       browser: harness.browser,
       showToast: message => toasts.push(message),
       onSendVoice: async ({ turnId }) => {
@@ -838,7 +1150,7 @@ describe('Juyi Hall voice sending escape', () => {
         terminals.push(payload)
         tracker.closeIfCurrent(payload.turnId, payload.reason)
       }
-    }))
+    })
     const HallVoiceControls = loadSfc('../src/components/juyiting/HallVoiceControls.vue')
     const wrapper = mount(HallVoiceControls, { props: { voice }, global: { stubs: { 'var-icon': true } } })
     try {
@@ -932,14 +1244,13 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
   it('queues a synchronous final until voice send acceptance reaches a terminal state', async () => {
     FakeRecorder.instances = []
     const harness = browserHarness()
-    let voice
-    ;({ voice } = createVoice({
+    const { voice } = createVoice({
       browser: harness.browser,
       onSendVoice: async () => {
         expect(voice.completeReply({ content: '同步完整回话' })).to.equal(true)
         return true
       }
-    }))
+    })
     await transcribeToReview(voice)
     expect(await voice.sendTranscript()).to.equal(true)
     await flush()
@@ -966,8 +1277,7 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
     FakeRecorder.instances = []
     const harness = browserHarness()
     let attempts = 0
-    let voice
-    ;({ voice } = createVoice({
+    const { voice } = createVoice({
       browser: harness.browser,
       onSendVoice: async () => {
         attempts += 1
@@ -977,7 +1287,7 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
         }
         return true
       }
-    }))
+    })
     await transcribeToReview(voice)
     expect(await voice.sendTranscript()).to.equal(false)
     expect(voice.state).to.equal('conflict')
@@ -1033,11 +1343,7 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
       AudioClass: SpeakingAudio,
       fetchImpl: async () => {
         ttsFetches += 1
-        return {
-          ok: true,
-          headers: new Headers({ 'content-type': 'audio/mpeg', 'content-length': '3' }),
-          body: new ReadableStream({ start (controller) { controller.enqueue(new Uint8Array([1, 2, 3])); controller.close() } })
-        }
+        return wavResponse()
       }
     })
     harness.browser.window.setTimeout = clock.setTimeout
@@ -1156,6 +1462,7 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
       } }
     })
     globalThis.MediaRecorder = FakeRecorder
+    installWorkletCaptureFakes()
     globalThis.Audio = class {
       play = async () => { audioPlays += 1 }
       pause () {}
@@ -1163,7 +1470,7 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
     globalThis.fetch = async url => {
       if (!String(url).includes('/chat/speech/synthesis')) return new Response(null, { status: 204 })
       ttsFetches += 1
-      return new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'content-type': 'audio/mpeg', 'content-length': '3' } })
+      return new Response(wavBytes(), { status: 200, headers: { 'content-type': 'audio/wav', 'content-length': String(wavBytes().byteLength) } })
     }
     const JuyiHall = loadActualJuyiHall(createActualHallVoiceMocks({
       chatApi, conversationRef, correlationRef, selectedAgentFixture, SelectedAgentCardComponent, voiceRef
@@ -1258,7 +1565,8 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
       context: validContext({
         conversationId: 'frozen-conversation', conversationScopeType: 'private', conversationScopeKey: 'agent:frozen-agent', mode: 'private',
         targetAgentIds: ['frozen-agent'], targetAgentId: 'frozen-agent', participantAgentIds: ['frozen-agent'], mentionAgentIds: [],
-        selectedAgentId: 'frozen-agent', selectedTaskId: 'frozen-task', taskId: 'frozen-task', outgoingMetadata: { frozen: { z: 1 } }
+        selectedAgentId: 'frozen-agent', selectedTaskId: 'frozen-task', taskId: 'frozen-task',
+        outgoingMetadata: { libraryCitationId: 'archive-frozen', librarySourceType: 'knowledge-base', frozen: { z: 1 } }
       }),
       draft: 'original draft',
       draftRevision: frozenRevision
@@ -1268,20 +1576,52 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
     expect(payloads[0]).to.deep.include({ conversationId: 'frozen-conversation', conversationScopeKey: 'agent:frozen-agent', targetAgentId: 'frozen-agent', taskId: 'frozen-task' })
     expect(payloads[0].metadata).to.deep.include({ selectedAgentId: 'frozen-agent', selectedTaskId: 'frozen-task' })
     expect(payloads[0].metadata.mentionAgentIds).to.deep.equal(['frozen-agent'])
-    expect(payloads[0].metadata.frozen).to.deep.equal({ z: 1 })
+    expect(payloads[0].metadata).to.include({ libraryCitationId: 'archive-frozen', librarySourceType: 'knowledge-base' })
+    expect(payloads[0].metadata.frozen).to.equal(undefined)
     expect(conversation.draft.value).to.equal('')
     conversation.disposeHallConversation()
   })
 })
 
 describe('Juyi Hall TTS cleanup', () => {
-  const audioResponse = () => ({
-    ok: true,
-    headers: new Headers({ 'content-type': 'audio/mpeg', 'content-length': '3' }),
-    body: new ReadableStream({ start (controller) { controller.enqueue(new Uint8Array([1, 2, 3])); controller.close() } })
-  })
+  const audioResponse = wavResponse
 
-  it('revokes object URLs on play rejection and media error', async () => {
+  it('uses the Window receiver for default-browser TTS while preserving its request and cleanup contract', async () => withVoiceBrowserState(async () => {
+    const revoked = []
+    let request
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia: async () => ({ getTracks: () => [{ stop () {} }] }) }
+    })
+    globalThis.URL = {
+      createObjectURL: () => 'blob:strict-window-voice',
+      revokeObjectURL: value => revoked.push(value)
+    }
+    class DefaultAudio { async play () {}; pause () {} }
+    globalThis.Audio = DefaultAudio
+    globalThis.fetch = async function strictWindowFetch (url, options) {
+      if (this !== globalThis) throw new TypeError('Failed to execute fetch on Window: Illegal invocation')
+      request = { url, options }
+      return audioResponse()
+    }
+
+    const voice = createVoice().voice
+    voice.setReplyVoiceEnabled(true)
+    await transcribeToReview(voice)
+    await voice.sendTranscript()
+    expect(await voice.completeReply({ content: '回话' })).to.equal(true)
+    expect(request.url).to.equal('/chat/speech/synthesis')
+    expect(request.options).to.include({ method: 'POST' })
+    expect(request.options.headers).to.deep.equal({ Authorization: 'Bearer token', 'Content-Type': 'application/json' })
+    expect(request.options.signal).to.be.instanceOf(AbortSignal)
+    expect(JSON.parse(request.options.body)).to.deep.include({ voice: 'juyiting-default', format: 'wav', text: '回话' })
+    expect(voice.state).to.equal('speaking')
+    voice.cancel()
+    expect(revoked).to.deep.equal(['blob:strict-window-voice'])
+  }))
+
+  it('labels actual TTS playback failures without mislabeling them as transcription failures', async () => {
+    const HallVoiceControls = loadSfc('../src/components/juyiting/HallVoiceControls.vue')
     class RejectAudio { constructor () { RejectAudio.instance = this } play = async () => { throw new Error('autoplay denied') }; pause () {} }
     let harness = browserHarness({ AudioClass: RejectAudio, fetchImpl: async () => audioResponse() })
     let voice = createVoice({ browser: harness.browser }).voice
@@ -1291,6 +1631,9 @@ describe('Juyi Hall TTS cleanup', () => {
     await voice.completeReply({ content: 'reply' })
     expect(voice.state).to.equal('error')
     expect(harness.revoked).to.deep.equal(['blob:voice'])
+    let controls = mount(HallVoiceControls, { props: { voice }, global: { stubs: { 'var-icon': true } } })
+    expect(controls.get('.voice-review strong').element.textContent).to.equal('语音未完成')
+    controls.unmount()
 
     class ErrorAudio { constructor () { ErrorAudio.instance = this } play = async () => {}; pause () {} }
     harness = browserHarness({ AudioClass: ErrorAudio, fetchImpl: async () => audioResponse() })
@@ -1303,12 +1646,77 @@ describe('Juyi Hall TTS cleanup', () => {
     ErrorAudio.instance.onerror()
     expect(voice.state).to.equal('error')
     expect(harness.revoked).to.deep.equal(['blob:voice'])
+    controls = mount(HallVoiceControls, { props: { voice }, global: { stubs: { 'var-icon': true } } })
+    expect(controls.get('.voice-review strong').element.textContent).to.equal('语音服务提示（AI 朗读）')
+    controls.unmount()
+  })
+
+  it('requests WAV and rejects a MIME/header-invalid response before playback', async () => {
+    let request
+    let plays = 0
+    class AudioProbe { async play () { plays += 1 }; pause () {} }
+    const harness = browserHarness({
+      AudioClass: AudioProbe,
+      fetchImpl: async (_url, options) => {
+        request = JSON.parse(options.body)
+        return { ...wavResponse(), headers: new Headers({ 'content-type': 'audio/mpeg', 'content-length': String(wavBytes().byteLength) }) }
+      }
+    })
+    const voice = createVoice({ browser: harness.browser }).voice
+    voice.setReplyVoiceEnabled(true)
+    await transcribeToReview(voice)
+    await voice.sendTranscript()
+    expect(await voice.completeReply({ content: '回话' })).to.equal(false)
+    expect(request).to.deep.include({ voice: 'juyiting-default', format: 'wav' })
+    expect(plays).to.equal(0)
+    expect(voice.error).to.equal('语音回答暂不可用')
+    voice.dispose()
+  })
+
+  it('rejects a supplied Content-Length that differs from the WAV bytes', async () => {
+    let plays = 0
+    class AudioProbe { async play () { plays += 1 }; pause () {} }
+    const harness = browserHarness({
+      AudioClass: AudioProbe,
+      fetchImpl: async () => ({
+        ok: true,
+        headers: new Headers({ 'content-type': 'audio/wav', 'content-length': String(wavBytes().byteLength - 1) }),
+        body: new ReadableStream({ start (controller) { controller.enqueue(wavBytes()); controller.close() } })
+      })
+    })
+    const voice = createVoice({ browser: harness.browser }).voice
+    voice.setReplyVoiceEnabled(true)
+    await transcribeToReview(voice)
+    await voice.sendTranscript()
+    expect(await voice.completeReply({ content: '回话' })).to.equal(false)
+    expect(plays).to.equal(0)
+    expect(voice.error).to.equal('语音回答为空或长度不符，文字已保留')
+    voice.dispose()
+  })
+
+  it('accepts a headerless WAV response when intrinsic RIFF length is valid', async () => {
+    class SpeakingAudio { async play () {}; pause () {} }
+    const harness = browserHarness({
+      AudioClass: SpeakingAudio,
+      fetchImpl: async () => ({
+        ok: true,
+        headers: new Headers({ 'content-type': 'audio/wav' }),
+        body: new ReadableStream({ start (controller) { controller.enqueue(wavBytes()); controller.close() } })
+      })
+    })
+    const voice = createVoice({ browser: harness.browser }).voice
+    voice.setReplyVoiceEnabled(true)
+    await transcribeToReview(voice)
+    await voice.sendTranscript()
+    expect(await voice.completeReply({ content: '回话' })).to.equal(true)
+    expect(voice.state).to.equal('speaking')
+    voice.dispose()
   })
 
   it('routes a zero-byte successful TTS response through terminal error cleanup', async () => {
     const emptyResponse = {
       ok: true,
-      headers: new Headers({ 'content-type': 'audio/mpeg', 'content-length': '0' }),
+      headers: new Headers({ 'content-type': 'audio/wav', 'content-length': '0' }),
       body: new ReadableStream({ start (controller) { controller.close() } })
     }
     const harness = browserHarness({ fetchImpl: async () => emptyResponse })
@@ -1318,7 +1726,7 @@ describe('Juyi Hall TTS cleanup', () => {
     await voice.sendTranscript()
     expect(await voice.completeReply({ content: '回话' })).to.equal(false)
     expect(voice.state).to.equal('error')
-    expect(voice.error).to.equal('语音回答为空，文字已保留')
+    expect(voice.error).to.equal('语音回答暂不可用')
     expect(voice.voiceTurnActive).to.equal(false)
     expect(voice.canRecord).to.equal(true)
     voice.dispose()

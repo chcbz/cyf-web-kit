@@ -27,6 +27,15 @@ const deferred = () => {
 }
 
 describe('useHallConversation scoped message loading', () => {
+  it('retains attachment-only USER messages with exact scoped references and no invented text', () => {
+    const source = { kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'file-1', version: '7', purpose: 'INPUT', assetId: null, assetRevision: null }
+    const message = normalizeHallMessage({ id: '101', messageType: 'USER', senderType: 'user', jiacn: 'owner', content: '',
+      metadata: JSON.stringify({ conversationScopeType: 'bounty', selectedTaskId: 'task-1', typedSourceSelectors: [source] }) }, 'owner')
+    expect(message.content).to.equal('')
+    expect(message.typedTaskId).to.equal('task-1')
+    expect(message.typedSourceSelectors).to.deep.equal([source])
+    expect(normalizeHallMessage({ id: '102', senderType: 'user', content: '', metadata: { conversationScopeType: 'private', typedSourceSelectors: [source] } }, 'owner').typedSourceSelectors).to.deep.equal([])
+  })
   it('does not fetch or schedule SSE recovery when token acquisition returns null', async () => {
     const originalFetch = global.fetch
     const originalSetTimeout = window.setTimeout
@@ -81,6 +90,45 @@ describe('useHallConversation scoped message loading', () => {
       expect(fetchCount).to.equal(0)
       expect(reconnectTimerCount).to.equal(0)
       expect(conversation.eventStreamRecovering.value).to.equal(false)
+    } finally {
+      global.fetch = originalFetch
+      window.setTimeout = originalSetTimeout
+    }
+  })
+
+  it('falls back to authoritative polling without reconnecting when durable SSE is unsupported', async () => {
+    const originalFetch = global.fetch
+    const originalSetTimeout = window.setTimeout
+    let fetchCount = 0
+    let reconnectTimerCount = 0
+    let contentLoads = 0
+    global.fetch = async () => {
+      fetchCount += 1
+      return new Response('', { status: 501 })
+    }
+    window.setTimeout = () => {
+      reconnectTimerCount += 1
+      return 1
+    }
+    try {
+      const conversation = useHallConversation({
+        apiStore: { token: async () => 'token', authorizationGeneration: 1 },
+        chatApi: {
+          list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation()] }),
+          getById: async (_path, _id, options) => { contentLoads += 1; options.onSuccess({ data: [] }) }
+        },
+        chatContext: ref({ conversationScopeType: 'public', conversationScopeKey: 'public', mode: 'public', participantAgentIds: [], targetAgentIds: [] }),
+        chatMode: ref('public'), globalStore: { getJiacn: 'jia-user', user: {} },
+        log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}),
+        portraitShortName: agent => agent?.name || agent?.agentId || '', selectedAgent: ref(null), selectedTask: ref(null), showToast: () => {}
+      })
+      await conversation.loadHallMessages()
+      await new Promise(resolve => setImmediate(resolve))
+      await new Promise(resolve => setImmediate(resolve))
+      expect(fetchCount).to.equal(1)
+      expect(contentLoads).to.be.at.least(2)
+      expect(reconnectTimerCount).to.equal(0)
+      conversation.disposeHallConversation()
     } finally {
       global.fetch = originalFetch
       window.setTimeout = originalSetTimeout
@@ -1612,5 +1660,76 @@ describe('Hall stream transport failure read-only recovery', () => {
     } finally {
       conversation.disposeHallConversation()
     }
+  })
+})
+
+
+describe('develop merge archive and durable conversation lanes', () => {
+  const capabilities = { schemaVersion: '2', requestId: true, requestRevision: true, contextSnapshot: true,
+    durableTurns: true, deltaSequence: true, cancel: true, interactionHints: ['chat', 'inspect'] }
+  const fixture = ({ metadata = {}, pendingCapability } = {}) => {
+    const posts = []
+    const apiStore = { authorizationGeneration: 1, token: async () => null }
+    const outgoingMetadata = ref(metadata)
+    const conversation = useHallConversation({ apiStore,
+      chatContext: ref({ conversationScopeType: 'public', conversationScopeKey: 'public', participantAgentIds: [], targetAgentIds: ['builtin-songjiang'] }),
+      chatMode: ref('public'), globalStore: { getJiacn: 'owner', user: {} }, outgoingMetadata,
+      selectedAgent: ref(null), selectedTask: ref(null), portraitShortName: () => '', showToast: () => {},
+      log: { warn: () => {}, error: () => {} }, openPanel: () => {},
+      chatApi: {
+        get: async () => pendingCapability ? pendingCapability.promise : capabilities,
+        create: async (path, body, options) => {
+          posts.push({ path, body, options })
+          options.onStreamOpen({ cancel: () => {} })
+          if (body.archiveMaintenanceIntent) options.onStream(JSON.stringify({ type: 'archive_maintenance_receipt', conversationId: '101', archiveMaintenance: { jobId: 'job-current', state: 'AUTHORITATIVE_NON_TERMINAL' } }))
+          options.onStreamEnd()
+        }
+      }
+    })
+    return { conversation, posts, apiStore, outgoingMetadata }
+  }
+  it('uses confirmation receipt streaming under v2 capabilities without inventing a durable request or waiting forever', async () => {
+    const f = fixture()
+    try {
+      expect(await f.conversation.sendHallMessage({ content: 'confirmed', archiveMaintenanceIntent: { schemaVersion: 1, confirmationRef: 'confirmed-ref' } })).to.equal(true)
+      expect(f.posts).to.have.length(1)
+      expect(f.posts[0].body.archiveMaintenanceIntent).to.deep.equal({ schemaVersion: 1, confirmationRef: 'confirmed-ref' })
+      expect(f.posts[0].body.forceNewConversation).to.equal(true)
+      expect(f.posts[0].body).not.to.have.property('requestId')
+      expect(f.posts[0].options.headers).to.deep.equal({})
+      expect(f.conversation.messages.value.some(message => message.sender === 'SYSTEM' && JSON.parse(message.content || '{}')?.type === 'archive_maintenance_receipt')).to.equal(true)
+      expect(f.conversation.activeRequest.value).to.equal(null)
+      expect(f.conversation.isAwaitingReply.value).to.equal(false)
+      expect(f.conversation.isStreaming.value).to.equal(false)
+    } finally { f.conversation.disposeHallConversation() }
+  })
+  it('retains ordinary multimedia inspection durable routing and rejects a mixed archive confirmation before posting', async () => {
+    const refs = [{ type: 'conversation_asset', id: 'asset-1' }]
+    const f = fixture({ metadata: { inputRefs: refs } })
+    try {
+      expect(await f.conversation.sendHallMessage({ content: 'inspect' })).to.equal(true)
+      expect(f.posts[0].body.interactionHint).to.equal('inspect')
+      expect(f.posts[0].body.inputRefs).to.deep.equal(refs)
+      expect(f.posts[0].body.requestId).to.be.a('string').and.not.equal('')
+      expect(f.posts[0].options.headers['Idempotency-Key']).to.equal(f.posts[0].body.requestId)
+    } finally { f.conversation.disposeHallConversation() }
+    const mixed = fixture({ metadata: { inputRefs: refs } })
+    try {
+      mixed.conversation.setDraft('retain draft')
+      expect(await mixed.conversation.sendHallMessage({ archiveMaintenanceIntent: { schemaVersion: 1, confirmationRef: 'confirmed-ref' } })).to.equal(false)
+      expect(mixed.posts).to.have.length(0)
+      expect(mixed.conversation.draft.value).to.equal('retain draft')
+    } finally { mixed.conversation.disposeHallConversation() }
+  })
+  it('fences a late capability response before either archive or durable POST after authorization changes', async () => {
+    const pending = deferred()
+    const f = fixture({ pendingCapability: pending })
+    try {
+      const sending = f.conversation.sendHallMessage({ content: 'confirmed', archiveMaintenanceIntent: { schemaVersion: 1, confirmationRef: 'confirmed-ref' } })
+      f.apiStore.authorizationGeneration += 1
+      pending.resolve(capabilities)
+      expect(await sending).to.equal(false)
+      expect(f.posts).to.have.length(0)
+    } finally { f.conversation.disposeHallConversation() }
   })
 })

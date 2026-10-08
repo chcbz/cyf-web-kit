@@ -1,0 +1,216 @@
+{
+  "schemaVersion": 1,
+  "contract": "typed-deliberation-atomic-followup-contract-v1.md",
+  "golden": {
+    "discussion": {
+      "schemaVersion": 1,
+      "intent": "DISCUSSION",
+      "taskId": "task-1",
+      "expectedAssignmentRevision": "4",
+      "content": "画一只鸟，可以先问我需要补充什么。",
+      "parentOutcomeId": null,
+      "expectedParentStateVersion": null,
+      "pendingQuestionId": null,
+      "expectedPendingQuestionStateVersion": null,
+      "sourceSelectors": []
+    },
+    "clarificationReply": {
+      "schemaVersion": 1,
+      "intent": "CLARIFICATION_REPLY",
+      "taskId": "task-1",
+      "expectedAssignmentRevision": "4",
+      "content": "画一只蓝色小鸟，水彩风格。",
+      "parentOutcomeId": "outcome-1",
+      "expectedParentStateVersion": "0",
+      "pendingQuestionId": "pending-1",
+      "expectedPendingQuestionStateVersion": "0",
+      "sourceSelectors": []
+    },
+    "accepted": {
+      "schemaVersion": 1,
+      "intent": "DISCUSSION",
+      "requestId": "request-1",
+      "userMessageId": "100",
+      "turnIds": [
+        "turn-1"
+      ],
+      "state": "ADMITTED",
+      "stateVersion": "0",
+      "eventCursor": "9007199254740993",
+      "statusUrl": "/chat/requests/request-1",
+      "typedOutcomeUrl": "/chat/conversations/7/requests/request-1/typed-outcome",
+      "replay": false,
+      "pendingQuestionId": null
+    },
+    "pendingRead": {
+      "schemaVersion": 1,
+      "conversationId": "7",
+      "conversationGeneration": "1",
+      "requestId": "request-1",
+      "requestRevision": "1",
+      "turnId": "turn-1",
+      "state": "PENDING",
+      "outcome": null
+    },
+    "answerRead": {
+      "schemaVersion": 1,
+      "conversationId": "7",
+      "conversationGeneration": "1",
+      "requestId": "request-1",
+      "requestRevision": "1",
+      "turnId": "turn-1",
+      "state": "READY",
+      "outcome": {
+        "outcomeId": "outcome-1",
+        "taskId": "task-1",
+        "assignmentRevision": "4",
+        "assistantMessageId": "101",
+        "finalDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "kind": "ANSWER",
+        "text": "这是一只鸟的创作需求。",
+        "clarification": null,
+        "proposal": null
+      }
+    },
+    "clarifyRead": {
+      "schemaVersion": 1,
+      "conversationId": "7",
+      "conversationGeneration": "1",
+      "requestId": "request-1",
+      "requestRevision": "1",
+      "turnId": "turn-1",
+      "state": "READY",
+      "outcome": {
+        "outcomeId": "outcome-1",
+        "taskId": "task-1",
+        "assignmentRevision": "4",
+        "assistantMessageId": "101",
+        "finalDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "kind": "CLARIFY",
+        "text": "请问你希望小鸟是什么颜色？",
+        "clarification": {
+          "pendingQuestionId": "pending-1",
+          "state": "OPEN",
+          "stateVersion": "0",
+          "question": "请问你希望小鸟是什么颜色？",
+          "requiredFacts": [
+            "REQUIREMENT_DETAILS"
+          ],
+          "replyRequestId": null
+        },
+        "proposal": null
+      }
+    },
+    "proposalRead": {
+      "schemaVersion": 1,
+      "conversationId": "7",
+      "conversationGeneration": "1",
+      "requestId": "request-1",
+      "requestRevision": "1",
+      "turnId": "turn-1",
+      "state": "READY",
+      "outcome": {
+        "outcomeId": "outcome-1",
+        "taskId": "task-1",
+        "assignmentRevision": "4",
+        "assistantMessageId": "101",
+        "finalDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "kind": "EXECUTION_PROPOSAL",
+        "text": "我可以画一只蓝色水彩小鸟，请确认本次生成。",
+        "clarification": null,
+        "proposal": {
+          "proposalId": "proposal-1",
+          "state": "PROPOSED",
+          "stateVersion": "0",
+          "operation": "GENERATE_IMAGE",
+          "instruction": "画一只蓝色小鸟，水彩风格",
+          "sourceRefIds": [],
+          "sourceSelectors": [],
+          "parent": null
+        }
+      }
+    }
+  },
+  "expectations": [
+    {
+      "id": "AT01",
+      "expected": "trusted marker+same transaction all final rows/event/outbox committed",
+      "runtime": "NOT_RUN"
+    },
+    {
+      "id": "AT02",
+      "expected": "samecontent differentkind/union digest conflict",
+      "runtime": "NOT_RUN"
+    },
+    {
+      "id": "AT03",
+      "expected": "plain legacy has no sidecar and old wire unchanged",
+      "runtime": "NOT_RUN"
+    },
+    {
+      "id": "AT04",
+      "expected": "unrequestedsidecar/missingrequestedsidecar reject",
+      "runtime": "NOT_RUN"
+    },
+    {
+      "id": "AT05",
+      "expected": "sidecar insertion failure rolls back all existing final/message/turn/event/outbox",
+      "runtime": "NOT_RUN"
+    },
+    {
+      "id": "AT06",
+      "expected": "samekey samebody pendingreply returns same request and no duplicate",
+      "runtime": "NOT_RUN"
+    },
+    {
+      "id": "AT07",
+      "expected": "differentkey pendingCAS at most one winner",
+      "runtime": "NOT_RUN"
+    },
+    {
+      "id": "AT08",
+      "expected": "newnormalCHAT revision1 no grant/step/START",
+      "runtime": "NOT_RUN"
+    },
+    {
+      "id": "AT09",
+      "expected": "foreign/deleted/assignmentchanged rejected and history read scoped",
+      "runtime": "NOT_RUN"
+    },
+    {
+      "id": "AT10",
+      "expected": "question read after refresh ANSWERED never reverted by late OPEN",
+      "runtime": "NOT_RUN"
+    },
+    {
+      "id": "AT11",
+      "expected": "proposal only explicit prepare preview, never auto issue/admit/START",
+      "runtime": "NOT_RUN"
+    },
+    {
+      "id": "AT12",
+      "expected": "currentlive typed declaration/snapshot only, offline/unavailable/ambiguous no fallback",
+      "runtime": "NOT_RUN"
+    },
+    {
+      "id": "AT13",
+      "expected": "version long cursor remain exact strings and cannot numbercoerce",
+      "runtime": "NOT_RUN"
+    },
+    {
+      "id": "AT14",
+      "expected": "source directory ACL frozen, metadata not byte content or authorization",
+      "runtime": "NOT_RUN"
+    },
+    {
+      "id": "AT15",
+      "expected": "schema pristine/additive exact restart, weak/partial drift rejected",
+      "runtime": "NOT_RUN"
+    },
+    {
+      "id": "AT16",
+      "expected": "existing Page/useHallConversation no second transcript or legacy fallback",
+      "runtime": "NOT_RUN"
+    }
+  ]
+}

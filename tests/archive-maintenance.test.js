@@ -53,6 +53,7 @@ const loadChatPanelSfc = ArchiveMaintenanceReceiptCard => {
     .replace(/^import\s+DOMPurify\s+from\s+['"]dompurify['"];?\s*$/gm, 'var DOMPurify = arguments[2]')
     .replace(/^import\s+HallChatComposer\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var HallChatComposer = arguments[3]')
     .replace(/^import\s+HallConversationHistory\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var HallConversationHistory = arguments[3]')
+    .replace(/^import\s+(HallMessageParts|BountyTextSelectionArchive|BountyTypedOutcomeCard)\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var $1 = arguments[3]')
     .replace(/^import\s+ArchiveMaintenanceReceiptCard\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var ArchiveMaintenanceReceiptCard = arguments[4]')
     .replace(/^import\s+\{\s*usePersonalWorkspace\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var usePersonalWorkspace = arguments[5].usePersonalWorkspace')
     .replace(/^import\s+\{\s*usePersonalWorkspaceConversationLinks\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var usePersonalWorkspaceConversationLinks = arguments[5].usePersonalWorkspaceConversationLinks')
@@ -301,6 +302,20 @@ describe('archive maintenance mounted Vue wiring', function () { this.timeout(10
     expect(wrapper.emitted('open-maintenance-job').at(-1)[0]).to.deep.equal({ jobId: 'job-chat' })
     expect(wrapper.emitted('open-archive-edition').at(-1)[0]).to.deep.equal({ workId: 'work-1', editionId: 'edition-1' })
     wrapper.unmount()
+  })
+
+  it('keeps persisted agent-owned archive receipts in the reauthorized card lane after reload, without trusting publication fields', async () => {
+    const Receipt = loadArchiveSfc('../src/components/juyiting/archive/ArchiveMaintenanceReceiptCard.vue'); const Chat = loadChatPanelSfc(Receipt)
+    globalThis.fetch = async () => admin({ jobId: 'job-reloaded', handling: handlingFacts({ jobId: 'job-reloaded', verificationState: 'PENDING', readerTarget: null }) })
+    const wrapper = mount(Chat, { attachTo: document.body, props: { archiveApi: authenticatedApi('/archive/admin/v1'), mentionLabel: () => '', senderText: () => '宋江', messages: [{ sender: 'AGENT', content: JSON.stringify({ type: 'archive_maintenance_receipt', archiveMaintenance: { jobId: 'job-reloaded', state: 'PUBLISHED', editionId: 'untrusted-edition' } }) }] } })
+    try {
+      await waitFor(() => wrapper.text().includes('水浒传校勘'))
+      expect(wrapper.text()).not.to.include('untrusted-edition')
+      expect(button(wrapper, '打开典籍')).to.equal(undefined)
+      await button(wrapper, '查看维护单').trigger('click')
+      await waitFor(() => wrapper.emitted('open-maintenance-job'))
+      expect(wrapper.emitted('open-maintenance-job').at(-1)[0]).to.deep.equal({ jobId: 'job-reloaded' })
+    } finally { wrapper.unmount() }
   })
 
   it('renders only reauthorized handling facts and emits exact maintenance/reader targets', async () => {

@@ -63,19 +63,43 @@ self.addEventListener('fetch', event => {
     return
   }
 
-  if (request.mode === 'navigate') {
+  const isAppShell = request.mode === 'navigate' || APP_SHELL.includes(url.pathname)
+  if (isAppShell) {
+    // A stable worker can survive many application releases. Revalidate the entry
+    // instead of serving yesterday's HTML or relying on a CACHE_VERSION bump.
+    const cacheKey = request.mode === 'navigate' ? '/index.html' : request
+    const networkRequest = new Request(request, {
+      cache: request.cache === 'no-store' ? 'no-store' : 'no-cache'
+    })
     event.respondWith(
-      fetch(request)
+      fetch(networkRequest)
         .then(response => {
-          const copy = response.clone()
-          caches.open(CACHE_VERSION).then(cache => cache.put('/index.html', copy)).catch(() => {})
+          if (response.ok && !response.redirected && request.cache !== 'no-store') {
+            const copy = response.clone()
+            event.waitUntil(caches.open(CACHE_VERSION)
+              .then(cache => cache.put(cacheKey, copy)).catch(() => {}))
+          }
+          // HTTP failures are real responses, not permission to present old success.
           return response
         })
-        .catch(async () => {
-          const cached = await caches.match('/index.html')
-          return cached || caches.match('/')
+        .catch(async error => {
+          if (request.cache === 'no-store') throw error
+          const cache = await caches.open(CACHE_VERSION)
+          const cached = await cache.match(cacheKey)
+          if (cached) return cached
+          if (request.mode === 'navigate') {
+            const fallback = await cache.match('/')
+            if (fallback) return fallback
+          }
+          throw error
         })
     )
+    return
+  }
+
+  // Honor explicit diagnostic/download freshness for non-shell resources too.
+  if (request.cache === 'no-store' || request.cache === 'reload') {
+    event.respondWith(fetch(request))
     return
   }
 

@@ -8,6 +8,7 @@ const router = readFileSync(new URL('../src/router/index.js', import.meta.url), 
 const sideMenu = readFileSync(new URL('../src/components/SideMenu.vue', import.meta.url), 'utf8')
 const taskMaterialLinks = readFileSync(new URL('../src/components/personal-workspace/TaskMaterialLinks.vue', import.meta.url), 'utf8')
 const overview = readFileSync(new URL('../src/components/juyiting/HallOverview.vue', import.meta.url), 'utf8')
+const materialPicker = readFileSync(new URL('../src/components/juyiting/HallMaterialPicker.vue', import.meta.url), 'utf8')
 const catalog = readFileSync(new URL('../src/components/juyiting/PersonaCatalogPanel.vue', import.meta.url), 'utf8')
 const library = readFileSync(new URL('../src/components/juyiting/LibraryPanel.vue', import.meta.url), 'utf8')
 const archiveReader = readFileSync(new URL('../src/components/juyiting/archive/ArchiveReader.vue', import.meta.url), 'utf8')
@@ -40,7 +41,9 @@ describe('1.13.6 Babao-box modal-stack hall presentation', () => {
   })
 
   it('uses one workbench selector language for new matters and linked material detail', () => {
-    for (const source of [overview, taskMaterialLinks]) {
+    assert.match(overview, /<HallMaterialPicker/ )
+    assert.match(overview, /import HallMaterialPicker from '\.\/HallMaterialPicker\.vue'/)
+    for (const source of [materialPicker, taskMaterialLinks]) {
       assert.match(source, /--material-ground:#f3f3ed;--material-paper:#fffefa;--material-ink:#242e2b;--material-muted:#68716b;--material-line:#d8d8ce;--material-brand:#923f30/)
       assert.match(source, /min-height:64px/)
       assert.match(source, /padding:16px max\(16px,env\(safe-area-inset-right\)\)/)

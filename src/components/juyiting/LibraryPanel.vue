@@ -217,6 +217,8 @@ const scoreText = (score) => {
 }
 </script>
 
+<style scoped src="./hall-view-tabs.css"></style>
+
 <style scoped>
 .library-panel { --library-ground: var(--work-ground, #f3f3ed); --library-paper: var(--work-paper, #fffefa); --library-ink: var(--work-ink, #242e2b); --library-muted: var(--work-muted, #68716b); --library-line: var(--work-line, #d8d8ce); --library-brand: var(--work-brand, #923f30); container-type: inline-size; display:flex; min-height:0; flex:1; flex-direction:column; gap:14px; padding:16px; overflow:hidden; background:var(--library-ground); color:var(--library-ink); }
 button,input,select { font:inherit; } button { cursor:pointer; } button:disabled { cursor:not-allowed; opacity:.5; }

@@ -1,12 +1,5 @@
 <template>
   <section class="public-discussion-panel discussion-panel">
-    <div class="discussion-brief">
-      <var-icon name="message-text-outline" />
-      <div>
-        <strong>厅前公议</strong>
-        <small>厅前面向众好汉，未点名时由宋江分拨。</small>
-      </div>
-    </div>
     <ChatPanel
       v-model:draft="draftProxy"
       discussion-variant="public"
@@ -16,6 +9,8 @@
       title="厅前公议"
       :voice="voice"
       v-bind="chatProps"
+      @cancel-deliberation="$emit('cancel-deliberation', $event)"
+      @cancel-legacy-transport="$emit('cancel-legacy-transport')"
       @clear-target="$emit('clear-target', $event)"
       @delete-conversation="$emit('delete-conversation', $event)"
       @load-history="$emit('load-history')"
@@ -48,6 +43,9 @@ const props = defineProps({
   conversationHistoryLoading: { type: Boolean, default: false },
   conversationLoadError: { type: String, default: '' },
   conversationBusy: { type: Boolean, default: false },
+  deliberationStatus: { type: String, default: '' },
+  durableCancelTarget: { type: Object, default: null },
+  legacyCancelAvailable: { type: Boolean, default: false },
   conversationId: { type: String, default: '' },
   identityEpoch: { type: [Number, String], default: 0 },
   draft: { type: String, default: '' },
@@ -66,6 +64,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits([
+  'cancel-deliberation',
+  'cancel-legacy-transport',
   'clear-target',
   'delete-conversation',
   'load-history',
@@ -98,6 +98,9 @@ const chatProps = computed(() => ({
   conversationHistoryLoading: props.conversationHistoryLoading,
   conversationLoadError: props.conversationLoadError,
   conversationBusy: props.conversationBusy,
+  deliberationStatus: props.deliberationStatus,
+  durableCancelTarget: props.durableCancelTarget,
+  legacyCancelAvailable: props.legacyCancelAvailable,
   conversationId: props.conversationId,
   identityEpoch: props.identityEpoch,
   eventStreamRecovering: props.eventStreamRecovering,
@@ -124,33 +127,4 @@ const chatProps = computed(() => ({
   background: #fffaf0;
 }
 
-.discussion-brief {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 10px;
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(116, 75, 35, 0.12);
-  background: #f5ead6;
-  color: #3f2815;
-}
-
-.discussion-brief :deep(.var-icon) {
-  align-self: center;
-  color: #7f4a22;
-  font-size: 24px;
-}
-
-.discussion-brief strong,
-.discussion-brief small {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.discussion-brief small {
-  margin-top: 3px;
-  color: #765f40;
-  font-size: 12px;
-}
 </style>

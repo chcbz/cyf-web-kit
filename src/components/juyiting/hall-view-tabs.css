@@ -1,0 +1,47 @@
+/* Shared view-switch styling only; selection and actions remain component-owned. */
+.hall-overview .overview-tabs,
+.library-panel .library-tabs,
+.hall-draft-editor .case-tabs,
+.personal-workspace.is-hall-treasure .treasure-tabs {
+  display: flex;
+  gap: 8px !important;
+  padding: 4px 2px;
+  border-bottom: 0 !important;
+  overflow-x: auto;
+}
+.hall-overview .overview-tabs button,
+.library-panel .library-tabs button,
+.hall-draft-editor .case-tabs button,
+.personal-workspace.is-hall-treasure .treasure-tabs button {
+  flex: none;
+  min-height: 44px;
+  padding: 8px 12px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: #595650 !important;
+  font-weight: 400;
+  white-space: nowrap;
+  box-shadow: none !important;
+}
+.hall-overview .overview-tabs button:hover:not(:disabled):not(.active):not([aria-pressed="true"]),
+.library-panel .library-tabs button:hover:not(:disabled):not(.active):not([aria-pressed="true"]),
+.hall-draft-editor .case-tabs button:hover:not(:disabled):not(.active):not([aria-pressed="true"]),
+.personal-workspace.is-hall-treasure .treasure-tabs button:hover:not(:disabled):not(.active):not([aria-pressed="true"]) {
+  background: #f3f0eb !important;
+}
+.hall-overview .overview-tabs button[aria-pressed="true"],
+.library-panel .library-tabs button.active,
+.hall-draft-editor .case-tabs button[aria-pressed="true"],
+.personal-workspace.is-hall-treasure .treasure-tabs button[aria-pressed="true"] {
+  background: #f7eae6 !important;
+  color: #923f30 !important;
+  font-weight: 500;
+}
+.hall-overview .overview-tabs button:focus-visible,
+.library-panel .library-tabs button:focus-visible,
+.hall-draft-editor .case-tabs button:focus-visible,
+.personal-workspace.is-hall-treasure .treasure-tabs button:focus-visible {
+  outline: 2px solid #923f30;
+  outline-offset: 2px;
+}

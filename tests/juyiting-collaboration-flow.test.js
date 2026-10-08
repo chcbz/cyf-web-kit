@@ -42,7 +42,10 @@ const hallConversationMessagesSource = readFileSync(hallConversationMessagesUrl,
 describe('JuyiHall collaboration flow contract', () => {
   it('starts OAuth before any protected hall load or background activity', () => {
     const mounted = hallSource.match(/onMounted\(async \(\) => \{([\s\S]*?)\n\}\)/)?.[1]
-    expect(mounted).to.include('if (!await apiStore.token()) return')
+    expect(mounted).to.include('if (!await apiStore.token() || !initializationIsCurrent()) return')
+    expect(mounted).to.include('initializationGeneration === apiStore.authorizationGeneration')
+    expect(mounted).to.include('if (!initializationIsCurrent()) return')
+    expect(mounted.indexOf('apiStore.getUserInfo()')).to.be.lessThan(mounted.indexOf('permitStageMount()'))
     expect(mounted.indexOf('apiStore.token()')).to.be.lessThan(mounted.indexOf('permitStageMount()'))
     expect(mounted.indexOf('apiStore.token()')).to.be.lessThan(mounted.indexOf('refreshHall({ silent: true })'))
     expect(mounted.indexOf('apiStore.token()')).to.be.lessThan(mounted.indexOf('startDialogueBubbles()'))
@@ -146,8 +149,12 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallConversationSource).to.include('mentionAgentIds,')
     expect(hallConversationSource).to.include('selectedTaskId')
     expect(hallConversationSource).to.include('const metadataSource = isVoiceSend ? (sendContext.outgoingMetadata || {}) : (outgoingMetadata?.value || {})')
-    expect(hallConversationSource).to.include('const { senderName: _legacySenderName, senderType: _legacySenderType, ...safeMetadataSource } = metadataSource')
-    expect(hallConversationSource).to.include('...safeMetadataSource,')
+    // Metadata is allowlisted at the transport boundary, so legacy display fields
+    // cannot be propagated into the durable chat request.
+    expect(hallConversationSource).to.include('const safeOutgoingMetadata = metadata => {')
+    expect(hallConversationSource).to.include("for (const key of ['libraryCitationId', 'librarySourceType'])")
+    expect(hallConversationSource).to.include('const safeMetadata = safeOutgoingMetadata(metadataSource)')
+    expect(hallConversationSource).to.include('...safeMetadata,')
     expect(hallConversationSource).not.to.include('...metadataSource,')
   })
 
@@ -162,7 +169,8 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallConversationSource).to.include('conversationScopeType: sendContext.conversationScopeType')
     expect(hallConversationSource).to.include('conversationScopeKey: sendContext.conversationScopeKey')
     expect(hallConversationSource).to.include('targetAgentIds: sendContext.targetAgentIds')
-    expect(hallConversationSource).to.include('forceNewConversation')
+    expect(hallConversationSource).to.include('const newHallConversation = ({ notify = true } = {}) => {')
+    expect(hallConversationSource).to.include('suppressedRestoreScopes.add(currentScopeSignature)')
   })
 
   it('loads hall messages by conversation scope instead of the latest juyiting conversation only', () => {
@@ -226,7 +234,8 @@ describe('JuyiHall collaboration flow contract', () => {
   })
 
   it('supports task management actions from the bounty board', () => {
-    expect(hallSource).to.include('@create-task="createTask"')
+    expect(hallSource).to.include('@create-task="createRequirementAndChooseAgent"')
+    expect(hallSource).to.match(/const createRequirementAndChooseAgent = async \(payload, acknowledge\) => \{\s*const created = await createTask\(payload, acknowledge\)\s*if \(created && !payload\?\.grossBountyAmountMicro\) openPanel\('agents'\)/)
     expect(hallSource).to.include('@archive-task="archiveTask"')
     expect(hallSource).to.include('@discuss-task="discussTask"')
     expect(hallSource).to.include('chatMentionAgents')
