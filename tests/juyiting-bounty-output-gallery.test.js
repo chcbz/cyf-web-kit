@@ -227,6 +227,15 @@ describe('bounty output gallery live owner scope', () => {
       expect(wrapper.find('.finalize-status-button').exists()).to.equal(false)
       expect(finalizationRequests).to.equal(1)
       expect(wrapper.emitted('task-completed')).to.have.length(1)
+      expect(wrapper.props('taskCompleted')).to.equal(false) // The task projection is still stale.
+      await wrapper.find('.finalize-button').trigger('click'); await flushPromises()
+      expect(finalizationRequests).to.equal(1)
+      expect(wrapper.emitted('task-completed')).to.have.length(1)
+      await wrapper.setProps({ taskCompleted: true })
+      expect(wrapper.find('.finalize-button').exists()).to.equal(false)
+      expect(wrapper.find('.continue-modification').exists()).to.equal(false)
+      expect(wrapper.text()).not.to.include('需要调整？')
+      expect(finalizationRequests).to.equal(1)
     } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
   })
 
@@ -438,7 +447,7 @@ describe('bounty output gallery live owner scope', () => {
 
   it('restores the locked original acceptance after remount and only explicitly replays after a read-only 404', async () => {
     const oldTimeout = globalThis.setTimeout; const oldClear = globalThis.clearTimeout
-    const calls = []; let reads = 0
+    const calls = []; let reads = 0; let completedReceipt = null
     const chatApi = { get: async path => {
       if (path === '/requests/request-1') return { data: { data: { requestId: 'request-1', conversationId: 'conversation-1',
         steps: [{ ...step('step-1'), taskId: 'task-1', assignmentRevision: '3' }] } } }
@@ -448,11 +457,16 @@ describe('bounty output gallery live owner scope', () => {
     const agentApi = { execute: async request => {
       calls.push(request)
       if (calls.length === 1) throw new TypeError('lost POST ACK')
-      if (request.method === 'GET') { reads++; throw Object.assign(new Error('not visible yet'), { status: 404 }) }
-      return { data: { data: { operationId: 'finalization-original', taskId: 'task-1', conversationId: 'conversation-1',
+      if (request.method === 'GET') {
+        reads++
+        if (completedReceipt) return { data: { data: completedReceipt } }
+        throw Object.assign(new Error('not visible yet'), { status: 404 })
+      }
+      completedReceipt = { operationId: 'finalization-original', taskId: 'task-1', conversationId: 'conversation-1',
         state: 'completed', stateVersion: '5', stage: 'TASK_COMPLETED', expectedTaskVersion: '9', expectedAssignmentRevision: '3',
         selectedOutputs: request.data.selectedOutputs, deliveryId: 'delivery-original', deliveryState: 'accepted',
-        taskState: 'completed', taskVersion: '12', errorCode: null, retryable: false } } }
+        taskState: 'completed', taskVersion: '12', errorCode: null, retryable: false }
+      return { data: { data: completedReceipt } }
     } }
     const Component = new Function('Vue', 'deps', script)(Vue, {
       createApi: base => base === '/agent' ? agentApi : chatApi, exactOutputId, outputCatalogItems, outputItemKey,
@@ -461,7 +475,7 @@ describe('bounty output gallery live owner scope', () => {
     })
     globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : oldTimeout(fn, delay, ...args)
     globalThis.clearTimeout = id => { if (id !== 999) oldClear(id) }
-    const props = { acceptance: true, enabled: true, identityKey: 'owner-finalization-recovery', taskVersion: '9', conversationId: 'conversation-1',
+    const props = { acceptance: true, enabled: true, identityKey: 'owner-finalization-recovery', taskId: 'task-1', taskVersion: '9', conversationId: 'conversation-1',
       request: { requestId: 'request-1', conversationId: 'conversation-1', stateVersion: '1' } }
     let wrapper
     try {
@@ -491,6 +505,23 @@ describe('bounty output gallery live owner scope', () => {
       expect(wrapper.emitted('task-completed')[0][0].deliveryId).to.equal('delivery-original')
       expect(wrapper.text()).not.to.match(/幂等|原键|晋升/)
       expect(wrapper.find('.finalize-button').attributes()).to.have.property('disabled')
+      expect(wrapper.find('.continue-modification').exists()).to.equal(false)
+      expect(wrapper.find('.finalize-status-button').exists()).to.equal(false)
+      expect(wrapper.text()).not.to.include('需要调整？')
+      await wrapper.find('.finalize-button').trigger('click'); await flushPromises()
+      expect(calls).to.have.length(4)
+      wrapper.unmount(); wrapper = mount(Component, { props: { ...props, taskVersion: '12' } }); await flushPromises()
+      expect(calls).to.have.length(4) // Remount reads outputs, never replays acceptance automatically.
+      expect(wrapper.text()).not.to.include('需求已完成') // Stored intent alone is not terminal authority.
+      await wrapper.find('.finalize-status-button').trigger('click'); await flushPromises()
+      expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET', 'GET', 'POST', 'GET'])
+      expect(calls[4].url).to.equal('/tasks/task-1/finalizations/finalization-original')
+      expect(wrapper.find('.finalize-button').text()).to.equal('需求已完成')
+      expect(wrapper.find('.finalize-button').attributes()).to.have.property('disabled')
+      expect(wrapper.find('.continue-modification').exists()).to.equal(false)
+      expect(wrapper.find('.finalize-status-button').exists()).to.equal(false)
+      expect(wrapper.text()).not.to.include('需要调整？')
+      expect(wrapper.emitted('task-completed')).to.have.length(1)
     } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
   })
 
@@ -609,7 +640,7 @@ describe('bounty output gallery live owner scope', () => {
     })
     globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : oldTimeout(fn, delay, ...args)
     globalThis.clearTimeout = id => { if (id !== 999) oldClear(id) }
-    const props = { acceptance: true, enabled: true, identityKey: 'owner-exact-delivery', taskVersion: '9',
+    const props = { acceptance: true, enabled: true, identityKey: 'owner-exact-delivery', taskId: 'task-1', taskVersion: '9',
       conversationId: 'conversation-1', request: catalog.at(-1).request, catalog }
     let wrapper
     try {

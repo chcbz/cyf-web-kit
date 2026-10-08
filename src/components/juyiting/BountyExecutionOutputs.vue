@@ -27,7 +27,7 @@
       <small v-if="item.replaces">改稿关联：{{ item.replaces.outputId }}（原稿仍保留）</small>
       <small v-if="!effectiveTaskCompleted">需要调整？直接在会话中告诉 Agent。</small>
     </div>
-    <button v-if="acceptance && (effectiveTaskCompleted || displayItems.length || finalizeState.intent)" type="button" class="finalize-button" :disabled="effectiveTaskCompleted || loading || !!error || finalizeState.busy || finalizeState.state === 'recovery_error' || (finalizeState.receipt?.state === 'failed' && !finalizeState.receipt.retryable)" @click="finalizeSelected">{{ effectiveTaskCompleted ? '需求已完成' : finalizeState.busy ? '正在验收…' : finalizeState.intent ? '继续验收' : '确认验收' }}</button>
+    <button v-if="acceptance && !taskCompleted && (effectiveTaskCompleted || displayItems.length || finalizeState.intent)" type="button" class="finalize-button" :disabled="effectiveTaskCompleted || loading || !!error || finalizeState.busy || finalizeState.state === 'recovery_error' || (finalizeState.receipt?.state === 'failed' && !finalizeState.receipt.retryable)" @click="finalizeSelected">{{ effectiveTaskCompleted ? '需求已完成' : finalizeState.busy ? '正在验收…' : finalizeState.intent ? '继续验收' : '确认验收' }}</button>
     <button v-if="acceptance && !effectiveTaskCompleted && finalizeState.intent" type="button" class="finalize-status-button" :disabled="finalizeState.busy" @click="finalizations.check">查询验收状态</button>
     <small v-if="acceptance && !effectiveTaskCompleted && finalizeState.intent">本次验收已冻结 {{ finalizeState.intent.body.selectedOutputs.length }} 项成果；可刷新查看进度。</small>
     <p v-if="finalizeState.message" :role="finalizeState.state === 'completed' ? 'status' : 'alert'">{{ finalizeState.message }}</p>
