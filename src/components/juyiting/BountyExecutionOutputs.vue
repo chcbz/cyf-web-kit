@@ -25,14 +25,14 @@
         <span v-else>此格式请下载查看。</span>
       </template>
       <small v-if="item.replaces">改稿关联：{{ item.replaces.outputId }}（原稿仍保留）</small>
-      <small v-if="!taskCompleted">需要调整？直接在会话中告诉 Agent。</small>
+      <small v-if="!effectiveTaskCompleted">需要调整？直接在会话中告诉 Agent。</small>
     </div>
-    <button v-if="acceptance && !taskCompleted && (displayItems.length || finalizeState.intent)" type="button" class="finalize-button" :disabled="loading || !!error || finalizeState.busy || finalizeState.state === 'completed' || finalizeState.state === 'recovery_error' || (finalizeState.receipt?.state === 'failed' && !finalizeState.receipt.retryable)" @click="finalizeSelected">{{ finalizeState.busy ? '正在验收…' : finalizeState.state === 'completed' ? '需求已完成' : finalizeState.intent ? '继续验收' : '确认验收' }}</button>
-    <button v-if="acceptance && !taskCompleted && finalizeState.intent" type="button" class="finalize-status-button" :disabled="finalizeState.busy" @click="finalizations.check">查询验收状态</button>
-    <small v-if="acceptance && !taskCompleted && finalizeState.intent">本次验收已冻结 {{ finalizeState.intent.body.selectedOutputs.length }} 项成果；可刷新查看进度。</small>
+    <button v-if="acceptance && (effectiveTaskCompleted || displayItems.length || finalizeState.intent)" type="button" class="finalize-button" :disabled="effectiveTaskCompleted || loading || !!error || finalizeState.busy || finalizeState.state === 'recovery_error' || (finalizeState.receipt?.state === 'failed' && !finalizeState.receipt.retryable)" @click="finalizeSelected">{{ effectiveTaskCompleted ? '需求已完成' : finalizeState.busy ? '正在验收…' : finalizeState.intent ? '继续验收' : '确认验收' }}</button>
+    <button v-if="acceptance && !effectiveTaskCompleted && finalizeState.intent" type="button" class="finalize-status-button" :disabled="finalizeState.busy" @click="finalizations.check">查询验收状态</button>
+    <small v-if="acceptance && !effectiveTaskCompleted && finalizeState.intent">本次验收已冻结 {{ finalizeState.intent.body.selectedOutputs.length }} 项成果；可刷新查看进度。</small>
     <p v-if="finalizeState.message" :role="finalizeState.state === 'completed' ? 'status' : 'alert'">{{ finalizeState.message }}</p>
     <button
-      v-if="acceptance && !taskCompleted"
+      v-if="acceptance && !effectiveTaskCompleted"
       type="button"
       class="continue-modification"
       @click="$emit('continue-modification')"
@@ -80,6 +80,9 @@ const finalizations = useHallBountyFinalization({ api: agentApi,
   conversationId: () => props.enabled ? props.conversationId : null, identityKey: () => props.identityKey
 })
 const finalizeState = finalizations.status
+// A validated completed receipt is immediate terminal authority even while the parent task DTO is stale.
+const effectiveTaskCompleted = computed(() => props.taskCompleted || (finalizeState.value.state === 'completed' &&
+  finalizeState.value.receipt?.taskId === props.taskId && finalizeState.value.receipt?.conversationId === props.conversationId))
 // Once acceptance starts, display only the original exact references from its durable intent.
 // A new output/late poll cannot replace accepted or in-flight displayed content.
 const deliveryProjection = computed(() => {
@@ -200,7 +203,7 @@ const archive = async item => {
 }
 const stepFor = item => requestSnapshots.value.find(request => request.requestId === item.requestId)?.steps?.find(step => step.stepId === item.stepId)
 const finalizeSelected = async () => {
-  if (!props.acceptance || props.taskCompleted || loading.value || error.value || finalizeState.value.busy) return
+  if (!props.acceptance || effectiveTaskCompleted.value || loading.value || error.value || finalizeState.value.busy) return
   if (finalizeState.value.intent) return finalizations.resume()
   if (!displayItems.value.length || finalizeState.value.state === 'recovery_error') return
   const invalid = message => { finalizeState.value = { ...finalizeState.value, state: 'error', busy: false, message } }

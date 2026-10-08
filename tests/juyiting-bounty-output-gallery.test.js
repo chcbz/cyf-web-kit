@@ -189,6 +189,7 @@ describe('bounty output gallery live owner scope', () => {
     const oldTimeout = globalThis.setTimeout
     const oldClear = globalThis.clearTimeout
     let submitted
+    let finalizationRequests = 0
     const catalogItem = { ...item('step-1'), byteLength: 20 }
     const chatApi = { get: async path => {
       if (path === '/requests/request-1') return { data: { data: { requestId: 'request-1', conversationId: 'conversation-1',
@@ -196,7 +197,7 @@ describe('bounty output gallery live owner scope', () => {
       if (path.endsWith('/steps/step-1/outputs')) return { data: { data: [catalogItem] } }
       throw new Error(`unexpected GET ${path}`)
     }, execute: async () => { throw new Error('unexpected chat write') } }
-    const agentApi = { execute: async request => { if (request.method === 'POST') submitted = request; return { data: { data: {
+    const agentApi = { execute: async request => { finalizationRequests++; if (request.method === 'POST') submitted = request; return { data: { data: {
       operationId: 'finalization-1', taskId: 'task-1', conversationId: 'conversation-1', state: 'completed',
       stateVersion: '5', stage: 'TASK_COMPLETED', expectedTaskVersion: '9', expectedAssignmentRevision: '3',
       selectedOutputs: submitted.data.selectedOutputs, deliveryId: 'delivery-1', deliveryState: 'accepted',
@@ -209,7 +210,7 @@ describe('bounty output gallery live owner scope', () => {
     globalThis.clearTimeout = id => { if (id !== 999) oldClear(id) }
     let wrapper
     try {
-      wrapper = mount(Component, { props: { acceptance: true, enabled: true, identityKey: 'owner-a', taskVersion: '9',
+      wrapper = mount(Component, { props: { acceptance: true, enabled: true, identityKey: 'owner-a', taskId: 'task-1', taskCompleted: false, taskVersion: '9',
         conversationId: 'conversation-1', request: { requestId: 'request-1', conversationId: 'conversation-1' } } })
       await flushPromises()
       expect(wrapper.find('input[type="checkbox"]').exists()).to.equal(false)
@@ -218,9 +219,13 @@ describe('bounty output gallery live owner scope', () => {
       expect(submitted.data.expectedTaskVersion).to.equal(9)
       expect(submitted.data.expectedAssignmentRevision).to.equal(3)
       expect(wrapper.text()).to.include('需求已完成')
+      expect(wrapper.find('.finalize-button').attributes('disabled')).to.equal('')
+      expect(wrapper.find('.continue-modification').exists()).to.equal(false)
+      expect(wrapper.findAll('.bounty-output').some(card => card.text().includes('需要调整？'))).to.equal(false)
       expect(wrapper.emitted('task-completed')).to.deep.equal([[{ taskId: 'task-1', conversationId: 'conversation-1',
         operationId: 'finalization-1', deliveryId: 'delivery-1', taskVersion: '12' }]])
-      await wrapper.find('.finalize-status-button').trigger('click'); await flushPromises()
+      expect(wrapper.find('.finalize-status-button').exists()).to.equal(false)
+      expect(finalizationRequests).to.equal(1)
       expect(wrapper.emitted('task-completed')).to.have.length(1)
     } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
   })
