@@ -12,9 +12,10 @@
 
 在 `package.json` 中配置了以下测试脚本：
 
-- `npm test`: 运行所有测试
+- `npm test`: 运行所有默认测试（包含遮挡与 sprite lifecycle 回归）
 - `npm run test:watch`: 监听模式运行测试
 - `npm run test:run`: 运行测试（与 `npm test` 相同）
+- `npm run test:juyiting-occlusion-evidence`: 单独选择 E1–E14 遮挡证据测试，不移除默认测试中的既有回归。该套件依赖 Chromium 与绑定证据；正式前端验证统一由 Flow 执行，本机定向诊断不代表发布验收。
 
 ## 测试文件位置
 
@@ -34,7 +35,7 @@ npx mocha tests/composables/useHttp.spec.js
 
 运行多个测试文件：
 ```bash
-npx mocha tests/basic.test.js tests/composables/useHttp.spec.js
+npm test -- --grep "useHttp"
 ```
 
 ## 测试编写示例
@@ -74,7 +75,7 @@ describe('测试套件', () => {
 1. 移除了 `vitest` 和 `@vitest/ui` 依赖
 2. 添加了 `mocha` 和 `chai` 依赖
 3. 更新了测试脚本
-4. 创建了 Mocha 配置文件 `.mocharc.js`
+4. 创建了 Mocha 配置文件 `.mocharc.json`
 5. 修改了测试文件中的断言语法
 6. 更新了测试设置文件 `tests/setup.js`
 7. 添加了 ES 模块支持 (`"type": "module"`)
