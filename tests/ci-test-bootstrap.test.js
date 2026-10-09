@@ -1,12 +1,12 @@
 import { expect } from 'chai'
 import { createHash } from 'node:crypto'
-import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, writeFile, rm, symlink } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { bootstrapEnabled, runTests, MOCHA_ARGS, REPORT, assertFreshBenchmark } from '../scripts/ci-test.mjs'
-import { downloadVerified, chromeWrapperSource, extractApprovedWebp, PINS, SYSTEM_DEPENDENCIES, systemDependencyInstallPolicy, rpmPackageProbe, installDependencies, CHROME_LAUNCHER_PATH } from '../scripts/ci/prepare-runtime.mjs'
+import { createRuntimeWork, downloadVerified, chromeWrapperSource, extractApprovedWebp, PINS, SYSTEM_DEPENDENCIES, systemDependencyInstallPolicy, rpmPackageProbe, installDependencies, CHROME_LAUNCHER_PATH } from '../scripts/ci/prepare-runtime.mjs'
 
 const root = process.cwd()
 const digest = bytes => createHash('sha256').update(bytes).digest('hex')
@@ -22,6 +22,29 @@ describe('repository npm test bootstrap', () => {
   let dir
   beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'cyf-ci-unit-')) })
   afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
+
+  it('does not cache extracted runtimes and removes only restored old run directories', async () => {
+    const cache = join(dir, 'cache'), scratch = join(dir, 'scratch')
+    await mkdir(join(cache, 'run-Ab1234'), { recursive: true })
+    await writeFile(join(cache, 'run-Ab1234', 'chrome'), 'old extracted binary')
+    await mkdir(join(cache, 'dnf'))
+    await mkdir(join(cache, 'run-not-an-old-runtime'))
+    await writeFile(join(cache, 'chrome-approved-sha'), 'verified archive')
+    const external = join(dir, 'external')
+    await mkdir(external)
+    await writeFile(join(external, 'keep'), 'must remain')
+    await symlink(external, join(cache, 'run-Zz9876'))
+    const work = await createRuntimeWork(cache, scratch)
+    expect(work.startsWith(join(scratch, 'cyf-test-runtime-'))).to.equal(true)
+    expect(existsSync(join(cache, 'run-Ab1234'))).to.equal(false)
+    expect(existsSync(join(cache, 'dnf'))).to.equal(true)
+    expect(existsSync(join(cache, 'run-not-an-old-runtime'))).to.equal(true)
+    expect(await readFile(join(cache, 'chrome-approved-sha'), 'utf8')).to.equal('verified archive')
+    expect(await readFile(join(cache, 'run-Zz9876', 'keep'), 'utf8')).to.equal('must remain')
+    const second = await createRuntimeWork(cache, scratch)
+    expect(second).not.to.equal(work)
+    expect(existsSync(work)).to.equal(true)
+  })
 
   it('installs the real Chrome launcher at the frozen E9B path rather than inventing historical provenance', async () => {
     const manifest = JSON.parse(await readFile(join(root, 'tests/fixtures/juyiting/occlusion-v2-atlases/atlas-manifest.json'), 'utf8'))

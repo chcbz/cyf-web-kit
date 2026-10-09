@@ -7,7 +7,10 @@ Preparation runs only for `CI=1/true/yes`, a nonempty `PIPELINE_ID`, or explicit
 
 CI installs signed distribution dependencies, SHA-verifies the pinned Node
 20.20.2 / Chrome 133.0.6943.141 / WebP 1.2 RPM downloads, and extracts into a
-fresh directory under the CI user's `.cache/cyf-test-runtime`. Archives are
+fresh directory under the worker temporary directory (outside the Flow cache).
+Only pinned archives and signed DNF data stay in `.cache/cyf-test-runtime`.
+Restored legacy `run-XXXXXX` directories are removed only on this job's isolated
+worker; links and unrelated cache names are not followed or removed. Archives are
 rehashed on reuse. Chrome has a same-SHA mirror for download availability;
 integrity failure always stops. RPM extraction uses system rpm2cpio/cpio
 (rpmfile 2.2.1 requires a newer Python than Alinux3's default). The extracted
@@ -57,3 +60,13 @@ Focused verification (no downloads, benchmark or full suite):
 node --import tsx node_modules/mocha/bin/mocha.js --no-config \
   --require tests/setup.js --reporter spec --exit tests/ci-test-bootstrap.test.js
 ```
+
+## Cache scope fix (2026-10-09)
+
+Run185/186 spent 77/76 seconds archiving a >2GB cache which Flow then declined
+to upload. Extracted historical `run-XXXXXX` runtimes must not accumulate in the
+cache. This source fix preserves archive rehashing, fresh extraction, pinned
+browser identity and full tests. Local bootstrap tests are diagnostic only;
+cache size/speed and the <=5 minute release target still require exact-source
+Flow evidence. Timing evidence is maintained by the root task
+`FRONTEND-RELEASE-5M-20261009`, not inferred from this change.

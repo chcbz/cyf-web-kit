@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream, existsSync } from 'node:fs'
-import { chmod, mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
+import { chmod, mkdir, mkdtemp, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import { homedir, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -152,6 +152,20 @@ export async function extractApprovedWebp(rpm, destination, execute = runChecked
   await writeFile(destination, library)
 }
 
+// Flow restores this directory into this job's isolated worker. Historical
+// versions cached extracted run directories; keep only archives/DNF data there.
+// Never follow links or remove names outside the old mkdtemp namespace.
+export async function createRuntimeWork(cache, scratch = tmpdir()) {
+  await mkdir(cache, { recursive: true })
+  for (const entry of await readdir(cache, { withFileTypes: true })) {
+    if (entry.isDirectory() && /^run-[A-Za-z0-9]{6}$/.test(entry.name)) {
+      await rm(join(cache, entry.name), { recursive: true })
+    }
+  }
+  await mkdir(scratch, { recursive: true })
+  return mkdtemp(join(scratch, 'cyf-test-runtime-'))
+}
+
 export async function prepareRuntime({ repo, env, log = console.log }) {
   if (process.platform !== 'linux' || process.arch !== 'x64') {
     throw new Error('Pinned Chrome133/WebP1.2 CI gates require a Linux x64 worker')
@@ -159,7 +173,7 @@ export async function prepareRuntime({ repo, env, log = console.log }) {
   const cache = join(homedir(), '.cache', 'cyf-test-runtime')
   await mkdir(cache, { recursive: true })
   await installDependencies(cache)
-  const work = await mkdtemp(join(cache, 'run-'))
+  const work = await createRuntimeWork(cache)
   const archives = {}
   for (const [name, pin] of Object.entries(PINS)) {
     log(`[cyf-ci] preparing ${name}: SHA256 ${pin.sha256}`)
