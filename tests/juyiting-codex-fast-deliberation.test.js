@@ -48,6 +48,70 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     conversation.disposeHallConversation()
   })
 
+  it('normalizes text once at the send entry and forwards the same content', async () => {
+    let conversions = 0; const sent = []
+    const content = { toString: () => { conversions++; return '  one normalized message  ' } }
+    const conversation = base({ chatApi: {
+      get: async () => ({ data: capabilityV2 }),
+      create: async (_path, body, options) => { sent.push(body); options.onStreamEnd() }
+    } })
+    try {
+      expect(await conversation.sendHallMessage({ content })).to.equal(true)
+      expect(conversions).to.equal(1)
+      expect(sent).to.have.length(1)
+      expect(sent[0].content).to.equal('one normalized message')
+      expect(conversation.messages.value[0].content).to.equal(sent[0].content)
+    } finally { conversation.disposeHallConversation() }
+  })
+
+  it('rejects empty text and non-string voice before protocol checks or state changes', async () => {
+    let reads = 0; let sends = 0
+    const conversation = base({ chatApi: {
+      get: async () => { reads++; return { data: capabilityV2 } },
+      create: async () => { sends++ }
+    } })
+    try {
+      conversation.setDraft('keep draft')
+      for (const content of ['', '  ', 0, false]) {
+        expect(await conversation.sendHallMessage({ content })).to.equal(false)
+      }
+      for (const content of [undefined, null, 12, {}, [], { toString: () => { throw new Error('voice must not coerce') } }]) {
+        expect(await conversation.sendHallMessage({ source: 'voice', content })).to.equal(false)
+      }
+      expect(reads).to.equal(0)
+      expect(sends).to.equal(0)
+      expect(conversation.draft.value).to.equal('keep draft')
+      expect(conversation.isSubmitting.value).to.equal(false)
+      expect(conversation.deliberationStatus.value).to.equal('')
+      expect(conversation.activeRequest.value).to.equal(null)
+      expect(conversation.messages.value).to.deep.equal([])
+    } finally { conversation.disposeHallConversation() }
+  })
+
+  for (const [flag, value] of [
+    ['isSubmitting', true], ['isAdoptingBountyBootstrap', true], ['isStreaming', true], ['isAwaitingReply', true],
+    ['conversationHistoryDeletingId', 'conversation-1'], ['conversationLoadError', 'cannot load'],
+    ['activeRequest', { requestId: 'unknown-request', state: 'SUBMITTING' }]
+  ]) {
+    it(`blocks send through the shared entry guard while ${flag} is active`, async () => {
+      let reads = 0; let sends = 0
+      const conversation = base({ chatApi: {
+        get: async () => { reads++; return { data: capabilityV2 } },
+        create: async () => { sends++ }
+      } })
+      try {
+        conversation.setDraft('keep draft')
+        conversation[flag].value = value
+        expect(await conversation.sendHallMessage()).to.equal(false)
+        expect(reads).to.equal(0)
+        expect(sends).to.equal(0)
+        expect(conversation.draft.value).to.equal('keep draft')
+        expect(conversation.messages.value).to.deep.equal([])
+        expect(conversation[flag].value).to.deep.equal(value)
+      } finally { conversation.disposeHallConversation() }
+    })
+  }
+
   it('takes the send lock and reserves one requestId before delayed capability negotiation', async () => {
     const gate = deferred(); const sent = []
     const conversation = base({ chatApi: {

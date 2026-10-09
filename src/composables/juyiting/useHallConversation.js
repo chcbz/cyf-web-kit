@@ -204,7 +204,6 @@ export const useHallConversation = ({
 
   const durableBusy = computed(() => deliberationBusy(activeRequest.value, activeTurns.value))
   const durableCancelTarget = computed(() => cancellationTarget(activeRequest.value, activeTurns.value))
-  const canCancelDurable = computed(() => Boolean(durableCancelTarget.value))
   const isConversationBusy = computed(() => isAdoptingBountyBootstrap.value || isSubmitting.value || durableBusy.value || isStreaming.value || isAwaitingReply.value || isConversationLoading.value || Boolean(conversationHistoryDeletingId.value))
 
   const pendingAgentName = computed(() => {
@@ -1192,11 +1191,8 @@ export const useHallConversation = ({
     source = 'text',
     clearDraftRevision,
     onConversationResolved
-  } = {}, sendToken) => {
+  } = {}, sendToken, content) => {
     const isVoiceSend = source === 'voice'
-    if (isVoiceSend && typeof explicitContent !== 'string') return false
-    const content = (isVoiceSend ? explicitContent : String((explicitContent ?? draft.value) || '')).trim()
-    if (disposed || !content || isStreaming.value || isAwaitingReply.value || isConversationLoading.value || conversationHistoryDeletingId.value || conversationLoadError.value) return false
     let sendContext = contextSnapshot || currentChatContext.value
     if (isVoiceSend) {
       const validated = captureHallVoiceSnapshot({
@@ -1380,14 +1376,15 @@ export const useHallConversation = ({
 
   const sendHallMessage = async (options = {}) => {
     const isVoiceSend = options.source === 'voice'
-    const content = String(isVoiceSend ? (options.content ?? '') : ((options.content ?? draft.value) || '')).trim()
-    if (disposed || !content || isAdoptingBountyBootstrap.value || activeSendToken || durableBusy.value || isStreaming.value || isAwaitingReply.value || isConversationLoading.value || conversationHistoryDeletingId.value || conversationLoadError.value) return false
+    if (isVoiceSend && typeof options.content !== 'string') return false
+    const content = String((options.content ?? draft.value) || '').trim()
+    if (disposed || !content || activeSendToken || isConversationBusy.value || conversationLoadError.value) return false
     const sendToken = Object.freeze({ requestId: createStableRequestId(), generation: lifecycleGeneration })
     activeSendToken = sendToken
     isSubmitting.value = true
     deliberationStatus.value = '正在提交，等待受理'
     try {
-      return await performHallMessageSend(options, sendToken)
+      return await performHallMessageSend(options, sendToken, content)
     } finally {
       if (activeSendToken === sendToken) {
         activeSendToken = null
@@ -1822,7 +1819,6 @@ export const useHallConversation = ({
     isAdoptingBountyBootstrap,
     cancelHallReplyTurn,
     cancelDeliberation,
-    canCancelDurable,
     durableCancelTarget,
     activeRequest,
     activeTurns,

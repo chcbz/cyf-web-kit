@@ -1,15 +1,14 @@
 <template>
   <section class="private-discussion-panel discussion-panel">
     <ChatPanel
-      v-model:draft="draftProxy"
+      @update:draft="$emit('update:draft', $event)"
       discussion-variant="private"
       empty-text="尚无密议记录，可先问一声眼下动静。"
       placeholder="向当前好汉传一句话"
       :show-target-picker="false"
       :subtitle="privateSubtitle"
       title="密议"
-      :voice="voice"
-      v-bind="chatProps"
+      v-bind="props"
       @cancel-deliberation="$emit('cancel-deliberation', $event)"
       @clear-target="$emit('clear-target', $event)"
       @delete-conversation="$emit('delete-conversation', $event)"
@@ -30,89 +29,17 @@
 <script setup>
 import { computed } from 'vue'
 import ChatPanel from './ChatPanel.vue'
+import { discussionPanelProps, discussionPanelEmits } from './discussionPanelContract.js'
 
-const props = defineProps({
-  agents: { type: Array, default: () => [] },
-  connectionStatus: { type: String, default: '' },
-  conversationHistory: { type: Array, default: () => [] },
-  conversationHistoryDeletingId: { type: String, default: '' },
-  conversationHistoryError: { type: String, default: '' },
-  conversationHistoryHasMore: { type: Boolean, default: false },
-  conversationHistoryLoading: { type: Boolean, default: false },
-  conversationLoadError: { type: String, default: '' },
-  conversationBusy: { type: Boolean, default: false },
-  deliberationStatus: { type: String, default: '' },
-  durableCancelTarget: { type: Object, default: null },
-  conversationId: { type: String, default: '' },
-  identityEpoch: { type: [Number, String], default: 0 },
-  draft: { type: String, default: '' },
-  eventStreamRecovering: { type: Boolean, default: false },
-  isAwaitingReply: { type: Boolean, default: false },
-  isStreaming: { type: Boolean, default: false },
-  mentionLabel: { type: Function, required: true },
-  messages: { type: Array, default: () => [] },
-  pendingAgentName: { type: String, default: '' },
-  selectedAgent: { type: Object, default: null },
-  selectedTask: { type: Object, default: null },
-  senderText: { type: Function, required: true },
-  scopeHint: { type: String, default: '' },
-  targetText: { type: String, default: '' },
-  voice: { type: Object, default: null }
-})
+const props = defineProps(discussionPanelProps)
 
-const emit = defineEmits([
-  'cancel-deliberation',
-  'clear-target',
-  'delete-conversation',
-  'load-history',
-  'load-more-history',
-  'load-messages',
-  'mention-agent',
-  'new-conversation',
-  'open-workspace',
-  'retry-conversation',
-  'select-conversation',
-  'send-message',
-  'update:draft',
-  'voice-apply'
-])
-
-const draftProxy = computed({
-  get: () => props.draft,
-  set: value => emit('update:draft', value)
-})
+defineEmits(discussionPanelEmits)
 
 const privateSubtitle = computed(() => {
   if (props.selectedTask?.title) return `${props.targetText} / ${props.selectedTask.title}`
   return props.targetText || '当前好汉'
 })
 
-const chatProps = computed(() => ({
-  agents: props.agents,
-  connectionStatus: props.connectionStatus,
-  conversationHistory: props.conversationHistory,
-  conversationHistoryDeletingId: props.conversationHistoryDeletingId,
-  conversationHistoryError: props.conversationHistoryError,
-  conversationHistoryHasMore: props.conversationHistoryHasMore,
-  conversationHistoryLoading: props.conversationHistoryLoading,
-  conversationLoadError: props.conversationLoadError,
-  conversationBusy: props.conversationBusy,
-  deliberationStatus: props.deliberationStatus,
-  durableCancelTarget: props.durableCancelTarget,
-  conversationId: props.conversationId,
-  identityEpoch: props.identityEpoch,
-  eventStreamRecovering: props.eventStreamRecovering,
-  isAwaitingReply: props.isAwaitingReply,
-  isStreaming: props.isStreaming,
-  mentionLabel: props.mentionLabel,
-  messages: props.messages,
-  pendingAgentName: props.pendingAgentName,
-  selectedAgent: props.selectedAgent,
-  selectedTask: props.selectedTask,
-  senderText: props.senderText,
-  scopeHint: props.scopeHint,
-  targetText: props.targetText
-}))
 </script>
 
 <style scoped>

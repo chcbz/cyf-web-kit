@@ -16,16 +16,12 @@
       @click="$emit('typed-resume')"
     >刷新处理状态</button>
     <ChatPanel
-      v-model:draft="draftProxy"
+      @update:draft="$emit('update:draft', $event)"
       discussion-variant="bounty"
       empty-text="此榜文尚无议事记录，先说清险处、分工与下一步。"
       placeholder="就当前榜文发起议事"
       :subtitle="bountySubtitle"
       title="榜文议事"
-      :voice="voice"
-      :typed-outcomes="typedOutcomes"
-      :typed-pending-question="typedPendingQuestion"
-      :typed-enabled="typedEnabled"
       v-bind="chatProps"
       @cancel-deliberation="$emit('cancel-deliberation', $event)"
       @clear-target="$emit('clear-target', $event)"
@@ -61,76 +57,28 @@
 <script setup>
 import { computed } from 'vue'
 import ChatPanel from './ChatPanel.vue'
+import { discussionPanelProps, discussionPanelEmits } from './discussionPanelContract.js'
 import BountyDeliberationStatus from './BountyDeliberationStatus.vue'
 import BountyExecutionTermination from './BountyExecutionTermination.vue'
 import BountyExecutionOutputs from './BountyExecutionOutputs.vue'
 import { bountyDeliberationPresentation } from '../../composables/juyiting/hallMultimediaDeliberationUi.js'
 
 const props = defineProps({
+  ...discussionPanelProps,
   activeRequest: { type: Object, default: null },
   requestCatalog: { type: Array, default: () => [] },
   activeTurns: { type: Array, default: () => [] },
-  agents: { type: Array, default: () => [] },
   capabilityState: { type: Object, default: null },
-  connectionStatus: { type: String, default: '' },
-  conversationHistory: { type: Array, default: () => [] },
-  conversationHistoryDeletingId: { type: String, default: '' },
-  conversationHistoryError: { type: String, default: '' },
-  conversationHistoryHasMore: { type: Boolean, default: false },
-  conversationHistoryLoading: { type: Boolean, default: false },
-  conversationLoadError: { type: String, default: '' },
-  conversationBusy: { type: Boolean, default: false },
-  deliberationStatus: { type: String, default: '' },
   deliberationV2Enabled: { type: Boolean, default: false },
   typedOutcomes: { type: Array, default: () => [] },
   typedPendingQuestion: { type: Object, default: null },
   typedEnabled: { type: Boolean, default: false },
   typedRecoveryAvailable: { type: Boolean, default: false },
   typedInspectionStatus: { type: String, default: '' },
-  durableCancelTarget: { type: Object, default: null },
-  conversationId: { type: String, default: '' },
-  identityEpoch: { type: [Number, String], default: 0 },
   identityScope: { type: String, default: '' },
-  draft: { type: String, default: '' },
-  eventStreamRecovering: { type: Boolean, default: false },
-  isAwaitingReply: { type: Boolean, default: false },
-  isStreaming: { type: Boolean, default: false },
-  mentionLabel: { type: Function, required: true },
-  messages: { type: Array, default: () => [] },
-  pendingAgentName: { type: String, default: '' },
-  selectedAgent: { type: Object, default: null },
-  selectedTask: { type: Object, default: null },
-  senderText: { type: Function, required: true },
-  scopeHint: { type: String, default: '' },
-  targetText: { type: String, default: '' },
-  voice: { type: Object, default: null }
 })
 
-const emit = defineEmits([
-  'execution-settled',
-  'cancel-deliberation',
-  'clear-target',
-  'delete-conversation',
-  'load-history',
-  'load-more-history',
-  'load-messages',
-  'mention-agent',
-  'new-conversation',
-  'open-workspace',
-  'retry-conversation',
-  'select-conversation',
-  'send-message',
-  'task-completed',
-  'update:draft',
-  'voice-apply',
-  'typed-reply',
-  'typed-resume'
-])
-
-const draftProxy = computed({
-  get: () => props.draft,
-  set: value => emit('update:draft', value)
-})
+defineEmits([...discussionPanelEmits, 'execution-settled', 'task-completed', 'typed-reply', 'typed-resume'])
 
 const v2Presentation = computed(() => bountyDeliberationPresentation({
   enabled: props.deliberationV2Enabled,
@@ -146,33 +94,13 @@ const bountySubtitle = computed(() => {
   return `${taskName}${countText}`
 })
 
-const chatProps = computed(() => ({
-  agents: props.agents,
-  connectionStatus: props.connectionStatus,
-  conversationHistory: props.conversationHistory,
-  conversationHistoryDeletingId: props.conversationHistoryDeletingId,
-  conversationHistoryError: props.conversationHistoryError,
-  conversationHistoryHasMore: props.conversationHistoryHasMore,
-  conversationHistoryLoading: props.conversationHistoryLoading,
-  conversationLoadError: props.conversationLoadError,
-  conversationBusy: props.conversationBusy,
-  deliberationStatus: props.deliberationStatus,
-  durableCancelTarget: props.durableCancelTarget,
-  conversationId: props.conversationId,
-  identityEpoch: props.identityEpoch,
-  identityScope: props.identityScope,
-  eventStreamRecovering: props.eventStreamRecovering,
-  isAwaitingReply: props.isAwaitingReply,
-  isStreaming: props.isStreaming,
-  mentionLabel: props.mentionLabel,
-  messages: props.messages,
-  pendingAgentName: props.pendingAgentName,
-  selectedAgent: props.selectedAgent,
-  selectedTask: props.selectedTask,
-  senderText: props.senderText,
-  scopeHint: props.scopeHint,
-  targetText: props.targetText
-}))
+const chatProps = computed(() => {
+  const {
+    activeRequest, requestCatalog, activeTurns, capabilityState, deliberationV2Enabled,
+    typedRecoveryAvailable, typedInspectionStatus, ...chat
+  } = props
+  return chat
+})
 </script>
 
 <style scoped>
