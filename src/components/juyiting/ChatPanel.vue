@@ -46,14 +46,7 @@
           aria-label="取消待处理回话"
           @click="$emit('cancel-deliberation', durableCancelTarget)"
         ><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" /></svg></button>
-        <button
-          v-else-if="legacyCancelAvailable"
-          class="icon-button"
-          type="button"
-          title="停止旧版回话等待"
-          aria-label="停止旧版回话等待"
-          @click="$emit('cancel-legacy-transport')"
-        ><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" /></svg></button>
+
 
       </div>
     </div>
@@ -255,7 +248,6 @@ const props = defineProps({
   conversationBusy: { type: Boolean, default: false },
   deliberationStatus: { type: String, default: '' },
   durableCancelTarget: { type: Object, default: null },
-  legacyCancelAvailable: { type: Boolean, default: false },
   conversationId: { type: String, default: '' },
   discussionVariant: { type: String, default: 'public' },
   draft: { type: String, default: '' },
@@ -284,7 +276,6 @@ const props = defineProps({
 
 const emit = defineEmits([
   'cancel-deliberation',
-  'cancel-legacy-transport',
   'clear-target',
   'delete-conversation',
   'load-history',

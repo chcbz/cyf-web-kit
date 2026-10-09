@@ -1,3 +1,4 @@
+import { getHallCapabilities } from './fixtures/hall-current-protocol.js'
 import { expect } from 'chai'
 import { describe, it } from 'mocha'
 import { ref } from 'vue'
@@ -15,7 +16,7 @@ describe('JYT-UX-W04 discussion source continuity', () => {
     const payloads = []
     const conversation = useHallConversation({
       apiStore: { token: async () => '' },
-      chatApi: { create: async (_path, payload, options) => {
+      chatApi: { get: getHallCapabilities, create: async (_path, payload, options) => {
         payloads.push(payload)
         options.onStreamEnd()
       } },

@@ -1,3 +1,4 @@
+import { getHallCapabilities } from './fixtures/hall-current-protocol.js'
 import { expect } from 'chai'
 import * as Vue from 'vue'
 import { normalizeHallMessage, appendHallEventMessage } from '../src/composables/juyiting/hallConversationMessages.js'
@@ -79,7 +80,7 @@ describe('bounty conversation persisted media parts', () => {
     const readHints = []
     const conversation = useHallConversation({
       apiStore: { token: async () => '' },
-      chatApi: { create: async (_path, _body, options) => {
+      chatApi: { get: getHallCapabilities, create: async (_path, _body, options) => {
         for (const event of events) options.onStream(JSON.stringify(event))
         options.onStreamEnd()
       } },

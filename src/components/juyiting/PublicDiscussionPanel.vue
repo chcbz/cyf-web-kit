@@ -10,7 +10,6 @@
       :voice="voice"
       v-bind="chatProps"
       @cancel-deliberation="$emit('cancel-deliberation', $event)"
-      @cancel-legacy-transport="$emit('cancel-legacy-transport')"
       @clear-target="$emit('clear-target', $event)"
       @delete-conversation="$emit('delete-conversation', $event)"
       @load-history="$emit('load-history')"
@@ -43,7 +42,6 @@ const props = defineProps({
   conversationBusy: { type: Boolean, default: false },
   deliberationStatus: { type: String, default: '' },
   durableCancelTarget: { type: Object, default: null },
-  legacyCancelAvailable: { type: Boolean, default: false },
   conversationId: { type: String, default: '' },
   identityEpoch: { type: [Number, String], default: 0 },
   draft: { type: String, default: '' },
@@ -63,7 +61,6 @@ const props = defineProps({
 
 const emit = defineEmits([
   'cancel-deliberation',
-  'cancel-legacy-transport',
   'clear-target',
   'delete-conversation',
   'load-history',
@@ -96,7 +93,6 @@ const chatProps = computed(() => ({
   conversationBusy: props.conversationBusy,
   deliberationStatus: props.deliberationStatus,
   durableCancelTarget: props.durableCancelTarget,
-  legacyCancelAvailable: props.legacyCancelAvailable,
   conversationId: props.conversationId,
   identityEpoch: props.identityEpoch,
   eventStreamRecovering: props.eventStreamRecovering,

@@ -1,3 +1,4 @@
+import { getHallCapabilities } from './fixtures/hall-current-protocol.js'
 import { expect } from 'chai'
 import { ref } from 'vue'
 import { useHallConversation } from '../src/composables/juyiting/useHallConversation.js'
@@ -326,6 +327,7 @@ describe('useHallConversation scoped message loading', () => {
     const conversation = useHallConversation({
       apiStore: { token: async () => '' },
       chatApi: {
+        get: getHallCapabilities,
         create: async (_path, payload, options) => {
           payloads.push(payload)
           options.onStream('{"conversationId":"1003"}')
@@ -818,6 +820,7 @@ describe('useHallConversation finalized reply routing', () => {
         apiStore: { token: async () => duplicatePath === 'live_sse' ? 'token' : null },
         chatApi: {
           list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation(existingConversationId)] }),
+          get: getHallCapabilities,
           create: async (_path, _payload, options) => {
             const finalEvent = JSON.stringify({
               type: 'agent_message',
@@ -987,6 +990,7 @@ describe('Hall conversation identity lifecycle', () => {
       const conversation = useHallConversation({
         apiStore: { token: async () => null },
         chatApi: {
+          get: getHallCapabilities,
           create: async (_path, _payload, options) => {
             options.onStream('{"conversationId":"1001"}')
             options.onStreamEnd()
@@ -1051,6 +1055,7 @@ describe('Hall conversation identity lifecycle', () => {
   })
 
   it('cancels an opened deferred reply stream on identity clear and filters all late callbacks', async () => {
+    const opened = deferred()
     let streamOptions
     let resolveStream
     let cancelReason
@@ -1058,8 +1063,10 @@ describe('Hall conversation identity lifecycle', () => {
     const conversation = useHallConversation({
       apiStore: { token: async () => 'token' },
       chatApi: {
+        get: getHallCapabilities,
         create: async (_path, _payload, options) => {
           streamOptions = options
+          opened.resolve()
           options.onStreamOpen({ cancel: reason => { cancelReason = reason } })
           await new Promise(resolve => { resolveStream = resolve })
         }
@@ -1072,7 +1079,7 @@ describe('Hall conversation identity lifecycle', () => {
 
     conversation.setDraft('hello')
     const sending = conversation.sendHallMessage()
-    await Promise.resolve()
+    await opened.promise
     expect(streamOptions.signal.aborted).to.equal(false)
 
     stopIdentityBoundWork()
@@ -1093,12 +1100,15 @@ describe('Hall conversation identity lifecycle', () => {
 
   it('resets an active reply when starting a new conversation and allows another send', async () => {
     const requests = []
+    const opened = deferred()
     let firstCancelReason
     const conversation = useHallConversation({
       apiStore: { token: async () => 'token' },
       chatApi: {
+        get: getHallCapabilities,
         create: async (_path, payload, options) => {
           requests.push({ payload, options })
+          opened.resolve()
           options.onStreamOpen({
             cancel: reason => {
               if (requests.length === 1) firstCancelReason = reason
@@ -1121,8 +1131,9 @@ describe('Hall conversation identity lifecycle', () => {
 
     conversation.setDraft('first')
     const firstSend = conversation.sendHallMessage()
-    await Promise.resolve()
-    expect(conversation.isStreaming.value).to.equal(true)
+    await opened.promise
+    expect(conversation.isSubmitting.value).to.equal(true)
+    expect(conversation.isStreaming.value).to.equal(false)
 
     const firstSignal = requests[0].options.signal
     conversation.newHallConversation()
@@ -1278,6 +1289,7 @@ describe('useHallConversation history remediation', () => {
     const payloads = []
     const conversation = createConversation({
       chatApi: {
+        get: getHallCapabilities,
         create: async (_path, payload, options) => {
           payloads.push(payload)
           options.onStream('{"conversationId":"1002"}')
@@ -1361,6 +1373,7 @@ describe('useHallConversation history remediation', () => {
           options.onSuccess({ data: listCalls === 1 ? [scopedConversation('1002', { title: '删除中旧议' })] : [] })
         },
         delete: async () => deletion.promise,
+        get: getHallCapabilities,
         create: async () => { throw new Error('send must be locked while deleting') }
       }
     })
@@ -1446,6 +1459,7 @@ describe('useHallConversation history remediation', () => {
           expect(id).to.equal('1002')
           options.onSuccess({ data: [{ id: '99', senderType: 'user', content: '重取成功', createTime: 1 }] })
         },
+        get: getHallCapabilities,
         create: async () => { throw new Error('send must remain blocked after selected content failure') }
       }
     })
@@ -1599,7 +1613,7 @@ describe('Hall stream transport failure read-only recovery', () => {
     showToast: () => {}, onFinalReply: event => callbacks.push(event)
   })
 
-  it('does not repeat POST and reads only the same conversation until a new persisted final exists', async () => {
+  it('does not repeat POST and reads only the same conversation until the authoritative request and persisted final both complete', async () => {
     const setInterval = window.setInterval
     const clearInterval = window.clearInterval
     let poll
@@ -1609,6 +1623,7 @@ describe('Hall stream transport failure read-only recovery', () => {
     let readCount = 0
     let postCount = 0
     let persistedFinal = false
+    let requestComplete = false
     let conversation
     try {
       conversation = options({
@@ -1618,6 +1633,13 @@ describe('Hall stream transport failure read-only recovery', () => {
           readCount += 1
           opts.onSuccess({ data: [{ id: 'reply-old', senderType: 'agent', content: '旧回话' },
             ...(persistedFinal ? [{ id: 'reply-new', senderType: 'agent', content: '吴用本次完整回话' }] : [])] })
+        },
+        get: async path => {
+          if (path === '/capabilities') return getHallCapabilities(path)
+          expect(path).to.equal(`/requests/${conversation.activeRequest.value.requestId}`)
+          return { data: { requestId: conversation.activeRequest.value.requestId, requestRevision: '1',
+            conversationId: '1001', state: requestComplete ? 'COMPLETED' : 'RUNNING', stateVersion: requestComplete ? '2' : '1',
+            turns: [{ turnId: 'recovery-turn', state: requestComplete ? 'PUBLISHED' : 'GENERATING', stateVersion: requestComplete ? '2' : '1' }] } }
         },
         create: async (_url, _payload, opts) => {
           postCount += 1
@@ -1635,9 +1657,12 @@ describe('Hall stream transport failure read-only recovery', () => {
       expect(conversation.messages.value.some(message => message.content.includes('尚无可核验'))).to.equal(true)
       expect(callbacks).to.have.length(0)
       persistedFinal = true
-      poll()
-      await Promise.resolve()
-      await Promise.resolve()
+      await poll()
+      expect(callbacks.map(value => value.messageId)).to.deep.equal(['reply-new'])
+      expect(conversation.isAwaitingReply.value).to.equal(true)
+      expect(await conversation.sendHallMessage({ content: '仍有待处理回话，禁止覆盖' })).to.equal(false)
+      requestComplete = true
+      await poll()
       expect(callbacks.map(value => value.messageId)).to.deep.equal(['reply-new'])
       expect(conversation.isAwaitingReply.value).to.equal(false)
       expect(postCount).to.equal(1)
@@ -1650,13 +1675,16 @@ describe('Hall stream transport failure read-only recovery', () => {
 
   it('without a server conversation ID reports unknown outcome instead of false delivery failure or resend', async () => {
     let posts = 0
-    const conversation = options({ create: async () => { posts += 1; throw new Error('network reset') } })
+    const conversation = options({ get: getHallCapabilities, create: async () => { posts += 1; throw new Error('network reset') } })
     try {
       conversation.setDraft('first request')
       expect(await conversation.sendHallMessage()).to.equal(false)
       expect(posts).to.equal(1)
       expect(conversation.isAwaitingReply.value).to.equal(false)
       expect(conversation.messages.value.at(-1).content).to.include('结果未知')
+      expect(conversation.isConversationBusy.value).to.equal(true)
+      expect(await conversation.sendHallMessage({ content: '不得重发未知请求' })).to.equal(false)
+      expect(posts).to.equal(1)
     } finally {
       conversation.disposeHallConversation()
     }

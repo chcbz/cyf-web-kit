@@ -554,7 +554,6 @@
             :conversation-busy="isConversationBusy"
             :deliberation-status="deliberationStatus"
             :durable-cancel-target="durableCancelTarget"
-            :legacy-cancel-available="canCancelLegacy"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -566,7 +565,6 @@
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
             @cancel-deliberation="cancelDeliberation"
-            @cancel-legacy-transport="cancelLegacyHallReply"
             @clear-target="handleClearChatTarget"
             @delete-conversation="deleteHallConversation"
             @load-history="loadHallConversationHistory({ force: true })"
@@ -613,7 +611,6 @@
             :conversation-busy="isConversationBusy"
             :deliberation-status="deliberationStatus"
             :durable-cancel-target="durableCancelTarget"
-            :legacy-cancel-available="canCancelLegacy"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -627,7 +624,6 @@
             :scope-hint="chatContext.conversationScopeKey"
             @execution-settled="refreshExecutionRequest"
             @cancel-deliberation="cancelDeliberation"
-            @cancel-legacy-transport="cancelLegacyHallReply"
             @clear-target="handleClearChatTarget"
             @delete-conversation="deleteHallConversation"
             @typed-reply="handleTypedReply"
@@ -667,7 +663,6 @@
             :conversation-busy="isConversationBusy"
             :deliberation-status="deliberationStatus"
             :durable-cancel-target="durableCancelTarget"
-            :legacy-cancel-available="canCancelLegacy"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -679,7 +674,6 @@
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
             @cancel-deliberation="cancelDeliberation"
-            @cancel-legacy-transport="cancelLegacyHallReply"
             @clear-target="handleClearChatTarget"
             @delete-conversation="deleteHallConversation"
             @load-history="loadHallConversationHistory({ force: true })"
@@ -2104,8 +2098,6 @@ const {
   capabilityState,
   cancelHallReplyTurn,
   cancelDeliberation,
-  cancelLegacyHallReply,
-  canCancelLegacy,
   durableCancelTarget,
   chatConnectionStatus,
   deliberationStatus,

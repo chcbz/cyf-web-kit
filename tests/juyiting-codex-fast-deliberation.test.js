@@ -7,7 +7,7 @@ import { createHallSseParser } from '../src/composables/juyiting/hallConversatio
 import { cancellationTarget, deliberationBusy, isTerminalTurnState, reduceDeliberationEvent } from '../src/composables/juyiting/hallDeliberationState.js'
 import { stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 
-const capabilityV2 = { schemaVersion: '2', requestId: true, requestRevision: true, contextSnapshot: true, durableTurns: true, deltaSequence: true, cancel: true, interactionHints: ['chat', 'inspect'] }
+import { hallCapabilities as capabilityV2 } from './fixtures/hall-current-protocol.js'
 const deferred = () => { let resolve; let reject; const promise = new Promise((ok, fail) => { resolve = ok; reject = fail }); return { promise, resolve, reject } }
 const base = ({ chatApi, apiStore = { authorizationGeneration: 1, token: async () => '' }, metadata, context, onDelivery } = {}) => useHallConversation({
   apiStore, chatApi: chatApi || {},
@@ -111,15 +111,40 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     conversation.disposeHallConversation()
   })
 
-  it('falls back to the legacy payload when capabilities are unavailable', async () => {
-    const sent = []
-    const conversation = base({ chatApi: { get: async () => { throw new Error('404') }, create: async (_p, body, options) => { sent.push({ body, options }); options.onStreamEnd() } } })
-    conversation.setDraft('legacy')
-    await conversation.sendHallMessage()
-    expect(sent[0].body).not.to.have.any.keys('requestId', 'requestRevision', 'interactionHint', 'clientSeenVector', 'inputRefs')
-    expect(sent[0].options.headers).to.deep.equal({})
-    conversation.disposeHallConversation()
-  })
+  for (const failure of ['network', 'unsupported', 'missing-client']) {
+    it(`does not send or clear the draft when current protocol is unavailable (${failure})`, async () => {
+      const sent = []; let available = false; let probes = 0
+      const chatApi = {
+        get: async () => {
+          probes++
+          if (available) return { data: { data: capabilityV2 } }
+          if (failure === 'network') throw new Error('network unavailable')
+          return { data: { data: { ...capabilityV2, durableTurns: false } } }
+        },
+        create: async (_p, body, options) => { sent.push({ body, options }); options.onStreamEnd() }
+      }
+      const get = chatApi.get
+      if (failure === 'missing-client') delete chatApi.get
+      const conversation = base({ chatApi })
+      conversation.setDraft('keep my draft')
+      expect(await conversation.sendHallMessage()).to.equal(false)
+      expect(sent).to.have.length(0)
+      expect(conversation.draft.value).to.equal('keep my draft')
+      expect(conversation.messages.value).to.have.length(0)
+      expect(conversation.isSubmitting.value).to.equal(false)
+      expect(conversation.capabilityState.value.loaded).to.equal(false)
+      expect(conversation.deliberationStatus.value).to.include('消息未发送')
+      available = true
+      chatApi.get = get
+      expect(await conversation.sendHallMessage()).to.equal(true)
+      expect(sent).to.have.length(1)
+      expect(sent[0].body.requestId).to.equal(sent[0].options.headers['Idempotency-Key'])
+      expect(sent[0].body.requestRevision).to.equal('1')
+      expect(probes).to.equal(failure === 'missing-client' ? 1 : 2)
+      expect(conversation.draft.value).to.equal('')
+      conversation.disposeHallConversation()
+    })
+  }
 
   it('keeps pre-admission status neutral and only renders observed runtime policy', async () => {
     let statusDuringPost = ''; let stateDuringPost; const deliveries = []
@@ -195,6 +220,30 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     await conversation.sendHallMessage()
     expect(creates).to.equal(1); expect(requestLookups).to.equal(1)
     expect(conversation.activeTurns.value[0].turnId).to.equal('9007199254740995')
+    conversation.disposeHallConversation()
+  })
+
+  it('does not write recovery status or messages after identity changes during unknown POST readback', async () => {
+    const gate = deferred(); const started = deferred(); let creates = 0
+    const conversation = base({ chatApi: {
+      get: async path => {
+        if (path === '/capabilities') return { data: capabilityV2 }
+        started.resolve(path)
+        return gate.promise
+      },
+      create: async () => { creates++; throw new TypeError('unknown POST result') }
+    } })
+    conversation.setDraft('old identity')
+    const sending = conversation.sendHallMessage()
+    const path = await started.promise
+    stopIdentityBoundWork()
+    gate.resolve({ data: { requestId: path.slice('/requests/'.length), state: 'RUNNING', conversationId: '1001', turns: [] } })
+    expect(await sending).to.equal(false)
+    expect(creates).to.equal(1)
+    expect(conversation.messages.value).to.deep.equal([])
+    expect(conversation.activeRequest.value).to.equal(null)
+    expect(conversation.deliberationStatus.value).to.equal('')
+    expect(conversation.isAwaitingReply.value).to.equal(false)
     conversation.disposeHallConversation()
   })
 

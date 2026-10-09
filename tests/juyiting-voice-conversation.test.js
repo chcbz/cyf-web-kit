@@ -1,3 +1,4 @@
+import { getHallCapabilities } from './fixtures/hall-current-protocol.js'
 import { bountyInteractionTargetId } from '../src/composables/juyiting/useHallChatContext.js'
 import { createHydratedIdentityScope, hasHydratedIdentity } from '../src/utils/identityScope.js'
 import { before } from 'mocha'
@@ -1438,6 +1439,7 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
     const selectedAgentFixture = { agentId: 'wuyong', name: '吴用', status: 'idle', boundToMe: true, canOperate: true, systemAgent: false }
     const SelectedAgentCardComponent = loadSfc('../src/components/juyiting/SelectedAgentCard.vue')
     const chatApi = {
+      get: getHallCapabilities,
       create: async (path, _payload, options) => {
         if (path === '/speech/transcriptions') {
           transcriptionCount += 1
@@ -1448,6 +1450,7 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
         const entry = { options, pending, cancelReason: null }
         streams.push(entry)
         options.onStreamOpen({ cancel: reason => { entry.cancelReason = reason } })
+        options.onStream(JSON.stringify({ requestId: _payload.requestId, turnId: 'voice-turn', state: 'STREAMING', stateVersion: '1' }))
         return pending.promise
       },
       list: async () => {},
@@ -1509,7 +1512,7 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
       expect(card().attributes('inert')).to.equal(undefined)
 
       const finalA = JSON.stringify({
-        type: 'agent_message', conversationId: 'conversation-a', messageId: 'reply-a', agentId: 'wuyong',
+        type: 'agent_message', turnId: 'voice-turn', state: 'PUBLISHED', stateVersion: '2', conversationId: 'conversation-a', messageId: 'reply-a', agentId: 'wuyong',
         senderType: 'agent', senderName: '吴用', content: '甲轮完整回话', timestamp: 1788000000000
       })
       streams[0].options.onStream(finalA)
@@ -1552,7 +1555,7 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
     const outgoingMetadata = Vue.ref({ libraryCitationId: 'archive-1' })
     const conversation = useHallConversation({
       apiStore: { token: async () => '' },
-      chatApi: { create: async (_path, payload, options) => { payloads.push(payload); options.onStream('{"conversationId":"frozen-conversation"}'); options.onStreamEnd() } },
+      chatApi: { get: getHallCapabilities, create: async (_path, payload, options) => { payloads.push(payload); options.onStream('{"conversationId":"frozen-conversation"}'); options.onStreamEnd() } },
       chatContext: Vue.ref(validContext()),
       chatMode: Vue.ref('private'),
       globalStore: { getJiacn: 'hero', user: { name: 'Tester' } },
