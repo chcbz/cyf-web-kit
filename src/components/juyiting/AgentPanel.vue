@@ -56,18 +56,20 @@
             <span v-for="ability in selectedAgent.abilities || []" :key="ability">{{ ability }}</span>
             <span v-if="!(selectedAgent.abilities || []).length">未录本领</span>
           </div>
-          <button
-            v-if="hasPendingTask"
-            class="point-and-deliberate"
-            type="button"
-            :disabled="pointAndStartBusy || !canPointAndDeliberate(selectedAgent)"
-            @click="$emit('point-and-deliberate', selectedAgent)"
-          >{{ pointAndStartBusy ? '正在点将…' : '点将并议事' }}</button>
-          <button
-            v-if="canStartConversation(selectedAgent)"
-            type="button"
-            @click="$emit('start-conversation', selectedAgent)"
-          >与这位好汉密议</button>
+          <div class="agent-detail-actions">
+            <button
+              v-if="canStartConversation(selectedAgent)"
+              type="button"
+              @click="$emit('start-conversation', selectedAgent)"
+            >与这位好汉密议</button>
+            <button
+              v-if="hasPendingTask"
+              class="point-and-deliberate"
+              type="button"
+              :disabled="pointAndStartBusy || !canPointAndDeliberate(selectedAgent)"
+              @click="$emit('point-and-deliberate', selectedAgent)"
+            >{{ pointAndStartBusy ? '正在点将…' : '点将并议事' }}</button>
+          </div>
           <p>{{ selectedAgent.errorMessage || selectedAgent.currentTaskTitle || '正在厅中候令，可从悬赏榜点将。' }}</p>
         </template>
         <p v-else>点一位厅中好汉，查看动静、本领与所领榜文。</p>
@@ -260,6 +262,42 @@ button {
   overflow: auto;
   border-radius: 8px;
   background: #f4e2c3;
+}
+
+/* Match the approved prototype's mmd-row / mmd-primary actions. */
+.agent-detail-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.agent-detail-actions button {
+  max-width: 100%;
+  padding: 7px 11px;
+  border: 1px solid #d6b98c;
+  border-radius: 7px;
+  background: #fffaf0;
+  color: #795332;
+}
+
+.agent-detail-actions .point-and-deliberate {
+  border-color: #a44330;
+  background: #a44330;
+  color: #fff9ed;
+}
+
+.agent-detail-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.agent-detail-actions button:focus-visible {
+  outline: 2px solid #a44330;
+  outline-offset: 2px;
 }
 
 .detail-head {

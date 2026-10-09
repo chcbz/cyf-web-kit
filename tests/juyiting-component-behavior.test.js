@@ -1796,7 +1796,8 @@ describe('JuyiHall component behavior', () => {
       }
     })
 
-    await wrapper.find('.new-task-button').trigger('click')
+    wrapper.vm.openCreateRequirement()
+    await Vue.nextTick()
     await wrapper.find('input[name="taskTitle"]').setValue('Review reports')
     await wrapper.find('textarea[name="taskDescription"]').setValue('Summarize reports')
     await wrapper.find('.task-create-form').trigger('submit')
@@ -3174,7 +3175,8 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
       state.openPanel('tasks')
       await Vue.nextTick()
       const bounty = wrapper.findComponent(BountyPanel)
-      await bounty.findAll('button').find(button => button.text() === '提出需求').trigger('click')
+      bounty.vm.$.exposed.openCreateRequirement()
+      await Vue.nextTick()
       await bounty.find('input[name="taskTitle"]').setValue('原张榜尚未提交的名目')
       const source = bounty.element
       expect(bounty.findAll('button').some(button => button.text() === '起草正式任务')).to.equal(false)
@@ -3644,7 +3646,8 @@ describe('W11 R9 actual JuyiHall stale funded acknowledgement', () => {
           expect(state.openPanel('tasks')).to.equal(true)
           await flushPromises()
           expect(wrapper.findComponent(BountyPanel).exists()).to.equal(true)
-          await wrapper.get('.new-task-button').trigger('click')
+          wrapper.findComponent(BountyPanel).vm.$.exposed.openCreateRequirement()
+          await Vue.nextTick()
           expect(wrapper.find('.task-create-form').exists()).to.equal(true)
 
           if (operation === 'ordinary create') {

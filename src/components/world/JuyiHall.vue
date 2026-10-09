@@ -353,7 +353,6 @@
             @create-task="createRequirementAndChooseAgent"
             @check-requirement-create="checkRequirementCreate"
             @resume-requirement-create="resumeRequirementCreate"
-            @start-private-draft="openPrivateDraft()"
             @open-formal-results="openFormalResults"
             @start-formal-draft="openPanel('formalDraft', { restore: true })"
             @resume-funded-create="resumeFundedCreate"
@@ -4112,13 +4111,10 @@ button.hall-room {
   height: var(--hall-control-height); padding-inline: 12px; border-color: var(--hall-border-strong); border-radius: var(--hall-radius-sm); background: var(--work-paper); color: var(--work-ink);
 }
 .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar > button),
-.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-create-actions button) {
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-draft-actions button) {
   min-height: var(--hall-control-height); background: var(--hall-surface-subtle); color: var(--work-ink); border: 1px solid var(--work-line);
 }
-.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-create-actions) { display: grid; grid-template-columns: repeat(3, minmax(0, auto)); gap: 8px; }
-.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-create-actions .new-task-button:first-child) {
-  background: var(--hall-surface-brand); color: var(--work-brand); border-color: #e3d8d0;
-}
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-draft-actions) { display: grid; grid-template-columns: repeat(2, minmax(0, auto)); gap: 8px; }
 .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs) {
   gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--work-line); scrollbar-width: none;
 }
@@ -4182,9 +4178,8 @@ button.hall-room {
   .home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor) { --hall-page-gutter: 16px; }
   .home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages) { padding: 16px; }
   .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar) { padding: 12px 16px; }
-  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-search) { grid-template-columns: minmax(0, 1fr); }
-  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-create-actions) { width: 100%; grid-template-columns: .75fr 1.35fr 1.05fr; }
-  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-create-actions button) { min-width: 0; padding-inline: 6px; font-size: 13px; line-height: 1.3; }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-draft-actions) { width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-draft-actions button) { min-width: 0; padding-inline: 6px; font-size: 13px; line-height: 1.3; }
   .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs) { padding: 10px 16px; }
   .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-panel-body) { padding: 12px 16px 20px; }
 }
@@ -4469,7 +4464,7 @@ button.hall-room {
 
   .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar) {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(108px, .58fr) 44px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, .8fr) 44px;
     gap: 8px;
   }
   .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-search) { display: contents; }
@@ -4492,9 +4487,9 @@ button.hall-room {
     display: inline-flex;
     flex: 0 0 auto;
   }
-  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-create-actions) {
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-draft-actions) {
     grid-column: 1 / -1;
-    grid-template-columns: .8fr 1.35fr 1.05fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs) {
     padding-left: 16px;
