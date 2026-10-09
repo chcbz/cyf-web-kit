@@ -20,7 +20,7 @@
         </div>
       </div>
 
-      <div class="composer-body" :class="{ 'has-supported-voice': voiceSupported, 'has-voice-detail': voiceHasDetail }">
+      <div class="composer-body">
         <div class="composer-input-area">
           <textarea
             ref="textareaRef"
@@ -55,7 +55,7 @@
               title="添加资料"
               aria-label="添加资料"
               :disabled="inputLocked"
-              @click="openMaterials"
+              @click="$emit('open-materials')"
             ><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m8 12 7-7a3 3 0 0 1 4 4l-9 9a5 5 0 0 1-7-7l9-9M7 14l8-8" /></svg></button>
             <div ref="voiceActionRef" class="composer-inline-voice"></div>
             <button
@@ -145,8 +145,7 @@ const emit = defineEmits([
   'send-message',
   'update:draft',
   'voice-apply',
-  'open-materials',
-  'open-workspace'
+  'open-materials'
 ])
 
 const composerRef = ref(null)
@@ -168,8 +167,6 @@ const handleEscape = event => {
   event.preventDefault()
   closeMore()
 }
-const openMaterials = () => { emit('open-materials') }
-const openWorkspace = () => { closeMore(); emit('open-workspace') }
 onMounted(() => {
   document.addEventListener('pointerdown', handleOutside)
   document.addEventListener('keydown', handleEscape)
@@ -180,15 +177,16 @@ onBeforeUnmount(() => {
 })
 const isFocused = ref(false)
 
-const draftLength = computed(() => String(props.draft || '').length)
+const draftText = computed(() => String(props.draft || ''))
+const draftLength = computed(() => draftText.value.length)
+const hasDraft = computed(() => Boolean(draftText.value.trim()))
 const inputLocked = computed(() => props.interactionLocked || props.isStreaming || props.isAwaitingReply || Boolean(props.voice?.voiceInteractionLocked))
-const canSend = computed(() => (Boolean(String(props.draft || '').trim()) || (props.discussionVariant === 'bounty' && props.hasTypedAttachments)) && !inputLocked.value)
+const canSend = computed(() => (hasDraft.value || (props.discussionVariant === 'bounty' && props.hasTypedAttachments)) && !inputLocked.value)
 const composerClass = computed(() => ({
   'is-streaming': props.isStreaming,
-  'has-draft': Boolean(String(props.draft || '').trim())
+  'has-draft': hasDraft.value
 }))
-const voiceSupported = computed(() => Boolean(props.voice?.supported))
-const voiceHasDetail = computed(() => voiceSupported.value && props.voice?.state !== 'idle')
+const voiceHasDetail = computed(() => Boolean(props.voice?.supported) && props.voice?.state !== 'idle')
 
 const selectedAgentInAgents = computed(() => props.selectedAgent && props.agents.some(agent => agent.agentId === props.selectedAgent.agentId))
 
@@ -205,34 +203,17 @@ const orderedAgents = computed(() => {
 
 const showMentionMenu = computed(() => {
   if (inputLocked.value || !orderedAgents.value.length) return false
-  const value = String(props.draft || '')
+  const value = draftText.value
   if (!isFocused.value && value !== '@') return false
   return /(^|\s)@[\S]*$/.test(value)
 })
 
 const targetChips = computed(() => {
-  if (props.discussionVariant === 'private' && selectedAgentInAgents.value) {
-    return [{
-      id: props.selectedAgent.agentId,
-      label: props.mentionLabel(props.selectedAgent),
-      locked: true
-    }]
-  }
-  if (props.discussionVariant === 'bounty') {
-    return props.agents.map(agent => ({
-      id: agent.agentId,
-      label: props.mentionLabel(agent),
-      locked: true
-    }))
-  }
-  if (selectedAgentInAgents.value) {
-    return [{
-      id: props.selectedAgent.agentId,
-      label: props.mentionLabel(props.selectedAgent),
-      locked: false
-    }]
-  }
-  return []
+  const targets = props.discussionVariant === 'bounty'
+    ? props.agents
+    : selectedAgentInAgents.value ? [props.selectedAgent] : []
+  const locked = props.discussionVariant === 'private' || props.discussionVariant === 'bounty'
+  return targets.map(agent => ({ id: agent.agentId, label: props.mentionLabel(agent), locked }))
 })
 
 const contextLabel = computed(() => {
@@ -293,17 +274,6 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
 </script>
 
 <style scoped>
-.composer-more-panel {
-  display: grid;
-  gap: 8px;
-  max-height: 45vh;
-  overflow-y: auto;
-  padding: 10px;
-  border: 1px solid #d7c3a2;
-  border-radius: 8px;
-  background: #fffdf6;
-}
-
 .hall-chat-composer {
   position: relative;
   display: flex;
@@ -423,8 +393,6 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
 
 .typed-pending-question { grid-column: 1 / -1; margin: 0 0 4px; color: #466c5a; font-size: 12px; }
 
-.composer-body.has-voice-detail .typed-pending-question { grid-column: 1 / -1; }
-
 .composer-actions {
   display: flex;
   align-items: center;
@@ -504,16 +472,6 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
 
 .composer-materials {
   display: contents;
-}
-
-.composer-execute {
-  border: 1px solid #7f4a22;
-  border-radius: 6px;
-  background: #fff3de;
-  color: #6a3719;
-  cursor: pointer;
-  font: inherit;
-  font-size: 12px;
 }
 
 .composer-more:disabled,

@@ -152,7 +152,6 @@
       @update:draft="$emit('update:draft', $event)"
       @voice-apply="$emit('voice-apply', $event)"
       @open-materials="toggleMaterialPicker"
-      @open-workspace="$emit('open-workspace')"
     >
       <template #materials>
         <section v-if="materialPickerOpen && !serverTaskCompleted" class="material-reference-picker" aria-label="引用议事资料">

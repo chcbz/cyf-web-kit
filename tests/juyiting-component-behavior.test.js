@@ -1984,6 +1984,8 @@ describe('JuyiHall component behavior', () => {
     } })
     try {
       const toolbar = wrapper.get('.panel-toolbar')
+      expect(toolbar.find('.material-reference-entry').exists()).to.equal(false)
+      expect(toolbar.find('.workspace-entry').exists()).to.equal(false)
       for (const button of toolbar.findAll('.icon-button')) {
         expect(button.get('svg').attributes('width')).to.equal('20')
         expect(button.get('svg').attributes('height')).to.equal('20')
@@ -2059,6 +2061,25 @@ describe('JuyiHall component behavior', () => {
     await legacy.find('[aria-label="停止旧版回话等待"]').trigger('click')
     expect(legacy.emitted('cancel-legacy-transport')).to.have.length(1)
     expect(legacy.emitted('cancel-deliberation')).to.equal(undefined)
+  })
+
+  it('opens workspace from the material picker without sending or changing the draft', async () => {
+    const wrapper = mount(ChatPanel, {
+      global: { stubs }, props: { conversationId: 'conversation-1', draft: '保留草稿',
+        mentionLabel: agent => agent.name, senderText: message => message.sender }
+    })
+    try {
+      await wrapper.get('[aria-label="添加资料"]').trigger('click')
+      await Vue.nextTick()
+      const picker = wrapper.get('.material-reference-picker')
+      const workspaceButton = picker.findAll('button').find(button => button.text() === '去百宝箱添加')
+      expect(workspaceButton, 'workspace action is reachable in the picker').not.to.equal(undefined)
+      await workspaceButton.trigger('click')
+      expect(wrapper.emitted('open-workspace')).to.deep.equal([[]])
+      expect(wrapper.emitted('send-message')).to.equal(undefined)
+      expect(wrapper.emitted('update:draft')).to.equal(undefined)
+      expect(wrapper.get('textarea').element.value).to.equal('保留草稿')
+    } finally { wrapper.unmount() }
   })
 
   it('explains that a material reference needs an established conversation', async () => {

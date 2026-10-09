@@ -28,6 +28,47 @@ describe('Juyi Hall simple composer more menu', () => {
       } finally { wrapper.unmount() }
     }
   })
+  it('maps target chips consistently without letting private or bounty targets be removed', async () => {
+    const agents = [{ agentId: 'a', name: '甲' }, { agentId: 'b', name: '乙' }]
+    for (const discussionVariant of ['public', 'private', 'bounty']) {
+      const wrapper = create({ agents, selectedAgent: agents[0], discussionVariant, mentionLabel: agent => agent.name })
+      try {
+        const chips = wrapper.findAll('.composer-target-chip')
+        expect(chips.map(chip => chip.text())).to.deep.equal(discussionVariant === 'bounty' ? ['@甲', '@乙'] : ['@甲'])
+        for (const chip of chips) expect(chip.element.disabled).to.equal(discussionVariant !== 'public')
+        await chips[0].trigger('click')
+        expect(wrapper.emitted('clear-target')).to.deep.equal(discussionVariant === 'public' ? [['a']] : undefined)
+        await wrapper.setProps({ selectedAgent: { agentId: 'outside', name: '不在当前名单' } })
+        expect(wrapper.findAll('.composer-target-chip')).to.have.length(discussionVariant === 'bounty' ? 2 : 0)
+      } finally { wrapper.unmount() }
+    }
+  })
+  it('keeps draft display and all input locks consistent for clicks and direct submits', async () => {
+    const wrapper = create({ draft: '   ' })
+    try {
+      expect(wrapper.classes()).not.to.include('has-draft')
+      expect(wrapper.get('.composer-send').element.disabled).to.equal(true)
+      expect(wrapper.get('.composer-meta').text()).to.include('3/1200')
+      await wrapper.setProps({ draft: '  消息  ' })
+      expect(wrapper.classes()).to.include('has-draft')
+      expect(wrapper.get('.composer-send').element.disabled).to.equal(false)
+      for (const lock of [{ interactionLocked: true }, { isStreaming: true }, { isAwaitingReply: true },
+        { voice: { supported: true, state: 'recording', voiceInteractionLocked: true } }]) {
+        await wrapper.setProps(lock)
+        expect(wrapper.get('textarea').element.disabled).to.equal(true)
+        expect(wrapper.get('.composer-send').element.disabled).to.equal(true)
+        expect(wrapper.get('.composer-add-materials').element.disabled).to.equal(true)
+        await wrapper.get('form').trigger('submit')
+        await wrapper.get('.composer-add-materials').trigger('click')
+        expect(wrapper.emitted('send-message')).to.equal(undefined)
+        expect(wrapper.emitted('open-materials')).to.equal(undefined)
+        await wrapper.setProps({ interactionLocked: false, isStreaming: false, isAwaitingReply: false, voice: null })
+      }
+      await wrapper.get('form').trigger('submit')
+      expect(wrapper.emitted('send-message')).to.deep.equal([[]])
+      expect(wrapper.emitted('update:draft')).to.equal(undefined)
+    } finally { wrapper.unmount() }
+  })
   it('groups the textarea, plus, voice target and send inside one input frame', () => {
     const wrapper = create()
     try {
@@ -124,13 +165,5 @@ describe('Juyi Hall simple composer more menu', () => {
       expect(wrapper.get('.voice-stub').element.style.display).not.to.equal('none')
       expect(wrapper.get('.composer-send').attributes('disabled')).to.equal('')
     } finally { wrapper.unmount() }
-  })
-  it('wires existing material and workspace operations below chat rather than in its toolbar', () => {
-    const chat = readFileSync(new URL('../src/components/juyiting/ChatPanel.vue', import.meta.url), 'utf8')
-    const toolbar = chat.slice(0, chat.indexOf('<section'))
-    expect(toolbar).not.to.contain('material-reference-entry')
-    expect(toolbar).not.to.contain('workspace-entry')
-    expect(chat).to.contain('@open-materials="toggleMaterialPicker"')
-    expect(chat).to.contain('@open-workspace="$emit(\'open-workspace\')"')
   })
 })
