@@ -236,6 +236,23 @@ describe('bounty output gallery live owner scope', () => {
       expect(wrapper.find('.continue-modification').exists()).to.equal(false)
       expect(wrapper.text()).not.to.include('需要调整？')
       expect(finalizationRequests).to.equal(1)
+      const props = { ...wrapper.props(), taskCompleted: true }
+      wrapper.unmount(); wrapper = mount(Component, { props }); await flushPromises()
+      expect(finalizationRequests).to.equal(2)
+      expect(wrapper.text()).to.include('验收完成。')
+      expect(wrapper.text()).not.to.include('验收尚未完成')
+      expect(wrapper.find('.finalize-status-button').exists()).to.equal(false)
+      expect(wrapper.find('.finalize-button').exists()).to.equal(false)
+      // Domain completion stays visible even if the separate receipt query fails.
+      agentApi.execute = async request => { finalizationRequests++; expect(request.method).to.equal('GET'); throw new TypeError('offline') }
+      wrapper.unmount(); wrapper = mount(Component, { props }); await flushPromises()
+      expect(finalizationRequests).to.equal(3)
+      expect(wrapper.text()).to.include('任务已完成。')
+      expect(wrapper.text()).to.include('暂时无法确认验收结果')
+      expect(wrapper.text()).not.to.include('验收完成。')
+      expect(wrapper.text()).not.to.include('验收尚未完成')
+      expect(wrapper.find('.finalize-status-button').exists()).to.equal(true)
+      expect(wrapper.find('.finalize-button').exists()).to.equal(false)
     } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
   })
 
@@ -488,10 +505,10 @@ describe('bounty output gallery live owner scope', () => {
       expect(calls).to.have.length(1)
       expect(wrapper.find('input[type="checkbox"]').exists()).to.equal(false)
       wrapper.unmount(); wrapper = mount(Component, { props: { ...props, taskVersion: '12' } }); await flushPromises()
-      expect(calls).to.have.length(1)
+      expect(calls).to.have.length(2)
       expect(wrapper.findAll('.bounty-output')).to.have.length(1)
       expect(wrapper.find('.finalize-button').text()).to.equal('继续验收')
-      await wrapper.find('.finalize-status-button').trigger('click'); await flushPromises()
+      // Remount already performed the read-only 404 check, without resubmitting.
       expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET'])
       expect(wrapper.text()).not.to.include('需求已完成')
       await wrapper.find('.finalize-button').trigger('click'); await flushPromises()
@@ -511,9 +528,8 @@ describe('bounty output gallery live owner scope', () => {
       await wrapper.find('.finalize-button').trigger('click'); await flushPromises()
       expect(calls).to.have.length(4)
       wrapper.unmount(); wrapper = mount(Component, { props: { ...props, taskVersion: '12' } }); await flushPromises()
-      expect(calls).to.have.length(4) // Remount reads outputs, never replays acceptance automatically.
-      expect(wrapper.text()).not.to.include('需求已完成') // Stored intent alone is not terminal authority.
-      await wrapper.find('.finalize-status-button').trigger('click'); await flushPromises()
+      expect(calls).to.have.length(5) // Remount reconciles by GET; no automatic acceptance POST.
+      expect(wrapper.text()).to.include('需求已完成') // Fresh validated receipt, not stored intent, is terminal authority.
       expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET', 'GET', 'POST', 'GET'])
       expect(calls[4].url).to.equal('/tasks/task-1/finalizations/finalization-original')
       expect(wrapper.find('.finalize-button').text()).to.equal('需求已完成')
@@ -666,7 +682,7 @@ describe('bounty output gallery live owner scope', () => {
       expect(calls).to.have.length(1)
       wrapper.unmount(); wrapper = mount(Component, { props: { ...props, catalog, request: catalog.at(-1).request } }); await flushPromises()
       expect(wrapper.findAll('.bounty-output')[0].text()).to.include('改稿关联：bird')
-      expect(calls).to.have.length(1)
+      expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET'])
     } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
   })
 
@@ -723,7 +739,7 @@ describe('bounty output gallery live owner scope', () => {
         await new Promise(resolve => oldTimeout(resolve, 5)); await flushPromises()
       }
       expect(wrapper.find('.bounty-output-text').text()).to.equal(raw.outcome.text)
-      expect(calls).to.have.length(1)
+      expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET'])
       expect(wrapper.text()).to.include('本次验收已冻结 1 项')
       await wrapper.find('.continue-modification').trigger('click')
       expect(wrapper.emitted('continue-modification')).to.deep.equal([[]])
@@ -778,7 +794,7 @@ describe('bounty output gallery live owner scope', () => {
           await new Promise(resolve => oldTimeout(resolve, 5)); await flushPromises()
         }
         expect(wrapper.findAll('.bounty-output-text')).to.have.length(count)
-        expect(calls).to.have.length(1); expect(wrapper.text()).to.include(`本次验收已冻结 ${count} 项`)
+        expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET']); expect(wrapper.text()).to.include(`本次验收已冻结 ${count} 项`)
         wrapper.unmount(); wrapper = null
       }
     } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
@@ -832,7 +848,7 @@ describe('bounty output gallery live owner scope', () => {
           await new Promise(resolve => oldTimeout(resolve, 5)); await flushPromises()
         }
         expect(wrapper.findAll('.bounty-output-text')).to.have.length(count)
-        expect(calls).to.have.length(1); expect(wrapper.text()).to.include(`本次验收已冻结 ${count} 项`)
+        expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET']); expect(wrapper.text()).to.include(`本次验收已冻结 ${count} 项`)
         wrapper.unmount(); wrapper = null
       }
     } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
@@ -889,7 +905,7 @@ describe('bounty output gallery live owner scope', () => {
           await new Promise(resolve => oldTimeout(resolve, 5)); await flushPromises()
         }
         expect(wrapper.findAll('.bounty-output-text')).to.have.length(count)
-        expect(calls).to.have.length(1); expect(wrapper.text()).to.include(`本次验收已冻结 ${count} 项`)
+        expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET']); expect(wrapper.text()).to.include(`本次验收已冻结 ${count} 项`)
         wrapper.unmount(); wrapper = null
       }
     } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }

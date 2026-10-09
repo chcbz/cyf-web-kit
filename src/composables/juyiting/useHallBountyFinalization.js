@@ -93,11 +93,12 @@ const stageLabel = receipt => ({ PROMOTING: '正在准备成果', READY_TO_SUBMI
 const statusCode = error => error?.status ?? error?.response?.status
 
 /** One immutable selected-set acceptance intent. No Provider call or automatic write on recovery. */
-export function useHallBountyFinalization ({ api = createApi('/agent'), conversationId = null, identityKey = null,
+export function useHallBountyFinalization ({ api = createApi('/agent'), conversationId = null, identityKey = null, taskId = null,
   storage = browserStorage(), idempotencyKeyFactory = uuid } = {}) {
   const status = ref({ state: 'idle', busy: false, message: '', intent: null, receipt: null })
   const conversation = computed(() => valueOf(conversationId))
   const identity = computed(() => valueOf(identityKey))
+  const task = computed(() => valueOf(taskId))
   const scopeKey = computed(() => ID(conversation.value) && typeof identity.value === 'string' && identity.value && identity.value.length <= 512
     ? `juyiting:finalization:v1:${encodeURIComponent(identity.value)}:${conversation.value}` : '')
   let generation = 0; let disposed = false
@@ -126,8 +127,11 @@ export function useHallBountyFinalization ({ api = createApi('/agent'), conversa
       const entry = JSON.parse(raw)
       if (!exactKeys(entry, ['taskId', 'idempotencyKey', 'body', 'operationId']) || !ID(entry.taskId) || !KEY(entry.idempotencyKey) ||
         !validBody(entry.body) || entry.body.conversationId !== conversation.value || (entry.operationId !== '' && !ID(entry.operationId))) throw new Error('invalid intent')
-      status.value = { state: 'unknown', busy: false, message: '验收尚未完成，可刷新状态或继续验收。',
+      if (task.value != null && entry.taskId !== task.value) return
+      status.value = { state: 'unknown', busy: false, message: '正在核对验收状态…',
         intent: Object.freeze({ ...entry, body: freezeBody(entry.body) }), receipt: null }
+      // Recover by GET only; a remount must never replay the acceptance POST.
+      void check()
     } catch {
       status.value = { state: 'recovery_error', busy: false, message: '无法恢复验收进度，请联系支持。', intent: null, receipt: null }
     }
@@ -204,7 +208,7 @@ export function useHallBountyFinalization ({ api = createApi('/agent'), conversa
     if (status.value.intent) return resume()
     if (disposed || !scopeKey.value || status.value.busy || status.value.state === 'recovery_error') return null
     try {
-      if (!exactKeys(command, ['taskId', 'body']) || !ID(command.taskId) || !validBody(command.body) || command.body.conversationId !== conversation.value) {
+      if (!exactKeys(command, ['taskId', 'body']) || !ID(command.taskId) || (task.value != null && command.taskId !== task.value) || !validBody(command.body) || command.body.conversationId !== conversation.value) {
         throw new Error('成果或需求已变化，请刷新后重新选择。')
       }
       const idempotencyKey = idempotencyKeyFactory()
@@ -218,7 +222,7 @@ export function useHallBountyFinalization ({ api = createApi('/agent'), conversa
     }
     return run(post)
   }
-  const stop = watch(scopeKey, reset, { immediate: true, flush: 'sync' })
+  const stop = watch([scopeKey, task], reset, { immediate: true, flush: 'sync' })
   const dispose = () => {
     if (disposed) return
     disposed = true; stop(); generation++; for (const controller of controllers) controller.abort(); controllers.clear()
