@@ -6,19 +6,6 @@
   "exit": true,
   "recursive": false,
   "spec": [
-    "./tests/*.test.js",
-    "./tests/composables/*.spec.js",
-    "./tests/game/**/*.test.ts"
-  ],
-  "extension": [
-    "js",
-    "ts"
-  ],
-  "reporter": "mochawesome",
-  "reporter-options": "reportDir=mochawesome-report,reportFilename=mochawesome.json",
-  "ui": "bdd",
-  "watch": false,
-  "ignore": [
     "tests/juyiting-occlusion-atlas-e9b.test.js",
     "tests/juyiting-occlusion-baseline.test.js",
     "tests/juyiting-occlusion-constraint-calibration.test.js",
@@ -35,5 +22,13 @@
     "tests/juyiting-e13-offline-validator-contract.test.js",
     "tests/juyiting-e13-mobility-contract.test.js",
     "tests/juyiting-webp-decoder-profile.test.js"
-  ]
+  ],
+  "extension": [
+    "js",
+    "ts"
+  ],
+  "reporter": "mochawesome",
+  "reporter-options": "reportDir=mochawesome-report,reportFilename=mochawesome.json",
+  "ui": "bdd",
+  "watch": false
 }

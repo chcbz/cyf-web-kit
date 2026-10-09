@@ -93,6 +93,16 @@ describe('E13 fail-closed independent recompute (P2-B)', () => {
       expect(gate.checks.find(c => c.check === PIXEL_CHECK)?.ok).to.equal(true)
       expect(gate.checks.find(c => c.check === LIVE_PY_CHECK)?.ok).to.equal(true)
       expect(gate.evidencePass).to.equal(true)
+      expect(gate.matrixPass).to.equal(true)
+      expect(gate.totalChecks).to.equal(gate.passedChecks)
+      expect(gate.livePass).to.equal(true)
+      expect(gate.releasePass).to.equal(false)
+      expect(gate.pass).to.equal(false)
+      expect(gate.checks.find(check => check.check.includes('GPT V5 rejection'))?.ok).to.equal(true)
+      expect(gate.checks.find(check => check.check.includes('GPT V7 full visual audit'))?.ok).to.equal(true)
+      expect(gate.checks.find(check => check.check.includes('37/37 mask'))?.ok).to.equal(true)
+      expect(gate.releaseBlockers).to.not.include('GPT V5 visual review REJECT/P1; rebuilt evidence requires V6 PASS')
+      expect(gate.releaseBlockers).to.deep.equal(['independent release_guard pending'])
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 
