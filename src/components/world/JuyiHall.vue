@@ -621,6 +621,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { useGlobalStore } from '@/stores/global'
 import { useApiStore } from '@/stores/api'
+import { browserBusinessNamespace } from '@/utils/tenantBusinessNamespace'
 import { agentApi, chatApi } from '@/composables/useHttp'
 import { useHallChatContext } from '@/composables/juyiting/useHallChatContext'
 import { useHallBackendSceneState } from '@/composables/juyiting/useHallBackendSceneState'
@@ -680,12 +681,7 @@ const accountDisplayName = computed(() => {
   const user = globalStore.user || {}
   return String(user.nickname || user.username || globalStore.getUserId || '个人中心').trim() || '个人中心'
 })
-const hallIdentityScope = computed(() => {
-  const owner = String(globalStore.user?.id || globalStore.user?.openid || globalStore.getUserId || globalStore.getOpenid || '').trim()
-  const client = String(apiStore.oauthClientId || '').trim()
-  const tenant = String(globalStore.user?.tenantId || globalStore.user?.tenantCode || globalStore.user?.tenant || '').trim()
-  return owner && client ? [tenant, client, owner].filter(Boolean).join('\u0000') : ''
-})
+const hallIdentityScope = computed(() => browserBusinessNamespace(apiStore, globalStore))
 
 const selectedAgent = ref(null)
 const selectedTask = ref(null)

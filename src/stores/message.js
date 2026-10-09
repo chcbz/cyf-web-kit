@@ -2,7 +2,6 @@ import { defineStore } from 'pinia'
 import { msgApi } from '../composables/useHttp.js'
 import { useApiStore } from './api.js'
 import { useGlobalStore } from './global.js'
-import { useUtilStore } from './util.js'
 import { log } from '../utils/logger.js'
 import { registerIdentityCleanup } from '../utils/identityLifecycle.js'
 import { throwIfAborted } from '../utils/abortSignals.js'
@@ -52,7 +51,7 @@ function assertMessageOperationCurrent (store, operation) {
 }
 
 function hasStoredApiToken () {
-  return Boolean(useUtilStore().getLocalStorage('api_token'))
+  return useApiStore().hasActiveToken()
 }
 
 function resetMessageLifecycle (store, { disposed = false } = {}) {

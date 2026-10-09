@@ -3,6 +3,7 @@ import { useUtilStore } from './util'
 import { log } from '../utils/logger.js'
 
 const runtimeEnv = import.meta.env ?? {}
+const isolatedTenantProfile = ['fixed', 'selectable'].includes(runtimeEnv.VITE_TENANT_SELECTION_MODE)
 
 const anonymousUser = () => ({
   id: null,
@@ -30,18 +31,22 @@ export const useGlobalStore = defineStore('global', {
   }),
   getters: {
     getOpenid () {
+      if (isolatedTenantProfile) return this.user.openid
       const utilStore = useUtilStore()
       return utilStore.getLocalStorage('openid') || this.user.openid
     },
     getJiacn () {
+      if (isolatedTenantProfile) return this.user.jiacn
       const utilStore = useUtilStore()
       return utilStore.getLocalStorage('jiacn') || this.user.jiacn
     },
     getWxToken () {
+      if (isolatedTenantProfile) return this.user.wxToken
       const utilStore = useUtilStore()
       return utilStore.getLocalStorage('wxToken') || this.user.wxToken
     },
     getUserId () {
+      if (isolatedTenantProfile) return this.user.id
       const utilStore = useUtilStore()
       return utilStore.getLocalStorage('userId') || this.user.id
     }
@@ -51,7 +56,7 @@ export const useGlobalStore = defineStore('global', {
       this.user = anonymousUser()
     },
     setUser (user = {}) {
-      if (user.id) {
+      if (user.id && !isolatedTenantProfile) {
         const utilStore = useUtilStore()
         utilStore.setLocalStorage('userId', user.id, new Date().getTime() + 7 * 24 * 60 * 60 * 1000)
       }
@@ -62,19 +67,25 @@ export const useGlobalStore = defineStore('global', {
     },
     setOpenid (id) {
       log.debug('Setting openid:', id)
-      const utilStore = useUtilStore()
-      utilStore.setLocalStorage('openid', id, new Date().getTime() + 7 * 24 * 60 * 60 * 1000)
+      if (!isolatedTenantProfile) {
+        const utilStore = useUtilStore()
+        utilStore.setLocalStorage('openid', id, new Date().getTime() + 7 * 24 * 60 * 60 * 1000)
+      }
       this.user.openid = id
     },
     setWxToken (payload) {
-      const utilStore = useUtilStore()
-      utilStore.setLocalStorage('wxToken', payload.accessToken, new Date().getTime() + payload.expiresIn * 1000 - 60000)
+      if (!isolatedTenantProfile) {
+        const utilStore = useUtilStore()
+        utilStore.setLocalStorage('wxToken', payload.accessToken, new Date().getTime() + payload.expiresIn * 1000 - 60000)
+      }
       this.user.wxToken = payload.accessToken
     },
     setJiacn (id) {
       log.debug('Setting jiacn:', id)
-      const utilStore = useUtilStore()
-      utilStore.setLocalStorage('jiacn', id, new Date().getTime() + 7 * 24 * 60 * 60 * 1000)
+      if (!isolatedTenantProfile) {
+        const utilStore = useUtilStore()
+        utilStore.setLocalStorage('jiacn', id, new Date().getTime() + 7 * 24 * 60 * 60 * 1000)
+      }
       this.user.jiacn = id
     },
     setTitle (title) {

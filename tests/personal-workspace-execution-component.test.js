@@ -5,6 +5,7 @@ import * as Vue from 'vue'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { mount, flushPromises } from '@vue/test-utils'
 import { deliveryTypeText } from '../src/utils/executionFormats.js'
+import { browserBusinessNamespace } from '../src/utils/tenantBusinessNamespace.js'
 
 for (const name of ['Element', 'HTMLElement', 'SVGElement', 'Node']) { if (!globalThis[name] && globalThis.window?.[name]) Object.defineProperty(globalThis, name, { value: globalThis.window[name], configurable: true }) }
 
@@ -18,6 +19,7 @@ script = script
   .replace(/^import\s+\{\s*savePersonalWorkspaceBlob,\s*usePersonalWorkspace\s*\}\s+from\s+['"]@\/composables\/usePersonalWorkspace['"];?\s*$/gm, 'var { savePersonalWorkspaceBlob, usePersonalWorkspace } = deps')
   .replace(/^import\s+\{\s*usePersonalWorkspaceExecution\s*\}\s+from\s+['"]@\/composables\/usePersonalWorkspaceExecution['"];?\s*$/gm, 'var { usePersonalWorkspaceExecution } = deps')
   .replace(/^import\s+\{\s*deliveryTypeText\s*\}\s+from\s+['"]@\/utils\/executionFormats['"];?\s*$/gm, 'var { deliveryTypeText } = deps')
+  .replace(/^import\s+\{\s*browserBusinessNamespace\s*\}\s+from\s+['"]@\/utils\/tenantBusinessNamespace['"];?\s*$/gm, 'var { browserBusinessNamespace } = deps')
   .replace('export default', 'return')
 
 const workspaceMock = () => {
@@ -45,6 +47,7 @@ describe('personal workspace execution receipt presentation', () => {
     const workspace = workspaceMock(); const execution = executionMock(); let executionOptions
     const component = new Function('Vue', 'deps', script)(Vue, {
       deliveryTypeText,
+      browserBusinessNamespace,
       useApiStore: () => ({ authorizationGeneration: 1, oauthClientId: 'web-client' }), useGlobalStore: () => ({ user: { id: 'owner-a', tenantId: 'tenant-a' }, getUserId: 'owner-a', getOpenid: '' }),
       usePersonalWorkspace: () => workspace, usePersonalWorkspaceExecution: options => { executionOptions = options; return execution }, savePersonalWorkspaceBlob: () => {}
     })
@@ -103,6 +106,7 @@ describe('personal workspace execution receipt presentation', () => {
     execution.loadAgents = execution.loadCapabilities = execution.recover = async () => { executionLoads += 1 }
     const component = new Function('Vue', 'deps', script)(Vue, {
       deliveryTypeText,
+      browserBusinessNamespace,
       useApiStore: () => ({ authorizationGeneration: 1, oauthClientId: 'web-client' }),
       useGlobalStore: () => ({ user: { id: 'owner-a' } }),
       usePersonalWorkspace: () => workspace, usePersonalWorkspaceExecution: () => execution, savePersonalWorkspaceBlob: () => {}
@@ -156,7 +160,7 @@ describe('personal workspace execution receipt presentation', () => {
     workspace.loadMore = async () => { calls.push('more'); workspace.items.value.push({ fileId: 'out-1', displayName: '成果.pdf', originKind: 'AGENT_DELIVERY', latestVersion: 1, state: 'ACTIVE' }); workspace.nextCursor.value = null }
     workspace.usage = async () => ({ taskReferences: [{ taskId: 'task-1' }], activeExecutions: [] })
     workspace.trash = async value => { calls.push(value); return { state: 'TRASHED' } }
-    const component = new Function('Vue', 'deps', script)(Vue, { deliveryTypeText, useApiStore: () => ({ authorizationGeneration: 1, oauthClientId: 'web-client' }), useGlobalStore: () => ({ user: { id: 'owner-a' } }), usePersonalWorkspace: () => workspace, usePersonalWorkspaceExecution: executionMock, savePersonalWorkspaceBlob: () => {} })
+    const component = new Function('Vue', 'deps', script)(Vue, { deliveryTypeText, browserBusinessNamespace, useApiStore: () => ({ authorizationGeneration: 1, oauthClientId: 'web-client' }), useGlobalStore: () => ({ user: { id: 'owner-a' } }), usePersonalWorkspace: () => workspace, usePersonalWorkspaceExecution: executionMock, savePersonalWorkspaceBlob: () => {} })
     const wrapper = mount(component, { props: { embedded: true } })
     const click = async text => { await wrapper.findAll('button').find(b => b.text() === text).trigger('click'); await Vue.nextTick(); await Vue.nextTick() }
     try {

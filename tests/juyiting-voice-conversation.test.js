@@ -52,6 +52,16 @@ const loadSfc = (relativePath, children = {}) => {
 }
 
 const loadActualJuyiHall = mocks => {
+  const effectiveMocks = {
+    browserBusinessNamespace: (apiStore, globalStore) => {
+      const owner = String(globalStore?.user?.id || globalStore?.user?.openid || globalStore?.getUserId || globalStore?.getOpenid || '').trim()
+      const tenant = String(globalStore?.user?.tenantId || globalStore?.user?.tenantCode || globalStore?.user?.tenant || '').trim()
+      const client = String(apiStore?.oauthClientId || '').trim()
+      return owner && client ? [tenant, client, owner].filter(Boolean).join('\u0000') : ''
+    },
+    useHallHomeMode: () => ({ homeMode: Vue.ref('map'), isOverviewHome: Vue.ref(false), setHomeMode: () => {} }),
+    ...mocks
+  }
   const relativePath = '../src/components/world/JuyiHall.vue'
   const filename = new URL(relativePath, import.meta.url).pathname
   const { descriptor } = parse(requireSource(relativePath), { filename })
@@ -61,7 +71,7 @@ const loadActualJuyiHall = mocks => {
     .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = mocks.${name}`)
     .replace(/import\.meta\.env/g, 'mocks.env')
     .replace('export default', 'return')
-  return new Function('Vue', 'mocks', body)(Vue, mocks)
+  return new Function('Vue', 'mocks', body)(Vue, effectiveMocks)
 }
 const requireSource = relativePath => {
   const { readFileSync } = globalThis.__voiceFs

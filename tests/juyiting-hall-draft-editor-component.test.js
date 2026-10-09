@@ -99,12 +99,15 @@ before(async () => {
 after(() => { document.body.innerHTML = '' })
 
 describe('JYT-UX-W03 HallDraftEditor boundary', () => {
-  it('receives the stable owner/client scope from the production Hall path rather than an epoch', () => {
+  it('receives the verified tenant/client/owner scope from the production Hall path rather than an epoch', () => {
     const bounty = readFileSync(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url), 'utf8')
     const hall = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+    const namespace = readFileSync(new URL('../src/utils/tenantBusinessNamespace.js', import.meta.url), 'utf8')
     expect(bounty).to.include(':identity-scope="identityScope"')
     expect(hall).to.include(':identity-scope="hallIdentityScope"')
-    expect(hall).to.include("[tenant, client, owner].filter(Boolean).join('\\u0000')")
+    expect(hall).to.include('browserBusinessNamespace(apiStore, globalStore)')
+    expect(namespace).to.include('identity.clientId !== client')
+    expect(namespace).to.include('apiStore.activeTenantId() !== identity.tenantId')
   })
 
   it('mounts the production component with its empty default draft and exposes the first save action', async () => {

@@ -97,6 +97,7 @@
     "chai": "^6.0.1",
     "eslint": "^9.3.0",
     "eslint-plugin-vue": "^9.25.0",
+    "fake-indexeddb": "^6.2.5",
     "jsdom": "^26.1.0",
     "less": "^3.8.1",
     "lodash": "^4.17.23",

@@ -2,7 +2,7 @@ import { initiateReauthentication } from './reauthentication.js'
 import { registerIdentityCleanup } from './identityLifecycle.js'
 import { combineAbortSignals, throwIfAborted } from './abortSignals.js'
 
-function responseWithCleanup (response, signal, cleanup) {
+function responseWithCleanup (response, signal, cleanup, assertCurrentIdentity) {
   if (!response.body) {
     cleanup()
     return response
@@ -43,9 +43,11 @@ function responseWithCleanup (response, signal, cleanup) {
           controller.close()
           return
         }
+        await assertCurrentIdentity()
+        throwIfAborted(signal)
         controller.enqueue(value)
       } catch (error) {
-        finish()
+        await cancelReader(error)
         controller.error(error)
       }
     },
@@ -83,6 +85,14 @@ async function fetchAuthenticatedSse ({
     combined.cleanup()
   }
 
+  const assertCurrentIdentity = async () => {
+    throwIfAborted(combined.signal)
+    if (authorizationGeneration !== apiStore.authorizationGeneration) {
+      throw new DOMException('Identity changed', 'AbortError')
+    }
+    await apiStore.assertTenantTokenCurrent?.(token)
+    throwIfAborted(combined.signal)
+  }
   try {
     throwIfAborted(combined.signal)
     const response = await fetchImpl(url, {
@@ -105,7 +115,8 @@ async function fetchAuthenticatedSse ({
       cleanup()
       return null
     }
-    return responseWithCleanup(response, combined.signal, cleanup)
+    await assertCurrentIdentity()
+    return responseWithCleanup(response, combined.signal, cleanup, assertCurrentIdentity)
   } catch (error) {
     cleanup()
     throw error

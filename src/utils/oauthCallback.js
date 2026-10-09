@@ -15,6 +15,7 @@ export async function processOAuthCallback ({
   query,
   scrubQuery,
   exchangeCodeForToken,
+  onFailure,
   loadUserInfo,
   replace,
   transactionConfig,
@@ -41,21 +42,26 @@ export async function processOAuthCallback ({
   }
 
   if (!validCallbackShape) {
+    if (transaction) await onFailure?.(transaction)
     throw new OAuthCallbackError('invalid_callback', transactionError)
   }
   if (transactionError) {
+    await onFailure?.()
     throw new OAuthCallbackError(
       transactionError instanceof OAuthTransactionError ? transactionError.code : 'invalid_transaction',
       transactionError
     )
   }
-  if (providerError) throw new OAuthCallbackError('authorization_denied')
-  if (!code) throw new OAuthCallbackError('missing_code')
+  if (providerError || !code) {
+    await onFailure?.(transaction)
+    throw new OAuthCallbackError(providerError ? 'authorization_denied' : 'missing_code')
+  }
 
   try {
     await exchangeCodeForToken(code, transaction)
     await loadUserInfo()
   } catch (error) {
+    await onFailure?.(transaction)
     throw new OAuthCallbackError('exchange_failed', error)
   }
 

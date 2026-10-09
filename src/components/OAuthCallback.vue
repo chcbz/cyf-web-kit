@@ -32,6 +32,7 @@ onMounted(async () => {
       scrubQuery: () => router.replace({ path: route.path, query: {}, hash: '' }),
       transactionConfig: apiStore.oauthRuntimeConfig(),
       exchangeCodeForToken: (code, transaction) => apiStore.exchangeCodeForToken(code, transaction),
+      onFailure: transaction => apiStore.abortAuthorizationAttempt(transaction),
       loadUserInfo: () => apiStore.getUserInfo(),
       replace: returnTo => router.replace(returnTo)
     })

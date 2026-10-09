@@ -38,6 +38,23 @@ describe('useHttp authentication boundary', () => {
     expect(fetchCount).to.equal(0)
   })
 
+  it('drops a late response when another window invalidates the persisted identity', async () => {
+    let allowed = true
+    const store = { authorizationGeneration: 0, token: async () => 'token',
+      assertTenantTokenCurrent: async () => { if (!allowed) throw new DOMException('Identity changed', 'AbortError') } }
+    let finishFetch
+    global.fetch = () => new Promise(resolve => { finishFetch = resolve })
+    const success = []
+    const pending = useHttp().get('/protected/late', {}, { authStore: store, onSuccess: () => success.push('published') })
+    await new Promise(resolve => window.setTimeout(resolve, 0))
+    allowed = false
+    finishFetch(new Response(JSON.stringify({ data: 'other-tenant' }), { status: 200 }))
+    let failure
+    try { await pending } catch (error) { failure = error }
+    expect(failure?.name).to.equal('AbortError')
+    expect(success).to.deep.equal([])
+  })
+
   it('starts one reauthentication for concurrent 401s and never replays either request', async () => {
     const store = { token: async () => 'expired-token' }
     let cleanCount = 0

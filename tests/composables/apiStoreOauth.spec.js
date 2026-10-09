@@ -1,12 +1,18 @@
 import { expect } from 'chai'
+import 'fake-indexeddb/auto'
 import { readFileSync } from 'node:fs'
 import { createPinia, setActivePinia } from 'pinia'
-import { useApiStore } from '../../src/stores/api.js'
+import { tenantSelectionEnabled, useApiStore, validTenantIdentity, validTenantProfile, verifyPersistedTenantSession, visibleTenantIdentity, visibleTenantSessionCurrent } from '../../src/stores/api.js'
+import { useGlobalStore } from '../../src/stores/global.js'
+import { useUtilStore } from '../../src/stores/util.js'
 import { initiateReauthentication } from '../../src/utils/reauthentication.js'
+import { OAUTH_TRANSACTION_STORAGE_KEY } from '../../src/utils/oauthTransaction.js'
+import { beginTenantAuthorization, commitTenantAuthorization, readTenantSession } from '../../src/utils/tenantAuthLedger.js'
 
 Object.defineProperty(global, 'location', { value: window.location, writable: true, configurable: true })
 Object.defineProperty(global, 'localStorage', { value: window.localStorage, writable: true, configurable: true })
 Object.defineProperty(global, 'sessionStorage', { value: window.sessionStorage, writable: true, configurable: true })
+Object.defineProperty(globalThis, 'indexedDB', { value: window.indexedDB, configurable: true })
 
 const transaction = Object.freeze({
   codeVerifier: 'A'.repeat(86),
@@ -17,6 +23,175 @@ const transaction = Object.freeze({
 })
 
 describe('OAuth API store token exchange', () => {
+  it('displays an area only for an active verified session in the current tab', () => {
+    const area = Object.freeze({ tenantId: '1', tenantName: '华南测试区', tenantKind: 'TEST' })
+    expect(visibleTenantIdentity(area, '1', true)).to.equal(area)
+    expect(visibleTenantIdentity(area, '0', true)).to.equal(null)
+    expect(visibleTenantIdentity(area, '1', false)).to.equal(null)
+    expect(visibleTenantIdentity({ ...area, tenantKind: 'UNKNOWN' }, '1', true)).to.equal(null)
+    expect(visibleTenantIdentity(null, '1', true)).to.equal(null)
+  })
+
+  it('hides an expired or cross-window-revoked tenant display on the next ledger check', () => {
+    const identity = { tenantId: '1', tenantName: '华南测试区', tenantKind: 'TEST' }
+    const verified = { tenantId: '1', authRevision: '4', viewRevision: '9',
+      expiresAt: 200, accessToken: 'verified-token' }
+    const snapshot = { authRevision: '4', viewRevision: '9',
+      session: { accessToken: 'verified-token' } }
+    expect(visibleTenantSessionCurrent(identity, '1', verified, snapshot, 100)).to.equal(true)
+    expect(visibleTenantSessionCurrent(identity, '1', verified, snapshot, 200)).to.equal(false)
+    expect(visibleTenantSessionCurrent(identity, '1', verified, null, 100)).to.equal(false)
+    expect(visibleTenantSessionCurrent(identity, '1', verified,
+      { ...snapshot, authRevision: '5' }, 100)).to.equal(false)
+    expect(visibleTenantSessionCurrent(identity, '0', verified, snapshot, 100)).to.equal(false)
+  })
+
+  it('forgets an earlier area display whenever the identity is cleared', () => {
+    setActivePinia(createPinia())
+    const store = useApiStore()
+    store.tenantIdentity = { tenantId: '1', tenantName: '华南测试区', tenantKind: 'TEST' }
+    store.clearIdentity()
+    expect(store.tenantIdentity).to.equal(null)
+  })
+
+  it('clears the old subject and aborts old work when a cross-tab identity becomes stale', async () => {
+    setActivePinia(createPinia())
+    const store = useApiStore()
+    const globalStore = useGlobalStore()
+    const utilStore = useUtilStore()
+    const until = Date.now() + 60_000
+    globalStore.setUser({ id: 123, jiacn: 'account-A' })
+    utilStore.setLocalStorage('jiacn', 'account-A', until)
+    utilStore.setLocalStorage('openid', 'old-openid', until)
+    utilStore.setLocalStorage('wxToken', 'old-wx-token', until)
+    store.tenantIdentity = { tenantId: '1', tenantName: '华南测试区', tenantKind: 'TEST' }
+    const before = store.authorizationGeneration
+    await store.refreshTenantDisplay()
+    expect(store.tenantIdentity).to.equal(null)
+    expect(store.authorizationGeneration).to.equal(before + 1)
+    expect(globalStore.user.id).to.equal(null)
+    expect(globalStore.getJiacn).to.equal(null)
+    for (const key of ['userId', 'jiacn', 'openid', 'wxToken']) {
+      expect(window.localStorage.getItem(key)).to.equal(null)
+    }
+  })
+
+  it('requires the restored user profile to match the verified tenant owner', () => {
+    const identity = { jiacn: 'owner-A' }
+    expect(validTenantProfile({ id: 123, jiacn: 'owner-A' }, identity)).to.equal(true)
+    expect(validTenantProfile({ id: '123', jiacn: 'owner-A' }, identity)).to.equal(true)
+    expect(validTenantProfile({ id: 0, jiacn: 'owner-A' }, identity)).to.equal(false)
+    expect(validTenantProfile({ id: 123, jiacn: 'owner-B' }, identity)).to.equal(false)
+    expect(validTenantProfile({ id: 123, jiacn: 'owner-A' }, {})).to.equal(false)
+    expect(validTenantProfile(null, identity)).to.equal(false)
+  })
+
+  it('hydrates a restored tenant session only from a matching live user profile', async () => {
+    const ctx = { issuer: 'https://api.example', origin: window.location.origin,
+      clientId: 'public-web', tabId: crypto.randomUUID(), state: crypto.randomUUID(), expectedTenant: '1' }
+    const identity = { issuer: ctx.issuer, subject: 'alice', clientId: ctx.clientId,
+      tenantId: '1', dataDomainId: 'cyf', tenantName: '华南测试区', tenantKind: 'TEST',
+      tenantSessionEpoch: '1', membershipRevision: '1', clientTenantGrantRevision: '1',
+      jiacn: 'owner-A', scopes: ['openid'] }
+    const record = { accessToken: 'restored-token', expiresAt: Date.now() + 60_000, identity }
+    await beginTenantAuthorization(ctx)
+    await commitTenantAuthorization({ ...ctx, verifiedTenant: '1', session: record })
+    setActivePinia(createPinia())
+    const store = useApiStore()
+    store.baseUrl = ctx.issuer
+    store.oauthClientId = ctx.clientId
+    const oldFetch = global.fetch
+    try {
+      global.fetch = async url => new Response(JSON.stringify(url.endsWith('/resource')
+        ? identity : { data: { id: 123, jiacn: 'owner-A' } }), { status: 200 })
+      const snapshot = await readTenantSession({ ...ctx, tenantId: '1' })
+      expect(await store.verifyTenantSnapshot(snapshot, ctx, '1')).to.equal('restored-token')
+      const user = useGlobalStore()
+      expect(user.getUserId).to.equal(123)
+      expect(user.getJiacn).to.equal('owner-A')
+      expect(store.tenantIdentity?.tenantId).to.equal('1')
+      expect(store.tenantIdentity?.issuer).to.equal(ctx.issuer)
+      expect(store.tenantIdentity?.jiacn).to.equal('owner-A')
+      expect(store.tenantIdentity?.dataDomainId).to.equal('cyf')
+      expect(store.tenantIdentity?.membershipRevision).to.equal('1')
+      expect(store.tenantIdentity?.scopes).to.deep.equal(['openid'])
+    } finally {
+      global.fetch = oldFetch
+    }
+  })
+
+  it('fails closed on an unrecognized configured tenant selection mode', () => {
+    expect(tenantSelectionEnabled('fixed')).to.equal(true)
+    expect(tenantSelectionEnabled('selectable')).to.equal(true)
+    expect(tenantSelectionEnabled(undefined)).to.equal(false)
+    expect(() => tenantSelectionEnabled('selectabe')).to.throw('Tenant selection mode is invalid')
+  })
+
+  it('requires the exact application data domain before accepting a tenant identity', () => {
+    const identity = {
+      issuer: 'https://api.example',
+      subject: 'alice',
+      clientId: 'public-web',
+      tenantId: '1',
+      dataDomainId: 'cyf',
+      tenantName: '华南测试区',
+      tenantKind: 'TEST',
+      tenantSessionEpoch: '3',
+      membershipRevision: '8',
+      clientTenantGrantRevision: '4',
+      jiacn: 'owner-alice',
+      scopes: ['openid', 'write']
+    }
+    const boundTransaction = { ...transaction, expectedTenant: '1' }
+    expect(validTenantIdentity(identity, boundTransaction)).to.equal(true)
+    expect(validTenantIdentity({ ...identity, dataDomainId: 'another-product' }, boundTransaction)).to.equal(false)
+    expect(validTenantIdentity({ ...identity, dataDomainId: undefined }, boundTransaction)).to.equal(false)
+    expect(validTenantIdentity({ ...identity, subject: '' }, boundTransaction)).to.equal(false)
+    expect(validTenantIdentity({ ...identity, jiacn: '' }, boundTransaction)).to.equal(false)
+    expect(validTenantIdentity({ ...identity, jiacn: 'owner\uD800' }, boundTransaction)).to.equal(false)
+    expect(validTenantIdentity({ ...identity, scopes: 'openid' }, boundTransaction)).to.equal(false)
+    expect(validTenantIdentity({ ...identity, scopes: ['openid', 'bad\nclaim'] }, boundTransaction)).to.equal(false)
+    expect(validTenantIdentity({ ...identity, scopes: ['openid', '\uDFFF'] }, boundTransaction)).to.equal(false)
+    expect(validTenantIdentity({ ...identity, issuer: '' }, boundTransaction)).to.equal(false)
+    expect(validTenantIdentity({ ...identity, issuer: 'https://attacker.example' }, boundTransaction)).to.equal(false)
+    expect(validTenantIdentity(identity, { clientId: 'public-web', expectedTenant: '1' })).to.equal(false)
+    expect(validTenantIdentity({ ...identity, tenantId: '0' }, boundTransaction)).to.equal(false)
+    expect(validTenantIdentity({ ...identity, membershipRevision: '9223372036854775808' }, boundTransaction)).to.equal(false)
+  })
+
+  it('revalidates a persisted candidate and rejects a changed permission fingerprint', async () => {
+    const identity = {
+      issuer: 'https://api.example',
+      subject: 'alice',
+      clientId: 'public-web',
+      tenantId: '1',
+      dataDomainId: 'cyf',
+      tenantName: '华南测试区',
+      tenantKind: 'TEST',
+      tenantSessionEpoch: '3',
+      membershipRevision: '8',
+      clientTenantGrantRevision: '4',
+      jiacn: 'owner-alice',
+      scopes: ['openid', 'write']
+    }
+    const record = { accessToken: 'candidate-token', identity }
+    const earlierFetch = global.fetch
+    const seen = []
+    try {
+      global.fetch = async (url, options) => {
+        seen.push({ url, options })
+        return new Response(JSON.stringify(identity), { status: 200 })
+      }
+      expect(await verifyPersistedTenantSession(record, { ...transaction, expectedTenant: '1' })).to.equal(true)
+      expect(seen[0].url).to.equal('https://api.example/resource')
+      expect(seen[0].options.headers.Authorization).to.equal('Bearer candidate-token')
+      global.fetch = async () => new Response(JSON.stringify({ ...identity, scopes: ['openid'] }), { status: 200 })
+      expect(await verifyPersistedTenantSession(record, { ...transaction, expectedTenant: '1' })).to.equal(false)
+    } finally {
+      global.fetch = earlierFetch
+    }
+  })
+
   let originalFetch
 
   beforeEach(() => {
@@ -156,7 +331,7 @@ function deferred () {
   return { promise, resolve }
 }
 
-const OAUTH_PENDING_KEY = 'cyf.oauth.pending.v1'
+const OAUTH_PENDING_KEY = OAUTH_TRANSACTION_STORAGE_KEY
 const DIGEST_NOT_STARTED = 'OAUTH_HARNESS_DIGEST_NOT_STARTED'
 const AUTH_SETTLED_BEFORE_DIGEST = 'OAUTH_HARNESS_AUTH_SETTLED_BEFORE_DIGEST'
 const AUTH_REJECTED_BEFORE_DIGEST = 'OAUTH_HARNESS_AUTH_REJECTED_BEFORE_DIGEST'

@@ -176,7 +176,20 @@ export function useHttp (options = {}) {
         delete fetchConfig.body
       }
 
+      const assertCurrentIdentity = async () => {
+        throwIfAborted(requestSignal.signal)
+        if (!needAuth) return
+        if (authorizationGeneration !== requestAuthStore.authorizationGeneration) {
+          throw new DOMException('Identity changed', 'AbortError')
+        }
+        await requestAuthStore.assertTenantTokenCurrent?.(token)
+        throwIfAborted(requestSignal.signal)
+        if (authorizationGeneration !== requestAuthStore.authorizationGeneration) {
+          throw new DOMException('Identity changed', 'AbortError')
+        }
+      }
       const response = await fetch(requestUrl, fetchConfig)
+      await assertCurrentIdentity()
       if (ordinaryJsonRequest) {
         rumRequestId = resolveRequestId(response.headers?.get?.('X-Request-Id') || rumRequestId)
       }
@@ -230,6 +243,7 @@ export function useHttp (options = {}) {
         try {
           while (true) {
             const { done, value } = await reader.read()
+            await assertCurrentIdentity()
             if (done) {
               // 处理缓冲区中剩余的数据
               const tail = decoder.decode()
@@ -325,6 +339,7 @@ export function useHttp (options = {}) {
         }
       }
 
+      await assertCurrentIdentity()
       response.value = resultObj
       data.value = result
 

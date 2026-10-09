@@ -2440,6 +2440,16 @@ describe('O04 shared panel session contract', () => {
 })
 
 const loadActualJuyiHall = (mocks) => {
+  const effectiveMocks = {
+    browserBusinessNamespace: (apiStore, globalStore) => {
+      const owner = String(globalStore?.user?.id || globalStore?.user?.openid || globalStore?.getUserId || globalStore?.getOpenid || '').trim()
+      const tenant = String(globalStore?.user?.tenantId || globalStore?.user?.tenantCode || globalStore?.user?.tenant || '').trim()
+      const client = String(apiStore?.oauthClientId || '').trim()
+      return owner && client ? [tenant, client, owner].filter(Boolean).join('\u0000') : ''
+    },
+    useHallHomeMode: () => ({ homeMode: Vue.ref('map'), isOverviewHome: Vue.ref(false), setHomeMode: () => {} }),
+    ...mocks
+  }
   const relativePath = '../src/components/world/JuyiHall.vue'
   const filename = new URL(relativePath, import.meta.url).pathname
   const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8')
@@ -2454,7 +2464,7 @@ const loadActualJuyiHall = (mocks) => {
     .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = mocks.${name}`)
     .replace(/import\.meta\.env/g, 'mocks.env')
     .replace('export default', 'return')
-  const component = new Function('Vue', 'mocks', body)(Vue, mocks)
+  const component = new Function('Vue', 'mocks', body)(Vue, effectiveMocks)
   const renderBody = template.code
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace('export function render', 'return function render')
