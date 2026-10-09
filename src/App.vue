@@ -20,9 +20,9 @@
           v-if="activeTenantBadge"
           class="tenant-badge"
           :class="{ 'tenant-badge--test': activeTenantBadge.tenantKind === 'TEST' }"
-          :aria-label="`当前区域：${activeTenantBadge.tenantName}${activeTenantBadge.tenantKind === 'TEST' ? '，测试数据' : ''}`"
+          :aria-label="`当前区域：${activeTenantBadge.tenantName || `区域 ${activeTenantBadge.tenantId}`}${activeTenantBadge.tenantKind === 'TEST' ? '，测试数据' : ''}`"
         >
-          {{ activeTenantBadge.tenantName }}<span v-if="activeTenantBadge.tenantKind === 'TEST'"> · 测试数据</span>
+          {{ activeTenantBadge.tenantName || `区域 ${activeTenantBadge.tenantId}` }}<span v-if="activeTenantBadge.tenantKind === 'TEST'"> · 测试数据</span>
         </span>
         <button
           v-if="isInstallable"

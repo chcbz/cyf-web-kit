@@ -1,5 +1,6 @@
 import { createHydratedIdentityScope } from './identityScope.js'
 import { encodeHallOnboardingSubject } from '../composables/juyiting/useHallOnboarding.js'
+import { validFixedTenantIdentity } from './fixedTenantIdentity.js'
 
 const runtimeEnv = import.meta.env ?? {}
 const tenantPattern = /^(?:0|[1-9][0-9]{0,49})$/
@@ -14,8 +15,9 @@ const revision = value => revisionPattern.test(value) &&
 export function browserBusinessNamespace (apiStore, globalStore, {
   mode = runtimeEnv.VITE_TENANT_SELECTION_MODE,
   origin = globalThis.location?.origin || globalThis.window?.location?.origin,
-  issuer = runtimeEnv.VITE_OAUTH_ISSUER || apiStore?.baseUrl || origin,
-  dataDomainId = runtimeEnv.VITE_DATA_DOMAIN_ID || 'cyf'
+  issuer = runtimeEnv.VITE_OAUTH_ISSUER || runtimeEnv.VITE_OAUTH_BASE_URL || apiStore?.baseUrl || origin,
+  dataDomainId = runtimeEnv.VITE_DATA_DOMAIN_ID || 'cyf',
+  tenantId = runtimeEnv.VITE_DEFAULT_TENANT_ID
 } = {}) {
   const client = apiStore?.oauthClientId
   if (mode == null || mode === '') {
@@ -28,17 +30,28 @@ export function browserBusinessNamespace (apiStore, globalStore, {
   const ownerValid = Number.isSafeInteger(ownerId) && ownerId > 0 ||
     typeof ownerId === 'string' && /^[1-9][0-9]*$/.test(ownerId)
   if (!identity || !ownerValid || !exact(client) || !exact(origin) || !exact(issuer) ||
-      !exact(dataDomainId) || !exact(identity.subject) || !exact(identity.jiacn) ||
+      !exact(identity.subject) || !exact(identity.jiacn) ||
       !exact(globalStore?.getJiacn) || identity.jiacn !== globalStore.getJiacn ||
       identity.clientId !== client || identity.issuer !== issuer ||
-      identity.dataDomainId !== dataDomainId || !tenantPattern.test(identity.tenantId || '') ||
-      !revision(identity.tenantSessionEpoch) || !revision(identity.membershipRevision) ||
-      !revision(identity.clientTenantGrantRevision) || !Array.isArray(identity.scopes) ||
+      !tenantPattern.test(identity.tenantId || '') || !Array.isArray(identity.scopes) ||
       !identity.scopes.every(exact)) return ''
+  if (mode === 'fixed') {
+    if (!validFixedTenantIdentity(identity, { issuer, clientId: client, tenantId }) ||
+        identity.userId !== String(ownerId)) return ''
+  } else if (!exact(dataDomainId) || identity.dataDomainId !== dataDomainId ||
+      !revision(identity.tenantSessionEpoch) || !revision(identity.membershipRevision) ||
+      !revision(identity.clientTenantGrantRevision)) return ''
   try {
     if (!apiStore.hasActiveToken() || apiStore.activeTenantId() !== identity.tenantId) return ''
   } catch {
     return ''
+  }
+  if (mode === 'fixed') {
+    // AccountSecurity auth_epoch fences same-user re-login/revocation too. Old
+    // platform/tenant-zero recovery records deliberately use a different key.
+    const fingerprint = [issuer, origin, client, identity.tenantId, identity.subject,
+      identity.jiacn, identity.userId, identity.authEpoch, [...identity.scopes].sort()]
+    return `tenant-fixed-v1:${encodeHallOnboardingSubject(JSON.stringify(fingerprint))}`
   }
   // Bind persisted opaque intent/recovery keys to a verified permission fingerprint.
   const fingerprint = [issuer, origin, client, identity.tenantId, dataDomainId,

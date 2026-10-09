@@ -98,6 +98,7 @@ async function fetchAuthenticatedSse ({
     throwIfAborted(combined.signal)
     const response = await fetchImpl(url, {
       method: 'GET',
+      cache: 'no-store',
       headers: { ...headers, Authorization: `Bearer ${token}` },
       signal: combined.signal
     })

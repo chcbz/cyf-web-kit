@@ -170,6 +170,9 @@ export function useHttp (options = {}) {
         body: config.body,
         signal: requestSignal.signal
       }
+      // A browser HTTP cache must not serve the previous account/permission's
+      // representation at the same business URL after identity changes.
+      if (needAuth) fetchConfig.cache = 'no-store'
 
       // 对于 GET 请求，不要包含 body
       if (config.method === 'GET') {

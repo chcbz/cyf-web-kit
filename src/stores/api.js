@@ -10,6 +10,7 @@ import { combineAbortSignals, throwIfAborted } from '../utils/abortSignals.js'
 import { tenantBrowserTabId } from '../utils/tenantBrowserTab.js'
 import { beginTenantAuthorization, cancelTenantAuthorization, commitTenantAuthorization,
   invalidateTenantView, logoutTenantSession, readTenantSession } from '../utils/tenantAuthLedger.js'
+import { bindFixedTenantIdentity, validFixedTenantIdentity } from '../utils/fixedTenantIdentity.js'
 
 const runtimeEnv = import.meta.env ?? {}
 const verifiedTenantSessions = new WeakMap()
@@ -124,6 +125,30 @@ function tenantIsolationEnabled () {
   return tenantSelectionEnabled(runtimeEnv.VITE_TENANT_SELECTION_MODE)
 }
 
+function fixedTenantMode () {
+  return runtimeEnv.VITE_TENANT_SELECTION_MODE === 'fixed'
+}
+
+function fixedIdentityContext (transaction) {
+  return { issuer: runtimeEnv.VITE_OAUTH_ISSUER || transaction.authorizationServer,
+    clientId: transaction.clientId, tenantId: configuredTenant(runtimeEnv.VITE_DEFAULT_TENANT_ID) }
+}
+
+function verifiedResourceIdentity (resource, accessToken, transaction) {
+  return fixedTenantMode()
+    ? bindFixedTenantIdentity(resource, accessToken, fixedIdentityContext(transaction))
+    : resource
+}
+
+function discardVerifiedTenantView (store) {
+  verifiedTenantSessions.delete(store)
+  store.tenantIdentity = null
+  store.authorizationGeneration += 1
+  cancelReauthentication(store)
+  stopIdentityBoundWork()
+  discardLocalUserIdentity()
+}
+
 function identityStorageKey ({ clientId, tenantId }) {
   return `cyf.auth.v2:${encodeURIComponent(window.location.origin)}:${encodeURIComponent(clientId)}:${tenantId}`
 }
@@ -147,7 +172,7 @@ async function tenantLedgerContext (clientId, authorizationServer) {
 function queueTenantIdentityClear (store, tenantId, preserveSharedSession = false) {
   const previous = pendingTenantLogouts.get(store)
   const task = Promise.resolve(previous).catch(() => {}).then(async () => {
-    const context = await tenantLedgerContext(store.oauthClientId, store.baseUrl || window.location.origin)
+    const context = await tenantLedgerContext(store.oauthClientId, store.oauthAuthorizationServer())
     return tenantId && !preserveSharedSession
       ? logoutTenantSession({ ...context, tenantId })
       : invalidateTenantView(context)
@@ -171,6 +196,10 @@ function validRevision (value) {
 }
 
 export function validTenantIdentity (identity, transaction) {
+  if (fixedTenantMode()) {
+    const expected = fixedIdentityContext(transaction)
+    return transaction.expectedTenant === expected.tenantId && validFixedTenantIdentity(identity, expected)
+  }
   const dataDomainId = runtimeEnv.VITE_DATA_DOMAIN_ID || 'cyf'
   if (!identity || typeof identity !== 'object' || identity.clientId !== transaction.clientId ||
       !validIdentityAtom(identity.subject) || !validIdentityAtom(identity.jiacn) ||
@@ -195,9 +224,11 @@ export async function verifyPersistedTenantSession (record, transaction, { signa
     signal
   })
   if (!response.ok) return false
-  const verified = await response.json()
+  const verified = verifiedResourceIdentity(await response.json(), record.accessToken, transaction)
   if (!validTenantIdentity(verified, transaction)) return false
-  const fields = ['issuer', 'subject', 'clientId', 'tenantId', 'dataDomainId',
+  const fields = fixedTenantMode()
+    ? ['issuer', 'subject', 'clientId', 'tenantId', 'tokenKind', 'userId', 'authEpoch', 'jiacn']
+    : ['issuer', 'subject', 'clientId', 'tenantId', 'dataDomainId',
     'tenantName', 'tenantKind', 'tenantSessionEpoch', 'membershipRevision',
     'clientTenantGrantRevision', 'jiacn']
   return fields.every(field => verified[field] === record.identity[field]) &&
@@ -210,10 +241,17 @@ export function validTenantProfile (profile, identity) {
   return (Number.isSafeInteger(id) && id > 0 ||
     typeof id === 'string' && /^[1-9][0-9]*$/.test(id)) &&
     typeof identity?.jiacn === 'string' && identity.jiacn.trim() !== '' &&
-    profile.jiacn === identity.jiacn
+    profile.jiacn === identity.jiacn &&
+    (!fixedTenantMode() || identity.tokenKind === 'user' && String(id) === identity.userId)
 }
 
 export function visibleTenantIdentity (identity, activeTenantId, hasActiveToken) {
+  if (fixedTenantMode()) {
+    if (!hasActiveToken || activeTenantId !== configuredTenant(runtimeEnv.VITE_DEFAULT_TENANT_ID) ||
+        !validFixedTenantIdentity(identity, { issuer: runtimeEnv.VITE_OAUTH_ISSUER || identity?.issuer,
+          clientId: identity?.clientId, tenantId: activeTenantId })) return null
+    return identity
+  }
   if (!hasActiveToken || identity?.tenantId !== activeTenantId ||
       !TENANT_ID_PATTERN.test(activeTenantId || '') ||
       typeof identity.tenantName !== 'string' || identity.tenantName.trim() === '' ||
@@ -223,6 +261,14 @@ export function visibleTenantIdentity (identity, activeTenantId, hasActiveToken)
 
 /** Only verified /resource claims are exposed to browser business namespaces. */
 function tenantViewIdentity (identity) {
+  if (fixedTenantMode()) {
+    return Object.freeze({ issuer: identity.issuer, subject: identity.subject, clientId: identity.clientId,
+      jiacn: identity.jiacn, tenantId: identity.tenantId, tokenKind: identity.tokenKind,
+      userId: identity.userId, authEpoch: identity.authEpoch,
+      // Display fields are optional; no fabricated domain or permission revisions.
+      tenantName: identity.tenantName, tenantKind: identity.tenantKind,
+      scopes: Object.freeze([...identity.scopes].sort()) })
+  }
   return Object.freeze({
     issuer: identity.issuer,
     subject: identity.subject,
@@ -257,6 +303,9 @@ export const useApiStore = defineStore('api', {
     tenantIdentity: null
   }),
   actions: {
+    oauthAuthorizationServer () {
+      return runtimeEnv.VITE_OAUTH_BASE_URL || this.baseUrl || window.location.origin
+    },
     oauthRuntimeConfig () {
       const configured = configuredTenant(runtimeEnv.VITE_DEFAULT_TENANT_ID)
       const fixed = runtimeEnv.VITE_TENANT_SELECTION_MODE === 'fixed'
@@ -264,7 +313,7 @@ export const useApiStore = defineStore('api', {
       return Object.freeze({
         clientId: this.oauthClientId,
         redirectUri: `${window.location.origin}/oauth2/callback`,
-        authorizationServer: this.baseUrl || window.location.origin,
+        authorizationServer: this.oauthAuthorizationServer(),
         expectedTenant: fixed ? configured : (this.activeTenantId() || configured),
         // The central chooser deliberately omits the hint; the callback still
         // checks the initiating state, client and authorization server.
@@ -366,12 +415,11 @@ export const useApiStore = defineStore('api', {
         if (this.authorizationStarted) return null
         const tenantId = this.activeTenantId()
         if (tenantId && isNonblankRuntimeString(this.oauthClientId)) {
-          const context = await tenantLedgerContext(this.oauthClientId, this.baseUrl || window.location.origin)
+          const context = await tenantLedgerContext(this.oauthClientId, this.oauthAuthorizationServer())
           const snapshot = await readTenantSession({ ...context, tenantId })
           if (snapshot) return this.verifyTenantSnapshot(snapshot, context, tenantId)
         }
-        verifiedTenantSessions.delete(this)
-        this.tenantIdentity = null
+        if (verifiedTenantSessions.has(this) || this.tenantIdentity) discardVerifiedTenantView(this)
         if (window.location.pathname === '/oauth2/callback') return null
         await this.beginAuthorization()
         return null
@@ -388,12 +436,19 @@ export const useApiStore = defineStore('api', {
     async verifyTenantSnapshot (snapshot, context, tenantId) {
       const record = snapshot.session
       const transaction = { clientId: context.clientId,
-        authorizationServer: this.baseUrl || window.location.origin, expectedTenant: tenantId }
-      if (!validTenantIdentity(record.identity, transaction)) throw new Error('Stored tenant identity is invalid')
+        authorizationServer: this.oauthAuthorizationServer(), expectedTenant: tenantId }
+      if (!validTenantIdentity(record.identity, transaction)) {
+        discardVerifiedTenantView(this)
+        throw new Error('Stored tenant identity is invalid')
+      }
       const previous = verifiedTenantSessions.get(this)
+      const identityFingerprint = JSON.stringify(tenantViewIdentity(record.identity))
       if (previous?.tenantId === tenantId && previous.authRevision === snapshot.authRevision &&
           previous.viewRevision === snapshot.viewRevision && previous.accessToken === record.accessToken &&
-          previous.expiresAt === record.expiresAt) return record.accessToken
+          previous.expiresAt === record.expiresAt && previous.identityFingerprint === identityFingerprint) return record.accessToken
+      // A newer ledger session (including the same uid with a newer auth_epoch)
+      // must cancel old work before it can publish a hydrated identity.
+      if (previous || this.tenantIdentity) discardVerifiedTenantView(this)
       const operation = createIdentityOperation(this)
       try {
         const valid = await verifyPersistedTenantSession(record, transaction, { signal: operation.signal })
@@ -426,7 +481,8 @@ export const useApiStore = defineStore('api', {
           authRevision: snapshot.authRevision,
           viewRevision: snapshot.viewRevision,
           accessToken: record.accessToken,
-          expiresAt: record.expiresAt
+          expiresAt: record.expiresAt,
+          identityFingerprint
         })
         globalStore.setUser(profile)
         globalStore.setJiacn(profile.jiacn)
@@ -460,7 +516,7 @@ export const useApiStore = defineStore('api', {
       let snapshot
       try {
         await pendingTenantLogouts.get(this)
-        const context = await tenantLedgerContext(this.oauthClientId, this.baseUrl || window.location.origin)
+        const context = await tenantLedgerContext(this.oauthClientId, this.oauthAuthorizationServer())
         snapshot = await readTenantSession({ ...context, tenantId: verified.tenantId })
       } catch {
         // A failed storage read cannot keep a badge claiming a live identity.
@@ -485,7 +541,7 @@ export const useApiStore = defineStore('api', {
       if (!tenantId || verified?.tenantId !== tenantId || verified.accessToken !== token) {
         throw new DOMException('Identity changed', 'AbortError')
       }
-      const context = await tenantLedgerContext(this.oauthClientId, this.baseUrl || window.location.origin)
+      const context = await tenantLedgerContext(this.oauthClientId, this.oauthAuthorizationServer())
       const snapshot = await readTenantSession({ ...context, tenantId })
       if (!snapshot || snapshot.authRevision !== verified.authRevision ||
           snapshot.viewRevision !== verified.viewRevision || snapshot.session.accessToken !== token) {
@@ -503,6 +559,9 @@ export const useApiStore = defineStore('api', {
       }
       if (tenantIsolationEnabled() && !/^[A-Za-z0-9_-]{43}$/.test(transaction.state || '')) {
         throw new Error('Tenant authorization transaction state is missing')
+      }
+      if (tenantIsolationEnabled() && (verifiedTenantSessions.has(this) || this.tenantIdentity)) {
+        discardVerifiedTenantView(this)
       }
       const operation = createIdentityOperation(this, signal)
       try {
@@ -538,7 +597,7 @@ export const useApiStore = defineStore('api', {
           })
           operation.assertCurrent()
           if (!identityResponse.ok) throw new Error('Tenant identity verification failed')
-          const identity = await identityResponse.json()
+          const identity = verifiedResourceIdentity(await identityResponse.json(), token.accessToken, transaction)
           operation.assertCurrent()
           if (!validTenantIdentity(identity, transaction)) throw new Error('Tenant identity verification failed')
           const record = Object.freeze({
@@ -568,7 +627,8 @@ export const useApiStore = defineStore('api', {
           // IndexedDB's completed readwrite transaction is the durable commit;
           verifiedTenantSessions.set(this, { tenantId: identity.tenantId,
             authRevision: committed.authRevision, viewRevision: committed.viewRevision,
-            accessToken: record.accessToken, expiresAt: record.expiresAt })
+            accessToken: record.accessToken, expiresAt: record.expiresAt,
+            identityFingerprint: JSON.stringify(tenantViewIdentity(identity)) })
           this.tenantIdentity = tenantViewIdentity(identity)
         } else {
           useUtilStore().setLocalStorage('api_token', token.accessToken, Date.now() + token.expiresIn * 1000)
@@ -668,6 +728,7 @@ export const useApiStore = defineStore('api', {
         const response = await fetch(`${this.baseUrl}/user/my`, {
           method: 'GET',
           headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
           signal: operation.signal
         })
         operation.assertCurrent()
@@ -681,7 +742,7 @@ export const useApiStore = defineStore('api', {
         const data = result.data
         if (tenantIsolationEnabled()) {
           const tenantId = this.activeTenantId()
-          const context = await tenantLedgerContext(this.oauthClientId, this.baseUrl || window.location.origin)
+          const context = await tenantLedgerContext(this.oauthClientId, this.oauthAuthorizationServer())
           const snapshot = await readTenantSession({ ...context, tenantId })
           operation.assertCurrent()
           if (snapshot?.session?.accessToken !== token || !validTenantProfile(data, snapshot.session.identity)) {
