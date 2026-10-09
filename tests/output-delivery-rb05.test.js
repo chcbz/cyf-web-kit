@@ -109,7 +109,8 @@ describe('RB05 output directory boundary', () => {
     expect(outputs).to.include("outputs.state.value === 'available' && outputs.items.value.length")
     expect(bounty).to.not.include('<OutputList')
     expect(bounty).to.not.include('<FormalDeliveryList')
-    expect(bounty).to.not.include('TaskMaterialLinks')
+    // W06 includes materials/execution controls, not inline delivery management.
+    expect(bounty).to.include('<TaskMaterialLinks')
     expect(bounty).to.include('class="workspace-shortcut"')
     expect(bounty).to.include("$emit('open-workspace')")
     expect(chat).to.not.include('OutputList')

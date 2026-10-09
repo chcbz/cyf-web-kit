@@ -16,7 +16,9 @@ describe('C07F task workspace build flag', () => {
       expect(isTaskWorkspaceBuildEnabled(value)).to.equal(false)
     }
     expect(defaultEnv).to.match(/^VITE_JUYITING_TASK_WORKSPACE_ENABLED=false$/m)
-    expect(productionEnv).to.match(/^VITE_JUYITING_TASK_WORKSPACE_ENABLED=false$/m)
+    // Formal TASK execution requires this workspace read path; API production remains
+    // restricted to the exact canonical tenant/client allowlist.
+    expect(productionEnv).to.match(/^VITE_JUYITING_TASK_WORKSPACE_ENABLED=true$/m)
   })
 
   it('uses a disabled adapter with no watch, open, request, stream, poll, retry, or timer behavior', () => {

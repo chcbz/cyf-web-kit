@@ -23,6 +23,33 @@ const timers = () => {
 }
 
 describe('personal workspace execution adapter', () => {
+  it('recovers an exact known execution by read-only GET without requiring a paginated history row', async () => {
+    const calls = []
+    const adapter = usePersonalWorkspaceExecution({ identityEpoch: ref('owner-a'), timerApi: timers(), api: { execute: async options => {
+      calls.push(options)
+      return { data: executionView({ state: 'INPUTS_REVOKED' }) }
+    } } })
+    assert.deepEqual(adapter.history.value, [])
+    assert.equal((await adapter.recoverExecution('exec_1')).state, 'INPUTS_REVOKED')
+    assert.deepEqual(calls.map(call => [call.method, call.url]), [['GET', '/personal-workspace/executions/exec_1']])
+    adapter.dispose()
+  })
+  it('does not adopt an unrelated or old-identity exact recovery response', async () => {
+    const epoch = ref('owner-a')
+    const pending = deferred()
+    const adapter = usePersonalWorkspaceExecution({ identityEpoch: epoch, timerApi: timers(), api: { execute: async () => pending.promise } })
+    const reading = adapter.recoverExecution('exec_1')
+    epoch.value = 'owner-b'
+    pending.resolve({ data: executionView({ state: 'INPUTS_REVOKED' }) })
+    assert.equal(await reading, null)
+    assert.equal(adapter.execution.value, null)
+    adapter.dispose()
+    const wrong = usePersonalWorkspaceExecution({ identityEpoch: ref('owner-a'), timerApi: timers(), api: { execute: async () => ({ data: executionView({ executionId: 'exec_other', state: 'INPUTS_REVOKED' }) }) } })
+    assert.equal(await wrong.recoverExecution('exec_1'), null)
+    assert.equal(wrong.execution.value, null)
+    assert.match(wrong.error.value, /编号不一致/)
+    wrong.dispose()
+  })
   it('uses the real roster, submits explicit pinned file versions, polls it, and asks the user to refresh only after completion', async () => {
     const calls = []
     const timerApi = timers()

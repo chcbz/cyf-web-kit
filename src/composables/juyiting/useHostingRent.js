@@ -44,6 +44,8 @@ export function useHostingRent({ agentApi, economyApi, loadCapability, enabled =
   const quoteExpired = computed(() => !state.value.quote || BigInt(state.value.quote.expiresAt) <= BigInt(clock.value))
   const canConfirm = computed(() => Boolean(writable.value && state.value.quote && !quoteExpired.value && wallet.value &&
     BigInt(wallet.value.availableMicro) >= BigInt(state.value.quote.amountMicro)))
+  const needsOnboardingGrant = computed(() => Boolean(ready.value && state.value.quote?.purpose === 'INITIAL' &&
+    wallet.value && BigInt(wallet.value.availableMicro) < BigInt(state.value.quote.amountMicro)))
 
   const save = (required = false) => {
     try {
@@ -77,6 +79,19 @@ export function useHostingRent({ agentApi, economyApi, loadCapability, enabled =
     wallet.value = result
     return true
   }
+  const claimGrantForQuote = async ctx => {
+    if (!needsOnboardingGrant.value) return true
+    const result = hostingPayload(await economyApi.create('/onboarding-grant', {}, requestOptions(ctx)))
+    if (!current(ctx)) return false
+    if (!text(result?.transactionId) || result.status !== 'POSTED' || !decimal(result.amountMicro) || !text(result.campaignRef)) {
+      throw new Error('迎新安顿金回执不完整，未继续付款。')
+    }
+    await readWallet(ctx)
+    if (!current(ctx)) return false
+    if (needsOnboardingGrant.value) throw new Error('迎新安顿金到账后余额仍不足，未提交租金。')
+    return true
+  }
+
   const readLease = async ctx => {
     const agentId = targetAgentId.value
     if (!agentId) return false
@@ -176,6 +191,13 @@ export function useHostingRent({ agentApi, economyApi, loadCapability, enabled =
       state.value.operation = null
       state.value.quote = copy(result)
       save()
+      if (purpose === 'INITIAL' && needsOnboardingGrant.value) {
+        try {
+          await claimGrantForQuote(ctx)
+        } catch (cause) {
+          if (current(ctx)) error.value = `迎新安顿金暂未到账：${cause.message}`
+        }
+      }
       return true
     }
     if (!matchingHostingReceipt(result, operation)) throw new Error('回执与原请求不匹配；结果未知，请只核对原请求。')
@@ -257,8 +279,17 @@ export function useHostingRent({ agentApi, economyApi, loadCapability, enabled =
     if (!canReprovision.value || !selected() || state.value.quote) return Promise.resolve(false)
     return perform({ kind: 'REPROVISION', key: requestKey(), agentId: targetAgentId.value, lease: copy(state.value.lookup.lease) })
   }
+  const claimOnboardingGrant = async () => {
+    if (!ready.value || busy.value || !selected() || !needsOnboardingGrant.value) return false
+    const ctx = context()
+    busy.value = true
+    error.value = ''
+    try { return await claimGrantForQuote(ctx) }
+    catch (cause) { if (current(ctx)) error.value = `迎新安顿金暂未到账：${cause.message}`; return false }
+    finally { if (current(ctx)) busy.value = false }
+  }
   const retryUnknown = () => state.value.operation ? perform(copy(state.value.operation), true) : Promise.resolve(false)
 
-  return { target, state, wallet, busy, ready, error, clock, targetAgentId, canInitial, canRenew, canReprovision, canConfirm, quoteExpired,
-    open, refresh, previewInitial, previewRenewal, confirmQuote, cancelQuote, reprovision, retryUnknown, tick, invalidate, dispose }
+  return { target, state, wallet, busy, ready, error, clock, targetAgentId, canInitial, canRenew, canReprovision, canConfirm, needsOnboardingGrant, quoteExpired,
+    open, refresh, previewInitial, previewRenewal, confirmQuote, cancelQuote, reprovision, claimOnboardingGrant, retryUnknown, tick, invalidate, dispose }
 }

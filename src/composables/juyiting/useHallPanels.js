@@ -136,3 +136,63 @@ export const useHallPanels = ({ experienceMode, isMobileCoarse, viewportHeight }
     viewportHeight: unref(viewportHeight)
   }))
 })
+
+// Presentation-only chrome resolver. It deliberately receives values rather
+// than refs so it cannot mutate frame, draft, reader, task, or workspace state.
+export const resolveHallNavigationPresentation = ({
+  isMobileCoarse = false,
+  experienceMode = '',
+  isOverviewHome = false,
+  renderedPanel = '',
+  panelReturnPanel = '',
+  formalTaskRef = null,
+  draftCanGoBack = false,
+  bountyCanGoBack = false,
+  treasureCanGoBack = false,
+  libraryCanGoBack = false,
+  portraitTaskDetailOpen = false,
+  isKeyboardActive = false,
+  externalRootModalOpen = false
+} = {}) => {
+  const isPortraitMobile = Boolean(isMobileCoarse && experienceMode === 'portrait-command')
+  const isPrimarySurface = Boolean(isOverviewHome && (!renderedPanel || ['tasks', 'treasure', 'mine'].includes(renderedPanel)))
+  const hasFrameParent = Boolean(panelReturnPanel)
+  const formalTaskDetail = Boolean(renderedPanel === 'tasks' && formalTaskRef)
+  const selfOwnedDetail = Boolean(
+    (['draft', 'item', 'formalDraft'].includes(renderedPanel) && draftCanGoBack) ||
+    (renderedPanel === 'tasks' && bountyCanGoBack && !formalTaskDetail) ||
+    (renderedPanel === 'library' && libraryCanGoBack) ||
+    portraitTaskDetailOpen
+  )
+  const hallOwnedDetail = Boolean(
+    formalTaskDetail ||
+    (renderedPanel === 'treasure' && treasureCanGoBack) ||
+    renderedPanel === 'workspace' ||
+    (!selfOwnedDetail && hasFrameParent)
+  )
+  const hasChildDetail = selfOwnedDetail || hallOwnedDetail
+  const returnOwner = hallOwnedDetail ? 'hall' : (selfOwnedDetail ? 'self' : 'none')
+  const showWorkbenchDock = Boolean(
+    isOverviewHome && isPrimarySurface && !hasChildDetail && !hasFrameParent && !isKeyboardActive && !externalRootModalOpen
+  )
+  // Portrait root dialogs use the same single leading return treatment as
+  // nested pages. The action closes the root panel because there is no frame
+  // parent, while desktop/landscape roots retain the explicit close control.
+  const showRootReturn = Boolean(isPortraitMobile && !isPrimarySurface && !hasChildDetail)
+  const showHallReturn = Boolean(returnOwner === 'hall' || showRootReturn)
+  const showHallClose = Boolean(!isPrimarySurface && !showRootReturn && (!hasChildDetail || !isPortraitMobile))
+  const showPrimaryChildHeader = Boolean(isPrimarySurface && showHallReturn)
+
+  return Object.freeze({
+    isPortraitMobile,
+    isPrimarySurface,
+    hasChildDetail,
+    hasFrameParent,
+    returnOwner,
+    showWorkbenchDock,
+    showRootReturn,
+    showHallReturn,
+    showHallClose,
+    showPrimaryChildHeader
+  })
+}

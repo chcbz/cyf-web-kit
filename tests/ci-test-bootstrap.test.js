@@ -35,10 +35,10 @@ describe('repository npm test bootstrap', () => {
     expect(source).not.to.include('CHROMIUM_PROVENANCE:')
   })
 
-  it('retains the signed full allowlist and 20-minute policy, while allowing a fixed missing subset only', () => {
+  it('retains the signed full allowlist without a package-manager wall-clock cap', () => {
     const policy = systemDependencyInstallPolicy('/root/.cache/cyf-test-runtime')
     expect(policy.cachedir).to.equal('/root/.cache/cyf-test-runtime/dnf')
-    expect(policy.timeout).to.equal(20 * 60 * 1000)
+    expect(policy).not.to.have.property('timeout')
     expect(policy.args).to.deep.equal([
       '-y', '--setopt=gpgcheck=1', '--setopt=install_weak_deps=False', '--setopt=cachedir=/root/.cache/cyf-test-runtime/dnf', 'install',
       'gcc', 'python3', 'git', 'tar', 'xz', 'rpm', 'cpio', 'ca-certificates',
@@ -73,16 +73,18 @@ describe('repository npm test bootstrap', () => {
     ])
   })
 
-  it('installs only missing allowlisted RPMs, including when none are installed', async () => {
+  it('installs only missing allowlisted RPMs without a DNF/YUM wall-clock cap', async () => {
     const cache = join(dir, 'cache with spaces')
-    const partialCalls = []
-    await installDependencies(cache, (command, args, options) => {
-      if (command === '/usr/bin/dnf') expect(existsSync(join(cache, 'dnf'))).to.equal(true)
-      partialCalls.push({ command, args, options })
-    }, { uid: 0, manager: '/usr/bin/dnf', packageProbe: name => !['gcc', 'libX11'].includes(name) })
-    expect(partialCalls[0]).to.deep.equal({
-      command: '/usr/bin/dnf', args: systemDependencyInstallPolicy(cache, ['gcc', 'libX11']).args, options: { timeout: 1200000 },
-    })
+    for (const manager of ['/usr/bin/dnf', '/usr/bin/yum']) {
+      const partialCalls = []
+      await installDependencies(cache, (command, args, options) => {
+        if (command === manager) expect(existsSync(join(cache, 'dnf'))).to.equal(true)
+        partialCalls.push({ command, args, options })
+      }, { uid: 0, manager, packageProbe: name => !['gcc', 'libX11'].includes(name) })
+      expect(partialCalls[0]).to.deep.equal({
+        command: manager, args: systemDependencyInstallPolicy(cache, ['gcc', 'libX11']).args, options: { timeout: 0 },
+      })
+    }
     const noneCalls = []
     await installDependencies(join(dir, 'none'), (command, args, options) => noneCalls.push({ command, args, options }), {
       uid: 0, manager: '/usr/bin/dnf', packageProbe: () => false,
@@ -103,18 +105,20 @@ describe('repository npm test bootstrap', () => {
     expect(calls).to.deep.equal([])
   })
 
-  it('stops on signed installation failure before runtime validation', async () => {
-    const calls = []
-    const failure = new Error('unavailable: /usr/bin/dnf')
-    let error
-    try {
-      await installDependencies(join(dir, 'cache'), command => {
-        calls.push(command)
-        if (command === '/usr/bin/dnf') throw failure
-      }, { uid: 0, manager: '/usr/bin/dnf', packageProbe: () => false })
-    } catch (caught) { error = caught }
-    expect(error).to.equal(failure)
-    expect(calls).to.deep.equal(['/usr/bin/dnf'])
+  it('stops on signed DNF/YUM installation failure before runtime validation', async () => {
+    for (const manager of ['/usr/bin/dnf', '/usr/bin/yum']) {
+      const calls = []
+      const failure = new Error(`unavailable: ${manager}`)
+      let error
+      try {
+        await installDependencies(join(dir, 'cache'), command => {
+          calls.push(command)
+          if (command === manager) throw failure
+        }, { uid: 0, manager, packageProbe: () => false })
+      } catch (caught) { error = caught }
+      expect(error).to.equal(failure)
+      expect(calls).to.deep.equal([manager])
+    }
   })
 
   it('enables only CI/Flow or explicit opt-in, including Node23 Flow without CI', () => {

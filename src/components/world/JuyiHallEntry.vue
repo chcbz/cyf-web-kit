@@ -1,7 +1,7 @@
 <template>
   <div class="juyi-hall-entry">
     <div ref="juyiHallContainer" class="juyi-hall-background">
-      <JuyiHall @open-onboarding="reopen" />
+      <JuyiHall :onboarding-visible="onboardingState.visible" @open-onboarding="reopen" />
     </div>
 
     <HallOnboarding

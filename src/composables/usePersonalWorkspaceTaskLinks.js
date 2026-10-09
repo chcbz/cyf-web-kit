@@ -132,6 +132,68 @@ export function usePersonalWorkspaceTaskLinks ({ api = createApi('/agent'), task
     }
   }
   const loadMore = () => nextCursor.value ? load({ cursor: nextCursor.value, append: true }) : Promise.resolve(false)
+  /**
+   * Reads one complete immutable directory observation for authorization-sensitive
+   * consumers. Partial pages are never published as a complete result.
+   */
+  const loadAll = async () => {
+    const selectedTaskId = currentTaskId.value
+    const snapshot = { generation, contextKey: contextKey.value }
+    if (!ID(selectedTaskId) || !snapshot.contextKey || loading.value) return null
+    loading.value = true
+    listState.value = 'loading'
+    error.value = ''
+    links.value = []
+    nextCursor.value = null
+    const observedRelations = new Set()
+    const observedCursors = new Set()
+    const complete = []
+    let cursor = null
+    try {
+      do {
+        if (cursor != null) {
+          if (observedCursors.has(cursor)) throw new Error('任务资料关联目录游标重复，未接受不完整目录。')
+          observedCursors.add(cursor)
+        }
+        const { data } = await request({
+          url: `/tasks/${encodeURIComponent(selectedTaskId)}/file-links`, method: 'GET',
+          params: cursor ? { cursor } : undefined
+        }, snapshot)
+        if (!validList(data, selectedTaskId)) throw new Error('任务资料关联目录返回格式无效，未接受不完整目录。')
+        for (const item of data.items) {
+          if (observedRelations.has(item.relationId)) throw new Error('任务资料关联目录含跨页重复关联，未接受不完整目录。')
+          observedRelations.add(item.relationId)
+          complete.push({ ...item })
+        }
+        cursor = data.nextCursor || null
+      } while (cursor != null)
+      if (disposed || snapshot.generation !== generation || snapshot.contextKey !== contextKey.value) throw abortError('Task link context changed')
+      links.value = complete
+      nextCursor.value = null
+      listState.value = complete.length ? 'ready' : 'empty'
+      return complete.map(item => ({ ...item }))
+    } catch (cause) {
+      if (cause?.name !== 'AbortError' && !disposed && snapshot.generation === generation && snapshot.contextKey === contextKey.value) {
+        links.value = []
+        nextCursor.value = null
+        error.value = errorMessage(cause)
+        listState.value = 'error'
+      }
+      return null
+    } finally {
+      if (snapshot.generation === generation && snapshot.contextKey === contextKey.value) loading.value = false
+    }
+  }
+  // Cross-origin deployments may not expose ETag to fetch even when the server sets it.
+  // In that case verify the committed revision through an authenticated, read-only GET;
+  // never issue a second POST/DELETE to recover an uncertain write.
+  const confirmWithoutExposedEtag = async (link, selectedTaskId, snapshot) => {
+    const { data } = await request({
+      url: `/tasks/${encodeURIComponent(selectedTaskId)}/file-links`, method: 'GET'
+    }, snapshot)
+    if (!validList(data, selectedTaskId)) return false
+    return data.items.some(item => Object.keys(link).every(key => item[key] === link[key]))
+  }
   const attach = async ({ fileId, version, role } = {}) => {
     const selectedTaskId = currentTaskId.value
     if (!ID(selectedTaskId) || !ID(fileId) || !VERSION(version) || !['INPUT', 'REFERENCE'].includes(role)) {
@@ -146,8 +208,12 @@ export function usePersonalWorkspaceTaskLinks ({ api = createApi('/agent'), task
         url: `/tasks/${encodeURIComponent(selectedTaskId)}/file-links`, method: 'POST',
         data: { fileId, version, role }, headers: { 'Idempotency-Key': randomKey() }
       }, snapshot)
-      if (!validLink(data, selectedTaskId) || !validEtag(header(headers, 'etag'), data)) {
-        throw new Error('任务资料关联回执无效，尚不能确认保存。')
+      const exposedEtag = header(headers, 'etag')
+      if (!validLink(data, selectedTaskId) || data.state !== 'ACTIVE' ||
+          data.fileId !== fileId || data.version !== version || data.role !== role ||
+          (exposedEtag ? !validEtag(exposedEtag, data) :
+            !(await confirmWithoutExposedEtag(data, selectedTaskId, snapshot)))) {
+        throw new Error('任务资料关联回执无效，请刷新核对原关联；不要重复提交。')
       }
       replace(data)
       actionState.value = 'ready'
@@ -174,8 +240,11 @@ export function usePersonalWorkspaceTaskLinks ({ api = createApi('/agent'), task
         url: `/tasks/${encodeURIComponent(selectedTaskId)}/file-links/${encodeURIComponent(link.relationId)}`,
         method: 'DELETE', headers: { 'Idempotency-Key': randomKey(), 'If-Match': ifMatch }
       }, snapshot)
-      if (!validDetach(data, selectedTaskId) || data.link.relationId !== link.relationId || !validEtag(header(headers, 'etag'), data.link)) {
-        throw new Error('解除任务资料关联回执无效，尚不能确认解除。')
+      const exposedEtag = header(headers, 'etag')
+      if (!validDetach(data, selectedTaskId) || data.link.relationId !== link.relationId ||
+          (exposedEtag ? !validEtag(exposedEtag, data.link) :
+            !(await confirmWithoutExposedEtag(data.link, selectedTaskId, snapshot)))) {
+        throw new Error('解除任务资料关联回执无效，请刷新核对原关联；不要重复提交。')
       }
       replace(data.link)
       actionState.value = 'ready'
@@ -198,5 +267,5 @@ export function usePersonalWorkspaceTaskLinks ({ api = createApi('/agent'), task
   }
   if (getCurrentInstance()) onBeforeUnmount(dispose)
 
-  return { links, nextCursor, listState, loading, actionState, error, currentTaskId, load, loadMore, attach, detach, etagFor, reset, dispose }
+  return { links, nextCursor, listState, loading, actionState, error, currentTaskId, load, loadMore, loadAll, attach, detach, etagFor, reset, dispose }
 }

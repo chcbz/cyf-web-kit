@@ -64,6 +64,7 @@ async function fetchAuthenticatedSse ({
   apiStore,
   url,
   signal,
+  headers = {},
   fetchImpl = fetch
 }) {
   throwIfAborted(signal)
@@ -97,7 +98,7 @@ async function fetchAuthenticatedSse ({
     throwIfAborted(combined.signal)
     const response = await fetchImpl(url, {
       method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { ...headers, Authorization: `Bearer ${token}` },
       signal: combined.signal
     })
     if (response.status === 401) {

@@ -24,31 +24,68 @@
         </div>
         <button @click="$emit('load-tasks')">
           <BountyActionIcon name="refresh" />
-          <span>重查</span>
+          <span class="toolbar-label">重查</span>
         </button>
         <div class="task-create-actions">
           <button class="new-task-button" type="button" @click="showCreateForm = !showCreateForm">
             <BountyActionIcon name="plus" />
-            <span>张榜</span>
+            <span>提出需求</span>
           </button>
           <button
-            v-if="embeddedHall"
+            v-if="!embeddedHall"
             class="new-task-button"
             type="button"
             @click="$emit('start-formal-draft')"
           >
             <span>起草正式任务</span>
           </button>
-          <button class="new-task-button" type="button" @click="embeddedHall ? $emit('start-private-draft') : showDraftEditor = !showDraftEditor">
+          <button
+            v-if="!embeddedHall"
+            class="new-task-button"
+            type="button"
+            @click="embeddedHall ? $emit('start-private-draft') : showDraftEditor = !showDraftEditor"
+          >
             <span>{{ showDraftEditor ? '收起草稿' : '起草交办' }}</span>
           </button>
         </div>
       </div>
 
+      <section v-if="requirementCreateState && requirementCreateState.status !== 'IDLE'" class="requirement-create-recovery" role="status">
+        <strong>原张榜操作待核对</strong>
+        <template v-if="requirementCreateState.intent">
+          <p>原榜文：{{ requirementCreateState.intent.body.title }}</p>
+          <p>原需求：{{ requirementCreateState.intent.body.description || '未填写' }}</p>
+          <p>精确资料：{{ requirementCreateInputSummary }}</p>
+          <p>当前编辑稿不会替换原需求；核对不会再次创建或启动 Agent。</p>
+          <button type="button" :disabled="requirementCreateBusy" @click="$emit('check-requirement-create')">核对原张榜</button>
+          <button v-if="!requirementCreateState.intent.receipt" type="button" :disabled="requirementCreateBusy" @click="$emit('resume-requirement-create')">确认继续原张榜</button>
+        </template>
+        <p v-if="requirementCreateState.error">{{ requirementCreateState.error }}</p>
+      </section>
+
       <form v-if="showCreateForm" class="task-create-form" @submit.prevent="submitCreateTask">
-        <input v-model.trim="taskForm.title" name="taskTitle" placeholder="榜文名目" />
-        <textarea v-model.trim="taskForm.description" name="taskDescription" placeholder="榜文缘由"></textarea>
-        <input v-model.trim="taskForm.requiredAbilities" name="requiredAbilities" placeholder="所需本领，逗号分隔" />
+        <input v-model="taskForm.title" name="taskTitle" placeholder="需求标题" />
+        <textarea
+          v-model="taskForm.description"
+          name="taskDescription"
+          placeholder="说明你希望得到什么结果（必填）"
+          required
+        ></textarea>
+        <input
+          v-if="!embeddedHall || taskForm.funded"
+          v-model.trim="taskForm.requiredAbilities"
+          name="requiredAbilities"
+          placeholder="所需本领，逗号分隔"
+        />
+        <HallMaterialPicker
+          class="task-material-picker"
+          v-if="!taskForm.funded && identityScope"
+          v-model="taskMaterials"
+          :identity-scope="identityScope"
+          :identity-epoch="authorizationGeneration"
+          :disabled="createPending || requirementCreateBusy"
+        />
+        <small v-else-if="taskMaterials.length" role="status">资金榜暂不支持普通榜资料；请切回普通榜移除资料，再选择资金悬赏。</small>
         <label v-if="fundedPreviewEnabled" class="funded-create-toggle">
           <input v-model="taskForm.funded" type="checkbox" /> 资金悬赏（开发预览）
         </label>
@@ -72,7 +109,7 @@
           <button type="button" @click="$emit('resume-funded-create')">确认按原请求恢复</button>
           <button type="button" @click="$emit('cancel-funded-create-recovery')">暂不恢复</button>
         </section>
-        <button type="submit" :disabled="createPending || !taskForm.title || (taskForm.funded && !validGrossAmount)">{{ createPending ? '张榜中…' : '张榜悬赏' }}</button>
+        <button type="submit" :disabled="createPending || requirementCreateBusy || !taskForm.title.trim() || !taskForm.description.trim() || (taskForm.funded && (!validGrossAmount || taskMaterials.length))">{{ createPending ? '正在提交…' : taskForm.funded ? '张榜悬赏' : '提出需求' }}</button>
       </form>
 
       <HallDraftEditor
@@ -134,11 +171,12 @@
 
     </div>
     <transition name="modal">
-      <div v-if="detailTask" class="bounty-modal-overlay" @click.self="closeTask">
-        <section class="bounty-modal">
+      <div v-if="detailTask" class="bounty-modal-overlay" :class="{ 'is-embedded-page': embeddedHall }" @click.self="embeddedHall ? null : closeTask()">
+        <section class="bounty-modal" :role="embeddedHall ? 'region' : 'dialog'" :aria-label="embeddedHall ? '事项详情' : null" :aria-modal="embeddedHall ? null : 'true'">
           <div class="bounty-modal-header">
-            <h3>榜文点将</h3>
-            <button class="modal-close" @click="closeTask">
+            <button v-if="embeddedHall" type="button" class="bounty-back-button" @click="closeTask">← 返回</button>
+            <h3>{{ embeddedHall ? '事项详情' : '榜文点将' }}</h3>
+            <button v-if="!embeddedHall" class="modal-close" @click="closeTask">
               <BountyActionIcon name="close" />
             </button>
           </div>
@@ -169,8 +207,47 @@
               <span v-if="fundedClaimState.refreshPending">榜文刷新待完成，请重查；勿重复领令。<button type="button" @click="$emit('refresh-funded-claim', detailTask)">重查已确认榜文</button></span>
             </p>
             <p v-else-if="fundedClaimState?.taskId === detailTask.id && fundedClaimState.status === 'unresolved'" role="status">原领令结果未知，请由原好汉核对，不要重新取价。</p>
+            <section v-if="pointAndStartForDetail" class="point-and-start-recovery" role="status">
+              <strong>{{ pointAndStartRecoveryTitle }}</strong>
+              <p>原点将目标：{{ pointAndStartForDetail.intent.body.targetAgentId || pointAndStartForDetail.intent.body.agentId }}；需求修订：{{ pointAndStartForDetail.intent.body.requirementRevision }}。</p>
+              <p>任务资料：{{ pointAndStartInputSummary }}。</p>
+              <p>{{ pointAndStartRecoveryHint }}</p>
+              <p v-if="pointAndStartForDetail.error" class="point-and-start-error" role="alert">原点将返回：{{ pointAndStartForDetail.error }}</p>
+              <button
+                type="button"
+                :disabled="pointAndStartBusy"
+                @click="$emit('check-point-and-start', detailTask)"
+              >核对原点将</button>
+              <button
+                v-if="pointAndStartForDetail.status === 'UNKNOWN'"
+                type="button"
+                :disabled="pointAndStartBusy"
+                @click="$emit('resume-point-and-start', detailTask)"
+              >继续原点将</button>
+            </section>
             <div class="modal-task-info">
-              <div class="task-detail-head">
+              <section v-if="embeddedHall" class="matter-advice-card" aria-label="办理建议">
+                <div class="matter-advice-heading"><span>办理建议</span><strong>{{ simpleMatterStatus(detailTask) }}</strong></div>
+                <p class="matter-request">{{ detailTask.description || detailTask.title }}</p>
+                <dl>
+                  <div><dt>预计成果</dt><dd>在议事中协作完成文本、图片、音频或文件，按实际交付验收</dd></div>
+                  <div><dt>建议承办</dt><dd>{{ preferredAgentName || '吴用或林冲' }}</dd></div>
+                  <div><dt>资料</dt><dd>可选；没有资料也可以点将议事</dd></div>
+                </dl>
+                <p class="matter-fee-note">点将后自动建立悬赏议事，将需求和资料交给所选 Agent；由 Agent 判断直接答复、查阅资料或澄清。执行遵循已有授权，不因点将自动扩大付费权限。</p>
+                <div v-if="detailTask.status === 'open' && preferredAgents.length" class="matter-agent-actions">
+                  <button v-for="agent in preferredAgents" :key="agent.agentId" type="button" :disabled="!canAssign(detailTask, agent)" @click="$emit('assign-task', detailTask, agent)">交给{{ agentDisplayName(agent) }}</button>
+                </div>
+                <button v-else-if="assignedAgentForTask(detailTask)" type="button" class="matter-primary-action" @click="$emit('discuss-task', detailTask, assignedAgentForTask(detailTask))">与{{ agentDisplayName(assignedAgentForTask(detailTask)) }}进入事项议事</button>
+                <button
+                  v-if="detailTask.status === 'completed'"
+                  type="button"
+                  class="matter-archive-action"
+                  @click="$emit('archive-task', detailTask)"
+                >收入案卷</button>
+                <p v-else-if="detailTask.status === 'archived'" class="matter-archive-note">已收入案卷，可在“办事 → 案卷”中查看。</p>
+              </section>
+              <div v-if="!embeddedHall" class="task-detail-head">
                 <div>
                   <strong>{{ detailTask.title }}</strong>
                   <small>{{ detailTask.id }} / {{ taskStatusText(detailTask.status) }}</small>
@@ -178,13 +255,32 @@
                 <span :class="taskStateClass(detailTask.status)">{{ taskStatusText(detailTask.status) }}</span>
               </div>
 
-              <p>{{ detailTask.description || '榜文尚未写明缘由' }}</p>
-              <section class="workspace-shortcut" aria-label="榜文百宝箱入口">
+              <p v-if="!embeddedHall">{{ detailTask.description || '榜文尚未写明缘由' }}</p>
+              <section v-if="!embeddedHall" class="workspace-shortcut" aria-label="榜文百宝箱入口">
                 <div>
                   <strong>资料与交付</strong>
-                  <p>文件、版本和交付件统一收在百宝箱，不再挤占榜文详情。</p>
+                  <p>资料和成果可在议事中预览、下载；需要保留时存入工作空间，在事项详情核对本次成果并验收。</p>
                 </div>
                 <button type="button" @click="$emit('open-workspace')">打开百宝箱</button>
+              </section>
+              <TaskMaterialLinks
+                v-if="formalTaskExecutionScope && !embeddedHall"
+                :key="formalTaskExecutionScope.taskId"
+                :task-id="formalTaskExecutionScope.taskId"
+                :conversation-id="formalTaskExecutionScope.conversationId"
+                :target-agent-id="formalTaskExecutionScope.targetAgentId"
+                :conversation-confirmed="formalTaskExecutionScope.conversationConfirmed"
+                :formal-execution-authorized="formalTaskExecutionScope.formalExecutionAuthorized"
+                :formal-execution-authorization-reason="formalTaskExecutionScope.authorizationReason"
+                :identity-epoch="authorizationGeneration"
+                :identity-scope="identityScope"
+                :default-instruction="detailTask.description || detailTask.title"
+                @formal-execution-created="$emit('formal-execution-created', $event)"
+                @formal-execution-recovered="$emit('formal-execution-recovered', $event)"
+              />
+              <section v-if="embeddedHall" class="deliberation-execution-route" role="status">
+                <strong>在议事中协作交付</strong>
+                <p>点将后自动进入悬赏议事。你可以继续补充文字和资料，与 Agent 反复沟通，在事项详情核对本次成果并确认验收，保存可选。</p>
               </section>
               <section v-if="isFundedTask(detailTask)" class="funded-preview-details" aria-label="资金悬赏详情">
                 <p class="funding-summary">已托管：{{ formatMoney(detailTask.funding.remainingMicro || detailTask.funding.grossBountyAmountMicro) }}</p>
@@ -200,19 +296,20 @@
               </section>
 
               <TeamRecommendationPanel
+                v-if="!embeddedHall"
                 :task="detailTask"
                 :authorization-generation="authorizationGeneration"
               />
 
-              <button type="button" @click="$emit('open-formal-results', detailTask)">查看正式成果与验收</button>
-              <WorkItemPlanPanel :task="detailTask" :enabled="workItemPlanEnabled" :authorization-generation="authorizationGeneration" />
+              <button v-if="!embeddedHall || detailTask.status !== 'open'" type="button" class="matter-results-action" @click="$emit('open-formal-results', detailTask)">查看正式成果与验收</button>
+              <WorkItemPlanPanel v-if="!embeddedHall" :task="detailTask" :enabled="workItemPlanEnabled" :authorization-generation="authorizationGeneration" />
 
-              <div class="ability-tags">
+              <div v-if="!embeddedHall" class="ability-tags">
                 <span v-for="ability in detailTask.requiredAbilities || []" :key="ability">{{ ability }}</span>
                 <span v-if="!(detailTask.requiredAbilities || []).length">不拘本领</span>
               </div>
 
-              <div class="task-operation-grid">
+              <div v-if="!embeddedHall" class="task-operation-grid">
                 <button
                   :aria-label="agentDisplayName(selectedAgent) ? `点当前好汉 ${agentDisplayName(selectedAgent)} 领令` : '先择好汉再点将'"
                   :disabled="isFundedTask(detailTask) || !canAssign(detailTask, selectedAgent)"
@@ -259,7 +356,7 @@
                   aria-label="进入议事"
                   :disabled="!taskAssigneeIds(detailTask).length"
                   :title="!taskAssigneeIds(detailTask).length ? unassignedDiscussHint : '进入该悬赏的既有议事入口'"
-                  @click="$emit('discuss-task', detailTask)"
+                  @click="$emit('discuss-task', detailTask, assignedAgentForTask(detailTask))"
                 >
                   <BountyActionIcon name="discuss" />
                   <span class="visually-hidden">进入议事</span>
@@ -275,12 +372,12 @@
                   <span class="visually-hidden">收入案卷</span>
                 </button>
               </div>
-              <p v-if="!taskAssigneeIds(detailTask).length" class="task-operation-hint">
+              <p v-if="!embeddedHall && !taskAssigneeIds(detailTask).length" class="task-operation-hint">
                 {{ unassignedDiscussHint }}
               </p>
             </div>
 
-            <div class="modal-agent-scroll">
+            <div v-if="!embeddedHall" class="modal-agent-scroll">
               <div class="section-label">可点好汉</div>
               <div
                 v-for="agent in recommendedAgents"
@@ -344,8 +441,11 @@
                   </button>
                 </div>
               </div>
-              <p v-if="!recommendedAgents.length">暂未寻得可领令的好汉。</p>
             </div>
+            <section v-if="detailTask.status === 'open' && !assignableRecommendedAgents.length" class="no-agent-recruitment" role="status">
+              <p>暂未寻得可领令的好汉。</p>
+              <button type="button" @click="$emit('recruit-agent', detailTask)">去招贤令</button>
+            </section>
           </div>
         </section>
       </div>
@@ -359,6 +459,8 @@ import BountyActionIcon from './BountyActionIcon.vue'
 import WorkItemPlanPanel from './WorkItemPlanPanel.vue'
 import TeamRecommendationPanel from './TeamRecommendationPanel.vue'
 import HallDraftEditor from './HallDraftEditor.vue'
+import HallMaterialPicker from './HallMaterialPicker.vue'
+import TaskMaterialLinks from '@/components/personal-workspace/TaskMaterialLinks.vue'
 import { formatSilverMicro, isCanonicalMicroAmount } from '@/utils/silverAmount'
 
 const props = defineProps({
@@ -382,9 +484,14 @@ const props = defineProps({
   workItemPlanEnabled: { type: Boolean, default: false },
   authorizationGeneration: { type: Number, default: 0 },
   identityScope: { type: String, default: '' },
+  formalTaskExecutionContext: { type: Object, default: null },
   fundedQuotePreview: { type: Object, default: null },
   fundedClaimState: { type: Object, default: null },
   fundedCreateRecovery: { type: Object, default: null },
+  requirementCreateState: { type: Object, default: null },
+  requirementCreateBusy: { type: Boolean, default: false },
+  pointAndStartState: { type: Object, default: null },
+  pointAndStartBusy: { type: Boolean, default: false },
   abilityText: { type: Function, required: true },
   canAssign: { type: Function, required: true },
   formatTime: { type: Function, required: true },
@@ -405,16 +512,23 @@ const emit = defineEmits([
   'confirm-funded-quote',
   'cancel-funded-quote',
   'refresh-funded-claim',
+  'recruit-agent',
   'create-task',
+  'check-requirement-create',
+  'resume-requirement-create',
   'start-formal-draft',
   'start-private-draft',
   'open-formal-results',
   'mark-changed',
   'resume-funded-create',
+  'check-point-and-start',
+  'resume-point-and-start',
   'cancel-funded-create-recovery',
   'discuss-task',
   'load-settlement',
   'open-workspace',
+  'formal-execution-created',
+  'formal-execution-recovered',
   'load-tasks',
   'select-agent',
   'select-task',
@@ -426,6 +540,8 @@ const emit = defineEmits([
 const modalTask = ref(null)
 const showCreateForm = ref(false)
 const createPending = ref(false)
+const taskMaterials = ref([])
+let createAttempt = 0
 const selectedAssigneeIds = ref([])
 const taskForm = ref({
   title: '',
@@ -434,7 +550,92 @@ const taskForm = ref({
   funded: false,
   grossBountyAmountMicro: ''
 })
+const requirementCreateInputSummary = computed(() => {
+  const intent = props.requirementCreateState?.intent
+  const refs = (intent?.schemaVersion === 2 ? intent.body?.attachments : intent?.body?.inputRefs) || []
+  return refs.length ? refs.map(item => `${item.fileId} v${item.version}`).join('、') : '无资料'
+})
+// A late success can only clear the exact submitting draft under the same
+// authenticated actor; editing during POST preserves the newer draft.
+watch(() => [props.identityScope, props.authorizationGeneration], () => {
+  createAttempt++
+  createPending.value = false
+  taskMaterials.value = []
+  taskForm.value = { title: '', description: '', requiredAbilities: '', funded: false, grossBountyAmountMicro: '' }
+  modalTask.value = null
+  selectedAssigneeIds.value = []
+}, { flush: 'sync' })
 const detailTask = computed(() => modalTask.value)
+const pointAndStartForDetail = computed(() => {
+  const state = props.pointAndStartState
+  return state?.intent?.taskId === detailTask.value?.id && state.intent?.body ? state : null
+})
+const pointAndStartRecoveryTitle = computed(() => ({
+  UNKNOWN: '正在确认点将结果',
+  PREPARING: '正在准备会话',
+  ADMITTED: '需求已发送',
+  ATTACHED: '已进入悬赏议事',
+  HISTORICAL: '历史指派',
+  FAILED: '点将未完成'
+}[pointAndStartForDetail.value?.status] || '正在确认点将结果'))
+const pointAndStartRecoveryHint = computed(() => ({
+  UNKNOWN: '请刷新状态查看进度。',
+  PREPARING: '准备完成后即可继续交流。',
+  ADMITTED: '正在进入会话。',
+  ATTACHED: '可在会话中查看答复或继续修改。',
+  HISTORICAL: '本次指派已结束，可查看历史记录。',
+  FAILED: '请刷新状态查看详情。'
+}[pointAndStartForDetail.value?.status] || '正在确认点将结果。'))
+const pointAndStartInputSummary = computed(() => {
+  const state = pointAndStartForDetail.value
+  const refs = state?.projection?.inputs || state?.intent?.projection?.inputs || state?.intent?.body?.inputRefs
+  if (!refs) return '本次需求添加的资料'
+  return refs.length ? refs.map(ref => `${ref.fileId} v${ref.version}`).join('、') : '无资料'
+})
+// The parent is the only authority for task-scoped discussion/workspace facts.  A
+// detail may never borrow the context of whichever task was previously selected.
+const assignedAgentForTask = task => {
+  const assignedIds = [...new Set(taskAssigneeIds(task).filter(Boolean))]
+  if (assignedIds.length !== 1) return null
+  return props.operableAgents.find(agent => agent.agentId === assignedIds[0]) || null
+}
+const assignableRecommendedAgents = computed(() => props.recommendedAgents.filter(agent => props.canAssign(detailTask.value, agent)))
+const selectedOperableAgent = computed(() => {
+  const agentId = props.selectedAgent?.agentId
+  if (!agentId) return null
+  const agent = props.operableAgents.find(item => item.agentId === agentId)
+  if (!agent || agent.canOperate !== true || agent.systemAgent === true) return null
+  return `${agent.status || ''}`.trim().toLowerCase() === 'online' ? agent : null
+})
+const preferredAgents = computed(() => {
+  const legacyFallback = props.recommendedAgents.filter(agent =>
+    ['吴用', '林冲'].some(name => `${agent.name || ''}${agent.displayName || ''}${agent.personaName || ''}`.includes(name)))
+  const seen = new Set()
+  return [selectedOperableAgent.value, ...assignableRecommendedAgents.value, ...legacyFallback]
+    .filter(agent => agent?.agentId && !seen.has(agent.agentId) && seen.add(agent.agentId))
+    .slice(0, 2)
+})
+const preferredAgentName = computed(() => {
+  const assignedId = taskAssigneeIds(detailTask.value)[0]
+  const assigned = props.operableAgents.find(agent => agent.agentId === assignedId)
+  return agentDisplayName(assigned || preferredAgents.value[0])
+})
+const simpleMatterStatus = task => ({ open: '待确认', assigned: '已受理', claimed: '已受理', queued: '已受理', running: '办理中', in_progress: '办理中', submitted: '待验收', review: '待验收', changes_requested: '待返工确认', completed: '已完成', accepted: '已完成', archived: '已归档', failed: '受阻' })[task?.status] || (taskAssigneeIds(task).length ? '已受理' : '状态待核对')
+
+const formalTaskExecutionScope = computed(() => {
+  const taskId = detailTask.value?.id
+  if (!taskId) return null
+  const context = props.formalTaskExecutionContext
+  if (context?.taskId === taskId) return context
+  return {
+    taskId,
+    conversationId: '',
+    targetAgentId: '',
+    conversationConfirmed: false,
+    formalExecutionAuthorized: false,
+    authorizationReason: '当前榜文的正式议事与必需工作项尚未核对；请先进入本榜文议事并明确选择已指派好汉。'
+  }
+})
 const validGrossAmount = computed(() => isCanonicalMicroAmount(taskForm.value.grossBountyAmountMicro))
 const fundedRecoveryAbilities = computed(() => {
   const abilities = props.fundedCreateRecovery?.body?.requiredAbilities
@@ -488,8 +689,8 @@ const taskAssigneeIds = (task) => {
 }
 
 const submitCreateTask = () => {
-  if (!taskForm.value.title) return
-  if (taskForm.value.funded && !validGrossAmount.value) return
+  if (!taskForm.value.title.trim() || !taskForm.value.description.trim()) return
+  if (taskForm.value.funded && (!validGrossAmount.value || taskMaterials.value.length)) return
   const payload = {
     title: taskForm.value.title,
     description: taskForm.value.description,
@@ -501,14 +702,20 @@ const submitCreateTask = () => {
   if (props.fundedPreviewEnabled && taskForm.value.funded) {
     payload.grossBountyAmountMicro = taskForm.value.grossBountyAmountMicro
     payload.settlementPolicy = 'GROSS_INCLUSIVE'
+  } else {
+    payload.attachments = taskMaterials.value.map(({ fileId, version }) => ({ fileId, version }))
   }
-  if (createPending.value) return
+  if (createPending.value || props.requirementCreateBusy) return
+  const attempt = ++createAttempt
+  const originalDraft = JSON.stringify({ form: taskForm.value, refs: taskMaterials.value })
   createPending.value = true
   emit('create-task', payload, (created) => {
+    if (attempt !== createAttempt) return
     createPending.value = false
     // Reset only after the parent receives a definitive success acknowledgement.
     // Recoverable/ambiguous failures retain the exact funded draft for retry.
-    if (created) {
+    if (created && originalDraft === JSON.stringify({ form: taskForm.value, refs: taskMaterials.value })) {
+      taskMaterials.value = []
       taskForm.value = { title: '', description: '', requiredAbilities: '', funded: false, grossBountyAmountMicro: '' }
       showCreateForm.value = false
     }
@@ -538,6 +745,12 @@ const closeTask = () => {
   emit('select-task', null)
 }
 
+const openCreateRequirement = () => {
+  if (modalTask.value) closeTask()
+  showCreateForm.value = true
+  return true
+}
+
 watch(() => props.selectedTask, (task) => {
   if (!task) {
     modalTask.value = null
@@ -555,7 +768,7 @@ const back = () => {
   closeTask()
   return true
 }
-defineExpose({ openTask, canGoBack, back })
+defineExpose({ openTask, openCreateRequirement, canGoBack, back })
 </script>
 <style scoped>
 .bounty-panel {
@@ -567,6 +780,15 @@ defineExpose({ openTask, canGoBack, back })
   box-sizing: border-box;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* The list needs a bounded flex parent so it can own scrolling inside the Hall panel. */
+.bounty-source {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
 }
 
 button {
@@ -615,6 +837,27 @@ button:disabled {
 .task-search input,
 .task-search select,
 .task-create-form input,
+.task-material-picker { grid-column: 1 / -1; min-width: 0; }
+
+.task-create-form { max-height: min(55vh, 30rem); overflow-y: auto; }
+
+.requirement-create-recovery {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: min(35vh, 14rem);
+  margin: 0 16px 12px;
+  padding: 10px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  border: 1px solid #b99358;
+  border-radius: 8px;
+  background: #fff4da;
+  color: #4a3423;
+}
+
+.requirement-create-recovery p { margin: 6px 0; }
+.requirement-create-recovery button { margin-right: 8px; padding: 6px 10px; border-radius: 6px; }
+
 .task-create-form textarea {
   min-width: 0;
   height: 36px;
@@ -702,10 +945,12 @@ button:disabled {
 }
 
 .task-list {
-  overflow: auto;
   min-width: 0;
   min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
   padding: 0;
+  -webkit-overflow-scrolling: touch;
 }
 
 .task-card {
@@ -935,6 +1180,9 @@ button:disabled {
   line-height: 1;
 }
 
+.no-agent-recruitment { display: grid; gap: 8px; margin: 12px 0; padding: 12px; border: 1px solid #d4bd97; border-radius: 6px; background: #fff8e7; }
+.no-agent-recruitment p { margin: 0; }
+.no-agent-recruitment button { justify-self: start; }
 .recommended-agent-actions button:nth-child(2) {
   background: #7c1f1b;
   color: #fff8e8;
@@ -1004,10 +1252,16 @@ button:disabled {
 }
 
 .task-state-open,
+.task-state-planning,
 .task-state-assigned,
 .task-state-running,
+.task-state-reviewing,
+.task-state-blocked,
 .task-state-done,
-.task-state-failed {
+.task-state-failed,
+.task-state-cancelled,
+.task-state-archived,
+.task-state-unknown {
   display: inline-flex;
   align-items: center;
   min-height: 22px;
@@ -1017,23 +1271,33 @@ button:disabled {
   font-weight: 700;
 }
 
-.task-state-open {
+.task-state-open,
+.task-state-planning {
   background: rgba(124, 31, 27, 0.12);
   color: #7c1f1b;
 }
 
 .task-state-assigned,
-.task-state-running {
+.task-state-running,
+.task-state-reviewing {
   background: rgba(154, 91, 0, 0.14);
   color: #875200;
 }
 
-.task-state-done {
+.task-state-blocked,
+.task-state-unknown {
+  background: rgba(111, 78, 35, 0.14);
+  color: #6f4e23;
+}
+
+.task-state-done,
+.task-state-archived {
   background: rgba(46, 125, 50, 0.14);
   color: #2e7d32;
 }
 
-.task-state-failed {
+.task-state-failed,
+.task-state-cancelled {
   background: rgba(179, 38, 30, 0.14);
   color: #b3261e;
 }
@@ -1320,4 +1584,11 @@ button:disabled {
   max-height: 100%;
   box-shadow: none;
 }
+.point-and-start-recovery { margin: 12px 0; padding: 12px; border: 1px solid #d6bb7f; border-radius: 8px; background: #fff9e9; color: #624a20; }
+.point-and-start-recovery p { margin: 6px 0; }
+.point-and-start-recovery button + button { margin-left: 8px; }
+</style>
+
+<style scoped>
+.bounty-modal-overlay.is-embedded-page{position:static;display:block;width:100%;height:auto;min-height:100%;padding:0;background:#f5f4f0;overflow:visible}.bounty-modal-overlay.is-embedded-page .bounty-modal{width:100%;max-width:none;min-height:100%;max-height:none;border:0;border-radius:0;box-shadow:none;background:#f5f4f0}.bounty-modal-overlay.is-embedded-page .bounty-modal-header{position:sticky;top:0;z-index:3;min-height:48px;padding:6px 16px;border-bottom:1px solid #e3e5dc;background:#fffefa}.bounty-modal-overlay.is-embedded-page .bounty-modal-header h3{font-size:17px;font-weight:500}.bounty-back-button{min-height:44px;padding:0 4px 0 0;border:0!important;background:transparent!important;color:#923f30!important;font:500 14px/1 inherit;cursor:pointer;white-space:nowrap}.bounty-modal-overlay.is-embedded-page .bounty-modal-header h3{flex:1;margin:0;color:#242e2b;text-align:left}.bounty-modal-overlay.is-embedded-page .bounty-modal-body{padding:0 0 96px}.bounty-modal-overlay.is-embedded-page .modal-task-info{padding:16px 16px 0}.matter-advice-card{display:grid;gap:12px;padding:16px;border:1px solid #eadfd4;border-radius:12px;background:#fffefa}.matter-advice-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.matter-advice-heading span{color:#923f30;font-size:13px;font-weight:600}.matter-advice-heading strong{padding:4px 8px;border-radius:999px;background:#f9efde;color:#87551c;font-size:12px}.matter-request{margin:0!important;padding-bottom:12px;border-bottom:1px solid #ece5dd;font-size:16px!important;line-height:1.75!important;color:#242e2b!important}.matter-advice-card dl{display:grid;gap:9px;margin:0}.matter-advice-card dl div{display:grid;grid-template-columns:70px minmax(0,1fr);gap:8px}.matter-advice-card dt{color:#68716b;font-size:12px}.matter-advice-card dd{margin:0;font-size:13px}.matter-fee-note{margin:0!important;padding:11px 12px;border-left:3px solid #c7a092;border-radius:8px;background:#f6eee8;color:#65473f!important;font-size:13px!important;line-height:1.65!important}.matter-agent-actions{display:flex;gap:8px;flex-wrap:wrap}.matter-primary-action,.matter-results-action{width:100%;min-height:46px;border-radius:8px!important;background:#923f30!important;color:#fffefa!important;border-color:#923f30!important}.matter-archive-action{width:100%;min-height:44px;border:1px solid #923f30!important;border-radius:8px!important;background:#fffefa!important;color:#923f30!important;font-weight:600}.matter-archive-note{margin:0!important;padding:10px;border-radius:8px;background:#eef5ec;color:#36643b!important;font-size:13px!important}.matter-agent-actions button{min-height:44px;padding:8px 14px;background:#923f30!important;color:#fffefa!important;border-color:#923f30!important}@media(max-width:620px){.bounty-modal-overlay.is-embedded-page .bounty-modal-body{display:block}.bounty-modal-overlay.is-embedded-page .modal-task-info{padding:12px 12px 0}.bounty-modal-overlay.is-embedded-page .modal-agent-scroll{margin-top:14px;max-height:none}.matter-advice-card dl div{grid-template-columns:64px minmax(0,1fr)}}
 </style>

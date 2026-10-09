@@ -1,18 +1,38 @@
 <template>
-  <div ref="hallRootRef" class="juyi-page" tabindex="-1" :style="hallViewportStyle" :class="{ 'is-immersive-map': isImmersiveMap, 'is-panel-open': isPanelSessionActive, 'is-virtual-landscape': isVirtualLandscape, [`experience-${experienceMode}`]: true, [`home-${homeMode}`]: true }">
-    <header v-show="!isImmersiveMap" class="hall-app-header" :inert="isPanelSessionActive || voiceInteractionLocked ? '' : null" :aria-hidden="isPanelSessionActive ? 'true' : null">
-      <button class="hall-brand" type="button" @click="setHomeMode('map')"><span class="hall-seal">聚</span><span>聚义厅<small>梁山好汉 · 共成其事</small></span></button>
+  <div ref="hallRootRef" class="juyi-page" tabindex="-1" :style="hallViewportStyle" :class="{ 'is-immersive-map': isImmersiveMap, 'is-panel-open': isPanelSessionActive, 'is-virtual-landscape': isVirtualLandscape, 'has-workbench-dock': showWorkbenchDock && (Boolean(activePanel) || !renderedPanel), 'is-keyboard-active': hallKeyboardActive, [`experience-${experienceMode}`]: true, [`home-${homeMode}`]: true }">
+    <aside v-show="isOverviewHome" class="hall-workbench-sidebar" :inert="voiceInteractionLocked || isPanelSessionActive && !workbenchPrimaryPanelSet.has(renderedPanel) ? '' : null" aria-label="工作台侧栏">
+      <button class="workbench-brand" type="button" @click="openWorkbenchPage('overview')"><span class="workbench-seal">聚</span><span>聚义厅<small>一起，把事情办成。</small></span></button>
+      <p class="workbench-nav-caption">我的工作空间</p>
+      <nav class="workbench-side-nav" aria-label="工作台主导航">
+        <button v-for="tab in workbenchPrimaryTabs" :key="tab.panel" type="button" :data-workbench-tab="tab.panel" :aria-current="workbenchCurrentPage === tab.panel ? 'page' : null" @click="openWorkbenchPage(tab.panel)"><var-icon :name="tab.icon" /><span>{{ tab.label }}</span></button>
+      </nav>
+      <div class="workbench-sidebar-bottom">
+        <button class="workbench-map-entry" type="button" @click="openWorkbenchMap"><var-icon name="map-marker-outline" /><span>厅中实景<small>去梁山走一走</small></span><var-icon name="chevron-right" /></button>
+        <nav class="workbench-side-nav workbench-side-utility" aria-label="工作台辅助导航">
+          <button type="button" @click="emit('open-onboarding', $event.currentTarget)"><var-icon name="help-circle-outline" /><span>使用帮助</span></button>
+        </nav>
+        <button class="workbench-sidebar-account" type="button" :disabled="accountEntryDisabled" aria-label="个人中心" @click="openProfile"><img v-if="accountAvatar" :src="accountAvatar" alt="" /><var-icon v-else name="account-circle-outline" aria-hidden="true" /><span>{{ accountDisplayName }}<small>个人中心</small></span><var-icon name="chevron-right" aria-hidden="true" /></button>
+      </div>
+    </aside>
+    <header v-show="!isImmersiveMap" class="hall-app-header" :inert="isPanelSessionActive && !workbenchPrimaryPanelSet.has(renderedPanel) || voiceInteractionLocked ? '' : null" :aria-hidden="isPanelSessionActive && !workbenchPrimaryPanelSet.has(renderedPanel) ? 'true' : null">
+      <nav v-if="isOverviewHome" class="workbench-breadcrumb" aria-label="当前位置"><button type="button" @click="openWorkbenchPage('overview')">我的工作空间</button><var-icon name="chevron-right" aria-hidden="true" /><strong>{{ workbenchCurrentLabel }}</strong></nav>
+      <button v-else class="hall-brand" type="button" @click="setHomeMode('overview')"><span class="hall-seal">聚</span><span>聚义厅<small>梁山好汉 · 共成其事</small></span></button>
       <nav class="hall-main-nav" aria-label="聚义厅主导航">
-        <button type="button" :aria-current="!activePanel ? 'page' : null" @click="setHomeMode('map')">聚义厅</button>
-        <button type="button" @click="openPanel('tasks')">悬赏榜</button>
-        <button type="button" @click="handleStagePanelOpen('chat')">厅内议事</button>
-        <button type="button" aria-label="打开百宝箱" @click="openBabaoBox">百宝箱</button>
+        <button v-for="tab in workbenchMobileTabs" :key="tab.panel" type="button" :aria-current="workbenchCurrentPage === tab.panel ? 'page' : null" @click="openWorkbenchPage(tab.panel)">{{ tab.label }}</button>
       </nav>
       <div class="hall-header-tools">
-        <button type="button" @click="openPanel('agents')">好汉</button>
-        <button type="button" aria-label="查看消息" @click="openPanel('messages')">消息</button>
-        <button type="button" :disabled="accountEntryDisabled" aria-label="个人中心" @click="openProfile">账户</button>
+        <button type="button" @click="openPanel('agents', { root: isOverviewHome })">好汉</button>
+        <button class="workbench-message-action" type="button" aria-label="查看消息" @click="openPanel('messages', { root: isOverviewHome })"><var-icon v-if="isOverviewHome" name="bell-outline" aria-hidden="true" /><span v-else>消息</span></button>
+        <button class="workbench-create-action" type="button" @click="openDefaultRequirementCreate()"><var-icon v-if="isOverviewHome" name="plus" aria-hidden="true" /><span>{{ isOverviewHome ? '提出需求' : '＋ 提出需求' }}</span></button>
+        <button class="workbench-account-action" type="button" :disabled="accountEntryDisabled" aria-label="个人中心" @click="openProfile"><var-icon v-if="isOverviewHome" name="account-circle-outline" aria-hidden="true" /><span>账户</span></button>
+        <button class="workbench-mobile-more" type="button" aria-label="全部入口" :aria-expanded="workbenchMenuOpen" @click="workbenchMenuOpen = !workbenchMenuOpen"><var-icon name="menu" /></button>
       </div>
+      <nav v-if="workbenchMenuOpen && isOverviewHome" class="workbench-more-menu" aria-label="全部入口">
+        <button v-for="tab in workbenchPrimaryTabs" :key="tab.panel" type="button" @click="openWorkbenchPage(tab.panel, $event)"><var-icon :name="tab.icon" aria-hidden="true" /><span>{{ tab.label }}</span></button>
+        <button type="button" @click="openWorkbenchMap"><var-icon name="map-marker-outline" aria-hidden="true" /><span>厅中实景</span></button>
+        <button type="button" :disabled="accountEntryDisabled" @click="workbenchMenuOpen = false; openProfile()"><var-icon name="account-circle-outline" aria-hidden="true" /><span>个人中心</span></button>
+        <button type="button" @click="workbenchMenuOpen = false; emit('open-onboarding', $event.currentTarget)"><var-icon name="help-circle-outline" aria-hidden="true" /><span>使用帮助</span></button>
+      </nav>
     </header>
     <div v-show="!isImmersiveMap" class="hall-mode-toolbar" :inert="isPanelSessionActive || voiceInteractionLocked ? '' : null" :aria-hidden="isPanelSessionActive ? 'true' : null">
       <div class="hall-mode-switch" aria-label="聚义厅视图"><button type="button" :aria-pressed="homeMode === 'map'" @click="setHomeMode('map')">厅中实景</button><button type="button" :aria-pressed="homeMode === 'overview'" @click="setHomeMode('overview')">办事概览</button></div>
@@ -22,11 +42,13 @@
         <button v-if="homeMode === 'map' && experienceMode === 'landscape-map'" type="button" aria-label="缩小地图" @click="hallStageRef?.zoom(-0.12)">−</button>
         <button v-if="homeMode === 'map' && experienceMode === 'landscape-map'" type="button" aria-label="放大地图" @click="hallStageRef?.zoom(0.12)">+</button>
         <button v-if="homeMode === 'map' && experienceMode === 'landscape-map'" type="button" @click="hallStageRef?.resetCamera()">全景</button>
-        <button v-if="experienceMode === 'landscape-map'" type="button" aria-label="方向控制" @click="requestPanelOrientation">{{ orientationRequestPending ? '取消切换' : (experienceMode === 'landscape-map' ? '纵向布局' : '横向布局') }}</button>
         <button class="hall-sound-action" type="button" :aria-pressed="soundEnabled" @click="toggleHallSound">{{ soundEnabled ? '关闭声音' : '开启声音' }}</button>
         <button class="hall-help-action" type="button" @click="emit('open-onboarding', $event.currentTarget)">怎么开始？</button>
       </div>
     </div>
+    <nav v-show="showWorkbenchDock && (Boolean(activePanel) || !renderedPanel)" class="workbench-mobile-nav" aria-label="移动端导航" :inert="voiceInteractionLocked || isPanelSessionActive && !workbenchPrimaryPanelSet.has(renderedPanel) ? '' : null">
+      <button v-for="tab in workbenchMobileTabs" :key="tab.panel" type="button" :data-workbench-tab="tab.panel" :aria-label="tab.label" :aria-current="workbenchCurrentPage === tab.panel ? 'page' : null" @click="openWorkbenchPage(tab.panel)"><var-icon :name="tab.icon" /><span>{{ tab.label }}</span></button>
+    </nav>
     <HallPortraitHome
       ref="portraitHomeRef"
       unified-shell
@@ -79,10 +101,15 @@
           :identity-scope="hallIdentityScope"
           :identity-epoch="apiStore.authorizationGeneration"
           :agents="operableRosterAgents"
+          :quick-pending="requirementCreateBusy"
+          :quick-message="requirementCreateState.error || ''"
+          @quick-request="handleQuickRequest"
           @set-home-mode="setHomeMode"
           @open-board="openPanel('tasks')"
+          @open-workspace="openBabaoBox"
+          @open-agents="openPanel('agents')"
           @start-chat="startContextConversation"
-          @start-draft="openPrivateDraft()"
+          @start-draft="openDefaultRequirementCreate()"
           @open-item="openOverviewItem"
           @open-task="openOverviewTask"
         />
@@ -172,7 +199,7 @@
     </Teleport>
 
     <footer v-if="homeMode === 'map' && !isImmersiveMap" class="hall-map-actions" :inert="isPanelSessionActive || voiceInteractionLocked ? '' : null" :aria-hidden="isPanelSessionActive ? 'true' : null">
-      <button class="hall-primary" type="button" @click="openPrivateDraft()">＋ 提出需求</button>
+      <button class="hall-primary" type="button" @click="openDefaultRequirementCreate()">＋ 提出需求</button>
       <button type="button" :aria-label="conversationEntryLabel" @click="startContextConversation">{{ conversationEntryLabel }}</button>
       <span>不必先懂所有功能，就能开始办事</span>
       <button class="hall-continue" type="button" @click="setHomeMode('overview')">接着上次办 →</button>
@@ -185,14 +212,15 @@
     />
 
     <transition name="panel" @after-leave="handlePanelAfterLeave">
-      <div v-if="activePanel" :key="panelSessionGeneration" class="panel-overlay" :class="{ 'is-full-window': panelLayout === 'full-window', 'is-low-height': isLowHeightPanel, 'is-chat-overlay': renderedPanel === 'chat', 'is-compact-chat-overlay': renderedPanel === 'chat' && isCompactChat }" :data-panel-generation="panelSessionGeneration" @pointerdown.self="closePanel">
+      <div v-if="activePanel" :key="panelSessionGeneration" class="panel-overlay" :class="{ 'is-full-window': panelLayout === 'full-window', 'is-low-height': isLowHeightPanel, 'is-chat-overlay': renderedPanel === 'chat', 'is-compact-chat-overlay': renderedPanel === 'chat' && isCompactChat, 'theme-workbench': isOverviewHome, 'is-workbench-panel': isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel), 'is-workbench-page': isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) }" :data-panel-generation="panelSessionGeneration" @pointerdown.self="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? null : closePanel()">
         <section
           ref="panelRef"
           class="floating-panel"
           :class="[`panel-${renderedPanel}`, `layout-${panelLayout}`]"
-          role="dialog"
-          aria-modal="true"
-          :aria-labelledby="panelTitleId"
+          :role="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? 'region' : 'dialog'"
+          :aria-modal="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? null : 'true'"
+          :aria-labelledby="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? null : panelTitleId"
+          :aria-label="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? workbenchCurrentLabel : null"
           tabindex="-1"
           @wheel.stop
           @pointerdown.stop
@@ -204,33 +232,26 @@
           @input.stop
           @click.stop
         >
-          <div class="panel-title">
+          <div v-if="!navigationPresentation.isPrimarySurface || navigationPresentation.showPrimaryChildHeader" class="panel-title">
             <button
+              v-if="navigationPresentation.showHallClose"
               class="panel-close"
               type="button"
               aria-label="关闭面板"
               :disabled="voiceInteractionLocked"
               @click="closePanel"
             >
-              <var-icon name="close-circle-outline" />
+              <var-icon :name="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? 'window-close' : 'close-circle-outline'" aria-hidden="true" />
             </button>
             <button
-              v-if="panelReturnPanel || panelChildCanReturn"
+              v-if="navigationPresentation.showHallReturn"
               class="panel-return"
               type="button"
-              aria-label="返回上一层"
+              :aria-label="navigationPresentation.showRootReturn ? '返回聚义厅' : '返回上一层'"
               :disabled="voiceInteractionLocked"
-              @click="returnPanel"
-            >返回</button>
+              @click="handleHallReturn"
+            >← 返回</button>
             <span :id="panelTitleId">{{ activePanelTitle }}</span>
-            <button
-              v-if="experienceMode === 'landscape-map'"
-              class="panel-orientation"
-              type="button"
-              :aria-label="orientationRequestPending ? '取消方向请求' : (experienceMode === 'landscape-map' ? '切换竖向布局' : '切换横向布局')"
-              :disabled="voiceInteractionLocked"
-              @click="requestPanelOrientation"
-            >{{ orientationRequestPending ? '取消切换' : (experienceMode === 'landscape-map' ? '竖向' : '横向') }}</button>
             <button
               v-if="taskWorkspaceEnabled && renderedPanel === 'tasks' && taskWorkspaceSubject"
               class="panel-workspace-link"
@@ -259,9 +280,13 @@
             :agent-filter="agentFilter"
             :loading="rosterLoading"
             :error-message="rosterError"
+            :has-pending-task="Boolean(pendingPointAndDeliberateTask)"
+            :point-and-start-busy="pointAndStartBusy || controlledBridgeBusy"
+            :can-point-and-deliberate="canPointAndDeliberateAgent"
+            :can-start-conversation="canStartAgentConversation"
             @set-agent-filter="setAgentFilter"
             @select-agent="selectAgent"
-            :can-start-conversation="canStartAgentConversation"
+            @point-and-deliberate="handlePointAndDeliberateAgent"
             @start-conversation="handleStartAgentConversation"
             @open-catalog="openPanel('catalog')"
           />
@@ -289,9 +314,14 @@
             :work-item-plan-enabled="workItemPlanEnabled"
             :authorization-generation="apiStore.authorizationGeneration"
             :identity-scope="hallIdentityScope"
+            :formal-task-execution-context="formalTaskExecutionContext"
             :funded-quote-preview="fundedQuotePreview"
             :funded-claim-state="fundedClaimState"
             :funded-create-recovery="fundedCreateRecovery"
+            :requirement-create-state="requirementCreateState"
+            :requirement-create-busy="requirementCreateBusy"
+            :point-and-start-state="pointAndStartPresentationState"
+            :point-and-start-busy="pointAndStartBusy || controlledBridgeBusy"
             :format-time="formatTime"
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
@@ -315,19 +345,26 @@
             @confirm-funded-quote="settleFundedQuote(true)"
             @cancel-funded-quote="settleFundedQuote(false)"
             @refresh-funded-claim="refreshFundedClaim"
+            @recruit-agent="beginHostedPointFlow"
             @auto-assign-task="autoAssignTask"
             @assign-task="assignTask"
             @archive-task="archiveTask"
             @brief-selected-task="briefSelectedTask"
-            @create-task="createTask"
+            @create-task="createRequirementAndChooseAgent"
+            @check-requirement-create="checkRequirementCreate"
+            @resume-requirement-create="resumeRequirementCreate"
             @start-private-draft="openPrivateDraft()"
             @open-formal-results="openFormalResults"
             @start-formal-draft="openPanel('formalDraft', { restore: true })"
             @resume-funded-create="resumeFundedCreate"
+            @check-point-and-start="checkPointAndStartOriginal"
+            @resume-point-and-start="resumePointAndStartOriginal"
             @cancel-funded-create-recovery="showToast('原资金榜请求仍会保留；请在准备好后明确恢复。')"
             @cancel-funding="cancelFunding"
             @load-settlement="loadSettlement"
             @open-workspace="openBabaoBox"
+            @formal-execution-created="hallReadRevision += 1"
+            @formal-execution-recovered="hallReadRevision += 1"
             @discuss-task="discussTask"
             @load-tasks="loadTasks"
             @select-agent="selectAgent"
@@ -335,12 +372,40 @@
             @set-status-filter="setTaskStatusFilter"
           />
 
-          <FormalDeliveryList
-            v-if="renderedPanel === 'tasks' && formalTaskRef && hallIdentityScope"
+          <BountyAcceptancePanel
+            v-if="renderedPanel === 'tasks' && formalTaskRef && hallIdentityScope && multimediaDeliberationUiEnabled && !taskReviewRef && formalTaskRef.funding?.mode !== 'FUNDED_SINGLE_AGENT'"
+            :key="formalTaskRef.id"
+            :task-id="formalTaskRef.id"
+            :identity-key="`${apiStore.authorizationGeneration}\u0000${hallIdentityScope}`"
+            :task-version="formalTaskRef.taskVersion ?? formalTaskRef.version"
+            :task-completed="formalTaskRef.status === 'completed'"
+            :conversation-id="chatMode === 'bounty' && conversationTask?.id === formalTaskRef.id ? conversationId : ''"
+            @continue-modification="continueBountyModification(formalTaskRef, $event)"
+            @task-completed="loadTasks"
+          >
+            <template #legacy>
+              <FormalTaskDeliveryPanel
+                :key="formalTaskRef.id"
+                :task-id="formalTaskRef.id"
+                :identity-fingerprint="`${hallIdentityScope}:${apiStore.authorizationGeneration}`"
+                :focus-delivery-id="''"
+                :execution-context="formalTaskExecutionContext"
+                :selected-agent-id="selectedAgent?.agentId || ''"
+                @discuss-task="discussTask(formalTaskRef)"
+                @rework-created="hallReadRevision += 1"
+              />
+            </template>
+          </BountyAcceptancePanel>
+          <FormalTaskDeliveryPanel
+            v-else-if="renderedPanel === 'tasks' && formalTaskRef && hallIdentityScope"
             :key="formalTaskRef.id"
             :task-id="formalTaskRef.id"
             :identity-fingerprint="`${hallIdentityScope}:${apiStore.authorizationGeneration}`"
             :focus-delivery-id="taskReviewRef?.taskId === formalTaskRef.id ? taskReviewRef.deliveryId : ''"
+            :execution-context="formalTaskExecutionContext"
+            :selected-agent-id="selectedAgent?.agentId || ''"
+            @discuss-task="discussTask(formalTaskRef)"
+            @rework-created="hallReadRevision += 1"
           />
 
           <template v-if="taskWorkspaceEnabled && renderedPanel === 'workspace' && taskWorkspaceSubject">
@@ -362,6 +427,17 @@
               :identity-epoch="apiStore.authorizationGeneration"
             />
           </template>
+
+          <HallMinePage
+            v-if="panelFrames.includes('mine')"
+            v-show="renderedPanel === 'mine'"
+            :inert="renderedPanel !== 'mine' ? '' : null"
+            :aria-hidden="renderedPanel !== 'mine' ? 'true' : null"
+            :account-entry-disabled="accountEntryDisabled"
+            @open="openPanel($event, { root: true })"
+            @map="openWorkbenchMap"
+            @profile="openProfile"
+          />
 
           <HallOverview
             v-if="panelFrames.includes('messages')"
@@ -428,7 +504,7 @@
             :compact="isLowHeightPanel"
             :inert="renderedPanel !== 'treasure' ? '' : null"
             :aria-hidden="renderedPanel !== 'treasure' ? 'true' : null"
-            :detail-allowed="canOpenPanelDetail"
+            :detail-allowed="true"
             embedded
             @start-draft="openPrivateDraft"
           />
@@ -442,11 +518,13 @@
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
             :setup-result="personaSetupResult"
+            :hosted-point-flow="Boolean(hostedPointFlow)"
             :loading="catalogLoading"
             :error-message="catalogError"
             @bind-persona="handleBindPersona"
             @clear-setup-result="personaSetupResult = null"
             @hosting-changed="refreshHall({ silent: true })"
+            @hosting-confirmed="waitForHostedPointAgent"
             @unbind-persona="handleUnbindPersona"
           />
 
@@ -456,6 +534,10 @@
             :inert="renderedPanel !== 'chat' ? '' : null"
             :aria-hidden="renderedPanel !== 'chat' ? 'true' : null"
             :draft="draft"
+            :active-request="activeRequest"
+            :active-turns="activeTurns"
+            :capability-state="capabilityState"
+            :deliberation-v2-enabled="multimediaDeliberationUiEnabled"
             :voice="hallVoice"
             @update:draft="setDraft"
             @voice-apply="applyVoiceTranscript"
@@ -471,6 +553,9 @@
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
             :conversation-busy="isConversationBusy"
+            :deliberation-status="deliberationStatus"
+            :durable-cancel-target="durableCancelTarget"
+            :legacy-cancel-available="canCancelLegacy"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -481,6 +566,8 @@
             :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
+            @cancel-deliberation="cancelDeliberation"
+            @cancel-legacy-transport="cancelLegacyHallReply"
             @clear-target="handleClearChatTarget"
             @delete-conversation="deleteHallConversation"
             @load-history="loadHallConversationHistory({ force: true })"
@@ -499,6 +586,16 @@
             v-show="renderedPanel === 'chat'"
             :inert="renderedPanel !== 'chat' ? '' : null"
             :aria-hidden="renderedPanel !== 'chat' ? 'true' : null"
+            :active-request="activeRequest"
+            :request-catalog="bountyRequestCatalog.entries"
+            :active-turns="activeTurns"
+            :capability-state="capabilityState"
+            :deliberation-v2-enabled="multimediaDeliberationUiEnabled"
+            :typed-outcomes="typedDeliberation.cards.value"
+            :typed-pending-question="typedDeliberation.selectedPending.value"
+            :typed-enabled="typedDeliberationEnabled"
+            :typed-recovery-available="typedDeliberation.recoveryAvailable.value"
+            :typed-inspection-status="typedDeliberation.inspectionStatus.value"
             :draft="draft"
             :voice="hallVoice"
             @update:draft="setDraft"
@@ -515,6 +612,9 @@
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
             :conversation-busy="isConversationBusy"
+            :deliberation-status="deliberationStatus"
+            :durable-cancel-target="durableCancelTarget"
+            :legacy-cancel-available="canCancelLegacy"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -522,11 +622,17 @@
             :conversation-history-loading="conversationHistoryLoading"
             :conversation-id="conversationId"
             :identity-epoch="apiStore.authorizationGeneration"
+            :identity-scope="hallIdentityScope"
             :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
+            @execution-settled="refreshExecutionRequest"
+            @cancel-deliberation="cancelDeliberation"
+            @cancel-legacy-transport="cancelLegacyHallReply"
             @clear-target="handleClearChatTarget"
             @delete-conversation="deleteHallConversation"
+            @typed-reply="handleTypedReply"
+            @typed-resume="handleTypedResume"
             @load-history="loadHallConversationHistory({ force: true })"
             @load-more-history="loadMoreHallConversationHistory"
             @load-messages="retryHallConversation"
@@ -536,6 +642,7 @@
             @retry-conversation="retryHallConversation"
             @select-conversation="selectHallConversation"
             @send-message="handleSendHallMessage"
+            @task-completed="loadTasks"
           />
 
           <PrivateDiscussionPanel
@@ -559,6 +666,9 @@
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
             :conversation-busy="isConversationBusy"
+            :deliberation-status="deliberationStatus"
+            :durable-cancel-target="durableCancelTarget"
+            :legacy-cancel-available="canCancelLegacy"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -569,6 +679,8 @@
             :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
+            @cancel-deliberation="cancelDeliberation"
+            @cancel-legacy-transport="cancelLegacyHallReply"
             @clear-target="handleClearChatTarget"
             @delete-conversation="deleteHallConversation"
             @load-history="loadHallConversationHistory({ force: true })"
@@ -615,18 +727,20 @@
 
 <script setup>
 import HallOverview from '@/components/juyiting/HallOverview.vue'
+import HallMinePage from '@/components/juyiting/HallMinePage.vue'
 import HallDraftEditor from '@/components/juyiting/HallDraftEditor.vue'
-import FormalDeliveryList from '@/components/deliveries/FormalDeliveryList.vue'
+import FormalTaskDeliveryPanel from '@/components/deliveries/FormalTaskDeliveryPanel.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { useGlobalStore } from '@/stores/global'
 import { useApiStore } from '@/stores/api'
 import { browserBusinessNamespace } from '@/utils/tenantBusinessNamespace'
 import { agentApi, chatApi } from '@/composables/useHttp'
-import { useHallChatContext } from '@/composables/juyiting/useHallChatContext'
+import { useHallChatContext, bountyInteractionTargetId } from '@/composables/juyiting/useHallChatContext'
 import { useHallBackendSceneState } from '@/composables/juyiting/useHallBackendSceneState'
 import { useHallCommandQueue } from '@/composables/juyiting/useHallCommandQueue'
 import { useHallConversation } from '@/composables/juyiting/useHallConversation'
+import { isMultimediaDeliberationUiEnabled } from '@/composables/juyiting/hallMultimediaDeliberationUi'
 import { useHallVoiceConversation } from '@/composables/juyiting/useHallVoiceConversation'
 import { confirmHallLeave, hasMeaningfulHallLeaveWork } from '@/composables/juyiting/hallAccountNavigation'
 import { createHallVoiceReplyCorrelation } from '@/composables/juyiting/hallVoiceReplyCorrelation'
@@ -635,22 +749,35 @@ import { useHallLibrary } from '@/composables/juyiting/useHallLibrary'
 import { resolveLiveMapPreviewActivation } from '@/composables/juyiting/liveMapPreviewPolicy'
 import { useHallExperienceMode } from '@/composables/juyiting/useHallExperienceMode'
 import { useHallHomeMode } from '@/composables/juyiting/useHallHomeMode'
-import { capturePanelReturnTarget, focusHallPanel, isCurrentPanelGeneration, isSafePanelFocusTarget, resolvePanelReturnTarget, restorePanelFocus, trapPanelFocus, useHallPanels } from '@/composables/juyiting/useHallPanels'
+import { capturePanelReturnTarget, focusHallPanel, isCurrentPanelGeneration, isSafePanelFocusTarget, resolveHallNavigationPresentation, resolvePanelReturnTarget, restorePanelFocus, trapPanelFocus, useHallPanels } from '@/composables/juyiting/useHallPanels'
 import { useHallScene } from '@/composables/juyiting/useHallScene'
 import { useHallSceneState } from '@/composables/juyiting/useHallSceneState'
 import { useHallSceneDebugBridge } from '@/composables/juyiting/useHallSceneDebugBridge'
 import { useHallSound } from '@/composables/juyiting/useHallSound'
 import { useHallTaskActions } from '@/composables/juyiting/useHallTaskActions'
+import { useHallRequirementCreate } from '@/composables/juyiting/useHallRequirementCreate'
+import { useHallPointAndStart } from '@/composables/juyiting/useHallPointAndStart'
+import { currentBountyAssignmentRevision } from '@/composables/juyiting/hallBountyAssignmentContext'
+import { createPointAndStartIntentStore } from '@/composables/juyiting/hallPointAndStartIntent'
+import { pointAndStartRecoveryLane } from '@/composables/juyiting/hallPointAndStartRecoveryLane'
+import { useHallPointAndStartControlledBridge } from '@/composables/juyiting/useHallPointAndStartControlledBridge'
+import { useHallBountyRequestCatalog } from '@/composables/juyiting/useHallBountyRequestCatalog'
+import { useHallTypedDeliberation } from '@/composables/juyiting/useHallTypedDeliberation'
+import { typedLong } from '@/composables/juyiting/hallTypedDeliberation'
+import { pointAndStartIntentReadLane } from '@/composables/juyiting/hallNativeBountyCapability'
+import { useHallDrafts } from '@/composables/juyiting/useHallDrafts'
 import { useTaskWorkspace } from '@/composables/juyiting/useTaskWorkspace'
 import { createDisabledTaskWorkspaceBinding, isTaskWorkspaceBuildEnabled } from '@/composables/juyiting/taskWorkspaceFeature'
 import { useTaskWorkspaceView } from '@/composables/juyiting/useTaskWorkspaceView'
 import { useTaskWorkspaceBinding } from '@/composables/juyiting/useTaskWorkspaceBinding'
+import { useFormalTaskExecutionScope } from '@/composables/useFormalTaskExecutionScope'
 import TaskWorkspacePanel from '@/components/juyiting/TaskWorkspacePanel.vue'
 import ArtifactTransferPanel from '@/components/juyiting/ArtifactTransferPanel.vue'
 import ArtifactOutcomePanel from '@/components/juyiting/ArtifactOutcomePanel.vue'
 import { portraitName, portraitRole, portraitShortName, portraitStyle, roleClass } from '@/composables/juyiting/useWaterMarginRoles'
 import AgentPanel from '@/components/juyiting/AgentPanel.vue'
 import BountyDiscussionPanel from '@/components/juyiting/BountyDiscussionPanel.vue'
+import BountyAcceptancePanel from '@/components/juyiting/BountyAcceptancePanel.vue'
 import BountyPanel from '@/components/juyiting/BountyPanel.vue'
 import HallPortraitHome from '@/components/juyiting/HallPortraitHome.vue'
 import HallStage from '@/components/juyiting/HallStage.vue'
@@ -669,9 +796,12 @@ import {
 import { log } from '@/utils/logger'
 import { isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
 import { isEconomyPreviewCapability, loadEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
+import { resolveAccountDisplayName } from '@/utils/displayName'
+import { hasHydratedIdentity } from '@/utils/identityScope'
 import { juyitingGame } from '@/game/index.js'
 
 const emit = defineEmits(['open-onboarding'])
+const props = defineProps({ onboardingVisible: { type: Boolean, default: false } })
 
 const globalStore = useGlobalStore()
 const apiStore = useApiStore()
@@ -679,14 +809,22 @@ const router = useRouter()
 const accountAvatar = computed(() => String(globalStore.user?.avatar || '').trim())
 const accountDisplayName = computed(() => {
   const user = globalStore.user || {}
-  return String(user.nickname || user.username || globalStore.getUserId || '个人中心').trim() || '个人中心'
+  return resolveAccountDisplayName(user, String(user.displayName || '')) || '个人中心'
 })
 const hallIdentityScope = computed(() => browserBusinessNamespace(apiStore, globalStore))
+// Existing unresolved draft writes are protected by the shared recovery store; new requirements never use TASK_CREATE + per-file links.
+const hallDraftRecovery = useHallDrafts({
+  identityScope: hallIdentityScope,
+  identityEpoch: () => apiStore.authorizationGeneration
+})
 
 const selectedAgent = ref(null)
 const selectedTask = ref(null)
 const economyPreviewEnabled = ref(false)
 const workItemPlanEnabled = import.meta.env.VITE_JUYITING_WORK_ITEM_PLAN_ENABLED === 'true'
+const multimediaDeliberationUiEnabled = isMultimediaDeliberationUiEnabled(import.meta.env.VITE_JUYITING_MULTIMEDIA_DELIBERATION_V2_UI)
+// Typed discussion is the single ordinary request entry for multimedia tasks.
+const typedDeliberationBuildEnabled = import.meta.env.VITE_JUYITING_TYPED_DELIBERATION_UI === 'true'
 const economyPreviewCapability = ref(null)
 const economyPreviewChecked = ref(false)
 const economyPreviewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
@@ -709,8 +847,12 @@ const {
   retry: retryTaskWorkspace
 } = useTaskWorkspaceView(taskWorkspace)
 const personaSetupResult = ref(null)
+// CTA-originated recruitment keeps the exact task snapshot until a roster read proves
+// the newly hosted agent is actually selectable. It is never an assignment authority.
+const hostedPointFlow = ref(null)
+let hostedPointWaitTimer = null
 const toast = ref('')
-const panelWhitelist = new Set(['agents', 'catalog', 'tasks', 'workspace', 'treasure', 'chat', 'library', 'messages', 'item', 'formalDraft', 'draft'])
+const panelWhitelist = new Set(['agents', 'catalog', 'tasks', 'workspace', 'treasure', 'chat', 'library', 'messages', 'mine', 'item', 'formalDraft', 'draft'])
 const activePanel = ref('')
 const renderedPanel = ref('')
 const panelSessionGeneration = ref(0)
@@ -798,10 +940,28 @@ const voiceReplyCorrelation = createHallVoiceReplyCorrelation({
   onReply: message => hallVoice?.completeReply(message)
 })
 const { homeMode, isOverviewHome, setHomeMode } = useHallHomeMode()
+const workbenchPrimaryTabs = Object.freeze([
+  { panel: 'overview', label: '办事', icon: 'home-outline' },
+  { panel: 'tasks', label: '事项', icon: 'format-list-checkbox' },
+  { panel: 'treasure', label: '资料', icon: 'file-document-outline' },
+  { panel: 'mine', label: '我的', icon: 'account-circle-outline' }
+])
+const workbenchMobileTabs = workbenchPrimaryTabs
+const workbenchPrimaryPanelSet = new Set(workbenchPrimaryTabs.map(tab => tab.panel))
+const workbenchMenuOpen = ref(false)
+const workbenchCurrentPage = computed(() => isOverviewHome.value ? (activePanel.value && workbenchPrimaryPanelSet.has(renderedPanel.value) ? renderedPanel.value : 'overview') : '')
+const workbenchCurrentLabel = computed(() => workbenchPrimaryTabs.find(tab => tab.panel === workbenchCurrentPage.value)?.label || '办事')
+watch(homeMode, () => { workbenchMenuOpen.value = false })
+watch(activePanel, panel => {
+  workbenchMenuOpen.value = false
+  if (panel !== 'catalog') cancelHostedPointWait()
+})
+
 const {
   experienceMode,
   isMobileCoarse,
   isVirtualLandscape,
+  isKeyboardActive: hallKeyboardActive = ref(false),
   orientationHint,
   orientationRequestPending,
   hallViewportHeight,
@@ -820,6 +980,22 @@ const hallViewportStyle = computed(() => {
 const isCompactChat = computed(() => resolvedHallViewportHeight.value > 0 && resolvedHallViewportHeight.value <= 320)
 const isLowHeightPanel = computed(() => resolvedHallViewportHeight.value > 0 && resolvedHallViewportHeight.value <= 500)
 const { panelLayout } = useHallPanels({ experienceMode, isMobileCoarse, viewportHeight: resolvedHallViewportHeight })
+const navigationPresentation = computed(() => resolveHallNavigationPresentation({
+  isMobileCoarse: isMobileCoarse.value,
+  experienceMode: experienceMode.value,
+  isOverviewHome: isOverviewHome.value,
+  renderedPanel: renderedPanel.value,
+  panelReturnPanel: panelReturnPanel.value,
+  formalTaskRef: formalTaskRef.value,
+  draftCanGoBack: Boolean(activeDraftEditor()?.canGoBack),
+  bountyCanGoBack: Boolean(bountyPanelRef.value?.canGoBack),
+  treasureCanGoBack: Boolean(treasurePanelRef.value?.canGoBack),
+  libraryCanGoBack: Boolean(libraryPanelRef.value?.canGoBack),
+  portraitTaskDetailOpen: portraitTaskDetailOpen.value,
+  isKeyboardActive: hallKeyboardActive.value,
+  externalRootModalOpen: props.onboardingVisible
+}))
+const showWorkbenchDock = computed(() => navigationPresentation.value.showWorkbenchDock)
 const hallRootRef = ref(null)
 const portraitHomeRef = ref(null)
 const landscapeTargetRef = ref(null)
@@ -935,11 +1111,11 @@ const activePanelTitle = computed(() => {
   if (renderedPanel.value === 'item') return overviewItemRef.value?.sourceType === 'DRAFT' ? '继续草稿' : '事项进展'
   if (renderedPanel.value === 'agents') return '点将册'
   if (renderedPanel.value === 'catalog') return '招贤令'
-  if (renderedPanel.value === 'tasks') return '悬赏榜'
+  if (renderedPanel.value === 'tasks') return isOverviewHome.value ? '我的事项' : '悬赏榜'
   if (renderedPanel.value === 'workspace') return '协作工作台'
   if (renderedPanel.value === 'treasure') return '百宝箱'
   if (renderedPanel.value === 'chat') return '厅内议事'
-  if (renderedPanel.value === 'library') return '案卷阁'
+  if (renderedPanel.value === 'library') return '典籍阁'
   return ''
 })
 
@@ -961,26 +1137,11 @@ const statusText = (status = '') => {
   return '候命'
 }
 
-const taskStatusText = (status = '') => {
-  const value = normalizeStatus(status)
-  if (value === 'open') return '待点将'
-  if (value === 'assigned') return '已点将'
-  if (value === 'running') return '在办'
-  if (value === 'completed') return '交令'
-  if (value === 'failed') return '失手'
-  if (value === 'archived') return '入档'
-  return '待点将'
-}
-
-const taskStateClass = (status = '') => {
-  const value = normalizeStatus(status)
-  if (value === 'completed') return 'task-state-done'
-  if (value === 'failed') return 'task-state-failed'
-  if (value === 'archived') return 'task-state-done'
-  if (value === 'running') return 'task-state-running'
-  if (value === 'assigned') return 'task-state-assigned'
-  return 'task-state-open'
-}
+// Use the filter metadata as the single lifecycle presentation contract. `detailAllowed`
+// only controlled panel nesting; file reads still go through PersonalWorkspace's scoped API.
+const taskStatusMeta = status => taskStatusFilters.find(item => item.value === normalizeStatus(status))
+const taskStatusText = status => taskStatusMeta(status)?.label || '状态待核对'
+const taskStateClass = status => taskStatusMeta(status)?.className || 'task-state-unknown'
 
 const abilityText = (agent) => {
   const abilities = agent.abilities || []
@@ -1201,9 +1362,104 @@ const selectAgent = (agent) => {
   return agent || null
 }
 
+const exactHostedAgentId = value => typeof value === 'string' && value.trim() === value && value.length > 0 ? value : ''
+const taskSnapshot = task => Object.freeze({ ...task })
+const cancelHostedPointWait = ({ clear = true } = {}) => {
+  if (hostedPointWaitTimer !== null) window.clearTimeout(hostedPointWaitTimer)
+  hostedPointWaitTimer = null
+  if (clear) hostedPointFlow.value = null
+}
+const isCurrentHostedPointFlow = context => (
+  !panelDisposed &&
+  hostedPointFlow.value === context &&
+  context.identityScope === hallIdentityScope.value &&
+  context.authorizationGeneration === apiStore.authorizationGeneration
+)
+const isHostedPointAgentOnline = (agent, context) => (
+  agent?.agentId === context.agentId &&
+  agent.boundToMe === true &&
+  agent.canOperate === true &&
+  !agent.systemAgent &&
+  normalizeStatus(agent.status) === 'online'
+)
+const returnToHostedPointTask = async (context, agent) => {
+  if (!isCurrentHostedPointFlow(context)) return false
+  // This is only a selection. Assignment remains the user's explicit button click.
+  selectedAgent.value = agent
+  taskWorkspaceBinding.selectExplicitActor(agent)
+  selectedTask.value = context.task
+  cancelHostedPointWait()
+  if (!openPanel('tasks', { silent: true, restore: true })) return false
+  await nextTick()
+  bountyPanelRef.value?.openTask(context.task)
+  showToast(`${portraitShortName(agent)} 已在线；请在原榜文中明确点将`)
+  return true
+}
+const pollHostedPointRoster = async context => {
+  if (!isCurrentHostedPointFlow(context)) return
+  await loadAgents()
+  if (!isCurrentHostedPointFlow(context)) return
+  const agent = operableRosterAgents.value.find(item => isHostedPointAgentOnline(item, context))
+  if (agent) {
+    await returnToHostedPointTask(context, agent)
+    return
+  }
+  // There is deliberately no total wait deadline: only scope changes, unmount, or
+  // leaving the recruitment flow cancels this readback loop.
+  hostedPointWaitTimer = window.setTimeout(() => {
+    hostedPointWaitTimer = null
+    void pollHostedPointRoster(context)
+  }, 2000)
+}
+const beginHostedPointFlow = task => {
+  if (!task?.id || normalizeStatus(task.status) !== 'open') return false
+  const context = Object.freeze({
+    taskId: task.id,
+    taskVersion: task.taskVersion ?? task.version ?? null,
+    task: taskSnapshot(task),
+    identityScope: hallIdentityScope.value,
+    authorizationGeneration: apiStore.authorizationGeneration,
+    personaCode: '',
+    agentId: ''
+  })
+  cancelHostedPointWait()
+  hostedPointFlow.value = context
+  if (!openPanel('catalog')) {
+    cancelHostedPointWait()
+    return false
+  }
+  return true
+}
+const waitForHostedPointAgent = receipt => {
+  const current = hostedPointFlow.value
+  const agentId = exactHostedAgentId(receipt?.agentId)
+  if (!current || !agentId || !isCurrentHostedPointFlow(current)) return false
+  const context = Object.freeze({ ...current, personaCode: String(receipt?.personaCode || ''), agentId })
+  cancelHostedPointWait({ clear: false })
+  hostedPointFlow.value = context
+  showToast('山寨安顿已确认；正在等待点将册显示该好汉在线')
+  void pollHostedPointRoster(context)
+  return true
+}
+
 const cancelPanelChatLoad = () => {
   if (panelChatLoadTimer !== null) window.clearTimeout(panelChatLoadTimer)
   panelChatLoadTimer = null
+}
+
+const captureWorkbenchReturnTarget = panel => {
+  // Menus unmount on navigation, so prefer a persistent visible root tab.
+  const root = hallRootRef.value
+  const tab = [...(root?.querySelectorAll?.(`[data-workbench-tab="${panel}"]`) || [])]
+    .find(isSafePanelFocusTarget)
+  const headerMessage = panel === 'messages'
+    ? root?.querySelector?.('.hall-header-tools [aria-label="查看消息"]') : null
+  const menu = root?.querySelector?.('.workbench-mobile-more')
+  const origin = tab || (isSafePanelFocusTarget(headerMessage) && headerMessage)
+    || (isSafePanelFocusTarget(menu) && menu) || document.activeElement
+  panelSessionOrigin = Object.freeze({
+    ...capturePanelReturnTarget(origin, panel), captureGeneration: panelSessionGeneration.value
+  })
 }
 
 const openPanel = (panel, options = {}) => {
@@ -1211,14 +1467,19 @@ const openPanel = (panel, options = {}) => {
   if (panel !== activePanel.value && guardPanelLeave(() => openPanel(panel, options))) return false
   const openingFromClosed = !activePanel.value
   const existingIndex = panelFrames.value.indexOf(panel)
-  if (!openingFromClosed && panel !== activePanel.value && existingIndex < 0 && panelDepth.value >= 3) {
+  if (!options.root && !openingFromClosed && panel !== activePanel.value && existingIndex < 0 && panelDepth.value >= 3) {
     showToast('请先返回上一层，再打开新的办理入口')
     return false
   }
-  if (!openingFromClosed && panel !== activePanel.value) {
+  if (!openingFromClosed && panel !== activePanel.value && !options.root) {
     panelLocations.set(activePanel.value, { focus: document.activeElement, scrollTop: panelRef.value?.scrollTop || 0 })
   }
-  panelFrames.value = openingFromClosed ? [panel]
+  if (options.root) {
+    formalTaskRef.value = null
+    panelLocations.clear()
+    if (!openingFromClosed && isOverviewHome.value) captureWorkbenchReturnTarget(panel)
+  }
+  panelFrames.value = openingFromClosed || options.root ? [panel]
     : existingIndex >= 0 ? panelFrames.value.slice(0, existingIndex + 1) : [...panelFrames.value, panel]
   panelReturnPanel.value = panelFrames.value.at(-2) || ''
   if (openingFromClosed) {
@@ -1226,7 +1487,7 @@ const openPanel = (panel, options = {}) => {
     panelReturnPanel.value = ''
     if (!renderedPanel.value) {
       panelSessionOrigin = Object.freeze({
-        ...capturePanelReturnTarget(document.activeElement, panel),
+        ...capturePanelReturnTarget(options.returnFocusTarget || document.activeElement, panel),
         captureGeneration: panelSessionGeneration.value + 1
       })
     }
@@ -1249,7 +1510,11 @@ const openPanel = (panel, options = {}) => {
       const location = options.restore ? panelLocations.get(panel) : null
       if (location && panelRef.value) panelRef.value.scrollTop = location.scrollTop
       if (location && isSafePanelFocusTarget(location.focus)) restorePanelFocus(location.focus)
-      else focusHallPanel(panelRef.value)
+      else if (isOverviewHome.value && workbenchPrimaryPanelSet.has(panel) && panelFrames.value.length === 1) {
+        // Root workbench pages focus their region, not the first input. This
+        // keeps opening “事项” from summoning the mobile software keyboard.
+        panelRef.value?.focus?.({ preventScroll: true })
+      } else focusHallPanel(panelRef.value)
     }
   })
   if (!options.silent) playPanelOpen()
@@ -1261,6 +1526,37 @@ const openPanel = (panel, options = {}) => {
     }, 0)
   }
   return true
+}
+
+const openWorkbenchMap = () => {
+  workbenchMenuOpen.value = false
+  if (activePanel.value && guardPanelLeave(openWorkbenchMap)) return false
+  if (activePanel.value && !closePanel()) return false
+  setHomeMode('map')
+  return true
+}
+
+const openWorkbenchPage = (panel, event) => {
+  // iOS tap/click may not focus a button: use the event target, not just activeElement.
+  const openedFromMenu = workbenchMenuOpen.value && (
+    event?.currentTarget?.closest?.('.workbench-more-menu') || document.activeElement?.closest?.('.workbench-more-menu')
+  )
+  const menuTrigger = openedFromMenu ? hallRootRef.value?.querySelector?.('.workbench-mobile-more') : null
+  workbenchMenuOpen.value = false
+  if (panel === 'overview') {
+    if (activePanel.value) {
+      if (guardPanelLeave(() => openWorkbenchPage('overview'))) return false
+      captureWorkbenchReturnTarget('overview')
+      if (!closePanel()) return false
+    }
+    setHomeMode('overview')
+    return true
+  }
+  if (!workbenchPrimaryPanelSet.has(panel) || voiceInteractionLocked.value) return false
+  if (activePanel.value === panel && renderedPanel.value === panel) return true
+  setHomeMode('overview')
+  return openPanel(panel, { root: true, ...(panel === 'chat' ? { mode: 'public' } : {}),
+    ...(isSafePanelFocusTarget(menuTrigger) ? { returnFocusTarget: menuTrigger } : {}) })
 }
 
 const handleStagePanelOpen = (panel) => {
@@ -1431,6 +1727,22 @@ const openOverviewItem = ref => {
   return true
 }
 
+const handleQuickRequest = async (request, settle = () => {}) => {
+  if (typeof request?.request !== 'string' || !request.request.trim()) return false
+  const identity = hallIdentityScope.value
+  const epoch = apiStore.authorizationGeneration
+  const created = await createTask({ title: request.request, description: request.request, attachments: request.materials ?? [] })
+  if (identity !== hallIdentityScope.value || epoch !== apiStore.authorizationGeneration) return false
+  settle(created === true)
+  if (!created) {
+    if (requirementCreateState.value.intent) openPanel('tasks', { root: true })
+    return false
+  }
+  hallReadRevision.value += 1
+  openPanel('agents')
+  return true
+}
+
 const openOverviewTask = async (task, review = null) => {
   if (guardPanelLeave(() => openOverviewTask(task, review))) return false
   if (!task?.id || !openPanel('tasks', { restore: true })) return false
@@ -1442,6 +1754,18 @@ const openOverviewTask = async (task, review = null) => {
   return true
 }
 
+const openDefaultRequirementCreate = () => {
+  if (!multimediaDeliberationUiEnabled) return openPrivateDraft()
+  if (guardPanelLeave(openDefaultRequirementCreate)) return false
+  if (!openPanel('tasks', { root: true })) return false
+  const generation = panelSessionGeneration.value
+  void nextTick(() => {
+    if (!panelDisposed && activePanel.value === 'tasks' && panelSessionGeneration.value === generation) {
+      bountyPanelRef.value?.openCreateRequirement?.()
+    }
+  })
+  return true
+}
 const openPrivateDraft = (context = {}) => {
   if (guardPanelLeave(() => openPrivateDraft(context))) return false
   if (!openPanel('draft', { restore: true })) return false
@@ -1456,15 +1780,35 @@ const openFormalResults = task => {
   taskReviewRef.value = null
   return true
 }
+// Return only to the scoped existing discussion; never point, create, or send on navigation.
+const continueBountyModification = async (task, source) => {
+  if (!task?.id || (source && source.taskId !== task.id) || !openPanel('chat')) return false
+  const identity = `${apiStore.authorizationGeneration}\u0000${hallIdentityScope.value}`
+  const sameDiscussion = chatMode.value === 'bounty' && conversationTask.value?.id === task.id
+  if (sameDiscussion && conversationId.value && (!source?.conversationId || conversationId.value === source.conversationId)) return true
+  if (isConversationBusy.value) { showToast('议事仍在处理中，请稍后返回原会话。'); return false }
+  if (!sameDiscussion) enterBountyDiscussion(task)
+  const current = () => identity === `${apiStore.authorizationGeneration}\u0000${hallIdentityScope.value}` && conversationTask.value?.id === task.id && chatMode.value === 'bounty'
+  await loadHallConversationHistory({ force: true })
+  if (!current()) return false
+  if (source?.conversationId) {
+    while (current() && !conversationHistory.value.some(row => row.id === source.conversationId) && conversationHistoryHasMore.value && !conversationHistoryError.value) {
+      const count = conversationHistory.value.length
+      await loadMoreHallConversationHistory()
+      if (conversationHistory.value.length === count) break
+    }
+    if (!current()) return false
+    const restored = await selectHallConversation(source.conversationId)
+    if (!restored) showToast('原议事暂不可读取，请重试；未创建新会话或重新执行。')
+    return restored
+  }
+  if (conversationHistory.value.length === 1 && !conversationHistoryHasMore.value) return selectHallConversation(conversationHistory.value[0].id)
+  showToast('请从话头记录返回原议事；未猜选最新会话。')
+  return false
+}
 const openTaskWorkspace = () => {
   if (!taskWorkspaceEnabled || !taskWorkspaceSubject.value?.taskId || !taskWorkspaceSubject.value?.actorAgentId) return
   openPanel('workspace')
-}
-
-const requestPanelOrientation = () => {
-  if (voiceInteractionLocked.value) return false
-  if (orientationRequestPending.value) return requestPortrait()
-  return experienceMode.value === 'landscape-map' ? requestPortrait() : requestLandscape()
 }
 
 const returnPanel = () => {
@@ -1492,6 +1836,11 @@ const closePanel = () => {
   return true
 }
 
+const handleHallReturn = () => {
+  if (navigationPresentation.value.showRootReturn) return closePanel()
+  return returnPanel()
+}
+
 const handlePanelKeydown = (event) => {
   event.stopPropagation()
   if (event.key === 'Escape' && !event.isComposing && event.keyCode !== 229) {
@@ -1499,7 +1848,9 @@ const handlePanelKeydown = (event) => {
     if (!returnPanel()) closePanel()
     return
   }
-  trapPanelFocus(event, panelRef.value)
+  if (!(isOverviewHome.value && workbenchPrimaryPanelSet.has(renderedPanel.value))) {
+    trapPanelFocus(event, panelRef.value)
+  }
 }
 
 const handlePanelAfterLeave = async (element) => {
@@ -1531,6 +1882,7 @@ const handlePanelAfterLeave = async (element) => {
 }
 
 watch([() => apiStore.authorizationGeneration, hallIdentityScope], () => {
+  cancelHostedPointWait()
   cancelPanelChatLoad()
   panelSessionGeneration.value += 1
   panelClosingGeneration.value = 0
@@ -1568,11 +1920,20 @@ const briefSelectedTask = (task = selectedTask.value, agent = selectedAgent.valu
   showToast('议事话头已备')
 }
 
-const discussTask = (task) => {
-  if (!task || !openPanel('chat')) return false
+const discussTask = (task, explicitAgent) => {
+  const assignedIds = [...new Set((Array.isArray(task?.assignedAgentIds) ? task.assignedAgentIds : [task?.assignedAgentId]).filter(Boolean))]
+  const actorAgentId = typeof explicitAgent?.agentId === 'string' ? explicitAgent.agentId : ''
+  const actor = assignedIds.length === 1 && assignedIds[0] === actorAgentId
+    ? operableRosterAgents.value.find(agent => agent.agentId === actorAgentId) || null
+    : null
+  if (!task?.id || !actor || !openPanel('chat')) return false
   enterBountyDiscussion(task)
+  // Clicking the task-scoped button is the user's explicit actor selection. Keep
+  // assignment itself non-authorizing, then bind only this exact task/actor pair.
+  taskWorkspaceBinding.selectExplicitActor(actor)
   markDiscussionStarted(task, chatContext.value?.participantAgentIds || [])
   if (!draft.value.trim()) setDraft(`请就榜文「${task.title}」议事。`)
+  return true
 }
 
 const toggleHallSound = () => {
@@ -1642,35 +2003,70 @@ const {
   tasks
 })
 
+const requirementCreateStorage = (() => {
+  try { return typeof window !== 'undefined' ? window.localStorage : null } catch { return null }
+})()
+const {
+  state: requirementCreateState,
+  busy: requirementCreateBusy,
+  create: runRequirementCreate,
+  checkOriginal: checkRequirementCreate,
+  resumeOriginal: resumeRequirementCreate,
+  readOriginal: readRequirementCreateOriginal,
+  dispose: disposeRequirementCreate
+} = useHallRequirementCreate({
+  agentApi,
+  actorScopeKey: hallIdentityScope,
+  identityEpoch: () => apiStore.authorizationGeneration,
+  storage: requirementCreateStorage,
+  schemaVersion: 2,
+  onCommitted: (receipt, fence) => {
+    if (!fence.isCurrent()) return false
+    tasks.value = [receipt.task, ...tasks.value.filter(task => task.id !== receipt.taskId)]
+    selectedTask.value = receipt.task
+    markTaskCreated(receipt.task)
+    playSuccess()
+    showToast('榜文及所选资料已确认；点将后才开始办理。')
+    return true
+  }
+})
 const createTask = async (payload, acknowledge = () => {}) => {
-  const created = await runCreateTask(payload)
-  if (created) markTaskCreated(selectedTask.value)
-  acknowledge(created)
+  // Preserve the funded lane, but never let it replace a pending ordinary
+  // creation operation, or reinterpret selected materials as funding authority.
+  let created = false
+  try {
+    const pendingDraft = hallDraftRecovery.unresolvedIntent.value
+    if (pendingDraft?.kind === 'TASK_CREATE') {
+      showToast('原事项创建仍待核对，请先打开原草稿；未创建另一份事项。')
+      openOverviewItem({ sourceType: 'DRAFT', sourceId: pendingDraft.draftId })
+      return false
+    }
+    if (payload?.grossBountyAmountMicro) {
+      const original = readRequirementCreateOriginal()
+      if (original.state !== 'ABSENT' || payload.attachments?.length || payload.inputRefs?.length) {
+        showToast('请先核对原张榜；资金榜不提交普通榜资料。')
+      } else {
+        created = await runCreateTask(payload)
+        if (created) markTaskCreated(selectedTask.value)
+      }
+    } else if (fundedCreateRecovery.value) {
+      showToast('请先核对原资金榜；当前编辑稿未提交。')
+    } else {
+      created = await runRequirementCreate(payload)
+      if (!created && requirementCreateState.value.error) showToast(requirementCreateState.value.error)
+    }
+  } finally { acknowledge(created) }
+  return created
+}
+const createRequirementAndChooseAgent = async (payload, acknowledge) => {
+  const created = await createTask(payload, acknowledge)
+  if (created && !payload?.grossBountyAmountMicro) openPanel('agents')
   return created
 }
 const resumeFundedCreate = async () => {
   const created = await runResumeFundedCreate()
   if (created) markTaskCreated(selectedTask.value)
   return created
-}
-
-const assignTask = async (task, agent) => {
-  const targetAgents = Array.isArray(agent) ? agent : [agent].filter(Boolean)
-  const hasExplicitAgentId = item => typeof item?.agentId === 'string' && Boolean(item.agentId.trim())
-  if (!task?.id || !targetAgents.length || targetAgents.some(item => !hasExplicitAgentId(item))) return false
-  if (task.funding?.mode === 'FUNDED_SINGLE_AGENT' && !economyPreviewEnabled.value) return false
-  if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT') {
-    if (targetAgents.some(item => !canAssign(task, item))) return false
-  }
-
-  taskWorkspaceBinding.clearExplicitActor()
-  const assignmentSucceeded = await runAssignTask(task, agent)
-  if (!assignmentSucceeded) return false
-
-  const canonicalTask = tasks.value.find(item => item.id === task.id) || task
-  if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT' ||
-    (canonicalTask.status === 'assigned' && canonicalTask.assignedAgentId === targetAgents[0].agentId)) markTaskAssigned(canonicalTask, targetAgents)
-  return true
 }
 
 const autoAssignTask = async (task) => {
@@ -1699,9 +2095,21 @@ const cancelFunding = async (task) => {
 
 const loadSettlement = async (task) => runLoadSettlement(task)
 
+let notifyBountyRequestCatalog = () => {}
+
 const {
+  activeRequest,
+  activeTurns,
+  adoptBountyBootstrap,
+  adoptTypedDiscussionReceipt,
+  capabilityState,
   cancelHallReplyTurn,
+  cancelDeliberation,
+  cancelLegacyHallReply,
+  canCancelLegacy,
+  durableCancelTarget,
   chatConnectionStatus,
+  deliberationStatus,
   conversationHistory,
   conversationHistoryDeletingId,
   conversationHistoryError,
@@ -1715,6 +2123,7 @@ const {
   insertAgentMention,
   isAwaitingReply,
   isConversationBusy,
+  isSubmitting,
   isStreaming,
   loadHallConversationHistory,
   loadHallMessages,
@@ -1725,6 +2134,7 @@ const {
   pendingAgentName,
   replyEventSequence,
   retryHallConversation,
+  refreshExecutionRequest,
   sendHallMessage,
   senderText,
   selectHallConversation,
@@ -1749,7 +2159,238 @@ const {
   showToast,
   onFinalReply: payload => {
     voiceReplyCorrelation.observe(payload)
+  },
+  onDelivery: ({ agentId }) => {
+    if (agentId) markAgentSpeaking(agentId, '收到传令', 'system')
+  },
+  onRequestCatalogHint: event => notifyBountyRequestCatalog(event),
+  onTypedOutcome: event => { if (event?.requestId) void typedDeliberation?.readOne?.(event.requestId) }
+})
+
+const followupContextGeneration = ref(0)
+const typedDeliberationEnabled = computed(() => typedDeliberationBuildEnabled && multimediaDeliberationUiEnabled && chatMode.value === 'bounty')
+let typedDeliberation = null
+const bountyRequestCatalog = useHallBountyRequestCatalog({
+  chatApi, identityScope: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
+  getContext: () => ({ conversationId: conversationId.value, taskId: conversationTask.value?.id || '',
+    targetAgentId: bountyInteractionTargetId(chatContext.value), assignmentRevision: typedAssignmentRevision() }),
+  getContextGeneration: () => followupContextGeneration.value, enabled: () => multimediaDeliberationUiEnabled && chatMode.value === 'bounty'
+})
+notifyBountyRequestCatalog = async () => {
+  if (await bountyRequestCatalog.refresh()) await typedDeliberation?.refresh?.()
+}
+const invalidateFollowupContext = () => { followupContextGeneration.value++; typedDeliberation?.invalidate?.() }
+const typedAssignmentRevision = () => currentBountyAssignmentRevision({
+  task: conversationTask.value, targetAgentId: bountyInteractionTargetId(chatContext.value),
+  conversationId: conversationId.value, state: pointAndStartState.value
+})
+const typedConversationGeneration = () => typedLong(activeRequest.value?.conversationGeneration) ||
+  typedLong(bountyRequestCatalog.entries.value?.[0]?.request?.conversationGeneration) || ''
+const typedDeliberationContext = () => ({ conversationId: conversationId.value, taskId: conversationTask.value?.id || '',
+  targetAgentId: bountyInteractionTargetId(chatContext.value), assignmentRevision: typedAssignmentRevision(),
+  conversationGeneration: typedConversationGeneration() })
+const typedDeliberationStorage = (() => { try { return typeof window !== 'undefined' ? window.sessionStorage : null } catch { return null } })()
+typedDeliberation = useHallTypedDeliberation({
+  chatApi, actorScopeKey: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
+  getContext: typedDeliberationContext, getContextGeneration: () => followupContextGeneration.value,
+  getCatalogEntries: () => bountyRequestCatalog.entries.value, prepareCatalog: () => bountyRequestCatalog.refresh(), storage: typedDeliberationStorage,
+  enabled: () => typedDeliberationEnabled.value,
+  onAccepted: async ({ receipt, purpose, context, isCurrent }) => {
+    if (!isCurrent?.()) return false
+    if (purpose === 'INSPECT') { bountyRequestCatalog.hint(); showToast('Agent 正在处理资料。'); return true }
+    const adopted = await adoptTypedDiscussionReceipt({ receipt, context, isCurrent })
+    if (!isCurrent?.()) return false
+    bountyRequestCatalog.hint()
+    showToast(adopted
+      ? (receipt.intent === 'CLARIFICATION_REPLY' ? '已发送补充。' : '已发送。')
+      : '消息已提交，正在确认处理状态。')
+    return adopted
   }
+})
+
+// Every user-visible task/target/auth context change fences in-flight original
+// projection reads. The one canonical task replacement performed by a verified
+// admission is marked below, so its own reactive write cannot cancel adoption.
+const pointAndStartContextGeneration = ref(0)
+let admittedPointAndStartTaskFingerprint = null
+const pointAndStartTaskFingerprint = task => [task?.id, task?.taskVersion, task?.requirementRevision, task?.revision]
+  .map(value => value == null ? '' : String(value)).join('\u0000')
+const preserveAdmittedPointAndStartContext = task => { admittedPointAndStartTaskFingerprint = pointAndStartTaskFingerprint(task) }
+const pointAndStartStorage = (() => {
+  try { return typeof window !== 'undefined' ? window.localStorage : null } catch { return null }
+})()
+const pointAndStartIntentState = (taskId) => createPointAndStartIntentStore({
+  storage: pointAndStartStorage,
+  scope: hallIdentityScope.value,
+  taskId
+}).read()
+const clearPointAndStartCapability = () => { pointAndStartContextGeneration.value++; invalidateControlledBridge(); stopPointAndStartObservation() }
+const attachAdmittedPointAndStart = async ({ task, targetAgentId, reference, isCurrent }) => {
+  if (!isCurrent?.() || panelDisposed || task?.id !== reference?.taskId || targetAgentId !== reference?.targetAgentId) return false
+  // Admission receives only the canonical TaskDTO. Never synthesize assignment
+  // fields from a grant receipt or choose a different roster target.
+  const target = operableRosterAgents.value.find(agent => agent?.agentId === targetAgentId)
+  if (!target) return false
+  tasks.value = tasks.value.map(item => item?.id === task.id ? task : item)
+  preserveAdmittedPointAndStartContext(task)
+  hallReadRevision.value += 1
+  selectedTask.value = task
+  if (!openPanel('chat')) return false
+  enterBountyDiscussion(task)
+  await nextTick()
+  if (!isCurrent?.() || panelDisposed || selectedTask.value?.id !== task.id) return false
+  return adoptBountyBootstrap(reference)
+}
+const {
+  state: controlledBridgeState,
+  busy: controlledBridgeBusy,
+  checkOriginal: checkControlledBridgeOriginal,
+  resumeOriginal: resumeControlledBridgeOriginal,
+  dispose: disposeControlledBridge,
+  invalidate: invalidateControlledBridge
+} = useHallPointAndStartControlledBridge({
+  agentApi,
+  actorScopeKey: hallIdentityScope,
+  storage: pointAndStartStorage,
+  keys: {
+    createAssignmentKey: () => globalThis.crypto?.randomUUID?.(),
+    createIssueKey: () => globalThis.crypto?.randomUUID?.()
+  },
+  onBound: async ({ intent, isCurrent }) => {
+    // The bridge receipt is not a bootstrap request. Observe the existing original
+    // projection until it is admitted/historical/failed or this context is invalidated.
+    if (isCurrent?.()) observePointAndStart(intent.taskId)
+  }
+})
+const {
+  state: pointAndStartState,
+  busy: pointAndStartBusy,
+  start: startPointAndStart,
+  checkOriginal: checkPointAndStart,
+  resumeOriginal: resumePointAndStart,
+  observeOriginal: observePointAndStart,
+  stopObservation: stopPointAndStartObservation,
+  dispose: disposePointAndStart
+} = useHallPointAndStart({
+  agentApi,
+  actorScopeKey: hallIdentityScope,
+  storage: pointAndStartStorage,
+  getContextGeneration: () => pointAndStartContextGeneration.value,
+  canAssign: (task, agent) => {
+    const current = operableRosterAgents.value.find(item => item?.agentId === agent?.agentId)
+    return Boolean(current && canAssign(task, current))
+  },
+  onAssignmentConfirmed: ({ isCurrent }) => {
+    if (isCurrent?.() && !panelDisposed) hallReadRevision.value += 1
+  },
+  onAdmitted: attachAdmittedPointAndStart
+})
+const pointAndStartPresentationState = computed(() => pointAndStartState.value.intent?.taskId === controlledBridgeState.value.intent?.taskId && pointAndStartState.value.status !== 'IDLE' ? pointAndStartState.value : controlledBridgeState.value.intent ? controlledBridgeState.value : pointAndStartState.value)
+const explainPointAndStartState = () => ({
+  UNKNOWN: '正在确认点将结果，请刷新状态。',
+  PREPARING: '正在准备会话。',
+  ADMITTED: '需求已发送，正在进入会话。',
+  HISTORICAL: '本次指派已结束，可查看历史记录。',
+  FAILED: '点将未完成，请刷新状态查看详情。'
+}[pointAndStartState.value.status] || '正在确认点将结果。')
+const checkPointAndStartOriginal = async (task) => {
+  if (!task?.id) return false
+  const existing = pointAndStartIntentState(task.id)
+  const result = pointAndStartRecoveryLane(existing) === 'CONTROLLED' ? await checkControlledBridgeOriginal(task.id) : await checkPointAndStart(task.id)
+  if (!result && pointAndStartState.value.intent?.taskId === task.id) showToast(explainPointAndStartState())
+  return result
+}
+const resumePointAndStartOriginal = async (task) => {
+  const intent = pointAndStartIntentState(task?.id)
+  if (intent.state !== 'PRESENT') return checkPointAndStartOriginal(task)
+  if (pointAndStartRecoveryLane(intent) === 'CONTROLLED') return resumeControlledBridgeOriginal(task.id)
+  return resumePointAndStart(task.id)
+}
+// Reuse the selected canonical task; private chat never changes this context.
+const pendingPointAndDeliberateTask = computed(() => {
+  const task = selectedTask.value
+  if (!task?.id || task.funding?.mode === 'FUNDED_SINGLE_AGENT') return null
+  if (String(task.status || '').toLowerCase() !== 'open') return null
+  if (task.assignedAgentId || task.assignedAgentIds?.length) return null
+  return task
+})
+const canPointAndDeliberateAgent = agent => Boolean(pendingPointAndDeliberateTask.value && agent?.agentId && canAssign(pendingPointAndDeliberateTask.value, agent))
+const handlePointAndDeliberateAgent = agent => {
+  if (!canPointAndDeliberateAgent(agent)) return false
+  return assignTask(pendingPointAndDeliberateTask.value, agent)
+}
+
+const assignTask = async (task, agent) => {
+  if (!task?.id) return false
+  // A durable v2 original always wins over every normal lane. This check happens
+  // before funded/multi/open eligibility so a changed current snapshot cannot
+  // turn an uncertain original write into a fresh legacy assignment.
+  const original = pointAndStartIntentState(task.id)
+  if (pointAndStartIntentReadLane(original) === 'UNAVAILABLE') {
+    showToast('无法读取原点将恢复记录；未另建点将。请恢复浏览器本地存储后核对原操作。')
+    return false
+  }
+  if (original.state === 'PRESENT' || original.state === 'CORRUPT') {
+    if (original.state === 'CORRUPT') showToast('原点将恢复记录损坏；为避免重复办理，未改走旧式点将。')
+    else await checkPointAndStartOriginal(task)
+    return false
+  }
+
+  const targetAgents = Array.isArray(agent) ? agent : [agent].filter(Boolean)
+  const hasExplicitAgentId = item => typeof item?.agentId === 'string' && Boolean(item.agentId.trim())
+  if (!targetAgents.length || targetAgents.some(item => !hasExplicitAgentId(item))) return false
+  if (task.funding?.mode === 'FUNDED_SINGLE_AGENT' && !economyPreviewEnabled.value) return false
+  if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT' && targetAgents.some(item => !canAssign(task, item))) return false
+
+  const oneOrdinaryTarget = task.funding?.mode !== 'FUNDED_SINGLE_AGENT' && targetAgents.length === 1
+  if (oneOrdinaryTarget) {
+    const started = await startPointAndStart({ task, agent: targetAgents[0] })
+    if (!started) showToast(explainPointAndStartState())
+    if (pointAndStartState.value.status === 'PREPARING') observePointAndStart(task.id)
+    return started
+  }
+
+  taskWorkspaceBinding.clearExplicitActor()
+  const assignmentSucceeded = await runAssignTask(task, agent)
+  if (!assignmentSucceeded) return false
+  const canonicalTask = tasks.value.find(item => item.id === task.id) || task
+  if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT' ||
+    (canonicalTask.status === 'assigned' && canonicalTask.assignedAgentId === targetAgents[0].agentId)) markTaskAssigned(canonicalTask, targetAgents)
+  return true
+}
+
+watch(() => [selectedTask.value?.id, selectedTask.value?.taskVersion, selectedTask.value?.requirementRevision, selectedTask.value?.revision], ([taskId, taskVersion, requirementRevision, revision]) => {
+  const fingerprint = [taskId, taskVersion, requirementRevision, revision].map(value => value == null ? '' : String(value)).join('\u0000')
+  const admittedProjection = admittedPointAndStartTaskFingerprint === fingerprint
+  admittedPointAndStartTaskFingerprint = null
+  if (admittedProjection) return
+  clearPointAndStartCapability()
+  if (taskId && pointAndStartIntentState(taskId).state === 'PRESENT') void checkPointAndStartOriginal({ id: taskId })
+}, { flush: 'sync' })
+watch([() => apiStore.authorizationGeneration, hallIdentityScope, () => selectedAgent.value?.agentId], clearPointAndStartCapability, { flush: 'sync' })
+const followupTaskFence = computed(() => [selectedTask.value?.id, selectedTask.value?.taskVersion,
+  selectedTask.value?.requirementRevision, selectedTask.value?.revision].map(value => value == null ? '' : String(value)).join('\u0000'))
+watch([followupTaskFence, () => apiStore.authorizationGeneration, hallIdentityScope, () => conversationId.value,
+  () => activeRequest.value?.conversationGeneration, () => bountyInteractionTargetId(chatContext.value), () => chatMode.value], invalidateFollowupContext, { flush: 'sync' })
+watch([followupTaskFence, () => apiStore.authorizationGeneration, hallIdentityScope, () => conversationId.value,
+  () => activeRequest.value?.conversationGeneration, () => bountyInteractionTargetId(chatContext.value), () => chatMode.value], () => {
+  bountyRequestCatalog.reset()
+  if (chatMode.value === 'bounty' && conversationId.value) {
+    void bountyRequestCatalog.refresh()
+    void typedDeliberation?.recover?.()
+  }
+}, { flush: 'sync' })
+
+const formalTaskExecutionContext = useFormalTaskExecutionScope({
+  selectedTask,
+  chatContext,
+  conversationId,
+  identityScope: hallIdentityScope,
+  taskWorkspaceEnabled,
+  taskWorkspaceSubject,
+  taskWorkspaceSnapshot,
+  taskWorkspaceConnectionState,
+  taskWorkspaceError
 })
 
 hallVoice = useHallVoiceConversation({
@@ -1776,7 +2417,7 @@ hallVoice = useHallVoiceConversation({
   },
   getDraft: () => draft.value,
   getDraftRevision: () => draftRevision.value,
-  isReplyBusy: () => isStreaming.value || isAwaitingReply.value,
+  isReplyBusy: () => Boolean(isSubmitting?.value) || isStreaming.value || isAwaitingReply.value,
   onCaptureStateChange: capturing => setSoundSuppressed?.(capturing),
   onReplyTurnTerminal: ({ reason, turnId }) => {
     const closedCurrentTurn = voiceReplyCorrelation.closeIfCurrent(turnId, reason)
@@ -1784,7 +2425,7 @@ hallVoice = useHallVoiceConversation({
   },
   onOpenReview: () => { if (!activePanel.value) openPanel('chat') },
   onSendVoice: async ({ content, contextSnapshot, draftRevision: frozenDraftRevision, turnId }) => {
-    if (isStreaming.value || isAwaitingReply.value) return false
+    if (Boolean(isSubmitting?.value) || isStreaming.value || isAwaitingReply.value) return false
     const correlationTurnId = voiceReplyCorrelation.start({
       turnId,
       baselineSequence: replyEventSequence.value,
@@ -1815,7 +2456,7 @@ const voiceInteractionLocked = computed(() => hallVoice.voiceInteractionLocked)
 const accountEntryDisabled = computed(() => isPanelSessionActive.value || voiceInteractionLocked.value)
 const hallLeaveHasMeaningfulWork = computed(() => hasMeaningfulHallLeaveWork({
   draft: draft.value,
-  isAwaitingReply: isAwaitingReply.value,
+  isAwaitingReply: isAwaitingReply.value || Boolean(isSubmitting?.value),
   isStreaming: isStreaming.value,
   voiceInteractionLocked: voiceInteractionLocked.value,
   voiceTurnActive: Boolean(hallVoice?.voiceTurnActive)
@@ -1926,16 +2567,39 @@ const handleNewHallConversation = () => {
   return true
 }
 
-const handleSendHallMessage = async () => {
+const handleSendHallMessage = async (typedInput = {}) => {
   voiceReplyCorrelation.close('manual_text_send')
   hallVoice?.cancel()
   playSend()
-  const currentContext = chatContext.value || {}
-  const targets = currentContext.targetAgentIds?.length ? currentContext.targetAgentIds : currentContext.participantAgentIds
-  targets?.slice(0, 3).forEach(agentId => markAgentSpeaking(agentId, '收到传令', 'system'))
-  await sendHallMessage()
+  if (typedDeliberationEnabled.value) {
+    const sourceSelectors = Array.isArray(typedInput?.sourceSelectors) ? typedInput.sourceSelectors : []
+    if (!typedAssignmentRevision() && conversationTask.value?.id) {
+      const fence = [hallIdentityScope.value, apiStore.authorizationGeneration, conversationTask.value.id,
+        conversationId.value, bountyInteractionTargetId(chatContext.value), draft.value]
+      await checkPointAndStartOriginal(conversationTask.value)
+      const current = [hallIdentityScope.value, apiStore.authorizationGeneration, conversationTask.value?.id,
+        conversationId.value, bountyInteractionTargetId(chatContext.value), draft.value]
+      if (fence.some((value, index) => value !== current[index])) return false
+    }
+    const accepted = await typedDeliberation.submit({ content: draft.value, sourceSelectors })
+    if (accepted) setDraft('')
+    else if (typedDeliberation.error.value) showToast(typedDeliberation.error.value)
+    return accepted
+  }
+  return sendHallMessage()
 }
-
+const handleTypedReply = projection => {
+  if (!typedDeliberationEnabled.value || !typedDeliberation.choosePending(projection)) return false
+  setDraft('')
+  showToast('请在输入框补充说明。')
+  return true
+}
+const handleTypedResume = async () => {
+  if (!typedDeliberationEnabled.value) return false
+  const resumed = await typedDeliberation.resumeUnknown()
+  if (!resumed && typedDeliberation.error.value) showToast(typedDeliberation.error.value)
+  return resumed
+}
 const handleMentionAgent = (agent) => {
   if (!chatMentionAgents.value.some(item => item.agentId === agent?.agentId)) {
     showToast('只可点名自家好汉')
@@ -1944,7 +2608,6 @@ const handleMentionAgent = (agent) => {
   playTap()
   setMentionAgent(agent)
   mentionAgent(agent)
-  markAgentSpeaking(agent, '收到传令', 'system')
 }
 
 const handleClearChatTarget = () => {
@@ -2038,13 +2701,22 @@ onMounted(async () => {
   // token() initiates the one OAuth redirect when identity is absent. Do not mount
   // the live hall workflow while that redirect is pending: its protected loaders
   // would otherwise race the redirect and turn authentication into a fetch error.
-  if (!await apiStore.token()) return
+  const initializationGeneration = apiStore.authorizationGeneration
+  const initializationIsCurrent = () => !panelDisposed && initializationGeneration === apiStore.authorizationGeneration
+  if (!await apiStore.token() || !initializationIsCurrent()) return
+  // A valid restored bearer token can survive while only the unverified local ID
+  // cache remains. Hydrate the server profile before identity-scoped state opens.
+  if (!hasHydratedIdentity(globalStore.user)) {
+    try { await apiStore.getUserInfo() } catch (error) { log.warn('hall identity hydration failed:', error) }
+  }
+  if (!initializationIsCurrent()) return
   permitStageMount()
   await refreshHall({ silent: true })
   startDialogueBubbles()
 })
 
 onUnmounted(() => {
+  cancelHostedPointWait()
   document.removeEventListener?.('visibilitychange', handleDocumentVisibility)
   panelDisposed = true
   panelSessionGeneration.value += 1
@@ -2059,6 +2731,11 @@ onUnmounted(() => {
   taskWorkspaceBinding.dispose()
   voiceReplyCorrelation.close('unmount')
   hallVoice?.dispose()
+  clearPointAndStartCapability()
+  disposeRequirementCreate()
+  disposePointAndStart()
+  disposeControlledBridge()
+  typedDeliberation?.dispose?.()
   disposeHallConversation()
   hallBackendSceneState?.dispose()
   stopHallEventStream()
@@ -2074,6 +2751,10 @@ onUnmounted(() => {
 <style scoped>
 .juyi-page {
   --bottom-action-bar-height: 68px;
+  --hall-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --hall-dock-height: 62px;
+  --hall-dock-reserve: 0px;
+  --hall-content-bottom-inset: calc(var(--hall-safe-bottom) + var(--hall-dock-reserve));
   position: relative;
   display: flex;
   flex: 1;
@@ -2785,8 +3466,7 @@ button.hall-room {
   color: #4a3423;
 }
 
-.panel-return,
-.panel-orientation {
+.panel-return {
   flex: 0 0 auto;
   white-space: nowrap;
 }
@@ -3203,9 +3883,7 @@ button.hall-room {
 .panel-title > span { white-space:normal; font-size:20px; }
 .panel-title .panel-close { order:4; border:0; background:transparent; }
 .panel-title .panel-return { order:0; }
-.panel-title .panel-orientation { margin-left:auto; font-size:14px; border:1px solid #c8ad84; background:transparent; }
 .panel-title > span { order:1; }
-.panel-title .panel-orientation { order:2; }
 @media (max-width:1000px) {
  .hall-mode-hint,.hall-sound-action,.hall-help-action,.hall-brand small { display:none; }
  .hall-app-header,.hall-map-actions { padding:8px 12px; gap:8px; }
@@ -3243,4 +3921,687 @@ button.hall-room {
 .floating-panel > :deep(.hall-draft-editor) { flex:1; min-height:0; overflow:auto; align-content:start; padding:24px 30px; box-sizing:border-box; overscroll-behavior:contain; }
 @media(max-width:600px) { .floating-panel > :deep(.hall-draft-editor) { padding:20px 16px; } }
 @media(max-height:500px) { .floating-panel > :deep(.hall-draft-editor) { padding:14px 20px; } }
+/* Lightweight workbench: keep all authoritative panels and the single live Stage. */
+.juyi-page.home-overview {
+  --hall-canvas: #f5f4f0;
+  --hall-surface: #fffefa;
+  --hall-surface-subtle: #f3f3ed;
+  --hall-surface-brand: #f6eee8;
+  --hall-text: #242e2b;
+  --hall-text-muted: #68716b;
+  --hall-border: #e3e5dc;
+  --hall-border-strong: #ccd2c5;
+  --hall-brand: #923f30;
+  --hall-brand-hover: #793326;
+  --hall-positive: #36643b;
+  --hall-warning: #87551c;
+  --hall-danger: #a13f35;
+  --hall-info: #21604d;
+  --hall-radius-sm: 7px;
+  --hall-radius-md: 10px;
+  --hall-radius-lg: 12px;
+  --hall-control-height: 44px;
+  --hall-page-gutter: 16px;
+  --hall-focus-ring: #923f3052;
+  --work-paper: var(--hall-surface);
+  --work-ground: var(--hall-canvas);
+  --work-line: var(--hall-border);
+  --work-ink: var(--hall-text);
+  --work-muted: var(--hall-text-muted);
+  --work-brand: var(--hall-brand);
+  display: grid;
+  grid-template-columns: 216px minmax(0, 1fr);
+  grid-template-rows: 76px minmax(0, 1fr);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-size: 15px;
+  line-height: 1.65;
+  background: var(--work-ground);
+  color: var(--work-ink);
+}
+.home-overview > .hall-workbench-sidebar {
+  grid-column: 1; grid-row: 1 / -1;
+  display: flex; flex-direction: column; min-height: 0; padding: 28px 15px 16px;
+  background: var(--work-paper); border-right: 1px solid var(--work-line); overflow-y: auto;
+}
+.home-overview .workbench-brand {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 0 5px;
+  min-height: 54px; text-align: left; border: 0; background: transparent;
+  color: var(--work-ink); font: 500 23px/1.2 "Noto Serif CJK SC", "Songti SC", STSong, serif;
+  cursor: pointer;
+}
+.home-overview .workbench-brand small, .home-overview .workbench-map-entry small {
+  display: block; margin-top: 4px; color: var(--work-muted); font: 400 11px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+}
+.home-overview .workbench-seal {
+  display: grid; place-items: center; width: 38px; height: 38px; flex: none;
+  border-radius: 8px; background: var(--work-brand); color: var(--work-paper); font-size: 21px;
+}
+.home-overview .workbench-nav-caption { margin: 30px 10px 10px; font-size: 11px; letter-spacing: .06em; color: var(--work-muted); }
+.home-overview .workbench-side-nav { display: flex; flex-direction: column; gap: 3px; }
+.home-overview .workbench-side-nav button, .home-overview .workbench-map-entry {
+  display: flex; align-items: center; justify-content: flex-start; gap: 12px; width: 100%;
+  min-height: 44px; padding: 9px 12px; border: 0; border-radius: 7px;
+  background: transparent; color: var(--work-muted); text-align: left; cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 500; line-height: 1.45;
+}
+.home-overview .workbench-side-nav button:hover, .home-overview .workbench-map-entry:hover { background: #f0f1ea; color: var(--work-ink); }
+.home-overview .workbench-side-nav button[aria-current="page"] { background: #f6eee8; color: var(--work-brand); }
+.home-overview .workbench-side-nav button .var-icon, .home-overview .workbench-map-entry .var-icon { flex: none; font-size: 19px; }
+.home-overview .workbench-sidebar-bottom { margin-top: auto; padding-top: 20px; }
+.home-overview .workbench-map-entry { min-height: 66px; margin-bottom: 14px; border: 1px solid var(--work-line); background: var(--work-ground); color: var(--work-ink); }
+.home-overview .workbench-map-entry span { flex: 1; }
+.home-overview .workbench-side-utility { border-top: 1px solid var(--work-line); padding-top: 12px; }
+.home-overview .workbench-sidebar-account { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 52px; margin-top: 14px; padding: 9px 5px; border: 0; border-top: 1px solid var(--work-line); background: transparent; text-align: left; color: var(--work-ink); font: inherit; cursor: pointer; }
+.home-overview .workbench-sidebar-account img, .home-overview .workbench-sidebar-account > .var-icon:first-child { flex: none; width: 32px; height: 32px; border-radius: 50%; object-fit: cover; font-size: 29px; }
+.home-overview .workbench-sidebar-account span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.home-overview .workbench-sidebar-account small { display: block; color: var(--work-muted); font-size: 11px; }
+.home-overview .workbench-sidebar-account > .var-icon:last-child { font-size: 16px; }
+.home-overview > .hall-app-header {
+  grid-column: 2; grid-row: 1; min-width: 0; padding: 12px 36px;
+  background: var(--work-paper); color: var(--work-ink); border-bottom: 1px solid var(--work-line);
+}
+.home-overview .hall-app-header .hall-brand { font-size: 17px; color: var(--work-ink); }
+.home-overview .workbench-breadcrumb { display: flex; align-items: center; gap: 13px; min-width: 0; color: var(--work-muted); font-size: 13px; }
+.home-overview .workbench-breadcrumb button { min-height: 36px; padding: 0; border: 0; background: none; color: inherit; font: inherit; }
+.home-overview .workbench-breadcrumb strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--work-ink); font-weight: 500; }
+.home-overview .workbench-breadcrumb > .var-icon { font-size: 14px; }
+.home-overview .hall-app-header .hall-seal, .home-overview .hall-app-header .hall-brand small, .home-overview .hall-app-header .hall-main-nav, .home-overview > .hall-mode-toolbar { display: none; }
+.home-overview .hall-app-header button { min-height: 40px; padding: 8px 12px; border-radius: 7px; color: var(--work-muted); border-color: var(--work-line); }
+.home-overview .hall-app-header .workbench-create-action { background: var(--work-brand); color: var(--work-paper); border-color: var(--work-brand); }
+.home-overview .hall-app-header .workbench-message-action { display: inline-flex; align-items: center; justify-content: center; width: 40px; padding: 8px; font-size: 19px; }
+.home-overview .hall-app-header .workbench-account-action, .home-overview .hall-app-header .workbench-create-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.home-overview .workbench-more-menu button { display: flex; align-items: center; gap: 8px; }
+.home-overview .workbench-more-menu button .var-icon { flex: none; font-size: 19px; }
+.home-overview .hall-app-header .workbench-create-action:hover { background: #793326; }
+.home-overview .workbench-mobile-more, .home-overview .workbench-mobile-nav { display: none; }
+/* The absolute containing block is .juyi-page; percentage width also accounts for classic viewport scrollbars. */
+.home-overview .workbench-more-menu { position: absolute; top: 64px; right: 15px; z-index: 32; box-sizing: border-box; width: min(330px, calc(100% - 30px)); max-height: calc(100% - 64px - var(--hall-content-bottom-inset)); overflow-y: auto; overscroll-behavior: contain; padding: 12px; background: var(--work-paper); border: 1px solid var(--work-line); border-radius: 10px; box-shadow: 0 18px 38px #242e2b29; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.home-overview .workbench-more-menu button { white-space: normal; text-align: left; justify-content: flex-start; }
+.juyi-page.home-overview :deep(.portrait-work-summary) { width: min(1320px, 100%); }
+.juyi-page.home-overview :deep(.hall-overview:not(.is-messages)) { background: var(--work-ground); color: var(--work-ink); }
+.juyi-page.home-overview > :deep(.hall-portrait-home.is-unified-shell) {
+  grid-column: 2; grid-row: 2; min-height: 0; height: 100%; background: var(--work-ground); color: var(--work-ink);
+}
+.home-overview .panel-overlay.is-workbench-panel {
+  inset: 76px 0 0 216px; top: 76px; bottom: 0; height: auto; max-height: none;
+  padding: 16px 24px; background: var(--work-ground); z-index: 20;
+}
+.home-overview .panel-overlay.is-workbench-panel::before { background: transparent; }
+.home-overview .panel-overlay.is-workbench-panel > .floating-panel {
+  flex: 1; width: min(1320px, 100%); max-width: 1320px; height: 100%; max-height: 100%; min-height: 0;
+  border: 1px solid var(--work-line); border-radius: 12px; background: var(--work-paper); box-shadow: none;
+}
+
+/* Overview-owned overlays retain modal geometry, but use the same semantic
+   workbench palette as primary pages. Map overlays never match this scope. */
+.home-overview .panel-overlay.theme-workbench:not(.is-workbench-panel) > .floating-panel {
+  background: var(--work-paper); color: var(--work-ink); border-color: var(--work-line); box-shadow: 0 18px 38px #242e2b29;
+}
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel),
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel),
+.home-overview .panel-overlay.theme-workbench :deep(.library-panel),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages) { background: var(--work-paper); color: var(--work-ink); }
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .status-filter button.active) { background: var(--hall-surface-brand); color: var(--work-brand); border: 1px solid var(--work-brand); }
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .agent-row) { background: var(--hall-surface-subtle); color: var(--work-ink); border: 1px solid var(--work-line); }
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .agent-row.active) { background: var(--hall-surface-brand); border-color: var(--work-brand); }
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .agent-row small),
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .detail-head small),
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .panel-data-state) { color: var(--work-muted); }
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .ability-tags span) { background: var(--hall-surface-brand); color: var(--work-brand); }
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .catalog-summary),
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .persona-card),
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .catalog-state),
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .access-prompt) { background: var(--work-paper); color: var(--work-ink); border-color: var(--work-line); }
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .persona-card.is-mine),
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .catalog-action.subtle) { background: var(--hall-surface-brand); color: var(--work-brand); border-color: var(--work-brand); }
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .catalog-action.primary) { background: var(--work-brand); border-color: var(--work-brand); color: var(--work-paper); }
+.home-overview .panel-overlay.theme-workbench :deep(.library-panel .library-search),
+.home-overview .panel-overlay.theme-workbench :deep(.library-panel .result-card),
+.home-overview .panel-overlay.theme-workbench :deep(.library-panel .empty-list) { background: var(--hall-surface-subtle); color: var(--work-ink); border-color: var(--work-line); }
+.home-overview .panel-overlay.theme-workbench :deep(.library-panel .library-search input),
+.home-overview .panel-overlay.theme-workbench :deep(.library-panel .library-search select) { background: var(--work-paper); color: var(--work-ink); border-color: var(--work-line); }
+.home-overview .panel-overlay.theme-workbench :deep(.library-panel .library-tabs button.active),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .case-tabs button[aria-pressed=true]) { background: transparent; color: var(--work-brand); border-bottom-color: var(--work-brand); }
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor input),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor textarea),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor select),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .draft-preview) { background: var(--work-paper); color: var(--work-ink); border-color: var(--work-line); }
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .draft-note),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .draft-chips span) { background: var(--hall-surface-brand); color: var(--work-brand); border-color: var(--work-line); }
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .draft-strip),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .draft-actions),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .case-tabs),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .material-picker),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .material-picker article),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .confirmation-grid),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .confirmation-grid > div),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .case-receipt) { border-color: var(--work-line); }
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages) { padding: 24px; }
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages .overview-intro),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages .overview-empty) { color: var(--work-muted); }
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages .overview-main),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages .overview-item),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages .overview-source-error) { background: var(--work-paper); color: var(--work-ink); border-color: var(--work-line); }
+.home-overview .panel-overlay.theme-workbench .panel-title { min-height: 56px; padding: 10px 20px; background: var(--work-paper); color: var(--work-ink); }
+.home-overview .panel-overlay.theme-workbench .panel-title > span { font-size: 20px; }
+.home-overview .panel-overlay.theme-workbench .panel-title .panel-return { min-height: 44px; padding: 0 4px 0 0; border: 0; background: transparent; color: var(--work-brand); box-shadow: none; white-space: nowrap; }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-messages) { flex: 1 1 auto; min-height: 0; padding: 16px 20px; }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-chat-composer) { padding: 10px 20px 12px; }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.chat-panel) { height: 100%; }
+/* The workbench owns only top-level presentation: nested detail dialogs, map and
+   business authorization/state remain controlled by their original components. */
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.chat-panel),
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-messages),
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-chat-composer) { background: var(--work-paper); color: var(--work-ink); }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.discussion-brief) { background: var(--work-ground); color: var(--work-ink); border-color: var(--work-line); }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.discussion-brief .var-icon) { color: var(--work-brand); }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar) { border-color: var(--work-line); color: var(--work-muted); }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar .icon-button) { background: transparent; color: var(--work-ink); border: 0; }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar .icon-button:hover:not(:disabled)) { background: #f3f3ed; }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar .context-summary strong) { color: var(--work-ink); }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-messages .empty-list) { color: var(--work-muted); }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-message) { background: #f2f2eb; color: var(--work-ink); box-shadow: none; }
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-message.USER) { background: #eaf0e6; }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel) { background: var(--work-paper); color: var(--work-ink); }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar) {
+  align-items: stretch; gap: 10px; padding: 16px 20px; border-bottom: 1px solid var(--work-line); color: var(--work-muted);
+}
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-search) { gap: 10px; }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-search input),
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-search select) {
+  height: var(--hall-control-height); padding-inline: 12px; border-color: var(--hall-border-strong); border-radius: var(--hall-radius-sm); background: var(--work-paper); color: var(--work-ink);
+}
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar > button),
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-create-actions button) {
+  min-height: var(--hall-control-height); background: var(--hall-surface-subtle); color: var(--work-ink); border: 1px solid var(--work-line);
+}
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-create-actions) { display: grid; grid-template-columns: repeat(3, minmax(0, auto)); gap: 8px; }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-create-actions .new-task-button:first-child) {
+  background: var(--hall-surface-brand); color: var(--work-brand); border-color: #e3d8d0;
+}
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs) {
+  gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--work-line); scrollbar-width: none;
+}
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs button) {
+  flex: 0 0 auto; min-height: 38px; background: var(--hall-surface-subtle); color: var(--work-muted); border: 1px solid var(--work-line);
+}
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs::-webkit-scrollbar) { display: none; }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs button.active) { background: var(--hall-surface-brand); color: var(--work-brand); border-color: #e3d8d0; }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs small) { min-width: 20px; box-sizing: border-box; background: var(--work-paper); color: inherit; text-align: center; }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-panel-body) { padding: 16px 20px 20px; background: var(--work-ground); }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-card) { margin-bottom: 10px; padding: 16px; border: 1px solid var(--work-line); border-radius: var(--hall-radius-md); background: var(--work-paper); box-shadow: 0 1px 2px rgba(36, 46, 43, .04); }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-card.selected) { background: var(--hall-surface-brand); border-color: #dfcbc1; }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-card p),
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-meta) { color: var(--work-muted); }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .ability-tags span) { background: #eef3eb; color: #4b6650; }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .empty-list) { border: 1px dashed var(--work-line); border-radius: var(--hall-radius-md); background: var(--work-paper); color: var(--work-muted); }
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .status-filter button:not(.active)) { background: #f3f3ed; color: var(--work-ink); }
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .detail-card) { background: #fafbf6; border: 1px solid var(--work-line); color: var(--work-ink); }
+.home-overview .panel-overlay.theme-workbench :deep(.library-panel .library-tabs button:not(.active)) { background: #f3f3ed; color: var(--work-ink); }
+.home-overview .panel-overlay.theme-workbench :deep(.personal-workspace.is-hall-treasure) { background: var(--work-paper); color: var(--work-ink); }
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-content button:not(.treasure-primary)) { color: var(--work-ink); border-color: var(--work-line); border-radius: 7px; }
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-content input:not([type=file])) { background: var(--work-paper); border-color: #ccd2c5; color: var(--work-ink); }
+/* Keep the authoritative treasure workflow, but let its search form reflow
+   inside the narrower workbench panel instead of stacking two Chinese glyphs. */
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-search label) { flex: 1 1 auto; min-width: 0; width: auto; }
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-search button) { flex: 0 0 auto; min-width: 68px; white-space: nowrap; }
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-content .treasure-primary) { background: var(--work-brand); border-color: var(--work-brand); color: var(--work-paper); border-radius: 7px; }
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-content .treasure-tabs) { border-color: var(--work-line); }
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-content .treasure-tabs button[aria-pressed="true"]) { color: var(--work-brand); border-color: var(--work-brand); }
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-content input:focus-visible),
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-content button:focus-visible) { outline-color: var(--work-brand); }
+
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar),
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .panel-toolbar),
+.home-overview .panel-overlay.theme-workbench :deep(.library-panel .library-toolbar),
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .catalog-toolbar) { gap: 8px; }
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel button),
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel button),
+.home-overview .panel-overlay.theme-workbench :deep(.library-panel button),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor button),
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel button),
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-content button) { min-height: var(--hall-control-height); border-radius: var(--hall-radius-sm); }
+.home-overview .panel-overlay.theme-workbench :deep(.library-panel button),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor button:not(.primary)),
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .catalog-action:not(.primary)),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages button) { background: var(--hall-surface-subtle); color: var(--work-ink); border-color: var(--work-line); }
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .primary),
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages button.primary) { background: var(--work-brand); color: var(--work-paper); border-color: var(--work-brand); }
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages button) { min-height: var(--hall-control-height); }
+.home-overview .panel-overlay.theme-workbench :deep(.overview-tabs),
+.home-overview .panel-overlay.theme-workbench :deep(.library-tabs) { min-height: var(--hall-control-height); border-bottom: 1px solid var(--hall-border); overflow-x: auto; }
+.home-overview .panel-overlay.theme-workbench :deep(.overview-tabs button[aria-pressed="true"]),
+.home-overview .panel-overlay.theme-workbench :deep(.library-tabs button.active) { color: var(--hall-brand); border-bottom: 2px solid var(--hall-brand); }
+.home-overview .panel-overlay.theme-workbench :deep(.task-status-tabs),
+.home-overview .panel-overlay.theme-workbench :deep(.status-filter) { overflow-x: auto; flex-wrap: nowrap; }
+@media (max-width: 760px) {
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel),
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel),
+  .home-overview .panel-overlay.theme-workbench :deep(.library-panel),
+  .home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel),
+  .home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor) { --hall-page-gutter: 16px; }
+  .home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages) { padding: 16px; }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar) { padding: 12px 16px; }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-search) { grid-template-columns: minmax(0, 1fr); }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-create-actions) { width: 100%; grid-template-columns: .75fr 1.35fr 1.05fr; }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-create-actions button) { min-width: 0; padding-inline: 6px; font-size: 13px; line-height: 1.3; }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs) { padding: 10px 16px; }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-panel-body) { padding: 12px 16px 20px; }
+}
+
+.home-overview button:focus-visible, .home-overview .workbench-more-menu button:focus-visible { outline: 3px solid #923f3080; outline-offset: 3px; }
+@media (max-width: 1200px) {
+  .juyi-page.home-overview { grid-template-columns: 192px minmax(0, 1fr); }
+  .home-overview > .hall-workbench-sidebar { padding-right: 10px; padding-left: 10px; }
+  .home-overview .panel-overlay.is-workbench-panel { left: 192px; }
+  .home-overview > .hall-app-header { padding-right: 26px; padding-left: 26px; }
+}
+@media (max-width: 760px) {
+  .juyi-page.has-workbench-dock { --hall-dock-reserve: var(--hall-dock-height); }
+  .juyi-page.home-overview { grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(0,1fr); }
+  .home-overview > .hall-workbench-sidebar, .home-overview > .hall-app-header { display: none; }
+  .home-overview .hall-app-header .hall-header-tools { gap: 5px; }
+  .home-overview .hall-app-header .hall-header-tools > button:first-child, .home-overview .hall-app-header .workbench-create-action { display: none; }
+  .home-overview .workbench-breadcrumb button, .home-overview .workbench-breadcrumb > .var-icon { display: none; }
+  .home-overview .workbench-breadcrumb strong { font-size: 15px; }
+  .home-overview .hall-app-header .workbench-account-action { width: 40px; padding: 8px; font-size: 19px; }
+  .home-overview .hall-app-header .workbench-account-action span { display: none; }
+  .home-overview .hall-app-header .workbench-mobile-more { display: inline-flex; }
+  .juyi-page.home-overview > :deep(.hall-portrait-home.is-unified-shell) { grid-column: 1; grid-row: 1; padding-bottom: var(--hall-content-bottom-inset); }
+  .home-overview .workbench-mobile-nav {
+    position: absolute; z-index: 30; bottom: 0; left: 0; right: 0;
+    display: flex; align-items: stretch; box-sizing: border-box; height: calc(var(--hall-dock-height) + var(--hall-safe-bottom));
+    padding: 5px 12px max(5px, var(--hall-safe-bottom));
+    border-top: 1px solid var(--work-line); background: var(--work-paper);
+  }
+  .home-overview .workbench-mobile-nav button {
+    flex: 1 1 25%; min-width: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 4px;
+    border: 0; border-radius: 7px; padding: 5px; min-height: 50px; background: transparent;
+    color: var(--work-muted); font-size: 11px; cursor: pointer; white-space: nowrap;
+  }
+  .home-overview .workbench-mobile-nav button[aria-current="page"] { color: var(--work-brand); background: #f6eee8; }
+  .home-overview .workbench-mobile-nav .var-icon { font-size: 21px; }
+  .home-overview .panel-overlay.is-workbench-panel {
+    inset: 0 0 var(--hall-content-bottom-inset) 0; top: 0; bottom: var(--hall-content-bottom-inset);
+    height: auto; max-height: none; padding: 0;
+  }
+  .home-overview .panel-overlay.is-workbench-panel > .floating-panel { width: 100%; max-width: none; height: 100%; border: 0; border-radius: 0; }
+  .home-overview .panel-overlay.theme-workbench .panel-title { min-height: 44px; padding: 6px 16px; }
+  .home-overview .panel-overlay.theme-workbench .panel-title > span { font-size: 17px; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-chat-composer) { padding: 8px 16px 10px; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-messages) { padding: 10px 16px; }
+  .home-overview .panel-overlay.theme-workbench :deep(.treasure-intro) { flex-wrap: wrap; gap: 12px; }
+  .home-overview .panel-overlay.theme-workbench :deep(.treasure-intro > div) { flex: 1 1 190px; min-width: 0; }
+  .home-overview .panel-overlay.theme-workbench :deep(.treasure-search) { gap: 8px; }
+}
+
+/* Keyboard-visible layouts must never reserve space for the mobile dock; keep
+   the safe-area inset in --hall-content-bottom-inset. */
+.juyi-page.is-keyboard-active { --hall-dock-reserve: 0px; }
+
+@media (max-height: 560px) {
+  .juyi-page.home-overview { grid-template-rows: minmax(0, 1fr); }
+  .home-overview .workbench-more-menu { top: 58px; max-height: calc(100% - 58px - var(--hall-content-bottom-inset)); }
+  .home-overview .panel-overlay.is-workbench-panel { top: 0; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.discussion-brief) { display: none; }
+  .home-overview .panel-overlay.is-workbench-panel { padding-top: 0; padding-bottom: 0; }
+  .home-overview .panel-overlay.theme-workbench .panel-title { min-height: 40px; padding-top: 4px; padding-bottom: 4px; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-chat-composer) { padding-top: 6px; padding-bottom: 6px; }
+}
+
+/* At 200%-equivalent narrow reflow, keep each action reachable rather than
+   letting min-content widths shift the workbench outside the viewport. */
+@media (max-width: 240px) {
+  .juyi-page.home-overview { grid-template-columns: minmax(0, 1fr); }
+  .home-overview > .hall-app-header { box-sizing: border-box; width: 100%; min-width: 0; flex-wrap: nowrap; padding: 5px 8px; }
+  .home-overview .hall-app-header .hall-header-tools > button:not(.workbench-mobile-more) { display: none; }
+  .home-overview .hall-app-header .hall-brand { flex: 0 1 auto; min-width: 0; }
+  .home-overview .workbench-mobile-nav button:not(:last-child) span { display: none; }
+  .home-overview .workbench-mobile-nav button { padding: 3px; font-size: 10px; }
+  .home-overview .panel-overlay.theme-workbench .panel-title > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-chat-composer) { padding-top: 2px; padding-bottom: 2px; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.composer-textarea) { max-height: 56px; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar) { overflow-x: auto; overscroll-behavior-x: contain; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar .context-summary),
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar .toolbar-actions) { flex: 0 0 auto; }
+}
+@media (max-width: 180px) {
+  .home-overview .panel-overlay.theme-workbench .panel-title { min-height: 36px; padding: 0 8px; }
+  .home-overview .panel-overlay.theme-workbench .panel-title > span { display: none; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar) { padding: 2px 6px; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-messages) { padding: 4px 8px; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.composer-meta span:last-child) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+/* When the entire chat is taller than an extremely short viewport, scroll the
+   work window itself so the composer remains reachable above the fixed dock. */
+@media (max-height: 260px) and (max-width: 760px) {
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay > .floating-panel { overflow-y: auto; overscroll-behavior: contain; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.chat-panel) { flex: 0 0 auto; height: auto; min-height: min-content; }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-messages) { flex: 0 0 auto; min-height: 80px; max-height: 40vh; }
+}
+
+/* Final workbench-only presentation polish. These rules intentionally change
+   geometry and visual hierarchy only; business state and actions remain owned
+   by the existing Hall components. */
+.home-overview .panel-overlay.theme-workbench .panel-title .panel-return:focus-visible {
+  outline: 0;
+  border-radius: 0;
+  box-shadow: inset 0 -2px 0 var(--work-brand);
+}
+
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .panel-toolbar) {
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--work-line);
+}
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .panel-toolbar > button) {
+  border: 1px solid var(--work-line);
+  background: var(--hall-surface-subtle);
+  color: var(--work-ink);
+}
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .detail-card) {
+  line-height: 1.65;
+}
+.home-overview .panel-overlay.theme-workbench :deep(.agent-panel .detail-card:not(:has(.detail-head))) {
+  min-height: 0;
+  padding: 15px 16px;
+  overflow: visible;
+  color: var(--work-muted);
+}
+
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .catalog-summary) {
+  border-bottom: 1px solid var(--work-line);
+}
+.home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .catalog-grid:empty) {
+  display: grid;
+  min-height: 260px;
+  margin: 12px 16px 16px;
+  padding: 28px;
+  place-items: center;
+  border: 1px dashed var(--work-line);
+  border-radius: var(--hall-radius-md);
+  background: var(--hall-surface-subtle);
+  overflow: visible;
+}
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages .overview-source-error) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin: 10px 0;
+  padding: 14px;
+  border: 1px solid #ead8d2;
+  border-radius: var(--hall-radius-sm);
+  line-height: 1.65;
+}
+.home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages .overview-source-error button) {
+  min-width: 72px;
+  padding-inline: 12px;
+  white-space: nowrap;
+}
+
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar) {
+  padding: 9px 12px;
+}
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions) {
+  scrollbar-width: none;
+}
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions::-webkit-scrollbar) {
+  display: none;
+}
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.composer-textarea) {
+  border-color: var(--hall-border-strong);
+  background: var(--work-paper);
+  color: var(--work-ink);
+}
+.home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.composer-target-chip) {
+  border-color: var(--work-line);
+  background: var(--hall-surface-brand);
+  color: var(--work-brand);
+}
+.juyi-page.home-overview:has(.floating-panel.panel-chat) > .toast {
+  bottom: max(150px, calc(env(safe-area-inset-bottom) + 150px));
+  max-width: calc(100% - 32px);
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .draft-error) {
+  padding: 8px 10px;
+  border-left: 3px solid #c45d4c;
+  border-radius: 5px;
+  background: #fff4f1;
+  line-height: 1.55;
+}
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor button:disabled) {
+  border-color: #dfe1da;
+  background: #eceee8;
+  color: #929a94;
+  opacity: 1;
+}
+.home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .primary:disabled) {
+  border-color: #dfe1da;
+  background: #e4e7e1;
+  color: #969d98;
+}
+
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-card) {
+  position: relative;
+  padding-right: 36px;
+  cursor: pointer;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-card::after) {
+  content: '›';
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  color: #9aa19b;
+  font-size: 24px;
+  line-height: 1;
+  transform: translateY(-50%);
+}
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-card:hover) {
+  border-color: #c9cec4;
+  box-shadow: 0 5px 14px rgba(36, 46, 43, .07);
+  transform: translateY(-1px);
+}
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs) {
+  scroll-padding-inline: 16px 44px;
+  padding-right: 44px;
+  background: linear-gradient(90deg, var(--work-paper) 0, var(--work-paper) calc(100% - 28px), rgba(255,254,250,0) 100%);
+}
+
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-content select) {
+  border-color: var(--hall-border-strong);
+  border-radius: var(--hall-radius-sm);
+  background: var(--work-paper);
+  color: var(--work-ink);
+}
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-preview) {
+  min-height: 150px;
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid var(--work-line);
+  border-radius: var(--hall-radius-md);
+  background: #fafbf8;
+  color: var(--work-ink);
+}
+.home-overview .panel-overlay.theme-workbench :deep(.treasure-preview:empty::before) {
+  content: '预览内容将在这里显示';
+  display: grid;
+  min-height: 112px;
+  place-items: center;
+  color: var(--work-muted);
+  font-size: 13px;
+}
+
+@media (max-width: 760px) {
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .panel-toolbar) {
+    gap: 8px;
+    padding: 12px 16px;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .status-filter) {
+    width: 100%;
+    padding-bottom: 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .status-filter::-webkit-scrollbar) { display: none; }
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .panel-toolbar > button) { width: 100%; }
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .panel-toolbar > span) { padding-inline: 2px; }
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel-body) {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 12px 18px;
+    overflow: auto;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .agent-list) {
+    order: 1;
+    flex: 0 0 auto;
+    max-height: 44vh;
+    overflow: auto;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .detail-card) {
+    order: 2;
+    flex: 0 0 auto;
+  }
+
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(108px, .58fr) 44px;
+    gap: 8px;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-search) { display: contents; }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar > button) {
+    width: 44px;
+    min-width: 44px;
+    padding: 0;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  /* Hide only the button label at phone widths. BountyActionIcon also renders a span. */
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar > button .toolbar-label) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar > button .bounty-action-icon) {
+    display: inline-flex;
+    flex: 0 0 auto;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-create-actions) {
+    grid-column: 1 / -1;
+    grid-template-columns: .8fr 1.35fr 1.05fr;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs) {
+    padding-left: 16px;
+    padding-right: 42px;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-panel-body) { padding-top: 10px; }
+
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.panel-toolbar) {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: visible;
+  }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.context-summary) {
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    min-width: 0;
+    gap: 2px 6px;
+  }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions) {
+    width: auto;
+    margin-left: auto;
+    padding-bottom: 0;
+    overflow: visible;
+  }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions .icon-button) {
+    min-width: 38px;
+    height: 38px;
+  }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions .material-reference-entry),
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions .workspace-entry) {
+    min-width: max-content;
+  }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.hall-chat-composer) {
+    gap: 6px;
+    padding-inline: 12px;
+  }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.composer-context) {
+    gap: 4px;
+  }
+  .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.composer-meta) {
+    padding-right: 2px;
+  }
+
+  .home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages .overview-source-error) {
+    grid-template-columns: minmax(0, 1fr) 74px;
+    gap: 10px;
+    padding: 12px;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages .overview-source-error button) {
+    width: 74px;
+    min-width: 74px;
+    padding-inline: 8px;
+    font-size: 13px;
+  }
+
+  .home-overview .panel-overlay.theme-workbench :deep(.persona-catalog-panel .catalog-grid:empty) {
+    min-height: 220px;
+    margin: 12px;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.treasure-preview) {
+    min-height: 128px;
+    padding: 14px;
+  }
+}
+
+@media (max-height: 500px) and (min-width: 601px) {
+  .home-overview .panel-overlay:not(.is-full-window) { padding: 10px 12px; }
+  .home-overview .floating-panel.layout-center-modal,
+  .home-overview .floating-panel.panel-treasure:not(.layout-full-window) {
+    height: calc(100% - 20px);
+    max-height: calc(100% - 20px);
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel-body) {
+    display: grid;
+    grid-template-columns: minmax(260px, .85fr) minmax(0, 1.15fr);
+    gap: 10px;
+    overflow: hidden;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .agent-list) {
+    order: initial;
+    max-height: none;
+    overflow: auto;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .detail-card) {
+    order: initial;
+    overflow: auto;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor form) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 16px;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor form > label),
+  .home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor form > p),
+  .home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor form > section),
+  .home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .draft-actions) {
+    grid-column: 1 / -1;
+  }
+  .home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor .draft-actions) {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin-inline: -4px;
+    padding: 10px 4px 4px;
+    background: linear-gradient(180deg, rgba(255,254,250,0), var(--work-paper) 24%);
+  }
+}
+
 </style>

@@ -1,8 +1,14 @@
+import { useHallDrafts } from '../src/composables/juyiting/useHallDrafts.js'
+import { bountyInteractionTargetId } from '../src/composables/juyiting/useHallChatContext.js'
+import { createHydratedIdentityScope, hasHydratedIdentity } from '../src/utils/identityScope.js'
 import { before, after } from 'mocha'
 import { expect } from 'chai'
 import { readFileSync } from 'fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { useTaskWorkspaceView } from '../src/composables/juyiting/useTaskWorkspaceView.js'
+import { useHallHomeMode } from '../src/composables/juyiting/useHallHomeMode.js'
+import { useFormalTaskExecutionScope } from '../src/composables/useFormalTaskExecutionScope.js'
+import { confirmHallLeave, hasMeaningfulHallLeaveWork } from '../src/composables/juyiting/hallAccountNavigation.js'
 import * as HallPanelHelpers from '../src/composables/juyiting/useHallPanels.js'
 import { resolveLiveMapPreviewActivation } from '../src/composables/juyiting/liveMapPreviewPolicy.js'
 import { isEconomyPreviewBuildEnabled } from '../src/utils/silverAmount.js'
@@ -89,14 +95,29 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
   }
   const taskWorkspace = workspaceState || null
   return {
-    ...HallPanelHelpers,
+    ...HallPanelHelpers, useHallHomeMode, useFormalTaskExecutionScope, confirmHallLeave, hasMeaningfulHallLeaveWork,
     resolveLiveMapPreviewActivation, isEconomyPreviewBuildEnabled,
+    resolveAccountDisplayName: (user, fallback = '用户') => user?.nickname || user?.username || fallback,
+    createHydratedIdentityScope, hasHydratedIdentity,
     isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: async () => null,
-    env: { VITE_JUYITING_TASK_WORKSPACE_ENABLED: workspaceState ? 'true' : undefined },
+    env: { VITE_JUYITING_TASK_WORKSPACE_ENABLED: workspaceState ? 'true' : undefined }, isMultimediaDeliberationUiEnabled: () => false,
+    useHallDrafts,
+    useHallRequirementCreate: () => ({ state: Vue.ref({ error: '' }), busy: Vue.ref(false), create: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, readOriginal: () => ({ state: 'ABSENT' }), dispose: noop }),
+    useHallBountyRequestCatalog: () => ({ entries: Vue.ref([]), hint: noop, reset: noop, refresh: asyncNoop, dispose: noop }),
+    useHallBountyFollowup: () => ({ state: Vue.ref({}), busy: Vue.ref(false), prepareGenerate: async () => false, prepareEdit: async () => false, confirm: async () => false, checkOriginal: async () => false, invalidate: noop, dispose: noop }),
+    useHallTypedDeliberation: () => ({ refresh: asyncNoop, readOne: asyncNoop, recover: asyncNoop, invalidate: noop, dispose: noop }), typedLong: () => '',
+    createControlledImageCapabilityObservationFence: () => ({ capture: () => ({ isCurrent: () => true }), invalidate: noop }), capabilityOffersControlledImageConsent: () => false, loadControlledImageBountyCapability: async () => null,
+    useHallTaskLinkedReferenceInputs: () => ({ resolve: async () => ({ state: 'STALE', inputRefs: [] }), invalidate: noop, dispose: noop }), createPointAndStartIntentStore: () => ({ read: () => ({ state: 'ABSENT' }) }), pointAndStartRecoveryLane: () => 'NONE', providerConsentAcknowledgement: {},
+    createNativeCapabilityObservationFence: () => ({ capture: () => ({ identityScope: '', authorizationGeneration: 0, isCurrent: () => true }), invalidate: noop }), loadNativeBountyCapability: async () => null, capabilityAllowsNewStart: () => false, capabilityAllowsOriginalReplay: () => false, pointAndStartIntentReadLane: () => 'ABSENT',
+    useHallPointAndStartControlledBridge: () => ({ state: Vue.ref({ intent: null, status: 'IDLE' }), busy: Vue.ref(false), selectContext: () => false, start: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, dispose: noop, invalidate: noop }),
+    useHallPointAndStart: () => ({ state: Vue.ref({ intent: null, status: 'IDLE' }), busy: Vue.ref(false), start: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, observeOriginal: asyncNoop, stopObservation: noop, dispose: noop }),
+
     useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({ authorizationGeneration: 1, token: async () => false }),
     useRouter: () => ({ push: asyncNoop }), onBeforeRouteLeave: noop,
     agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {}, roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
+    useHallHomeMode: () => { const homeMode = Vue.ref('map'); return { homeMode, isOverviewHome: Vue.computed(() => homeMode.value === 'overview'), setHomeMode: mode => { homeMode.value = mode } } },
     useHallData: () => hallData,
+    useHallQuickMatter: () => ({ busy: Vue.ref(false), message: text, submit: asyncNoop, reconcile: asyncNoop }),
     useHallExperienceMode: () => ({ experienceMode: mode, isMobileCoarse: Vue.ref(true), orientationHint: text, orientationRequestPending: Vue.ref(false), requestLandscape: asyncNoop }),
     useHallPanels: HallPanelHelpers.useHallPanels,
     useHallSceneState: () => ({ setMapRuntime: noop, reset: noop, forwardPhaseEvents: asyncNoop }),
@@ -104,10 +125,11 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
     useHallBackendSceneState: () => ({ start: asyncNoop, stop: noop, dispose: noop, reportPhase: noop }),
     useHallSceneDebugBridge: () => ({ sentinel: 'debug-o04', republish: noop, stop: noop }),
     useHallSound: () => ({ playAgentSelect: noop, playError: noop, playPanelOpen: noop, playRefresh: noop, playSend: noop, playSuccess: noop, playTap: noop, setSoundEnabled: noop, setSoundSuppressed: noop, soundEnabled: Vue.ref(false) }),
-    useHallChatContext: () => ({ chatContext: Vue.ref({ conversationScopeKey: 'scope-o04' }), chatMentionAgentIds: Vue.ref([]), chatMentionAgents: list, chatMode: Vue.ref('public'), chatTargetText: text, enterBountyDiscussion: noop, enterPrivateConversation: noop, resetToPublic: noop, setMentionAgent: noop }),
+    bountyInteractionTargetId,
+    useHallChatContext: () => ({ conversationAgent: Vue.ref(null), conversationTask: Vue.ref(null), chatContext: Vue.ref({ conversationScopeKey: 'scope-o04' }), chatMentionAgentIds: Vue.ref([]), chatMentionAgents: list, chatMode: Vue.ref('public'), chatTargetText: text, enterBountyDiscussion: noop, enterPrivateConversation: noop, resetToPublic: noop, setMentionAgent: noop }),
     useHallScene: () => ({ markAgentSpeaking: noop, markDiscussionStarted: noop, markLibraryCitation: noop, markLibrarySearching: noop, markRecommendedAgents: noop, markTaskArchived: noop, markTaskAssigned: noop, markTaskAutoAssigned: noop, markTaskCreated: noop, resetSceneFeedback: noop, sceneAgents: list, sceneAgentStyle: () => ({}), sceneHotspots: list, syncAfterPersonaChanged: noop }),
     useHallTaskActions: () => ({ archiveTask: asyncNoop, autoAssignTask: asyncNoop, assignTask: async () => true, createTask: asyncNoop }),
-    useHallConversation: () => ({ chatConnectionStatus: text, conversationId: Vue.ref('conversation-o04'), draft: Vue.ref('draft-o04'), draftRevision: Vue.ref(0), eventStreamRecovering: Vue.ref(false), insertAgentMention: noop, isAwaitingReply: Vue.ref(false), isStreaming: Vue.ref(false), loadHallMessages: asyncNoop, mentionAgent: noop, messages: Vue.ref([{ id: 'message-o04' }]), newHallConversation: noop, pendingAgentName: text, replyEventSequence: Vue.ref(0), sendHallMessage: asyncNoop, senderText: text, setDraft: noop, disposeHallConversation: noop, stopHallEventStream: noop, stopHallReplyPolling: noop, stopHallReplyStreaming: noop }),
+    useHallConversation: () => ({ activeRequest: Vue.ref(null), chatConnectionStatus: text, conversationId: Vue.ref('conversation-o04'), draft: Vue.ref('draft-o04'), draftRevision: Vue.ref(0), eventStreamRecovering: Vue.ref(false), insertAgentMention: noop, isAwaitingReply: Vue.ref(false), isStreaming: Vue.ref(false), loadHallMessages: asyncNoop, mentionAgent: noop, messages: Vue.ref([{ id: 'message-o04' }]), newHallConversation: noop, pendingAgentName: text, replyEventSequence: Vue.ref(0), sendHallMessage: asyncNoop, senderText: text, setDraft: noop, disposeHallConversation: noop, stopHallEventStream: noop, stopHallReplyPolling: noop, stopHallReplyStreaming: noop }),
     useHallVoiceConversation: () => ({ supported: false, voiceInteractionLocked: false, cancel: noop, dispose: noop, applyTranscript: noop }),
     createHallVoiceReplyCorrelation: () => ({ start: () => true, observe: noop, resolveConversation: () => true, close: noop }),
     useHallLibrary: () => ({ citeLibraryItem: noop, libraryErrorMessage: text, libraryHasSearched: Vue.ref(false), libraryKeyword: Vue.ref('library-filter-o04'), libraryLoading: Vue.ref(false), libraryResults: list, librarySourceType: Vue.ref('project'), searchLibrary: asyncNoop }),
@@ -117,6 +139,7 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
     useTaskWorkspaceView: () => workspaceState ? ({ subject: workspaceState.subject, workspace: workspaceState.workspace, connectionState: workspaceState.connectionState, error: workspaceState.error, retry: workspaceState.retry }) : ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: text, error: Vue.ref(null), retry: noop }),
     useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }),
     portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '',
+    HallOverview: EmptyPanel, HallDraftEditor: EmptyPanel, FormalTaskDeliveryPanel: EmptyPanel,
     HallPortraitHome, HallStage, HallVoiceHud: EmptyPanel, LibraryPanel: LibraryPanel || EmptyPanel, TaskWorkspacePanel: TaskWorkspacePanel || EmptyPanel, ArtifactTransferPanel: ArtifactTransferPanel || EmptyPanel, ArtifactOutcomePanel: EmptyPanel,
     AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel, BountyPanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard: EmptyPanel
   }

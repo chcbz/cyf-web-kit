@@ -13,6 +13,10 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const enableAnalyze = env.VITE_ANALYZE === 'true' || process.env.ANALYZE === 'true'
   const enableLegacy = env.VITE_LEGACY_BUILD === 'true' || process.env.LEGACY_BUILD === 'true'
+  const configureProxyOrigin = proxy => {
+    if (!env.VITE_PROXY_ORIGIN) return
+    proxy.on('proxyReq', proxyReq => proxyReq.setHeader('Origin', env.VITE_PROXY_ORIGIN))
+  }
 
   return {
     esbuild: {
@@ -82,24 +86,28 @@ export default defineConfig(({ mode }) => {
           target: env.VITE_OAUTH_PROXY_TARGET || env.VITE_API_PROXY_TARGET || env.VITE_API_BASE_URL,
           changeOrigin: true,
           secure: false,
+          configure: configureProxyOrigin,
           rewrite: path => path.replace(/^\/api/, '')
         },
         '/api/oauth': {
           target: env.VITE_OAUTH_PROXY_TARGET || env.VITE_API_PROXY_TARGET || env.VITE_API_BASE_URL,
           changeOrigin: true,
           secure: false,
+          configure: configureProxyOrigin,
           rewrite: path => path.replace(/^\/api/, '')
         },
         '/api/login': {
           target: env.VITE_OAUTH_PROXY_TARGET || env.VITE_API_PROXY_TARGET || env.VITE_API_BASE_URL,
           changeOrigin: true,
           secure: false,
+          configure: configureProxyOrigin,
           rewrite: path => path.replace(/^\/api/, '')
         },
         '/api': {
           target: env.VITE_API_PROXY_TARGET || env.VITE_API_BASE_URL,
           changeOrigin: true,
           secure: false,
+          configure: configureProxyOrigin,
           rewrite: path => path.replace(/^\/api/, '')
         }
       }

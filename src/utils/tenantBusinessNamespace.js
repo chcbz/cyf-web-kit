@@ -1,3 +1,4 @@
+import { createHydratedIdentityScope } from './identityScope.js'
 import { encodeHallOnboardingSubject } from '../composables/juyiting/useHallOnboarding.js'
 
 const runtimeEnv = import.meta.env ?? {}
@@ -19,11 +20,7 @@ export function browserBusinessNamespace (apiStore, globalStore, {
   const client = apiStore?.oauthClientId
   if (mode == null || mode === '') {
     // Preserve the existing recovery keys for installations not yet in tenant mode.
-    const owner = String(globalStore?.user?.id || globalStore?.user?.openid ||
-      globalStore?.getUserId || globalStore?.getOpenid || '').trim()
-    const tenant = String(globalStore?.user?.tenantId || globalStore?.user?.tenantCode ||
-      globalStore?.user?.tenant || '').trim()
-    return owner && exact(client) ? [tenant, client, owner].filter(Boolean).join('\u0000') : ''
+    return createHydratedIdentityScope(globalStore?.user, client)
   }
   if (mode !== 'fixed' && mode !== 'selectable') return ''
   const identity = apiStore?.tenantIdentity

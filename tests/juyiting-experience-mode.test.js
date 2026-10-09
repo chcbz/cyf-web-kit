@@ -76,6 +76,36 @@ const restoreProperty = (target, key, descriptor) => {
   else delete target[key]
 }
 
+const installViewportHarness = ({ width = 390, height = 844, visual = true } = {}) => {
+  const originals = {
+    innerWidth: Object.getOwnPropertyDescriptor(global.window, 'innerWidth'),
+    innerHeight: Object.getOwnPropertyDescriptor(global.window, 'innerHeight'),
+    visualViewport: Object.getOwnPropertyDescriptor(global.window, 'visualViewport')
+  }
+  let visualWidth = width
+  let visualHeight = height
+  const listeners = { resize: new Set(), scroll: new Set() }
+  Object.defineProperty(global.window, 'innerWidth', { configurable: true, writable: true, value: width })
+  Object.defineProperty(global.window, 'innerHeight', { configurable: true, writable: true, value: height })
+  Object.defineProperty(global.window, 'visualViewport', { configurable: true, value: visual ? {
+    get width() { return visualWidth },
+    get height() { return visualHeight },
+    addEventListener: (type, listener) => listeners[type]?.add(listener),
+    removeEventListener: (type, listener) => listeners[type]?.delete(listener)
+  } : undefined })
+  return {
+    setVisualSize(nextWidth, nextHeight) { visualWidth = nextWidth; visualHeight = nextHeight },
+    setWindowSize(nextWidth, nextHeight) { global.window.innerWidth = nextWidth; global.window.innerHeight = nextHeight },
+    emitVisual(type = 'resize') { listeners[type].forEach(listener => listener(new global.window.Event(type))) },
+    listenerCount(type) { return listeners[type].size },
+    restore() {
+      restoreProperty(global.window, 'innerWidth', originals.innerWidth)
+      restoreProperty(global.window, 'innerHeight', originals.innerHeight)
+      restoreProperty(global.window, 'visualViewport', originals.visualViewport)
+    }
+  }
+}
+
 const setupEnvironment = ({ coarse = true, mediaLandscape = false, screen = {}, legacyAngle } = {}) => {
   const original = {
     matchMedia: global.window.matchMedia,
@@ -790,6 +820,265 @@ describe('Juyi Hall experience mode', () => {
     }
   })
 
+  it('uses exact 120px enter and 40px exit hysteresis without poisoning the stable height', async () => {
+    const viewportHarness = installViewportHarness()
+    const env = setupEnvironment({ mediaLandscape: false, screen: { type: 'portrait-primary', angle: 0 } })
+    let wrapper
+    const input = document.createElement('input')
+    document.body.append(input)
+    const resizeTo = async height => {
+      viewportHarness.setVisualSize(390, height)
+      viewportHarness.emitVisual()
+      await flush()
+    }
+    try {
+      const mounted = await mountMode()
+      wrapper = mounted.wrapper
+      input.focus()
+      await resizeTo(725)
+      expect(mounted.mode.keyboardPhase.value).to.equal('closed')
+      await resizeTo(724)
+      expect(mounted.mode.keyboardPhase.value).to.equal('open')
+      expect(mounted.mode.stableViewportHeight.value).to.equal(844)
+      await resizeTo(803)
+      expect(mounted.mode.keyboardPhase.value).to.equal('open')
+      await resizeTo(804)
+      expect(mounted.mode.keyboardPhase.value).to.equal('closed')
+      expect(mounted.mode.stableViewportHeight.value).to.equal(844)
+    } finally {
+      wrapper?.unmount()
+      input.remove()
+      viewportHarness.restore()
+      env.restore()
+    }
+  })
+
+  it('reanchors the keyboard baseline when confirmed orientation arrives before viewport resize', async () => {
+    const viewportHarness = installViewportHarness()
+    const env = setupEnvironment({ mediaLandscape: false, screen: { type: 'portrait-primary', angle: 0 } })
+    let wrapper
+    const input = document.createElement('input')
+    document.body.append(input)
+    try {
+      const mounted = await mountMode()
+      wrapper = mounted.wrapper
+      expect(mounted.mode.viewport.value).to.deep.equal({ width: 390, height: 844 })
+      expect(mounted.mode.stableViewportHeight.value).to.equal(844)
+
+      env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
+      await flush()
+      expect(mounted.mode.isPhysicalLandscape.value).to.equal(true)
+      expect(mounted.mode.stableViewportHeight.value).to.equal(844)
+
+      viewportHarness.setVisualSize(844, 390)
+      viewportHarness.setWindowSize(844, 390)
+      viewportHarness.emitVisual()
+      await flush()
+      input.focus()
+      await flush()
+
+      expect(mounted.mode.viewport.value).to.deep.equal({ width: 844, height: 390 })
+      expect(mounted.mode.hallViewportHeight.value).to.equal(390)
+      expect(mounted.mode.stableViewportHeight.value).to.equal(390)
+      expect(mounted.mode.isEditableFocused.value).to.equal(true)
+      expect(mounted.mode.keyboardPhase.value).to.equal('closed')
+    } finally {
+      wrapper?.unmount()
+      input.remove()
+      viewportHarness.restore()
+      env.restore()
+    }
+  })
+
+  it('does not rebuild the keyboard baseline from aspect inversion and resets only on confirmed orientation', async () => {
+    const viewportHarness = installViewportHarness()
+    const env = setupEnvironment({ mediaLandscape: false, screen: { type: 'portrait-primary', angle: 0 } })
+    let wrapper
+    const input = document.createElement('textarea')
+    document.body.append(input)
+    try {
+      const mounted = await mountMode()
+      wrapper = mounted.wrapper
+      input.focus()
+      viewportHarness.setVisualSize(390, 300)
+      viewportHarness.emitVisual()
+      await flush()
+      expect(mounted.mode.viewport.value).to.deep.equal({ width: 390, height: 300 })
+      expect(mounted.mode.stableViewportHeight.value).to.equal(844)
+      expect(mounted.mode.keyboardPhase.value).to.equal('open')
+      expect(mounted.mode.isPhysicalLandscape.value).to.equal(false)
+      expect(mounted.mode.experienceMode.value).to.equal('portrait-command')
+
+      env.screenOrientation.emit({ nextType: 'landscape-primary', nextAngle: 90 })
+      await flush()
+      expect(mounted.mode.isPhysicalLandscape.value).to.equal(true)
+      expect(mounted.mode.stableViewportHeight.value).to.equal(300)
+      expect(mounted.mode.keyboardPhase.value).to.equal('closed')
+    } finally {
+      wrapper?.unmount()
+      input.remove()
+      viewportHarness.restore()
+      env.restore()
+    }
+  })
+
+  it('falls back to window innerHeight when visualViewport is unavailable', async () => {
+    const viewportHarness = installViewportHarness({ visual: false })
+    const env = setupEnvironment({ mediaLandscape: false, screen: { type: 'portrait-primary', angle: 0 } })
+    let wrapper
+    const input = document.createElement('input')
+    document.body.append(input)
+    try {
+      const mounted = await mountMode()
+      wrapper = mounted.wrapper
+      input.focus()
+      viewportHarness.setWindowSize(390, 724)
+      global.window.dispatchEvent(new global.window.Event('resize'))
+      await flush()
+      expect(mounted.mode.viewport.value.height).to.equal(724)
+      expect(mounted.mode.stableViewportHeight.value).to.equal(844)
+      expect(mounted.mode.keyboardPhase.value).to.equal('open')
+      viewportHarness.setWindowSize(390, 804)
+      global.window.dispatchEvent(new global.window.Event('resize'))
+      await flush()
+      expect(mounted.mode.keyboardPhase.value).to.equal('closed')
+    } finally {
+      wrapper?.unmount()
+      input.remove()
+      viewportHarness.restore()
+      env.restore()
+    }
+  })
+
+  it('keeps focus transfer open, latches blur as closing, and closes after viewport recovery', async () => {
+    const viewportHarness = installViewportHarness()
+    const env = setupEnvironment({ mediaLandscape: false, screen: { type: 'portrait-primary', angle: 0 } })
+    const originalRaf = Object.getOwnPropertyDescriptor(globalThis, 'requestAnimationFrame')
+    const originalCancelRaf = Object.getOwnPropertyDescriptor(globalThis, 'cancelAnimationFrame')
+    const frames = new Map()
+    let frameId = 0
+    Object.defineProperty(globalThis, 'requestAnimationFrame', { configurable: true, value: callback => { frames.set(++frameId, callback); return frameId } })
+    Object.defineProperty(globalThis, 'cancelAnimationFrame', { configurable: true, value: id => frames.delete(id) })
+    const runFrames = () => {
+      const pending = [...frames.values()]
+      frames.clear()
+      pending.forEach(callback => callback())
+    }
+    let wrapper
+    const first = document.createElement('input')
+    const second = document.createElement('textarea')
+    document.body.append(first, second)
+    try {
+      const mounted = await mountMode()
+      wrapper = mounted.wrapper
+      first.focus()
+      viewportHarness.setVisualSize(390, 700)
+      viewportHarness.emitVisual()
+      await flush()
+      expect(mounted.mode.keyboardPhase.value).to.equal('open')
+
+      second.focus()
+      expect(frames.size).to.equal(1)
+      runFrames()
+      await flush()
+      expect(mounted.mode.isEditableFocused.value).to.equal(true)
+      expect(mounted.mode.keyboardPhase.value).to.equal('open')
+
+      second.blur()
+      expect(frames.size).to.equal(1)
+      runFrames()
+      await flush()
+      expect(mounted.mode.isEditableFocused.value).to.equal(false)
+      expect(mounted.mode.keyboardPhase.value).to.equal('closing')
+      expect(mounted.mode.isKeyboardActive.value).to.equal(true)
+
+      viewportHarness.setVisualSize(390, 804)
+      viewportHarness.emitVisual()
+      await flush()
+      expect(mounted.mode.keyboardPhase.value).to.equal('closed')
+    } finally {
+      wrapper?.unmount()
+      first.remove(); second.remove()
+      restoreProperty(globalThis, 'requestAnimationFrame', originalRaf)
+      restoreProperty(globalThis, 'cancelAnimationFrame', originalCancelRaf)
+      viewportHarness.restore()
+      env.restore()
+    }
+  })
+
+  it('removes viewport/window/focus listeners and cancels a pending focus RAF on unmount', async () => {
+    const viewportHarness = installViewportHarness()
+    const env = setupEnvironment({ mediaLandscape: false, screen: { type: 'portrait-primary', angle: 0 } })
+    const originalRaf = Object.getOwnPropertyDescriptor(globalThis, 'requestAnimationFrame')
+    const originalCancelRaf = Object.getOwnPropertyDescriptor(globalThis, 'cancelAnimationFrame')
+    const pendingFrames = new Map()
+    const cancelledFrames = new Set()
+    let frameId = 0
+    Object.defineProperty(globalThis, 'requestAnimationFrame', { configurable: true, value: callback => { pendingFrames.set(++frameId, callback); return frameId } })
+    Object.defineProperty(globalThis, 'cancelAnimationFrame', { configurable: true, value: id => { cancelledFrames.add(id); pendingFrames.delete(id) } })
+
+    const windowListeners = { resize: new Set() }
+    const focusListeners = { focusin: new Set(), focusout: new Set() }
+    const originalWindowAdd = global.window.addEventListener
+    const originalWindowRemove = global.window.removeEventListener
+    const originalDocumentAdd = global.document.addEventListener
+    const originalDocumentRemove = global.document.removeEventListener
+    global.window.addEventListener = function (type, listener, options) {
+      windowListeners[type]?.add(listener)
+      return originalWindowAdd.call(this, type, listener, options)
+    }
+    global.window.removeEventListener = function (type, listener, options) {
+      windowListeners[type]?.delete(listener)
+      return originalWindowRemove.call(this, type, listener, options)
+    }
+    global.document.addEventListener = function (type, listener, options) {
+      focusListeners[type]?.add(listener)
+      return originalDocumentAdd.call(this, type, listener, options)
+    }
+    global.document.removeEventListener = function (type, listener, options) {
+      focusListeners[type]?.delete(listener)
+      return originalDocumentRemove.call(this, type, listener, options)
+    }
+
+    let wrapper
+    const input = document.createElement('input')
+    document.body.append(input)
+    try {
+      const mounted = await mountMode()
+      wrapper = mounted.wrapper
+      expect(viewportHarness.listenerCount('resize')).to.equal(1)
+      expect(viewportHarness.listenerCount('scroll')).to.equal(1)
+      expect(windowListeners.resize.size).to.equal(1)
+      expect(focusListeners.focusin.size).to.equal(1)
+      expect(focusListeners.focusout.size).to.equal(1)
+      input.focus()
+      input.blur()
+      expect(pendingFrames.size).to.equal(1)
+
+      wrapper.unmount()
+      wrapper = null
+      expect(viewportHarness.listenerCount('resize')).to.equal(0)
+      expect(viewportHarness.listenerCount('scroll')).to.equal(0)
+      expect(windowListeners.resize.size).to.equal(0)
+      expect(focusListeners.focusin.size).to.equal(0)
+      expect(focusListeners.focusout.size).to.equal(0)
+      expect(pendingFrames.size).to.equal(0)
+      expect(cancelledFrames.size).to.equal(1)
+      expect(mounted.mode.keyboardPhase.value).to.equal('closed')
+    } finally {
+      wrapper?.unmount()
+      input.remove()
+      global.window.addEventListener = originalWindowAdd
+      global.window.removeEventListener = originalWindowRemove
+      global.document.addEventListener = originalDocumentAdd
+      global.document.removeEventListener = originalDocumentRemove
+      restoreProperty(globalThis, 'requestAnimationFrame', originalRaf)
+      restoreProperty(globalThis, 'cancelAnimationFrame', originalCancelRaf)
+      viewportHarness.restore()
+      env.restore()
+    }
+  })
+
   it('keeps orientation ownership in the mode composable, not panels or stage', () => {
     const modeSource = readFileSync(new URL('../src/composables/juyiting/useHallExperienceMode.js', import.meta.url), 'utf8')
     const panelsSource = readFileSync(new URL('../src/composables/juyiting/useHallPanels.js', import.meta.url), 'utf8')
@@ -800,6 +1089,9 @@ describe('Juyi Hall experience mode', () => {
     expect(modeSource).to.include('const isWeChatWebView')
     expect(modeSource).to.include('const requestPortrait = async () =>')
     expect(modeSource).to.include("visualViewport?.addEventListener?.('resize'")
+    expect(modeSource).to.include("visualViewport?.addEventListener?.('scroll'")
+    expect(modeSource).to.include("globalThis.document?.addEventListener?.('focusin'")
+    expect(modeSource).to.include("keyboardPhase")
     expect(panelsSource).not.to.include('addEventListener')
     expect(panelsSource).not.to.include('matchMedia')
     expect(stageSource).not.to.include("matchMedia?.('(orientation: landscape)')")

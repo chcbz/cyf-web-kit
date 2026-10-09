@@ -1,3 +1,7 @@
+import { useHallDrafts } from '../src/composables/juyiting/useHallDrafts.js'
+import { bountyInteractionTargetId } from '../src/composables/juyiting/useHallChatContext.js'
+import { createHydratedIdentityScope, hasHydratedIdentity } from '../src/utils/identityScope.js'
+import { useFormalTaskExecutionScope } from '../src/composables/useFormalTaskExecutionScope.js'
 import { readFileSync } from 'fs'
 import { expect } from 'chai'
 import { compileScript, parse } from '@vue/compiler-sfc'
@@ -95,23 +99,40 @@ const createHallMocks = ({ SelectedAgentCard, counters }) => {
   const conversationDraft = Vue.ref('旧话头')
   return {
     resolveLiveMapPreviewActivation, isEconomyPreviewBuildEnabled,
+    resolveHallNavigationPresentation: () => ({ renderedPanel: null, overlayClass: {}, floatingPanelClass: {} }),
+    resolveAccountDisplayName: (user, fallback = '用户') => user?.nickname || user?.username || fallback,
+    createHydratedIdentityScope, hasHydratedIdentity,
     isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: async () => null,
-    env: {}, capturePanelReturnTarget: () => null, focusHallPanel: noop, isCurrentPanelGeneration: () => true, isSafePanelFocusTarget: () => false,
+    env: {}, isMultimediaDeliberationUiEnabled: () => false,
+    useHallDrafts,
+    useHallRequirementCreate: () => ({ state: Vue.ref({ error: '' }), busy: Vue.ref(false), create: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, readOriginal: () => ({ state: 'ABSENT' }), dispose: noop }),
+    useHallBountyRequestCatalog: () => ({ entries: Vue.ref([]), hint: noop, reset: noop, refresh: asyncNoop, dispose: noop }),
+    useHallBountyFollowup: () => ({ state: Vue.ref({}), busy: Vue.ref(false), prepareGenerate: async () => false, prepareEdit: async () => false, confirm: async () => false, checkOriginal: async () => false, invalidate: noop, dispose: noop }),
+    useHallTypedDeliberation: () => ({ refresh: asyncNoop, readOne: asyncNoop, recover: asyncNoop, invalidate: noop, dispose: noop }), typedLong: () => '',
+    createControlledImageCapabilityObservationFence: () => ({ capture: () => ({ isCurrent: () => true }), invalidate: noop }), capabilityOffersControlledImageConsent: () => false, loadControlledImageBountyCapability: async () => null,
+    useHallTaskLinkedReferenceInputs: () => ({ resolve: async () => ({ state: 'STALE', inputRefs: [] }), invalidate: noop, dispose: noop }), createPointAndStartIntentStore: () => ({ read: () => ({ state: 'ABSENT' }) }), pointAndStartRecoveryLane: () => 'NONE', providerConsentAcknowledgement: {},
+    createNativeCapabilityObservationFence: () => ({ capture: () => ({ identityScope: '', authorizationGeneration: 0, isCurrent: () => true }), invalidate: noop }), loadNativeBountyCapability: async () => null, capabilityAllowsNewStart: () => false, capabilityAllowsOriginalReplay: () => false, pointAndStartIntentReadLane: () => 'ABSENT',
+    useHallPointAndStartControlledBridge: () => ({ state: Vue.ref({ intent: null, status: 'IDLE' }), busy: Vue.ref(false), selectContext: () => false, start: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, dispose: noop, invalidate: noop }),
+    useHallPointAndStart: () => ({ state: Vue.ref({ intent: null, status: 'IDLE' }), busy: Vue.ref(false), start: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, observeOriginal: asyncNoop, stopObservation: noop, dispose: noop }),
+ capturePanelReturnTarget: () => null, focusHallPanel: noop, isCurrentPanelGeneration: () => true, isSafePanelFocusTarget: () => false,
     resolvePanelReturnTarget: () => null, restorePanelFocus: noop, trapPanelFocus: noop,
     onBeforeRouteLeave: noop, useRouter: () => ({ push: asyncNoop }),
     useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({ token: async () => true, authorizationGeneration: 0 }),
     agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {}, roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
     useHallData: ({ selectedAgent }) => { selectedAgent.value = selected; return hallData },
     useHallExperienceMode: () => ({ experienceMode: Vue.ref('landscape-map'), isMobileCoarse: Vue.ref(false), orientationHint: text, orientationRequestPending: Vue.ref(false), requestLandscape: asyncNoop }),
+    useFormalTaskExecutionScope,
     useHallHomeMode: () => ({ homeMode: Vue.ref('map'), isOverviewHome: Vue.ref(false), setHomeMode: noop }),
     useHallPanels: () => ({ panelLayout: Vue.ref('center-modal') }),
     useHallSceneState: () => ({ setMapRuntime: noop, reset: noop, forwardPhaseEvents: asyncNoop }), useHallCommandQueue: () => ({ ready: Vue.ref(false), setSimulation: noop }),
     useHallBackendSceneState: () => ({ start: asyncNoop, stop: noop, dispose: noop, reportPhase: noop }), useHallSceneDebugBridge: () => ({ republish: noop, stop: noop }),
     useHallSound: () => ({ playAgentSelect: noop, playError: noop, playPanelOpen: noop, playRefresh: noop, playSend: noop, playSuccess: noop, playTap: noop, setSoundEnabled: noop, setSoundSuppressed: noop, soundEnabled: Vue.ref(false) }),
-    useHallChatContext: () => ({ chatContext: Vue.ref({ conversationScopeType: 'public', conversationScopeKey: 'public', mode: 'public', participantAgentIds: [], targetAgentIds: [] }), chatMentionAgentIds: list, chatMentionAgents: Vue.ref([selected]), chatMode: Vue.ref('public'), chatTargetText: text, enterBountyDiscussion: noop, enterPrivateConversation: agent => counters.privateTargets.push(agent), resetToPublic: noop, setMentionAgent: noop }),
+    bountyInteractionTargetId,
+    useHallChatContext: () => ({ conversationAgent: Vue.ref(null), conversationTask: Vue.ref(null), chatContext: Vue.ref({ conversationScopeType: 'public', conversationScopeKey: 'public', mode: 'public', participantAgentIds: [], targetAgentIds: [] }), chatMentionAgentIds: list, chatMentionAgents: Vue.ref([selected]), chatMode: Vue.ref('public'), chatTargetText: text, enterBountyDiscussion: noop, enterPrivateConversation: agent => counters.privateTargets.push(agent), resetToPublic: noop, setMentionAgent: noop }),
     useHallScene: () => ({ markAgentSpeaking: noop, markDiscussionStarted: noop, markLibraryCitation: noop, markLibrarySearching: noop, markRecommendedAgents: noop, markTaskArchived: noop, markTaskAssigned: noop, markTaskAutoAssigned: noop, markTaskCreated: noop, resetSceneFeedback: noop, sceneAgents: Vue.ref([selected]), sceneAgentStyle: () => ({}), sceneHotspots: list, syncAfterPersonaChanged: noop }),
     useHallTaskActions: () => ({ archiveTask: asyncNoop, autoAssignTask: asyncNoop, assignTask: asyncNoop, createTask: asyncNoop }),
-    useHallConversation: () => ({ chatConnectionStatus: text, conversationId: text, draft: conversationDraft, draftRevision: Vue.ref(0), eventStreamRecovering: Vue.ref(false),
+    useHallQuickMatter: () => ({ busy: Vue.ref(false), message: Vue.ref(''), submit: async () => null }),
+    useHallConversation: () => ({ activeRequest: Vue.ref(null), chatConnectionStatus: text, conversationId: text, draft: conversationDraft, draftRevision: Vue.ref(0), eventStreamRecovering: Vue.ref(false),
       insertAgentMention: (agent, suffix) => { counters.mentions.push({ agent, suffix }); conversationDraft.value = `@${agent.name} ${suffix}` },
       isAwaitingReply: Vue.ref(false), isStreaming: Vue.ref(false), loadHallMessages: asyncNoop, mentionAgent: noop, messages: list, newHallConversation: noop,
       pendingAgentName: text, replyEventSequence: Vue.ref(0), sendHallMessage: asyncNoop, senderText: () => '',
@@ -122,7 +143,7 @@ const createHallMocks = ({ SelectedAgentCard, counters }) => {
     useTaskWorkspace: () => null, createDisabledTaskWorkspaceBinding: selectedAgent => ({ selectExplicitActor: agent => { counters.explicitActors.push(agent); selectedAgent.value = agent || null }, clearExplicitActor: noop, dispose: noop }),
     isTaskWorkspaceBuildEnabled: () => false, useTaskWorkspaceView: () => ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: text, error: Vue.ref(null), retry: noop }), useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop }),
     portraitName: agent => agent?.personaName || '', portraitRole: () => ({ slug: 'default' }), portraitShortName: agent => agent?.name || '', portraitStyle: () => ({}), roleClass: () => '',
-    HallPortraitHome: EmptyPanel, HallStage, HallVoiceHud: EmptyPanel, LibraryPanel: EmptyPanel, AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel,
+    HallPortraitHome: EmptyPanel, HallMinePage: EmptyPanel, HallStage, HallVoiceHud: EmptyPanel, LibraryPanel: EmptyPanel, AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel,
     BountyPanel: EmptyPanel, TaskWorkspacePanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PersonalWorkspace: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard
   }
 }
@@ -227,19 +248,16 @@ describe('SelectedAgentCard interaction contract', () => {
     expect(panelOverlayRule).to.include('max-height: 100%')
     expect(floatingPanelRule).to.include('box-sizing: border-box')
     expect(floatingPanelRule).to.include('max-width: 100%')
-    expect(floatingPanelRule).to.include('width: calc(100% - 16px)')
+    expect(floatingPanelRule).to.include('width: min(860px, 100%)')
     expect(hallSource).to.include("'is-compact-chat-overlay': renderedPanel === 'chat' && isCompactChat")
     expect(hallSource).to.include('resolvedHallViewportHeight.value <= 320')
     expect(chatOverlayRule).to.include('top: 0')
     expect(chatOverlayRule).to.include('bottom: auto')
     expect(chatOverlayRule).to.include('height: min(100%, var(--hall-visual-height, 100%))')
-    expect(chatOverlayRule).to.include('align-items: flex-start')
-    expect(chatOverlayRule).to.include('padding: 0')
-    expect(landscapeChatRule).to.include('width: 50%')
-    expect(landscapeChatRule).to.include('max-width: 50%')
-    expect(landscapeChatRule).to.include('height: 100%')
-    expect(portraitChatRule).to.include('width: 100%')
-    expect(portraitChatRule).to.include('max-width: 100%')
+    expect(hallSource).to.include('.panel-overlay.is-full-window .floating-panel.layout-full-window')
+    expect(hallSource).to.include('width: min(1180px, 100%)')
+    expect(hallSource).to.include('.home-overview .panel-overlay.is-workbench-panel')
+    expect(hallSource).to.include('inset: 0 0 var(--hall-content-bottom-inset) 0')
     expect(hallSource).to.include("'is-virtual-landscape': isVirtualLandscape")
     expect(compactTitleRule).to.include('padding: 6px 10px')
     expect(hallSource).to.include('.panel-overlay.is-compact-chat-overlay :deep(.discussion-brief)')
@@ -278,7 +296,7 @@ describe('SelectedAgentCard interaction contract', () => {
 
   it('toggles the selected agent without showing a toast', () => {
     const selectAgentStart = hallSource.indexOf('const selectAgent = (agent) => {')
-    const selectAgentEnd = hallSource.indexOf('const openPanel', selectAgentStart)
+    const selectAgentEnd = hallSource.indexOf('const exactHostedAgentId', selectAgentStart)
     const selectAgentSource = hallSource.slice(selectAgentStart, selectAgentEnd)
 
     expect(selectAgentSource).to.include('taskWorkspaceBinding.selectExplicitActor(agent)')

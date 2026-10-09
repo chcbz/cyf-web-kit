@@ -140,6 +140,9 @@ export function useTaskWorkspace ({ agentApi = defaultAgentApi, setTimeoutFn = s
       clearSnapshotTimeout(controller)
       workspace.value = snapshot
       error.value = null
+      // A validated owner/task snapshot is available even when an idle SSE request
+      // has not flushed its headers. Do not mislabel this as loading or live.
+      connectionState.value = 'snapshot_ready'
       // Stream callbacks may synchronously demand another snapshot; release only this
       // controller before opening so the replacement can acquire single-flight ownership.
       if (snapshotController === controller) snapshotController = null

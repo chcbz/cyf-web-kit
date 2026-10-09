@@ -1,5 +1,6 @@
 import { computed, getCurrentInstance, onBeforeUnmount, reactive, ref } from 'vue'
 import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
+import { createPcmWavRecorder, supportsPcmWavCapture, validatePcm16MonoWav } from '../../utils/pcmWavRecorder.js'
 
 export const HALL_VOICE_MAX_DURATION_MS = 45_000
 export const HALL_VOICE_MAX_AUDIO_BYTES = 5 * 1024 * 1024
@@ -8,7 +9,6 @@ export const HALL_VOICE_MAX_TTS_BYTES = 8 * 1024 * 1024
 export const HALL_VOICE_AUTO_SEND_DELAY_MS = 1_500
 
 const runtimeEnv = import.meta.env ?? {}
-const supportedMimes = ['audio/webm;codecs=opus']
 const captureStates = new Set(['requesting_permission', 'recording', 'stopping', 'transcribing', 'pending_send'])
 const interactionLockedStates = new Set([...captureStates, 'review', 'conflict', 'sending'])
 const exactStringFields = [
@@ -88,10 +88,11 @@ export const captureHallVoiceSnapshot = ({ context, draft, draftRevision }) => {
 
 const defaultBrowser = () => ({
   navigator: globalThis.navigator,
-  MediaRecorder: globalThis.MediaRecorder,
+  AudioContext: globalThis.AudioContext || globalThis.webkitAudioContext,
+  AudioWorkletNode: globalThis.AudioWorkletNode,
   Audio: globalThis.Audio,
   URL: globalThis.URL,
-  fetch: globalThis.fetch,
+  fetch: globalThis.fetch?.bind(globalThis),
   document: globalThis.document,
   window: globalThis.window,
   crypto: globalThis.crypto
@@ -110,17 +111,12 @@ export const useHallVoiceConversation = ({
   onCaptureStateChange,
   onReplyTurnTerminal,
   showToast,
-  browser: browserOverride
+  browser: browserOverride,
+  createRecorder: createRecorderOverride
 }) => {
   const browser = { ...defaultBrowser(), ...(browserOverride || {}) }
-  const preferredMime = (() => {
-    if (!browser.MediaRecorder) return ''
-    if (typeof browser.MediaRecorder.isTypeSupported !== 'function') return supportedMimes[0]
-    return supportedMimes.find(type => {
-      try { return browser.MediaRecorder.isTypeSupported(type) } catch { return false }
-    }) || ''
-  })()
-  const browserSupported = Boolean(enabled && browser.navigator?.mediaDevices?.getUserMedia && browser.MediaRecorder && preferredMime)
+  const recorderFactory = createRecorderOverride || (options => createPcmWavRecorder({ ...options, browser }))
+  const browserSupported = Boolean(enabled && browser.navigator?.mediaDevices?.getUserMedia && (createRecorderOverride || supportsPcmWavCapture(browser)))
   const stateRef = ref(browserSupported ? 'idle' : 'unsupported')
   const transcriptRef = ref('')
   const errorRef = ref('')
@@ -133,9 +129,10 @@ export const useHallVoiceConversation = ({
   const voiceTurnActiveRef = ref(false)
   const supportedRef = ref(browserSupported)
   let generation = 0
+  let draftOnlyCapture = false
   let mediaStream = null
-  let mediaRecorder = null
-  let chunks = []
+  let pcmRecorder = null
+  let recorderInitController = null
   let bytes = 0
   let ticker = null
   let hardStopTimer = null
@@ -185,19 +182,14 @@ export const useHallVoiceConversation = ({
     generation += 1
     uploadController?.abort(new DOMException('Voice turn cancelled', 'AbortError'))
     ttsController?.abort(new DOMException('Voice turn cancelled', 'AbortError'))
-    uploadController = ttsController = null
+    recorderInitController?.abort(new DOMException('Voice turn cancelled', 'AbortError'))
+    uploadController = ttsController = recorderInitController = null
     clearCaptureTimers()
-    const recorder = mediaRecorder
-    mediaRecorder = null
-    if (recorder) {
-      recorder.ondataavailable = null
-      recorder.onerror = null
-      recorder.onstop = null
-      try { if (recorder.state !== 'inactive') recorder.stop() } catch {}
-    }
+    const recorder = pcmRecorder
+    pcmRecorder = null
+    void recorder?.dispose?.()
     stopTracks(mediaStream)
     mediaStream = null
-    chunks = []
     bytes = 0
     pendingFinalReply = null
     if (stopAudio) stopPlayback()
@@ -270,12 +262,11 @@ export const useHallVoiceConversation = ({
     return true
   }
 
-  const upload = async (current, blob, mimeType) => {
+  const upload = async (current, blob) => {
     if (current !== generation) return false
     stopTracks(mediaStream)
     mediaStream = null
-    mediaRecorder = null
-    chunks = []
+    pcmRecorder = null
     bytes = 0
     if (!blob.size || blob.size > HALL_VOICE_MAX_AUDIO_BYTES) {
       failCapture('录音无效或超过 5MiB')
@@ -284,7 +275,7 @@ export const useHallVoiceConversation = ({
     setState('transcribing')
     uploadController = new AbortController()
     const body = new FormData()
-    body.append('audio', blob, mimeType.includes('mp4') ? 'juyiting-voice.m4a' : 'juyiting-voice.webm')
+    body.append('audio', blob, 'juyiting-voice.wav')
     body.append('requestId', safeRequestId(browser.crypto))
     body.append('language', 'zh-CN')
     body.append('durationMs', String(elapsedMsRef.value))
@@ -294,7 +285,7 @@ export const useHallVoiceConversation = ({
       const text = String(response?.data?.data?.text || response?.data?.text || '').trim()
       if (!text) throw new Error('未识别到语音内容')
       transcriptRef.value = text
-      if (autoSendEnabledRef.value && matchesFrozen() && !isReplyBusy()) startCountdown(current)
+      if (!draftOnlyCapture && autoSendEnabledRef.value && matchesFrozen() && !isReplyBusy()) startCountdown(current)
       else openReview(!matchesFrozen())
       return true
     } catch (cause) {
@@ -311,8 +302,9 @@ export const useHallVoiceConversation = ({
     }
   }
 
-  const startRecording = async () => {
+  const startRecording = async ({ draftOnly = false } = {}) => {
     if (!canRecordRef.value) return false
+    draftOnlyCapture = draftOnly === true
     invalidateAsyncWork()
     closeReplyTurn('superseded_by_capture')
     const current = generation
@@ -336,30 +328,30 @@ export const useHallVoiceConversation = ({
         return false
       }
       mediaStream = capture
-      const mimeType = preferredMime
-      const recorder = new browser.MediaRecorder(capture, { mimeType })
-      mediaRecorder = recorder
-      chunks = []
       bytes = 0
-      recorder.ondataavailable = event => {
-        if (current !== generation || !event.data?.size) return
-        bytes += event.data.size
-        if (bytes > HALL_VOICE_MAX_AUDIO_BYTES) {
-          failCapture('录音超过 5MiB，已停止')
-          return
+      recorderInitController = new AbortController()
+      const recorder = await recorderFactory({
+        stream: capture,
+        abortSignal: recorderInitController.signal,
+        onProcessorError: cause => {
+          if (current === generation) failCapture(cause?.message || '录音处理器出错')
+        },
+        onPcmData: chunk => {
+          if (current !== generation) return
+          const size = chunk?.byteLength || 0
+          bytes += size
+          if (bytes + 44 > HALL_VOICE_MAX_AUDIO_BYTES) failCapture('录音超过 5MiB，已停止')
         }
-        chunks.push(event.data)
+      })
+      if (current !== generation) {
+        await recorder?.dispose?.()
+        stopTracks(capture)
+        return false
       }
-      recorder.onerror = () => {
-        if (current === generation) failCapture('录音设备出错，已停止')
-      }
-      recorder.onstop = () => {
-        if (current !== generation) return
-        clearCaptureTimers()
-        const blob = new Blob(chunks, { type: mimeType })
-        void upload(current, blob, mimeType)
-      }
-      recorder.start(250)
+      pcmRecorder = recorder
+      recorderInitController = null
+      await recorder.start?.()
+      if (current !== generation) return false
       setState('recording')
       const startedAt = Date.now()
       ticker = browser.window.setInterval(() => { elapsedMsRef.value = Math.min(HALL_VOICE_MAX_DURATION_MS, Date.now() - startedAt) }, 100)
@@ -381,17 +373,35 @@ export const useHallVoiceConversation = ({
   }
 
   const stopRecording = () => {
-    if (stateRef.value !== 'recording' || !mediaRecorder) return false
+    if (stateRef.value !== 'recording' || !pcmRecorder) return false
+    const current = generation
+    const recorder = pcmRecorder
     setState('stopping')
     clearCaptureTimers()
-    stopTracks(mediaStream)
-    try {
-      mediaRecorder.stop()
-      return true
-    } catch (cause) {
-      failCapture(cause?.message || '录音停止失败')
-      return false
-    }
+    void (async () => {
+      try {
+        const blob = await recorder.stop()
+        if (current !== generation) return
+        stopTracks(mediaStream)
+        mediaStream = null
+        pcmRecorder = null
+        if (blob?.type !== 'audio/wav' || !blob.size || blob.size > HALL_VOICE_MAX_AUDIO_BYTES) {
+          failCapture('录音 WAV 格式无效或超过 5MiB')
+          return
+        }
+        const wavBytes = new Uint8Array(await blob.arrayBuffer())
+        if (current !== generation) return
+        if (!validatePcm16MonoWav(wavBytes, { maxBytes: HALL_VOICE_MAX_AUDIO_BYTES })) {
+          failCapture('录音 WAV 格式无效或超过 5MiB')
+          return
+        }
+        if (current !== generation) return
+        void upload(current, blob)
+      } catch (cause) {
+        if (current === generation) failCapture(cause?.message || '录音停止失败')
+      }
+    })()
+    return true
   }
 
   const startCountdown = current => {
@@ -508,12 +518,14 @@ export const useHallVoiceConversation = ({
       const response = await browser.fetch(`${runtimeEnv.VITE_API_BASE_URL || ''}/chat/speech/synthesis`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requestId: safeRequestId(browser.crypto), text, voice: 'juyiting-default', format: 'mp3' }),
+        body: JSON.stringify({ requestId: safeRequestId(browser.crypto), text, voice: 'juyiting-default', format: 'wav' }),
         signal: ttsController.signal
       })
       if (current !== generation) return false
-      const declaredLength = Number(response.headers.get('content-length') || 0)
-      if (!response.ok || !response.body || declaredLength > HALL_VOICE_MAX_TTS_BYTES) throw new Error('语音回答暂不可用')
+      const contentType = response.headers.get('content-type')?.trim().toLowerCase()
+      const contentLength = response.headers.get('content-length')
+      const declaredLength = contentLength === null ? null : Number(contentLength)
+      if (!response.ok || !response.body || contentType !== 'audio/wav' || (contentLength !== null && (!/^\d+$/.test(contentLength) || !Number.isSafeInteger(declaredLength) || declaredLength <= 0 || declaredLength > HALL_VOICE_MAX_TTS_BYTES))) throw new Error('语音回答暂不可用')
       const reader = response.body.getReader()
       const parts = []
       let total = 0
@@ -528,8 +540,12 @@ export const useHallVoiceConversation = ({
         parts.push(value)
       }
       if (current !== generation) return false
-      if (!total) throw new Error('语音回答为空，文字已保留')
-      playbackUrl = browser.URL.createObjectURL(new Blob(parts, { type: response.headers.get('content-type') || 'audio/mpeg' }))
+      if (!total || (declaredLength !== null && total !== declaredLength)) throw new Error('语音回答为空或长度不符，文字已保留')
+      const wav = new Uint8Array(total)
+      let offset = 0
+      parts.forEach(part => { wav.set(part, offset); offset += part.byteLength })
+      if (!validatePcm16MonoWav(wav, { maxBytes: HALL_VOICE_MAX_TTS_BYTES })) throw new Error('语音回答 WAV 格式无效，文字已保留')
+      playbackUrl = browser.URL.createObjectURL(new Blob([wav], { type: 'audio/wav' }))
       const player = new browser.Audio(playbackUrl)
       playback = player
       const finishPlayback = nextState => {

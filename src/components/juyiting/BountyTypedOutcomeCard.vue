@@ -1,0 +1,36 @@
+<template>
+  <article class="typed-outcome-card" :class="`typed-${outcome.kind.toLowerCase()}`">
+    <header><strong>{{ heading }}</strong><small>{{ inspection ? '资料答复' : 'Agent 答复' }}</small></header>
+    <p class="typed-outcome-text">{{ body }}</p>
+    <template v-if="outcome.kind === 'CLARIFY'">
+      <p class="typed-question">{{ outcome.clarification.question }}</p>
+      <button v-if="outcome.clarification.state === 'OPEN'" type="button" @click="$emit('reply', projection)">回答此问</button>
+      <small v-else class="typed-state">已收到补充</small>
+    </template>
+    <template v-else-if="outcome.kind === 'EXECUTION_PROPOSAL'">
+      <small>如需调整，请在会话中继续说明。</small>
+    </template>
+  </article>
+</template>
+
+<script setup>
+import { computed } from 'vue'
+const props = defineProps({ projection: { type: Object, required: true } })
+defineEmits(['reply'])
+const outcome = computed(() => props.projection.outcome)
+const inspection = computed(() => props.projection?.purpose === 'INSPECT')
+const progress = computed(() => props.projection.actionProgress)
+const heading = computed(() => outcome.value?.kind === 'ACTION_REQUEST'
+  ? ({ QUEUED: '等待处理', RUNNING: '正在处理', COMPLETED: '本轮完成', FAILED: '未完成', CANCELLED: '已取消' })[progress.value?.state]
+  : ({ ANSWER: '议事答复', CLARIFY: '需要补充', EXECUTION_PROPOSAL: 'Agent 建议' })[outcome.value?.kind] || '议事结果')
+const body = computed(() => outcome.value?.kind === 'ACTION_REQUEST'
+  ? ({ COMPLETED: '请查看会话中的答复或文件。', FAILED: '这次未完成，可以继续补充需求。', CANCELLED: '本次处理已取消。' })[progress.value?.state] || outcome.value.text
+  : outcome.value?.text)
+</script>
+
+<style scoped>
+.typed-outcome-card { margin: 8px 0 12px; padding: 12px; border: 1px solid #b8d4c6; border-radius: 10px; background: #f2faf5; color: #203a2f; }
+.typed-outcome-card header { display:flex; justify-content:space-between; gap:12px; } .typed-outcome-card header small,.typed-outcome-card>small { color:#557267; font-size:12px; }
+.typed-outcome-text,.typed-question,.typed-proposal { margin:8px 0; white-space:pre-wrap; } .typed-outcome-card button { margin-top:10px; border:0; border-radius:6px; padding:7px 10px; background:#276348; color:#fff; cursor:pointer; }
+.typed-execution_proposal { border-color:#d9b56c; background:#fffbeb; }.typed-state{display:block;margin-top:8px}
+</style>

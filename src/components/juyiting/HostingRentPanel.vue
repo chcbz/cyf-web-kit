@@ -51,7 +51,9 @@
       <p>报价有效至 {{ timestamp(quote.expiresAt) }}（{{ quote.expiresAt }} ms）</p>
       <p>初租从服务可用时起算；续租从当前时刻与已付到期时间中的较晚者顺延。实际起止时间由服务端返回，本页不预设收费价格或租约到期日。</p>
       <p v-if="rent.quoteExpired.value" role="alert">报价已过期，请取消后重新预览；不会自动换价付款。</p>
+      <p v-else-if="rent.needsOnboardingGrant.value" role="status">余额不足，正在为首次山寨安顿领取一次性迎新安顿金；不会改走自家接应。</p>
       <p v-else-if="rent.wallet.value && !rent.canConfirm.value" role="status">余额不足或当前租约/选择待核对，暂不可付款。</p>
+      <button v-if="rent.needsOnboardingGrant.value" type="button" :disabled="rent.busy.value" @click="rent.claimOnboardingGrant">重试领取迎新安顿金</button>
       <button type="button" :disabled="!rent.canConfirm.value" @click="acceptedAction(rent.confirmQuote)">确认此报价并{{ quote.purpose === 'INITIAL' ? '预留租金' : '手动续租付款' }}</button>
       <button type="button" :disabled="rent.busy.value || !!rent.state.value.operation" @click="rent.cancelQuote">取消报价，不付款</button>
     </section>
@@ -75,7 +77,7 @@ import { loadEconomyPreviewCapability } from '../../utils/economyPreviewCapabili
 import { formatSilverMicro, isCanonicalDecimalString, isEconomyPreviewBuildEnabled } from '../../utils/silverAmount.js'
 
 const props = defineProps({ persona: { type: Object, required: true }, resolvePersona: { type: Function, required: true } })
-const emit = defineEmits(['close', 'hosting-changed'])
+const emit = defineEmits(['close', 'hosting-changed', 'hosting-confirmed'])
 const apiStore = useApiStore()
 const rent = useHostingRent({ agentApi, economyApi, loadCapability: loadEconomyPreviewCapability,
   enabled: isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED),
@@ -106,7 +108,14 @@ const openPersona = async () => {
 }
 const acceptedAction = async action => {
   if (await action()) {
-    if (rent.state.value.accepted && !rent.state.value.operation) emit('hosting-changed')
+    const receipt = rent.state.value.accepted?.receipt
+    if (receipt && !rent.state.value.operation) {
+      emit('hosting-changed')
+      emit('hosting-confirmed', {
+        personaCode: props.persona.personaCode,
+        agentId: receipt.agentId || quote.value?.agentId || ''
+      })
+    }
   }
 }
 watch(() => [props.persona.personaCode, props.persona.agentId, props.persona.boundToMe, props.persona.bound,

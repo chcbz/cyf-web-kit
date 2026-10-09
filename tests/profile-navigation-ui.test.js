@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { assessReadOnlyPreviewCapabilities } from '../src/utils/economyReadOnlyPreviewPolicy.js'
 import * as profileNavigation from '../src/utils/profileNavigation.js'
+import * as displayName from '../src/utils/displayName.js'
 
 const Vue = await import('vue')
 const VueRouter = await import('vue-router')
@@ -69,7 +70,8 @@ const profileComponent = ({ globalStore, apiStore, client }) => compileComponent
   '@/composables/economyReadOnlyPreviewApi': { economyReadOnlyPreviewClient: client },
   '@/composables/commandObservabilityApi': { commandObservabilityClient: client.commandObservability || { capabilities: async () => ({ contractVersion: 'command-observability-v1', available: false, readOnly: true, reason: 'FORBIDDEN' }) } },
   '@/utils/commandObservabilityPolicy': { assessCommandObservabilityCapability: value => value?.contractVersion === 'command-observability-v1' && value?.available === true && value?.readOnly === true && value?.reason === null ? { available: true, reason: null } : { available: false, reason: value?.reason || 'MALFORMED' }, capabilityUnavailableMessage: () => '不可用' },
-  '@/utils/profileNavigation': profileNavigation
+  '@/utils/profileNavigation': profileNavigation,
+  '@/utils/displayName': displayName
 }, { VITE_ECONOMY_READONLY_PREVIEW_ENABLED: 'true', VITE_ECONOMY_PREVIEW_ENABLED: 'false' })
 
 const previewComponent = state => compileComponent('../src/components/economy/EconomyReadOnlyPreview.vue', 'preview-navigation-mounted', {

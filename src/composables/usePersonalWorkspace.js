@@ -3,7 +3,9 @@ import { createApi } from './useHttp.js'
 import { registerIdentityCleanup } from '../utils/identityLifecycle.js'
 
 export const PERSONAL_WORKSPACE_MIME_TYPES = Object.freeze([
-  'image/png', 'image/jpeg', 'text/plain', 'application/pdf',
+  'image/png', 'image/jpeg', 'image/webp', 'image/gif',
+  'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/mp4', 'audio/webm',
+  'text/plain', 'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation'
@@ -11,7 +13,9 @@ export const PERSONAL_WORKSPACE_MIME_TYPES = Object.freeze([
 
 const ALLOWED_MIME_TYPES = new Set(PERSONAL_WORKSPACE_MIME_TYPES)
 const EXTENSION_MIME = Object.freeze({
-  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', txt: 'text/plain', pdf: 'application/pdf',
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif',
+  mp3: 'audio/mpeg', ogg: 'audio/ogg', oga: 'audio/ogg', wav: 'audio/wav',
+  m4a: 'audio/mp4', mp4: 'audio/mp4', webm: 'audio/webm', txt: 'text/plain', pdf: 'application/pdf',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
@@ -37,8 +41,12 @@ const extensionFor = filename => {
   const match = typeof filename === 'string' ? /\.([^.]+)$/.exec(filename.trim()) : null
   return match ? match[1].toLowerCase() : ''
 }
-const inferredMime = file => ALLOWED_MIME_TYPES.has(normalizeMime(file?.type))
-  ? normalizeMime(file.type) : EXTENSION_MIME[extensionFor(file?.name)] || ''
+const inferredMime = file => {
+  const declared = normalizeMime(file?.type)
+  if (ALLOWED_MIME_TYPES.has(declared)) return declared
+  // An explicit video/active-content type must not be relabelled as audio by its extension.
+  return !declared || declared === 'application/octet-stream' ? EXTENSION_MIME[extensionFor(file?.name)] || '' : ''
+}
 const fileNameMatchesMime = (name, mime) => EXTENSION_MIME[extensionFor(name)] === mime
 const randomKey = () => {
   const value = globalThis.crypto?.randomUUID?.()
@@ -51,14 +59,15 @@ const safeDownloadFilename = value => {
 const errorMessage = error => {
   if (error?.name === 'AbortError') return ''
   if ([401, 403, 404].includes(error?.status)) return '当前身份或文件已不可访问，请刷新后重试。'
-  if (error?.code === 'FILE_TYPE_UNSUPPORTED' || error?.status === 415) return '仅支持 PNG、JPEG、纯文本、PDF、DOCX、XLSX 或 PPTX。'
+  if (error?.code === 'FILE_TYPE_UNSUPPORTED' || error?.status === 415) return '此格式暂不支持，请选择工作空间支持的图片、音频、文本或办公文档。'
   if (error?.code === 'METADATA_CHANGED' || error?.status === 412) return '文件信息已变化，请刷新后再操作。'
   if (error?.code === 'FILE_VERSION_CONFLICT' || error?.status === 409) return '文件版本已变化，请刷新后明确选择要追加的版本。'
   if (error?.code === 'OPERATION_PROCESSING' || error?.status === 202) return '上一次操作仍在确认中，请使用原操作标识查询后再重试。'
   if (error?.status === 503) return '工作空间存储暂不可用，请稍后重试。'
   return error?.message || '工作空间请求未完成，请刷新确认。'
 }
-const previewPartMimeTypes = new Set(['text/plain', 'image/png', 'image/jpeg'])
+const previewPartMimeTypes = new Set(PERSONAL_WORKSPACE_MIME_TYPES.filter(mime =>
+  mime === 'text/plain' || mime.startsWith('image/') || mime.startsWith('audio/')))
 // PreviewView from the current API does not carry a representation field. A known
 // label is tolerated during rollout but never controls rendering or authorization.
 const PREVIEW_REPRESENTATIONS = new Set(['EXTRACTED_TEXT', 'PAGED_IMAGE', 'SHEET_TEXT', 'PAGED_TEXT'])
@@ -104,15 +113,19 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
   const controllers = new Set()
   const activeUrls = new Set()
   let generation = 0
+  let previewGeneration = 0
+  let detailGeneration = 0
   let disposed = false
 
   const revokePreview = () => {
+    previewGeneration += 1
     for (const url of activeUrls) urlApi?.revokeObjectURL?.(url)
     activeUrls.clear()
     preview.value = { kind: 'none', message: '' }
   }
   const reset = () => {
     generation += 1
+    detailGeneration += 1
     for (const controller of controllers) controller.abort(abortError('Workspace identity changed'))
     controllers.clear()
     items.value = []
@@ -151,7 +164,7 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     error.value = ''
     const params = {}
     if (TEXT(q, 100)) params.q = q
-    if (['IMAGE', 'TEXT', 'DOCUMENT', 'SPREADSHEET', 'PRESENTATION', 'PDF'].includes(mediaFamily)) params.mediaFamily = mediaFamily
+    if (['IMAGE', 'AUDIO', 'TEXT', 'DOCUMENT', 'SPREADSHEET', 'PRESENTATION', 'PDF'].includes(mediaFamily)) params.mediaFamily = mediaFamily
     if (['ACTIVE', 'TRASHED'].includes(state)) params.state = state
     if (cursor) params.cursor = cursor
     try {
@@ -179,10 +192,12 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
   const loadMore = options => nextCursor.value ? refresh({ ...options, cursor: nextCursor.value, append: true }) : false
   const select = async fileId => {
     if (!ID(fileId)) return null
+    const detailRequest = ++detailGeneration
     const snapshot = { generation, epoch: currentEpoch.value }
     actionState.value = 'loading-detail'; error.value = ''; revokePreview()
     try {
       const response = await request({ url: `/personal-workspace/files/${encodeURIComponent(fileId)}`, method: 'GET' }, snapshot)
+      if (detailRequest !== detailGeneration) return null
       const data = response.data
       if (!data || !validFileView(data.file) || !validVersion(data.latestVersion) || !Array.isArray(data.versions) || !data.versions.every(validVersion)) {
         throw new Error('文件详情返回格式无效。')
@@ -192,7 +207,7 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
       actionState.value = 'ready'
       return detail.value
     } catch (cause) {
-      if (cause?.name !== 'AbortError' && snapshot.generation === generation) { error.value = errorMessage(cause); actionState.value = 'error' }
+      if (cause?.name !== 'AbortError' && snapshot.generation === generation && detailRequest === detailGeneration) { error.value = errorMessage(cause); actionState.value = 'error' }
       return null
     }
   }
@@ -335,8 +350,13 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     if (!validFileView(file) || !VERSION(version)) return null
     const snapshot = { generation, epoch: currentEpoch.value }
     revokePreview(); actionState.value = 'loading-preview'; error.value = ''
+    const previewRequest = previewGeneration
+    const current = () => !disposed && snapshot.generation === generation &&
+      snapshot.epoch === currentEpoch.value && previewRequest === previewGeneration
+    const requireCurrent = () => { if (!current()) throw abortError('Workspace preview changed') }
     try {
       const { data } = await request({ url: `/personal-workspace/files/${encodeURIComponent(file.fileId)}/versions/${Number(version)}/preview`, method: 'GET', params: { view: 'parts' } }, snapshot)
+      requireCurrent()
       if (!validPreviewView(data)) {
         preview.value = { kind: 'unsupported', message: data?.reason || '此文件可下载，但暂时无法生成可用预览。' }
         actionState.value = 'ready'
@@ -345,14 +365,19 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
       const rendered = []
       for (const part of displayPreviewParts(data)) {
         const content = await readBlob(file.fileId, version, `preview/parts/${encodeURIComponent(part.partId)}`)
+        requireCurrent()
         const mime = normalizeMime(part.contentMimeType)
         if (normalizeMime(content.blob.type) !== mime) throw new Error('预览分片类型无效，请下载原文件查看。')
-        if (mime === 'text/plain') rendered.push({ partId: part.partId, contentMimeType: mime, kind: 'text', text: await content.blob.text(), url: '' })
+        if (mime === 'text/plain') {
+          const text = await content.blob.text()
+          requireCurrent()
+          rendered.push({ partId: part.partId, contentMimeType: mime, kind: 'text', text, url: '' })
+        }
         else {
           const url = urlApi?.createObjectURL?.(content.blob)
           if (!url) throw new Error('当前浏览器不能安全创建预览。')
           activeUrls.add(url)
-          rendered.push({ partId: part.partId, contentMimeType: mime, kind: 'image', text: '', url })
+          rendered.push({ partId: part.partId, contentMimeType: mime, kind: mime.startsWith('audio/') ? 'audio' : 'image', text: '', url })
         }
       }
       const note = data.partial ? (data.reason || '预览内容不完整；请下载原文件查看。') : ''
@@ -360,12 +385,13 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
         const first = rendered[0]
         preview.value = first.kind === 'text'
           ? { kind: 'text', text: first.text, message: note, parts: rendered, selectedIndex: 0 }
-          : { kind: 'image', url: first.url, message: note, parts: rendered, selectedIndex: 0 }
+          : { kind: first.kind, url: first.url, message: note, parts: rendered, selectedIndex: 0 }
       } else preview.value = { kind: 'parts', parts: rendered, selectedIndex: 0, message: note }
       actionState.value = 'ready'
       return preview.value
     } catch (cause) {
-      // Revoke any URLs created before a later part fails or the request is cancelled.
+      // A stale preview must not revoke or overwrite a newer file/identity's preview.
+      if (!current()) return null
       revokePreview()
       if (cause?.name !== 'AbortError' && snapshot.generation === generation) {
         error.value = errorMessage(cause)

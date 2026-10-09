@@ -32,6 +32,14 @@ const restoreDom = () => {
   }
 }
 
+const formalExecutionStub = () => ({
+  readyReason: Vue.ref('正式执行条件尚未满足。'), stateText: Vue.ref('尚未确认本正式任务的执行记录。'), scopeError: Vue.ref(''), activeExecution: Vue.ref(null),
+  formalHistory: Vue.ref([]), historyState: Vue.ref('idle'), historyError: Vue.ref(''),
+  canRevoke: Vue.ref(false), revoking: Vue.ref(false), revokeOriginal: async () => null,
+  execution: { pending: Vue.ref(false) }, refreshReadiness: async () => false,
+  recoverOriginalRequest: async () => null, begin: async () => null, loadFormalHistory: async () => [], selectFormalHistory: async () => null, dispose: () => {}
+})
+
 const compile = () => {
   const filename = new URL('../src/components/personal-workspace/TaskMaterialLinks.vue', import.meta.url)
   const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename: filename.pathname })
@@ -41,7 +49,7 @@ const compile = () => {
     .replace(/^import\s+([^\s]+)\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_match, name, path) =>
       `const ${name} = imports[${JSON.stringify(path)}]`)
     .replace('export default', 'return')
-  return imports => new Function('imports', code)(imports)
+  return imports => new Function('imports', code)({ '@/composables/useFormalTaskExecution': { useFormalTaskExecution: formalExecutionStub }, ...imports })
 }
 
 describe('W06 workspace bounty material links', () => {
@@ -72,23 +80,51 @@ describe('W06 workspace bounty material links', () => {
       '@/composables/usePersonalWorkspace': { usePersonalWorkspace: () => workspace },
       '@/composables/usePersonalWorkspaceTaskLinks': { usePersonalWorkspaceTaskLinks: () => links }
     })
-    const wrapper = mount(component, { props: { taskId: 'task_a', identityEpoch: 1 } })
+    const wrapper = mount(component, { global: { stubs: { teleport: true } }, props: { taskId: 'task_a', identityEpoch: 1 } })
     wrappers.push(wrapper)
 
+    await wrapper.get('.open-material-picker').trigger('click')
     await wrapper.get('.workspace-file-list button').trigger('click')
     await wrapper.get('select').setValue('1')
     await wrapper.get('.attach-material').trigger('click')
 
     assert.deepEqual(attached, [{ fileId: 'file_a', version: 1, role: 'INPUT' }])
     assert.match(wrapper.text(), /不会启动 Agent 执行/)
-    assert.match(wrapper.text(), /不提供 execution 或 deliverable 查询/)
+    assert.match(wrapper.text(), /明确开始正式办理/)
+  })
+
+
+  it('offers both INPUT and REFERENCE task links to the explicit formal execution input manifest', async () => {
+    const begun = []
+    const formal = formalExecutionStub()
+    formal.readyReason.value = ''
+    formal.execution.generationEnabled = Vue.ref(true)
+    formal.begin = async payload => { begun.push(payload); return { executionId: 'exec-reference', state: 'QUEUED' } }
+    const workspace = {
+      items: Vue.ref([{ fileId: 'file_ref', displayName: '真实参考资料', latestVersion: 3 }]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), error: Vue.ref(''), detail: Vue.ref(null),
+      refresh: async () => true, loadMore: async () => false, select: async () => null, dispose: () => {}
+    }
+    const links = {
+      links: Vue.ref([taskLink({ relationId: 'rel_ref', fileId: 'file_ref', version: 2, role: 'REFERENCE' })]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), actionState: Vue.ref('idle'), error: Vue.ref(''),
+      load: async () => true, loadMore: async () => false, attach: async () => null, detach: async () => null, dispose: () => {}
+    }
+    const component = TaskMaterialLinks({ vue: Vue, '@/composables/useFormalTaskExecution': { useFormalTaskExecution: () => formal }, '@/composables/usePersonalWorkspace': { usePersonalWorkspace: () => workspace }, '@/composables/usePersonalWorkspaceTaskLinks': { usePersonalWorkspaceTaskLinks: () => links } })
+    const wrapper = mount(component, { global: { stubs: { teleport: true } }, props: { taskId: 'task_a', conversationId: 'conversation_a', targetAgentId: 'agent_a', conversationConfirmed: true, formalExecutionAuthorized: true, identityEpoch: 1, identityScope: 'tenant\u0000client\u0000owner-a', defaultInstruction: '整理正式成果' } })
+    wrappers.push(wrapper)
+    await Vue.nextTick()
+
+    assert.match(wrapper.text(), /真实参考资料 · v2 · 参考资料/)
+    assert.match(wrapper.text(), /明确勾选.*input manifest/)
+    await wrapper.get('.formal-inputs input').setValue(true)
+    await wrapper.get('.begin-formal-execution').trigger('click')
+    assert.deepEqual(begun, [{ inputs: [{ fileId: 'file_ref', version: 2 }], instruction: '整理正式成果', confirmed: true }])
   })
 
   it('renders a server-returned OUTPUT link as an execution-managed reference without inventing formal delivery', () => {
     const workspace = { items: Vue.ref([]), nextCursor: Vue.ref(null), listState: Vue.ref('empty'), loading: Vue.ref(false), error: Vue.ref(''), detail: Vue.ref(null), refresh: async () => true, loadMore: async () => false, select: async () => null, dispose: () => {} }
     const links = { links: Vue.ref([taskLink({ relationId: 'rel_output', role: 'OUTPUT' })]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), actionState: Vue.ref('idle'), error: Vue.ref(''), load: async () => true, loadMore: async () => false, attach: async () => null, detach: async () => null, dispose: () => {} }
     const component = TaskMaterialLinks({ vue: Vue, '@/composables/usePersonalWorkspace': { usePersonalWorkspace: () => workspace }, '@/composables/usePersonalWorkspaceTaskLinks': { usePersonalWorkspaceTaskLinks: () => links } })
-    const wrapper = mount(component, { props: { taskId: 'task_a', identityEpoch: 1 } })
+    const wrapper = mount(component, { global: { stubs: { teleport: true } }, props: { taskId: 'task_a', identityEpoch: 1 } })
     wrappers.push(wrapper)
 
     assert.match(wrapper.text(), /成果关联由执行流程管理/)
@@ -102,23 +138,85 @@ describe('W06 workspace bounty material links', () => {
     const workspace = { items: Vue.ref([{ fileId: 'file_a', displayName: '项目资料', latestVersion: 2 }]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), error: Vue.ref(''), detail, refresh: async () => true, loadMore: async () => false, select: async () => { detail.value = workspaceDetail(); return detail.value }, dispose: () => {} }
     const links = { links: Vue.ref([]), nextCursor: Vue.ref(null), listState: Vue.ref('empty'), loading: Vue.ref(false), actionState: Vue.ref('idle'), error: Vue.ref(''), load: async () => true, loadMore: async () => false, attach: async () => null, detach: async () => null, dispose: () => {} }
     const component = TaskMaterialLinks({ vue: Vue, '@/composables/usePersonalWorkspace': { usePersonalWorkspace: () => workspace }, '@/composables/usePersonalWorkspaceTaskLinks': { usePersonalWorkspaceTaskLinks: () => links } })
-    const wrapper = mount(component, { props: { taskId: 'task_a', identityEpoch: 1 } })
+    const wrapper = mount(component, { global: { stubs: { teleport: true } }, props: { taskId: 'task_a', identityEpoch: 1 } })
     wrappers.push(wrapper)
+    await wrapper.get('.open-material-picker').trigger('click')
     await wrapper.get('.workspace-file-list button').trigger('click')
     assert.equal(wrapper.find('.attach-material').exists(), true)
 
     await wrapper.setProps({ identityEpoch: 2 })
-    const attach = wrapper.find('.attach-material')
-    assert.equal(attach.exists(), true)
-    assert.equal(attach.attributes('disabled'), '')
+    assert.equal(wrapper.find('.task-material-picker').exists(), false)
+    assert.equal(wrapper.find('.attach-material').exists(), false)
   })
 
-  it('keeps task material controls out of the bounty detail and preserves the existing task discussion event', () => {
+  it('requires explicit confirmation to revoke the queued execution and emits the exact receipt', async () => {
+    const calls = []
+    const receipt = { executionId: 'pwe_exact', state: 'INPUTS_REVOKED' }
+    const formal = formalExecutionStub()
+    formal.activeExecution.value = { executionId: 'pwe_exact', state: 'QUEUED' }
+    formal.canRevoke.value = true
+    formal.revokeOriginal = async options => { calls.push(options); return receipt }
+    const workspace = { items: Vue.ref([]), nextCursor: Vue.ref(null), listState: Vue.ref('empty'), loading: Vue.ref(false), error: Vue.ref(''), detail: Vue.ref(null), refresh: async () => true, dispose: () => {} }
+    const links = { links: Vue.ref([]), nextCursor: Vue.ref(null), listState: Vue.ref('empty'), loading: Vue.ref(false), actionState: Vue.ref('idle'), error: Vue.ref(''), load: async () => true, dispose: () => {} }
+    const component = TaskMaterialLinks({ vue: Vue, '@/composables/useFormalTaskExecution': { useFormalTaskExecution: () => formal }, '@/composables/usePersonalWorkspace': { usePersonalWorkspace: () => workspace }, '@/composables/usePersonalWorkspaceTaskLinks': { usePersonalWorkspaceTaskLinks: () => links } })
+    const wrapper = mount(component, { global: { stubs: { teleport: true } }, props: { taskId: 'task_a', identityEpoch: 1 } })
+    wrappers.push(wrapper)
+    const button = wrapper.findAll('button').find(node => node.text() === '撤销本次输入授权')
+    assert.equal(button.attributes('disabled'), '')
+    await button.trigger('click')
+    assert.deepEqual(calls, [])
+    await wrapper.get('.formal-confirmation input').setValue(true)
+    assert.equal(button.attributes('disabled'), undefined)
+    await button.trigger('click')
+    assert.deepEqual(calls, [{ confirmed: true }])
+    assert.deepEqual(wrapper.emitted('formal-execution-recovered'), [[receipt]])
+    assert.equal(button.attributes('disabled'), '')
+  })
+
+  it('uses a non-modal full-page material picker whose scroll body and action footer stay separate with long lists', async () => {
+    const items = Array.from({ length: 19 }, (_, index) => ({ fileId: `file_${index + 1}`, displayName: `资料 ${index + 1}`, latestVersion: 1 }))
+    const detail = Vue.ref(null)
+    const workspace = { items: Vue.ref(items), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), error: Vue.ref(''), detail, refresh: async () => true, loadMore: async () => false, select: async fileId => { detail.value = { file: { fileId, displayName: fileId, state: 'ACTIVE', latestVersion: 1 }, latestVersion: { version: 1 }, versions: [{ version: 1, originalFilename: `${fileId}.pdf` }] }; return detail.value }, dispose: () => {} }
+    const links = { links: Vue.ref([]), nextCursor: Vue.ref(null), listState: Vue.ref('empty'), loading: Vue.ref(false), actionState: Vue.ref('idle'), error: Vue.ref(''), load: async () => true, loadMore: async () => false, attach: async () => null, detach: async () => null, dispose: () => {} }
+    const component = TaskMaterialLinks({ vue: Vue, '@/composables/usePersonalWorkspace': { usePersonalWorkspace: () => workspace }, '@/composables/usePersonalWorkspaceTaskLinks': { usePersonalWorkspaceTaskLinks: () => links } })
+    const wrapper = mount(component, { global: { stubs: { teleport: true } }, props: { taskId: 'task_a', identityEpoch: 1, defaultInstruction: '整理正式 PDF' } })
+    wrappers.push(wrapper)
+
+    await wrapper.get('.open-material-picker').trigger('click')
+    assert.equal(wrapper.get('.task-material-picker').attributes('role'), 'region')
+    assert.equal(wrapper.find('.task-material-picker[role="dialog"]').exists(), false)
+    assert.equal(wrapper.findAll('.workspace-file-list button').length, 19)
+    assert.equal(wrapper.get('.material-picker-body').exists(), true)
+    assert.equal(wrapper.get('.material-picker-footer').exists(), true)
+    assert.match(wrapper.get('.use-no-material').text(), /不使用资料/)
+    const source = readFileSync(new URL('../src/components/personal-workspace/TaskMaterialLinks.vue', import.meta.url), 'utf8')
+    assert.match(source, /<Teleport to="body">/)
+    assert.match(source, /grid-template-rows:\s*auto minmax\(0, ?1fr\) auto/)
+    assert.match(source, /--material-paper:#fffefa/)
+    assert.match(source, /--material-brand:#923f30/)
+    assert.match(source, /workspace-file-list button\.selected/)
+  })
+
+  it('treats the explicit start button as confirmation without an extra consent checkbox', () => {
+    const source = readFileSync(new URL('../src/components/personal-workspace/TaskMaterialLinks.vue', import.meta.url), 'utf8')
+    assert.match(source, /confirmed: true/)
+    assert.match(source, /确认并开始办理（PDF）/)
+    assert.doesNotMatch(source, /v-model="inputsConfirmed"/)
+  })
+
+  it('mounts task material controls in the formal bounty detail while preserving the existing discussion event', () => {
     const bounty = readFileSync(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url), 'utf8')
-    assert.doesNotMatch(bounty, /TaskMaterialLinks/)
+    assert.match(bounty, /TaskMaterialLinks/)
+    const hall = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+    assert.match(hall, /:formal-task-execution-context="formalTaskExecutionContext"/)
+    assert.match(bounty, /formalTaskExecutionScope\.taskId/)
+    // Standalone formal-task PDF controls remain. Embedded matters use the
+    // ordinary discussion route, without a second manual execution entry.
+    assert.match(bounty, /v-if="formalTaskExecutionScope && !embeddedHall"/)
+    assert.match(bounty, /v-if="embeddedHall" class="deliberation-execution-route"/)
     assert.match(bounty, /workspace-shortcut/)
     assert.match(bounty, /open-workspace/)
-    assert.match(bounty, /@click="\$emit\('discuss-task', detailTask\)"/)
+    assert.match(bounty, /@click="\$emit\('discuss-task', detailTask, assignedAgentForTask\(detailTask\)\)"/)
     assert.match(bounty, /进入议事/)
   })
 })

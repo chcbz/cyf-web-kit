@@ -181,7 +181,7 @@ export function useFormalDeliveries ({ taskId, identityFingerprint, adapter = fo
     const captured = generation; const capturedTask = taskValue.value; const capturedScope = scope.value
     const requestController = new AbortController(); controller = requestController; busyDeliveryId.value = delivery.deliveryId; message.value = ''
     try {
-      await adapter.decide({ taskId: capturedTask, deliveryId: delivery.deliveryId, expectedTaskVersion: delivery.taskVersion, expectedDeliveryVersion: delivery.revision, decision, reviewReason: decision === 'changes_requested' ? reviewReason : '', idempotencyKey, signal: requestController.signal })
+      await adapter.decide({ taskId: capturedTask, deliveryId: delivery.deliveryId, expectedTaskVersion: delivery.taskVersion, expectedDeliveryVersion: delivery.deliveryVersion, decision, reviewReason: decision === 'changes_requested' ? reviewReason : '', idempotencyKey, signal: requestController.signal })
       if (!current(captured, capturedScope, requestController)) return null
       controller = null; busyDeliveryId.value = ''
       const rows = await refresh()

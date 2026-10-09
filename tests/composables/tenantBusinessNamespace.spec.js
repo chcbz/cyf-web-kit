@@ -84,7 +84,9 @@ describe('verified business browser namespace', () => {
     const second = browserBusinessNamespace(api, profile, config)
     expect(createHallOnboarding({ subject: second, localStorage: storage,
       sessionStorage: memoryStorage() }).snapshot().visible).to.equal(true)
-    expect(browserBusinessNamespace(api, profile, { mode: undefined })).to.equal('web\u000042')
+    expect(browserBusinessNamespace(api, profile, { mode: undefined })).to.equal('')
+    profile.user.tenantId = '0'
+    expect(browserBusinessNamespace(api, profile, { mode: undefined })).to.equal('0\u0000web\u000042')
   })
 
   it('does not reconcile an old-area idempotency key as the new-area request', () => {

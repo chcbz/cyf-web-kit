@@ -90,7 +90,7 @@ export function systemDependencyInstallPolicy(cache, packages = SYSTEM_DEPENDENC
     throw new Error('system dependency install policy only accepts fixed allowlisted packages')
   }
   const cachedir = join(cache, 'dnf')
-  return { cachedir, args: ['-y', '--setopt=gpgcheck=1', '--setopt=install_weak_deps=False', `--setopt=cachedir=${cachedir}`, 'install', ...packages], timeout: 1200000 }
+  return { cachedir, args: ['-y', '--setopt=gpgcheck=1', '--setopt=install_weak_deps=False', `--setopt=cachedir=${cachedir}`, 'install', ...packages] }
 }
 
 // This uses the signed RPM database only; it does not contact repositories or
@@ -124,7 +124,9 @@ export async function installDependencies(cache, execute = runChecked, {
     if (!manager) throw new Error('CI runtime preparation requires the Alinux3 dnf/yum worker')
     const policy = systemDependencyInstallPolicy(cache, missing)
     await mkdir(policy.cachedir, { recursive: true })
-    execute(manager, policy.args, { timeout: policy.timeout })
+    // Do not impose an arbitrary package-manager wall clock; Flow owns cancellation.
+    // timeout: 0 overrides runChecked's finite default for DNF/YUM only.
+    execute(manager, policy.args, { timeout: 0 })
   }
   // rpm supplies rpm2cpio on Alinux/RHEL; no build toolchain RPM is needed.
   execute('/bin/sh', ['-c', 'command -v rpm2cpio && command -v cpio'])

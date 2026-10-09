@@ -19,7 +19,7 @@ describe('personal workspace task link adapter', () => {
     const api = { execute: async options => {
       calls.push(options)
       if (options.method === 'GET') return { data: { items: [initial], nextCursor: null } }
-      if (options.method === 'POST') return { data: link({ relationId: 'rel_b', fileId: 'file_b', role: 'REFERENCE' }), headers: { etag: '"rel_b:1"' } }
+      if (options.method === 'POST') return { data: link({ relationId: 'rel_b', fileId: 'file_b', version: 3, role: 'REFERENCE' }), headers: { etag: '"rel_b:1"' } }
       return { data: { link: detached, executionSnapshotsPreserved: true }, headers: { etag: etag(detached) } }
     } }
     const adapter = usePersonalWorkspaceTaskLinks({ api, taskId: ref('task_a'), identityEpoch: ref('owner-a') })
@@ -38,6 +38,52 @@ describe('personal workspace task link adapter', () => {
     assert.ok(calls[2].headers['Idempotency-Key'])
     assert.equal(result.executionSnapshotsPreserved, true)
     assert.equal(adapter.links.value.find(item => item.relationId === 'rel_a').state, 'DETACHED')
+    adapter.dispose()
+  })
+
+  it('confirms a 201 by authenticated readback when cross-origin ETag is not exposed, without repeating the POST', async () => {
+    const calls = []
+    const saved = link({ relationId: 'rel_saved', taskId: 'task_a', fileId: 'file_b', version: 1 })
+    const api = { execute: async options => {
+      calls.push(options.method)
+      return options.method === 'POST'
+        ? { data: saved, status: 201, headers: {} }
+        : { data: { items: [saved], nextCursor: null } }
+    } }
+    const adapter = usePersonalWorkspaceTaskLinks({ api, taskId: ref('task_a'), identityEpoch: ref('owner-a') })
+    assert.equal((await adapter.attach({ fileId: 'file_b', version: 1, role: 'INPUT' })).relationId, 'rel_saved')
+    assert.deepEqual(calls, ['POST', 'GET'])
+    assert.equal(adapter.links.value[0].state, 'ACTIVE')
+    adapter.dispose()
+  })
+
+  it('confirms a detach through a read-only GET when the browser cannot see its ETag', async () => {
+    const calls = []
+    const detached = link({ state: 'DETACHED', relationRevision: 2 })
+    const api = { execute: async options => {
+      calls.push(options.method)
+      return options.method === 'DELETE'
+        ? { data: { link: detached, executionSnapshotsPreserved: true }, headers: {} }
+        : { data: { items: [detached], nextCursor: null } }
+    } }
+    const adapter = usePersonalWorkspaceTaskLinks({ api, taskId: ref('task_a'), identityEpoch: ref('owner-a') })
+    assert.equal((await adapter.detach(link())).link.state, 'DETACHED')
+    assert.deepEqual(calls, ['DELETE', 'GET'])
+    adapter.dispose()
+  })
+
+  it('does not accept a 201 with no ETag when readback does not confirm that exact version', async () => {
+    const calls = []
+    const api = { execute: async options => {
+      calls.push(options.method)
+      return options.method === 'POST'
+        ? { data: link({ fileId: 'file_b', version: 1 }), status: 201, headers: {} }
+        : { data: { items: [link({ fileId: 'file_b', version: 2 })], nextCursor: null } }
+    } }
+    const adapter = usePersonalWorkspaceTaskLinks({ api, taskId: ref('task_a'), identityEpoch: ref('owner-a') })
+    assert.equal(await adapter.attach({ fileId: 'file_b', version: 1, role: 'INPUT' }), null)
+    assert.deepEqual(calls, ['POST', 'GET'])
+    assert.match(adapter.error.value, /不要重复提交/)
     adapter.dispose()
   })
 
@@ -64,6 +110,62 @@ describe('personal workspace task link adapter', () => {
 
     assert.equal(await pending, false)
     assert.equal(signal.aborted, true)
+    assert.deepEqual(adapter.links.value, [])
+    assert.equal(adapter.listState.value, 'idle')
+    adapter.dispose()
+  })
+
+  it('loads every page as one readonly directory snapshot without hiding cross-page relations', async () => {
+    const calls = []
+    const api = { execute: async options => {
+      calls.push(options)
+      return options.params?.cursor === 'next-1'
+        ? { data: { items: [link({ relationId: 'rel_b', fileId: 'file_b', role: 'REFERENCE' })], nextCursor: null } }
+        : { data: { items: [link()], nextCursor: 'next-1' } }
+    } }
+    const adapter = usePersonalWorkspaceTaskLinks({ api, taskId: ref('task_a'), identityEpoch: ref('owner-a') })
+
+    const result = await adapter.loadAll()
+
+    assert.deepEqual(result.map(item => item.relationId), ['rel_a', 'rel_b'])
+    assert.deepEqual(calls.map(call => call.params || null), [null, { cursor: 'next-1' }])
+    assert.deepEqual(adapter.links.value.map(item => item.relationId), ['rel_a', 'rel_b'])
+    assert.equal(adapter.nextCursor.value, null)
+    adapter.dispose()
+  })
+
+  for (const [name, secondPage] of [
+    ['repeated cursor', { items: [link({ relationId: 'rel_b' })], nextCursor: 'next-1' }],
+    ['cross-page relation', { items: [link()], nextCursor: null }]
+  ]) it(`rejects a ${name} instead of publishing a partial complete directory`, async () => {
+    const api = { execute: async options => options.params?.cursor
+      ? { data: secondPage }
+      : { data: { items: [link()], nextCursor: 'next-1' } } }
+    const adapter = usePersonalWorkspaceTaskLinks({ api, taskId: ref('task_a'), identityEpoch: ref('owner-a') })
+
+    assert.equal(await adapter.loadAll(), null)
+    assert.deepEqual(adapter.links.value, [])
+    assert.equal(adapter.listState.value, 'error')
+    assert.match(adapter.error.value, /重复/)
+    adapter.dispose()
+  })
+
+  it('aborts a complete-directory read when identity changes between pages', async () => {
+    const epoch = ref('owner-a')
+    const wait = deferred()
+    let calls = 0
+    const api = { execute: options => {
+      calls++
+      if (calls === 1) return Promise.resolve({ data: { items: [link()], nextCursor: 'next-1' } })
+      options.signal.addEventListener('abort', () => wait.resolve({ data: { items: [], nextCursor: null } }), { once: true })
+      return wait.promise
+    } }
+    const adapter = usePersonalWorkspaceTaskLinks({ api, taskId: ref('task_a'), identityEpoch: epoch })
+    const pending = adapter.loadAll()
+    await Promise.resolve(); await Promise.resolve()
+    epoch.value = 'owner-b'
+
+    assert.equal(await pending, null)
     assert.deepEqual(adapter.links.value, [])
     assert.equal(adapter.listState.value, 'idle')
     adapter.dispose()

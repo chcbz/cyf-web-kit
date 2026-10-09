@@ -6,7 +6,7 @@ export const normalizeHallHomeMode = mode => HALL_HOME_MODES.includes(mode) ? mo
 
 // Home content preference is deliberately independent from physical/presented
 // orientation. It owns no viewport listeners, engine lifecycle, or panel state.
-export const useHallHomeMode = (initialMode = 'map') => {
+export const useHallHomeMode = (initialMode = 'overview') => {
   const homeMode = ref(normalizeHallHomeMode(initialMode))
   const isMapHome = computed(() => homeMode.value === 'map')
   const isOverviewHome = computed(() => homeMode.value === 'overview')

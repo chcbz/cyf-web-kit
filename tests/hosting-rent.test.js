@@ -19,7 +19,7 @@ const harness = (overrides = {}) => {
   const rent = useHostingRent({ enabled: true, storage, now: () => 2000,
     createKey: () => `00000000-0000-4000-8000-${String(++key).padStart(12, '0')}`,
     loadCapability: async () => ({ economyPreviewEnabled: true, principalScopeFingerprint: 'opaque-scope-a' }),
-    economyApi: { get: async (url, params, options) => { requests.push({ url, params, options }); return ok({ currency: 'SILVER', availableMicro: '9999999999', heldMicro: '0' }) } },
+    economyApi: { get: async (url, params, options) => { requests.push({ url, params, options }); return ok({ currency: 'SILVER', availableMicro: '9999999999', heldMicro: '0' }) }, create: async (url, body, options) => { requests.push({ url, body, options }); return ok({ transactionId: 'etx-welcome', status: 'POSTED', amountMicro: '1000000000', campaignRef: 'hosting-welcome-v1' }) } },
     agentApi: {
       create: async (url, body, options) => { requests.push({ url, body, options }); return ok(url.endsWith('/quotes') ? hostingQuote() : hostingReceipt()) },
       get: async (url, params, options) => { requests.push({ url, params, options }); return ok(hostingLookup()) }
@@ -101,8 +101,26 @@ describe('hosting rent frozen HTTP integration', () => {
     })
   }
 
+  it('automatically claims the one-time onboarding grant and immediately enables confirmation', async () => {
+    let available = '0'
+    const economyRequests = []
+    const h = harness({ economyApi: {
+      get: async () => ok({ currency: 'SILVER', availableMicro: available, heldMicro: '0' }),
+      create: async (url, body) => {
+        economyRequests.push({ url, body })
+        available = '1234500000'
+        return ok({ transactionId: 'etx-welcome', status: 'POSTED', amountMicro: '1234500000', campaignRef: 'hosting-welcome-v1' })
+      }
+    } })
+    await h.rent.open(h.persona)
+    expect(await h.rent.previewInitial()).to.equal(true)
+    expect(economyRequests).to.deep.equal([{ url: '/onboarding-grant', body: {} }])
+    expect(h.rent.wallet.value.availableMicro).to.equal('1234500000')
+    expect(h.rent.canConfirm.value).to.equal(true)
+  })
+
   it('requires canonical wallet amounts and never sends a claim with insufficient availability', async () => {
-    const h = harness({ economyApi: { get: async () => ok({ currency: 'SILVER', availableMicro: '1', heldMicro: '0' }) } })
+    const h = harness({ economyApi: { get: async () => ok({ currency: 'SILVER', availableMicro: '1', heldMicro: '0' }), create: async () => { throw new Error('grant unavailable') } } })
     await h.rent.open(h.persona)
     await h.rent.previewInitial()
     expect(await h.rent.confirmQuote()).to.equal(false)
