@@ -1,3 +1,4 @@
+import * as ordinaryCancellation from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
 /* global before */
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
@@ -14,7 +15,7 @@ const compile = async () => {
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_m, names, path) => `const { ${names.split(',').map(x => x.trim().replace(/\s+as\s+/, ': ')).join(', ')} } = imports[${JSON.stringify(path)}]`)
     .replace(/^import\s+([^\s]+)\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_m, name, path) => `const ${name} = imports[${JSON.stringify(path)}]`)
     .replace('export default', 'return')
-  return new Function('imports', code)({ vue: Vue, './BountyActionIcon.vue': stub, './WorkItemPlanPanel.vue': stub,
+  return new Function('imports', code)({ vue: Vue, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, './BountyActionIcon.vue': stub, './WorkItemPlanPanel.vue': stub,
     './TeamRecommendationPanel.vue': stub, './HallDraftEditor.vue': stub, './HallMaterialPicker.vue': stub,
     '@/components/personal-workspace/TaskMaterialLinks.vue': stub, '@/utils/silverAmount': silver })
 }

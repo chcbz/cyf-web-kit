@@ -1,3 +1,4 @@
+import * as ordinaryCancellation from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
 import { bountyInteractionTargetId } from '../src/composables/juyiting/useHallChatContext.js'
 import { expect } from 'chai'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -119,6 +120,7 @@ const loadSfc = (relativePath) => {
   }).content
 
   const scriptBody = script
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\.\/\.\.\/composables\/juyiting\/useHallOrdinaryCancellation\.js['"];?\s*$/gm, (_line, names) => `var { ${names} } = ordinaryCancellation`)
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace(/^import\s+AgentToken\s+from\s+['"]@\/components\/juyiting\/AgentToken\.vue['"];?\s*$/gm, 'var AgentToken = { template: \'<button class="agent-token" type="button" @click="$emit(\\\'select-agent\\\', agent)"></button>\', props: [\'agent\'] }')
     .replace(/^import\s+\{\s*juyitingGame\s*\}\s+from\s+['"]@\/game\/index\.js['"];?\s*$/gm, 'var juyitingGame = arguments[2]')
@@ -159,7 +161,7 @@ const loadSfc = (relativePath) => {
   const unresolvedImports = scriptBody.match(/^import\s.+$/gm)
   if (unresolvedImports?.length) throw new SyntaxError(`Unsupported SFC imports in ${relativePath}: ${unresolvedImports.join(', ')}`)
 
-  return new Function('Vue', 'HallChatComposer', 'juyitingGame', 'classifyViewportResize', 'silverAmount', 'chatPanelDependencies', scriptBody)(Vue, HallChatComposer, hallGameMock, classifyViewportResizeMock, silverAmount, chatPanelDependencies)
+  return new Function('Vue', 'HallChatComposer', 'juyitingGame', 'classifyViewportResize', 'silverAmount', 'chatPanelDependencies', 'ordinaryCancellation', scriptBody)(Vue, HallChatComposer, hallGameMock, classifyViewportResizeMock, silverAmount, chatPanelDependencies, ordinaryCancellation)
 }
 
 const stubs = {
@@ -2722,7 +2724,10 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
   }
   const panelHelpers = counters.panelHelpers || {}
   return {
-    ...panelHelpers, useFormalTaskExecutionScope,
+    ...panelHelpers, useFormalTaskExecutionScope, ...ordinaryCancellation,
+    Dialog: async () => 'cancel', saveOutputBlob: noop, completedTextItem: async () => null, OutputPreview: EmptyPanel,
+    useOutputs: () => ({ items: Vue.ref([]), loading: Vue.ref(false), message: scalar, cacheKey: scalar, nextCursor: Vue.ref(null), refresh: asyncNoop, loadMore: asyncNoop, download: asyncNoop, preview: asyncNoop }),
+    useHallBountyAcceptance: () => ({ scope: Vue.ref(null), error: scalar, refresh: asyncNoop, catalog: { error: scalar, entries: Vue.ref([]) } }),
     env: {}, isMultimediaDeliberationUiEnabled: () => false, capturePanelReturnTarget: panelHelpers.capturePanelReturnTarget, focusHallPanel: panelHelpers.focusHallPanel, isCurrentPanelGeneration: panelHelpers.isCurrentPanelGeneration, isSafePanelFocusTarget: panelHelpers.isSafePanelFocusTarget, resolveLiveMapPreviewActivation, resolvePanelReturnTarget: panelHelpers.resolvePanelReturnTarget, restorePanelFocus: panelHelpers.restorePanelFocus, trapPanelFocus: panelHelpers.trapPanelFocus,
     onBeforeRouteLeave: navigation?.onBeforeRouteLeave || noop, useRouter: () => navigation?.router || ({ push: asyncNoop }), confirmHallLeave: navigation?.confirmHallLeave || (() => true), hasMeaningfulHallLeaveWork: navigation?.hasMeaningfulHallLeaveWork || (() => false), useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({ token: asyncNoop }), agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {},
     resolveAccountDisplayName, createHydratedIdentityScope, hasHydratedIdentity,

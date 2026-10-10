@@ -1,3 +1,4 @@
+import * as ordinaryCancellation from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
 import { expect } from 'chai'
 import { before, after } from 'mocha'
 import { readFileSync } from 'node:fs'
@@ -259,7 +260,7 @@ describe('mounted Bounty requirement draft and original recovery', () => {
     const filename = fileURLToPath(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url))
     const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
     const silver = await import('../src/utils/silverAmount.js')
-    const imports = new Proxy({ vue: Vue, '@/utils/silverAmount': silver, './HallMaterialPicker.vue': Picker, '@/components/personal-workspace/TaskMaterialLinks.vue': TaskMaterialLinks }, {
+    const imports = new Proxy({ vue: Vue, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, '@/utils/silverAmount': silver, './HallMaterialPicker.vue': Picker, '@/components/personal-workspace/TaskMaterialLinks.vue': TaskMaterialLinks }, {
       get: (target, name) => target[name] ?? Vue.defineComponent({ render: () => Vue.h('span') })
     })
     const code = compileScript(descriptor, { id: 'mounted-reference-intake', inlineTemplate: true }).content

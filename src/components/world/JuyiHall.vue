@@ -316,6 +316,8 @@
             :identity-scope="hallIdentityScope"
             :formal-task-execution-context="formalTaskExecutionContext"
             :funded-quote-preview="fundedQuotePreview"
+            :cancellation-state="cancellationState"
+            :cancellation-busy="cancellationBusy"
             :funded-claim-state="fundedClaimState"
             :funded-create-recovery="fundedCreateRecovery"
             :requirement-create-state="requirementCreateState"
@@ -359,6 +361,7 @@
             @check-point-and-start="checkPointAndStartOriginal"
             @resume-point-and-start="resumePointAndStartOriginal"
             @cancel-funded-create-recovery="showToast('原资金榜请求仍会保留；请在准备好后明确恢复。')"
+            @cancel-task="cancelTask"
             @cancel-funding="cancelFunding"
             @load-settlement="loadSettlement"
             @open-workspace="openBabaoBox"
@@ -371,8 +374,37 @@
             @set-status-filter="setTaskStatusFilter"
           />
 
+          <section
+            v-if="renderedPanel === 'tasks' && formalTaskRef?.status === 'cancelled' && hallIdentityScope"
+            class="terminal-task-history"
+            aria-label="事项历史成果"
+          >
+            <p role="status">{{ taskStatusText(formalTaskRef.status) }}；仅查看历史成果，不再继续办理或验收。</p>
+            <p v-if="terminalHistory.loading.value" role="status">正在读取历史成果…</p>
+            <p v-else role="status">{{ terminalHistory.message.value }}</p>
+            <button type="button" @click="terminalHistory.refresh">重新读取正式成果</button>
+            <article v-for="item in terminalHistory.items.value" :key="`${item.artifactId}:${item.artifactVersion}`">
+              <strong>{{ item.title }}</strong>
+              <button type="button" @click="downloadTerminalOutput(item)">下载历史成果</button>
+              <OutputPreview
+                :item="item"
+                :load="terminalHistory.preview"
+                :context-key="terminalHistory.cacheKey.value"
+              />
+            </article>
+            <button v-if="terminalHistory.nextCursor.value" type="button" @click="terminalHistory.loadMore">读取更多历史成果</button>
+            <p v-if="terminalHistoryDownloadError" role="alert">{{ terminalHistoryDownloadError }}</p>
+            <p v-if="terminalConversationHistory.error.value || terminalConversationHistory.catalog.error.value || terminalTextError" role="alert">
+              {{ terminalConversationHistory.error.value || terminalConversationHistory.catalog.error.value || terminalTextError }}
+            </p>
+            <button type="button" @click="terminalConversationHistory.refresh">重新读取议事文字成果</button>
+            <article v-for="item in terminalTextItems" :key="`${item.requestId}:${item.outcomeId}`">
+              <strong>历史文字成果</strong>
+              <pre v-text="item.text"></pre>
+            </article>
+          </section>
           <BountyAcceptancePanel
-            v-if="renderedPanel === 'tasks' && formalTaskRef && hallIdentityScope && multimediaDeliberationUiEnabled && !taskReviewRef && formalTaskRef.funding?.mode !== 'FUNDED_SINGLE_AGENT'"
+            v-else-if="renderedPanel === 'tasks' && formalTaskRef && hallIdentityScope && multimediaDeliberationUiEnabled && !taskReviewRef && formalTaskRef.funding?.mode !== 'FUNDED_SINGLE_AGENT'"
             :key="formalTaskRef.id"
             :task-id="formalTaskRef.id"
             :identity-key="`${apiStore.authorizationGeneration}\u0000${hallIdentityScope}`"
@@ -518,13 +550,14 @@
             :portrait-style="portraitStyle"
             :setup-result="personaSetupResult"
             :hosted-point-flow="Boolean(hostedPointFlow)"
+            :unbind-busy="personaUnbindBusy"
             :loading="catalogLoading"
             :error-message="catalogError"
             @bind-persona="handleBindPersona"
             @clear-setup-result="personaSetupResult = null"
             @hosting-changed="refreshHall({ silent: true })"
             @hosting-confirmed="waitForHostedPointAgent"
-            @unbind-persona="handleUnbindPersona"
+            @request-unbind-persona="handleUnbindPersona"
           />
 
           <PublicDiscussionPanel
@@ -719,6 +752,13 @@
 </template>
 
 <script setup>
+import { Dialog } from '@varlet/ui'
+import { useHallBountyAcceptance } from '@/composables/juyiting/useHallBountyAcceptance'
+import { completedTextItem } from '@/composables/juyiting/bountyOutputCatalog'
+import { useOutputs } from '@/composables/useOutputs'
+import { saveOutputBlob } from '@/utils/outputDownload'
+import OutputPreview from '@/components/outputs/OutputPreview.vue'
+import { isTerminalMatter } from '@/composables/juyiting/useHallOrdinaryCancellation'
 import HallOverview from '@/components/juyiting/HallOverview.vue'
 import HallMinePage from '@/components/juyiting/HallMinePage.vue'
 import HallDraftEditor from '@/components/juyiting/HallDraftEditor.vue'
@@ -1775,7 +1815,7 @@ const openFormalResults = task => {
 }
 // Return only to the scoped existing discussion; never point, create, or send on navigation.
 const continueBountyModification = async (task, source) => {
-  if (!task?.id || (source && source.taskId !== task.id) || !openPanel('chat')) return false
+  if (!task?.id || isTerminalMatter(task) || (source && source.taskId !== task.id) || !openPanel('chat')) return false
   const identity = `${apiStore.authorizationGeneration}\u0000${hallIdentityScope.value}`
   const sameDiscussion = chatMode.value === 'bounty' && conversationTask.value?.id === task.id
   if (sameDiscussion && conversationId.value && (!source?.conversationId || conversationId.value === source.conversationId)) return true
@@ -1899,6 +1939,7 @@ const closeSelectedAgentCard = () => {
 }
 
 const briefSelectedTask = (task = selectedTask.value, agent = selectedAgent.value) => {
+  if (isTerminalMatter(task)) return false
   if (!task || (agent && !canStartAgentConversation(agent))) return false
   if (!openPanel('chat')) return false
   selectedTask.value = task
@@ -1914,6 +1955,7 @@ const briefSelectedTask = (task = selectedTask.value, agent = selectedAgent.valu
 }
 
 const discussTask = (task, explicitAgent) => {
+  if (isTerminalMatter(task)) return false
   const assignedIds = [...new Set((Array.isArray(task?.assignedAgentIds) ? task.assignedAgentIds : [task?.assignedAgentId]).filter(Boolean))]
   const actorAgentId = typeof explicitAgent?.agentId === 'string' ? explicitAgent.agentId : ''
   const actor = assignedIds.length === 1 && assignedIds[0] === actorAgentId
@@ -1978,12 +2020,26 @@ const {
   archiveTask: runArchiveTask,
   autoAssignTask: runAutoAssignTask,
   assignTask: runAssignTask,
+  cancelTask,
+  cancellationState,
+  cancellationBusy,
   cancelFunding: runCancelFunding,
   createTask: runCreateTask,
   loadSettlement: runLoadSettlement
 } = useHallTaskActions({
   agentApi,
   confirmFundedQuote,
+  identityScope: hallIdentityScope,
+  identityEpoch: () => apiStore.authorizationGeneration,
+  actionSessionKey: () => `${panelSessionGeneration.value}:${renderedPanel.value}`,
+  onOrdinaryCancelled: async (_task, fence) => {
+    if (!fence.isCurrent()) return
+    await loadAgents()
+    if (!fence.isCurrent()) return
+    if (catalogError.value || rosterError.value || mapError.value) throw new Error('名册投影刷新待完成')
+    hallReadRevision.value += 1
+    syncAfterPersonaChanged()
+  },
   fundedActorScopeKey: computed(() => economyPreviewCapability.value?.principalScopeFingerprint || ''),
   resolveFundedAgent: agent => agents.value.find(item => item.agentId === agent.agentId),
   canAssign,
@@ -2372,6 +2428,68 @@ watch([followupTaskFence, () => apiStore.authorizationGeneration, hallIdentitySc
   }
 }, { flush: 'sync' })
 
+const terminalHistory = useOutputs({
+  source: () => renderedPanel.value === 'tasks' && formalTaskRef.value?.status === 'cancelled' && hallIdentityScope.value
+    ? { type: 'task', id: formalTaskRef.value.id } : null,
+  identityFingerprint: () => `${hallIdentityScope.value}:${apiStore.authorizationGeneration}`,
+  pageSize: 100
+})
+// Reuse the existing owner/task-scoped catalog and validated text projection,
+// but render no acceptance, continuation, or execution component for terminal tasks.
+const terminalConversationHistory = useHallBountyAcceptance({
+  api: chatApi,
+  taskId: () => renderedPanel.value === 'tasks' && formalTaskRef.value?.status === 'cancelled' ? formalTaskRef.value.id : '',
+  identityKey: () => hallIdentityScope.value ? `${hallIdentityScope.value}:${apiStore.authorizationGeneration}` : ''
+})
+const terminalTextItems = ref([])
+const terminalTextError = ref('')
+watch([() => terminalHistory.cacheKey.value, () => terminalConversationHistory.scope.value,
+  () => terminalConversationHistory.catalog.entries.value], async (_value, _old, onCleanup) => {
+  terminalTextItems.value = []; terminalTextError.value = ''
+  const controller = new AbortController()
+  onCleanup(() => controller.abort())
+  const key = terminalHistory.cacheKey.value
+  const scope = terminalConversationHistory.scope.value
+  if (!key || !scope || formalTaskRef.value?.status !== 'cancelled') return
+  const taskId = formalTaskRef.value.id
+  try {
+    const items = []
+    for (const entry of terminalConversationHistory.catalog.entries.value) {
+      const requestId = entry.request?.requestId
+      if (!requestId) continue
+      const response = await chatApi.get(`/requests/${encodeURIComponent(requestId)}`, {}, { autoLoading: false, signal: controller.signal })
+      const request = response?.data?.data ?? response?.data
+      if (request?.requestId !== requestId || request.conversationId !== scope.conversationId) throw new Error('历史议事来源不匹配')
+      for (const turn of request.turns || []) {
+        if (turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state)) continue
+        const outcome = await chatApi.get(`/conversations/${encodeURIComponent(scope.conversationId)}/requests/${encodeURIComponent(requestId)}/typed-outcome`, {},
+          { autoLoading: false, signal: controller.signal })
+        const item = await completedTextItem(outcome?.data?.data ?? outcome?.data, request, turn, taskId)
+        if (item) items.push(item)
+      }
+    }
+    if (!controller.signal.aborted && key === terminalHistory.cacheKey.value) terminalTextItems.value = items
+  } catch (error) {
+    if (!controller.signal.aborted && key === terminalHistory.cacheKey.value) terminalTextError.value = error.message || '历史文字成果读取未成'
+  }
+}, { flush: 'sync' })
+
+const terminalHistoryDownloadError = ref('')
+watch(() => terminalHistory.cacheKey.value, () => { terminalHistoryDownloadError.value = '' })
+const downloadTerminalOutput = async item => {
+  const key = terminalHistory.cacheKey.value
+  terminalHistoryDownloadError.value = ''
+  try {
+    const result = await terminalHistory.download(item)
+    if (key !== terminalHistory.cacheKey.value || panelDisposed) return false
+    saveOutputBlob({ blob: result instanceof Blob ? result : result?.blob, item })
+    return true
+  } catch (error) {
+    if (key === terminalHistory.cacheKey.value && error?.name !== 'AbortError') terminalHistoryDownloadError.value = error.message || '历史成果下载未成，请重查。'
+    return false
+  }
+}
+
 const formalTaskExecutionContext = useFormalTaskExecutionScope({
   selectedTask,
   chatContext,
@@ -2661,9 +2779,29 @@ const handleBindPersona = async (persona, mode = 'local') => {
   }
 }
 
+const personaUnbindBusy = ref(false)
 const handleUnbindPersona = async (persona) => {
+  if (personaUnbindBusy.value || !hallIdentityScope.value || !persona?.personaCode || persona.boundToMe !== true || persona.systemAgent) return false
+  const identity = hallIdentityScope.value
+  const epoch = apiStore.authorizationGeneration
+  const generation = panelSessionGeneration.value
+  const agentId = persona.agentId
+  const current = () => !panelDisposed && identity === hallIdentityScope.value && epoch === apiStore.authorizationGeneration &&
+    generation === panelSessionGeneration.value && renderedPanel.value === 'catalog'
+  personaUnbindBusy.value = true
   try {
-    const unbound = await unbindPersona(persona)
+    const action = await Dialog({
+      title: `确认将${portraitShortName(persona)}除名下山？`,
+      message: '除名会解除当前绑定。如有托管租约，重新入伙不会自动承接剩余租期，可能需要重新报价并收费；本操作不会退款或迁移租约。若只是接应故障，宜保留绑定，先在“重整接应 → 山寨安顿”核对租约并使用可用的免费重整（不续租、不延长到期日）。尚未核对租约时，不能认定没有租约或没有成本。',
+      confirmButtonText: '仍要除名',
+      cancelButtonText: '保留绑定，先核对',
+      confirmButtonTextType: 'danger'
+    })
+    if (action !== 'confirm' || !current()) return false
+    const latest = personaCatalog.value.find(item => item.personaCode === persona.personaCode)
+    if (!latest || latest.boundToMe !== true || latest.systemAgent || latest.agentId !== agentId) return false
+    const unbound = await unbindPersona(latest)
+    if (!current()) return false
     if (!unbound) {
       showToast('该好汉未在当前名册中，未执行除名')
       return false
@@ -2673,10 +2811,15 @@ const handleUnbindPersona = async (persona) => {
     syncAfterPersonaChanged()
     playSuccess()
     showToast(`${portraitShortName(persona)} 已除名下山`)
+    return true
   } catch (error) {
+    if (!current()) return false
     log.warn('unbind persona failed:', error)
     playError()
     showToast(error.message || '除名未成')
+    return false
+  } finally {
+    personaUnbindBusy.value = false
   }
 }
 
@@ -2740,6 +2883,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.terminal-task-history { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
 .juyi-page {
   --bottom-action-bar-height: 68px;
   --hall-safe-bottom: env(safe-area-inset-bottom, 0px);

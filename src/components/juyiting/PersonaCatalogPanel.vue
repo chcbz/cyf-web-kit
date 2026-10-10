@@ -139,7 +139,8 @@
             v-if="persona.boundToMe && !persona.systemAgent && activePersonaCode !== persona.personaCode"
             class="catalog-action"
             type="button"
-            @click="$emit('unbind-persona', persona)"
+            :disabled="unbindBusy"
+            @click="$emit('request-unbind-persona', persona)"
           >
             除名下山
           </button>
@@ -161,6 +162,7 @@ const LOCAL_API_KEY_PLACEHOLDER = '<key>'
 const props = defineProps({
   personas: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
+  unbindBusy: { type: Boolean, default: false },
   errorMessage: { type: String, default: '' },
   portraitName: { type: Function, required: true },
   portraitStyle: { type: Function, required: true },
@@ -168,7 +170,7 @@ const props = defineProps({
   hostedPointFlow: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['bind-persona', 'unbind-persona', 'clear-setup-result', 'hosting-changed', 'hosting-confirmed'])
+const emit = defineEmits(['bind-persona', 'request-unbind-persona', 'clear-setup-result', 'hosting-changed', 'hosting-confirmed'])
 
 const activePersonaCode = ref(null)
 const hostingPersonaCode = ref(null)

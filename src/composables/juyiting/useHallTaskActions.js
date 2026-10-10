@@ -1,4 +1,5 @@
 import { computed, ref, unref, watch } from 'vue'
+import { useHallOrdinaryCancellation } from './useHallOrdinaryCancellation.js'
 import { isCanonicalDecimalString } from '../../utils/silverAmount.js'
 import { createEconomyRequestIntentStore } from './economyRequestIntent.js'
 
@@ -41,6 +42,10 @@ const defaultIdempotencyKey = () => globalThis.crypto?.randomUUID?.() || `econom
 export const useHallTaskActions = ({
   agentApi,
   canAssign,
+  identityScope,
+  identityEpoch,
+  actionSessionKey,
+  onOrdinaryCancelled,
   fundedActorScopeKey = () => '',
   fundedIntentStorage = typeof window !== 'undefined' ? window.localStorage : null,
   createIdempotencyKey = defaultIdempotencyKey,
@@ -55,6 +60,8 @@ export const useHallTaskActions = ({
   showToast,
   tasks
 }) => {
+  const ordinaryCancellation = useHallOrdinaryCancellation({ agentApi, selectedTask, tasks, identityScope, identityEpoch,
+    sessionKey: actionSessionKey, onCancelled: onOrdinaryCancelled, showToast, playSuccess, playError, log })
   // Keep the key for an unresolved request so retrying after a timeout or lost
   // response replays the exact same server-side operation instead of charging twice.
   const fundedActorScope = computed(() => {
@@ -454,5 +461,5 @@ export const useHallTaskActions = ({
     }
   }
 
-  return { archiveTask, autoAssignTask, assignTask, cancelFunding, createTask, loadSettlement, fundedClaimState, refreshFundedClaim, fundedCreateRecovery, resumeFundedCreate }
+  return { ...ordinaryCancellation, archiveTask, autoAssignTask, assignTask, cancelFunding, createTask, loadSettlement, fundedClaimState, refreshFundedClaim, fundedCreateRecovery, resumeFundedCreate }
 }

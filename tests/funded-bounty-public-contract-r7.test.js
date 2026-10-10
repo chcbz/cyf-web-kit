@@ -1,3 +1,4 @@
+import * as ordinaryCancellation from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
@@ -24,7 +25,7 @@ const compile = async () => {
       `const ${name} = imports[${JSON.stringify(path)}]`)
     .replace('export default', 'return')
   return new Function('imports', code)({
-    vue: Vue,
+    vue: Vue, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation,
     './BountyActionIcon.vue': Vue.defineComponent({ render: () => Vue.h('span') }),
     '@/utils/silverAmount': silverAmount
   })

@@ -1,3 +1,4 @@
+import * as ordinaryCancellation from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
 import { strict as assert } from 'node:assert'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -73,7 +74,7 @@ function fixture (panelProps = {}) {
   const stub = Vue.defineComponent({ render: () => Vue.h('span') })
   const TaskMaterialLinks = Vue.defineComponent({ name: 'TaskMaterialLinks', render: () => Vue.h('section', { class: 'formal-material-controls' }) })
   const Panel = compileComponent('../src/components/juyiting/BountyPanel.vue', new Proxy({
-    vue: Vue, '@/utils/silverAmount': silver, './HallMaterialPicker.vue': Picker, '@/components/personal-workspace/TaskMaterialLinks.vue': TaskMaterialLinks
+    vue: Vue, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, '@/utils/silverAmount': silver, './HallMaterialPicker.vue': Picker, '@/components/personal-workspace/TaskMaterialLinks.vue': TaskMaterialLinks
   }, { get: (target, name) => target[name] ?? stub }))
   const wrapper = mount(Panel, { global: { stubs: { teleport: true } }, props: { ...props, ...panelProps, onCreateTask: async (body, acknowledge) => acknowledge(await create.create(body)) } })
   wrappers.push(wrapper)
