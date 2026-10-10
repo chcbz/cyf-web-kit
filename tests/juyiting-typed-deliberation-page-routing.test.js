@@ -1,3 +1,4 @@
+import * as discussionContract from '../src/components/juyiting/discussionPanelContract.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -75,9 +76,10 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
       .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_, name) => name === 'ChatPanel' ? 'var ChatPanel = deps.ChatPanel' : `var ${name} = { template: '<span />' }`)
       .replace(/^import\s+\{\s*bountyDeliberationPresentation\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { bountyDeliberationPresentation } = deps')
+      .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\/discussionPanelContract\.js['"];?\s*$/gm, (_, names) => `var { ${names} } = deps`)
       .replace('export default', 'return')
     const ChatPanel = { emits: ['send-message'], render () { return Vue.h('button', { class: 'emit-send', onClick: () => this.$emit('send-message', { sourceSelectors: [{ kind: 'TASK_LINKED_WORKSPACE_VERSION' }] }) }) } }
-    const Panel = new Function('Vue', 'deps', panelCode)(Vue, { ChatPanel, bountyDeliberationPresentation: () => ({}) })
+    const Panel = new Function('Vue', 'deps', panelCode)(Vue, { ...discussionContract, ChatPanel, bountyDeliberationPresentation: () => ({}) })
     const previous = new Map()
     for (const name of ['Element', 'HTMLElement', 'SVGElement', 'Node']) { if (globalThis[name]) continue; previous.set(name, Object.getOwnPropertyDescriptor(globalThis, name)); Object.defineProperty(globalThis, name, { value: window[name], configurable: true, writable: true }) }
     const wrapper = mount(Panel, { props: { mentionLabel: () => '', senderText: () => '', typedEnabled: true } })

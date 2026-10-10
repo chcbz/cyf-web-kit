@@ -1796,7 +1796,8 @@ describe('JuyiHall component behavior', () => {
       }
     })
 
-    await wrapper.find('.new-task-button').trigger('click')
+    wrapper.vm.openCreateRequirement()
+    await Vue.nextTick()
     await wrapper.find('input[name="taskTitle"]').setValue('Review reports')
     await wrapper.find('textarea[name="taskDescription"]').setValue('Summarize reports')
     await wrapper.find('.task-create-form').trigger('submit')
@@ -1983,6 +1984,8 @@ describe('JuyiHall component behavior', () => {
     } })
     try {
       const toolbar = wrapper.get('.panel-toolbar')
+      expect(toolbar.find('.material-reference-entry').exists()).to.equal(false)
+      expect(toolbar.find('.workspace-entry').exists()).to.equal(false)
       for (const button of toolbar.findAll('.icon-button')) {
         expect(button.get('svg').attributes('width')).to.equal('20')
         expect(button.get('svg').attributes('height')).to.equal('20')
@@ -2036,7 +2039,7 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.emitted('send-message')).to.equal(undefined)
   })
 
-  it('emits explicit durable cancellation targets and keeps legacy cancellation separate', async () => {
+  it('emits explicit durable cancellation targets and offers no unscoped stop', async () => {
     const durable = mount(ChatPanel, {
       global: { stubs },
       props: {
@@ -2048,16 +2051,33 @@ describe('JuyiHall component behavior', () => {
     expect(durable.emitted('cancel-deliberation')?.[0]?.[0]).to.deep.equal({ allPending: true })
     expect(durable.find('[aria-label="停止旧版回话等待"]').exists()).to.equal(false)
 
-    const legacy = mount(ChatPanel, {
+    const idle = mount(ChatPanel, {
       global: { stubs },
-      props: {
-        agents: [], draft: '', messages: [], legacyCancelAvailable: true,
-        mentionLabel: agent => agent.name, senderText: message => message.sender
-      }
+      props: { agents: [], draft: '', messages: [], mentionLabel: agent => agent.name, senderText: message => message.sender }
     })
-    await legacy.find('[aria-label="停止旧版回话等待"]').trigger('click')
-    expect(legacy.emitted('cancel-legacy-transport')).to.have.length(1)
-    expect(legacy.emitted('cancel-deliberation')).to.equal(undefined)
+    expect(idle.find('[aria-label="停止旧版回话等待"]').exists()).to.equal(false)
+    expect(idle.find('[aria-label="取消待处理回话"]').exists()).to.equal(false)
+    idle.unmount()
+    durable.unmount()
+  })
+
+  it('opens workspace from the material picker without sending or changing the draft', async () => {
+    const wrapper = mount(ChatPanel, {
+      global: { stubs }, props: { conversationId: 'conversation-1', draft: '保留草稿',
+        mentionLabel: agent => agent.name, senderText: message => message.sender }
+    })
+    try {
+      await wrapper.get('[aria-label="添加资料"]').trigger('click')
+      await Vue.nextTick()
+      const picker = wrapper.get('.material-reference-picker')
+      const workspaceButton = picker.findAll('button').find(button => button.text() === '去百宝箱添加')
+      expect(workspaceButton, 'workspace action is reachable in the picker').not.to.equal(undefined)
+      await workspaceButton.trigger('click')
+      expect(wrapper.emitted('open-workspace')).to.deep.equal([[]])
+      expect(wrapper.emitted('send-message')).to.equal(undefined)
+      expect(wrapper.emitted('update:draft')).to.equal(undefined)
+      expect(wrapper.get('textarea').element.value).to.equal('保留草稿')
+    } finally { wrapper.unmount() }
   })
 
   it('explains that a material reference needs an established conversation', async () => {
@@ -2645,12 +2665,9 @@ describe('O04 shared panel session contract', () => {
 
 const loadActualJuyiHall = (mocks) => {
   const effectiveMocks = {
-    browserBusinessNamespace: (apiStore, globalStore) => {
-      const owner = String(globalStore?.user?.id || globalStore?.user?.openid || globalStore?.getUserId || globalStore?.getOpenid || '').trim()
-      const tenant = String(globalStore?.user?.tenantId || globalStore?.user?.tenantCode || globalStore?.user?.tenant || '').trim()
-      const client = String(apiStore?.oauthClientId || '').trim()
-      return owner && client ? [tenant, client, owner].filter(Boolean).join('\u0000') : ''
-    },
+    // Match the real legacy namespace: cached local IDs are not hydrated identity.
+    browserBusinessNamespace: (apiStore, globalStore) =>
+      createHydratedIdentityScope(globalStore?.user, apiStore?.oauthClientId),
     useHallHomeMode: () => ({ homeMode: Vue.ref('map'), isOverviewHome: Vue.ref(false), setHomeMode: () => {} }),
     ...mocks
   }
@@ -2731,7 +2748,7 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
     useHallScene: () => ({ markAgentSpeaking: noop, markDiscussionStarted: noop, markLibraryCitation: noop, markLibrarySearching: noop, markRecommendedAgents: noop, markTaskArchived: noop, markTaskAssigned: noop, markTaskAutoAssigned: noop, markTaskCreated: task => { counters.markedTasks ||= []; counters.markedTasks.push(task) }, resetSceneFeedback: noop, sceneAgents: value, sceneAgentStyle: () => ({}), sceneHotspots: value, syncAfterPersonaChanged: noop }),
     useHallTaskActions: () => taskActions || ({ archiveTask: asyncNoop, autoAssignTask: asyncNoop, assignTask: async () => true, cancelFunding: async () => false, createTask: asyncNoop, fundedClaimState: Vue.ref(null), fundedCreateRecovery: Vue.ref(null), loadSettlement: async () => null, refreshFundedClaim: asyncNoop, resumeFundedCreate: asyncNoop }),
     useHallDrafts: () => ({ unresolvedIntent: Vue.ref(null) }),
-    useHallConversation: () => { counters.owners.conversation += 1; return ({ activeRequest: Vue.ref(null), activeTurns: Vue.ref([]), adoptBountyBootstrap: async () => false, adoptTypedDiscussionReceipt: async () => false, capabilityState: scalar, cancelDeliberation: asyncNoop, cancelHallReplyTurn: noop, cancelLegacyHallReply: asyncNoop, canCancelLegacy: Vue.ref(false), chatConnectionStatus: scalar, conversationHistory: value, conversationHistoryDeletingId: scalar, conversationHistoryError: scalar, conversationHistoryHasMore: Vue.ref(false), conversationHistoryLoading: Vue.ref(false), conversationId: counters.refs.conversationId, conversationLoadError: scalar, deleteHallConversation: asyncNoop, draft: counters.refs.draft, draftRevision: Vue.ref(0), durableCancelTarget: Vue.ref(null), eventStreamRecovering: Vue.ref(false), insertAgentMention: noop, isAwaitingReply: Vue.ref(false), isConversationBusy: Vue.ref(false), isSubmitting: Vue.ref(false), isStreaming: Vue.ref(false), loadHallConversationHistory: asyncNoop, loadHallMessages: async () => { counters.loads.messages += 1 }, loadMoreHallConversationHistory: asyncNoop, mentionAgent: noop, messages: counters.refs.messages, newHallConversation: noop, pendingAgentName: scalar, replyEventSequence: Vue.ref(0), retryHallConversation: asyncNoop, selectHallConversation: asyncNoop, sendHallMessage: asyncNoop, senderText: scalar, setDraft: value => { counters.refs.draft.value = value }, disposeHallConversation: noop, stopHallEventStream: noop, stopHallReplyPolling: noop, stopHallReplyStreaming: noop }) },
+    useHallConversation: () => { counters.owners.conversation += 1; return ({ activeRequest: Vue.ref(null), activeTurns: Vue.ref([]), adoptBountyBootstrap: async () => false, adoptTypedDiscussionReceipt: async () => false, capabilityState: scalar, cancelDeliberation: asyncNoop, cancelHallReplyTurn: noop, chatConnectionStatus: scalar, conversationHistory: value, conversationHistoryDeletingId: scalar, conversationHistoryError: scalar, conversationHistoryHasMore: Vue.ref(false), conversationHistoryLoading: Vue.ref(false), conversationId: counters.refs.conversationId, conversationLoadError: scalar, deleteHallConversation: asyncNoop, draft: counters.refs.draft, draftRevision: Vue.ref(0), durableCancelTarget: Vue.ref(null), eventStreamRecovering: Vue.ref(false), insertAgentMention: noop, isAwaitingReply: Vue.ref(false), isConversationBusy: Vue.ref(false), isSubmitting: Vue.ref(false), isStreaming: Vue.ref(false), loadHallConversationHistory: asyncNoop, loadHallMessages: async () => { counters.loads.messages += 1 }, loadMoreHallConversationHistory: asyncNoop, mentionAgent: noop, messages: counters.refs.messages, newHallConversation: noop, pendingAgentName: scalar, replyEventSequence: Vue.ref(0), retryHallConversation: asyncNoop, selectHallConversation: asyncNoop, sendHallMessage: asyncNoop, senderText: scalar, setDraft: value => { counters.refs.draft.value = value }, disposeHallConversation: noop, stopHallEventStream: noop, stopHallReplyPolling: noop, stopHallReplyStreaming: noop }) },
     useHallVoiceConversation: () => ({ supported: false, voiceInteractionLocked: navigation?.voiceInteractionLocked ?? false, voiceTurnActive: navigation?.voiceTurnActive ?? false, cancel: noop, dispose: noop, applyTranscript: noop }),
     createHallVoiceReplyCorrelation: () => ({ start: () => true, observe: noop, resolveConversation: () => true, close: noop }),
     useHallLibrary: () => ({ citeLibraryItem: noop, libraryErrorMessage: scalar, libraryHasSearched: Vue.ref(false), libraryKeyword: scalar, libraryLoading: Vue.ref(false), libraryResults: value, librarySourceType: scalar, searchLibrary: asyncNoop }),
@@ -3184,7 +3201,8 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
       state.openPanel('tasks')
       await Vue.nextTick()
       const bounty = wrapper.findComponent(BountyPanel)
-      await bounty.findAll('button').find(button => button.text() === '提出需求').trigger('click')
+      bounty.vm.$.exposed.openCreateRequirement()
+      await Vue.nextTick()
       await bounty.find('input[name="taskTitle"]').setValue('原张榜尚未提交的名目')
       const source = bounty.element
       expect(bounty.findAll('button').some(button => button.text() === '起草正式任务')).to.equal(false)
@@ -3654,7 +3672,8 @@ describe('W11 R9 actual JuyiHall stale funded acknowledgement', () => {
           expect(state.openPanel('tasks')).to.equal(true)
           await flushPromises()
           expect(wrapper.findComponent(BountyPanel).exists()).to.equal(true)
-          await wrapper.get('.new-task-button').trigger('click')
+          wrapper.findComponent(BountyPanel).vm.$.exposed.openCreateRequirement()
+          await Vue.nextTick()
           expect(wrapper.find('.task-create-form').exists()).to.equal(true)
 
           if (operation === 'ordinary create') {

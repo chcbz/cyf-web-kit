@@ -1,5 +1,6 @@
 import { expect } from 'chai'
 import { ref } from 'vue'
+import { flushPromises } from '@vue/test-utils'
 import { safeFinalizationVersion, validFinalizationReceipt, useHallBountyFinalization } from '../src/composables/juyiting/useHallBountyFinalization.js'
 
 const body = () => ({ expectedTaskVersion: 9, expectedAssignmentRevision: 3, conversationId: 'conversation-1',
@@ -71,7 +72,8 @@ describe('MMD finalization immutable owner acceptance', () => {
     const recovered = useHallBountyFinalization({ api, storage, conversationId: 'conversation-1', identityKey: 'owner-a',
       idempotencyKeyFactory: () => { throw new Error('must not create a new key') } })
     try {
-      expect(calls).to.have.length(1); expect(recovered.status.value.state).to.equal('unknown')
+      expect(calls).to.have.length(2); expect(calls[1].method).to.equal('GET'); expect(recovered.status.value.state).to.equal('unknown')
+      await flushPromises()
       const original = recovered.status.value.intent
       api.execute = async request => { calls.push(request); expect(request.method).to.equal('GET'); return { data: completed() } }
       await recovered.check()
@@ -262,7 +264,7 @@ describe('MMD completed-message finalization wire and recovery', () => {
       expect(recovered.status.value.intent.body).to.deep.equal(frozen)
       expect(Object.isFrozen(recovered.status.value.intent.body.selectedOutputs[1].messageSource)).to.equal(true)
       api.execute = async request => { calls.push(request); if (request.method === 'GET') throw error(404); return { data: completed({}, frozen) } }
-      await recovered.check()
+      await flushPromises()
       expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET'])
       await sendBody(recovered, textBody())
       expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET', 'GET', 'POST'])
@@ -357,5 +359,58 @@ describe('real API text receipt nullable DTO source slots', () => {
     expect(validFinalizationReceipt(partial, command)).to.equal(false)
     const reordered = dtoReceipt(original); reordered.selectedOutputs.reverse()
     expect(validFinalizationReceipt(reordered, command)).to.equal(false)
+  })
+})
+
+describe('UR06 completed acceptance reload reconciliation', () => {
+  it('automatically reads a completed operation on remount without a second POST', async () => {
+    const { client, calls, api, storage } = setup(() => ({ data: completed() }))
+    await send(client); client.dispose()
+    const recovered = useHallBountyFinalization({ api, storage, taskId: 'task-1', conversationId: 'conversation-1', identityKey: 'owner-a' })
+    try {
+      expect(recovered.status.value.message).to.equal('正在核对验收状态…')
+      expect(recovered.status.value.busy).to.equal(true)
+      await flushPromises()
+      expect(recovered.status.value.state).to.equal('completed')
+      expect(recovered.status.value.message).to.equal('验收完成。')
+      expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET'])
+      expect(calls[1].url).to.equal('/tasks/task-1/finalizations/finalization-1')
+    } finally { recovered.dispose() }
+  })
+  for (const code of [401, 403, 404, 500, 'network']) it(`recovery ${code} never replays a POST or infers completion`, async () => {
+    const { client, calls, api, storage } = setup(() => ({ data: completed() }))
+    await send(client); client.dispose()
+    api.execute = async request => { calls.push(request); throw code === 'network' ? new TypeError('offline') : error(code) }
+    const recovered = useHallBountyFinalization({ api, storage, taskId: 'task-1', conversationId: 'conversation-1', identityKey: 'owner-a' })
+    try {
+      await flushPromises()
+      expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET'])
+      expect(recovered.status.value.busy).to.equal(false)
+      expect(recovered.status.value.state).not.to.equal('completed')
+      expect(recovered.status.value.receipt).to.equal(null)
+      expect(recovered.status.value.message).not.to.include('验收尚未完成')
+      if (code === 404 || code === 500 || code === 'network') expect(recovered.status.value.message).to.include('暂时无法确认')
+    } finally { recovered.dispose() }
+  })
+  for (const change of ['task', 'identity', 'conversation', 'dispose']) it(`fences late recovery after ${change} changes`, async () => {
+    const { client, calls, api, storage } = setup(() => ({ data: completed() }))
+    await send(client); client.dispose()
+    let finish
+    api.execute = request => { calls.push(request); return new Promise(resolve => { finish = resolve }) }
+    const taskId = ref('task-1'); const identityKey = ref('owner-a'); const conversationId = ref('conversation-1')
+    const recovered = useHallBountyFinalization({ api, storage, taskId, identityKey, conversationId })
+    try {
+      expect(calls).to.have.length(2)
+      if (change === 'task') taskId.value = 'task-2'
+      if (change === 'identity') identityKey.value = 'owner-b'
+      if (change === 'conversation') conversationId.value = 'conversation-2'
+      if (change === 'dispose') recovered.dispose()
+      expect(calls[1].signal.aborted).to.equal(true)
+      finish({ data: completed() }); await flushPromises()
+      expect(recovered.status.value.state).to.equal('idle')
+      expect(recovered.status.value.receipt).to.equal(null)
+      expect(recovered.status.value.intent).to.equal(null)
+      expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET'])
+    } finally { recovered.dispose() }
   })
 })

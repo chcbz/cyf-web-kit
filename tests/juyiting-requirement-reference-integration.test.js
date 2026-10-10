@@ -80,7 +80,8 @@ function fixture (panelProps = {}) {
   return { wrapper, calls, created, revoked, rows, adopted, Picker }
 }
 async function openDraft (wrapper) {
-  await button(wrapper, '提出需求').trigger('click')
+  wrapper.vm.openCreateRequirement()
+  await Vue.nextTick()
   await wrapper.find('[name="taskTitle"]').setValue(' 画一只鸟🦜 ')
   await wrapper.find('[name="taskDescription"]').setValue('照片风格\n完整原文')
 }

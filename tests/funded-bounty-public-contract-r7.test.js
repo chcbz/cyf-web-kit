@@ -142,7 +142,8 @@ describe('W11 funded-create public composable contract', () => {
     })
     const wrapper = mount(Harness)
     wrappers.push(wrapper)
-    await wrapper.find('.new-task-button').trigger('click')
+    wrapper.findComponent(BountyPanel).vm.$.exposed.openCreateRequirement()
+    await Vue.nextTick()
 
     const recoveryText = wrapper.find('.funded-create-recovery').text()
     expect(recoveryText).to.include('原榜文名目：原资金榜正文')
@@ -192,7 +193,8 @@ describe('W11 funded-create public composable contract', () => {
     })
     const wrapper = mount(Harness)
     wrappers.push(wrapper)
-    await wrapper.find('.new-task-button').trigger('click')
+    wrapper.findComponent(BountyPanel).vm.$.exposed.openCreateRequirement()
+    await Vue.nextTick()
 
     scope.value = 'actor-a'
     await Vue.nextTick()
@@ -264,7 +266,8 @@ describe('W11 funded-create public composable contract', () => {
     })
     const wrapper = mount(Harness)
     wrappers.push(wrapper)
-    await wrapper.find('.new-task-button').trigger('click')
+    wrapper.findComponent(BountyPanel).vm.$.exposed.openCreateRequirement()
+    await Vue.nextTick()
     expect(wrapper.find('.funded-create-recovery').text()).to.include('原榜文名目：B 待恢复原文')
 
     delayedA.resolve(success({ id: 'a-created-task', ...originalA }))

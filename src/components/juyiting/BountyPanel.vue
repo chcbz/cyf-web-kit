@@ -10,40 +10,35 @@
         <div class="task-search">
           <input
             :value="taskKeyword"
+            type="search"
+            aria-label="查榜号"
             placeholder="查榜号"
             @input="$emit('update:taskKeyword', $event.target.value.trim())"
             @keyup.enter="$emit('load-tasks')"
           />
           <select
             :value="taskAbilityFilter"
+            aria-label="筛选所需本领"
             @change="$emit('update:taskAbilityFilter', $event.target.value); $emit('load-tasks')"
           >
             <option value="">不拘本领</option>
             <option v-for="ability in taskAbilityOptions" :key="ability" :value="ability">{{ ability }}</option>
           </select>
         </div>
-        <button @click="$emit('load-tasks')">
+        <button class="task-refresh" type="button" aria-label="刷新事项" title="刷新事项" @click="$emit('load-tasks')">
           <BountyActionIcon name="refresh" />
           <span class="toolbar-label">重查</span>
         </button>
-        <div class="task-create-actions">
-          <button class="new-task-button" type="button" @click="showCreateForm = !showCreateForm">
-            <BountyActionIcon name="plus" />
-            <span>提出需求</span>
-          </button>
+        <div v-if="!embeddedHall" class="task-draft-actions">
           <button
-            v-if="!embeddedHall"
-            class="new-task-button"
             type="button"
             @click="$emit('start-formal-draft')"
           >
             <span>起草正式任务</span>
           </button>
           <button
-            v-if="!embeddedHall"
-            class="new-task-button"
             type="button"
-            @click="embeddedHall ? $emit('start-private-draft') : showDraftEditor = !showDraftEditor"
+            @click="showDraftEditor = !showDraftEditor"
           >
             <span>{{ showDraftEditor ? '收起草稿' : '起草交办' }}</span>
           </button>
@@ -517,7 +512,6 @@ const emit = defineEmits([
   'check-requirement-create',
   'resume-requirement-create',
   'start-formal-draft',
-  'start-private-draft',
   'open-formal-results',
   'mark-changed',
   'resume-funded-create',
@@ -803,7 +797,8 @@ button:disabled {
 }
 
 .panel-toolbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr) 44px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
@@ -813,7 +808,7 @@ button:disabled {
   font-size: 13px;
 }
 
-.task-create-actions { display: inline-flex; flex: 0 0 auto; gap: 8px; }
+.task-draft-actions { display: flex; flex-wrap: wrap; grid-column: 1 / -1; gap: 8px; }
 
 .panel-toolbar button {
   display: inline-flex;
@@ -826,17 +821,44 @@ button:disabled {
   color: #4a3423;
 }
 
-.task-search {
-  display: grid;
-  grid-template-columns: minmax(160px, 1fr) minmax(118px, 150px);
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-}
+.task-search { display: contents; }
 
 .task-search input,
-.task-search select,
-.task-create-form input,
+.task-search select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--hall-border-strong, #d7c3a2);
+  border-radius: 8px;
+  background: var(--work-paper, #fffdf6);
+  color: var(--work-ink, #3f2815);
+  font: inherit;
+}
+
+.task-search input:focus-visible,
+.task-search select:focus-visible,
+.task-refresh:focus-visible {
+  outline: 2px solid var(--work-brand, #a44330);
+  outline-offset: 2px;
+}
+
+.panel-toolbar .task-refresh {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--work-line, #d7c3a2);
+}
+
+.task-refresh .toolbar-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
 .task-material-picker { grid-column: 1 / -1; min-width: 0; }
 
 .task-create-form { max-height: min(55vh, 30rem); overflow-y: auto; }
@@ -858,6 +880,7 @@ button:disabled {
 .requirement-create-recovery p { margin: 6px 0; }
 .requirement-create-recovery button { margin-right: 8px; padding: 6px 10px; border-radius: 6px; }
 
+.task-create-form input,
 .task-create-form textarea {
   min-width: 0;
   height: 36px;
@@ -1500,12 +1523,6 @@ button:disabled {
     padding: 10px;
   }
 
-  .panel-toolbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .task-search,
   .task-panel-body {
     grid-template-columns: 1fr;
   }

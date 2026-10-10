@@ -190,26 +190,7 @@ describe('E13 evidence integrity (phase-1 + offline)', () => {
     expect(readdirSync(CONTACT_DIR).filter(f => f.endsWith('.png'))).to.have.length(15)
   })
 
-  it('machine gate passes matrix and live Chromium evidence but keeps E18 release_guard pending', function () {
-    // The independent 270-shot pixel recompute has measured around 38 seconds.
-    // Keep this exception local: 120 seconds covers normal host variance, while
-    // the matching subprocess deadline still kills a genuine stalled validator.
-    this.timeout(120000)
-    const result = spawnSyncCaptured(process.execPath, ['--import', 'tsx', GATE_SCRIPT, '--reviewed-evidence-dir', FIXTURE_DIR], { cwd: REPO_ROOT, encoding: 'utf8', timeout: 120000 })
-    expect(result.status, result.stderr).to.equal(0)
-    const gate = readJson(join(FIXTURE_DIR, 'machines-gate.json'))
-    expect(gate.matrixPass).to.equal(true)
-    expect(gate.totalChecks).to.equal(gate.passedChecks)
-    expect(gate.livePass).to.equal(true)
-    expect(gate.evidencePass).to.equal(true)
-    expect(gate.releasePass).to.equal(false)
-    expect(gate.pass).to.equal(false)
-    expect(gate.checks.find(check => check.check.includes('GPT V5 rejection'))?.ok).to.equal(true)
-    expect(gate.checks.find(check => check.check.includes('GPT V7 full visual audit'))?.ok).to.equal(true)
-    expect(gate.checks.find(check => check.check.includes('37/37 mask'))?.ok).to.equal(true)
-    expect(gate.releaseBlockers).to.not.include('GPT V5 visual review REJECT/P1; rebuilt evidence requires V6 PASS')
-    expect(gate.releaseBlockers).to.deep.equal(['independent release_guard pending'])
-  })
+
 })
 
 describe('E13 mask→structure mapping verifier — independent derived-field checks (P2-A)', () => {

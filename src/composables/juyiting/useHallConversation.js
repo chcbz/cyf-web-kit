@@ -73,7 +73,7 @@ export const useHallConversation = ({
   const deliberationStatus = ref('')
   const activeRequest = ref(null)
   const activeTurns = ref([])
-  const capabilityState = ref({ loaded: false, v2: false, fallbackReason: '旧版传令兼容模式' })
+  const capabilityState = ref({ loaded: false, v2: false })
   const draftRevision = ref(0)
   const replyEventSequence = ref(0)
   const observedFinalReplyIds = new Set()
@@ -151,24 +151,27 @@ export const useHallConversation = ({
     if (capabilityState.value.loaded) return capabilityState.value
     if (capabilityPromise) { const result = await capabilityPromise; abortIfStale(guard); return result }
     const attempt = ++capabilityAttempt
-    const promise = (async () => {
+    const promise = Promise.resolve().then(async () => {
       try {
+        abortIfStale(guard)
         const response = await chatApi.get('/capabilities', {}, { autoLoading: false, signal: lifecycleController.signal })
         abortIfStale(guard)
         if (attempt !== capabilityAttempt) throw new DOMException('Stale capability negotiation', 'AbortError')
         const capability = apiData(response)
         const v2 = v2Supported(capability)
-        capabilityState.value = { loaded: true, v2, fallbackReason: v2 ? '' : '服务端未声明 v2 durable turn 能力' }
+        if (!v2) throw new Error('服务端不支持当前议事协议，请更新服务后重试')
+        capabilityState.value = { loaded: true, v2: true }
       } catch (error) {
         if (error?.name === 'AbortError' || !guardCurrent(guard) || attempt !== capabilityAttempt) throw error?.name === 'AbortError'
           ? error : new DOMException('Hall identity changed during capability negotiation', 'AbortError')
-        capabilityState.value = { loaded: true, v2: false, fallbackReason: '能力协商不可用，已安全回退旧传令' }
+        capabilityState.value = { loaded: false, v2: false }
+        throw error
       } finally {
         if (capabilityPromise === promise) capabilityPromise = null
       }
       abortIfStale(guard)
       return capabilityState.value
-    })()
+    })
     capabilityPromise = promise
     return promise
   }
@@ -201,8 +204,6 @@ export const useHallConversation = ({
 
   const durableBusy = computed(() => deliberationBusy(activeRequest.value, activeTurns.value))
   const durableCancelTarget = computed(() => cancellationTarget(activeRequest.value, activeTurns.value))
-  const canCancelDurable = computed(() => Boolean(durableCancelTarget.value))
-  const canCancelLegacy = computed(() => !activeRequest.value?.requestId && (isStreaming.value || isAwaitingReply.value))
   const isConversationBusy = computed(() => isAdoptingBountyBootstrap.value || isSubmitting.value || durableBusy.value || isStreaming.value || isAwaitingReply.value || isConversationLoading.value || Boolean(conversationHistoryDeletingId.value))
 
   const pendingAgentName = computed(() => {
@@ -623,7 +624,7 @@ export const useHallConversation = ({
   const resetDurableState = () => {
     capabilityAttempt += 1
     capabilityPromise = null
-    capabilityState.value = { loaded: false, v2: false, fallbackReason: '旧版传令兼容模式' }
+    capabilityState.value = { loaded: false, v2: false }
     deliberationStatus.value = ''
     activeRequest.value = null
     activeTurns.value = []
@@ -1051,12 +1052,16 @@ export const useHallConversation = ({
     if (disposed || typeof id !== 'string' || !id) return
     const generation = lifecycleGeneration
     stopHallReplyPolling()
-    hallReplyPollTimer = window.setInterval(() => {
+    const guard = captureGuard()
+    hallReplyPollTimer = window.setInterval(async () => {
       if (disposed || generation !== lifecycleGeneration || !isAwaitingReply.value || conversationId.value !== id) {
         stopHallReplyPolling()
         return
       }
-      loadHallConversationContent(id)
+      // Current protocol completion comes from the request, not just a message in history.
+      if (activeRequest.value?.requestId) await recoverUnknownRequest(activeRequest.value.requestId, guard)
+      if (!guardCurrent(guard) || conversationId.value !== id) return
+      await loadHallConversationContent(id)
     }, 2000)
   }
 
@@ -1186,11 +1191,8 @@ export const useHallConversation = ({
     source = 'text',
     clearDraftRevision,
     onConversationResolved
-  } = {}, sendToken) => {
+  } = {}, sendToken, content) => {
     const isVoiceSend = source === 'voice'
-    if (isVoiceSend && typeof explicitContent !== 'string') return false
-    const content = (isVoiceSend ? explicitContent : String((explicitContent ?? draft.value) || '')).trim()
-    if (disposed || !content || isStreaming.value || isAwaitingReply.value || isConversationLoading.value || conversationHistoryDeletingId.value || conversationLoadError.value) return false
     let sendContext = contextSnapshot || currentChatContext.value
     if (isVoiceSend) {
       const validated = captureHallVoiceSnapshot({
@@ -1204,27 +1206,26 @@ export const useHallConversation = ({
     const requestConversationId = isVoiceSend ? sendContext.conversationId : conversationId.value
     const sendScope = scopeSnapshot()
     const sendGuard = captureGuard(sendScope)
-    let capability
     try {
-      capability = typeof chatApi.get === 'function'
-        ? await negotiateCapabilities(sendGuard)
-        : { loaded: true, v2: false, fallbackReason: '旧版传令兼容模式' }
+      await negotiateCapabilities(sendGuard)
       abortIfStale(sendGuard)
     } catch (error) {
       if (error?.name === 'AbortError') return false
-      throw error
+      log.warn('聚义厅协议确认失败', error)
+      deliberationStatus.value = '当前议事协议不可用，消息未发送，请稍后重试'
+      showToast(deliberationStatus.value)
+      return false
     }
     const metadataSource = isVoiceSend ? (sendContext.outgoingMetadata || {}) : (outgoingMetadata?.value || {})
-    const { senderName: _legacySenderName, senderType: _legacySenderType, ...safeMetadataSource } = metadataSource
     const mentionAgentIds = Array.isArray(sendContext.mentionAgentIds) && sendContext.mentionAgentIds.length
       ? sendContext.mentionAgentIds
       : sendContext.targetAgentIds
     const selectedAgentId = isVoiceSend ? sendContext.selectedAgentId : (Object.hasOwn(sendContext, 'selectedAgentId') ? sendContext.selectedAgentId : selectedAgent.value?.agentId)
     const selectedTaskId = isVoiceSend ? sendContext.selectedTaskId : (Object.hasOwn(sendContext, 'selectedTaskId') ? sendContext.selectedTaskId : selectedTask.value?.id)
-    const requestId = capability.v2 ? sendToken.requestId : ''
+    const requestId = sendToken.requestId
     const requestRevision = '1'
     const interactionHint = inputRefsFor(metadataSource).length ? 'inspect' : 'chat'
-    const request = capability.v2 ? { requestId, requestRevision, observations: [] } : null
+    const request = { requestId, requestRevision, observations: [] }
     recordObservation('send', request)
     const replyGeneration = ++hallReplyGeneration
     const isCurrentReplyTurn = () => guardCurrent(sendGuard) && replyGeneration === hallReplyGeneration
@@ -1244,7 +1245,7 @@ export const useHallConversation = ({
     })
     isStreaming.value = false
     isAwaitingReply.value = false
-    activeRequest.value = request ? { ...request, state: 'SUBMITTING' } : null
+    activeRequest.value = { ...request, state: 'SUBMITTING' }
     activeTurns.value = []
     stopHallReplyPolling()
 
@@ -1255,6 +1256,8 @@ export const useHallConversation = ({
     try {
       const safeMetadata = safeOutgoingMetadata(metadataSource)
       const body = {
+        requestId, requestRevision, interactionHint,
+        clientSeenVector: seenVector(), inputRefs: inputRefsFor(metadataSource),
         content,
         conversationId: requestConversationId,
         conversationType: 'juyiting',
@@ -1274,30 +1277,21 @@ export const useHallConversation = ({
           selectedTaskId
         }
       }
-      if (capability.v2) Object.assign(body, { requestId, requestRevision, interactionHint,
-        clientSeenVector: seenVector(), inputRefs: inputRefsFor(metadataSource) })
       await chatApi.create('/stream', body, {
         responseType: 'stream',
         autoLoading: false,
         timeout: 1800000,
         signal: replySignal.signal,
-        headers: capability.v2 ? { 'Idempotency-Key': requestId } : {},
+        headers: { 'Idempotency-Key': requestId },
         onStreamOpen: handle => {
           if (!isCurrentReplyTurn()) {
             handle.cancel?.(new DOMException('Stale Hall reply stream', 'AbortError'))
             return
           }
           hallReplyStreamHandle = handle
-          if (!capability.v2) {
-            if (activeSendToken === sendToken) isSubmitting.value = false
-            isStreaming.value = true
-            isAwaitingReply.value = true
-            deliberationStatus.value = capability.fallbackReason || '旧版传令兼容模式'
-          }
         },
         onStream: eventData => {
           if (!isCurrentReplyTurn()) return
-          if (!capability.v2) isAwaitingReply.value = true
           const previousConversationId = conversationId.value
           const accepted = processStream(eventData)
           if (accepted) recordObservation('first_response', request)
@@ -1306,8 +1300,7 @@ export const useHallConversation = ({
         onStreamEnd: () => {
           if (!isCurrentReplyTurn()) return
           hallReplyStreamHandle = null
-          if (activeRequest.value?.requestId) syncDurablePresentation()
-          else { isStreaming.value = false; deliberationStatus.value = '' }
+          syncDurablePresentation()
           const finalized = streamFinalCandidate
           const completedTurn = activeBuiltInTurn
           activeBuiltInTurn = null
@@ -1339,12 +1332,11 @@ export const useHallConversation = ({
       recordObservation('network_unknown', request)
       isStreaming.value = false
       isAwaitingReply.value = false
-      if (capability.v2 && requestId) {
-        deliberationStatus.value = '结果未知，正在核对原请求'
-        await recoverUnknownRequest(requestId, sendGuard)
-      }
+      deliberationStatus.value = '结果未知，正在核对原请求'
+      await recoverUnknownRequest(requestId, sendGuard)
+      if (!isCurrentReplyTurn()) return false
       const exactId = exactRuntimeId(conversationId.value)
-      const stillBusy = capability.v2 ? deliberationBusy(activeRequest.value, activeTurns.value) : Boolean(exactId)
+      const stillBusy = deliberationBusy(activeRequest.value, activeTurns.value)
       recoveringReplyTurn = exactId && stillBusy ? {
         conversationId: exactId,
         baselineMessageIds: new Set(activeBuiltInTurn?.baselineMessageIds || [])
@@ -1384,14 +1376,15 @@ export const useHallConversation = ({
 
   const sendHallMessage = async (options = {}) => {
     const isVoiceSend = options.source === 'voice'
-    const content = String(isVoiceSend ? (options.content ?? '') : ((options.content ?? draft.value) || '')).trim()
-    if (disposed || !content || isAdoptingBountyBootstrap.value || activeSendToken || isStreaming.value || isAwaitingReply.value || isConversationLoading.value || conversationHistoryDeletingId.value || conversationLoadError.value) return false
+    if (isVoiceSend && typeof options.content !== 'string') return false
+    const content = String((options.content ?? draft.value) || '').trim()
+    if (disposed || !content || activeSendToken || isConversationBusy.value || conversationLoadError.value) return false
     const sendToken = Object.freeze({ requestId: createStableRequestId(), generation: lifecycleGeneration })
     activeSendToken = sendToken
     isSubmitting.value = true
     deliberationStatus.value = '正在提交，等待受理'
     try {
-      return await performHallMessageSend(options, sendToken)
+      return await performHallMessageSend(options, sendToken, content)
     } finally {
       if (activeSendToken === sendToken) {
         activeSendToken = null
@@ -1609,10 +1602,10 @@ export const useHallConversation = ({
         abortIfStale(guard)
         const response = await chatApi.get(`/requests/${encodeURIComponent(requestId)}`, {}, { autoLoading: false, signal: lifecycleController.signal })
         abortIfStale(guard)
+        if (activeRequest.value?.requestId !== requestId) return false
         let requestView = apiData(response)
         if (adoptedBootstrap?.initialRequestId === requestId) {
-          if (activeRequest.value?.requestId !== requestId ||
-              !bountyBootstrapContextMatches(chatContext?.value, selectedTask?.value, selectedAgent?.value, adoptedBootstrap)) return false
+          if (!bountyBootstrapContextMatches(chatContext?.value, selectedTask?.value, selectedAgent?.value, adoptedBootstrap)) return false
           requestView = validateBountyBootstrapRequest(requestView, adoptedBootstrap)
           if (!requestView || !bootstrapReadbackIsCurrent(activeRequest.value, requestView)) return false
         }
@@ -1786,19 +1779,6 @@ export const useHallConversation = ({
     }
   }
 
-  const cancelLegacyHallReply = async () => {
-    if (!canCancelLegacy.value) return false
-    const id = exactRuntimeId(conversationId.value)
-    if (id && typeof chatApi.post === 'function') {
-      try { await chatApi.post('/stop_stream', { conversationId: id }, { autoLoading: false, signal: lifecycleController.signal }) } catch (error) {
-        if (error?.name !== 'AbortError') log.warn('停止旧版聚义厅回话失败', error)
-      }
-    }
-    cancelHallReplyTurn('legacy_user_cancelled')
-    deliberationStatus.value = '已停止旧版回话等待'
-    return true
-  }
-
   const insertAgentMention = (agent, suffix = '') => {
     const mention = `@${portraitShortName(agent)}`
     const current = draft.value.trim()
@@ -1839,9 +1819,6 @@ export const useHallConversation = ({
     isAdoptingBountyBootstrap,
     cancelHallReplyTurn,
     cancelDeliberation,
-    cancelLegacyHallReply,
-    canCancelDurable,
-    canCancelLegacy,
     durableCancelTarget,
     activeRequest,
     activeTurns,

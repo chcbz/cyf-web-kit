@@ -242,7 +242,7 @@ const action = (wrapper, text) => {
   const found = wrapper.findAll('button').find(button => button.text() === text)
   expect(found, `missing button ${text}`).to.exist; return found
 }
-const openDraft = async wrapper => { await wrapper.get('.new-task-button').trigger('click') }
+const openDraft = async wrapper => { wrapper.vm.openCreateRequirement(); await nextTick() }
 const setDraft = async (wrapper, title = '画一只鸟') => {
   await wrapper.find('[name="taskTitle"]').setValue(title)
   await wrapper.find('[name="taskDescription"]').setValue('照片风格')

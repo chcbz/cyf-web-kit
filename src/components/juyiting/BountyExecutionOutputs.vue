@@ -28,9 +28,10 @@
       <small v-if="!effectiveTaskCompleted">需要调整？直接在会话中告诉 Agent。</small>
     </div>
     <button v-if="acceptance && !taskCompleted && (effectiveTaskCompleted || displayItems.length || finalizeState.intent)" type="button" class="finalize-button" :disabled="effectiveTaskCompleted || loading || !!error || finalizeState.busy || finalizeState.state === 'recovery_error' || (finalizeState.receipt?.state === 'failed' && !finalizeState.receipt.retryable)" @click="finalizeSelected">{{ effectiveTaskCompleted ? '需求已完成' : finalizeState.busy ? '正在验收…' : finalizeState.intent ? '继续验收' : '确认验收' }}</button>
-    <button v-if="acceptance && !effectiveTaskCompleted && finalizeState.intent" type="button" class="finalize-status-button" :disabled="finalizeState.busy" @click="finalizations.check">查询验收状态</button>
+    <button v-if="acceptance && finalizeState.intent && !finalizationCompleted" type="button" class="finalize-status-button" :disabled="finalizeState.busy" @click="finalizations.check">查询验收状态</button>
     <small v-if="acceptance && !effectiveTaskCompleted && finalizeState.intent">本次验收已冻结 {{ finalizeState.intent.body.selectedOutputs.length }} 项成果；可刷新查看进度。</small>
-    <p v-if="finalizeState.message" :role="finalizeState.state === 'completed' ? 'status' : 'alert'">{{ finalizeState.message }}</p>
+    <p v-if="effectiveTaskCompleted" role="status">{{ finalizationCompleted ? '验收完成。' : '任务已完成。' }}</p>
+    <p v-if="finalizeState.message && !finalizationCompleted" :role="finalizeState.busy ? 'status' : 'alert'">{{ finalizeState.message }}</p>
     <button
       v-if="acceptance && !effectiveTaskCompleted"
       type="button"
@@ -77,12 +78,13 @@ const items = ref([]); const loading = ref(false); const error = ref('')
 const previewUrls = ref({}); const textPreviews = ref({}); const itemErrors = ref({})
 const expandedUrl = ref('')
 const finalizations = useHallBountyFinalization({ api: agentApi,
-  conversationId: () => props.enabled ? props.conversationId : null, identityKey: () => props.identityKey
+  conversationId: () => props.enabled ? props.conversationId : null, identityKey: () => props.identityKey, taskId: () => props.taskId || null
 })
 const finalizeState = finalizations.status
 // A validated completed receipt is immediate terminal authority even while the parent task DTO is stale.
-const effectiveTaskCompleted = computed(() => props.taskCompleted || (finalizeState.value.state === 'completed' &&
-  finalizeState.value.receipt?.taskId === props.taskId && finalizeState.value.receipt?.conversationId === props.conversationId))
+const finalizationCompleted = computed(() => finalizeState.value.state === 'completed' &&
+  finalizeState.value.receipt?.taskId === props.taskId && finalizeState.value.receipt?.conversationId === props.conversationId)
+const effectiveTaskCompleted = computed(() => props.taskCompleted || finalizationCompleted.value)
 // Once acceptance starts, display only the original exact references from its durable intent.
 // A new output/late poll cannot replace accepted or in-flight displayed content.
 const deliveryProjection = computed(() => {

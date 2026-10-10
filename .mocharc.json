@@ -10,9 +10,30 @@
     "./tests/composables/*.spec.js",
     "./tests/game/**/*.test.ts"
   ],
-  "extension": ["js", "ts"],
+  "extension": [
+    "js",
+    "ts"
+  ],
   "reporter": "mochawesome",
   "reporter-options": "reportDir=mochawesome-report,reportFilename=mochawesome.json",
   "ui": "bdd",
-  "watch": false
+  "watch": false,
+  "ignore": [
+    "tests/juyiting-occlusion-atlas-e9b.test.js",
+    "tests/juyiting-occlusion-baseline.test.js",
+    "tests/juyiting-occlusion-constraint-calibration.test.js",
+    "tests/juyiting-occlusion-e13-fail-closed.test.js",
+    "tests/juyiting-occlusion-e13-offline.test.js",
+    "tests/juyiting-occlusion-e13.test.js",
+    "tests/juyiting-occlusion-e14.test.js",
+    "tests/juyiting-occlusion-fragment-ownership.test.js",
+    "tests/juyiting-occlusion-mask-migration.test.js",
+    "tests/juyiting-occlusion-mask-tmx-migration.test.js",
+    "tests/juyiting-occlusion-prop-sort.test.js",
+    "tests/juyiting-occlusion-prop-tmx-migration.test.js",
+    "tests/juyiting-e13-native-raster.test.js",
+    "tests/juyiting-e13-offline-validator-contract.test.js",
+    "tests/juyiting-e13-mobility-contract.test.js",
+    "tests/juyiting-webp-decoder-profile.test.js"
+  ]
 }

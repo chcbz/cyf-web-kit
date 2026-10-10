@@ -9,14 +9,6 @@
         <path class="accent-fill" d="M15.2 10.2h4.5l-2.1 3.9h-4.5z" />
       </g>
 
-      <g v-else-if="name === 'plus'">
-        <path d="M8.5 22.6h15" />
-        <path d="M10.2 9.3h11.6l2.1 13.3H8.1z" />
-        <path d="M16 12.7v7" />
-        <path d="M12.5 16.2h7" />
-        <path class="accent" d="M11.4 7.7c2.2-1.3 6.9-1.3 9.2 0" />
-      </g>
-
       <g v-else-if="name === 'close'">
         <path d="M9.4 9.4 22.6 22.6" />
         <path d="M22.6 9.4 9.4 22.6" />
