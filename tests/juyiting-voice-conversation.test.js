@@ -1,3 +1,5 @@
+import { useOutputs } from '../src/composables/useOutputs.js'
+import { useHallBountyAcceptance } from '../src/composables/juyiting/useHallBountyAcceptance.js'
 import { getHallCapabilities } from './fixtures/hall-current-protocol.js'
 import { bountyInteractionTargetId } from '../src/composables/juyiting/useHallChatContext.js'
 import { createHydratedIdentityScope, hasHydratedIdentity } from '../src/utils/identityScope.js'
@@ -298,6 +300,8 @@ const createActualHallVoiceMocks = ({
     loadNativeBountyCapability: async () => null, capabilityAllowsNewStart: () => false, capabilityAllowsOriginalReplay: () => false, pointAndStartIntentReadLane: () => 'ABSENT',
     useHallPointAndStartControlledBridge: () => ({ state: Vue.ref({ status: 'IDLE', intent: null }), busy: Vue.ref(false), selectContext: () => true, start: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, dispose: noop, invalidate: noop }),
     useHallPointAndStart: () => ({ state: Vue.ref({ status: 'IDLE', intent: null }), busy: Vue.ref(false), start: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, observeOriginal: async () => false, stopObservation: noop, dispose: noop }),
+    // Real read adapters stay inert without a cancelled-task source.
+    useOutputs, useHallBountyAcceptance,
     useHallBountyRequestCatalog: () => ({ entries: Vue.ref([]), error: text, loading: Vue.ref(false), hint: noop, refresh: async () => false, reset: noop }),
     useHallDrafts: () => ({ unresolvedIntent: Vue.ref(null) }),
     useHallBountyFollowup: () => ({ state: Vue.ref({ status: 'IDLE' }), busy: Vue.ref(false), prepareGenerate: async () => false, prepareEdit: async () => false, confirm: async () => false, checkOriginal: async () => false, invalidate: noop, dispose: noop }),

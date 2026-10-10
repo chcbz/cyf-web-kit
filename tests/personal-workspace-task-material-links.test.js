@@ -1,3 +1,4 @@
+import { isTerminalMatter } from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
 import { strict as assert } from 'node:assert'
 import { readFileSync } from 'node:fs'
 import { describe, it, before, after, afterEach } from 'mocha'
@@ -204,6 +205,30 @@ describe('W06 workspace bounty material links', () => {
     assert.doesNotMatch(source, /v-model="inputsConfirmed"/)
   })
 
+  it('preserves non-terminal formal/discussion routes and blocks terminal continuation', () => {
+    const bounty = readFileSync(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url), 'utf8')
+    const formalGuard = bounty.match(/<TaskMaterialLinks\s+v-if="([^"]+)"/)?.[1]
+    const discussionGuard = bounty.match(/<section v-if="([^"]+)" class="deliberation-execution-route"/)?.[1]
+    assert.ok(formalGuard, 'formal material route must remain present')
+    assert.ok(discussionGuard, 'embedded discussion route must remain present')
+    const evaluate = (guard, status, embeddedHall, formalTaskExecutionScope) => Boolean(new Function(
+      'detailTask', 'embeddedHall', 'formalTaskExecutionScope', 'isTerminalMatter', `return (${guard})`
+    )({ status }, embeddedHall, formalTaskExecutionScope, isTerminalMatter))
+    for (const status of ['open', 'planning', 'assigned']) {
+      assert.equal(evaluate(formalGuard, status, false, { taskId: 'task_a' }), true)
+      assert.equal(evaluate(formalGuard, status, false, null), false)
+      assert.equal(evaluate(formalGuard, status, true, { taskId: 'task_a' }), false)
+      assert.equal(evaluate(discussionGuard, status, true, null), true)
+      assert.equal(evaluate(discussionGuard, status, false, null), false)
+    }
+    for (const status of ['cancelled', 'completed', 'accepted', 'failed', 'archived']) {
+      for (const embedded of [false, true]) {
+        assert.equal(evaluate(formalGuard, status, embedded, { taskId: 'task_a' }), false, status)
+        assert.equal(evaluate(discussionGuard, status, embedded, null), false, status)
+      }
+    }
+  })
+
   it('mounts task material controls in the formal bounty detail while preserving the existing discussion event', () => {
     const bounty = readFileSync(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url), 'utf8')
     assert.match(bounty, /TaskMaterialLinks/)
@@ -212,8 +237,8 @@ describe('W06 workspace bounty material links', () => {
     assert.match(bounty, /formalTaskExecutionScope\.taskId/)
     // Standalone formal-task PDF controls remain. Embedded matters use the
     // ordinary discussion route, without a second manual execution entry.
-    assert.match(bounty, /v-if="formalTaskExecutionScope && !embeddedHall"/)
-    assert.match(bounty, /v-if="embeddedHall" class="deliberation-execution-route"/)
+    assert.match(bounty, /v-if="formalTaskExecutionScope && !embeddedHall && !isTerminalMatter\(detailTask\)"/)
+    assert.match(bounty, /v-if="embeddedHall && !isTerminalMatter\(detailTask\)" class="deliberation-execution-route"/)
     assert.match(bounty, /workspace-shortcut/)
     assert.match(bounty, /open-workspace/)
     assert.match(bounty, /@click="\$emit\('discuss-task', detailTask, assignedAgentForTask\(detailTask\)\)"/)
