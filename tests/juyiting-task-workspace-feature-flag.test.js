@@ -38,7 +38,7 @@ describe('C07F task workspace build flag', () => {
     expect(hallSource).to.include('? useTaskWorkspaceBinding({ selectedTask, selectedAgent, taskWorkspace })')
     expect(hallSource).to.include(': createDisabledTaskWorkspaceBinding(selectedAgent)')
     expect(hallSource).to.include('v-if="taskWorkspaceEnabled && renderedPanel === \'workspace\' && taskWorkspaceSubject"')
-    expect(hallSource).to.include('v-if="taskWorkspaceEnabled && renderedPanel === \'tasks\' && taskWorkspaceSubject"')
+    expect(hallSource).to.include('v-if="taskWorkspaceEnabled && renderedPanel === \'tasks\' && !formalTaskRef && taskWorkspaceSubject"')
     expect(hallSource).not.to.match(/URLSearchParams|location\.search|route\.query|window\.__.*TASK_WORKSPACE|localStorage.*TASK_WORKSPACE/)
   })
 
