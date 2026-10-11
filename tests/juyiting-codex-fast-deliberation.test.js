@@ -1147,4 +1147,21 @@ describe('HALL-ROUND-WEB-20261011 request-scoped closeout', () => {
     }
   })
 
+
+  it('does not apply ordinary round settlement to bounty admission or media/action child requests', async () => {
+    const context = ref({ ...contextFor(), conversationScopeType: 'bounty', conversationScopeKey: 'task:task-1', mode: 'bounty', taskId: 'task-1' })
+    const h = harness({ context })
+    try {
+      const { post, sending } = await h.send('bounty existing lifecycle')
+      await h.readback(post, h.viewFor(post, 'CANCELLED', ['CANCELLED']))
+      expect(post.options.signal.aborted).to.equal(false)
+      expect(post.cancels).to.equal(0)
+      expect(await h.conversation.sendHallMessage({ content: 'POST still open' })).to.equal(false)
+      post.options.onStreamEnd(); post.transport.resolve()
+      expect(await sending).to.equal(true)
+      expect(post.cancels).to.equal(0)
+      expect(h.posts).to.have.length(1)
+    } finally { h.conversation.disposeHallConversation() }
+  })
+
 })

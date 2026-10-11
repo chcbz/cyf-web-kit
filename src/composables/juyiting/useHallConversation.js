@@ -343,7 +343,7 @@ export const useHallConversation = ({
   const applyDeliberationEvent = event => {
     if (!event || typeof event !== 'object') return false
     if (activeRequest.value?.requestId && event.requestId && event.requestId !== activeRequest.value.requestId) return false
-    const session = activeSendSession
+    const session = activeSendSession?.roundCloseout ? activeSendSession : null
     if (session && event.requestId === session.requestId) {
       if (!currentSendSession(session) || !bindSendEvent(session, event)) return false
     }
@@ -435,7 +435,7 @@ export const useHallConversation = ({
     }
     if (result.type === 'late_delta' || result.type === 'duplicate_part') { syncDurablePresentation(); return true }
     if (needsReadback && result.type === 'delta') scheduleAuthoritativeRequestReadback(event.requestId)
-    if (activeSendSession?.requestId !== event.requestId && needsReadback && event.type === 'agent_message' && ['final', 'duplicate'].includes(result.type)) {
+    if ((!activeSendSession?.roundCloseout || activeSendSession.requestId !== event.requestId) && needsReadback && event.type === 'agent_message' && ['final', 'duplicate'].includes(result.type)) {
       scheduleAuthoritativeRequestReadback(event.requestId, { immediate: true })
     }
     if (result.type === 'delta') recordObservation('first_delta', activeRequest.value)
@@ -1184,7 +1184,7 @@ export const useHallConversation = ({
         isAwaitingReply.value = state.isAwaitingReply; isStreaming.value = state.isStreaming
         if (result.type === 'stream_final' && result.message?.content) {
           streamFinalCandidate = { message: result.message, conversationId: result.conversationId, toastName: result.toastName }
-          if (activeSendSession?.requestId !== event.requestId && needsReadback) scheduleAuthoritativeRequestReadback(event.requestId, { immediate: true })
+          if ((!activeSendSession?.roundCloseout || activeSendSession.requestId !== event.requestId) && needsReadback) scheduleAuthoritativeRequestReadback(event.requestId, { immediate: true })
         }
         syncDurablePresentation()
         return result.type === 'stream_final'
@@ -1367,6 +1367,8 @@ export const useHallConversation = ({
     const replyGeneration = ++hallReplyGeneration
     const session = {
       token: sendToken, requestId, requestRevision, guard: sendGuard, replyGeneration,
+      // Bounty typed/action admission and media child requests keep their existing lifecycle.
+      roundCloseout: ['public', 'private'].includes(sendContext.conversationScopeType),
       conversationId: requestConversationId || '',
       conversationGeneration: activeRequest.value?.conversationId === requestConversationId
         ? canonicalWireString(activeRequest.value.conversationGeneration) || '' : '',
@@ -1381,6 +1383,7 @@ export const useHallConversation = ({
     }
     const completion = new Promise(resolve => { session.resolveCompletion = resolve })
     activeSendSession = session
+    hasPendingSendSession.value = session.roundCloseout
     const isCurrentReplyTurn = () => currentSendSession(session)
     if (explicitContent === undefined) clearDraft()
     stopHallReplyStreaming()
@@ -1450,7 +1453,7 @@ export const useHallConversation = ({
           let event
           try { event = JSON.parse(String(eventData || '').replace(/^data:\s?/, '').trim()) } catch { /* text frame */ }
           const conversationReplay = isMessagePartEvent(event) || event?.type === 'execution_abandoned'
-          if (!conversationReplay && event && typeof event === 'object' && event.requestId &&
+          if (session.roundCloseout && !conversationReplay && event && typeof event === 'object' && event.requestId &&
               (event.requestId !== session.requestId || !bindSendEvent(session, event))) return
           const previousConversationId = conversationId.value
           const accepted = processStream(eventData)
@@ -1464,7 +1467,7 @@ export const useHallConversation = ({
           publishStreamFinals()
           syncDurablePresentation()
           // A final event has already arranged this GET (including its trailing rerun).
-          if (!session.terminalReadbackHint || !requestReadbackInflight.has(requestId)) {
+          if (session.roundCloseout && (!session.terminalReadbackHint || !requestReadbackInflight.has(requestId))) {
             scheduleAuthoritativeRequestReadback(requestId, { immediate: true })
           }
           if (isAwaitingReply.value && conversationId.value) startHallReplyPolling(conversationId.value)
@@ -1532,14 +1535,15 @@ export const useHallConversation = ({
     if (disposed || !content || activeSendToken || isConversationBusy.value || conversationLoadError.value) return false
     const sendToken = Object.freeze({ requestId: createStableRequestId(), generation: lifecycleGeneration })
     activeSendToken = sendToken
-    hasPendingSendSession.value = true
+    hasPendingSendSession.value = ['public', 'private'].includes(scopeSnapshot()?.type)
     isSubmitting.value = true
     deliberationStatus.value = '正在提交，等待受理'
     try {
       return await performHallMessageSend(options, sendToken, content)
     } finally {
-      if (activeSendToken === sendToken && activeSendSession?.token !== sendToken) {
+      if (activeSendToken === sendToken && (!activeSendSession?.roundCloseout || activeSendSession.token !== sendToken)) {
         activeSendToken = null
+        if (activeSendSession?.token === sendToken) activeSendSession = null
         hasPendingSendSession.value = false
         isSubmitting.value = false
         if (!activeRequest.value?.requestId && !isAwaitingReply.value && !isStreaming.value && deliberationStatus.value === '正在提交，等待受理') {
@@ -1550,7 +1554,7 @@ export const useHallConversation = ({
   }
 
   const applyRequestView = (requestView, requestId, { authoritative = false } = {}) => {
-    const session = activeSendSession?.requestId === requestId ? activeSendSession : null
+    const session = activeSendSession?.roundCloseout && activeSendSession.requestId === requestId ? activeSendSession : null
     if (session && authoritative && !localRequestViewMatches(session, requestView)) return false
     if (!requestView || typeof requestView !== 'object' || requestView.requestId !== requestId) return false
     const requestRevision = canonicalWireString(requestView.requestRevision)
