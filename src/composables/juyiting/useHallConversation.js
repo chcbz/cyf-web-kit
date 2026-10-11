@@ -1311,7 +1311,7 @@ export const useHallConversation = ({
     const stillThisRound = () => guardCurrent(session.guard) && session.replyGeneration === hallReplyGeneration &&
       activeRequest.value?.requestId === session.requestId && conversationId.value === view.conversationId && !activeSendToken
     // History recovery cannot hold the send lock or reclassify the durable terminal state.
-    session.settlePromise = missingFinals()
+    session.settlePromise = stillThisRound() && missingFinals()
       ? loadHallConversationContent(view.conversationId, { identity: session.guard, adoptionCurrent: stillThisRound }).then(loaded => {
         if (stillThisRound() && (!loaded || missingFinals())) {
           deliberationStatus.value = `${view.state === 'PARTIAL' ? '部分回话已完成；' : ''}回话已结束，正文加载待重试`
@@ -1776,6 +1776,8 @@ export const useHallConversation = ({
           if (!requestView || !bootstrapReadbackIsCurrent(activeRequest.value, requestView)) return false
         }
         if (!applyRequestView(requestView, requestId, { authoritative: true })) return false
+        // Final-reply observers can synchronously switch identity or start another round.
+        if (!guardCurrent(guard) || activeRequest.value?.requestId !== requestId) return false
         const id = typeof requestView?.conversationId === 'string' ? requestView.conversationId : conversationId.value
         if (id) conversationId.value = id
         if (!hasPendingSendSession.value && !deliberationBusy(activeRequest.value, activeTurns.value)) stopHallReplyPolling()

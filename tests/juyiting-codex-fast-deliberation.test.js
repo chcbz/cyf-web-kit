@@ -1164,4 +1164,25 @@ describe('HALL-ROUND-WEB-20261011 request-scoped closeout', () => {
     } finally { h.conversation.disposeHallConversation() }
   })
 
+
+  it('returns stale rather than successful if identity changes synchronously inside terminal final notification', async () => {
+    const apiStore = { authorizationGeneration: 1, token: async () => '' }
+    const h = harness({ apiStore, onFinalReply: () => {
+      apiStore.authorizationGeneration++
+      stopIdentityBoundWork()
+    } })
+    try {
+      const { post, sending } = await h.send()
+      post.options.onStream(JSON.stringify({ type: 'agent_message', conversationId: id, conversationGeneration: '1',
+        requestId: post.body.requestId, requestRevision: '1', turnId: 'turn-a', messageId: '91', finalSeq: '1',
+        content: 'terminal body', senderType: 'agent', occurredAt: '200' }))
+      await h.readback(post, h.viewFor(post))
+      expect(await sending).to.equal(false)
+      expect(h.conversation.conversationId.value).to.equal('')
+      expect(h.conversation.activeRequest.value).to.equal(null)
+      expect(h.conversation.messages.value).to.deep.equal([])
+      expect(h.contentReads()).to.equal(0)
+    } finally { h.conversation.disposeHallConversation() }
+  })
+
 })
