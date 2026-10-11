@@ -843,7 +843,7 @@ describe('HALL-ROUND-WEB-20261011 request-scoped closeout', () => {
         posts.push(post)
         views.set(body.requestId, durableRequestView({ requestId: body.requestId, state: 'RUNNING', stateVersion: '1',
           turns: targets.map(agent => durableTurnView({ requestId: body.requestId, turnId: `turn-${agent}`, targetAgentId: agent, state: 'QUEUED', stateVersion: '1' })) }))
-        options.onStreamOpen({ cancel: () => { post.cancels++ } })
+        options.onStreamOpen({ cancel: () => { post.cancels++; post.onCancel?.() } })
         for (const agent of targets) options.onStream(JSON.stringify({ requestId: body.requestId, requestRevision: '1',
           conversationId: id, conversationGeneration: '1', turnId: `turn-${agent}`, targetAgentId: agent,
           agentDelivery: { accepted: true, agentId: agent, state: 'QUEUED' } }))
@@ -1072,4 +1072,79 @@ describe('HALL-ROUND-WEB-20261011 request-scoped closeout', () => {
       expect(h.contentReads()).to.equal(2)
     } finally { h.conversation.disposeHallConversation() }
   })
+
+  it('keeps terminal-owned abort successful when cancel synchronously sends EOF and rejects the POST', async () => {
+    const h = harness()
+    try {
+      const { post, sending } = await h.send()
+      post.onCancel = () => {
+        post.options.onStreamEnd()
+        post.transport.reject(new DOMException('own terminal abort', 'AbortError'))
+      }
+      await h.readback(post, h.viewFor(post, 'CANCELLED', ['CANCELLED']))
+      expect(await sending).to.equal(true)
+      expect(post.cancels).to.equal(1)
+      expect(h.conversation.isConversationBusy.value).to.equal(false)
+      expect(h.conversation.messages.value.some(message => message.sender === 'SYSTEM')).to.equal(false)
+    } finally { h.conversation.disposeHallConversation() }
+  })
+
+  it('a queued old poll neither reads the new request nor clears the new round poll', async () => {
+    const originalSet = window.setInterval; const originalClear = window.clearInterval
+    const polls = []; const cleared = []
+    window.setInterval = callback => { polls.push(callback); return polls.length }
+    window.clearInterval = timer => { cleared.push(timer) }
+    const h = harness()
+    try {
+      const first = await h.send()
+      first.post.options.onStreamEnd()
+      await h.readback(first.post, h.viewFor(first.post, 'CANCELLED', ['CANCELLED']))
+      expect(await first.sending).to.equal(true)
+      const second = await h.send('second')
+      second.post.options.onStreamEnd()
+      await flushReadbacks(24)
+      const latestTimer = polls.length; const readCount = h.reads.length
+      await polls[0]()
+      expect(h.reads).to.have.length(readCount)
+      expect(cleared).not.to.include(latestTimer)
+      expect(h.conversation.activeRequest.value.requestId).to.equal(second.post.body.requestId)
+      expect(h.conversation.isConversationBusy.value).to.equal(true)
+      await h.readback(second.post, h.viewFor(second.post, 'CANCELLED', ['CANCELLED']))
+      expect(await second.sending).to.equal(true)
+    } finally {
+      h.conversation.disposeHallConversation()
+      window.setInterval = originalSet; window.clearInterval = originalClear
+    }
+  })
+
+  it('closing either POST leaves the independent authenticated conversation GET events reader alive', async () => {
+    const originalFetch = global.fetch
+    let eventSignal; let eventCancels = 0; let fetches = 0
+    global.fetch = async (_url, options) => {
+      fetches++; eventSignal = options.signal
+      return new Response(new ReadableStream({ cancel: () => { eventCancels++ } }), { status: 200 })
+    }
+    const h = harness({ apiStore: { authorizationGeneration: 1, token: async () => 'test-token' } })
+    try {
+      await h.conversation.loadHallMessages()
+      await flushReadbacks(24)
+      expect(fetches).to.equal(1)
+      expect(eventSignal.aborted).to.equal(false)
+      for (const content of ['first', 'second']) {
+        const { post, sending } = await h.send(content)
+        await h.readback(post, h.viewFor(post, 'CANCELLED', ['CANCELLED']))
+        expect(await sending).to.equal(true)
+        expect(post.options.signal.aborted).to.equal(true)
+        expect(eventSignal.aborted).to.equal(false)
+        expect(eventCancels).to.equal(0)
+        expect(fetches).to.equal(1)
+      }
+      expect(h.posts).to.have.length(2)
+    } finally {
+      h.conversation.disposeHallConversation()
+      await flushReadbacks(24)
+      global.fetch = originalFetch
+    }
+  })
+
 })

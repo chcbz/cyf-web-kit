@@ -1072,25 +1072,33 @@ export const useHallConversation = ({
     const generation = lifecycleGeneration
     stopHallReplyPolling()
     const guard = captureGuard()
-    hallReplyPollTimer = window.setInterval(async () => {
-      if (disposed || generation !== lifecycleGeneration || !isAwaitingReply.value || conversationId.value !== id) {
-        stopHallReplyPolling()
+    const replyGeneration = hallReplyGeneration
+    const sendToken = activeSendToken
+    const pollCurrent = () => guardCurrent(guard) && generation === lifecycleGeneration &&
+      replyGeneration === hallReplyGeneration && (!activeSendToken || activeSendToken === sendToken) && conversationId.value === id
+    const timer = window.setInterval(async () => {
+      if (!pollCurrent() || !isAwaitingReply.value) {
+        if (hallReplyPollTimer === timer) stopHallReplyPolling()
         return
       }
       // Current protocol completion comes from the request, not just a message in history.
       if (activeRequest.value?.requestId) await recoverUnknownRequest(activeRequest.value.requestId, guard)
-      if (!guardCurrent(guard) || conversationId.value !== id) return
+      if (!pollCurrent()) return
       await loadHallConversationContent(id)
     }, 2000)
+    hallReplyPollTimer = timer
   }
 
   const scheduleHallConversationSync = (id) => {
     if (disposed || !id) return
     const generation = lifecycleGeneration
+    const replyGeneration = hallReplyGeneration
+    const sendToken = activeSendToken
     const schedule = delay => {
       const timer = window.setTimeout(() => {
         hallSyncTimers = hallSyncTimers.filter(item => item !== timer)
-        if (!disposed && generation === lifecycleGeneration && conversationId.value === id) {
+        if (!disposed && generation === lifecycleGeneration && replyGeneration === hallReplyGeneration &&
+            (!activeSendToken || activeSendToken === sendToken) && conversationId.value === id) {
           loadHallConversationContent(id)
         }
       }, delay)
@@ -1441,7 +1449,8 @@ export const useHallConversation = ({
           if (!isCurrentReplyTurn()) return
           let event
           try { event = JSON.parse(String(eventData || '').replace(/^data:\s?/, '').trim()) } catch { /* text frame */ }
-          if (event && typeof event === 'object' && event.requestId &&
+          const conversationReplay = isMessagePartEvent(event) || event?.type === 'execution_abandoned'
+          if (!conversationReplay && event && typeof event === 'object' && event.requestId &&
               (event.requestId !== session.requestId || !bindSendEvent(session, event))) return
           const previousConversationId = conversationId.value
           const accepted = processStream(eventData)
