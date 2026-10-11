@@ -380,7 +380,10 @@
             <p role="status">{{ taskStatusText(formalTaskRef.status) }}；仅查看历史成果，不再继续办理或验收。</p>
             <p v-if="terminalHistory.loading.value" role="status">正在读取历史成果…</p>
             <p v-else role="status">{{ terminalHistory.message.value }}</p>
-            <button type="button" @click="refreshTerminalHistory">重新读取历史成果</button>
+            <div class="terminal-history-actions" role="group" aria-label="重新读取历史成果">
+              <button type="button" @click="refreshTerminalHistory">重新读取历史成果</button>
+              <button type="button" @click="terminalConversationHistory.refresh">重新读取议事文字成果</button>
+            </div>
             <article v-for="item in terminalHistory.items.value" :key="`${item.artifactId}:${item.artifactVersion}`">
               <strong>{{ item.title }}</strong>
               <button type="button" @click="downloadTerminalOutput(item)">下载历史成果</button>
@@ -395,7 +398,6 @@
             <p v-if="terminalConversationHistory.error.value || terminalConversationHistory.catalog.error.value || terminalTextError" role="alert">
               {{ terminalConversationHistory.error.value || terminalConversationHistory.catalog.error.value || terminalTextError }}
             </p>
-            <button type="button" @click="terminalConversationHistory.refresh">重新读取议事文字成果</button>
             <article v-for="item in terminalTextItems" :key="`${item.requestId}:${item.outcomeId}`">
               <strong>历史文字成果</strong>
               <pre v-text="item.text"></pre>
@@ -2874,7 +2876,41 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.terminal-task-history { flex: 1; min-height: 0; overflow: auto; padding: 12px; }
+.terminal-task-history { flex: 1; min-width: 0; min-height: 0; overflow: auto; padding: 12px; }
+.terminal-history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0;
+}
+.terminal-history-actions button {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--hall-border-strong, #cbb998);
+  border-radius: 7px;
+  background: var(--hall-surface, #fffaf0);
+  color: var(--hall-text, #493a28);
+  font: inherit;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.terminal-history-actions button:hover {
+  background: var(--hall-surface-brand, #f6eee8);
+  border-color: var(--hall-brand, #923f30);
+}
+.terminal-history-actions button:focus-visible {
+  outline: 2px solid var(--hall-brand, #923f30);
+  outline-offset: 2px;
+}
+@media (max-width: 600px) {
+  .terminal-history-actions { flex-direction: column; }
+  .terminal-history-actions button { width: 100%; }
+}
 .juyi-page {
   --bottom-action-bar-height: 68px;
   --hall-safe-bottom: env(safe-area-inset-bottom, 0px);

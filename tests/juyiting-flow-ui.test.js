@@ -104,6 +104,37 @@ describe('flow gap actual UI consumers', () => {
     }
     expect(template).to.include(":task-completed=\"formalTaskRef.status === 'completed'\"")
   })
+  it('groups history reload controls with responsive styling and preserves both read handlers', async () => {
+    const template = hall.match(/<div class="terminal-history-actions"[\s\S]*?<\/div>/)[0]
+    const compiled = compileTemplate({ source: template, filename: 'history-actions.vue', id: 'history-actions',
+      compilerOptions: { mode: 'function' } })
+    expect(compiled.errors).to.deep.equal([])
+    const calls = []
+    const wrapper = mount(Vue.defineComponent({
+      setup: () => ({ refreshTerminalHistory: () => calls.push('history'),
+        terminalConversationHistory: { refresh: () => calls.push('text') } }),
+      render: new Function('Vue', compiled.code)(Vue)
+    }))
+    try {
+      expect(wrapper.attributes('role')).to.equal('group')
+      const buttons = wrapper.findAll('button')
+      expect(buttons.map(button => button.text())).to.deep.equal(['重新读取历史成果', '重新读取议事文字成果'])
+      for (const button of buttons) {
+        expect(button.attributes('type')).to.equal('button')
+        await button.trigger('click')
+      }
+      expect(calls).to.deep.equal(['history', 'text'])
+    } finally { wrapper.unmount() }
+    const css = parse(hall).descriptor.styles[0].content
+    const actions = css.match(/\.terminal-history-actions \{([^}]+)\}/)[1]
+    expect(actions).to.include('flex-wrap: wrap').and.include('gap: 12px').and.include('margin: 16px 0')
+    const button = css.match(/\.terminal-history-actions button \{([^}]+)\}/)[1]
+    for (const rule of ['min-height: 44px', 'font: inherit', 'white-space: normal', 'max-width: 100%', 'border: 1px solid']) {
+      expect(button).to.include(rule)
+    }
+    expect(css).to.include('.terminal-history-actions button:focus-visible')
+    expect(css).to.match(/@media \(max-width: 600px\) \{\s*\.terminal-history-actions \{ flex-direction: column; \}\s*\.terminal-history-actions button \{ width: 100%; \}/)
+  })
   it('terminal history is a separate read adapter with preview/download, not acceptance or continuation', () => {
     const section = hall.match(/<section\s+v-if="renderedPanel[^>]+class="terminal-task-history"[\s\S]*?<\/section>/)?.[0]
     expect(section).to.include("formalTaskRef?.status === 'cancelled'")
