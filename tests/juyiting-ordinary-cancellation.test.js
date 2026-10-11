@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { parse as parseSfc } from '@vue/compiler-sfc'
+import postcss from 'postcss'
 import { expect } from 'chai'
 import { ref } from 'vue'
 import { useHallOrdinaryCancellation, ordinaryTaskVersion, canCancelOrdinaryTask, cancellationPayload } from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
@@ -146,5 +149,34 @@ describe('ordinary cancellation scoped existing API', () => {
     expect(cancellationPayload({ data: receipt, status: 200 })).to.equal(receipt)
     expect(cancellationPayload({ data: { code: 'E0', data: receipt } })).to.equal(receipt)
     expect(() => cancellationPayload({ data: { code: 'CANCEL_FORBIDDEN', status: 403 } })).to.throw()
+  })
+})
+
+
+describe('ordinary cancellation detail layout', () => {
+  const source = readFileSync(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url), 'utf8')
+  const { descriptor } = parseSfc(source)
+  const css = postcss.parse(descriptor.styles.map(style => style.content).join('\n'))
+  const declarations = selector => {
+    const values = {}
+    css.walkRules(selector, rule => rule.walkDecls(decl => { values[decl.prop] = decl.value }))
+    return values
+  }
+
+  it('separates the cancellation copy, button and following results action', () => {
+    expect(declarations('.ordinary-cancellation')).to.include({
+      display: 'grid', gap: '12px', margin: '16px 0', 'padding-top': '16px'
+    })
+    expect(declarations('.ordinary-cancellation > p')).to.include({ margin: '0', 'line-height': '1.65' })
+  })
+
+  it('keeps the secondary action full-width and allows narrow-screen wrapping', () => {
+    expect(declarations('.ordinary-cancel-action')).to.include({
+      width: '100%', 'min-width': '0', 'box-sizing': 'border-box',
+      'white-space': 'normal', 'overflow-wrap': 'anywhere', 'min-height': '44px',
+      border: '1px solid var(--hall-brand, #923f30)', background: 'var(--hall-surface, #fffefa)'
+    })
+    expect(declarations('.ordinary-cancel-action:focus-visible').outline).to.exist
+    expect(declarations('.ordinary-cancel-action:disabled').cursor).to.equal('not-allowed')
   })
 })

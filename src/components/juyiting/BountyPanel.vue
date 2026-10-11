@@ -864,7 +864,37 @@ button {
   font: inherit;
 }
 
-.ordinary-cancel-action { min-height: 44px; padding: 9px 14px; border: 1px solid var(--hall-brand, #923f30); border-radius: 8px; background: var(--hall-surface, #fffefa); color: var(--hall-brand, #923f30); font-weight: 500; }
+.ordinary-cancellation {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 16px 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--hall-border, #eadfd4);
+}
+
+.ordinary-cancellation > p {
+  margin: 0;
+  color: var(--hall-text-secondary, #68716b);
+  font-size: 13px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.ordinary-cancel-action {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 9px 14px;
+  border: 1px solid var(--hall-brand, #923f30);
+  border-radius: 8px;
+  background: var(--hall-surface, #fffefa);
+  color: var(--hall-brand, #923f30);
+  font-weight: 500;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .ordinary-cancel-action:hover:not(:disabled) { background: #f6eee8; border-color: #793326; }
 .ordinary-cancel-action:focus-visible { outline: 3px solid #923f3080; outline-offset: 3px; }
 .ordinary-cancel-action:disabled { opacity: .55; cursor: not-allowed; }
