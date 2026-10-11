@@ -31,7 +31,7 @@ describe('explicit text to execution batch delivery', () => {
   })
   it('waits for the exact output-committed child, never delivers queued/failed/cancelled action prose', async () => {
     const group = groups[0]; const initial = await text(group.initial)
-    for (const state of ['QUEUED', 'FAILED']) {
+    for (const state of ['QUEUED']) {
       const raw = clone(group.queued); raw.actionProgress.state = state
       const pending = completedExecutionDelivery(raw, request(raw), turn(raw), [], 'task')
       expect(() => currentOutputDelivery([initial], [pending])).to.throw('尚未完成')
@@ -44,6 +44,17 @@ describe('explicit text to execution batch delivery', () => {
     const raw = group.completed
     expect(() => currentOutputDelivery([initial], [node(raw)])).to.throw('尚未明确')
     expect(() => currentOutputDelivery([initial], [completedExecutionDelivery(raw, request(raw), turn(raw), [], 'task')])).to.throw('尚未完成')
+  })
+  it('keeps the committed basis after a verified failed action without a child, without retrying it', async () => {
+    const group = groups[0]; const initial = await text(group.initial)
+    const raw = clone(group.queued); raw.actionProgress.state = 'FAILED'
+    expect(completedExecutionDelivery(raw, request(raw), turn(raw), [], 'task')).to.equal(null)
+    expect(currentOutputDelivery([initial], [])).to.deep.equal([initial])
+    expect(() => completedExecutionDelivery(raw, request(raw), { ...turn(raw), finalMessageId: 'foreign' }, [], 'task')).to.throw()
+    for (const patch of [{ childRequestId: 'unknown' }, { childRoute: 'EXECUTE' }, { childStateVersion: '0' }]) {
+      const bad = clone(raw); Object.assign(bad.actionProgress, patch)
+      expect(() => completedExecutionDelivery(bad, request(bad), turn(bad), [], 'task')).to.throw()
+    }
   })
   it('rejects foreign scope, wrong child step/run readiness and source tampering', () => {
     const raw = groups[0].completed

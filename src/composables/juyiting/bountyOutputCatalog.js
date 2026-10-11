@@ -221,6 +221,10 @@ export function completedExecutionDelivery (raw, request, turn, snapshots, taskI
     turn.requestId !== request.requestId || turn.requestRevision !== request.requestRevision ||
     turn.conversationId !== request.conversationId || turn.conversationGeneration !== request.conversationGeneration ||
     !exactOutputId(taskId) || outcome.taskId !== taskId) throw new Error('媒体交付与原动作快照不一致。')
+  // A durable pre-admission failure has no execution or deliverable to wait for.
+  // Keep its failure card/history, but do not poison the committed media basis.
+  if (progress.state === 'FAILED' && progress.childRequestId === null &&
+    progress.childRoute === null && progress.childStateVersion === null) return null
   const node = { outcomeId: outcome.outcomeId, finalDigest: outcome.finalDigest,
     deliveryRelation: outcome.deliveryRelation ? Object.freeze({ ...outcome.deliveryRelation }) : null, requestId: progress.childRequestId, stepId: null }
   if (progress.childRoute != null && progress.childRoute !== 'EXECUTE') throw new Error('查阅动作不是媒体交付。')

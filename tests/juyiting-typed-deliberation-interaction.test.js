@@ -540,6 +540,29 @@ describe('actual mixed media basis natural discussion and frozen original recove
       } finally { lane.dispose() }
     }
   })
+  it('allows a fresh media discussion after failed admission, retains the failure, and never replays it', async () => {
+    for (const state of ['FAILED', 'QUEUED']) {
+      const failed = JSON.parse(JSON.stringify(group.mediaTwo))
+      failed.requestId = 'failed-edit-request'; failed.turnId = 'failed-edit-turn'
+      failed.outcome.outcomeId = 'failed-edit-outcome'; failed.outcome.assistantMessageId = '9999'
+      failed.outcome.finalDigest = `sha256:${'f'.repeat(64)}`
+      failed.outcome.deliveryRelation = { mode: 'APPEND', parentOutcomeId: group.updated.outcome.outcomeId, parentFinalDigest: group.updated.outcome.finalDigest }
+      failed.actionProgress = { ...failed.actionProgress, state, childRequestId: null, childRoute: null, childStateVersion: null }
+      const sources = [...values, failed]; const { lane, calls } = create(store(), sources)
+      try {
+        for (const raw of sources) expect(await lane.readOne(raw.requestId)).not.to.equal(null)
+        await lane.submit({ content: '基于原图继续改图' })
+        const posts = calls.filter(call => call[0] === 'POST')
+        expect(posts).to.have.length(state === 'FAILED' ? 1 : 0)
+        expect(lane.projections.value.find(value => value.requestId === failed.requestId).actionProgress.state).to.equal(state)
+        if (state === 'FAILED') {
+          expect(posts[0][2].sourceSelectors).to.deep.equal(expected)
+          expect(posts[0][2].parentOutcomeId).to.equal(group.updated.outcome.outcomeId)
+          expect(posts[0][1]).to.equal('/conversations/42/interactions/discussion')
+        }
+      } finally { lane.dispose() }
+    }
+  })
   it('keeps explicitly chosen attachment sources and a verified media causal basis, including attachment-only admission', async () => {
     for (const content of ['按新资料修改', '  ']) {
       const { lane, calls } = create(store(), values.slice(0, 3))
