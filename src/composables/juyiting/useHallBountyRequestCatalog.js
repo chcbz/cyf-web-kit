@@ -12,18 +12,18 @@ export const useHallBountyRequestCatalog = ({ chatApi, enabled = () => false, id
   const current = captured => !disposed && enabled?.() && captured.generation === generation.value && captured.scope === scope.value &&
     captured.auth === unref(typeof authorizationGeneration === 'function' ? authorizationGeneration() : authorizationGeneration) &&
     captured.contextGeneration === getContextGeneration?.() && JSON.stringify(captured.context) === JSON.stringify(getContext?.() || {})
-  const reset = () => { generation.value++; activeScan = null; entries.value = []; error.value = ''; loading.value = false }
+  const reset = () => { generation.value++; activeScan?.controller.abort(); activeScan = null; refreshQueued = false; entries.value = []; error.value = ''; loading.value = false }
   const refresh = async () => {
     if (loading.value) { refreshQueued = true; return false }
     const captured = capture(); const context = captured.context
     if (!enabled?.() || !context.conversationId || !context.taskId) return false
-    const scan = {}; activeScan = scan
+    const scan = { controller: new AbortController() }; activeScan = scan
     loading.value = true; error.value = ''
     try {
       let after = '0'; let through = null; let expectedGeneration = context.conversationGeneration || null; let next = true; let merged = entries.value
       while (next) {
         const params = query({ ...(expectedGeneration ? { expectedGeneration } : {}), after, ...(through != null ? { through } : {}) })
-        const page = catalogPage(unwrap(await chatApi.get(`/conversations/${encodeURIComponent(context.conversationId)}/requests`, params, { autoLoading: false, needAuth: true })),
+        const page = catalogPage(unwrap(await chatApi.get(`/conversations/${encodeURIComponent(context.conversationId)}/requests`, params, { autoLoading: false, needAuth: true, signal: scan.controller.signal })),
           { conversationId: context.conversationId, taskId: context.taskId, generation: expectedGeneration, after, through })
         if (!current(captured) || !page) return false
         if (through != null && page.through !== through) throw new Error('悬赏成果索引分页边界不一致')

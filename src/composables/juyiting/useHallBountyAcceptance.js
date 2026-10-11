@@ -1,33 +1,40 @@
 import { computed, getCurrentInstance, onBeforeUnmount, ref, watch } from 'vue'
-import { exactOutputId } from './bountyOutputCatalog.js'
+import { exactOutputId, outputRequestPending } from './bountyOutputCatalog.js'
 import { exactHallConversationId } from './hallConversationHistory.js'
 import { useHallBountyRequestCatalog } from './useHallBountyRequestCatalog.js'
 
 const unwrap = value => value?.data?.data ?? value?.data ?? value
 /** Read existing owner/task scoped sources only. Never choose the latest conversation,
  * create/point/send, or convert a legacy formal delivery into a conversation output. */
-export function useHallBountyAcceptance ({ api, taskId, identityKey, conversationId = () => '' }) {
+export function useHallBountyAcceptance ({ api, taskId, identityKey, conversationId = () => '', enabled = () => true, taskCompleted = () => false, stateVersion = () => '' }) {
   const scope = ref(null); const loading = ref(false); const error = ref(''); const legacy = ref(false)
-  let epoch = 0; let disposed = false; let controller = null; let timer = null
+  let epoch = 0; let disposed = false; let controller = null; let timer = null; let pollQueued = false
   const identity = computed(() => `${identityKey()}\u0000${taskId()}`)
   const catalog = useHallBountyRequestCatalog({ chatApi: api, identityScope: identity,
     authorizationGeneration: () => epoch, getContextGeneration: () => epoch,
-    enabled: () => !disposed && !!scope.value,
+    enabled: () => !disposed && enabled() && !!scope.value,
     getContext: () => ({ conversationId: scope.value?.conversationId || '', taskId: taskId() }) })
-  const valid = captured => !disposed && captured === epoch
+  const valid = captured => !disposed && enabled() && captured === epoch
   const poll = async captured => {
+    if (!valid(captured) || !scope.value) return false
+    if (catalog.loading.value) { pollQueued = true; return false }
+    if (timer != null) clearTimeout(timer); timer = null
     const loaded = await catalog.refresh()
     if (valid(captured) && scope.value) {
       error.value = !loaded && !catalog.error.value ? '成果索引暂未能核实，请重新读取。' : ''
       legacy.value = loaded && !catalog.error.value && !catalog.entries.value.length
-      timer = setTimeout(() => { void poll(captured) }, 2500)
+      if (pollQueued) { pollQueued = false; return poll(captured) }
+      if (loaded && !catalog.error.value && !taskCompleted() && catalog.entries.value.some(entry => outputRequestPending(entry.request))) {
+        timer = setTimeout(() => { timer = null; void poll(captured) }, 2500)
+      }
     }
+    return loaded
   }
   const refresh = async () => {
-    epoch++; const captured = epoch
+    epoch++; pollQueued = false; const captured = epoch
     controller?.abort(); if (timer != null) clearTimeout(timer); timer = null
     scope.value = null; catalog.reset(); error.value = ''; legacy.value = false; loading.value = false
-    if (disposed || !identityKey() || !exactOutputId(taskId())) return false
+    if (disposed || !enabled() || !identityKey() || !exactOutputId(taskId())) return false
     controller = new AbortController(); loading.value = true
     const signal = controller.signal
     try {
@@ -66,8 +73,12 @@ export function useHallBountyAcceptance ({ api, taskId, identityKey, conversatio
       return false
     } finally { if (valid(captured)) loading.value = false }
   }
-  const stop = watch(() => [identity.value, conversationId()], () => { void refresh() }, { immediate: true, flush: 'sync' })
-  const dispose = () => { disposed = true; epoch++; controller?.abort(); if (timer != null) clearTimeout(timer); stop(); catalog.dispose() }
+  const stop = watch(() => [identity.value, conversationId(), enabled()], () => { void refresh() }, { immediate: true, flush: 'sync' })
+  const stopProjection = watch(() => [taskCompleted(), stateVersion()], () => {
+    if (timer != null) clearTimeout(timer); timer = null
+    if (scope.value) void poll(epoch)
+  }, { flush: 'sync' })
+  const dispose = () => { disposed = true; epoch++; controller?.abort(); if (timer != null) clearTimeout(timer); stop(); stopProjection(); catalog.dispose() }
   if (getCurrentInstance()) onBeforeUnmount(dispose)
-  return { scope, loading, error, legacy, catalog, refresh, dispose }
+  return { scope, loading, error, legacy, catalog, refresh, refreshCatalog: () => poll(epoch), dispose }
 }

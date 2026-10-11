@@ -1,3 +1,4 @@
+import { isTerminalRequestState, isTerminalTurnState } from './hallDeliberationState.js'
 import { typedOutcomeProjection } from './hallTypedDeliberation.js'
 
 /** Browser-safe projection of the owner-authorized conversation output catalog. */
@@ -20,6 +21,13 @@ export function outputAssetPart (item) {
   return Object.freeze({ state: 'ready', kind: previewKind(item.contentMimeType),
     assetId: item.assetRef.assetId, revision: item.assetRef.revision })
 }
+
+// A final parent can still own a live EXECUTE step or a pending turn. Unknown
+// wire states keep refreshing; only verified terminal projections go quiet.
+export const outputRequestPending = request => !isTerminalRequestState(request?.state) ||
+  (request.turns || []).some(turn => !isTerminalTurnState(turn.state)) ||
+  (request.steps || []).some(step => step.kind === 'EXECUTE' &&
+    !['OUTPUT_COMMITTED', 'COMPLETED', 'FAILED', 'CANCELLED', 'ABANDONED'].includes(step.executionState))
 
 export function scopedExecutionSteps (request, conversationId) {
   if (!exactOutputId(request?.requestId) || request?.conversationId !== conversationId) return []

@@ -9,7 +9,7 @@
       v-if="source.scope.value && !source.legacy.value && !source.loading.value"
       acceptance
       :task-completed="taskCompleted"
-      :enabled="!source.error.value && !source.catalog.error.value"
+      :enabled="enabled && !source.error.value && !source.catalog.error.value"
       :request="source.catalog.entries.value.at(-1)?.request || null"
       :catalog="source.catalog.entries.value"
       :conversation-id="source.scope.value.conversationId"
@@ -18,6 +18,7 @@
       :task-id="taskId"
       @continue-modification="$emit('continue-modification', source.scope.value)"
       @task-completed="$emit('task-completed', $event)"
+      @catalog-refresh-needed="source.refreshCatalog"
     />
     <slot v-else-if="source.legacy.value" name="legacy"></slot>
     <p v-else-if="taskCompleted" role="status">该事项已完成；此处仅供查看原成果。</p><button v-else type="button" @click="$emit('continue-modification', null)">返回事项议事</button>
@@ -27,11 +28,12 @@
 import { createApi } from '../../composables/useHttp.js'
 import { useHallBountyAcceptance } from '../../composables/juyiting/useHallBountyAcceptance.js'
 import BountyExecutionOutputs from './BountyExecutionOutputs.vue'
-const props = defineProps({ taskId: { type: String, required: true }, identityKey: { type: String, required: true }, taskCompleted: { type: Boolean, default: false },
+const props = defineProps({ enabled: { type: Boolean, default: true }, taskId: { type: String, required: true }, identityKey: { type: String, required: true }, taskCompleted: { type: Boolean, default: false },
   taskVersion: { type: [Number, String], default: '' }, conversationId: { type: String, default: '' } })
 defineEmits(['continue-modification', 'task-completed'])
 const source = useHallBountyAcceptance({ api: createApi('/chat'), taskId: () => props.taskId,
-  identityKey: () => props.identityKey, conversationId: () => props.conversationId })
+  identityKey: () => props.identityKey, conversationId: () => props.conversationId, enabled: () => props.enabled,
+  taskCompleted: () => props.taskCompleted, stateVersion: () => props.taskVersion })
 </script>
 <style scoped>
 .bounty-acceptance-panel { flex: 1; min-height: 0; overflow: auto; padding: 12px; background: #fffaf0; }

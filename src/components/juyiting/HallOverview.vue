@@ -110,7 +110,7 @@ const actionLabels = { OPEN_CASE: '查看事项', OPEN_EXECUTION: '查看原交�
 const statusText = code => ({
   EDITING: '尚未交办', SUBMITTED: '已交办', QUEUED: '等待执行', OUTPUT_COMMITTED: '成果可查看',
   FAILED: '执行未完成', INPUTS_REVOKED: '资料授权已撤销', open: '待领令', assigned: '已领令',
-  running: '办理中', completed: '已完成', failed: '未完成', archived: '已归档'
+  running: '办理中', completed: '已完成', failed: '失败', blocked: '受阻', cancelled: '已取消', archived: '已归档'
 })[code] || '状态待核对'
 const rowsFor = view => sourcesFor(view).flatMap(source => model.sections.value[view].partitions[source].items).sort((a, b) => b.updatedAt - a.updatedAt)
 const attentionItems = computed(() => rowsFor('needsAction').slice(0, 2))

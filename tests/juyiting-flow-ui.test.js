@@ -45,13 +45,16 @@ describe('flow gap actual UI consumers', () => {
       expect(task.assignedAgentIds).to.deep.equal(assignedAgentIds)
     } finally { wrapper.unmount() }
   })
-  it('shows assigned pre-start cancellation and emits an explicit task; busy prevents another click', async () => {
+  it('confirms assigned pre-start cancellation with the original version; busy prevents another click', async () => {
     const task = { id: 'a', title: '普通事项', status: 'assigned', taskVersion: '2', funding: null, assignedAgentIds: ['old-agent'] }
     const wrapper = mount(Panel, { props: { ...baseProps, tasks: [task], selectedTask: task } })
     try {
       wrapper.vm.openTask(task); await Vue.nextTick()
       const button = wrapper.get('.ordinary-cancellation button')
-      await button.trigger('click'); expect(wrapper.emitted('cancel-task')).to.have.length(1)
+      await button.trigger('click'); expect(wrapper.emitted('cancel-task')).to.equal(undefined)
+      wrapper.get('var-dialog').element.dispatchEvent(new window.Event('confirm')); await Vue.nextTick()
+      expect(wrapper.emitted('cancel-task')).to.have.length(1)
+      expect(wrapper.emitted('cancel-task')[0][0]).to.include({ id: 'a', taskVersion: 2 })
       await wrapper.setProps({ cancellationBusy: true }); await button.trigger('click')
       expect(button.attributes('disabled')).to.equal(''); expect(wrapper.emitted('cancel-task')).to.have.length(1)
       await wrapper.setProps({ cancellationBusy: false, cancellationState: { taskId: 'a', status: 'unresolved' } })

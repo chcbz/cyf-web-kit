@@ -278,12 +278,17 @@
                 <p>点将后自动进入悬赏议事。你可以继续补充文字和资料，与 Agent 反复沟通，在事项详情核对本次成果并确认验收，保存可选。</p>
               </section>
               <section
-                v-if="canCancelOrdinaryTask(detailTask)"
+                v-if="canCancelOrdinaryTask(detailTask) || cancellationUnresolved"
                 class="ordinary-cancellation"
                 aria-label="普通事项取消"
               >
                 <p>仅取消无资金事实、未实际开始的普通事项；已点将未开工也可申请，最终以服务端核验为准。历史指派与成果保留。</p>
-                <button type="button" :disabled="cancellationBusy" @click="$emit('cancel-task', detailTask)">
+                <button
+                  type="button"
+                  class="ordinary-cancel-action"
+                  :disabled="cancellationBusy || showCancellationDialog || cancellationSubmitting"
+                  @click="requestCancellation"
+                >
                   {{ cancellationState?.taskId === detailTask.id && cancellationState.status === 'unresolved' ? '核对原取消结果' : '取消未开工事项' }}
                 </button>
                 <p v-if="cancellationState?.taskId === detailTask.id && cancellationState.status === 'unresolved'" role="status">结果尚未确认；只核对原事项，不重复提交取消。</p>
@@ -458,12 +463,23 @@
         </section>
       </div>
     </transition>
+    <var-dialog
+      v-model:show="showCancellationDialog"
+      title="确认取消未开工事项？"
+      :message="`即将申请取消“${cancellationCandidate?.task.title || '原事项'}”。仅限无资金事实且未实际开始的事项，最终由服务端核验；历史指派与成果保留。确认后不会继续办理；若结果未确认，只核对原结果，不重复提交。`"
+      confirm-button-text="确认取消事项"
+      cancel-button-text="保留事项"
+      confirm-button-text-type="danger"
+      @confirm="confirmCancellation"
+      @cancel="dismissCancellation"
+      @close="dismissCancellation"
+    />
   </div>
 </template>
 
 <script setup>
-import { canCancelOrdinaryTask, isTerminalMatter } from '../../composables/juyiting/useHallOrdinaryCancellation.js'
-import { computed, ref, watch } from 'vue'
+import { canCancelOrdinaryTask, ordinaryTaskVersion, isTerminalMatter } from '../../composables/juyiting/useHallOrdinaryCancellation.js'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import BountyActionIcon from './BountyActionIcon.vue'
 import WorkItemPlanPanel from './WorkItemPlanPanel.vue'
 import TeamRecommendationPanel from './TeamRecommendationPanel.vue'
@@ -577,6 +593,46 @@ watch(() => [props.identityScope, props.authorizationGeneration], () => {
   selectedAssigneeIds.value = []
 }, { flush: 'sync' })
 const detailTask = computed(() => modalTask.value)
+const showCancellationDialog = ref(false)
+const cancellationCandidate = ref(null)
+const cancellationSubmitting = ref(false)
+const cancellationUnresolved = computed(() => props.cancellationState?.taskId === detailTask.value?.id && props.cancellationState?.status === 'unresolved')
+const cancellationFence = computed(() => JSON.stringify([props.identityScope, props.authorizationGeneration,
+  props.detailAllowed, props.selectedTask?.id, detailTask.value?.id, ordinaryTaskVersion(detailTask.value),
+  detailTask.value?.status, detailTask.value?.startedAt, detailTask.value?.completedAt,
+  detailTask.value?.funding, detailTask.value?.reward]))
+const dismissCancellation = () => { showCancellationDialog.value = false; cancellationCandidate.value = null }
+watch(cancellationFence, () => { dismissCancellation(); cancellationSubmitting.value = false }, { flush: 'sync' })
+watch(() => [props.cancellationBusy, props.cancellationState], () => {
+  if (!props.cancellationBusy) cancellationSubmitting.value = false
+}, { flush: 'sync' })
+onBeforeUnmount(dismissCancellation)
+const requestCancellation = () => {
+  if (!props.identityScope || !props.detailAllowed || props.cancellationBusy || cancellationSubmitting.value ||
+      showCancellationDialog.value || !detailTask.value) return false
+  // Uncertainty belongs to the existing scoped cancellation client. This path
+  // only checks its original record; it must not create another POST intent.
+  if (cancellationUnresolved.value) {
+    cancellationSubmitting.value = true
+    emit('cancel-task', detailTask.value)
+    return true
+  }
+  if (!canCancelOrdinaryTask(detailTask.value)) return false
+  const task = JSON.parse(JSON.stringify(detailTask.value))
+  task.taskVersion = ordinaryTaskVersion(task)
+  cancellationCandidate.value = Object.freeze({ task, fence: cancellationFence.value })
+  showCancellationDialog.value = true
+  return true
+}
+const confirmCancellation = () => {
+  const candidate = cancellationCandidate.value
+  dismissCancellation()
+  if (!candidate || candidate.fence !== cancellationFence.value || props.cancellationBusy ||
+      cancellationSubmitting.value || !canCancelOrdinaryTask(detailTask.value)) return false
+  cancellationSubmitting.value = true
+  emit('cancel-task', candidate.task)
+  return true
+}
 const pointAndStartForDetail = computed(() => {
   const state = props.pointAndStartState
   return state?.intent?.taskId === detailTask.value?.id && state.intent?.body ? state : null
@@ -631,7 +687,7 @@ const preferredAgentName = computed(() => {
   const assigned = props.operableAgents.find(agent => agent.agentId === assignedId)
   return agentDisplayName(assigned || preferredAgents.value[0])
 })
-const simpleMatterStatus = task => ({ open: '待确认', assigned: '已受理', claimed: '已受理', queued: '已受理', running: '办理中', in_progress: '办理中', submitted: '待验收', review: '待验收', changes_requested: '待返工确认', completed: '已完成', accepted: '已完成', archived: '已归档', cancelled: '已取消', failed: '受阻' })[task?.status] || (taskAssigneeIds(task).length ? '已受理' : '状态待核对')
+const simpleMatterStatus = task => ({ open: '待确认', assigned: '已受理', claimed: '已受理', queued: '已受理', running: '办理中', in_progress: '办理中', submitted: '待验收', review: '待验收', changes_requested: '待返工确认', completed: '已完成', accepted: '已完成', archived: '已归档', cancelled: '已取消', failed: '失败', blocked: '受阻' })[task?.status] || (taskAssigneeIds(task).length ? '已受理' : '状态待核对')
 
 const formalTaskExecutionScope = computed(() => {
   const taskId = detailTask.value?.id
@@ -807,6 +863,11 @@ button {
   cursor: pointer;
   font: inherit;
 }
+
+.ordinary-cancel-action { min-height: 44px; padding: 9px 14px; border: 1px solid var(--hall-brand, #923f30); border-radius: 8px; background: var(--hall-surface, #fffefa); color: var(--hall-brand, #923f30); font-weight: 500; }
+.ordinary-cancel-action:hover:not(:disabled) { background: #f6eee8; border-color: #793326; }
+.ordinary-cancel-action:focus-visible { outline: 3px solid #923f3080; outline-offset: 3px; }
+.ordinary-cancel-action:disabled { opacity: .55; cursor: not-allowed; }
 
 button:disabled {
   cursor: not-allowed;

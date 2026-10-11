@@ -382,7 +382,7 @@
             <p role="status">{{ taskStatusText(formalTaskRef.status) }}；仅查看历史成果，不再继续办理或验收。</p>
             <p v-if="terminalHistory.loading.value" role="status">正在读取历史成果…</p>
             <p v-else role="status">{{ terminalHistory.message.value }}</p>
-            <button type="button" @click="terminalHistory.refresh">重新读取正式成果</button>
+            <button type="button" @click="refreshTerminalHistory">重新读取历史成果</button>
             <article v-for="item in terminalHistory.items.value" :key="`${item.artifactId}:${item.artifactVersion}`">
               <strong>{{ item.title }}</strong>
               <button type="button" @click="downloadTerminalOutput(item)">下载历史成果</button>
@@ -2439,8 +2439,14 @@ const terminalHistory = useOutputs({
 const terminalConversationHistory = useHallBountyAcceptance({
   api: chatApi,
   taskId: () => renderedPanel.value === 'tasks' && formalTaskRef.value?.status === 'cancelled' ? formalTaskRef.value.id : '',
+  taskCompleted: () => true,
+  stateVersion: () => formalTaskRef.value?.taskVersion ?? formalTaskRef.value?.version,
   identityKey: () => hallIdentityScope.value ? `${hallIdentityScope.value}:${apiStore.authorizationGeneration}` : ''
 })
+const refreshTerminalHistory = () => {
+  void terminalConversationHistory.refresh()
+  return terminalHistory.refresh()
+}
 const terminalTextItems = ref([])
 const terminalTextError = ref('')
 watch([() => terminalHistory.cacheKey.value, () => terminalConversationHistory.scope.value,
