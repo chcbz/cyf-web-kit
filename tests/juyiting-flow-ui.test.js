@@ -135,6 +135,38 @@ describe('flow gap actual UI consumers', () => {
     expect(css).to.include('.terminal-history-actions button:focus-visible')
     expect(css).to.match(/@media \(max-width: 600px\) \{\s*\.terminal-history-actions \{ flex-direction: column; \}\s*\.terminal-history-actions button \{ width: 100%; \}/)
   })
+  it('hides the workspace entry on every formal results page without removing the normal task entry', async () => {
+    const template = hall.match(/<button\s+v-if="[^"]+"\s+class="panel-workspace-link"[\s\S]*?<\/button>/)[0]
+    const compiled = compileTemplate({ source: template, filename: 'workspace-entry.vue', id: 'workspace-entry',
+      compilerOptions: { mode: 'function' } })
+    expect(compiled.errors).to.deep.equal([])
+    const state = Vue.reactive({ taskWorkspaceEnabled: true, renderedPanel: 'tasks', formalTaskRef: null,
+      taskWorkspaceSubject: { taskId: 'a', actorAgentId: 'agent-a' } })
+    let opened = 0
+    const wrapper = mount(Vue.defineComponent({
+      setup: () => ({ ...Vue.toRefs(state), openTaskWorkspace: () => { opened += 1 } }),
+      render: new Function('Vue', compiled.code)(Vue)
+    }))
+    try {
+      await wrapper.get('button').trigger('click')
+      expect(opened).to.equal(1)
+      for (const status of ['open', 'assigned', 'running', 'completed', 'accepted', 'cancelled']) {
+        state.formalTaskRef = { id: 'a', status }; await Vue.nextTick()
+        expect(wrapper.find('button').exists(), status).to.equal(false)
+      }
+      state.formalTaskRef = null; await Vue.nextTick()
+      expect(wrapper.get('button').text()).to.equal('协作工作台')
+      state.taskWorkspaceSubject = null; await Vue.nextTick()
+      expect(wrapper.find('button').exists()).to.equal(false)
+      state.taskWorkspaceSubject = { taskId: 'a', actorAgentId: 'agent-a' }
+      state.taskWorkspaceEnabled = false; await Vue.nextTick()
+      expect(wrapper.find('button').exists()).to.equal(false)
+      state.taskWorkspaceEnabled = true; state.renderedPanel = 'chat'; await Vue.nextTick()
+      expect(wrapper.find('button').exists()).to.equal(false)
+    } finally { wrapper.unmount() }
+    expect(hall).to.include("if (renderedPanel.value === 'tasks' && formalTaskRef.value) { formalTaskRef.value = null; return true }")
+    expect(hall).to.include('<TaskWorkspacePanel')
+  })
   it('terminal history is a separate read adapter with preview/download, not acceptance or continuation', () => {
     const section = hall.match(/<section\s+v-if="renderedPanel[^>]+class="terminal-task-history"[\s\S]*?<\/section>/)?.[0]
     expect(section).to.include("formalTaskRef?.status === 'cancelled'")

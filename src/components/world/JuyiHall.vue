@@ -253,7 +253,7 @@
             >← 返回</button>
             <span :id="panelTitleId">{{ activePanelTitle }}</span>
             <button
-              v-if="taskWorkspaceEnabled && renderedPanel === 'tasks' && taskWorkspaceSubject"
+              v-if="taskWorkspaceEnabled && renderedPanel === 'tasks' && !formalTaskRef && taskWorkspaceSubject"
               class="panel-workspace-link"
               type="button"
               @click="openTaskWorkspace"
