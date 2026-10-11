@@ -153,7 +153,7 @@ describe('exact requirement/reference create contract', () => {
 })
 
 const page = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
-const actualCreate = page.match(/const createTask = async \(payload, acknowledge = \(\) => \{\}\) => \{([\s\S]*?)\n\}\nconst createRequirementAndChooseAgent/)?.[1]
+const actualCreate = page.match(/const createTask = async \(payload, acknowledge = \(\) => \{\}\) => \{([\s\S]*?)\n\}\nconst resumeFundedCreate/)?.[1]
 if (!actualCreate) throw new Error('Actual JuyiHall create closure missing')
 const actualDefaultRequirementEntry = page.match(/const openDefaultRequirementCreate = \(\) => \{([\s\S]*?)\n\}\nconst openPrivateDraft/)?.[1]
 if (!actualDefaultRequirementEntry) throw new Error('Actual JuyiHall default requirement entry missing')
@@ -165,41 +165,22 @@ const pageHarness = ({ ordinary = { state: 'ABSENT' }, fundedRecovery = null } =
   h.create = new Function(...Object.keys(deps), `return async (payload, acknowledge = () => {}) => {${actualCreate}}`)(...Object.values(deps))
   return h
 }
-const defaultEntryHarness = ({ enabled = true, guard = false, open = true } = {}) => {
-  const h = { privateDrafts: 0, panels: [], createForms: 0 }
-  const activePanel = ref('')
-  const panelSessionGeneration = ref(4)
-  const bountyPanelRef = ref({ openCreateRequirement: () => { h.createForms++; return true } })
-  const entry = new Function('multimediaDeliberationUiEnabled', 'openPrivateDraft', 'guardPanelLeave', 'openPanel', 'panelSessionGeneration', 'nextTick', 'panelDisposed', 'activePanel', 'bountyPanelRef',
-    `const openDefaultRequirementCreate = () => {${actualDefaultRequirementEntry}}; return openDefaultRequirementCreate`)(enabled, () => { h.privateDrafts++; return true }, () => guard,
-    (panel, options) => { h.panels.push({ panel, options }); if (open) activePanel.value = panel; return open }, panelSessionGeneration, callback => Promise.resolve().then(callback), false, activePanel, bountyPanelRef)
-  return { h, entry }
-}
 describe('actual JuyiHall default requirement entry', () => {
-  it('uses the ordinary requirement form under the multimedia UI flag without creating, selecting an agent, or starting a provider', async () => {
-    const { h, entry } = defaultEntryHarness({ enabled: true })
+  it('always delegates to the existing guarded standalone draft route', () => {
+    let drafts = 0
+    const entry = new Function('openPrivateDraft', `return () => {${actualDefaultRequirementEntry}}`)(() => { drafts++; return true })
     expect(entry()).to.equal(true)
-    await Promise.resolve()
-    expect(h.panels).to.deep.equal([{ panel: 'tasks', options: { root: true } }])
-    expect(h.createForms).to.equal(1)
-    expect(h.privateDrafts).to.equal(0)
+    expect(drafts).to.equal(1)
+    const blocked = new Function('openPrivateDraft', `return () => {${actualDefaultRequirementEntry}}`)(() => false)
+    expect(blocked()).to.equal(false)
+    expect(actualDefaultRequirementEntry).not.to.include('multimediaDeliberationUiEnabled')
+    expect(actualDefaultRequirementEntry).not.to.include("openPanel('tasks'")
   })
-  it('keeps the pre-flag private-draft route and blocks all routing while a guarded draft remains active', async () => {
-    const legacy = defaultEntryHarness({ enabled: false })
-    expect(legacy.entry()).to.equal(true)
-    await Promise.resolve()
-    expect(legacy.h.privateDrafts).to.equal(1)
-    expect(legacy.h.panels).to.deep.equal([])
-    const guarded = defaultEntryHarness({ enabled: true, guard: true })
-    expect(guarded.entry()).to.equal(false)
-    await Promise.resolve()
-    expect(guarded.h.panels).to.deep.equal([])
-    expect(guarded.h.createForms).to.equal(0)
-    expect(guarded.h.privateDrafts).to.equal(0)
-  })
-  it('wires every explicit default 提出需求 entry to the guarded formal requirement route', () => {
+  it('wires all default entries to the standalone draft with its save-before-leave guard', () => {
     expect((page.match(/openDefaultRequirementCreate\(\)/g) || [])).to.have.length(3)
-    expect(page).to.include("bountyPanelRef.value?.openCreateRequirement?.()")
+    expect(page).not.to.include('openCreateRequirement')
+    expect(page).to.include('if (guardPanelLeave(() => openPrivateDraft(context))) return false')
+    expect(page).to.include("if (!openPanel('draft', { restore: true })) return false")
   })
 })
 
@@ -231,10 +212,8 @@ describe('actual JuyiHall ordinary/funded boundary', () => {
   })
 })
 
-const material = (version = 2) => ({ fileId: 'pwf_document', version })
-// Compile and mount the actual parent SFC; the selection child is a bounded
-// emission stub here. Its real workspace/Blob ACL tests belong to picker suite.
-let Vue, mount, Panel, Picker
+// Mount the actual task board: creation is absent, original recovery and detail remain.
+let Vue, mount, Panel
 const wrappers = [], domDescriptors = {}
 const panelProps = () => ({ identityScope: scopeA, authorizationGeneration: 1, fundedPreviewEnabled: true,
   abilityText: () => '', canAssign: () => false, formatTime: () => '', portraitName: () => '', portraitStyle: () => ({}),
@@ -243,24 +222,18 @@ const action = (wrapper, text) => {
   const found = wrapper.findAll('button').find(button => button.text() === text)
   expect(found, `missing button ${text}`).to.exist; return found
 }
-const openDraft = async wrapper => { wrapper.vm.openCreateRequirement(); await nextTick() }
-const setDraft = async (wrapper, title = '画一只鸟') => {
-  await wrapper.find('[name="taskTitle"]').setValue(title)
-  await wrapper.find('[name="taskDescription"]').setValue('照片风格')
-}
-describe('mounted Bounty requirement draft and original recovery', () => {
+describe('mounted Bounty read/manage surface and original recovery', () => {
   before(async () => {
     for (const key of ['SVGElement', 'Element', 'Node']) {
       domDescriptors[key] = Object.getOwnPropertyDescriptor(globalThis, key)
       Object.defineProperty(globalThis, key, { configurable: true, writable: true, value: window[key] })
     }
     Vue = await import('vue'); ({ mount } = await import('@vue/test-utils'))
-    Picker = Vue.defineComponent({ name: 'HallMaterialPicker', props: ['modelValue', 'identityScope', 'identityEpoch', 'disabled'], emits: ['update:modelValue'], render: () => Vue.h('span', { class: 'picker-boundary' }) })
     const TaskMaterialLinks = Vue.defineComponent({ name: 'TaskMaterialLinks', render: () => Vue.h('section', { class: 'formal-task-execution' }, '明确开始正式办理（PDF）') })
     const filename = fileURLToPath(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url))
     const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
     const silver = await import('../src/utils/silverAmount.js')
-    const imports = new Proxy({ vue: Vue, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, '@/utils/silverAmount': silver, './HallMaterialPicker.vue': Picker, '@/components/personal-workspace/TaskMaterialLinks.vue': TaskMaterialLinks }, {
+    const imports = new Proxy({ vue: Vue, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, '@/utils/silverAmount': silver, '@/components/personal-workspace/TaskMaterialLinks.vue': TaskMaterialLinks }, {
       get: (target, name) => target[name] ?? Vue.defineComponent({ render: () => Vue.h('span') })
     })
     const code = compileScript(descriptor, { id: 'mounted-reference-intake', inlineTemplate: true }).content
@@ -278,26 +251,14 @@ describe('mounted Bounty requirement draft and original recovery', () => {
     }
   })
   const panel = (props = {}) => { const wrapper = mount(Panel, { props: { ...panelProps(), ...props } }); wrappers.push(wrapper); return wrapper }
-  it('opens the exposed ordinary requirement form without creating a task or starting execution', async () => {
-    const wrapper = panel()
+  for (const embeddedHall of [true, false]) it(`does not expose creation in the task board (embedded=${embeddedHall})`, async () => {
+    const wrapper = panel({ embeddedHall })
+    expect(wrapper.vm.openCreateRequirement).to.equal(undefined)
     expect(wrapper.find('form').exists()).to.equal(false)
-    expect(wrapper.vm.openCreateRequirement()).to.equal(true)
+    wrapper.vm.openTask({ id: 'existing-task', title: '既有事项', status: 'open' })
     await nextTick()
-    expect(wrapper.find('form').exists()).to.equal(true)
-    expect(wrapper.getComponent(Picker).exists()).to.equal(true)
-    expect(wrapper.emitted('create-task')).to.equal(undefined)
-  })
-
-  it('leaves an embedded task detail before exposing the ordinary requirement form without creating or starting execution', async () => {
-    const wrapper = panel({ embeddedHall: true })
-    expect(wrapper.vm.openTask({ id: 'existing-task', title: '既有榜文', status: 'open' })).to.equal(undefined)
-    await nextTick()
-    expect(wrapper.find('.bounty-source').element.style.display).to.equal('none')
-    expect(wrapper.vm.openCreateRequirement()).to.equal(true)
-    await nextTick()
-    expect(wrapper.find('.bounty-source').element.style.display).to.equal('')
-    expect(wrapper.find('form').exists()).to.equal(true)
-    expect(wrapper.emitted('select-task').at(-1)).to.deep.equal([null])
+    expect(wrapper.emitted('select-task').at(-1)[0].id).to.equal('existing-task')
+    expect(wrapper.find('form').exists()).to.equal(false)
     expect(wrapper.emitted('create-task')).to.equal(undefined)
   })
 
@@ -337,41 +298,6 @@ describe('mounted Bounty requirement draft and original recovery', () => {
     expect(ordinary.find('.deliberation-execution-route').exists()).to.equal(true)
   })
 
-  it('submits optional exact reference selection from the real pre-task form; no guessed taskId', async () => {
-    const wrapper = panel(); await openDraft(wrapper); await setDraft(wrapper)
-    const selector = wrapper.getComponent(Picker)
-    expect(selector.props('identityScope')).to.equal(scopeA)
-    expect(selector.props('identityEpoch')).to.equal(1)
-    selector.vm.$emit('update:modelValue', [material()]); await nextTick()
-    await wrapper.find('form').trigger('submit')
-    const [body, acknowledge] = wrapper.emitted('create-task')[0]
-    expect(body).to.deep.equal({ title: '画一只鸟', description: '照片风格', requiredAbilities: [], attachments: [material()] })
-    expect(body).not.to.have.property('taskId')
-    acknowledge(true); await nextTick(); expect(wrapper.find('form').exists()).to.equal(false)
-  })
-  it('allows a no-reference draft and retains edited text/reference after an older success', async () => {
-    const wrapper = panel(); await openDraft(wrapper); await setDraft(wrapper)
-    await wrapper.find('form').trigger('submit')
-    const [body, acknowledge] = wrapper.emitted('create-task')[0]; expect(body.attachments).to.deep.equal([])
-    await wrapper.find('[name="taskTitle"]').setValue('新稿：画一只蓝鸟')
-    wrapper.getComponent(Picker).vm.$emit('update:modelValue', [material(3)]); await nextTick()
-    acknowledge(true); await nextTick()
-    expect(wrapper.find('form').exists()).to.equal(true); expect(wrapper.find('[name="taskTitle"]').element.value).to.equal('新稿：画一只蓝鸟')
-    expect(wrapper.getComponent(Picker).props('modelValue')).to.deep.equal([material(3)])
-  })
-  it('identity changes clear the old draft and late acknowledgement cannot clear a new actor draft', async () => {
-    const wrapper = panel(); await openDraft(wrapper); await setDraft(wrapper)
-    wrapper.getComponent(Picker).vm.$emit('update:modelValue', [material()]); await nextTick()
-    await wrapper.find('form').trigger('submit'); const oldAck = wrapper.emitted('create-task')[0][1]
-    await wrapper.setProps({ identityScope: scopeB, authorizationGeneration: 2 })
-    expect(wrapper.find('[name="taskTitle"]').element.value).to.equal(''); expect(wrapper.getComponent(Picker).props('modelValue')).to.deep.equal([])
-    await setDraft(wrapper, '另一个用户的新稿'); await wrapper.find('form').trigger('submit')
-    oldAck(true); await nextTick()
-    expect(wrapper.find('[name="taskTitle"]').element.value).to.equal('另一个用户的新稿')
-    expect(action(wrapper, '正在提交…').attributes()).to.have.property('disabled')
-    wrapper.emitted('create-task')[1][1](false); await nextTick()
-    expect(wrapper.find('[name="taskTitle"]').element.value).to.equal('另一个用户的新稿')
-  })
   it('shows immutable unknown original refs and emits explicit check/resume instead of resubmitting current draft', async () => {
     const wrapper = panel({ requirementCreateState: { status: 'UNKNOWN', intent: intent(), error: '结果未知' } })
     expect(wrapper.find('.requirement-create-recovery').text()).to.include('pwf_image v2')
@@ -379,14 +305,5 @@ describe('mounted Bounty requirement draft and original recovery', () => {
     expect(wrapper.emitted('check-requirement-create')).to.have.length(1)
     expect(wrapper.emitted('resume-requirement-create')).to.have.length(1)
     expect(wrapper.emitted('create-task')).to.equal(undefined)
-  })
-  it('never submits hidden ordinary refs as a funded draft', async () => {
-    const wrapper = panel(); await openDraft(wrapper); await setDraft(wrapper)
-    wrapper.getComponent(Picker).vm.$emit('update:modelValue', [material()]); await nextTick()
-    await wrapper.find('.funded-create-toggle input').setValue(true)
-    await wrapper.find('[name="grossBountyAmountMicro"]').setValue('5')
-    await wrapper.find('form').trigger('submit')
-    expect(wrapper.emitted('create-task')).to.equal(undefined)
-    expect(wrapper.text()).to.include('资金榜暂不支持普通榜资料')
   })
 })

@@ -352,11 +352,9 @@
             @assign-task="assignTask"
             @archive-task="archiveTask"
             @brief-selected-task="briefSelectedTask"
-            @create-task="createRequirementAndChooseAgent"
             @check-requirement-create="checkRequirementCreate"
             @resume-requirement-create="resumeRequirementCreate"
             @open-formal-results="openFormalResults"
-            @start-formal-draft="openPanel('formalDraft', { restore: true })"
             @resume-funded-create="resumeFundedCreate"
             @check-point-and-start="checkPointAndStartOriginal"
             @resume-point-and-start="resumePointAndStartOriginal"
@@ -1787,17 +1785,9 @@ const openOverviewTask = async (task, review = null) => {
   return true
 }
 
+// Creation owns a separate page in every layout; the task board only manages existing matters.
 const openDefaultRequirementCreate = () => {
-  if (!multimediaDeliberationUiEnabled) return openPrivateDraft()
-  if (guardPanelLeave(openDefaultRequirementCreate)) return false
-  if (!openPanel('tasks', { root: true })) return false
-  const generation = panelSessionGeneration.value
-  void nextTick(() => {
-    if (!panelDisposed && activePanel.value === 'tasks' && panelSessionGeneration.value === generation) {
-      bountyPanelRef.value?.openCreateRequirement?.()
-    }
-  })
-  return true
+  return openPrivateDraft()
 }
 const openPrivateDraft = (context = {}) => {
   if (guardPanelLeave(() => openPrivateDraft(context))) return false
@@ -2105,11 +2095,6 @@ const createTask = async (payload, acknowledge = () => {}) => {
       if (!created && requirementCreateState.value.error) showToast(requirementCreateState.value.error)
     }
   } finally { acknowledge(created) }
-  return created
-}
-const createRequirementAndChooseAgent = async (payload, acknowledge) => {
-  const created = await createTask(payload, acknowledge)
-  if (created && !payload?.grossBountyAmountMicro) openPanel('agents')
   return created
 }
 const resumeFundedCreate = async () => {
@@ -4252,11 +4237,9 @@ button.hall-room {
 .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-search select) {
   height: var(--hall-control-height); padding-inline: 12px; border-color: var(--hall-border-strong); border-radius: var(--hall-radius-sm); background: var(--work-paper); color: var(--work-ink);
 }
-.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar > button),
-.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-draft-actions button) {
+.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar > button) {
   min-height: var(--hall-control-height); background: var(--hall-surface-subtle); color: var(--work-ink); border: 1px solid var(--work-line);
 }
-.home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-draft-actions) { display: grid; grid-template-columns: repeat(2, minmax(0, auto)); gap: 8px; }
 .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs) {
   gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--work-line); scrollbar-width: none;
 }
@@ -4320,8 +4303,6 @@ button.hall-room {
   .home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor) { --hall-page-gutter: 16px; }
   .home-overview .panel-overlay.theme-workbench :deep(.hall-overview.is-messages) { padding: 16px; }
   .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar) { padding: 12px 16px; }
-  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-draft-actions) { width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-draft-actions button) { min-width: 0; padding-inline: 6px; font-size: 13px; line-height: 1.3; }
   .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs) { padding: 10px 16px; }
   .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-panel-body) { padding: 12px 16px 20px; }
 }
@@ -4628,10 +4609,6 @@ button.hall-room {
   .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar > button .bounty-action-icon) {
     display: inline-flex;
     flex: 0 0 auto;
-  }
-  .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-draft-actions) {
-    grid-column: 1 / -1;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs) {
     padding-left: 16px;

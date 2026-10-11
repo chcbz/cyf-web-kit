@@ -76,18 +76,20 @@ function fixture (panelProps = {}) {
   const Panel = compileComponent('../src/components/juyiting/BountyPanel.vue', new Proxy({
     vue: Vue, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, '@/utils/silverAmount': silver, './HallMaterialPicker.vue': Picker, '@/components/personal-workspace/TaskMaterialLinks.vue': TaskMaterialLinks
   }, { get: (target, name) => target[name] ?? stub }))
-  const wrapper = mount(Panel, { global: { stubs: { teleport: true } }, props: { ...props, ...panelProps, onCreateTask: async (body, acknowledge) => acknowledge(await create.create(body)) } })
+  // The task board no longer owns a create form. Exercise the actual neutral
+  // picker and atomic controller directly; do not invent a replacement UI route.
+  const selection = Vue.ref([])
+  const PickerHarness = Vue.defineComponent({
+    setup: () => () => Vue.h(Picker, { modelValue: selection.value, identityScope: scope, identityEpoch: 1,
+      'onUpdate:modelValue': value => { selection.value = value } })
+  })
+  const wrapper = mount(panelProps.tasks ? Panel : PickerHarness, { global: { stubs: { teleport: true } }, props: panelProps.tasks ? { ...props, ...panelProps } : {} })
   wrappers.push(wrapper)
-  return { wrapper, calls, created, revoked, rows, adopted, Picker }
-}
-async function openDraft (wrapper) {
-  wrapper.vm.openCreateRequirement()
-  await Vue.nextTick()
-  await wrapper.find('[name="taskTitle"]').setValue(' 画一只鸟🦜 ')
-  await wrapper.find('[name="taskDescription"]').setValue('照片风格\n完整原文')
-}
+  return { wrapper, calls, created, revoked, rows, adopted, Picker,
+    submit: () => create.create({ title: ' 画一只鸟🦜 ', description: '照片风格\n完整原文', requiredAbilities: [], attachments: selection.value.map(({ fileId, version }) => ({ fileId, version })) }) }
 
-describe('real Bounty + shared neutral picker + v2 atomic creation integration', () => {
+}
+describe('shared neutral picker + v2 atomic controller integration and read-only Bounty detail', () => {
   before(() => {
     for (const key of ['SVGElement', 'Element', 'Node']) {
       descriptors[key] = Object.getOwnPropertyDescriptor(globalThis, key)
@@ -103,7 +105,6 @@ describe('real Bounty + shared neutral picker + v2 atomic creation integration',
   })
   it('fixes the current versions of four media types without a version chooser, then creates atomically', async () => {
     const f = fixture()
-    await openDraft(f.wrapper)
     await button(f.wrapper, '添加资料（可选）').trigger('click'); await flush()
     for (let index = 0; index < files.length; index++) {
       await f.wrapper.findAll('.quick-material-files button')[index].trigger('click'); await flush()
@@ -117,14 +118,15 @@ describe('real Bounty + shared neutral picker + v2 atomic creation integration',
     await f.wrapper.get('.quick-material-confirm').trigger('click'); await flush()
     assert.equal(f.calls.filter(call => call.method !== 'GET').length, 0)
     assert.equal(f.wrapper.findAll('.quick-material-summary li').length, 4)
-    await f.wrapper.find('form').trigger('submit'); await flush()
+    assert.equal(await f.submit(), true); await flush()
     const posts = f.calls.filter(call => call.method === 'POST')
     assert.equal(posts.length, 1)
     assert.deepEqual(posts[0].body, { title: ' 画一只鸟🦜 ', description: '照片风格\n完整原文', requiredAbilities: [], reward: null, attachments })
     assert.equal(posts[0].options.headers['Idempotency-Key'], 'bird-original-key')
     assert.equal(f.adopted[0].task.id, 'task-bird')
     assert.equal(f.rows.size, 0)
-    assert.equal(f.wrapper.find('form').exists(), false)
+    f.wrapper.unmount()
+    wrappers.splice(wrappers.indexOf(f.wrapper), 1)
     assert.deepEqual(f.revoked, f.created)
   })
   it('keeps standalone formal controls, while embedded matters route only through discussion', async () => {
@@ -140,8 +142,7 @@ describe('real Bounty + shared neutral picker + v2 atomic creation integration',
   })
   it('submits no-material requirement without reading workspace or creating grants/executions', async () => {
     const f = fixture()
-    await openDraft(f.wrapper)
-    await f.wrapper.find('form').trigger('submit'); await flush()
+    assert.equal(await f.submit(), true); await flush()
     assert.equal(f.calls.length, 1)
     assert.deepEqual(f.calls[0].body.attachments, [])
     assert.equal(f.calls[0].path, '/tasks/creation-operations/v2')

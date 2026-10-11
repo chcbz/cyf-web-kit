@@ -29,20 +29,6 @@
           <BountyActionIcon name="refresh" />
           <span class="toolbar-label">重查</span>
         </button>
-        <div v-if="!embeddedHall" class="task-draft-actions">
-          <button
-            type="button"
-            @click="$emit('start-formal-draft')"
-          >
-            <span>起草正式任务</span>
-          </button>
-          <button
-            type="button"
-            @click="showDraftEditor = !showDraftEditor"
-          >
-            <span>{{ showDraftEditor ? '收起草稿' : '起草交办' }}</span>
-          </button>
-        </div>
       </div>
 
       <section v-if="requirementCreateState && requirementCreateState.status !== 'IDLE'" class="requirement-create-recovery" role="status">
@@ -58,65 +44,17 @@
         <p v-if="requirementCreateState.error">{{ requirementCreateState.error }}</p>
       </section>
 
-      <form v-if="showCreateForm" class="task-create-form" @submit.prevent="submitCreateTask">
-        <input v-model="taskForm.title" name="taskTitle" placeholder="需求标题" />
-        <textarea
-          v-model="taskForm.description"
-          name="taskDescription"
-          placeholder="说明你希望得到什么结果（必填）"
-          required
-        ></textarea>
-        <input
-          v-if="!embeddedHall || taskForm.funded"
-          v-model.trim="taskForm.requiredAbilities"
-          name="requiredAbilities"
-          placeholder="所需本领，逗号分隔"
-        />
-        <HallMaterialPicker
-          class="task-material-picker"
-          v-if="!taskForm.funded && identityScope"
-          v-model="taskMaterials"
-          :identity-scope="identityScope"
-          :identity-epoch="authorizationGeneration"
-          :disabled="createPending || requirementCreateBusy"
-        />
-        <small v-else-if="taskMaterials.length" role="status">资金榜暂不支持普通榜资料；请切回普通榜移除资料，再选择资金悬赏。</small>
-        <label v-if="fundedPreviewEnabled" class="funded-create-toggle">
-          <input v-model="taskForm.funded" type="checkbox" /> 资金悬赏（开发预览）
-        </label>
-        <input
-          v-if="fundedPreviewEnabled && taskForm.funded"
-          v-model.trim="taskForm.grossBountyAmountMicro"
-          class="gross-bounty-input"
-          name="grossBountyAmountMicro"
-          inputmode="numeric"
-          placeholder="总额（micro-SILVER）"
-        />
-        <small v-if="fundedPreviewEnabled && taskForm.funded && !validGrossAmount" class="funded-input-error">请输入规范的非负整数字符串。</small>
-        <section v-if="fundedCreateRecovery" class="funded-create-recovery" role="status">
-          <strong>发现原资金榜请求，结果未知</strong>
-          <p>原榜文名目：{{ fundedCreateRecovery.body.title }}</p>
-          <p>原榜文缘由：{{ fundedCreateRecovery.body.description || '未填写' }}</p>
-          <p>原所需本领：{{ fundedRecoveryAbilities }}</p>
-          <p>原结算规则：{{ fundedCreateRecovery.body.settlementPolicy || '未填写' }}</p>
-          <p>原总额：{{ fundedCreateRecovery.body.grossBountyAmountMicro }} micro-SILVER。</p>
-          <p>当前编辑稿不会提交或替换原请求。</p>
-          <button type="button" @click="$emit('resume-funded-create')">确认按原请求恢复</button>
-          <button type="button" @click="$emit('cancel-funded-create-recovery')">暂不恢复</button>
-        </section>
-        <button type="submit" :disabled="createPending || requirementCreateBusy || !taskForm.title.trim() || !taskForm.description.trim() || (taskForm.funded && (!validGrossAmount || taskMaterials.length))">{{ createPending ? '正在提交…' : taskForm.funded ? '张榜悬赏' : '提出需求' }}</button>
-      </form>
-
-      <HallDraftEditor
-        v-if="showDraftEditor"
-        :agents="operableAgents"
-        :selected-agent="selectedAgent"
-        :identity-epoch="authorizationGeneration"
-        :identity-scope="identityScope"
-        @close="showDraftEditor = false"
-        @open-task="openTask"
-        @changed="$emit('mark-changed')"
-      />
+      <section v-if="fundedCreateRecovery" class="funded-create-recovery requirement-create-recovery" role="status">
+        <strong>发现原资金榜请求，结果未知</strong>
+        <p>原榜文名目：{{ fundedCreateRecovery.body.title }}</p>
+        <p>原榜文缘由：{{ fundedCreateRecovery.body.description || '未填写' }}</p>
+        <p>原所需本领：{{ fundedRecoveryAbilities }}</p>
+        <p>原结算规则：{{ fundedCreateRecovery.body.settlementPolicy || '未填写' }}</p>
+        <p>原总额：{{ fundedCreateRecovery.body.grossBountyAmountMicro }} micro-SILVER。</p>
+        <p>当前编辑稿不会提交或替换原请求。</p>
+        <button type="button" @click="$emit('resume-funded-create')">确认按原请求恢复</button>
+        <button type="button" @click="$emit('cancel-funded-create-recovery')">暂不恢复</button>
+      </section>
 
       <p v-if="loading" class="task-data-state" role="status">悬赏榜读取中…</p>
       <p v-else-if="errorMessage" class="task-data-state is-error" role="alert">{{ errorMessage }}</p>
@@ -483,10 +421,8 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import BountyActionIcon from './BountyActionIcon.vue'
 import WorkItemPlanPanel from './WorkItemPlanPanel.vue'
 import TeamRecommendationPanel from './TeamRecommendationPanel.vue'
-import HallDraftEditor from './HallDraftEditor.vue'
-import HallMaterialPicker from './HallMaterialPicker.vue'
 import TaskMaterialLinks from '@/components/personal-workspace/TaskMaterialLinks.vue'
-import { formatSilverMicro, isCanonicalMicroAmount } from '@/utils/silverAmount'
+import { formatSilverMicro } from '@/utils/silverAmount'
 
 const props = defineProps({
   embeddedHall: { type: Boolean, default: false },
@@ -541,10 +477,8 @@ const emit = defineEmits([
   'cancel-funded-quote',
   'refresh-funded-claim',
   'recruit-agent',
-  'create-task',
   'check-requirement-create',
   'resume-requirement-create',
-  'start-formal-draft',
   'open-formal-results',
   'mark-changed',
   'resume-funded-create',
@@ -565,30 +499,13 @@ const emit = defineEmits([
 ])
 
 const modalTask = ref(null)
-const showCreateForm = ref(false)
-const createPending = ref(false)
-const taskMaterials = ref([])
-let createAttempt = 0
 const selectedAssigneeIds = ref([])
-const taskForm = ref({
-  title: '',
-  description: '',
-  requiredAbilities: '',
-  funded: false,
-  grossBountyAmountMicro: ''
-})
 const requirementCreateInputSummary = computed(() => {
   const intent = props.requirementCreateState?.intent
   const refs = (intent?.schemaVersion === 2 ? intent.body?.attachments : intent?.body?.inputRefs) || []
   return refs.length ? refs.map(item => `${item.fileId} v${item.version}`).join('、') : '无资料'
 })
-// A late success can only clear the exact submitting draft under the same
-// authenticated actor; editing during POST preserves the newer draft.
 watch(() => [props.identityScope, props.authorizationGeneration], () => {
-  createAttempt++
-  createPending.value = false
-  taskMaterials.value = []
-  taskForm.value = { title: '', description: '', requiredAbilities: '', funded: false, grossBountyAmountMicro: '' }
   modalTask.value = null
   selectedAssigneeIds.value = []
 }, { flush: 'sync' })
@@ -703,12 +620,10 @@ const formalTaskExecutionScope = computed(() => {
     authorizationReason: '当前榜文的正式议事与必需工作项尚未核对；请先进入本榜文议事并明确选择已指派好汉。'
   }
 })
-const validGrossAmount = computed(() => isCanonicalMicroAmount(taskForm.value.grossBountyAmountMicro))
 const fundedRecoveryAbilities = computed(() => {
   const abilities = props.fundedCreateRecovery?.body?.requiredAbilities
   return Array.isArray(abilities) ? abilities.join('、') || '未填写' : abilities || '未填写'
 })
-const showDraftEditor = ref(false)
 const unassignedDiscussHint = '此榜文尚未点将，暂不可开议'
 const isFundedTask = task => task?.funding?.mode === 'FUNDED_SINGLE_AGENT'
 const fundedClaimBlocked = (task, agent) => {
@@ -755,40 +670,6 @@ const taskAssigneeIds = (task) => {
   return task.assignedAgentId ? [task.assignedAgentId] : []
 }
 
-const submitCreateTask = () => {
-  if (!taskForm.value.title.trim() || !taskForm.value.description.trim()) return
-  if (taskForm.value.funded && (!validGrossAmount.value || taskMaterials.value.length)) return
-  const payload = {
-    title: taskForm.value.title,
-    description: taskForm.value.description,
-    requiredAbilities: taskForm.value.requiredAbilities
-      .split(',')
-      .map(item => item.trim())
-      .filter(Boolean)
-  }
-  if (props.fundedPreviewEnabled && taskForm.value.funded) {
-    payload.grossBountyAmountMicro = taskForm.value.grossBountyAmountMicro
-    payload.settlementPolicy = 'GROSS_INCLUSIVE'
-  } else {
-    payload.attachments = taskMaterials.value.map(({ fileId, version }) => ({ fileId, version }))
-  }
-  if (createPending.value || props.requirementCreateBusy) return
-  const attempt = ++createAttempt
-  const originalDraft = JSON.stringify({ form: taskForm.value, refs: taskMaterials.value })
-  createPending.value = true
-  emit('create-task', payload, (created) => {
-    if (attempt !== createAttempt) return
-    createPending.value = false
-    // Reset only after the parent receives a definitive success acknowledgement.
-    // Recoverable/ambiguous failures retain the exact funded draft for retry.
-    if (created && originalDraft === JSON.stringify({ form: taskForm.value, refs: taskMaterials.value })) {
-      taskMaterials.value = []
-      taskForm.value = { title: '', description: '', requiredAbilities: '', funded: false, grossBountyAmountMicro: '' }
-      showCreateForm.value = false
-    }
-  })
-}
-
 const toggleAssignee = (agent) => {
   if (isFundedTask(detailTask.value) || !props.canAssign(detailTask.value, agent)) return
   const id = agent?.agentId
@@ -812,12 +693,6 @@ const closeTask = () => {
   emit('select-task', null)
 }
 
-const openCreateRequirement = () => {
-  if (modalTask.value) closeTask()
-  showCreateForm.value = true
-  return true
-}
-
 watch(() => props.selectedTask, (task) => {
   if (!task) {
     modalTask.value = null
@@ -835,7 +710,7 @@ const back = () => {
   closeTask()
   return true
 }
-defineExpose({ openTask, openCreateRequirement, canGoBack, back })
+defineExpose({ openTask, canGoBack, back })
 </script>
 <style scoped>
 .bounty-panel {
@@ -916,7 +791,6 @@ button:disabled {
   font-size: 13px;
 }
 
-.task-draft-actions { display: flex; flex-wrap: wrap; grid-column: 1 / -1; gap: 8px; }
 
 .panel-toolbar button {
   display: inline-flex;
@@ -967,10 +841,6 @@ button:disabled {
   clip: rect(0 0 0 0);
 }
 
-.task-material-picker { grid-column: 1 / -1; min-width: 0; }
-
-.task-create-form { max-height: min(55vh, 30rem); overflow-y: auto; }
-
 .requirement-create-recovery {
   flex: 0 1 auto;
   min-height: 0;
@@ -987,40 +857,6 @@ button:disabled {
 
 .requirement-create-recovery p { margin: 6px 0; }
 .requirement-create-recovery button { margin-right: 8px; padding: 6px 10px; border-radius: 6px; }
-
-.task-create-form input,
-.task-create-form textarea {
-  min-width: 0;
-  height: 36px;
-  padding: 0 10px;
-  border: 1px solid #d7c3a2;
-  border-radius: 8px;
-  background: #fffdf6;
-  color: #3f2815;
-  outline: none;
-}
-
-.task-create-form {
-  display: grid;
-  flex: 0 0 auto;
-  grid-template-columns: minmax(150px, 1fr) minmax(180px, 1.4fr) minmax(140px, 0.8fr) auto;
-  gap: 8px;
-  padding: 0 16px 12px;
-}
-
-.task-create-form textarea {
-  height: 36px;
-  padding-top: 8px;
-  resize: vertical;
-}
-
-.task-create-form button {
-  min-height: 36px;
-  padding: 0 12px;
-  border-radius: 8px;
-  background: #7c1f1b;
-  color: #fff8e8;
-}
 
 .task-data-state {
   margin: 0 16px 8px;
@@ -1668,10 +1504,6 @@ button:disabled {
     height: 34px;
   }
 
-  .task-create-form {
-    grid-template-columns: 1fr;
-  }
-
   .bounty-modal {
     width: 100%;
     max-width: 100%;
@@ -1680,9 +1512,6 @@ button:disabled {
 }
 
 /* ECO-V0 funded-preview additions; legacy bounty layout stays intact. */
-.funded-create-toggle { display: inline-flex; align-items: center; gap: 6px; color: #765f40; font-size: 12px; }
-.gross-bounty-input { min-width: 180px; }
-.funded-input-error { color: #b42318; font-size: 12px; }
 .funded-quote-confirmation { max-height: 50vh; overflow-y: auto; flex-shrink: 0; padding: 12px; }
 .funding-summary { margin: 8px 0 0; color: #75430b !important; font-weight: 700; }
 .funded-preview-details { margin: 10px 0; padding: 10px; border-radius: 8px; background: #fff3cc; color: #6b4a12; font-size: 12px; }

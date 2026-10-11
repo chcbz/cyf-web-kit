@@ -44,24 +44,23 @@ describe('Bounty task toolbar', () => {
     } finally { wrapper.unmount() }
   })
 
-  it('retains the shared creation entry for other callers, not a hidden toolbar toggle', async () => {
-    const wrapper = mount(Panel, { props })
+  for (const embeddedHall of [true, false]) it(`has no creation form or exposed creation method (embedded=${embeddedHall})`, () => {
+    const wrapper = mount(Panel, { props: { ...props, embeddedHall } })
     try {
-      expect(wrapper.vm.openCreateRequirement()).to.equal(true)
-      await Vue.nextTick()
-      expect(wrapper.find('.task-create-form').exists()).to.equal(true)
+      expect(wrapper.vm.openCreateRequirement).to.equal(undefined)
+      expect(wrapper.find('form').exists()).to.equal(false)
+      expect(wrapper.find('.task-draft-actions').exists()).to.equal(false)
+      expect(wrapper.text()).not.to.include('提出需求')
       expect(wrapper.emitted('create-task')).to.equal(undefined)
-      expect(source).not.to.include('showCreateForm = !showCreateForm')
-      expect(source).not.to.include('new-task-button')
-      expect(source).not.to.include("'start-private-draft'")
+      expect(source).not.to.include('submitCreateTask')
     } finally { wrapper.unmount() }
   })
 
-  it('gives toolbar controls independent grid cells and restores complete form field styles', () => {
+  it('gives toolbar controls independent grid cells without obsolete creation styles', () => {
     const css = descriptor.styles[0].content
     expect(css).to.include('grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr) 44px')
     expect(css).to.include('.task-search { display: contents; }')
     expect(css).not.to.match(/\.task-search input,[^{}]*\.task-material-picker\s*\{/)
-    expect(css).to.include('.task-create-form input,\n.task-create-form textarea {')
+    expect(css).not.to.include('.task-create-form')
   })
 })

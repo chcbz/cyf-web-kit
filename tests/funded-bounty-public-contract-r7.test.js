@@ -143,7 +143,6 @@ describe('W11 funded-create public composable contract', () => {
     })
     const wrapper = mount(Harness)
     wrappers.push(wrapper)
-    wrapper.findComponent(BountyPanel).vm.$.exposed.openCreateRequirement()
     await Vue.nextTick()
 
     const recoveryText = wrapper.find('.funded-create-recovery').text()
@@ -194,7 +193,6 @@ describe('W11 funded-create public composable contract', () => {
     })
     const wrapper = mount(Harness)
     wrappers.push(wrapper)
-    wrapper.findComponent(BountyPanel).vm.$.exposed.openCreateRequirement()
     await Vue.nextTick()
 
     scope.value = 'actor-a'
@@ -267,7 +265,6 @@ describe('W11 funded-create public composable contract', () => {
     })
     const wrapper = mount(Harness)
     wrappers.push(wrapper)
-    wrapper.findComponent(BountyPanel).vm.$.exposed.openCreateRequirement()
     await Vue.nextTick()
     expect(wrapper.find('.funded-create-recovery').text()).to.include('原榜文名目：B 待恢复原文')
 
