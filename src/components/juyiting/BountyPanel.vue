@@ -422,7 +422,7 @@ import BountyActionIcon from './BountyActionIcon.vue'
 import WorkItemPlanPanel from './WorkItemPlanPanel.vue'
 import TeamRecommendationPanel from './TeamRecommendationPanel.vue'
 import TaskMaterialLinks from '@/components/personal-workspace/TaskMaterialLinks.vue'
-import { formatSilverMicro } from '@/utils/silverAmount'
+import { formatSilverMicro, isCanonicalMicroAmount } from '@/utils/silverAmount'
 
 const props = defineProps({
   embeddedHall: { type: Boolean, default: false },

@@ -64,7 +64,14 @@ describe('flow gap actual UI consumers', () => {
   it('funded tasks display only their own funded cancellation CTA', async () => {
     const task = { id: 'a', status: 'open', version: '2', funding: { mode: 'FUNDED_SINGLE_AGENT', fundingStatus: 'FUNDS_HELD', remainingMicro: '100' } }
     const wrapper = mount(Panel, { props: { ...baseProps, tasks: [task], selectedTask: task } })
-    try { wrapper.vm.openTask(task); await Vue.nextTick(); expect(wrapper.find('.ordinary-cancellation').exists()).to.equal(false) }
+    try {
+      wrapper.vm.openTask(task); await Vue.nextTick()
+      expect(wrapper.find('.ordinary-cancellation').exists()).to.equal(false)
+      expect(wrapper.findAll('.funding-summary').every(row => row.text().includes(silver.formatSilverMicro('100')))).to.equal(true)
+      expect(wrapper.get('.funded-preview-details').text()).to.include('开工前撤榜并退款')
+      await wrapper.get('.funded-preview-details .funded-detail-button').trigger('click')
+      expect(wrapper.emitted('cancel-funding')[0]).to.deep.equal([task])
+    }
     finally { wrapper.unmount() }
   })
   it('catalog requests parent confirmation, never emits an immediate unbind, and respects busy', async () => {

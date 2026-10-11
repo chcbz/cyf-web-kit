@@ -22,10 +22,11 @@ describe('economy preview wallet and funded bounty integration', () => {
     expect(httpSource).to.include("export const economyApi = createApi('/economy')")
   })
 
-  it('layers funded controls onto the legacy bounty board and leaves its explicit-agent event intact', () => {
+  it('retains funded management and recovery without inline creation', () => {
     expect(bountySource).to.include('fundedPreviewEnabled')
     expect(bountySource).to.include('grossBountyAmountMicro')
-    expect(bountySource).to.include("payload.settlementPolicy = 'GROSS_INCLUSIVE'")
+    expect(bountySource).not.to.include("emit('create-task'")
+    expect(bountySource).to.include("fundedCreateRecovery.body.settlementPolicy")
     expect(bountySource).to.include("$emit('assign-task', detailTask, agent)")
     expect(bountySource).to.include("$emit('cancel-funding', detailTask)")
     expect(bountySource).to.include("$emit('load-settlement', detailTask)")
@@ -201,12 +202,12 @@ describe('funded bounty remediation', () => {
     expect(cancelKeys).to.deep.equal(['idem-1', 'idem-1'])
   })
 
-  it('keeps funded form state pending and gates skill market discovery and direct routing by the server capability', () => {
+  it('keeps original funded recovery and gates skill market discovery and direct routing by the server capability', () => {
     const profileSource = readFileSync(new URL('../src/components/UserProfile.vue', import.meta.url), 'utf8')
     const routerSource = readFileSync(new URL('../src/router/index.js', import.meta.url), 'utf8')
-    expect(bountySource).to.include("emit('create-task', payload, (created) =>")
-    expect(bountySource).to.include('createPending.value = true')
-    expect(bountySource).to.include('Reset only after the parent receives a definitive success acknowledgement')
+    expect(bountySource).not.to.include('submitCreateTask')
+    expect(bountySource).to.include("$emit('resume-funded-create')")
+    expect(bountySource).to.include('当前编辑稿不会提交或替换原请求。')
     expect(walletSource).to.include('const epochMillis = BigInt(value)')
     expect(walletSource).to.include('MAX_ECMASCRIPT_EPOCH_MILLIS')
     expect(profileSource).to.include('v-if="economyPreviewAvailable"')
