@@ -2761,7 +2761,7 @@ const handleStartAgentConversation = (candidate) => {
   playAgentSelect()
   enterPrivateConversation(agent)
   markAgentSpeaking(agent, '入席密议', 'system')
-  if (!draft.value.trim()) insertAgentMention(agent, '请报眼下动静、可领何榜、还需哪路照应。')
+  if (!draft.value.trim()) setDraft('请报眼下动静、可领何榜、还需哪路照应。')
   showToast(`正与 ${portraitShortName(agent)} 密议`)
   return true
 }

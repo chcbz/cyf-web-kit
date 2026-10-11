@@ -1807,7 +1807,7 @@ export const useHallConversation = ({
     if (!agent) return
     if (chatMode) chatMode.value = 'private'
     selectedAgent.value = agent
-    insertAgentMention(agent, '请报眼下动静、可领何榜、还需哪路照应。')
+    if (!draft.value.trim()) setDraft('请报眼下动静、可领何榜、还需哪路照应。')
     openPanel('chat')
     showToast(`正与 ${portraitShortName(agent)} 密议`)
   }

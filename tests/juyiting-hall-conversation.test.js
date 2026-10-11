@@ -312,6 +312,38 @@ describe('useHallConversation scoped message loading', () => {
     expect(conversation.draft.value).to.equal('@宋江 ')
   })
 
+  it('prefills private discussion without a mention, preserving drafts and explicit mentions', () => {
+    const selectedAgent = ref(null)
+    const chatMode = ref('public')
+    const panels = []
+    const agent = { agentId: 'wuyong', name: '吴用' }
+    const conversation = useHallConversation({
+      apiStore: {}, chatApi: {}, chatContext: ref({}), chatMode,
+      globalStore: { user: {} }, log: { warn: () => {}, error: () => {} },
+      openPanel: panel => panels.push(panel), outgoingMetadata: ref({}),
+      portraitShortName: agent => agent.name, selectedAgent,
+      selectedTask: ref(null), showToast: () => {}
+    })
+    try {
+      conversation.startAgentConversation(agent)
+      expect(conversation.draft.value).to.equal('请报眼下动静、可领何榜、还需哪路照应。')
+      expect(chatMode.value).to.equal('private')
+      expect(selectedAgent.value.agentId).to.equal('wuyong')
+      expect(panels).to.deep.equal(['chat'])
+      conversation.setDraft('  保留我写的 @宋江 内容  ')
+      conversation.startAgentConversation(agent)
+      expect(conversation.draft.value).to.equal('  保留我写的 @宋江 内容  ')
+      conversation.setDraft('   ')
+      conversation.startAgentConversation(agent)
+      expect(conversation.draft.value).to.equal('请报眼下动静、可领何榜、还需哪路照应。')
+      conversation.setDraft('')
+      conversation.mentionAgent(agent)
+      expect(conversation.draft.value).to.equal('@吴用 ')
+    } finally {
+      conversation.disposeHallConversation()
+    }
+  })
+
   it('trims sent hall messages while preserving scoped payload fields', async () => {
     const chatContext = ref({
       conversationScopeType: 'private',
