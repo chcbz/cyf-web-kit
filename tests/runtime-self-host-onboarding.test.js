@@ -157,6 +157,13 @@ describe('runtime self-host onboarding panel', () => {
       await tick()
       expect(wrapper.text()).not.to.include('ACTIVE')
       expect(wrapper.get('.runtime-actions .catalog-action.primary').attributes('disabled')).not.to.equal(undefined)
+      await importText(wrapper, JSON.stringify(handoff({}, req)))
+      expect(wrapper.get('.runtime-actions .catalog-action.primary').attributes('disabled')).to.equal(undefined)
+      await wrapper.setProps({ runtimeRole: 'role-switched' })
+      expect(wrapper.get('.runtime-actions .catalog-action.primary').attributes('disabled')).not.to.equal(undefined)
+      await importText(wrapper, JSON.stringify(handoff({}, req)))
+      await wrapper.setProps({ identityEpoch: 2 })
+      expect(wrapper.get('.runtime-actions .catalog-action.primary').attributes('disabled')).not.to.equal(undefined)
     } finally { wrapper.unmount() }
   })
 })
