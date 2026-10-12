@@ -24,24 +24,23 @@
           <div><dt>Manifest 版本</dt><dd>{{ runtimeSetup.manifestVersion }}</dd></div>
         </dl>
         <div class="setup-note">
-          <strong>Runtime 指引</strong>
+          <div class="runtime-guide-head">
+            <strong>Runtime 指引</strong>
+            <button type="button" class="setup-copy" @click="copyRuntimeGuide">{{ runtimeCopied ? '已复制文书' : '复制非秘密文书' }}</button>
+          </div>
           <a :href="runtimeSetup.guideUrl" target="_blank" rel="noopener noreferrer">打开自托管 Runtime v1 指引</a>
           <ol>
             <li>在目标机安装 isp-install，并确认运行用户、文件 UID 与权限；系统模板 root 不可由非 root 运行用户直接使用。</li>
             <li>在 isp-install 仓库准备交接材料（有效期参数为 Unix 毫秒）：</li>
           </ol>
-          <pre>node "$REPO/shell/cyf_runtime_enrollment_prepare.mjs" --tenant-id {{ runtimeSetup.tenantId }} --client-id {{ runtimeSetup.clientId }} --agent-id {{ runtimeSetup.canonicalAgentId }} --output ABS_NEW_DIR --expires-at EPOCH_MS</pre>
+          <pre class="runtime-command">{{ prepareCommand }}</pre>
           <p>将目标机生成的 handoff.json 安全传回本页；不要粘贴或传送 enrollment-secret、subject-key、JWT 或 API Key。</p>
           <label class="handoff-import">导入 handoff.json<input type="file" accept="application/json,.json" @change="importHandoff" /></label>
           <p v-if="handoffMessage" role="status">{{ handoffMessage }}</p>
           <p v-if="runtimeError" class="runtime-error" role="alert">{{ runtimeError }}</p>
-          <dl v-if="importedHandoff" class="runtime-scope">
-            <div><dt>Installation</dt><dd>{{ importedHandoff.request.installationId }}</dd></div>
-            <div><dt>Expires (ms)</dt><dd>{{ importedHandoff.request.enrollmentExpiresAt }}</dd></div>
-          </dl>
           <div class="runtime-actions">
-            <button type="button" :disabled="!importedHandoff || runtimeBusy || createAttempted" @click="createInstallation">明确登记安装</button>
-            <button type="button" :disabled="!(importedHandoff || lastInstallationId) || runtimeBusy" @click="lookupInstallation">手动查询同一安装</button>
+            <button type="button" class="catalog-action primary" :disabled="!canCreateInstallation" @click="createInstallation">明确登记安装</button>
+            <button type="button" class="catalog-action subtle" :disabled="!(importedHandoff || lastInstallationId) || runtimeBusy" @click="lookupInstallation">手动查询同一安装</button>
           </div>
           <p v-if="installationStatus" role="status">安装授权状态：{{ installationStatus }}。PENDING / ACTIVE 不代表在线；请继续完成 profile/host 配置、validate、enroll、服务切换，并以新事项验收。</p>
         </div>
@@ -165,15 +164,28 @@ const handoffMessage = ref('')
 const runtimeError = ref('')
 const installationStatus = ref('')
 const runtimeBusy = ref(false)
+const runtimeCopied = ref(false)
 const createAttempted = ref(false)
 const lastInstallationId = ref('')
+const lastInstallationRequest = ref(null)
 const requestKeys = ['installationId', 'canonicalAgentId', 'manifestVersion', 'manifestSha256', 'enrollmentSecretSha256', 'enrollmentExpiresAt']
 const scopeKeys = ['tenantId', 'clientId', 'canonicalAgentId']
+const shellQuote = value => `'${String(value).replaceAll("'", "'\\''")}'`
+const prepareCommand = computed(() => `node "$REPO/shell/cyf_runtime_enrollment_prepare.mjs" --tenant-id ${shellQuote(runtimeSetup.value.tenantId || '')} --client-id ${shellQuote(runtimeSetup.value.clientId || '')} --agent-id ${shellQuote(runtimeSetup.value.canonicalAgentId || '')} --output ABS_NEW_DIR --expires-at EPOCH_MS`)
+const runtimeCopyText = computed(() => [
+  'Runtime v1 自家接应文书',
+  `Tenant: ${runtimeSetup.value.tenantId || ''}`, `Client: ${runtimeSetup.value.clientId || ''}`,
+  `Agent: ${runtimeSetup.value.canonicalAgentId || ''}`, `Manifest version: ${runtimeSetup.value.manifestVersion || ''}`,
+  `Guide: ${runtimeSetup.value.guideUrl || ''}`, prepareCommand.value,
+  '安装 -> prepare -> 网页登记 -> profile/host 配置 -> validate -> enroll -> 服务切换 -> 新事项验收',
+  'PENDING / ACTIVE 是安装授权状态，不代表 Runtime 在线。'
+].join('\n'))
+const canCreateInstallation = computed(() => Boolean(importedHandoff.value && !runtimeBusy.value && !createAttempted.value && importedHandoff.value.request.enrollmentExpiresAt > Date.now()))
 let operationGeneration = 0
 let mounted = true
 const contextKey = computed(() => `${props.identityScope}\u0000${props.identityEpoch}\u0000${props.runtimeRole}\u0000${runtimeSetup.value.tenantId || ''}\u0000${runtimeSetup.value.clientId || ''}\u0000${runtimeSetup.value.canonicalAgentId || ''}`)
 const clearRuntimeState = () => {
-  operationGeneration += 1; importedHandoff.value = null; handoffMessage.value = ''; runtimeError.value = ''; installationStatus.value = ''; runtimeBusy.value = false; createAttempted.value = false; lastInstallationId.value = ''
+  operationGeneration += 1; importedHandoff.value = null; handoffMessage.value = ''; runtimeError.value = ''; installationStatus.value = ''; runtimeBusy.value = false; createAttempted.value = false; lastInstallationId.value = ''; lastInstallationRequest.value = null
 }
 watch(contextKey, clearRuntimeState, { flush: 'sync' })
 const exactKeys = (value, keys) => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).sort().join('\u0000') === [...keys].sort().join('\u0000')
@@ -185,52 +197,87 @@ const validHandoff = (value) => {
   if (r.canonicalAgentId !== scope.canonicalAgentId || r.manifestVersion !== scope.manifestVersion) return false
   if (!requestKeys.filter(key => key !== 'enrollmentExpiresAt').every(key => typeof r[key] === 'string' && r[key].length > 0)) return false
   if (!Number.isSafeInteger(r.enrollmentExpiresAt) || r.enrollmentExpiresAt <= 0) return false
+  if (!/^rti_[0-9a-f]{32}$/.test(r.installationId)) return false
   if (!/^[a-f0-9]{64}$/.test(r.manifestSha256) || !/^[a-f0-9]{64}$/.test(r.enrollmentSecretSha256)) return false
   return true
 }
 const importHandoff = async event => {
-  const file = event.target.files?.[0]; event.target.value = ''; clearRuntimeState()
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  clearRuntimeState()
   if (!file) return
+  const generation = operationGeneration
+  const context = contextKey.value
   try {
-    const value = JSON.parse(await file.text())
-    if (!validHandoff(value)) throw new Error('交接材料格式或 scope 不匹配')
+    const text = await file.text()
+    if (!currentOperation(generation, context)) return
+    const value = JSON.parse(text)
+    if (!validHandoff(value)) throw new Error('invalid handoff')
+    if (!currentOperation(generation, context)) return
     importedHandoff.value = { scope: { ...value.scope }, request: Object.fromEntries(requestKeys.map(key => [key, value.request[key]])) }
     handoffMessage.value = '交接材料已验证；原文件内容不会回显。'
   } catch {
+    if (!currentOperation(generation, context)) return
     handoffMessage.value = ''
     runtimeError.value = '无法导入：仅接受当前 scope 匹配且不含额外字段或凭据的 handoff.json。'
   }
 }
 const currentOperation = (generation, context) => mounted && generation === operationGeneration && context === contextKey.value
+const matchesInstallationView = (view, request) => Boolean(view && request &&
+  view.installationId === request.installationId &&
+  view.tenantId === runtimeSetup.value.tenantId && view.clientId === runtimeSetup.value.clientId &&
+  view.canonicalAgentId === request.canonicalAgentId && view.manifestVersion === request.manifestVersion &&
+  view.manifestSha256 === request.manifestSha256 && view.enrollmentExpiresAt === request.enrollmentExpiresAt)
+const statusLabel = status => ['PENDING', 'ACTIVE', 'REVOKED', 'EXPIRED'].includes(status) ? status : '状态未知'
 const createInstallation = async () => {
-  if (!importedHandoff.value || runtimeBusy.value) return
-  lastInstallationId.value = importedHandoff.value.request.installationId
+  if (!importedHandoff.value || runtimeBusy.value || createAttempted.value) return
+  const request = Object.fromEntries(requestKeys.map(key => [key, importedHandoff.value.request[key]]))
+  lastInstallationId.value = request.installationId
+  lastInstallationRequest.value = request
+  if (request.enrollmentExpiresAt <= Date.now()) {
+    runtimeError.value = '登记材料已过期；不会创建安装，可手动查询同一 installationId。'
+    return
+  }
   createAttempted.value = true
   const generation = ++operationGeneration; const context = contextKey.value
-  const body = Object.fromEntries(requestKeys.map(key => [key, importedHandoff.value.request[key]]))
+  const body = { ...request }
   runtimeBusy.value = true; runtimeError.value = ''; installationStatus.value = ''
   try {
     const result = await agentApi.post('/runtime/v1/installations', body, { autoLoading: false })
     if (!currentOperation(generation, context)) return
-    const data = result?.data ?? result
-    installationStatus.value = ['PENDING', 'ACTIVE', 'REVOKED', 'EXPIRED'].includes(data?.status) ? data.status : '已登记响应；请手动查询确认'
+    const envelope = result?.data
+    const view = envelope?.data
+    if (envelope?.code !== 'E0' || !matchesInstallationView(view, request)) throw new Error('registration not confirmed')
+    installationStatus.value = statusLabel(view.status)
     importedHandoff.value = null
   } catch {
     if (currentOperation(generation, context)) runtimeError.value = '登记结果未确认。不要重复创建；请先手动查询同一 installationId。'
   } finally { if (currentOperation(generation, context)) runtimeBusy.value = false }
 }
 const lookupInstallation = async () => {
-  const id = importedHandoff.value?.request.installationId || lastInstallationId.value
+  const request = importedHandoff.value?.request || lastInstallationRequest.value
+  const id = request?.installationId || lastInstallationId.value
   if (!id || runtimeBusy.value) return
   const generation = ++operationGeneration; const context = contextKey.value
   runtimeBusy.value = true; runtimeError.value = ''
   try {
     const result = await agentApi.get(`/runtime/v1/installations/${encodeURIComponent(id)}`, undefined, { autoLoading: false })
     if (!currentOperation(generation, context)) return
-    const data = result?.data ?? result
-    installationStatus.value = ['PENDING', 'ACTIVE', 'REVOKED', 'EXPIRED'].includes(data?.status) ? data.status : '状态未知'
-  } catch { if (currentOperation(generation, context)) runtimeError.value = '查询失败；可由你明确再次查询同一安装。' }
+    const envelope = result?.data
+    const view = envelope?.data
+    if (envelope?.code !== 'E0' || !matchesInstallationView(view, request)) throw new Error('lookup not confirmed')
+    installationStatus.value = statusLabel(view.status)
+  } catch { if (currentOperation(generation, context)) runtimeError.value = '查询未确认：响应与当前 scope/installation 不匹配，或请求失败。' }
   finally { if (currentOperation(generation, context)) runtimeBusy.value = false }
+}
+const copyRuntimeGuide = async () => {
+  try {
+    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(runtimeCopyText.value)
+    else {
+      const input = document.createElement('textarea'); input.value = runtimeCopyText.value; input.setAttribute('readonly', ''); input.style.position = 'fixed'; input.style.opacity = '0'; document.body.appendChild(input); input.select(); document.execCommand('copy'); document.body.removeChild(input)
+    }
+    runtimeCopied.value = true
+  } catch { runtimeCopied.value = false }
 }
 const canShowActions = persona => Boolean(persona.canBind || (persona.boundToMe && !persona.systemAgent))
 const handleHostingConfirmed = receipt => {
@@ -383,6 +430,12 @@ onUnmounted(() => { mounted = false; clearRuntimeState() })
   font-weight: 700;
 }
 
+.runtime-guide-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.runtime-command { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.runtime-scope dd { white-space: normal; overflow-wrap: anywhere; user-select: text; }
+.runtime-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.runtime-actions .catalog-action { min-height: 34px; padding: 7px 12px; }
+.runtime-actions .catalog-action:disabled { opacity: .55; cursor: not-allowed; }
 .setup-note a {
   margin-left: 6px;
   color: #7c3b20;
