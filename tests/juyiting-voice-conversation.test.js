@@ -305,6 +305,7 @@ const createActualHallVoiceMocks = ({
     useHallBountyRequestCatalog: () => ({ entries: Vue.ref([]), error: text, loading: Vue.ref(false), hint: noop, refresh: async () => false, reset: noop }),
     useHallDrafts: () => ({ unresolvedIntent: Vue.ref(null) }),
     useHallBountyFollowup: () => ({ state: Vue.ref({ status: 'IDLE' }), busy: Vue.ref(false), prepareGenerate: async () => false, prepareEdit: async () => false, confirm: async () => false, checkOriginal: async () => false, invalidate: noop, dispose: noop }),
+    useHallBountyAssignmentContext: () => ({ projection: Vue.ref(null), error: Vue.ref(''), refresh: async () => false, dispose: noop }),
     useHallTypedDeliberation: () => ({ projections: Vue.ref([]), cards: Vue.ref([]), selectedPending: Vue.ref(null), error: text, busy: Vue.ref(false), recoveryAvailable: Vue.ref(false), refresh: async () => false, readOne: async () => null, submit: async () => false, recover: async () => false, resumeUnknown: async () => false, choosePending: () => false, confirmProposal: async () => false, invalidate: noop, dispose: noop }),
     typedLong: value => typeof value === 'string' ? value : '',
     useHallConversation: options => {

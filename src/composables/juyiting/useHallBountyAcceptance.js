@@ -21,7 +21,7 @@ export function useHallBountyAcceptance ({ api, taskId, identityKey, conversatio
     if (timer != null) clearTimeout(timer); timer = null
     const loaded = await catalog.refresh()
     if (valid(captured) && scope.value) {
-      error.value = !loaded && !catalog.error.value ? '成果索引暂未能核实，请重新读取。' : ''
+      error.value = catalog.error.value || (!loaded ? '成果索引暂未能核实，请重新读取。' : '')
       legacy.value = loaded && !catalog.error.value && !catalog.entries.value.length
       if (pollQueued) { pollQueued = false; return poll(captured) }
       if (loaded && !catalog.error.value && !taskCompleted() && catalog.entries.value.some(entry => outputRequestPending(entry.request))) {

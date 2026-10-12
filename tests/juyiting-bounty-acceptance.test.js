@@ -68,6 +68,14 @@ describe('task acceptance existing scoped source reads', () => {
     const absent = useHallBountyAcceptance({ api: { list: async () => response([]) }, taskId: () => 'task-1', identityKey: () => 'owner-1' })
     try { await flushPromises(); expect(absent.legacy.value).to.equal(true) } finally { absent.dispose() }
   })
+  it('surfaces a catalog read error instead of clearing it on the acceptance page', async () => {
+    const source = useHallBountyAcceptance({ api: { list: async () => response([scoped()]), get: async () => { throw new Error('read unavailable') } },
+      taskId: () => 'task-1', identityKey: () => 'owner-1' })
+    try {
+      await flushPromises(); expect(source.error.value).to.equal('read unavailable')
+      expect(source.legacy.value).to.equal(false)
+    } finally { source.dispose() }
+  })
   it('clears old visible sources on identity/task switches and fences delayed previous-owner responses', async () => {
     const pending = deferred(); const owner = Vue.ref('a'); const task = Vue.ref('task-1'); let first = true; let oldSignal
     const source = useHallBountyAcceptance({ api: {
