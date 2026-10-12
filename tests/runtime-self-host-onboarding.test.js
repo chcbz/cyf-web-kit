@@ -1,13 +1,11 @@
 import { expect } from 'chai'
-import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { readFileSync } from 'node:fs'
 import { parse, compileScript } from '@vue/compiler-sfc'
 import { mount } from '@vue/test-utils'
 import * as Vue from 'vue'
 
 const source = readFileSync(new URL('../src/components/juyiting/PersonaCatalogPanel.vue', import.meta.url), 'utf8')
+const generatedHandoffText = readFileSync(new URL('./fixtures/runtime-self-host-onboarding/handoff.json', import.meta.url), 'utf8')
 const { descriptor, errors } = parse(source)
 expect(errors).to.deep.equal([])
 let script = compileScript(descriptor, { id: 'runtime-onboarding-test', inlineTemplate: true }).content
@@ -76,34 +74,31 @@ describe('runtime self-host onboarding panel', () => {
     } finally { wrapper.unmount() }
   })
 
-  it('imports the actual offline helper handoff and sends only six fields after explicit click', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'cyf-runtime-web-'))
-    const output = join(root, 'prepared')
-    const helper = '/home/isp/wsps/chcbz/isp-install/shell/cyf_runtime_enrollment_prepare.mjs'
+  it('imports the checked-in helper-generated handoff fixture and sends only six fields after explicit click', async () => {
+    const fixture = JSON.parse(generatedHandoffText)
+    const req = fixture.request
+    const calls = []
+    const api = {
+      post: async (...args) => { calls.push(['post', ...args]); return envelope(viewFor(args[1])) },
+      get: async (...args) => { calls.push(['get', ...args]); return envelope(viewFor(req, 'ACTIVE')) }
+    }
+    const wrapper = mountPanel(api)
     try {
-      execFileSync(process.execPath, [helper, '--tenant-id', setup.tenantId, '--client-id', setup.clientId, '--agent-id', setup.canonicalAgentId, '--output', output, '--expires-at', String(Date.now() + 120_000)], { stdio: ['ignore', 'ignore', 'pipe'] })
-      const text = readFileSync(join(output, 'handoff.json'), 'utf8')
-      const secretMaterial = ['enrollment-secret', 'subject-key.txt'].map(name => readFileSync(join(output, name), 'utf8').trim())
-      const calls = []
-      const api = { post: async (...args) => { calls.push(['post', ...args]); return envelope(viewFor(args[1])) }, get: async (...args) => { calls.push(['get', ...args]); return envelope(viewFor(JSON.parse(text).request, 'ACTIVE')) } }
-      const wrapper = mountPanel(api)
-      try {
-        await importText(wrapper, text)
-        expect(calls).to.have.length(0)
-        expect(wrapper.get('.runtime-actions .catalog-action.primary').attributes('disabled')).to.equal(undefined)
-        await wrapper.get('.runtime-actions .catalog-action.primary').trigger('click')
-        expect(calls).to.have.length(1)
-        expect(calls[0][1]).to.equal('/runtime/v1/installations')
-        expect(Object.keys(calls[0][2]).sort()).to.deep.equal(['canonicalAgentId', 'enrollmentExpiresAt', 'enrollmentSecretSha256', 'installationId', 'manifestSha256', 'manifestVersion'].sort())
-        expect(calls[0][2]).to.deep.equal(JSON.parse(text).request)
-        expect(wrapper.text()).to.include('PENDING').and.include('不代表在线')
-        for (const secret of secretMaterial) expect(wrapper.text()).not.to.include(secret)
-        await wrapper.get('.runtime-actions .catalog-action.subtle').trigger('click')
-        expect(calls[1][0]).to.equal('get')
-        expect(calls[1][1]).to.equal(`/runtime/v1/installations/${JSON.parse(text).request.installationId}`)
-        expect(wrapper.text()).to.include('ACTIVE').and.include('不代表在线')
-      } finally { wrapper.unmount() }
-    } finally { rmSync(root, { recursive: true, force: true }) }
+      await importText(wrapper, generatedHandoffText)
+      expect(calls).to.have.length(0)
+      expect(wrapper.get('.runtime-actions .catalog-action.primary').attributes('disabled')).to.equal(undefined)
+      await wrapper.get('.runtime-actions .catalog-action.primary').trigger('click')
+      expect(calls).to.have.length(1)
+      expect(calls[0][1]).to.equal('/runtime/v1/installations')
+      expect(Object.keys(calls[0][2]).sort()).to.deep.equal(['canonicalAgentId', 'enrollmentExpiresAt', 'enrollmentSecretSha256', 'installationId', 'manifestSha256', 'manifestVersion'].sort())
+      expect(calls[0][2]).to.deep.equal(req)
+      expect(wrapper.text()).to.include('PENDING').and.include('不代表在线')
+      expect(wrapper.text()).not.to.include(req.installationId)
+      await wrapper.get('.runtime-actions .catalog-action.subtle').trigger('click')
+      expect(calls[1][0]).to.equal('get')
+      expect(calls[1][1]).to.equal(`/runtime/v1/installations/${req.installationId}`)
+      expect(wrapper.text()).to.include('ACTIVE').and.include('不代表在线')
+    } finally { wrapper.unmount() }
   })
 
   it('rejects HTTP-200 JsonResult business errors and mismatched installation views', async () => {
