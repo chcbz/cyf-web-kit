@@ -121,7 +121,7 @@ const loadSfc = (relativePath, runtimeAgentApi = { post: async () => { throw new
 
   const scriptBody = script
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\.\/\.\.\/composables\/juyiting\/useHallOrdinaryCancellation\.js['"];?\s*$/gm, (_line, names) => `var { ${names} } = ordinaryCancellation`)
-    .replace(/^import\s+\{\s*agentApi\s*\}\s+from\s+['"]\.\.\/\.\.\/composables\/useHttp\.js['"];?\s*$/gm, 'var { agentApi } = runtimeAgentApi')
+    .replace(/^import\s+\{\s*agentApi\s*\}\s+from\s+['"]\.\.\/\.\.\/composables\/useHttp\.js['"];?\s*$/gm, 'var agentApi = runtimeAgentApi')
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace(/^import\s+AgentToken\s+from\s+['"]@\/components\/juyiting\/AgentToken\.vue['"];?\s*$/gm, 'var AgentToken = { template: \'<button class="agent-token" type="button" @click="$emit(\\\'select-agent\\\', agent)"></button>\', props: [\'agent\'] }')
     .replace(/^import\s+\{\s*juyitingGame\s*\}\s+from\s+['"]@\/game\/index\.js['"];?\s*$/gm, 'var juyitingGame = arguments[2]')

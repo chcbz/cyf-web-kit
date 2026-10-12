@@ -117,6 +117,20 @@ describe('runtime self-host onboarding panel', () => {
     }
   })
 
+  it('does not offer creation after a matching existing registration is found', async () => {
+    const req = request()
+    const calls = []
+    const wrapper = mountPanel({ post: async () => { calls.push('post') }, get: async () => envelope(viewFor(req, 'ACTIVE')) })
+    try {
+      await importText(wrapper, JSON.stringify(handoff({}, req)))
+      await wrapper.get('.runtime-actions .catalog-action.subtle').trigger('click')
+      expect(wrapper.text()).to.include('ACTIVE')
+      expect(wrapper.get('.runtime-actions .catalog-action.primary').attributes('disabled')).not.to.equal(undefined)
+      await wrapper.get('.runtime-actions .catalog-action.primary').trigger('click')
+      expect(calls).to.deep.equal([])
+    } finally { wrapper.unmount() }
+  })
+
   it('does not create expired handoffs but still allows explicit same-ID lookup', async () => {
     const req = request({ enrollmentExpiresAt: Date.now() - 10 })
     const calls = []

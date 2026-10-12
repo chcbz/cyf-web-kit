@@ -185,7 +185,7 @@ let operationGeneration = 0
 let mounted = true
 const contextKey = computed(() => `${props.identityScope}\u0000${props.identityEpoch}\u0000${props.runtimeRole}\u0000${runtimeSetup.value.tenantId || ''}\u0000${runtimeSetup.value.clientId || ''}\u0000${runtimeSetup.value.canonicalAgentId || ''}`)
 const clearRuntimeState = () => {
-  operationGeneration += 1; importedHandoff.value = null; handoffMessage.value = ''; runtimeError.value = ''; installationStatus.value = ''; runtimeBusy.value = false; createAttempted.value = false; lastInstallationId.value = ''; lastInstallationRequest.value = null
+  operationGeneration += 1; importedHandoff.value = null; handoffMessage.value = ''; runtimeError.value = ''; installationStatus.value = ''; runtimeBusy.value = false; createAttempted.value = false; lastInstallationId.value = ''; lastInstallationRequest.value = null; runtimeCopied.value = false
 }
 watch(contextKey, clearRuntimeState, { flush: 'sync' })
 const exactKeys = (value, keys) => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).sort().join('\u0000') === [...keys].sort().join('\u0000')
@@ -266,6 +266,8 @@ const lookupInstallation = async () => {
     const envelope = result?.data
     const view = envelope?.data
     if (envelope?.code !== 'E0' || !matchesInstallationView(view, request)) throw new Error('lookup not confirmed')
+    // A matching registration already exists; only query/enroll it, never offer create again.
+    createAttempted.value = true
     installationStatus.value = statusLabel(view.status)
   } catch { if (currentOperation(generation, context)) runtimeError.value = '查询未确认：响应与当前 scope/installation 不匹配，或请求失败。' }
   finally { if (currentOperation(generation, context)) runtimeBusy.value = false }
@@ -274,7 +276,7 @@ const copyRuntimeGuide = async () => {
   try {
     if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(runtimeCopyText.value)
     else {
-      const input = document.createElement('textarea'); input.value = runtimeCopyText.value; input.setAttribute('readonly', ''); input.style.position = 'fixed'; input.style.opacity = '0'; document.body.appendChild(input); input.select(); document.execCommand('copy'); document.body.removeChild(input)
+      const input = document.createElement('textarea'); input.value = runtimeCopyText.value; input.setAttribute('readonly', ''); input.style.position = 'fixed'; input.style.opacity = '0'; document.body.appendChild(input); input.select(); let copied = false; try { copied = document.execCommand('copy') } finally { document.body.removeChild(input) }; if (!copied) throw new Error('copy failed')
     }
     runtimeCopied.value = true
   } catch { runtimeCopied.value = false }
