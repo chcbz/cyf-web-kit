@@ -29,8 +29,10 @@
             <button type="button" class="setup-copy" @click="copyRuntimeGuide">{{ runtimeCopied ? '已复制文书' : '复制非秘密文书' }}</button>
           </div>
           <a :href="runtimeSetup.guideUrl" target="_blank" rel="noopener noreferrer">打开自托管 Runtime v1 指引</a>
+          <p class="runtime-layout">统一目录：程序放 apps/cyf-agent-runtime-v1，配置与策略放 conf/cyf-agent-runtime-v1，各角色 HOME 放 state/cyf-agent-runtime-v1/INSTANCE/agents/SUBJECT/codex-home；路径基目录使用目标机本人获授权的位置。</p>
+          <p class="runtime-upgrade-note">已有统一 Runtime：升级或整理目录时沿用 installation、manifest、hostId、授权和完整会话，不重新生成交接材料、不重复登记或 enroll。按指引第9节迁移 HOME 与会话路径索引，核验后再退役旧入口；本页不会自动更新目标机。</p>
           <ol>
-            <li>在目标机安装 isp-install，并确认运行用户、文件 UID 与权限；系统模板 root 不可由非 root 运行用户直接使用。</li>
+            <li>首次接入：在目标机安装 isp-install，并确认运行用户、文件 UID 与权限；系统模板 root 不可由非 root 运行用户直接使用。</li>
             <li>在 isp-install 仓库准备交接材料（有效期参数为 Unix 毫秒）：</li>
           </ol>
           <pre class="runtime-command">{{ prepareCommand }}</pre>
@@ -171,9 +173,11 @@ const lastInstallationRequest = ref(null)
 const requestKeys = ['installationId', 'canonicalAgentId', 'manifestVersion', 'manifestSha256', 'enrollmentSecretSha256', 'enrollmentExpiresAt']
 const scopeKeys = ['tenantId', 'clientId', 'canonicalAgentId']
 const shellQuote = value => `'${String(value).replaceAll("'", "'\\''")}'`
-const prepareCommand = computed(() => `node "$REPO/shell/cyf_runtime_enrollment_prepare.mjs" --tenant-id ${shellQuote(runtimeSetup.value.tenantId || '')} --client-id ${shellQuote(runtimeSetup.value.clientId || '')} --agent-id ${shellQuote(runtimeSetup.value.canonicalAgentId || '')} --output ABS_NEW_DIR --expires-at EPOCH_MS`)
+const prepareCommand = computed(() => `"$ARTIFACT/node/bin/node" "$REPO/shell/cyf_runtime_enrollment_prepare.mjs" --tenant-id ${shellQuote(runtimeSetup.value.tenantId || '')} --client-id ${shellQuote(runtimeSetup.value.clientId || '')} --agent-id ${shellQuote(runtimeSetup.value.canonicalAgentId || '')} --output ABS_NEW_DIR --expires-at EPOCH_MS`)
 const runtimeCopyText = computed(() => [
   'Runtime v1 自家接应文书',
+  '统一目录：apps/cyf-agent-runtime-v1；conf/cyf-agent-runtime-v1；state/cyf-agent-runtime-v1/INSTANCE/agents/SUBJECT/codex-home（使用目标机本人获授权的基目录）。',
+  '已有统一 Runtime 升级/迁移：保留身份、授权和完整会话，按指引第9节迁移路径索引，不重复登记或 enroll；下面 prepare 仅用于首次接入。',
   `Tenant: ${runtimeSetup.value.tenantId || ''}`, `Client: ${runtimeSetup.value.clientId || ''}`,
   `Agent: ${runtimeSetup.value.canonicalAgentId || ''}`, `Manifest version: ${runtimeSetup.value.manifestVersion || ''}`,
   `Guide: ${runtimeSetup.value.guideUrl || ''}`, prepareCommand.value,
