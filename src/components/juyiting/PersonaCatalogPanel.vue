@@ -11,59 +11,46 @@
     <section v-if="setupResult" class="setup-result">
       <div class="setup-head">
         <strong>{{ setupResult.message || setupTitle }}</strong>
-        <div class="setup-tools">
-          <button type="button" class="setup-copy" @click="copySetupResult">
-            <var-icon name="content-copy" />
-            <span>{{ copied ? '已复制' : '复制' }}</span>
-          </button>
-          <button type="button" class="setup-close" @click="$emit('clear-setup-result')">
-            <var-icon name="close-circle-outline" />
-          </button>
-        </div>
+        <button type="button" class="setup-close" aria-label="关闭接应文书" @click="$emit('clear-setup-result')">
+          <var-icon name="close-circle-outline" />
+        </button>
       </div>
-      <dl>
-        <div>
-          <dt>好汉编号</dt>
-          <dd>{{ setupResult.agentId }}</dd>
-        </div>
-        <div>
-          <dt>接应牌</dt>
-          <dd>{{ setupResult.profileId }}</dd>
-        </div>
-        <div>
-          <dt>安身处</dt>
-          <dd>{{ setupResult.workdir }}</dd>
-        </div>
-      </dl>
-      <div v-if="setupVariables.length" class="setup-variables">
-        <strong>接应变量</strong>
-        <div class="setup-variable-grid">
-          <div v-for="item in setupVariables" :key="item.key">
-            <dt>{{ item.label }}</dt>
-            <dd>{{ item.value }}</dd>
+      <template v-if="isLocalSetup">
+        <p>Runtime {{ runtimeSetup.runtimeProtocolVersion }} 自家接应；安装授权不代表 Runtime 在线或事项可办理。</p>
+        <dl class="runtime-scope">
+          <div><dt>Tenant</dt><dd>{{ runtimeSetup.tenantId }}</dd></div>
+          <div><dt>Client</dt><dd>{{ runtimeSetup.clientId }}</dd></div>
+          <div><dt>Agent</dt><dd>{{ runtimeSetup.canonicalAgentId }}</dd></div>
+          <div><dt>Manifest 版本</dt><dd>{{ runtimeSetup.manifestVersion }}</dd></div>
+        </dl>
+        <div class="setup-note">
+          <strong>Runtime 指引</strong>
+          <a :href="runtimeSetup.guideUrl" target="_blank" rel="noopener noreferrer">打开自托管 Runtime v1 指引</a>
+          <ol>
+            <li>在目标机安装 isp-install，并确认运行用户、文件 UID 与权限；系统模板 root 不可由非 root 运行用户直接使用。</li>
+            <li>在 isp-install 仓库准备交接材料（有效期参数为 Unix 毫秒）：</li>
+          </ol>
+          <pre>node "$REPO/shell/cyf_runtime_enrollment_prepare.mjs" --tenant-id {{ runtimeSetup.tenantId }} --client-id {{ runtimeSetup.clientId }} --agent-id {{ runtimeSetup.canonicalAgentId }} --output ABS_NEW_DIR --expires-at EPOCH_MS</pre>
+          <p>将目标机生成的 handoff.json 安全传回本页；不要粘贴或传送 enrollment-secret、subject-key、JWT 或 API Key。</p>
+          <label class="handoff-import">导入 handoff.json<input type="file" accept="application/json,.json" @change="importHandoff" /></label>
+          <p v-if="handoffMessage" role="status">{{ handoffMessage }}</p>
+          <p v-if="runtimeError" class="runtime-error" role="alert">{{ runtimeError }}</p>
+          <dl v-if="importedHandoff" class="runtime-scope">
+            <div><dt>Installation</dt><dd>{{ importedHandoff.request.installationId }}</dd></div>
+            <div><dt>Expires (ms)</dt><dd>{{ importedHandoff.request.enrollmentExpiresAt }}</dd></div>
+          </dl>
+          <div class="runtime-actions">
+            <button type="button" :disabled="!importedHandoff || runtimeBusy || createAttempted" @click="createInstallation">明确登记安装</button>
+            <button type="button" :disabled="!(importedHandoff || lastInstallationId) || runtimeBusy" @click="lookupInstallation">手动查询同一安装</button>
           </div>
+          <p v-if="installationStatus" role="status">安装授权状态：{{ installationStatus }}。PENDING / ACTIVE 不代表在线；请继续完成 profile/host 配置、validate、enroll、服务切换，并以新事项验收。</p>
         </div>
-      </div>
-      <div v-if="isLocalSetup" class="setup-note">
-        <strong>
-          安装说明
-          <a :href="INSTALL_GUIDE_URL" target="_blank" rel="noopener noreferrer">codex-ws-agent-install</a>
-        </strong>
-        <ol>
-          <li v-for="step in installSteps" :key="step">{{ step }}</li>
-        </ol>
-      </div>
-      <div v-if="normalizedEnvExample" class="setup-block">
-        <span>.env</span>
-        <pre>{{ normalizedEnvExample }}</pre>
-      </div>
-      <div v-if="setupResult.profileExample" class="setup-block">
-        <span>codex-profiles.conf</span>
-        <pre>{{ setupResult.profileExample }}</pre>
-      </div>
-      <ol v-if="displayCommands.length" class="setup-commands">
-        <li v-for="command in displayCommands" :key="command">{{ command }}</li>
-      </ol>
+      </template>
+      <dl v-else>
+        <div><dt>好汉编号</dt><dd>{{ setupResult.agentId }}</dd></div>
+        <div><dt>接应牌</dt><dd>{{ setupResult.profileId }}</dd></div>
+        <div><dt>安身处</dt><dd>{{ setupResult.workdir }}</dd></div>
+      </dl>
     </section>
 
     <HostingRentPanel
@@ -152,168 +139,100 @@
 </template>
 
 <script setup>
-import { computed, onUnmounted, ref } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
+import { agentApi } from '../../composables/useHttp.js'
 import HostingRentPanel from './HostingRentPanel.vue'
 
-const PUBLIC_AGENT_WS_URL = 'wss://api.chaoyoufan.cn/ws/agent/channel'
-const INSTALL_GUIDE_URL = 'https://gitee.com/chcbz/isp-install/blob/master/skills/codex-ws-agent-install/SKILL.md'
-const LOCAL_API_KEY_PLACEHOLDER = '<key>'
-
 const props = defineProps({
-  personas: { type: Array, default: () => [] },
-  loading: { type: Boolean, default: false },
-  unbindBusy: { type: Boolean, default: false },
-  errorMessage: { type: String, default: '' },
-  portraitName: { type: Function, required: true },
-  portraitStyle: { type: Function, required: true },
-  setupResult: { type: Object, default: null },
-  hostedPointFlow: { type: Boolean, default: false }
+  personas: { type: Array, default: () => [] }, loading: { type: Boolean, default: false },
+  unbindBusy: { type: Boolean, default: false }, errorMessage: { type: String, default: '' },
+  portraitName: { type: Function, required: true }, portraitStyle: { type: Function, required: true },
+  setupResult: { type: Object, default: null }, hostedPointFlow: { type: Boolean, default: false },
+  identityScope: { type: [String, Number], default: '' }, identityEpoch: { type: [String, Number], default: '' },
+  runtimeRole: { type: [String, Number], default: '' }
 })
-
 const emit = defineEmits(['bind-persona', 'request-unbind-persona', 'clear-setup-result', 'hosting-changed', 'hosting-confirmed'])
-
 const activePersonaCode = ref(null)
 const hostingPersonaCode = ref(null)
 const hostingPersona = computed(() => props.personas.find(persona => persona.personaCode === hostingPersonaCode.value) || null)
 const resolveHostingPersona = persona => props.personas.find(item => item.personaCode === persona.personaCode) || null
-const copied = ref(false)
-let copiedTimer = null
 const boundToMeCount = computed(() => props.personas.filter(persona => persona.boundToMe).length)
 const setupTitle = computed(() => props.setupResult?.mode === 'server' ? '山寨安顿文书已备' : '自家接应文书已备')
-const isLocalSetup = computed(() => props.setupResult?.mode === 'local')
-const normalizedEnvExample = computed(() => normalizeEnvExample(props.setupResult))
-const installSteps = computed(() => [
-  '目标机器需已有 Node.js >= 20，并可执行 codex CLI。',
-  '在 isp-install 仓库执行 sudo ./install.sh --profile agent，或直接执行 sudo ./shell/codex_ws_agent_install.sh。',
-  '编辑 /home/isp/apps/codex-ws-agent/.env，填入 OPENCLAW_API_KEY，并确认 WS_URL、DEFAULT_CODEX_PROFILE、CODEX_PROFILES_FILE。',
-  '把下方 profile 追加到 /home/isp/apps/codex-ws-agent/codex-profiles.conf。',
-  '执行 node agent-client.mjs --validate 校验，通过后用 /home/isp/bin/codex_ws_agent.sh start 启动。'
-])
-const displayCommands = computed(() => {
-  if (!isLocalSetup.value) return props.setupResult?.commands || []
-  return [
-    'sudo ./install.sh --profile agent',
-    '或 sudo ./shell/codex_ws_agent_install.sh',
-    'cd /home/isp/apps/codex-ws-agent && node agent-client.mjs --validate',
-    '/home/isp/bin/codex_ws_agent.sh start',
-    'systemctl status codex-ws-agent',
-    'journalctl -u codex-ws-agent -f'
-  ]
-})
-const setupVariables = computed(() => buildSetupVariables(props.setupResult, normalizedEnvExample.value))
-const setupCopyText = computed(() => {
-  if (!props.setupResult) return ''
-  const sections = [
-    setupVariables.value.length ? [
-      'variables',
-      ...setupVariables.value.map(item => `${item.key}=${item.value}`)
-    ].join('\n') : '',
-    isLocalSetup.value ? ['install guide', INSTALL_GUIDE_URL].join('\n') : '',
-    normalizedEnvExample.value ? ['.env', normalizedEnvExample.value].join('\n') : '',
-    props.setupResult.profileExample ? ['codex-profiles.conf', props.setupResult.profileExample].join('\n') : '',
-    displayCommands.value.length ? ['commands', displayCommands.value.join('\n')].join('\n') : ''
-  ].filter(Boolean)
-  return sections.join('\n\n')
-})
-
-const canShowActions = (persona) => Boolean(persona.canBind || (persona.boundToMe && !persona.systemAgent))
-
-const normalizeEnvExample = (setupResult) => {
-  if (!setupResult) return ''
-  if (!setupResult.envExample && setupResult.mode !== 'local') return ''
-  const rawEnv = setupResult.envExample || [
-    `WS_URL=${PUBLIC_AGENT_WS_URL}`,
-    `OPENCLAW_API_KEY=${LOCAL_API_KEY_PLACEHOLDER}`,
-    'DEFAULT_CODEX_PROFILE=codex-default',
-    'CODEX_PROFILES_FILE=/home/isp/apps/codex-ws-agent/codex-profiles.conf',
-    'HEARTBEAT_MS=30000',
-    'RECONNECT_MAX_MS=1800000'
-  ].join('\n')
-  const lines = rawEnv.split(/\r?\n/)
-  upsertEnvLine(lines, 'WS_URL', PUBLIC_AGENT_WS_URL)
-  if (setupResult.mode === 'local') {
-    upsertEnvLine(lines, 'OPENCLAW_API_KEY', parseConfigValue(rawEnv, 'OPENCLAW_API_KEY') || LOCAL_API_KEY_PLACEHOLDER)
-    upsertEnvLine(lines, 'DEFAULT_CODEX_PROFILE', 'codex-default')
-    upsertEnvLine(lines, 'CODEX_PROFILES_FILE', '/home/isp/apps/codex-ws-agent/codex-profiles.conf')
-  }
-  return lines.join('\n').trim()
+const isLocalSetup = computed(() => props.setupResult?.mode === 'local' && Boolean(props.setupResult?.runtimeSetup))
+const runtimeSetup = computed(() => props.setupResult?.runtimeSetup || {})
+const importedHandoff = ref(null)
+const handoffMessage = ref('')
+const runtimeError = ref('')
+const installationStatus = ref('')
+const runtimeBusy = ref(false)
+const createAttempted = ref(false)
+const lastInstallationId = ref('')
+const requestKeys = ['installationId', 'canonicalAgentId', 'manifestVersion', 'manifestSha256', 'enrollmentSecretSha256', 'enrollmentExpiresAt']
+const scopeKeys = ['tenantId', 'clientId', 'canonicalAgentId']
+let operationGeneration = 0
+let mounted = true
+const contextKey = computed(() => `${props.identityScope}\u0000${props.identityEpoch}\u0000${props.runtimeRole}\u0000${runtimeSetup.value.tenantId || ''}\u0000${runtimeSetup.value.clientId || ''}\u0000${runtimeSetup.value.canonicalAgentId || ''}`)
+const clearRuntimeState = () => {
+  operationGeneration += 1; importedHandoff.value = null; handoffMessage.value = ''; runtimeError.value = ''; installationStatus.value = ''; runtimeBusy.value = false; createAttempted.value = false; lastInstallationId.value = ''
 }
-
-const upsertEnvLine = (lines, key, value) => {
-  const index = lines.findIndex(line => line.trim().startsWith(`${key}=`))
-  const nextLine = `${key}=${value}`
-  if (index >= 0) {
-    lines[index] = nextLine
-  } else {
-    lines.unshift(nextLine)
-  }
+watch(contextKey, clearRuntimeState, { flush: 'sync' })
+const exactKeys = (value, keys) => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).sort().join('\u0000') === [...keys].sort().join('\u0000')
+const validHandoff = (value) => {
+  if (!exactKeys(value, ['scope', 'request']) || !exactKeys(value.scope, scopeKeys) || !exactKeys(value.request, requestKeys)) return false
+  const scope = runtimeSetup.value
+  if (value.scope.tenantId !== scope.tenantId || value.scope.clientId !== scope.clientId || value.scope.canonicalAgentId !== scope.canonicalAgentId) return false
+  const r = value.request
+  if (r.canonicalAgentId !== scope.canonicalAgentId || r.manifestVersion !== scope.manifestVersion) return false
+  if (!requestKeys.filter(key => key !== 'enrollmentExpiresAt').every(key => typeof r[key] === 'string' && r[key].length > 0)) return false
+  if (!Number.isSafeInteger(r.enrollmentExpiresAt) || r.enrollmentExpiresAt <= 0) return false
+  if (!/^[a-f0-9]{64}$/.test(r.manifestSha256) || !/^[a-f0-9]{64}$/.test(r.enrollmentSecretSha256)) return false
+  return true
 }
-
-const parseConfigValue = (text = '', key) => {
-  const line = String(text || '').split(/\r?\n/).find(item => item.trim().startsWith(`${key}=`))
-  if (!line) return ''
-  return line.slice(line.indexOf('=') + 1).trim()
-}
-
-const buildSetupVariables = (setupResult, envText) => {
-  if (!setupResult) return []
-  const agent = setupResult.agent || {}
-  const profileText = setupResult.profileExample || ''
-  const apiKey = setupResult.apiKey ||
-    parseConfigValue(profileText, 'apiKey') ||
-    parseConfigValue(envText, 'OPENCLAW_API_KEY') ||
-    LOCAL_API_KEY_PLACEHOLDER
-  const variables = [
-    ['agentId', 'agentId', setupResult.agentId || agent.agentId || parseConfigValue(profileText, 'agentId')],
-    ['agentName', 'agentName', agent.name || parseConfigValue(profileText, 'agentName')],
-    ['personaName', 'personaName', agent.personaName || parseConfigValue(profileText, 'personaName')],
-    ['profileId', 'profileId', setupResult.profileId],
-    ['apiKey', 'apiKey', apiKey],
-    ['WS_URL', 'WS_URL', parseConfigValue(envText, 'WS_URL') || PUBLIC_AGENT_WS_URL],
-    ['DEFAULT_CODEX_PROFILE', 'DEFAULT_CODEX_PROFILE', parseConfigValue(envText, 'DEFAULT_CODEX_PROFILE')],
-    ['CODEX_PROFILES_FILE', 'CODEX_PROFILES_FILE', parseConfigValue(envText, 'CODEX_PROFILES_FILE')]
-  ]
-  return variables
-    .filter(([, , value]) => value)
-    .map(([key, label, value]) => ({ key, label, value }))
-}
-
-const copyText = async (text) => {
-  if (!text) return false
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text)
-    return true
-  }
-  const textarea = document.createElement('textarea')
-  textarea.value = text
-  textarea.setAttribute('readonly', '')
-  textarea.style.position = 'fixed'
-  textarea.style.opacity = '0'
-  document.body.appendChild(textarea)
-  textarea.select()
-  const ok = document.execCommand('copy')
-  document.body.removeChild(textarea)
-  return ok
-}
-
-const copySetupResult = async () => {
-  let ok = false
+const importHandoff = async event => {
+  const file = event.target.files?.[0]; event.target.value = ''; clearRuntimeState()
+  if (!file) return
   try {
-    ok = await copyText(setupCopyText.value)
+    const value = JSON.parse(await file.text())
+    if (!validHandoff(value)) throw new Error('交接材料格式或 scope 不匹配')
+    importedHandoff.value = { scope: { ...value.scope }, request: Object.fromEntries(requestKeys.map(key => [key, value.request[key]])) }
+    handoffMessage.value = '交接材料已验证；原文件内容不会回显。'
   } catch {
-    ok = false
+    handoffMessage.value = ''
+    runtimeError.value = '无法导入：仅接受当前 scope 匹配且不含额外字段或凭据的 handoff.json。'
   }
-  if (!ok) {
-    copied.value = false
-    return
-  }
-  copied.value = true
-  if (copiedTimer) window.clearTimeout(copiedTimer)
-  copiedTimer = window.setTimeout(() => {
-    copied.value = false
-  }, 1800)
 }
-
+const currentOperation = (generation, context) => mounted && generation === operationGeneration && context === contextKey.value
+const createInstallation = async () => {
+  if (!importedHandoff.value || runtimeBusy.value) return
+  lastInstallationId.value = importedHandoff.value.request.installationId
+  createAttempted.value = true
+  const generation = ++operationGeneration; const context = contextKey.value
+  const body = Object.fromEntries(requestKeys.map(key => [key, importedHandoff.value.request[key]]))
+  runtimeBusy.value = true; runtimeError.value = ''; installationStatus.value = ''
+  try {
+    const result = await agentApi.post('/runtime/v1/installations', body, { autoLoading: false })
+    if (!currentOperation(generation, context)) return
+    const data = result?.data ?? result
+    installationStatus.value = ['PENDING', 'ACTIVE', 'REVOKED', 'EXPIRED'].includes(data?.status) ? data.status : '已登记响应；请手动查询确认'
+    importedHandoff.value = null
+  } catch {
+    if (currentOperation(generation, context)) runtimeError.value = '登记结果未确认。不要重复创建；请先手动查询同一 installationId。'
+  } finally { if (currentOperation(generation, context)) runtimeBusy.value = false }
+}
+const lookupInstallation = async () => {
+  const id = importedHandoff.value?.request.installationId || lastInstallationId.value
+  if (!id || runtimeBusy.value) return
+  const generation = ++operationGeneration; const context = contextKey.value
+  runtimeBusy.value = true; runtimeError.value = ''
+  try {
+    const result = await agentApi.get(`/runtime/v1/installations/${encodeURIComponent(id)}`, undefined, { autoLoading: false })
+    if (!currentOperation(generation, context)) return
+    const data = result?.data ?? result
+    installationStatus.value = ['PENDING', 'ACTIVE', 'REVOKED', 'EXPIRED'].includes(data?.status) ? data.status : '状态未知'
+  } catch { if (currentOperation(generation, context)) runtimeError.value = '查询失败；可由你明确再次查询同一安装。' }
+  finally { if (currentOperation(generation, context)) runtimeBusy.value = false }
+}
+const canShowActions = persona => Boolean(persona.canBind || (persona.boundToMe && !persona.systemAgent))
 const handleHostingConfirmed = receipt => {
   emit('hosting-confirmed', receipt)
 }
@@ -335,9 +254,7 @@ const stateText = (persona) => {
   return '未到请时'
 }
 
-onUnmounted(() => {
-  if (copiedTimer) window.clearTimeout(copiedTimer)
-})
+onUnmounted(() => { mounted = false; clearRuntimeState() })
 </script>
 
 <style scoped>
