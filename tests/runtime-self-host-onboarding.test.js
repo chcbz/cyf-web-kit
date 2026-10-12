@@ -13,7 +13,7 @@ script = script
   .replace(/^import \{ agentApi \} from '\.\.\/\.\.\/composables\/useHttp\.js';?$/m, 'const { agentApi } = runtime')
   .replace(/^import HostingRentPanel from '\.\/HostingRentPanel\.vue';?$/m, "const HostingRentPanel = { template: '<div />' }")
   .replace('export default', 'return')
-const makeComponent = runtime => new Function('Vue', 'runtime', script)(Vue, runtime)
+const makeComponent = agentApi => new Function('Vue', 'runtime', script)(Vue, { agentApi })
 const setup = { runtimeProtocolVersion: 'v1', tenantId: 'tenant-real', clientId: 'client-real', canonicalAgentId: 'agent-real', manifestVersion: '1', installationCreatePath: '/agent/runtime/v1/installations', guideUrl: 'https://gitee.com/chcbz/isp-install/blob/develop/docs/cyf-agent-runtime-v1-self-host.md' }
 const request = () => ({ installationId: 'rti_0123456789abcdef0123456789abcdef', canonicalAgentId: setup.canonicalAgentId, manifestVersion: '1', manifestSha256: 'a'.repeat(64), enrollmentSecretSha256: 'b'.repeat(64), enrollmentExpiresAt: 1791800000000 })
 const handoff = (scope = {}, req = request()) => ({ scope: { tenantId: setup.tenantId, clientId: setup.clientId, canonicalAgentId: setup.canonicalAgentId, ...scope }, request: req })
