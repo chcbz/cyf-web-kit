@@ -55,6 +55,19 @@ describe('typed natural discussion interaction adapter', () => {
       expect(posts).to.have.length(1)
     } finally { lane.dispose() }
   })
+  it('identifies a missing assignment before catalog preparation, not as a slow index', async () => {
+    const calls = []
+    const lane = useHallTypedDeliberation({ chatApi: { create: async () => calls.push('POST') },
+      actorScopeKey: ref('owner'), authorizationGeneration: ref(1),
+      getContext: () => ({ conversationId: '7', conversationGeneration: '1', taskId: '450', targetAgentId: 'wuyong', assignmentRevision: '' }),
+      getContextGeneration: () => 1, getCatalogEntries: () => [],
+      prepareCatalog: async () => { calls.push('catalog'); return true }, enabled: () => true })
+    try {
+      expect(await lane.submit({ content: '识别图片' })).to.equal(false)
+      expect(calls).to.deep.equal([]); expect(lane.error.value).to.include('指派上下文')
+      expect(lane.error.value).not.to.include('成果索引')
+    } finally { lane.dispose() }
+  })
   it('reports a missing current assignment context instead of silently dropping the draft', async () => {
     const calls = []
     const lane = useHallTypedDeliberation({ chatApi: { create: async () => calls.push('POST') },

@@ -792,6 +792,7 @@ import { useHallSound } from '@/composables/juyiting/useHallSound'
 import { useHallTaskActions } from '@/composables/juyiting/useHallTaskActions'
 import { useHallRequirementCreate } from '@/composables/juyiting/useHallRequirementCreate'
 import { useHallPointAndStart } from '@/composables/juyiting/useHallPointAndStart'
+import { useHallBountyAssignmentContext } from '@/composables/juyiting/useHallBountyAssignmentContext'
 import { currentBountyAssignmentRevision } from '@/composables/juyiting/hallBountyAssignmentContext'
 import { createPointAndStartIntentStore } from '@/composables/juyiting/hallPointAndStartIntent'
 import { pointAndStartRecoveryLane } from '@/composables/juyiting/hallPointAndStartRecoveryLane'
@@ -2207,6 +2208,13 @@ const {
 const followupContextGeneration = ref(0)
 const typedDeliberationEnabled = computed(() => typedDeliberationBuildEnabled && multimediaDeliberationUiEnabled && chatMode.value === 'bounty')
 let typedDeliberation = null
+const bountyAssignmentContext = useHallBountyAssignmentContext({
+  chatApi, identityScope: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
+  getContext: () => ({ conversationId: conversationId.value, taskId: conversationTask.value?.id || '',
+    targetAgentId: bountyInteractionTargetId(chatContext.value), taskVersion: conversationTask.value?.taskVersion || '',
+    conversationGeneration: activeRequest.value?.conversationGeneration || '' }),
+  getContextGeneration: () => followupContextGeneration.value, enabled: () => typedDeliberationEnabled.value
+})
 const bountyRequestCatalog = useHallBountyRequestCatalog({
   chatApi, identityScope: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
   getContext: () => ({ conversationId: conversationId.value, taskId: conversationTask.value?.id || '',
@@ -2220,9 +2228,10 @@ const invalidateFollowupContext = () => { followupContextGeneration.value++; typ
 const typedAssignmentRevision = () => currentBountyAssignmentRevision({
   task: conversationTask.value, targetAgentId: bountyInteractionTargetId(chatContext.value),
   conversationId: conversationId.value, state: pointAndStartState.value
-})
+}) || bountyAssignmentContext.projection.value?.assignmentRevision || ''
 const typedConversationGeneration = () => typedLong(activeRequest.value?.conversationGeneration) ||
-  typedLong(bountyRequestCatalog.entries.value?.[0]?.request?.conversationGeneration) || ''
+  typedLong(bountyRequestCatalog.entries.value?.[0]?.request?.conversationGeneration) ||
+  bountyAssignmentContext.projection.value?.conversationGeneration || ''
 const typedDeliberationContext = () => ({ conversationId: conversationId.value, taskId: conversationTask.value?.id || '',
   targetAgentId: bountyInteractionTargetId(chatContext.value), assignmentRevision: typedAssignmentRevision(),
   conversationGeneration: typedConversationGeneration() })
@@ -2681,10 +2690,14 @@ const handleSendHallMessage = async (typedInput = {}) => {
     if (!typedAssignmentRevision() && conversationTask.value?.id) {
       const fence = [hallIdentityScope.value, apiStore.authorizationGeneration, conversationTask.value.id,
         conversationId.value, bountyInteractionTargetId(chatContext.value), draft.value]
-      await checkPointAndStartOriginal(conversationTask.value)
+      const prepared = await bountyAssignmentContext.refresh()
       const current = [hallIdentityScope.value, apiStore.authorizationGeneration, conversationTask.value?.id,
         conversationId.value, bountyInteractionTargetId(chatContext.value), draft.value]
       if (fence.some((value, index) => value !== current[index])) return false
+      if (!prepared || !typedAssignmentRevision()) {
+        showToast(bountyAssignmentContext.error.value || '当前指派上下文尚未核对；未发送消息。')
+        return false
+      }
     }
     const accepted = await typedDeliberation.submit({ content: draft.value, sourceSelectors })
     if (accepted) setDraft('')
@@ -2866,6 +2879,7 @@ onUnmounted(() => {
   disposePointAndStart()
   disposeControlledBridge()
   typedDeliberation?.dispose?.()
+  bountyAssignmentContext.dispose()
   disposeHallConversation()
   hallBackendSceneState?.dispose()
   stopHallEventStream()

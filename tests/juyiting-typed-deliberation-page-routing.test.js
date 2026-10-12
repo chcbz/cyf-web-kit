@@ -39,22 +39,36 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
     await actual({ sourceSelectors: [{ kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'file-1', version: '7', purpose: 'REFERENCE', assetId: null, assetRevision: null }] })
     expect(calls.at(-2)).to.deep.equal(['typed', { content: '画一只鸟', sourceSelectors: [{ kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'file-1', version: '7', purpose: 'REFERENCE', assetId: null, assetRevision: null }] }])
   })
-  it('read-only recovers the original binding and fences identity changes before sending', async () => {
+  it('read-only resolves the server binding without an original browser intent and fences identity changes before sending', async () => {
     for (const switchIdentity of [false, true]) {
       const calls = []; const identity = ref('owner-a'); const draft = ref('追加文字')
       const task = ref({ id: '423' }); let revision = ''
       const actual = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled',
         'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', 'typedAssignmentRevision',
         'conversationTask', 'hallIdentityScope', 'apiStore', 'conversationId', 'bountyInteractionTargetId',
-        'chatContext', 'checkPointAndStartOriginal', `return (${handler('handleSendHallMessage')})`)(
+        'chatContext', 'bountyAssignmentContext', `return (${handler('handleSendHallMessage')})`)(
         { close() {} }, { cancel() {} }, () => {}, ref(true),
         { error: ref(''), submit: async () => { calls.push('POST'); return true } }, draft,
         () => {}, () => {}, () => { throw new Error('legacy lane forbidden') }, () => revision,
         task, identity, { authorizationGeneration: 1 }, ref('7'), () => 'agent-a', ref({}),
-        async () => { calls.push('GET-original'); revision = '1'; if (switchIdentity) identity.value = 'owner-b' })
+        { error: ref(''), refresh: async () => { calls.push('GET-context'); revision = '1'; if (switchIdentity) identity.value = 'owner-b'; return true } })
       expect(await actual()).to.equal(!switchIdentity)
-      expect(calls).to.deep.equal(switchIdentity ? ['GET-original'] : ['GET-original', 'POST'])
+      expect(calls).to.deep.equal(switchIdentity ? ['GET-context'] : ['GET-context', 'POST'])
     }
+  })
+  it('does not send or clear the draft when authoritative assignment recovery fails', async () => {
+    const calls = []; const draft = ref('识别这张图片')
+    const actual = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled',
+      'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', 'typedAssignmentRevision',
+      'conversationTask', 'hallIdentityScope', 'apiStore', 'conversationId', 'bountyInteractionTargetId',
+      'chatContext', 'bountyAssignmentContext', `return (${handler('handleSendHallMessage')})`)(
+      { close() {} }, { cancel() {} }, () => {}, ref(true),
+      { error: ref(''), submit: async () => calls.push('POST') }, draft,
+      () => calls.push('clear'), text => calls.push(text), () => calls.push('legacy'), () => '',
+      ref({ id: '450' }), ref('owner'), { authorizationGeneration: 1 }, ref('7'), () => 'wuyong', ref({}),
+      { error: ref('指派核对失败'), refresh: async () => false })
+    expect(await actual()).to.equal(false); expect(calls).to.deep.equal(['指派核对失败'])
+    expect(draft.value).to.equal('识别这张图片')
   })
   it('does not expose a proposal-confirmation or image-preview branch on normal requests', () => {
     expect(() => option('useHallTypedDeliberation', 'onProposal')).to.throw('missing useHallTypedDeliberation.onProposal')
