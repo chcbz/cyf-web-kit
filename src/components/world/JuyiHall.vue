@@ -281,7 +281,7 @@
             :loading="rosterLoading"
             :error-message="rosterError"
             :has-pending-task="Boolean(pendingPointAndDeliberateTask)"
-            :point-and-start-busy="pointAndStartBusy || controlledBridgeBusy"
+            :point-and-start-busy="pointAndStartBusy"
             :can-point-and-deliberate="canPointAndDeliberateAgent"
             :can-start-conversation="canStartAgentConversation"
             @set-agent-filter="setAgentFilter"
@@ -323,7 +323,7 @@
             :requirement-create-state="requirementCreateState"
             :requirement-create-busy="requirementCreateBusy"
             :point-and-start-state="pointAndStartPresentationState"
-            :point-and-start-busy="pointAndStartBusy || controlledBridgeBusy"
+            :point-and-start-busy="pointAndStartBusy"
             :format-time="formatTime"
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
@@ -796,7 +796,6 @@ import { useHallBountyAssignmentContext } from '@/composables/juyiting/useHallBo
 import { currentBountyAssignmentRevision } from '@/composables/juyiting/hallBountyAssignmentContext'
 import { createPointAndStartIntentStore } from '@/composables/juyiting/hallPointAndStartIntent'
 import { pointAndStartRecoveryLane } from '@/composables/juyiting/hallPointAndStartRecoveryLane'
-import { useHallPointAndStartControlledBridge } from '@/composables/juyiting/useHallPointAndStartControlledBridge'
 import { useHallBountyRequestCatalog } from '@/composables/juyiting/useHallBountyRequestCatalog'
 import { useHallTypedDeliberation } from '@/composables/juyiting/useHallTypedDeliberation'
 import { typedLong } from '@/composables/juyiting/hallTypedDeliberation'
@@ -2270,7 +2269,7 @@ const pointAndStartIntentState = (taskId) => createPointAndStartIntentStore({
   scope: hallIdentityScope.value,
   taskId
 }).read()
-const clearPointAndStartCapability = () => { pointAndStartContextGeneration.value++; invalidateControlledBridge(); stopPointAndStartObservation() }
+const clearPointAndStartCapability = () => { pointAndStartContextGeneration.value++; stopPointAndStartObservation() }
 const attachAdmittedPointAndStart = async ({ task, targetAgentId, reference, isCurrent }) => {
   if (!isCurrent?.() || panelDisposed || task?.id !== reference?.taskId || targetAgentId !== reference?.targetAgentId) return false
   // Admission receives only the canonical TaskDTO. Never synthesize assignment
@@ -2287,27 +2286,6 @@ const attachAdmittedPointAndStart = async ({ task, targetAgentId, reference, isC
   if (!isCurrent?.() || panelDisposed || selectedTask.value?.id !== task.id) return false
   return adoptBountyBootstrap(reference)
 }
-const {
-  state: controlledBridgeState,
-  busy: controlledBridgeBusy,
-  checkOriginal: checkControlledBridgeOriginal,
-  resumeOriginal: resumeControlledBridgeOriginal,
-  dispose: disposeControlledBridge,
-  invalidate: invalidateControlledBridge
-} = useHallPointAndStartControlledBridge({
-  agentApi,
-  actorScopeKey: hallIdentityScope,
-  storage: pointAndStartStorage,
-  keys: {
-    createAssignmentKey: () => globalThis.crypto?.randomUUID?.(),
-    createIssueKey: () => globalThis.crypto?.randomUUID?.()
-  },
-  onBound: async ({ intent, isCurrent }) => {
-    // The bridge receipt is not a bootstrap request. Observe the existing original
-    // projection until it is admitted/historical/failed or this context is invalidated.
-    if (isCurrent?.()) observePointAndStart(intent.taskId)
-  }
-})
 const {
   state: pointAndStartState,
   busy: pointAndStartBusy,
@@ -2331,7 +2309,7 @@ const {
   },
   onAdmitted: attachAdmittedPointAndStart
 })
-const pointAndStartPresentationState = computed(() => pointAndStartState.value.intent?.taskId === controlledBridgeState.value.intent?.taskId && pointAndStartState.value.status !== 'IDLE' ? pointAndStartState.value : controlledBridgeState.value.intent ? controlledBridgeState.value : pointAndStartState.value)
+const pointAndStartPresentationState = pointAndStartState
 const explainPointAndStartState = () => ({
   UNKNOWN: '正在确认点将结果，请刷新状态。',
   PREPARING: '正在准备会话。',
@@ -2341,15 +2319,17 @@ const explainPointAndStartState = () => ({
 }[pointAndStartState.value.status] || '正在确认点将结果。')
 const checkPointAndStartOriginal = async (task) => {
   if (!task?.id) return false
-  const existing = pointAndStartIntentState(task.id)
-  const result = pointAndStartRecoveryLane(existing) === 'CONTROLLED' ? await checkControlledBridgeOriginal(task.id) : await checkPointAndStart(task.id)
+  const result = await checkPointAndStart(task.id)
   if (!result && pointAndStartState.value.intent?.taskId === task.id) showToast(explainPointAndStartState())
   return result
 }
 const resumePointAndStartOriginal = async (task) => {
   const intent = pointAndStartIntentState(task?.id)
   if (intent.state !== 'PRESENT') return checkPointAndStartOriginal(task)
-  if (pointAndStartRecoveryLane(intent) === 'CONTROLLED') return resumeControlledBridgeOriginal(task.id)
+  if (pointAndStartRecoveryLane(intent) === 'CONTROLLED' || intent.record?.schemaVersion !== 2) {
+    showToast('旧图片与费用操作仅可查看历史，不再重放执行。')
+    return checkPointAndStartOriginal(task)
+  }
   return resumePointAndStart(task.id)
 }
 // Reuse the selected canonical task; private chat never changes this context.
@@ -2699,7 +2679,7 @@ const handleSendHallMessage = async (typedInput = {}) => {
         return false
       }
     }
-    const accepted = await typedDeliberation.submit({ content: draft.value, sourceSelectors })
+    const accepted = await typedDeliberation.submit({ content: draft.value, sourceSelectors, materialScope: typedInput?.materialScope || 'TASK_DEFAULT' })
     if (accepted) setDraft('')
     else if (typedDeliberation.error.value) showToast(typedDeliberation.error.value)
     return accepted
@@ -2877,7 +2857,6 @@ onUnmounted(() => {
   clearPointAndStartCapability()
   disposeRequirementCreate()
   disposePointAndStart()
-  disposeControlledBridge()
   typedDeliberation?.dispose?.()
   bountyAssignmentContext.dispose()
   disposeHallConversation()

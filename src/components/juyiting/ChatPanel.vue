@@ -141,7 +141,7 @@
       :voice="voice"
       @clear-target="$emit('clear-target', $event)"
       @mention-agent="$emit('mention-agent', $event)"
-      @send-message="$emit('send-message', typedEnabled && discussionVariant === 'bounty' ? { sourceSelectors: typedSourceSelectors } : undefined)"
+      @send-message="$emit('send-message', typedEnabled && discussionVariant === 'bounty' ? { sourceSelectors: typedSourceSelectors, materialScope: typedMaterialScope } : undefined)"
       @update:draft="$emit('update:draft', $event)"
       @voice-apply="$emit('voice-apply', $event)"
       @open-materials="toggleMaterialPicker"
@@ -151,7 +151,7 @@
           <div class="material-reference-heading">
             <div>
               <strong>{{ isTaskDiscussion ? '本次需求的资料' : '引用资料' }}</strong>
-              <small>{{ isTaskDiscussion ? '图片、文档、音频等都可以作为资料，由 Agent 按需求使用。' : '引用固定到当前话头及所选版本；不会把资料内容或假摘要写入消息。' }}</small>
+              <small>{{ isTaskDiscussion ? '默认使用本任务有效资料；也可选择仅本条消息或不带资料。' : '引用固定到当前话头及所选版本；不会把资料内容或假摘要写入消息。' }}</small>
             </div>
             <button type="button" aria-label="收起引用资料" @click="materialPickerOpen = false">
               <var-icon name="close" />
@@ -164,10 +164,17 @@
             <p v-if="materialError" class="material-reference-error" role="alert">{{ materialError }}</p>
             <div v-if="materialLoading" class="material-reference-state">正在查找百宝箱资料…</div>
             <div v-if="isTaskDiscussion" class="task-material-directory">
+              <label v-if="typedEnabled" class="typed-material-scope">资料范围
+                <select v-model="typedMaterialScope" aria-label="资料范围">
+                  <option value="TASK_DEFAULT">本任务资料</option>
+                  <option value="EXPLICIT">仅本条消息</option>
+                  <option value="NONE">不带资料</option>
+                </select>
+              </label>
               <p v-if="!activeMaterialLinks.length" class="material-reference-state">暂未添加资料，不影响继续讨论。</p>
               <article v-for="link in activeMaterialLinks" :key="link.relationId" class="task-material-reference">
                 <div><strong>{{ materialName(link) }}</strong><small>v{{ link.version }} · {{ link.role === 'INPUT' ? '用于办理' : '参考资料' }}</small></div>
-                <p>可随消息发送，Agent 会按需求使用。</p>
+                <p>本任务资料默认有效；临时勾选只用于所选消息范围。</p>
                 <label v-if="typedEnabled" class="typed-source-selector"><input type="checkbox" :checked="typedSelectedSourceIds.has(`${link.fileId}\u0000${link.version}`)" @change="toggleTypedSource(link, $event.target.checked)" /> 随本条消息发送</label>
               </article>
               <p class="material-reference-notice">资料可选；直接描述你想要的结果即可。</p>
@@ -324,7 +331,8 @@ const activeMaterialLinks = computed(() => selectedMaterialDirectory.value.links
 const linkedFileIds = computed(() => new Set(activeMaterialLinks.value.map(link => `${link.fileId}:${link.version}`)))
 const linkFor = file => activeMaterialLinks.value.find(link => link.fileId === file.fileId && link.version === file.latestVersion)
 const materialName = link => materialNames.value[link.fileId] || workspace.items.value.find(file => file.fileId === link.fileId)?.displayName || `资料 ${link.fileId}`
-const typedSourceSelectors = computed(() => activeMaterialLinks.value.filter(link => typedSelectedSourceIds.value.has(`${link.fileId}\u0000${link.version}`) ).map(link => ({ kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: link.fileId, version: String(link.version), purpose: link.role, assetId: null, assetRevision: null })))
+const typedMaterialScope = ref('TASK_DEFAULT')
+const typedSourceSelectors = computed(() => (typedMaterialScope.value === 'NONE' ? [] : activeMaterialLinks.value).filter(link => typedSelectedSourceIds.value.has(`${link.fileId}\u0000${link.version}`) ).map(link => ({ kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: link.fileId, version: String(link.version), purpose: link.role })))
 const toggleTypedSource = (link, selected) => {
   if (!props.typedEnabled || !link || !['INPUT', 'REFERENCE'].includes(link.role)) return
   const next = new Set(typedSelectedSourceIds.value); const key = `${link.fileId}\u0000${link.version}`
@@ -397,6 +405,7 @@ watch(() => `${materialIdentityKey.value}\u0000${taskId.value}\u0000${props.conv
   materialPickerOpen.value = false
   materialNames.value = {}
   typedSelectedSourceIds.value = new Set()
+  typedMaterialScope.value = 'TASK_DEFAULT'
 }, { flush: 'sync' })
 onBeforeUnmount(() => {
   workspace.dispose()

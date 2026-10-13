@@ -1,5 +1,5 @@
 import { computed, ref, unref, watch } from 'vue'
-import { currentDeliveryProjection, completedExecutionDelivery, exactOutputId, outputAssetPart, outputCatalogItems, textDeliveryProjection } from './bountyOutputCatalog.js'
+import { textDeliveryProjection } from './bountyOutputCatalog.js'
 import { actionProgressAdvances, discussionAccepted, discussionBody, inspectionAccepted, inspectionOutcomeProjection, outcomeCardKey, typedId, typedLong, typedOutcomeProjection } from './hallTypedDeliberation.js'
 
 const unwrap = response => response?.data?.data ?? response?.data ?? response
@@ -39,20 +39,17 @@ const writeRecords = (storage, scope, context, records) => {
 const sameContext = (one, two) => one && two && one.conversationId === two.conversationId && one.taskId === two.taskId &&
   one.targetAgentId === two.targetAgentId && one.assignmentRevision === two.assignmentRevision &&
   one.conversationGeneration === two.conversationGeneration
-const selectorInputs = proposal => proposal.sourceSelectors.map(selector => selector.kind === 'CURRENT_CONVERSATION_ASSET'
-  ? { kind: selector.kind, assetRef: { assetId: selector.assetId, revision: selector.assetRevision } }
-  : { kind: selector.kind, fileId: selector.fileId, version: selector.version, purpose: selector.purpose })
 const storedBody = value => {
   const body = discussionBody({ intent: value?.intent, taskId: value?.taskId, assignmentRevision: value?.expectedAssignmentRevision,
     content: value?.content, parentOutcomeId: value?.parentOutcomeId, expectedParentStateVersion: value?.expectedParentStateVersion,
     pendingQuestionId: value?.pendingQuestionId, expectedPendingQuestionStateVersion: value?.expectedPendingQuestionStateVersion,
-    sourceSelectors: value?.sourceSelectors })
+    sourceSelectors: value?.sourceSelectors, materialScope: value?.materialScope })
   return body && JSON.stringify(body) === JSON.stringify(value) ? body : null
 }
 
 /** Typed natural CHAT UI adapter. It owns only the frozen discussion/read wire; no model, grant, or legacy stream fallback. */
 export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorizationGeneration, getContext, getContextGeneration,
-  getCatalogEntries, prepareCatalog, storage = null, enabled = () => false, onAccepted = null, onProposal = null }) => {
+  getCatalogEntries, storage = null, enabled = () => false, onAccepted = null }) => {
   const scope = computed(() => unref(typeof actorScopeKey === 'function' ? actorScopeKey() : actorScopeKey))
   const projections = ref([]); const selectedPending = ref(null); const error = ref(''); const busy = ref(false); const storageRevision = ref(0)
   let generation = 0; let disposed = false; let queued = false; let refreshFlight = null
@@ -82,7 +79,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     if (previous?.state === 'READY' && projection.state === 'READY' && !sameFinalBinding(previous, projection)) return false
     if (previous?.state === 'READY' && projection.state === 'READY' && projection.outcome?.kind !== 'CLARIFY' &&
       JSON.stringify(previous.outcome) !== JSON.stringify(projection.outcome)) return false
-    if (previous?.schemaVersion === 3 && projection.schemaVersion === 3 &&
+    if ([3, 4].includes(previous?.schemaVersion) && previous.schemaVersion === projection.schemaVersion &&
       !actionProgressAdvances(previous.actionProgress, projection.actionProgress)) return false
     const previousClarification = previous?.outcome?.kind === 'CLARIFY' ? previous.outcome.clarification : null
     const clarification = projection?.outcome?.kind === 'CLARIFY' ? projection.outcome.clarification : null
@@ -156,87 +153,14 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   }
   // A single explicit manifest/edit chain supplies context, not delivery intent or tool authority.
   // Independent roots, pending projections and late assets remain unresolved; never pick latest MIME.
-  const currentMediaContext = async (catalog, captured) => {
-    const context = captured.context
-    const steps = []
-    for (const entry of catalog) {
-      const request = entry?.request
-      if (!request || request.conversationId !== context.conversationId || request.conversationGeneration !== context.conversationGeneration ||
-        !exactOutputId(request.requestId) || !Array.isArray(request.steps) || !Array.isArray(request.turns)) return { sourceSelectors: [], basis: null }
-      // Inspection-only children cannot contribute or replace deliverables. Their old
-      // recovery status must not erase the exact completed CHAT/EXECUTE basis.
-      if (request.steps.length === 0 && request.turns.length > 0 && request.turns.every(turn => turn.route === 'INSPECT')) continue
-      for (const step of request.steps.filter(step => step.kind === 'EXECUTE')) {
-        if (!['OUTPUT_COMMITTED', 'COMPLETED'].includes(request.state) || step.state !== 'OUTPUT_COMMITTED' || step.executionState !== 'OUTPUT_COMMITTED' ||
-          !exactOutputId(step.stepId) || !exactOutputId(step.executionId) || step.taskId !== context.taskId ||
-          step.targetAgentId !== context.targetAgentId || step.assignmentRevision !== context.assignmentRevision) return { sourceSelectors: [], basis: null }
-        steps.push({ requestId: request.requestId, stepId: step.stepId })
-      }
-      if (request.turns.length && !projections.value.some(value => value.requestId === request.requestId && value.state === 'READY')) return { sourceSelectors: [], basis: null }
-    }
-    if (!steps.length || projections.value.some(value => value.route !== 'INSPECT' && value.purpose !== 'INSPECT' && value.state === 'PENDING')) return { sourceSelectors: [], basis: null }
-    if (projections.value.some(value => value.outcome?.deliverable === true) && !projections.value.some(value =>
-      value.state === 'READY' && value.outcome?.kind === 'ACTION_REQUEST' && value.actionProgress?.childRoute === 'EXECUTE')) return { sourceSelectors: [], basis: null }
-    const outputs = []
-    try {
-      for (const step of steps) {
-        const raw = unwrap(await chatApi.get(`/requests/${encodeURIComponent(step.requestId)}/steps/${encodeURIComponent(step.stepId)}/outputs`, {}, { autoLoading: false, needAuth: true }))
-        if (!current(captured)) return { sourceSelectors: [], basis: null }
-        const items = outputCatalogItems(raw, step.requestId, step.stepId)
-        if (!Array.isArray(raw) || !items.length || items.length !== raw.length) return { sourceSelectors: [], basis: null } // Never silently drop an invalid part of a manifest.
-        outputs.push(...items)
-      }
-      const actions = []; const texts = []
-      const snapshots = catalog.map(entry => entry.request)
-      for (const value of projections.value.filter(value => value.state === 'READY' && value.schemaVersion === 3 && value.route === 'CHAT')) {
-        const request = snapshots.find(request => request.requestId === value.requestId)
-        if (!request || value.outcome.taskId !== context.taskId || value.outcome.assignmentRevision !== context.assignmentRevision) return { sourceSelectors: [], basis: null }
-        if (value.outcome.deliverable === true) texts.push({ requestId: value.requestId, outcomeId: value.outcome.outcomeId,
-          messageSource: value.outcome.messageSource, deliveryRelation: value.outcome.deliveryRelation })
-        if (value.outcome.kind === 'ACTION_REQUEST') {
-          const turn = request.turns.find(turn => turn.turnId === value.turnId)
-          if (!turn) return { sourceSelectors: [], basis: null }
-          const raw = { ...value }; delete raw.purpose
-          const action = completedExecutionDelivery(raw, request, turn, snapshots, context.taskId)
-          if (action) actions.push(action)
-        }
-      }
-      const projection = currentDeliveryProjection([...texts, ...outputs], actions)
-      const media = projection.items.filter(item => !item.messageSource)
-      if (!media.length || media.length > 32 || media.some(item => !outputAssetPart(item))) return { sourceSelectors: [], basis: projection.basis }
-      const seen = new Set()
-      const sourceSelectors = media.map(item => {
-        const asset = outputAssetPart(item)
-        if (!asset || asset.assetId.length > 64 || seen.has(asset.assetId)) throw new Error('Ambiguous asset source')
-        seen.add(asset.assetId)
-        return { kind: 'CURRENT_CONVERSATION_ASSET', fileId: null, version: null, purpose: null, assetId: asset.assetId, assetRevision: asset.revision }
-      })
-      return { sourceSelectors, basis: projection.basis }
-    } catch { return { sourceSelectors: [], basis: null, unresolvedDelivery: true } } // Do not turn an ambiguous existing collection into an unrelated new root.
-  }
-  const submit = async ({ content, sourceSelectors = [], inspection = false } = {}) => {
+  const submit = async ({ content, sourceSelectors = [], materialScope = 'TASK_DEFAULT', inspection = false } = {}) => {
+    if (inspection) { error.value = '资料在原议事回合使用，请直接发送需求。'; return false }
     if (busy.value || !enabled?.()) return false
     const captured = capture(); const context = captured.context
     if (!current(captured) || !typedId(context.conversationId) || !typedId(context.taskId) || !typedId(context.targetAgentId) ||
       !typedLong(context.assignmentRevision, { allowZero: true })) {
       if (current(captured)) error.value = '当前指派上下文尚未核对，请刷新事项后重试；未发送消息。'
       return false
-    }
-    if (prepareCatalog) {
-      busy.value = true
-      try {
-        if (!await prepareCatalog() || !current(captured)) {
-          if (current(captured)) error.value = '当前成果索引核对失败；未发送消息，请刷新后重试。'
-          return false
-        }
-        if (!await refresh()) {
-          if (current(captured)) error.value = '当前答复状态未能核对；未发送消息，请刷新后重试。'
-          return false
-        }
-      } catch {
-        if (current(captured)) error.value = '暂时无法核对当前成果索引；未发送消息。'
-        return false
-      } finally { if (current(captured)) busy.value = false }
     }
     if (!current(captured)) return false
     const pending = selectedPending.value
@@ -247,28 +171,10 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     }
     let deliveryParent = null
     const catalog = clone(getCatalogEntries?.() || [])
-    const explicitSources = Array.isArray(sourceSelectors) && sourceSelectors.length > 0
-    const completedMediaBasis = projections.value.some(value => value.state === 'READY' && value.outcome?.kind === 'ACTION_REQUEST' &&
-      value.actionProgress?.state === 'COMPLETED' && value.actionProgress?.childRoute === 'EXECUTE')
-    if (!pending && purpose === 'CHAT' && Array.isArray(sourceSelectors) && typeof content === 'string' &&
-      ((!explicitSources && content.trim()) || (explicitSources && completedMediaBasis))) {
-      busy.value = true
-      try {
-        const available = await currentMediaContext(catalog, captured)
-        if (available.unresolvedDelivery) {
-          if (current(captured)) error.value = '本次交付范围尚不明确；未发送消息，请先核对原成果关联。'
-          return false
-        }
-        if (!explicitSources) sourceSelectors = available.sourceSelectors
-        deliveryParent = available.basis
-      }
-      finally { if (current(captured)) busy.value = false }
-      if (!current(captured) || JSON.stringify(catalog) !== JSON.stringify(getCatalogEntries?.() || [])) return false
-    }
     const unresolved = catalog.some(entry => !entry?.request?.turns?.some(turn => turn.route === 'INSPECT') &&
       !projections.value.some(value => value.requestId === entry?.request?.requestId && value.state === 'READY'))
     if (!deliveryParent && !pending && purpose === 'CHAT' && !unresolved && !catalog.some(entry => entry?.request?.steps?.some(step => step.kind === 'EXECUTE'))) {
-      const finals = projections.value.filter(value => value.schemaVersion === 3 && value.state === 'READY' && value.route === 'CHAT' &&
+      const finals = projections.value.filter(value => [3, 4].includes(value.schemaVersion) && value.state === 'READY' && value.route === 'CHAT' &&
         value.outcome?.deliverable === true && value.outcome.assignmentRevision === context.assignmentRevision)
       try {
         deliveryParent = textDeliveryProjection(finals.map(value => ({ outcomeId: value.outcome.outcomeId,
@@ -277,8 +183,8 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     }
     const body = discussionBody(pending ? { intent: 'CLARIFICATION_REPLY', taskId: context.taskId, assignmentRevision: context.assignmentRevision,
       content, parentOutcomeId: pending.parentOutcomeId, expectedParentStateVersion: pending.expectedParentStateVersion,
-      pendingQuestionId: pending.pendingQuestionId, expectedPendingQuestionStateVersion: pending.expectedPendingQuestionStateVersion, sourceSelectors }
-      : { intent: 'DISCUSSION', taskId: context.taskId, assignmentRevision: context.assignmentRevision, content, sourceSelectors,
+      pendingQuestionId: pending.pendingQuestionId, expectedPendingQuestionStateVersion: pending.expectedPendingQuestionStateVersion, sourceSelectors, materialScope }
+      : { intent: 'DISCUSSION', taskId: context.taskId, assignmentRevision: context.assignmentRevision, content, sourceSelectors, materialScope,
         parentOutcomeId: deliveryParent?.outcomeId ?? null, expectedParentStateVersion: deliveryParent ? '0' : null })
     const key = secureKey()
     if (!body || !key) { if (current(captured)) error.value = '暂时无法发送，请检查内容和资料后重试。'; return false }
@@ -293,7 +199,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     const context = captured.context
     const body = storedBody(record?.body)
     const purpose = recordPurpose(record)
-    if (!body || !typedId(record?.key) || !sameContext(record.context, context) || !current(captured)) return false
+    if (purpose !== 'CHAT' || record?.body?.schemaVersion !== 2 || !body || !typedId(record?.key) || !sameContext(record.context, context) || !current(captured)) return false
     try {
       const receipt = (purpose === 'INSPECT' ? inspectionAccepted : discussionAccepted)(unwrap(await chatApi.create(`/conversations/${encodeURIComponent(context.conversationId)}/interactions/${purpose === 'INSPECT' ? 'inspection' : 'discussion'}`, clone(body), apiOptions(record.key))), body, context.conversationId)
       if (!current(captured)) return false
@@ -341,18 +247,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     try { return await postOriginal(record, captured) }
     finally { if (current(captured)) busy.value = false }
   }
-  const confirmProposal = async projection => {
-    const proposal = projection?.outcome?.proposal
-    if (!proposal || !current(capture())) return false
-    const inputs = selectorInputs(proposal)
-    if (proposal.operation === 'GENERATE_IMAGE') return Boolean(await onProposal?.({ kind: 'GENERATE_IMAGE', content: proposal.instruction,
-      inputRefs: inputs, continuationOf: null, projection: clone(projection) }))
-    if (proposal.operation === 'EDIT_IMAGE' && proposal.parent && inputs.length === 1 && inputs[0].kind === 'CURRENT_CONVERSATION_ASSET') {
-      return Boolean(await onProposal?.({ kind: 'EDIT_IMAGE', content: proposal.instruction, assetRef: inputs[0].assetRef,
-        continuationOf: clone(proposal.parent), projection: clone(projection) }))
-    }
-    return false
-  }
+  const confirmProposal = async () => false // Historical proposals are audit data, never a new write entry.
   const cards = computed(() => projections.value.filter(item => item.state === 'READY' && item.outcome).map(item => Object.freeze({ ...item, key: outcomeCardKey(item) })))
   const inspectionStatus = computed(() => {
     storageRevision.value

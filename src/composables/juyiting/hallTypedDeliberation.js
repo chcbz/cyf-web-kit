@@ -13,24 +13,27 @@ export const typedId = value => typeof value === 'string' && value && value === 
 export const exactKeys = (value, fields) => value && typeof value === 'object' && !Array.isArray(value) &&
   Object.keys(value).length === fields.length && fields.every(field => own(value, field))
 const freeze = value => Object.freeze(JSON.parse(JSON.stringify(value)))
-const selectorFields = ['kind', 'fileId', 'version', 'purpose', 'assetId', 'assetRevision']
+// v2 tagged union. File references retain exact version/lineage; data results bind their digest.
 export const sourceSelector = value => {
-  if (!exactKeys(value, selectorFields)) return null
-  if (value.kind === 'TASK_LINKED_WORKSPACE_VERSION' && typedId(value.fileId) && typedLong(value.version) &&
-    ['INPUT', 'REFERENCE'].includes(value.purpose) && value.assetId === null && value.assetRevision === null) return freeze(value)
-  if (value.kind === 'CURRENT_CONVERSATION_ASSET' && value.fileId === null && value.version === null && value.purpose === null &&
+  if (value?.kind === 'TASK_LINKED_WORKSPACE_VERSION' && exactKeys(value, ['kind', 'fileId', 'version', 'purpose']) &&
+    typedId(value.fileId) && typedLong(value.version) && BigInt(value.version) <= 2147483647n &&
+    ['INPUT', 'REFERENCE'].includes(value.purpose)) return freeze(value)
+  if (value?.kind === 'CURRENT_CONVERSATION_ASSET' && exactKeys(value, ['kind', 'assetId', 'assetRevision']) &&
     typedId(value.assetId) && typedLong(value.assetRevision)) return freeze(value)
+  if (value?.kind === 'EXECUTION_RESULT' && exactKeys(value, ['kind', 'executionId', 'resultDigest']) &&
+    typedId(value.executionId) && /^[a-f0-9]{64}$/.test(value.resultDigest)) return freeze(value)
   return null
 }
 export const discussionBody = ({ intent, taskId, assignmentRevision, content, parentOutcomeId = null,
-  expectedParentStateVersion = null, pendingQuestionId = null, expectedPendingQuestionStateVersion = null, sourceSelectors = [] }) => {
+  expectedParentStateVersion = null, pendingQuestionId = null, expectedPendingQuestionStateVersion = null, sourceSelectors = [], materialScope = 'TASK_DEFAULT' }) => {
   if (!['DISCUSSION', 'CLARIFICATION_REPLY'].includes(intent) || !typedId(taskId) || !typedLong(assignmentRevision, { allowZero: true }) ||
     typeof content !== 'string' || Array.from(content).length > 4000 || (forbiddenContentControl(content) && Boolean(content.trim())) ||
-    !Array.isArray(sourceSelectors) || sourceSelectors.length > 32) return null
+    !['TASK_DEFAULT', 'EXPLICIT', 'NONE'].includes(materialScope) || !Array.isArray(sourceSelectors) || sourceSelectors.length > 32 ||
+    (materialScope === 'NONE' && sourceSelectors.length)) return null
   const selectors = sourceSelectors.map(sourceSelector)
-  if (selectors.some(value => !value) || (!content.trim() && !selectors.length)) return null
+  if (selectors.some(value => !value) || new Set(selectors.map(value => JSON.stringify(value))).size !== selectors.length || (!content.trim() && !selectors.length)) return null
   const body = {
-    schemaVersion: 1, intent, taskId, expectedAssignmentRevision: assignmentRevision, content,
+    schemaVersion: 2, materialScope, intent, taskId, expectedAssignmentRevision: assignmentRevision, content,
     parentOutcomeId, expectedParentStateVersion, pendingQuestionId, expectedPendingQuestionStateVersion,
     sourceSelectors: selectors
   }
@@ -69,7 +72,7 @@ const outcome = value => {
 }
 const projectionFields = ['schemaVersion', 'conversationId', 'conversationGeneration', 'requestId', 'requestRevision', 'turnId', 'state', 'outcome']
 export const typedOutcomeProjection = (value, context = {}) => {
-  if (value?.schemaVersion === 3) return actionOutcomeProjection(value, context, 'CHAT')
+  if ([3, 4].includes(value?.schemaVersion)) return actionOutcomeProjection(value, context, 'CHAT')
   if (!exactKeys(value, projectionFields) || value.schemaVersion !== 1 || !typedId(value.conversationId) || !typedLong(value.conversationGeneration) ||
     !typedId(value.requestId) || !typedLong(value.requestRevision) || !typedId(value.turnId) || !['PENDING', 'READY'].includes(value.state)) return null
   if ((context.conversationId && value.conversationId !== context.conversationId) ||
@@ -83,7 +86,7 @@ export const typedOutcomeProjection = (value, context = {}) => {
 }
 const acceptedFields = ['schemaVersion', 'intent', 'requestId', 'userMessageId', 'turnIds', 'state', 'stateVersion', 'eventCursor', 'statusUrl', 'typedOutcomeUrl', 'replay', 'pendingQuestionId']
 export const discussionAccepted = (value, body, conversationId) => {
-  if (!exactKeys(value, acceptedFields) || value.schemaVersion !== 1 || value.intent !== body?.intent || !typedId(value.requestId) ||
+  if (!exactKeys(value, acceptedFields) || value.schemaVersion !== body?.schemaVersion || value.intent !== body?.intent || !typedId(value.requestId) ||
     !typedLong(value.userMessageId) || !Array.isArray(value.turnIds) || value.turnIds.length !== 1 || !value.turnIds.every(typedId) ||
     typeof value.state !== 'string' || !value.state || !typedLong(value.stateVersion, { allowZero: true }) || !typedLong(value.eventCursor, { allowZero: true }) ||
     value.statusUrl !== `/chat/requests/${value.requestId}` || value.typedOutcomeUrl !== `/chat/conversations/${conversationId}/requests/${value.requestId}/typed-outcome` ||
@@ -96,7 +99,7 @@ const inspectionSummaryFields = ['inputDigest', 'sources']
 const inspectionReceiptSourceFields = ['sourceRefId', 'sha256', 'byteLength', 'carrier', 'contributionDigest']
 const digest = value => typeof value === 'string' && /^sha256:[a-f0-9]{64}$/.test(value)
 export const inspectionOutcomeProjection = (value, context = {}) => {
-  if (value?.schemaVersion === 3) return actionOutcomeProjection(value, context, 'INSPECT')
+  if ([3, 4].includes(value?.schemaVersion)) return actionOutcomeProjection(value, context, 'INSPECT')
   const fields = ['schemaVersion', 'contract', 'conversationId', 'conversationGeneration', 'requestId', 'requestRevision', 'turnId', 'state', 'outcome', 'inspection']
   if (!exactKeys(value, fields) || value.schemaVersion !== 2 || value.contract !== 'juyiting-typed-inspection-v1' || !typedId(value.conversationId) || !typedLong(value.conversationGeneration) || !typedId(value.requestId) || !typedLong(value.requestRevision) || !typedId(value.turnId) || !['PENDING', 'READY'].includes(value.state) || !exactKeys(value.inspection, inspectionFields) || !typedId(value.inspection.authorizationId) || !digest(value.inspection.manifestDigest) || !Array.isArray(value.inspection.sourceRefIds) || !value.inspection.sourceRefIds.length || value.inspection.sourceRefIds.some(item => !typedId(item)) || new Set(value.inspection.sourceRefIds).size !== value.inspection.sourceRefIds.length) return null
   if ((context.conversationId && value.conversationId !== context.conversationId) || (context.conversationGeneration && value.conversationGeneration !== context.conversationGeneration) || (context.requestId && value.requestId !== context.requestId)) return null
@@ -113,7 +116,7 @@ export const inspectionAccepted = (value, body, conversationId) => {
 }
 export const outcomeCardKey = value => `${value.requestId}\u0000${value.turnId}\u0000${value.outcome?.outcomeId || ''}`
 
-// Ordinary v3 outcomes are display data. Hydration must never trigger a tool or a payment request.
+// Ordinary action-v4 outcomes are display data. Hydration must never trigger a tool or a payment request.
 const actionProjectionFields = [...projectionFields, 'route', 'inspection', 'actionProgress']
 const actionOutcomeFields = ['outcomeContractVersion', 'outcomeId', 'taskId', 'assignmentRevision', 'assistantMessageId', 'finalDigest', 'kind', 'text', 'clarification', 'action']
 const actionFields = ['actionRequestId', 'actionId', 'instruction', 'sourceRefIds']
@@ -129,11 +132,11 @@ const prose = value => {
   return true
 }
 const actionId = value => prose(value) && value.length <= 512 && !isoControl(value)
-const actionOutcome = value => {
+const actionOutcome = (value, version) => {
   const marked = own(value || {}, 'deliverable')
   const relation = own(value || {}, 'deliveryRelation')
   const fields = marked ? [...actionOutcomeFields, 'deliverable', ...(value.deliverable === true ? ['messageSource'] : [])] : actionOutcomeFields
-  if (!exactKeys(value, [...fields, ...(relation ? ['deliveryRelation'] : [])]) || (marked && typeof value.deliverable !== 'boolean') || value.outcomeContractVersion !== 3 || !typedId(value.outcomeId) ||
+  if (!exactKeys(value, [...fields, ...(relation ? ['deliveryRelation'] : [])]) || (marked && typeof value.deliverable !== 'boolean') || value.outcomeContractVersion !== version || !typedId(value.outcomeId) ||
     !typedId(value.taskId) || !typedLong(value.assignmentRevision, { allowZero: true }) || !typedLong(value.assistantMessageId) ||
     !digest(value.finalDigest) || !prose(value.text) || value.text.length > 200000) return null
   if (value.deliverable === true) {
@@ -156,9 +159,10 @@ const actionOutcome = value => {
     ((c.state === 'OPEN' && c.stateVersion === '0' && c.replyRequestId === null) ||
       (c.state === 'ANSWERED' && c.stateVersion === '1' && typedId(c.replyRequestId)))) return freeze(value)
   const a = value.action
-  if (value.kind === 'ACTION_REQUEST' && c === null && exactKeys(a, actionFields) && typedId(a.actionRequestId) &&
+  if (value.kind === 'ACTION_REQUEST' && c === null && exactKeys(a, [...actionFields, ...(version === 4 ? ['parameters'] : [])]) && typedId(a.actionRequestId) &&
     actionId(a.actionId) && prose(a.instruction) && Array.isArray(a.sourceRefIds) && a.sourceRefIds.length <= 32 &&
-    a.sourceRefIds.every(actionId) && new Set(a.sourceRefIds).size === a.sourceRefIds.length) return freeze(value)
+    a.sourceRefIds.every(actionId) && new Set(a.sourceRefIds).size === a.sourceRefIds.length &&
+    (version !== 4 || (a.parameters && typeof a.parameters === 'object' && !Array.isArray(a.parameters)))) return freeze(value)
   return null
 }
 const actionInspection = (value, state) => {
@@ -174,14 +178,20 @@ const actionInspection = (value, state) => {
       ['DIRECT_TEXT', 'LOCAL_IMAGE', 'LOCAL_AUDIO', 'PARSED_TEXT'].includes(source.carrier) && digest(source.contributionDigest))
 }
 const progressFields = ['actionRequestId', 'state', 'dispatchVersion', 'childRequestId', 'childRoute', 'childStateVersion']
-const actionProgressValid = (progress, outcome) => {
+const actionProgressValid = (progress, outcome, version) => {
+  const fields = version === 4 ? [...progressFields, 'executionId', 'phase', 'resultDigest'] : progressFields
   if (outcome?.kind !== 'ACTION_REQUEST') return progress === null
-  if (!exactKeys(progress, progressFields) || progress.actionRequestId !== outcome.action.actionRequestId ||
+  if (!exactKeys(progress, fields) || progress.actionRequestId !== outcome.action.actionRequestId ||
     !typedLong(progress.dispatchVersion, { allowZero: true })) return false
   if (progress.childRequestId === null) return progress.childRoute === null && progress.childStateVersion === null &&
-    ['QUEUED', 'FAILED'].includes(progress.state)
-  return Boolean(typedId(progress.childRequestId) && ['INSPECT', 'EXECUTE'].includes(progress.childRoute) &&
-    typedLong(progress.childStateVersion, { allowZero: true }) && ['RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED'].includes(progress.state))
+    ['QUEUED', 'FAILED'].includes(progress.state) &&
+    (version !== 4 || (progress.executionId === null && progress.phase === null && progress.resultDigest === null))
+  if (version === 4 && (!typedId(progress.executionId) || !['READY', 'RUNNING', 'WAITING_PROVIDER', 'RESULT_UNKNOWN', 'RESULT_READY', 'ARCHIVING', 'COMPLETE', 'FAILED', 'CANCELLED'].includes(progress.phase) ||
+    (progress.resultDigest !== null && !/^[a-f0-9]{64}$/.test(progress.resultDigest)) ||
+    (progress.state === 'COMPLETED' && (progress.phase !== 'COMPLETE' || progress.resultDigest === null)) ||
+    (progress.phase === 'ARCHIVING' && progress.state === 'COMPLETED'))) return false
+  return Boolean(typedId(progress.childRequestId) && (version === 4 ? progress.childRoute === 'EXECUTE' : ['INSPECT', 'EXECUTE'].includes(progress.childRoute)) &&
+    typedLong(progress.childStateVersion, { allowZero: true }) && ['RUNNING', 'WAITING_PROVIDER', 'RESULT_UNKNOWN', 'ARCHIVING', 'COMPLETED', 'FAILED', 'CANCELLED'].includes(progress.state))
 }
 // Both values have already passed the strict read-wire parser. No status can authorize execution.
 export const actionProgressAdvances = (before, after) => {
@@ -198,17 +208,19 @@ export const actionProgressAdvances = (before, after) => {
   return true
 }
 export const actionOutcomeProjection = (value, context = {}, route = 'CHAT') => {
-  if (!exactKeys(value, actionProjectionFields) || value.schemaVersion !== 3 || value.route !== route || !['CHAT', 'INSPECT'].includes(route) ||
+  if (!exactKeys(value, actionProjectionFields) || ![3, 4].includes(value.schemaVersion) || value.route !== route || !['CHAT', 'INSPECT'].includes(route) ||
+    (value.schemaVersion === 4 && route !== 'CHAT') ||
     !typedId(value.conversationId) || !typedLong(value.conversationGeneration) || !typedId(value.requestId) || !typedLong(value.requestRevision) ||
     !typedId(value.turnId) || !['PENDING', 'READY'].includes(value.state)) return null
   for (const key of ['conversationId', 'conversationGeneration', 'requestId', 'requestRevision', 'turnId']) {
     if (context[key] && value[key] !== context[key]) return null
   }
-  if (route === 'CHAT' ? value.inspection !== null : !actionInspection(value.inspection, value.state)) return null
+  if (value.inspection !== null ? !actionInspection(value.inspection, value.state) : route === 'INSPECT') return null
+  if (value.schemaVersion === 3 && route === 'CHAT' && value.inspection !== null) return null
   if (value.state === 'PENDING') return value.outcome === null && value.actionProgress === null ? freeze({ ...value, purpose: route }) : null
   if ((context.taskId && value.outcome?.taskId !== context.taskId) ||
     (context.assignmentRevision && value.outcome?.assignmentRevision !== context.assignmentRevision)) return null
-  const normalized = actionOutcome(value.outcome)
+  const normalized = actionOutcome(value.outcome, value.schemaVersion)
   if (normalized?.deliverable === true && (route !== 'CHAT' || normalized.messageSource.turnId !== value.turnId)) return null
-  return normalized && actionProgressValid(value.actionProgress, normalized) ? freeze({ ...value, outcome: normalized, purpose: route }) : null
+  return normalized && actionProgressValid(value.actionProgress, normalized, value.schemaVersion) ? freeze({ ...value, outcome: normalized, purpose: route }) : null
 }
