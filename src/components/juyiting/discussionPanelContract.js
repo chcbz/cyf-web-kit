@@ -1,0 +1,46 @@
+// Shared input contract for the three existing discussion panels; no extra component layer.
+export const discussionPanelProps = {
+  agents: { type: Array, default: () => [] },
+  connectionStatus: { type: String, default: '' },
+  conversationHistory: { type: Array, default: () => [] },
+  conversationHistoryDeletingId: { type: String, default: '' },
+  conversationHistoryError: { type: String, default: '' },
+  conversationHistoryHasMore: { type: Boolean, default: false },
+  conversationHistoryLoading: { type: Boolean, default: false },
+  conversationLoadError: { type: String, default: '' },
+  conversationBusy: { type: Boolean, default: false },
+  deliberationStatus: { type: String, default: '' },
+  durableCancelTarget: { type: Object, default: null },
+  conversationId: { type: String, default: '' },
+  identityEpoch: { type: [Number, String], default: 0 },
+  draft: { type: String, default: '' },
+  eventStreamRecovering: { type: Boolean, default: false },
+  isAwaitingReply: { type: Boolean, default: false },
+  isStreaming: { type: Boolean, default: false },
+  mentionLabel: { type: Function, required: true },
+  messages: { type: Array, default: () => [] },
+  pendingAgentName: { type: String, default: '' },
+  selectedAgent: { type: Object, default: null },
+  selectedTask: { type: Object, default: null },
+  senderText: { type: Function, required: true },
+  scopeHint: { type: String, default: '' },
+  targetText: { type: String, default: '' },
+  voice: { type: Object, default: null }
+}
+
+export const discussionPanelEmits = [
+  'cancel-deliberation',
+  'clear-target',
+  'delete-conversation',
+  'load-history',
+  'load-more-history',
+  'load-messages',
+  'mention-agent',
+  'new-conversation',
+  'open-workspace',
+  'retry-conversation',
+  'select-conversation',
+  'send-message',
+  'update:draft',
+  'voice-apply'
+]

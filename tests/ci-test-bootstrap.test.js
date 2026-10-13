@@ -1,12 +1,12 @@
 import { expect } from 'chai'
 import { createHash } from 'node:crypto'
-import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, writeFile, rm, symlink } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { bootstrapEnabled, runTests, MOCHA_ARGS, REPORT, assertFreshBenchmark } from '../scripts/ci-test.mjs'
-import { downloadVerified, chromeWrapperSource, extractApprovedWebp, PINS, SYSTEM_DEPENDENCIES, systemDependencyInstallPolicy, rpmPackageProbe, installDependencies, CHROME_LAUNCHER_PATH } from '../scripts/ci/prepare-runtime.mjs'
+import { bootstrapEnabled, runTests, MOCHA_ARGS, REPORT, assertFreshBenchmark, mochaArgs } from '../scripts/ci-test.mjs'
+import { createRuntimeWork, downloadVerified, chromeWrapperSource, extractApprovedWebp, PINS, SYSTEM_DEPENDENCIES, systemDependencyInstallPolicy, rpmPackageProbe, installDependencies, CHROME_LAUNCHER_PATH } from '../scripts/ci/prepare-runtime.mjs'
 
 const root = process.cwd()
 const digest = bytes => createHash('sha256').update(bytes).digest('hex')
@@ -22,6 +22,68 @@ describe('repository npm test bootstrap', () => {
   let dir
   beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'cyf-ci-unit-')) })
   afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
+
+  it('does not cache extracted runtimes and removes only restored old run directories', async () => {
+    const cache = join(dir, 'cache'), scratch = join(dir, 'scratch')
+    await mkdir(join(cache, 'run-Ab1234'), { recursive: true })
+    await writeFile(join(cache, 'run-Ab1234', 'chrome'), 'old extracted binary')
+    await mkdir(join(cache, 'dnf'))
+    await mkdir(join(cache, 'run-not-an-old-runtime'))
+    await writeFile(join(cache, 'chrome-approved-sha'), 'verified archive')
+    const external = join(dir, 'external')
+    await mkdir(external)
+    await writeFile(join(external, 'keep'), 'must remain')
+    await symlink(external, join(cache, 'run-Zz9876'))
+    const work = await createRuntimeWork(cache, scratch)
+    expect(work.startsWith(join(scratch, 'cyf-test-runtime-'))).to.equal(true)
+    expect(existsSync(join(cache, 'run-Ab1234'))).to.equal(false)
+    expect(existsSync(join(cache, 'dnf'))).to.equal(true)
+    expect(existsSync(join(cache, 'run-not-an-old-runtime'))).to.equal(true)
+    expect(await readFile(join(cache, 'chrome-approved-sha'), 'utf8')).to.equal('verified archive')
+    expect(await readFile(join(cache, 'run-Zz9876', 'keep'), 'utf8')).to.equal('must remain')
+    const second = await createRuntimeWork(cache, scratch)
+    expect(second).not.to.equal(work)
+    expect(existsSync(work)).to.equal(true)
+  })
+
+  it('separates authoring checks without dropping runtime/identity/recovery regression files', async () => {
+    const release = JSON.parse(await readFile(join(root, '.mocharc.json'), 'utf8'))
+    const assets = JSON.parse(await readFile(join(root, '.mocharc.assets.json'), 'utf8'))
+    const all = JSON.parse(await readFile(join(root, '.mocharc.all.json'), 'utf8'))
+    expect(release.ignore).to.deep.equal(assets.spec)
+    expect(all).not.to.have.property('ignore')
+    expect(all.spec).to.deep.equal(release.spec)
+    for (const config of [release, assets, all]) {
+      expect(config.require).to.deep.equal(['./tests/setup.js'])
+      expect(config['reporter-options']).to.equal(release['reporter-options'])
+    }
+    for (const file of release.ignore) expect(existsSync(join(root, file)), file).to.equal(true)
+    for (const file of ['tests/archive-reader.test.js', 'tests/output-delivery-rb05.test.js', 'tests/game/occlusion/hallscene-e15.test.ts', 'tests/juyiting-e13-live-movement-contract.test.js']) {
+      expect(existsSync(join(root, file)), file).to.equal(true)
+      expect(release.ignore).not.to.include(file)
+    }
+    expect(mochaArgs('assets').at(-1)).to.equal('.mocharc.assets.json')
+    expect(() => mochaArgs('unknown')).to.throw('Unknown test profile')
+  })
+
+  it('runs release CI with fresh reports but without Chrome, DNF or E14 preparation', async () => {
+    const runtime = await fixture()
+    const calls = []
+    const code = await runTests({ prepareWork: async () => runtime.work, repo: dir, env: { PIPELINE_ID: '4403172' }, node: '/pinned/node20',
+      prepare: () => { throw new Error('release must not prepare asset runtime') }, log: () => {},
+      execute: async (command, args) => {
+        calls.push({ command, args })
+        await mkdir(join(dir, 'mochawesome-report'), { recursive: true })
+        for (const name of ['mochawesome.html', 'mochawesome.json']) await writeFile(join(dir, 'mochawesome-report', name), '{}')
+        return 0
+      } })
+    expect(code).to.equal(0)
+    expect(calls).to.have.length(1)
+    expect(calls[0].command).to.equal('/pinned/node20')
+    const profile = JSON.parse(await readFile(join(dir, 'mochawesome-report/ci-profile.json'), 'utf8'))
+    expect(profile.profile).to.equal('release')
+    expect(profile.separateAssetTests).to.have.length(16)
+  })
 
   it('installs the real Chrome launcher at the frozen E9B path rather than inventing historical provenance', async () => {
     const manifest = JSON.parse(await readFile(join(root, 'tests/fixtures/juyiting/occlusion-v2-atlases/atlas-manifest.json'), 'utf8'))
@@ -166,7 +228,7 @@ describe('repository npm test bootstrap', () => {
     const calls = []
     let error
     try {
-      await runTests({ repo: dir, env: { PIPELINE_ID: '4403172' }, execute: async (...call) => calls.push(call),
+      await runTests({ profile: 'all', repo: dir, env: { PIPELINE_ID: '4403172' }, execute: async (...call) => calls.push(call),
         prepare: () => downloadVerified({ urls: ['https://unavailable.invalid'], sha256: '0'.repeat(64) }, join(dir, 'download'), async () => new Response('', { status: 503 })) })
     } catch (caught) { error = caught }
     expect(error.message).to.include('pinned download failed')
@@ -197,7 +259,9 @@ describe('repository npm test bootstrap', () => {
 
   async function fixture() {
     await mkdir(join(dir, 'tests/fixtures/juyiting/occlusion-e14'), { recursive: true })
-    await writeFile(join(dir, '.mocharc.json'), await readFile(join(root, '.mocharc.json')))
+    for (const config of ['.mocharc.json', '.mocharc.assets.json', '.mocharc.all.json']) {
+      await writeFile(join(dir, config), await readFile(join(root, config)))
+    }
     await mkdir(join(dir, 'runtime'))
     return { node: '/pinned/node20', env: { CI: 'true', E14_REQUIRE_REPORT: '1', MOCHAWESOME_CONSOLEREPORTER: 'dot' }, work: join(dir, 'runtime'), browser }
   }
@@ -207,7 +271,7 @@ describe('repository npm test bootstrap', () => {
     await writeFile(join(dir, REPORT), 'old ARM report')
     const calls = [], logs = []
     const report = validReport(); report.pass = false; report.timing.total.p95 = 4.2
-    const code = await runTests({ repo: dir, env: { PIPELINE_ID: '4403172' }, prepare: async () => runtime, log: value => logs.push(value),
+    const code = await runTests({ profile: 'all', repo: dir, env: { PIPELINE_ID: '4403172' }, prepare: async () => runtime, log: value => logs.push(value),
       execute: async (command, args, options) => {
         calls.push({ command, args, options })
         expect(existsSync(join(dir, REPORT))).to.equal(false)
@@ -224,7 +288,7 @@ describe('repository npm test bootstrap', () => {
   it('runs full original Mocha after fresh pinned E14 passes, retaining HTML/JSON and forwarded args', async () => {
     const runtime = await fixture()
     const calls = [], logs = []
-    const code = await runTests({ repo: dir, env: { CI: '1' }, args: ['--bail'], prepare: async () => runtime, log: line => logs.push(line),
+    const code = await runTests({ profile: 'all', repo: dir, env: { CI: '1' }, args: ['--bail'], prepare: async () => runtime, log: line => logs.push(line),
       execute: async (command, args, options) => {
         calls.push({ command, args, options })
         if (calls.length === 1) await writeFile(join(dir, REPORT), JSON.stringify(validReport()))
@@ -237,7 +301,7 @@ describe('repository npm test bootstrap', () => {
     expect(code).to.equal(0)
     expect(calls).to.have.length(2)
     expect(calls[1].command).to.equal(runtime.node)
-    expect(calls[1].args.slice(0, MOCHA_ARGS.length)).to.deep.equal(MOCHA_ARGS)
+    expect(calls[1].args.slice(0, MOCHA_ARGS.length)).to.deep.equal([...MOCHA_ARGS.slice(0, -1), '.mocharc.all.json'])
     expect(calls[1].args.at(-1)).to.equal('--bail')
     expect(calls[1].args).to.include('reportDir=mochawesome-report,reportFilename=mochawesome.json,consoleReporter=dot')
     expect(logs).to.include('[cyf-ci] Mocha report written: mochawesome-report/mochawesome.html')
@@ -247,7 +311,7 @@ describe('repository npm test bootstrap', () => {
     const runtime = await fixture()
     const calls = []
     let error
-    try { await runTests({ repo: dir, env: { CI: 'true' }, prepare: async () => runtime, log: () => {}, execute: async (...call) => { calls.push(call); return 0 } }) } catch (caught) { error = caught }
+    try { await runTests({ profile: 'all', repo: dir, env: { CI: 'true' }, prepare: async () => runtime, log: () => {}, execute: async (...call) => { calls.push(call); return 0 } }) } catch (caught) { error = caught }
     expect(error).to.be.instanceOf(Error)
     expect(calls).to.have.length(1)
     for (const mutate of [r => { r.pass = false }, r => { r.timing.total.p95 = 2.01 }, r => { r.timing.total.p99 = 4.01 }, r => { r.timing.sampleMs = 1000 }, r => { r.browser.executableSha256 = '0'.repeat(64) }, r => { r.browser.product = 'HeadlessChrome/139.0.7258.154' }]) {

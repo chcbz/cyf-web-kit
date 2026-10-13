@@ -52,6 +52,21 @@ const settle = async () => { await flushPromises(); await Vue.nextTick() }
 const props = { enabled: true, identityScope: 'tenant\u0000client\u0000owner-a', identityEpoch: 1 }
 
 describe('JYT-UX-W05 mounted overview and message projection', () => {
+  it('renders cancelled/failed/blocked formal statuses accurately without reinterpreting private execution failures', async () => {
+    const data = response()
+    data.sections.recent.partitions.task.items = ['cancelled', 'failed', 'blocked'].map(code => ({ ...summary('TASK', code, 'OPEN_TASK'), status: { code, evidenceSource: 'PERSISTED', observedAt: 100 } }))
+    data.sections.recent.partitions.private.items = [{ ...summary('PRIVATE_CASE', 'private-failure', 'OPEN_CASE'), status: { code: 'FAILED', evidenceSource: 'PERSISTED', observedAt: 100 } }]
+    const wrapper = mount(load({ execute: async () => data }), { props })
+    try {
+      await settle()
+      const row = code => wrapper.findAll('.overview-item').find(item => item.text().includes(code))
+      expect(row('cancelled').get('.overview-status').text()).to.equal('已取消')
+      expect(row('failed').get('.overview-status').text()).to.equal('失败')
+      expect(row('blocked').get('.overview-status').text()).to.equal('受阻')
+      expect(row('private-failure').get('.overview-status').text()).to.equal('执行未完成')
+    } finally { wrapper.unmount() }
+  })
+
   it('shows only needsAction in messages, explains partial sources, and emits exact read refs', async () => {
     const calls = []
     const wrapper = mount(load({ execute: async options => { calls.push(options); return response() } }), { props: { ...props, messagesOnly: true } })

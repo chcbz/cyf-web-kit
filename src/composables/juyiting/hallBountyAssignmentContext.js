@@ -12,3 +12,19 @@ export const currentBountyAssignmentRevision = ({ task, targetAgentId, conversat
     !pointAndStartLong(p.assignmentRevision, true)) return ''
   return p.assignmentRevision
 }
+
+// Existing conversations must not depend on this browser having retained the
+// original point-and-start idempotency record. This owner-authenticated GET
+// checks the current grant and durable conversation binding on the server.
+export const bountyAssignmentContextProjection = (value, expected) => {
+  const fields = ['schemaVersion', 'conversationId', 'conversationGeneration', 'taskId', 'targetAgentId',
+    'taskVersion', 'assignmentRevision', 'baselineGrantVersion', 'requirementRevision']
+  if (!value || Object.keys(value).length !== fields.length || !fields.every(key => Object.hasOwn(value, key)) ||
+    value.schemaVersion !== 1 || !pointAndStartLong(value.conversationGeneration) ||
+    !pointAndStartLong(value.taskVersion, true) || !pointAndStartLong(value.assignmentRevision, true) ||
+    !pointAndStartLong(value.baselineGrantVersion) || !pointAndStartLong(value.requirementRevision) ||
+    !['conversationId', 'taskId', 'targetAgentId', 'taskVersion'].every(key =>
+      typeof expected[key] === 'string' && expected[key] && value[key] === expected[key]) ||
+    (expected.conversationGeneration && value.conversationGeneration !== expected.conversationGeneration)) return null
+  return Object.freeze({ ...value })
+}

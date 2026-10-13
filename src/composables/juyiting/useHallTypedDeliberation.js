@@ -217,11 +217,20 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   const submit = async ({ content, sourceSelectors = [], inspection = false } = {}) => {
     if (busy.value || !enabled?.()) return false
     const captured = capture(); const context = captured.context
+    if (!current(captured) || !typedId(context.conversationId) || !typedId(context.taskId) || !typedId(context.targetAgentId) ||
+      !typedLong(context.assignmentRevision, { allowZero: true })) {
+      if (current(captured)) error.value = '当前指派上下文尚未核对，请刷新事项后重试；未发送消息。'
+      return false
+    }
     if (prepareCatalog) {
       busy.value = true
       try {
-        if (!await prepareCatalog() || !current(captured) || !await refresh()) {
-          if (current(captured)) error.value = '当前成果索引尚未核对；未发送消息，请读取完成后继续。'
+        if (!await prepareCatalog() || !current(captured)) {
+          if (current(captured)) error.value = '当前成果索引核对失败；未发送消息，请刷新后重试。'
+          return false
+        }
+        if (!await refresh()) {
+          if (current(captured)) error.value = '当前答复状态未能核对；未发送消息，请刷新后重试。'
           return false
         }
       } catch {
@@ -229,11 +238,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
         return false
       } finally { if (current(captured)) busy.value = false }
     }
-    if (!current(captured) || !typedId(context.conversationId) || !typedId(context.taskId) || !typedId(context.targetAgentId) ||
-      !typedLong(context.assignmentRevision, { allowZero: true })) {
-      if (current(captured)) error.value = '当前指派上下文尚未核对，请核对原点将后重试；未发送消息。'
-      return false
-    }
+    if (!current(captured)) return false
     const pending = selectedPending.value
     const purpose = inspection ? 'INSPECT' : 'CHAT'
     if (purpose === 'INSPECT' && !pending && (!Array.isArray(sourceSelectors) || sourceSelectors.length === 0)) {

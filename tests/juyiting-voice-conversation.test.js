@@ -1,3 +1,6 @@
+import { useOutputs } from '../src/composables/useOutputs.js'
+import { useHallBountyAcceptance } from '../src/composables/juyiting/useHallBountyAcceptance.js'
+import { getHallCapabilities } from './fixtures/hall-current-protocol.js'
 import { bountyInteractionTargetId } from '../src/composables/juyiting/useHallChatContext.js'
 import { createHydratedIdentityScope, hasHydratedIdentity } from '../src/utils/identityScope.js'
 import { before } from 'mocha'
@@ -297,9 +300,12 @@ const createActualHallVoiceMocks = ({
     loadNativeBountyCapability: async () => null, capabilityAllowsNewStart: () => false, capabilityAllowsOriginalReplay: () => false, pointAndStartIntentReadLane: () => 'ABSENT',
     useHallPointAndStartControlledBridge: () => ({ state: Vue.ref({ status: 'IDLE', intent: null }), busy: Vue.ref(false), selectContext: () => true, start: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, dispose: noop, invalidate: noop }),
     useHallPointAndStart: () => ({ state: Vue.ref({ status: 'IDLE', intent: null }), busy: Vue.ref(false), start: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, observeOriginal: async () => false, stopObservation: noop, dispose: noop }),
+    // Real read adapters stay inert without a cancelled-task source.
+    useOutputs, useHallBountyAcceptance,
     useHallBountyRequestCatalog: () => ({ entries: Vue.ref([]), error: text, loading: Vue.ref(false), hint: noop, refresh: async () => false, reset: noop }),
     useHallDrafts: () => ({ unresolvedIntent: Vue.ref(null) }),
     useHallBountyFollowup: () => ({ state: Vue.ref({ status: 'IDLE' }), busy: Vue.ref(false), prepareGenerate: async () => false, prepareEdit: async () => false, confirm: async () => false, checkOriginal: async () => false, invalidate: noop, dispose: noop }),
+    useHallBountyAssignmentContext: () => ({ projection: Vue.ref(null), error: Vue.ref(''), refresh: async () => false, dispose: noop }),
     useHallTypedDeliberation: () => ({ projections: Vue.ref([]), cards: Vue.ref([]), selectedPending: Vue.ref(null), error: text, busy: Vue.ref(false), recoveryAvailable: Vue.ref(false), refresh: async () => false, readOne: async () => null, submit: async () => false, recover: async () => false, resumeUnknown: async () => false, choosePending: () => false, confirmProposal: async () => false, invalidate: noop, dispose: noop }),
     typedLong: value => typeof value === 'string' ? value : '',
     useHallConversation: options => {
@@ -445,7 +451,7 @@ describe('Juyi Hall voice mounted facade', () => {
     await on.get('.voice-start').trigger('click')
     await flush()
     expect(onVoice.state).to.equal('recording')
-    expect(on.find('.composer-body.has-voice-detail').exists()).to.equal(true)
+    expect(on.get('.composer-more-panel').element.style.display).not.to.equal('none')
     expect(on.get('.is-recording').attributes('aria-label')).to.equal('停止录音并转写')
     expect(on.get('.voice-inline-status').element.textContent).to.contain('正在录音')
     const recorder = FakeRecorder.instances.at(-1)
@@ -453,7 +459,7 @@ describe('Juyi Hall voice mounted facade', () => {
     onVoice.stopRecording()
     await flush()
     expect(onVoice.state).to.equal('review')
-    expect(on.get('.composer-body.has-voice-detail').exists()).to.equal(true)
+    expect(on.get('.composer-more-panel').element.style.display).not.to.equal('none')
     expect(on.get('.voice-review strong').element.textContent).to.equal('语音转写')
     expect(on.find('button[aria-label="确认发送语音转写"]').exists()).to.equal(false)
     expect(on.emitted('voice-apply')).to.deep.equal([['append']])
@@ -1438,6 +1444,7 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
     const selectedAgentFixture = { agentId: 'wuyong', name: '吴用', status: 'idle', boundToMe: true, canOperate: true, systemAgent: false }
     const SelectedAgentCardComponent = loadSfc('../src/components/juyiting/SelectedAgentCard.vue')
     const chatApi = {
+      get: getHallCapabilities,
       create: async (path, _payload, options) => {
         if (path === '/speech/transcriptions') {
           transcriptionCount += 1
@@ -1448,6 +1455,7 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
         const entry = { options, pending, cancelReason: null }
         streams.push(entry)
         options.onStreamOpen({ cancel: reason => { entry.cancelReason = reason } })
+        options.onStream(JSON.stringify({ requestId: _payload.requestId, turnId: 'voice-turn', state: 'STREAMING', stateVersion: '1' }))
         return pending.promise
       },
       list: async () => {},
@@ -1509,7 +1517,7 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
       expect(card().attributes('inert')).to.equal(undefined)
 
       const finalA = JSON.stringify({
-        type: 'agent_message', conversationId: 'conversation-a', messageId: 'reply-a', agentId: 'wuyong',
+        type: 'agent_message', turnId: 'voice-turn', state: 'PUBLISHED', stateVersion: '2', conversationId: 'conversation-a', messageId: 'reply-a', agentId: 'wuyong',
         senderType: 'agent', senderName: '吴用', content: '甲轮完整回话', timestamp: 1788000000000
       })
       streams[0].options.onStream(finalA)
@@ -1552,7 +1560,7 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
     const outgoingMetadata = Vue.ref({ libraryCitationId: 'archive-1' })
     const conversation = useHallConversation({
       apiStore: { token: async () => '' },
-      chatApi: { create: async (_path, payload, options) => { payloads.push(payload); options.onStream('{"conversationId":"frozen-conversation"}'); options.onStreamEnd() } },
+      chatApi: { get: getHallCapabilities, create: async (_path, payload, options) => { payloads.push(payload); options.onStream('{"conversationId":"frozen-conversation"}'); options.onStreamEnd() } },
       chatContext: Vue.ref(validContext()),
       chatMode: Vue.ref('private'),
       globalStore: { getJiacn: 'hero', user: { name: 'Tester' } },

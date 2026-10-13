@@ -7,14 +7,14 @@ import { createHallSseParser } from '../src/composables/juyiting/hallConversatio
 import { cancellationTarget, deliberationBusy, isTerminalTurnState, reduceDeliberationEvent } from '../src/composables/juyiting/hallDeliberationState.js'
 import { stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 
-const capabilityV2 = { schemaVersion: '2', requestId: true, requestRevision: true, contextSnapshot: true, durableTurns: true, deltaSequence: true, cancel: true, interactionHints: ['chat', 'inspect'] }
+import { hallCapabilities as capabilityV2 } from './fixtures/hall-current-protocol.js'
 const deferred = () => { let resolve; let reject; const promise = new Promise((ok, fail) => { resolve = ok; reject = fail }); return { promise, resolve, reject } }
-const base = ({ chatApi, apiStore = { authorizationGeneration: 1, token: async () => '' }, metadata, context, onDelivery } = {}) => useHallConversation({
+const base = ({ chatApi, apiStore = { authorizationGeneration: 1, token: async () => '' }, metadata, context, onDelivery, outgoingMetadata, onFinalReply } = {}) => useHallConversation({
   apiStore, chatApi: chatApi || {},
   chatContext: context || ref({ conversationScopeType: 'public', conversationScopeKey: 'public', mode: 'public', participantAgentIds: ['a'], targetAgentIds: ['a'], targetAgentId: 'a' }),
   chatMode: ref('public'), globalStore: { user: { username: 'tester' } }, log: { warn () {}, error () {} },
-  openPanel () {}, outgoingMetadata: ref(metadata || { inputRefs: [{ type: 'message', id: '9007199254740993', content: 'must never upload' }] }),
-  portraitShortName: agent => agent?.name || '', selectedAgent: ref({ agentId: 'a' }), selectedTask: ref(null), showToast () {}, onDelivery
+  openPanel () {}, outgoingMetadata: outgoingMetadata || ref(metadata || { inputRefs: [{ type: 'message', id: '9007199254740993', content: 'must never upload' }] }),
+  portraitShortName: agent => agent?.name || '', selectedAgent: ref({ agentId: 'a' }), selectedTask: ref(null), showToast () {}, onDelivery, onFinalReply
 })
 
 const durableTurnView = ({ requestId, turnId, state, stateVersion, targetAgentId = 'a', lastDeltaSeq = '0' }) => ({
@@ -47,6 +47,70 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     expect(sent[0].body.inputRefs).to.deep.equal([{ type: 'message', id: '9007199254740993' }])
     conversation.disposeHallConversation()
   })
+
+  it('normalizes text once at the send entry and forwards the same content', async () => {
+    let conversions = 0; const sent = []
+    const content = { toString: () => { conversions++; return '  one normalized message  ' } }
+    const conversation = base({ chatApi: {
+      get: async () => ({ data: capabilityV2 }),
+      create: async (_path, body, options) => { sent.push(body); options.onStreamEnd() }
+    } })
+    try {
+      expect(await conversation.sendHallMessage({ content })).to.equal(true)
+      expect(conversions).to.equal(1)
+      expect(sent).to.have.length(1)
+      expect(sent[0].content).to.equal('one normalized message')
+      expect(conversation.messages.value[0].content).to.equal(sent[0].content)
+    } finally { conversation.disposeHallConversation() }
+  })
+
+  it('rejects empty text and non-string voice before protocol checks or state changes', async () => {
+    let reads = 0; let sends = 0
+    const conversation = base({ chatApi: {
+      get: async () => { reads++; return { data: capabilityV2 } },
+      create: async () => { sends++ }
+    } })
+    try {
+      conversation.setDraft('keep draft')
+      for (const content of ['', '  ', 0, false]) {
+        expect(await conversation.sendHallMessage({ content })).to.equal(false)
+      }
+      for (const content of [undefined, null, 12, {}, [], { toString: () => { throw new Error('voice must not coerce') } }]) {
+        expect(await conversation.sendHallMessage({ source: 'voice', content })).to.equal(false)
+      }
+      expect(reads).to.equal(0)
+      expect(sends).to.equal(0)
+      expect(conversation.draft.value).to.equal('keep draft')
+      expect(conversation.isSubmitting.value).to.equal(false)
+      expect(conversation.deliberationStatus.value).to.equal('')
+      expect(conversation.activeRequest.value).to.equal(null)
+      expect(conversation.messages.value).to.deep.equal([])
+    } finally { conversation.disposeHallConversation() }
+  })
+
+  for (const [flag, value] of [
+    ['isSubmitting', true], ['isAdoptingBountyBootstrap', true], ['isStreaming', true], ['isAwaitingReply', true],
+    ['conversationHistoryDeletingId', 'conversation-1'], ['conversationLoadError', 'cannot load'],
+    ['activeRequest', { requestId: 'unknown-request', state: 'SUBMITTING' }]
+  ]) {
+    it(`blocks send through the shared entry guard while ${flag} is active`, async () => {
+      let reads = 0; let sends = 0
+      const conversation = base({ chatApi: {
+        get: async () => { reads++; return { data: capabilityV2 } },
+        create: async () => { sends++ }
+      } })
+      try {
+        conversation.setDraft('keep draft')
+        conversation[flag].value = value
+        expect(await conversation.sendHallMessage()).to.equal(false)
+        expect(reads).to.equal(0)
+        expect(sends).to.equal(0)
+        expect(conversation.draft.value).to.equal('keep draft')
+        expect(conversation.messages.value).to.deep.equal([])
+        expect(conversation[flag].value).to.deep.equal(value)
+      } finally { conversation.disposeHallConversation() }
+    })
+  }
 
   it('takes the send lock and reserves one requestId before delayed capability negotiation', async () => {
     const gate = deferred(); const sent = []
@@ -111,15 +175,41 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     conversation.disposeHallConversation()
   })
 
-  it('falls back to the legacy payload when capabilities are unavailable', async () => {
-    const sent = []
-    const conversation = base({ chatApi: { get: async () => { throw new Error('404') }, create: async (_p, body, options) => { sent.push({ body, options }); options.onStreamEnd() } } })
-    conversation.setDraft('legacy')
-    await conversation.sendHallMessage()
-    expect(sent[0].body).not.to.have.any.keys('requestId', 'requestRevision', 'interactionHint', 'clientSeenVector', 'inputRefs')
-    expect(sent[0].options.headers).to.deep.equal({})
-    conversation.disposeHallConversation()
-  })
+  for (const failure of ['network', 'unsupported', 'missing-client']) {
+    it(`does not send or clear the draft when current protocol is unavailable (${failure})`, async () => {
+      const sent = []; let available = false; let probes = 0
+      const chatApi = {
+        get: async path => {
+          if (path !== '/capabilities') return { data: {} }
+          probes++
+          if (available) return { data: { data: capabilityV2 } }
+          if (failure === 'network') throw new Error('network unavailable')
+          return { data: { data: { ...capabilityV2, durableTurns: false } } }
+        },
+        create: async (_p, body, options) => { sent.push({ body, options }); options.onStreamEnd() }
+      }
+      const get = chatApi.get
+      if (failure === 'missing-client') delete chatApi.get
+      const conversation = base({ chatApi })
+      conversation.setDraft('keep my draft')
+      expect(await conversation.sendHallMessage()).to.equal(false)
+      expect(sent).to.have.length(0)
+      expect(conversation.draft.value).to.equal('keep my draft')
+      expect(conversation.messages.value).to.have.length(0)
+      expect(conversation.isSubmitting.value).to.equal(false)
+      expect(conversation.capabilityState.value.loaded).to.equal(false)
+      expect(conversation.deliberationStatus.value).to.include('消息未发送')
+      available = true
+      chatApi.get = get
+      expect(await conversation.sendHallMessage()).to.equal(true)
+      expect(sent).to.have.length(1)
+      expect(sent[0].body.requestId).to.equal(sent[0].options.headers['Idempotency-Key'])
+      expect(sent[0].body.requestRevision).to.equal('1')
+      expect(probes).to.equal(failure === 'missing-client' ? 1 : 2)
+      expect(conversation.draft.value).to.equal('')
+      conversation.disposeHallConversation()
+    })
+  }
 
   it('keeps pre-admission status neutral and only renders observed runtime policy', async () => {
     let statusDuringPost = ''; let stateDuringPost; const deliveries = []
@@ -185,7 +275,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     const conversation = base({ chatApi: {
       get: async path => {
         if (path === '/capabilities') return { data: { data: capabilityV2 } }
-        if (path.startsWith('/requests/')) { requestLookups++; return { data: { data: { requestId: path.slice(10), conversationId: '9007199254740993', state: 'RUNNING', turns: [{ turnId: '9007199254740995', state: 'QUEUED', stateVersion: '1' }] } } } }
+        if (path.startsWith('/requests/')) { requestLookups++; return { data: { data: durableRequestView({ requestId: path.slice(10), state: 'RUNNING', stateVersion: '1', turns: [durableTurnView({ requestId: path.slice(10), turnId: '9007199254740995', state: 'QUEUED', stateVersion: '1' })] }) } } }
         return { data: { data: {} } }
       },
       getById: async (_p, _id, options) => options?.onSuccess?.({ data: [] }),
@@ -195,6 +285,30 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     await conversation.sendHallMessage()
     expect(creates).to.equal(1); expect(requestLookups).to.equal(1)
     expect(conversation.activeTurns.value[0].turnId).to.equal('9007199254740995')
+    conversation.disposeHallConversation()
+  })
+
+  it('does not write recovery status or messages after identity changes during unknown POST readback', async () => {
+    const gate = deferred(); const started = deferred(); let creates = 0
+    const conversation = base({ chatApi: {
+      get: async path => {
+        if (path === '/capabilities') return { data: capabilityV2 }
+        started.resolve(path)
+        return gate.promise
+      },
+      create: async () => { creates++; throw new TypeError('unknown POST result') }
+    } })
+    conversation.setDraft('old identity')
+    const sending = conversation.sendHallMessage()
+    const path = await started.promise
+    stopIdentityBoundWork()
+    gate.resolve({ data: { requestId: path.slice('/requests/'.length), state: 'RUNNING', conversationId: '1001', turns: [] } })
+    expect(await sending).to.equal(false)
+    expect(creates).to.equal(1)
+    expect(conversation.messages.value).to.deep.equal([])
+    expect(conversation.activeRequest.value).to.equal(null)
+    expect(conversation.deliberationStatus.value).to.equal('')
+    expect(conversation.isAwaitingReply.value).to.equal(false)
     conversation.disposeHallConversation()
   })
 
@@ -418,8 +532,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     const conversation = base({ chatApi: {
       get: async path => {
         if (path === '/capabilities') return { data: { data: capabilityV2 } }
-        return { data: { data: { requestId, requestRevision: '1', conversationId: '9007199254740993', state: 'COMPLETED',
-          turns: [{ turnId: 'turn-terminal', requestId, state: 'PUBLISHED', stateVersion: '2', lastDeltaSeq: '1' }] } } }
+        return { data: { data: durableRequestView({ requestId, state: 'COMPLETED', stateVersion: '2', turns: [durableTurnView({ requestId, turnId: 'turn-terminal', state: 'PUBLISHED', stateVersion: '2', lastDeltaSeq: '1' })] }) } }
       },
       getById: async () => { contentLoads += 1; throw new Error('history unavailable') },
       create: async (_path, body) => { creates += 1; requestId = body.requestId; throw new TypeError('transport lost') }
@@ -490,9 +603,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     const conversation = base({ chatApi: {
       get: async path => {
         if (path === '/capabilities') return { data: { data: capabilityV2 } }
-        return { data: { data: { requestId, requestRevision: '1', conversationId: '9007199254740993',
-          state: 'RUNNING', stateVersion: '0', turns: [{ turnId: 'turn-a', requestId, requestRevision: '1',
-            conversationId: '9007199254740993', state: 'QUEUED', stateVersion: '0', lastDeltaSeq: '0' }] } } }
+        return { data: { data: durableRequestView({ requestId, state: 'RUNNING', stateVersion: '0', turns: [durableTurnView({ requestId, turnId: 'turn-a', state: 'QUEUED', stateVersion: '0' })] }) } }
       },
       create: async (_path, body, options) => {
         requestId = body.requestId
@@ -700,4 +811,378 @@ describe('Juyi Hall durable SSE parser', () => {
     expect(result.cursors).to.deep.equal([])
     expect(result.invalid).to.deep.equal(['event_sequence_conflict'])
   })
+})
+
+// The transport deliberately remains pending after business completion. These tests
+// exercise the real composable rather than a mock that equates EOF with completion.
+describe('HALL-ROUND-WEB-20261011 request-scoped closeout', () => {
+  const id = '9007199254740993'
+  const contextFor = (key = 'public', targets = ['a']) => ({ conversationScopeType: 'public', conversationScopeKey: key,
+    mode: 'public', participantAgentIds: targets, targetAgentIds: targets, targetAgentId: targets[0] })
+  const harness = ({ targets = ['a'], contentGet, apiStore, outgoingMetadata, onFinalReply, context = ref(contextFor('public', targets)) } = {}) => {
+    const posts = []; const views = new Map(); const reads = []; let contentReads = 0
+    const conversation = base({ context, apiStore, outgoingMetadata, onFinalReply, chatApi: {
+      get: async path => {
+        if (path === '/capabilities') return { data: capabilityV2 }
+        const requestId = decodeURIComponent(path.slice('/requests/'.length))
+        reads.push(requestId)
+        const view = views.get(requestId)
+        if (view instanceof Error) throw view
+        return { data: view }
+      },
+      list: async (_path, _params, options) => options.onSuccess({ data: [{ id, conversationType: 'juyiting',
+        conversationScopeType: context.value.conversationScopeType, conversationScopeKey: context.value.conversationScopeKey }] }),
+      getById: async (_path, conversationId, options) => {
+        contentReads++
+        if (contentGet) return contentGet(conversationId, options, conversation)
+        options.onSuccess({ data: [] })
+      },
+      create: (_path, body, options) => {
+        const transport = deferred()
+        const post = { body, options, transport, cancels: 0 }
+        posts.push(post)
+        views.set(body.requestId, durableRequestView({ requestId: body.requestId, state: 'RUNNING', stateVersion: '1',
+          turns: targets.map(agent => durableTurnView({ requestId: body.requestId, turnId: `turn-${agent}`, targetAgentId: agent, state: 'QUEUED', stateVersion: '1' })) }))
+        options.onStreamOpen({ cancel: () => { post.cancels++; post.onCancel?.() } })
+        for (const agent of targets) options.onStream(JSON.stringify({ requestId: body.requestId, requestRevision: '1',
+          conversationId: id, conversationGeneration: '1', turnId: `turn-${agent}`, targetAgentId: agent,
+          agentDelivery: { accepted: true, agentId: agent, state: 'QUEUED' } }))
+        return transport.promise
+      }
+    } })
+    conversation.conversationId.value = id
+    const viewFor = (post, state = 'COMPLETED', turnStates = targets.map(() => 'PUBLISHED')) => durableRequestView({
+      requestId: post.body.requestId, state, stateVersion: '2', turns: targets.map((agent, index) => durableTurnView({
+        requestId: post.body.requestId, turnId: `turn-${agent}`, targetAgentId: agent, state: turnStates[index], stateVersion: '2', lastDeltaSeq: '1'
+      }))
+    })
+    const readback = async (post, view) => {
+      views.set(post.body.requestId, view)
+      conversation.refreshExecutionRequest({ conversationId: id, requestId: post.body.requestId })
+      await flushReadbacks(24)
+    }
+    const send = async (content = 'first') => {
+      const sending = conversation.sendHallMessage({ content })
+      await flushReadbacks(24)
+      return { sending, post: posts.at(-1) }
+    }
+    return { conversation, posts, views, reads, viewFor, readback, send, context, contentReads: () => contentReads }
+  }
+
+  it('settles a never-resolving POST from full GET, keeps history and sends two exact requests in one conversation', async () => {
+    const finals = []; const h = harness({ onFinalReply: final => finals.push(final) })
+    try {
+      const first = await h.send()
+      first.post.options.onStream(JSON.stringify({ type: 'agent_message', conversationId: id, conversationGeneration: '1',
+        requestId: first.post.body.requestId, requestRevision: '1', turnId: 'turn-a', messageId: '91', finalSeq: '1',
+        content: 'first final', senderType: 'agent', senderName: 'Agent A', occurredAt: '200' }))
+      await h.readback(first.post, h.viewFor(first.post))
+      expect(await first.sending).to.equal(true)
+      expect(first.post.options.signal.aborted).to.equal(true)
+      expect(first.post.cancels).to.equal(1)
+      expect(h.conversation.isConversationBusy.value).to.equal(false)
+      expect(h.conversation.messages.value.some(message => message.content === 'first final')).to.equal(true)
+      expect(finals.map(final => final.messageId)).to.deep.equal(['91'])
+      const second = await h.send('second')
+      expect(h.posts).to.have.length(2)
+      expect(h.posts.map(post => post.body.conversationId)).to.deep.equal([id, id])
+      expect(first.post.body.requestId).not.to.equal(second.post.body.requestId)
+      expect(h.conversation.messages.value.some(message => message.content === 'first final')).to.equal(true)
+      await h.readback(second.post, h.viewFor(second.post, 'FAILED', ['FAILED']))
+      expect(await second.sending).to.equal(true)
+      expect(h.conversation.deliberationStatus.value).to.include('失败')
+    } finally { h.conversation.disposeHallConversation() }
+  })
+
+  for (const [label, mutate] of [
+    ['partial with a running child', view => { view.state = 'PARTIAL'; view.turns[1].state = 'STREAMING' }],
+    ['UNKNOWN child', view => { view.turns[1].state = 'UNKNOWN' }],
+    ['RECOVERY_REQUIRED child', view => { view.turns[1].state = 'RECOVERY_REQUIRED' }],
+    ['empty turns', view => { view.turns = [] }],
+    ['missing admitted turn', view => { view.turns.pop() }],
+    ['duplicate turns', view => { view.turns[1] = { ...view.turns[0] } }],
+    ['foreign request', view => { view.requestId = 'foreign' }],
+    ['foreign revision', view => { view.requestRevision = '2' }],
+    ['foreign conversation', view => { view.conversationId = 'other' }],
+    ['foreign generation', view => { view.conversationGeneration = '2' }],
+    ['foreign child scope', view => { view.turns[1].conversationGeneration = '2' }],
+    ['missing request generation', view => { delete view.conversationGeneration }],
+    ['lower request version', view => { view.stateVersion = '0' }],
+    ['lower turn version', view => { view.turns[1].stateVersion = '0' }],
+    ['nonterminal aggregate with terminal children', view => { view.state = 'RUNNING' }]
+  ]) {
+    it(`does not unlock on ${label}`, async () => {
+      const h = harness({ targets: ['a', 'b'] })
+      try {
+        const { sending, post } = await h.send()
+        const invalid = h.viewFor(post); mutate(invalid)
+        await h.readback(post, invalid)
+        expect(h.conversation.isConversationBusy.value).to.equal(true)
+        expect(post.options.signal.aborted).to.equal(false)
+        expect(post.cancels).to.equal(0)
+        expect(await h.conversation.sendHallMessage({ content: 'must not send' })).to.equal(false)
+        expect(h.posts).to.have.length(1)
+        await h.readback(post, h.viewFor(post, 'PARTIAL', ['PUBLISHED', 'FAILED']))
+        expect(await sending).to.equal(true)
+        expect(post.cancels).to.equal(1)
+        expect(h.conversation.isConversationBusy.value).to.equal(false)
+        expect(h.conversation.deliberationStatus.value).to.include('部分')
+      } finally { h.conversation.disposeHallConversation() }
+    })
+  }
+
+  for (const state of ['FAILED', 'CANCELLED', 'COMPLETED']) {
+    it(`releases ${state} from full GET exactly once without treating failure/cancellation as an answer`, async () => {
+      const finals = []; const h = harness({ onFinalReply: final => finals.push(final) })
+      try {
+        const { post, sending } = await h.send()
+        const view = h.viewFor(post, state, [state === 'COMPLETED' ? 'FINAL_PERSISTED' : state])
+        await h.readback(post, view)
+        await h.readback(post, view)
+        post.options.onStreamEnd()
+        post.options.onStreamEnd()
+        expect(await sending).to.equal(true)
+        expect(post.cancels).to.equal(1)
+        expect(h.conversation.activeRequest.value.state).to.equal(state)
+        expect(h.conversation.isConversationBusy.value).to.equal(false)
+        expect(finals).to.deep.equal([])
+      } finally { h.conversation.disposeHallConversation() }
+    })
+  }
+
+  it('EOF is transport-only: pending GET and failed terminal readback retain the gate without another POST', async () => {
+    const h = harness()
+    try {
+      const { post, sending } = await h.send()
+      post.options.onStreamEnd(); post.transport.resolve()
+      expect(await sending).to.equal(true)
+      await flushReadbacks(24)
+      expect(h.conversation.isConversationBusy.value).to.equal(true)
+      await h.readback(post, new Error('GET unavailable'))
+      expect(h.conversation.deliberationStatus.value).to.equal('需要恢复核对')
+      expect(await h.conversation.sendHallMessage({ content: 'retry must not POST' })).to.equal(false)
+      expect(h.posts).to.have.length(1)
+      await h.readback(post, h.viewFor(post))
+      expect(h.conversation.isConversationBusy.value).to.equal(false)
+    } finally { h.conversation.disposeHallConversation() }
+  })
+
+  it('ignores old late delta/error/end/open and eventual transport completion after a new request starts', async () => {
+    const metadata = ref({ libraryCitationId: 'first-citation' }); const h = harness({ outgoingMetadata: metadata })
+    try {
+      const first = await h.send()
+      await h.readback(first.post, h.viewFor(first.post, 'CANCELLED', ['CANCELLED']))
+      expect(await first.sending).to.equal(true)
+      metadata.value = { libraryCitationId: 'second-citation' }
+      const second = await h.send('second')
+      metadata.value = { libraryCitationId: 'new draft metadata' }
+      const before = JSON.stringify(h.conversation.messages.value)
+      first.post.options.onStream(JSON.stringify({ conversationId: id, content: 'late old text' }))
+      first.post.options.onError('late error', new Error('late'))
+      first.post.options.onStreamEnd()
+      let lateOpenCancelled = 0
+      first.post.options.onStreamOpen({ cancel: () => { lateOpenCancelled++ } })
+      first.post.transport.reject(new Error('late old rejection'))
+      await flushReadbacks(24)
+      expect(lateOpenCancelled).to.equal(1)
+      expect(JSON.stringify(h.conversation.messages.value)).to.equal(before)
+      expect(h.conversation.activeRequest.value.requestId).to.equal(second.post.body.requestId)
+      expect(second.post.options.signal.aborted).to.equal(false)
+      expect(second.post.cancels).to.equal(0)
+      expect(metadata.value).to.deep.equal({ libraryCitationId: 'new draft metadata' })
+      expect(h.conversation.isConversationBusy.value).to.equal(true)
+      await h.readback(second.post, h.viewFor(second.post, 'CANCELLED', ['CANCELLED']))
+      expect(await second.sending).to.equal(true)
+    } finally { h.conversation.disposeHallConversation() }
+  })
+
+  it('does not let the old finally clear a new send started synchronously during final content recovery', async () => {
+    const metadata = ref({}); let secondSending; let launched = false
+    const h = harness({ outgoingMetadata: metadata, contentGet: (_id, options, conversation) => {
+      if (!launched) {
+        launched = true
+        metadata.value = { libraryCitationId: 'second' }
+        secondSending = conversation.sendHallMessage({ content: 'second from recovery' })
+      }
+      options.onSuccess({ data: [{ id: '91', senderType: 'agent', content: 'first body' }] })
+    } })
+    try {
+      const first = await h.send()
+      await h.readback(first.post, h.viewFor(first.post))
+      expect(await first.sending).to.equal(true)
+      expect(h.posts).to.have.length(2)
+      expect(h.posts[1].body.metadata.libraryCitationId).to.equal('second')
+      expect(h.conversation.activeRequest.value.requestId).to.equal(h.posts[1].body.requestId)
+      expect(h.posts[1].options.signal.aborted).to.equal(false)
+      expect(h.conversation.isConversationBusy.value).to.equal(true)
+      expect(h.conversation.messages.value.some(message => message.content === 'first body')).to.equal(false)
+      await h.readback(h.posts[1], h.viewFor(h.posts[1], 'CANCELLED', ['CANCELLED']))
+      expect(await secondSending).to.equal(true)
+    } finally { h.conversation.disposeHallConversation() }
+  })
+
+  it('fences A→B→A and identity reset even with the same conversation ID and late old readback', async () => {
+    const context = ref(contextFor()); const apiStore = { authorizationGeneration: 1, token: async () => '' }
+    const h = harness({ context, apiStore })
+    try {
+      const first = await h.send()
+      context.value = contextFor('B'); context.value = contextFor()
+      expect(await first.sending).to.equal(false)
+      h.conversation.conversationId.value = id
+      const second = await h.send('new A')
+      first.post.options.onStream(JSON.stringify({ requestId: first.post.body.requestId, conversationId: id, content: 'stale A' }))
+      first.post.options.onStreamEnd(); first.post.transport.resolve()
+      await h.readback(first.post, h.viewFor(first.post))
+      expect(h.conversation.activeRequest.value.requestId).to.equal(second.post.body.requestId)
+      expect(second.post.options.signal.aborted).to.equal(false)
+      apiStore.authorizationGeneration++
+      stopIdentityBoundWork()
+      expect(await second.sending).to.equal(false)
+      second.post.options.onStreamEnd()
+      await h.readback(second.post, h.viewFor(second.post))
+      expect(h.conversation.messages.value).to.deep.equal([])
+      expect(h.conversation.activeRequest.value).to.equal(null)
+    } finally { h.conversation.disposeHallConversation() }
+  })
+
+  it('releases the business gate while missing final body recovery fails, then reuses history GET on refresh', async () => {
+    let fail = true; const h = harness({ contentGet: (_id, options) => {
+      if (fail) throw new Error('history unavailable')
+      options.onSuccess({ data: [{ id: '91', senderType: 'agent', content: 'persisted body' }] })
+    } })
+    try {
+      const { post, sending } = await h.send()
+      await h.readback(post, h.viewFor(post))
+      expect(await sending).to.equal(true)
+      expect(h.conversation.activeRequest.value.state).to.equal('COMPLETED')
+      expect(h.conversation.isConversationBusy.value).to.equal(false)
+      expect(h.conversation.deliberationStatus.value).to.equal('回话已结束，正文加载待重试')
+      expect(h.contentReads()).to.equal(1)
+      fail = false
+      // The existing refresh path rereads the same conversation; no model POST.
+      expect(await h.conversation.retryHallConversation()).to.equal(true)
+      expect(h.conversation.messages.value.some(message => message.content === 'persisted body')).to.equal(true)
+      expect(h.posts).to.have.length(1)
+      post.options.onStreamEnd()
+      const second = await h.send('allowed despite missing body')
+      expect(h.posts).to.have.length(2)
+      await h.readback(second.post, h.viewFor(second.post))
+      expect(await second.sending).to.equal(true)
+      expect(h.conversation.messages.value.some(message => message.content === 'persisted body')).to.equal(true)
+      expect(h.contentReads()).to.equal(2)
+    } finally { h.conversation.disposeHallConversation() }
+  })
+
+  it('keeps terminal-owned abort successful when cancel synchronously sends EOF and rejects the POST', async () => {
+    const h = harness()
+    try {
+      const { post, sending } = await h.send()
+      post.onCancel = () => {
+        post.options.onStreamEnd()
+        post.transport.reject(new DOMException('own terminal abort', 'AbortError'))
+      }
+      await h.readback(post, h.viewFor(post, 'CANCELLED', ['CANCELLED']))
+      expect(await sending).to.equal(true)
+      expect(post.cancels).to.equal(1)
+      expect(h.conversation.isConversationBusy.value).to.equal(false)
+      expect(h.conversation.messages.value.some(message => message.sender === 'SYSTEM')).to.equal(false)
+    } finally { h.conversation.disposeHallConversation() }
+  })
+
+  it('a queued old poll neither reads the new request nor clears the new round poll', async () => {
+    const originalSet = window.setInterval; const originalClear = window.clearInterval
+    const polls = []; const cleared = []
+    window.setInterval = callback => { polls.push(callback); return polls.length }
+    window.clearInterval = timer => { cleared.push(timer) }
+    const h = harness()
+    try {
+      const first = await h.send()
+      first.post.options.onStreamEnd()
+      await h.readback(first.post, h.viewFor(first.post, 'CANCELLED', ['CANCELLED']))
+      expect(await first.sending).to.equal(true)
+      const second = await h.send('second')
+      second.post.options.onStreamEnd()
+      await flushReadbacks(24)
+      const latestTimer = polls.length; const readCount = h.reads.length
+      await polls[0]()
+      expect(h.reads).to.have.length(readCount)
+      expect(cleared).not.to.include(latestTimer)
+      expect(h.conversation.activeRequest.value.requestId).to.equal(second.post.body.requestId)
+      expect(h.conversation.isConversationBusy.value).to.equal(true)
+      await h.readback(second.post, h.viewFor(second.post, 'CANCELLED', ['CANCELLED']))
+      expect(await second.sending).to.equal(true)
+    } finally {
+      h.conversation.disposeHallConversation()
+      window.setInterval = originalSet; window.clearInterval = originalClear
+    }
+  })
+
+  it('closing either POST leaves the independent authenticated conversation GET events reader alive', async () => {
+    const originalFetch = global.fetch
+    let eventSignal; let eventCancels = 0; let fetches = 0
+    global.fetch = async (_url, options) => {
+      fetches++; eventSignal = options.signal
+      return new Response(new ReadableStream({ cancel: () => { eventCancels++ } }), { status: 200 })
+    }
+    const h = harness({ apiStore: { authorizationGeneration: 1, token: async () => 'test-token' } })
+    try {
+      await h.conversation.loadHallMessages()
+      await flushReadbacks(24)
+      expect(fetches).to.equal(1)
+      expect(eventSignal.aborted).to.equal(false)
+      for (const content of ['first', 'second']) {
+        const { post, sending } = await h.send(content)
+        await h.readback(post, h.viewFor(post, 'CANCELLED', ['CANCELLED']))
+        expect(await sending).to.equal(true)
+        expect(post.options.signal.aborted).to.equal(true)
+        expect(eventSignal.aborted).to.equal(false)
+        expect(eventCancels).to.equal(0)
+        expect(fetches).to.equal(1)
+      }
+      expect(h.posts).to.have.length(2)
+    } finally {
+      h.conversation.disposeHallConversation()
+      await flushReadbacks(24)
+      global.fetch = originalFetch
+    }
+  })
+
+
+  it('does not apply ordinary round settlement to bounty admission or media/action child requests', async () => {
+    const context = ref({ ...contextFor(), conversationScopeType: 'bounty', conversationScopeKey: 'task:task-1', mode: 'bounty', taskId: 'task-1' })
+    const h = harness({ context })
+    try {
+      const { post, sending } = await h.send('bounty existing lifecycle')
+      await h.readback(post, h.viewFor(post, 'CANCELLED', ['CANCELLED']))
+      expect(post.options.signal.aborted).to.equal(false)
+      expect(post.cancels).to.equal(0)
+      expect(await h.conversation.sendHallMessage({ content: 'POST still open' })).to.equal(false)
+      post.options.onStreamEnd(); post.transport.resolve()
+      expect(await sending).to.equal(true)
+      expect(post.cancels).to.equal(0)
+      expect(h.posts).to.have.length(1)
+    } finally { h.conversation.disposeHallConversation() }
+  })
+
+
+  it('returns stale rather than successful if identity changes synchronously inside terminal final notification', async () => {
+    const apiStore = { authorizationGeneration: 1, token: async () => '' }
+    const h = harness({ apiStore, onFinalReply: () => {
+      apiStore.authorizationGeneration++
+      stopIdentityBoundWork()
+    } })
+    try {
+      const { post, sending } = await h.send()
+      post.options.onStream(JSON.stringify({ type: 'agent_message', conversationId: id, conversationGeneration: '1',
+        requestId: post.body.requestId, requestRevision: '1', turnId: 'turn-a', messageId: '91', finalSeq: '1',
+        content: 'terminal body', senderType: 'agent', occurredAt: '200' }))
+      await h.readback(post, h.viewFor(post))
+      expect(await sending).to.equal(false)
+      expect(h.conversation.conversationId.value).to.equal('')
+      expect(h.conversation.activeRequest.value).to.equal(null)
+      expect(h.conversation.messages.value).to.deep.equal([])
+      expect(h.contentReads()).to.equal(0)
+    } finally { h.conversation.disposeHallConversation() }
+  })
+
 })

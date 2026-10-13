@@ -1,3 +1,4 @@
+import { isTerminalMatter } from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
 import { before, after } from 'mocha'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
@@ -67,6 +68,14 @@ describe('task acceptance existing scoped source reads', () => {
     const absent = useHallBountyAcceptance({ api: { list: async () => response([]) }, taskId: () => 'task-1', identityKey: () => 'owner-1' })
     try { await flushPromises(); expect(absent.legacy.value).to.equal(true) } finally { absent.dispose() }
   })
+  it('surfaces a catalog read error instead of clearing it on the acceptance page', async () => {
+    const source = useHallBountyAcceptance({ api: { list: async () => response([scoped()]), get: async () => { throw new Error('read unavailable') } },
+      taskId: () => 'task-1', identityKey: () => 'owner-1' })
+    try {
+      await flushPromises(); expect(source.error.value).to.equal('read unavailable')
+      expect(source.legacy.value).to.equal(false)
+    } finally { source.dispose() }
+  })
   it('clears old visible sources on identity/task switches and fences delayed previous-owner responses', async () => {
     const pending = deferred(); const owner = Vue.ref('a'); const task = Vue.ref('task-1'); let first = true; let oldSignal
     const source = useHallBountyAcceptance({ api: {
@@ -97,10 +106,10 @@ describe('task acceptance existing scoped source reads', () => {
 
 const hall = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
 const returnBody = hall.slice(hall.indexOf('const continueBountyModification = async'), hall.indexOf('\nconst openTaskWorkspace ='))
-const returnToDiscussion = deps => new Function('deps', `var { openPanel, apiStore, hallIdentityScope, chatMode, conversationTask, conversationId,
+const returnToDiscussion = deps => new Function('deps', 'isTerminalMatter', `var { openPanel, apiStore, hallIdentityScope, chatMode, conversationTask, conversationId,
   isConversationBusy, enterBountyDiscussion, loadHallConversationHistory, conversationHistory, conversationHistoryHasMore,
   conversationHistoryError, loadMoreHallConversationHistory, selectHallConversation, showToast, loadHallMessages } = deps;
-  ${returnBody}; return continueBountyModification`)(deps)
+  ${returnBody}; return continueBountyModification`)(deps, isTerminalMatter)
 
 describe('task acceptance return to original discussion', () => {
   const deps = () => ({ openPanel: () => true, apiStore: { authorizationGeneration: 1 }, hallIdentityScope: Vue.ref('owner'),
@@ -109,6 +118,11 @@ describe('task acceptance return to original discussion', () => {
     enterBountyDiscussion: () => { throw new Error('do not reset same discussion target or draft') },
     loadHallConversationHistory: async () => {}, selectHallConversation: async () => true,
     showToast: () => {}, loadHallMessages: async () => { throw new Error('no latest conversation substitution') } })
+  it('never resumes discussion for a cancelled task while preserving completed receipt viewing separately', async () => {
+    const state = deps(); let opens = 0; state.openPanel = () => { opens++; return true }
+    expect(await returnToDiscussion(state)({ id: 'task-1', status: 'cancelled' }, null)).to.equal(false)
+    expect(opens).to.equal(0)
+  })
   it('returns to an already active original without resets, draft changes, polling restarts or new sends', async () => {
     const state = deps(); state.isConversationBusy.value = true
     state.loadHallConversationHistory = () => { throw new Error('must preserve active discussion') }

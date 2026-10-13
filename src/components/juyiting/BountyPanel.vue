@@ -10,44 +10,25 @@
         <div class="task-search">
           <input
             :value="taskKeyword"
+            type="search"
+            aria-label="查榜号"
             placeholder="查榜号"
             @input="$emit('update:taskKeyword', $event.target.value.trim())"
             @keyup.enter="$emit('load-tasks')"
           />
           <select
             :value="taskAbilityFilter"
+            aria-label="筛选所需本领"
             @change="$emit('update:taskAbilityFilter', $event.target.value); $emit('load-tasks')"
           >
             <option value="">不拘本领</option>
             <option v-for="ability in taskAbilityOptions" :key="ability" :value="ability">{{ ability }}</option>
           </select>
         </div>
-        <button @click="$emit('load-tasks')">
+        <button class="task-refresh" type="button" aria-label="刷新事项" title="刷新事项" @click="$emit('load-tasks')">
           <BountyActionIcon name="refresh" />
           <span class="toolbar-label">重查</span>
         </button>
-        <div class="task-create-actions">
-          <button class="new-task-button" type="button" @click="showCreateForm = !showCreateForm">
-            <BountyActionIcon name="plus" />
-            <span>提出需求</span>
-          </button>
-          <button
-            v-if="!embeddedHall"
-            class="new-task-button"
-            type="button"
-            @click="$emit('start-formal-draft')"
-          >
-            <span>起草正式任务</span>
-          </button>
-          <button
-            v-if="!embeddedHall"
-            class="new-task-button"
-            type="button"
-            @click="embeddedHall ? $emit('start-private-draft') : showDraftEditor = !showDraftEditor"
-          >
-            <span>{{ showDraftEditor ? '收起草稿' : '起草交办' }}</span>
-          </button>
-        </div>
       </div>
 
       <section v-if="requirementCreateState && requirementCreateState.status !== 'IDLE'" class="requirement-create-recovery" role="status">
@@ -63,65 +44,17 @@
         <p v-if="requirementCreateState.error">{{ requirementCreateState.error }}</p>
       </section>
 
-      <form v-if="showCreateForm" class="task-create-form" @submit.prevent="submitCreateTask">
-        <input v-model="taskForm.title" name="taskTitle" placeholder="需求标题" />
-        <textarea
-          v-model="taskForm.description"
-          name="taskDescription"
-          placeholder="说明你希望得到什么结果（必填）"
-          required
-        ></textarea>
-        <input
-          v-if="!embeddedHall || taskForm.funded"
-          v-model.trim="taskForm.requiredAbilities"
-          name="requiredAbilities"
-          placeholder="所需本领，逗号分隔"
-        />
-        <HallMaterialPicker
-          class="task-material-picker"
-          v-if="!taskForm.funded && identityScope"
-          v-model="taskMaterials"
-          :identity-scope="identityScope"
-          :identity-epoch="authorizationGeneration"
-          :disabled="createPending || requirementCreateBusy"
-        />
-        <small v-else-if="taskMaterials.length" role="status">资金榜暂不支持普通榜资料；请切回普通榜移除资料，再选择资金悬赏。</small>
-        <label v-if="fundedPreviewEnabled" class="funded-create-toggle">
-          <input v-model="taskForm.funded" type="checkbox" /> 资金悬赏（开发预览）
-        </label>
-        <input
-          v-if="fundedPreviewEnabled && taskForm.funded"
-          v-model.trim="taskForm.grossBountyAmountMicro"
-          class="gross-bounty-input"
-          name="grossBountyAmountMicro"
-          inputmode="numeric"
-          placeholder="总额（micro-SILVER）"
-        />
-        <small v-if="fundedPreviewEnabled && taskForm.funded && !validGrossAmount" class="funded-input-error">请输入规范的非负整数字符串。</small>
-        <section v-if="fundedCreateRecovery" class="funded-create-recovery" role="status">
-          <strong>发现原资金榜请求，结果未知</strong>
-          <p>原榜文名目：{{ fundedCreateRecovery.body.title }}</p>
-          <p>原榜文缘由：{{ fundedCreateRecovery.body.description || '未填写' }}</p>
-          <p>原所需本领：{{ fundedRecoveryAbilities }}</p>
-          <p>原结算规则：{{ fundedCreateRecovery.body.settlementPolicy || '未填写' }}</p>
-          <p>原总额：{{ fundedCreateRecovery.body.grossBountyAmountMicro }} micro-SILVER。</p>
-          <p>当前编辑稿不会提交或替换原请求。</p>
-          <button type="button" @click="$emit('resume-funded-create')">确认按原请求恢复</button>
-          <button type="button" @click="$emit('cancel-funded-create-recovery')">暂不恢复</button>
-        </section>
-        <button type="submit" :disabled="createPending || requirementCreateBusy || !taskForm.title.trim() || !taskForm.description.trim() || (taskForm.funded && (!validGrossAmount || taskMaterials.length))">{{ createPending ? '正在提交…' : taskForm.funded ? '张榜悬赏' : '提出需求' }}</button>
-      </form>
-
-      <HallDraftEditor
-        v-if="showDraftEditor"
-        :agents="operableAgents"
-        :selected-agent="selectedAgent"
-        :identity-epoch="authorizationGeneration"
-        :identity-scope="identityScope"
-        @close="showDraftEditor = false"
-        @open-task="openTask"
-        @changed="$emit('mark-changed')"
-      />
+      <section v-if="fundedCreateRecovery" class="funded-create-recovery requirement-create-recovery" role="status">
+        <strong>发现原资金榜请求，结果未知</strong>
+        <p>原榜文名目：{{ fundedCreateRecovery.body.title }}</p>
+        <p>原榜文缘由：{{ fundedCreateRecovery.body.description || '未填写' }}</p>
+        <p>原所需本领：{{ fundedRecoveryAbilities }}</p>
+        <p>原结算规则：{{ fundedCreateRecovery.body.settlementPolicy || '未填写' }}</p>
+        <p>原总额：{{ fundedCreateRecovery.body.grossBountyAmountMicro }} micro-SILVER。</p>
+        <p>当前编辑稿不会提交或替换原请求。</p>
+        <button type="button" @click="$emit('resume-funded-create')">确认按原请求恢复</button>
+        <button type="button" @click="$emit('cancel-funded-create-recovery')">暂不恢复</button>
+      </section>
 
       <p v-if="loading" class="task-data-state" role="status">悬赏榜读取中…</p>
       <p v-else-if="errorMessage" class="task-data-state is-error" role="alert">{{ errorMessage }}</p>
@@ -207,7 +140,7 @@
               <span v-if="fundedClaimState.refreshPending">榜文刷新待完成，请重查；勿重复领令。<button type="button" @click="$emit('refresh-funded-claim', detailTask)">重查已确认榜文</button></span>
             </p>
             <p v-else-if="fundedClaimState?.taskId === detailTask.id && fundedClaimState.status === 'unresolved'" role="status">原领令结果未知，请由原好汉核对，不要重新取价。</p>
-            <section v-if="pointAndStartForDetail" class="point-and-start-recovery" role="status">
+            <section v-if="pointAndStartForDetail && !isTerminalMatter(detailTask)" class="point-and-start-recovery" role="status">
               <strong>{{ pointAndStartRecoveryTitle }}</strong>
               <p>原点将目标：{{ pointAndStartForDetail.intent.body.targetAgentId || pointAndStartForDetail.intent.body.agentId }}；需求修订：{{ pointAndStartForDetail.intent.body.requirementRevision }}。</p>
               <p>任务资料：{{ pointAndStartInputSummary }}。</p>
@@ -238,7 +171,7 @@
                 <div v-if="detailTask.status === 'open' && preferredAgents.length" class="matter-agent-actions">
                   <button v-for="agent in preferredAgents" :key="agent.agentId" type="button" :disabled="!canAssign(detailTask, agent)" @click="$emit('assign-task', detailTask, agent)">交给{{ agentDisplayName(agent) }}</button>
                 </div>
-                <button v-else-if="assignedAgentForTask(detailTask)" type="button" class="matter-primary-action" @click="$emit('discuss-task', detailTask, assignedAgentForTask(detailTask))">与{{ agentDisplayName(assignedAgentForTask(detailTask)) }}进入事项议事</button>
+                <button v-else-if="!isTerminalMatter(detailTask) && assignedAgentForTask(detailTask)" type="button" class="matter-primary-action" @click="$emit('discuss-task', detailTask, assignedAgentForTask(detailTask))">与{{ agentDisplayName(assignedAgentForTask(detailTask)) }}进入事项议事</button>
                 <button
                   v-if="detailTask.status === 'completed'"
                   type="button"
@@ -264,7 +197,7 @@
                 <button type="button" @click="$emit('open-workspace')">打开百宝箱</button>
               </section>
               <TaskMaterialLinks
-                v-if="formalTaskExecutionScope && !embeddedHall"
+                v-if="formalTaskExecutionScope && !embeddedHall && !isTerminalMatter(detailTask)"
                 :key="formalTaskExecutionScope.taskId"
                 :task-id="formalTaskExecutionScope.taskId"
                 :conversation-id="formalTaskExecutionScope.conversationId"
@@ -278,10 +211,27 @@
                 @formal-execution-created="$emit('formal-execution-created', $event)"
                 @formal-execution-recovered="$emit('formal-execution-recovered', $event)"
               />
-              <section v-if="embeddedHall" class="deliberation-execution-route" role="status">
+              <section v-if="embeddedHall && !isTerminalMatter(detailTask)" class="deliberation-execution-route" role="status">
                 <strong>在议事中协作交付</strong>
                 <p>点将后自动进入悬赏议事。你可以继续补充文字和资料，与 Agent 反复沟通，在事项详情核对本次成果并确认验收，保存可选。</p>
               </section>
+              <section
+                v-if="canCancelOrdinaryTask(detailTask) || cancellationUnresolved"
+                class="ordinary-cancellation"
+                aria-label="普通事项取消"
+              >
+                <p>仅取消无资金事实、未实际开始的普通事项；已点将未开工也可申请，最终以服务端核验为准。历史指派与成果保留。</p>
+                <button
+                  type="button"
+                  class="ordinary-cancel-action"
+                  :disabled="cancellationBusy || showCancellationDialog || cancellationSubmitting"
+                  @click="requestCancellation"
+                >
+                  {{ cancellationState?.taskId === detailTask.id && cancellationState.status === 'unresolved' ? '核对原取消结果' : '取消未开工事项' }}
+                </button>
+                <p v-if="cancellationState?.taskId === detailTask.id && cancellationState.status === 'unresolved'" role="status">结果尚未确认；只核对原事项，不重复提交取消。</p>
+              </section>
+
               <section v-if="isFundedTask(detailTask)" class="funded-preview-details" aria-label="资金悬赏详情">
                 <p class="funding-summary">已托管：{{ formatMoney(detailTask.funding.remainingMicro || detailTask.funding.grossBountyAmountMicro) }}</p>
                 <p>仅可由一位明确好汉按报价领令；组队、宋江代点和旧式点将已禁用。</p>
@@ -296,20 +246,21 @@
               </section>
 
               <TeamRecommendationPanel
-                v-if="!embeddedHall"
+                v-if="!embeddedHall && !isTerminalMatter(detailTask)"
                 :task="detailTask"
                 :authorization-generation="authorizationGeneration"
               />
 
-              <button v-if="!embeddedHall || detailTask.status !== 'open'" type="button" class="matter-results-action" @click="$emit('open-formal-results', detailTask)">查看正式成果与验收</button>
-              <WorkItemPlanPanel v-if="!embeddedHall" :task="detailTask" :enabled="workItemPlanEnabled" :authorization-generation="authorizationGeneration" />
+              <p v-if="detailTask.status === 'cancelled'" role="status">事项已取消；历史指派与成果保留，不再继续办理。</p>
+              <button v-if="!embeddedHall || detailTask.status !== 'open'" type="button" class="matter-results-action" @click="$emit('open-formal-results', detailTask)">{{ isTerminalMatter(detailTask) ? '查看历史成果' : '查看正式成果与验收' }}</button>
+              <WorkItemPlanPanel v-if="!embeddedHall && !isTerminalMatter(detailTask)" :task="detailTask" :enabled="workItemPlanEnabled" :authorization-generation="authorizationGeneration" />
 
               <div v-if="!embeddedHall" class="ability-tags">
                 <span v-for="ability in detailTask.requiredAbilities || []" :key="ability">{{ ability }}</span>
                 <span v-if="!(detailTask.requiredAbilities || []).length">不拘本领</span>
               </div>
 
-              <div v-if="!embeddedHall" class="task-operation-grid">
+              <div v-if="!embeddedHall && !isTerminalMatter(detailTask)" class="task-operation-grid">
                 <button
                   :aria-label="agentDisplayName(selectedAgent) ? `点当前好汉 ${agentDisplayName(selectedAgent)} 领令` : '先择好汉再点将'"
                   :disabled="isFundedTask(detailTask) || !canAssign(detailTask, selectedAgent)"
@@ -450,16 +401,26 @@
         </section>
       </div>
     </transition>
+    <var-dialog
+      v-model:show="showCancellationDialog"
+      title="确认取消未开工事项？"
+      :message="`即将申请取消“${cancellationCandidate?.task.title || '原事项'}”。仅限无资金事实且未实际开始的事项，最终由服务端核验；历史指派与成果保留。确认后不会继续办理；若结果未确认，只核对原结果，不重复提交。`"
+      confirm-button-text="确认取消事项"
+      cancel-button-text="保留事项"
+      confirm-button-text-type="danger"
+      @confirm="confirmCancellation"
+      @cancel="dismissCancellation"
+      @close="dismissCancellation"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { canCancelOrdinaryTask, ordinaryTaskVersion, isTerminalMatter } from '../../composables/juyiting/useHallOrdinaryCancellation.js'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import BountyActionIcon from './BountyActionIcon.vue'
 import WorkItemPlanPanel from './WorkItemPlanPanel.vue'
 import TeamRecommendationPanel from './TeamRecommendationPanel.vue'
-import HallDraftEditor from './HallDraftEditor.vue'
-import HallMaterialPicker from './HallMaterialPicker.vue'
 import TaskMaterialLinks from '@/components/personal-workspace/TaskMaterialLinks.vue'
 import { formatSilverMicro, isCanonicalMicroAmount } from '@/utils/silverAmount'
 
@@ -492,6 +453,8 @@ const props = defineProps({
   requirementCreateBusy: { type: Boolean, default: false },
   pointAndStartState: { type: Object, default: null },
   pointAndStartBusy: { type: Boolean, default: false },
+  cancellationBusy: { type: Boolean, default: false },
+  cancellationState: { type: Object, default: null },
   abilityText: { type: Function, required: true },
   canAssign: { type: Function, required: true },
   formatTime: { type: Function, required: true },
@@ -509,15 +472,13 @@ const emit = defineEmits([
   'auto-assign-task',
   'brief-selected-task',
   'cancel-funding',
+  'cancel-task',
   'confirm-funded-quote',
   'cancel-funded-quote',
   'refresh-funded-claim',
   'recruit-agent',
-  'create-task',
   'check-requirement-create',
   'resume-requirement-create',
-  'start-formal-draft',
-  'start-private-draft',
   'open-formal-results',
   'mark-changed',
   'resume-funded-create',
@@ -538,34 +499,57 @@ const emit = defineEmits([
 ])
 
 const modalTask = ref(null)
-const showCreateForm = ref(false)
-const createPending = ref(false)
-const taskMaterials = ref([])
-let createAttempt = 0
 const selectedAssigneeIds = ref([])
-const taskForm = ref({
-  title: '',
-  description: '',
-  requiredAbilities: '',
-  funded: false,
-  grossBountyAmountMicro: ''
-})
 const requirementCreateInputSummary = computed(() => {
   const intent = props.requirementCreateState?.intent
   const refs = (intent?.schemaVersion === 2 ? intent.body?.attachments : intent?.body?.inputRefs) || []
   return refs.length ? refs.map(item => `${item.fileId} v${item.version}`).join('、') : '无资料'
 })
-// A late success can only clear the exact submitting draft under the same
-// authenticated actor; editing during POST preserves the newer draft.
 watch(() => [props.identityScope, props.authorizationGeneration], () => {
-  createAttempt++
-  createPending.value = false
-  taskMaterials.value = []
-  taskForm.value = { title: '', description: '', requiredAbilities: '', funded: false, grossBountyAmountMicro: '' }
   modalTask.value = null
   selectedAssigneeIds.value = []
 }, { flush: 'sync' })
 const detailTask = computed(() => modalTask.value)
+const showCancellationDialog = ref(false)
+const cancellationCandidate = ref(null)
+const cancellationSubmitting = ref(false)
+const cancellationUnresolved = computed(() => props.cancellationState?.taskId === detailTask.value?.id && props.cancellationState?.status === 'unresolved')
+const cancellationFence = computed(() => JSON.stringify([props.identityScope, props.authorizationGeneration,
+  props.detailAllowed, props.selectedTask?.id, detailTask.value?.id, ordinaryTaskVersion(detailTask.value),
+  detailTask.value?.status, detailTask.value?.startedAt, detailTask.value?.completedAt,
+  detailTask.value?.funding, detailTask.value?.reward]))
+const dismissCancellation = () => { showCancellationDialog.value = false; cancellationCandidate.value = null }
+watch(cancellationFence, () => { dismissCancellation(); cancellationSubmitting.value = false }, { flush: 'sync' })
+watch(() => [props.cancellationBusy, props.cancellationState], () => {
+  if (!props.cancellationBusy) cancellationSubmitting.value = false
+}, { flush: 'sync' })
+onBeforeUnmount(dismissCancellation)
+const requestCancellation = () => {
+  if (!props.identityScope || !props.detailAllowed || props.cancellationBusy || cancellationSubmitting.value ||
+      showCancellationDialog.value || !detailTask.value) return false
+  // Uncertainty belongs to the existing scoped cancellation client. This path
+  // only checks its original record; it must not create another POST intent.
+  if (cancellationUnresolved.value) {
+    cancellationSubmitting.value = true
+    emit('cancel-task', detailTask.value)
+    return true
+  }
+  if (!canCancelOrdinaryTask(detailTask.value)) return false
+  const task = JSON.parse(JSON.stringify(detailTask.value))
+  task.taskVersion = ordinaryTaskVersion(task)
+  cancellationCandidate.value = Object.freeze({ task, fence: cancellationFence.value })
+  showCancellationDialog.value = true
+  return true
+}
+const confirmCancellation = () => {
+  const candidate = cancellationCandidate.value
+  dismissCancellation()
+  if (!candidate || candidate.fence !== cancellationFence.value || props.cancellationBusy ||
+      cancellationSubmitting.value || !canCancelOrdinaryTask(detailTask.value)) return false
+  cancellationSubmitting.value = true
+  emit('cancel-task', candidate.task)
+  return true
+}
 const pointAndStartForDetail = computed(() => {
   const state = props.pointAndStartState
   return state?.intent?.taskId === detailTask.value?.id && state.intent?.body ? state : null
@@ -620,7 +604,7 @@ const preferredAgentName = computed(() => {
   const assigned = props.operableAgents.find(agent => agent.agentId === assignedId)
   return agentDisplayName(assigned || preferredAgents.value[0])
 })
-const simpleMatterStatus = task => ({ open: '待确认', assigned: '已受理', claimed: '已受理', queued: '已受理', running: '办理中', in_progress: '办理中', submitted: '待验收', review: '待验收', changes_requested: '待返工确认', completed: '已完成', accepted: '已完成', archived: '已归档', failed: '受阻' })[task?.status] || (taskAssigneeIds(task).length ? '已受理' : '状态待核对')
+const simpleMatterStatus = task => ({ open: '待确认', assigned: '已受理', claimed: '已受理', queued: '已受理', running: '办理中', in_progress: '办理中', submitted: '待验收', review: '待验收', changes_requested: '待返工确认', completed: '已完成', accepted: '已完成', archived: '已归档', cancelled: '已取消', failed: '失败', blocked: '受阻' })[task?.status] || (taskAssigneeIds(task).length ? '已受理' : '状态待核对')
 
 const formalTaskExecutionScope = computed(() => {
   const taskId = detailTask.value?.id
@@ -636,12 +620,10 @@ const formalTaskExecutionScope = computed(() => {
     authorizationReason: '当前榜文的正式议事与必需工作项尚未核对；请先进入本榜文议事并明确选择已指派好汉。'
   }
 })
-const validGrossAmount = computed(() => isCanonicalMicroAmount(taskForm.value.grossBountyAmountMicro))
 const fundedRecoveryAbilities = computed(() => {
   const abilities = props.fundedCreateRecovery?.body?.requiredAbilities
   return Array.isArray(abilities) ? abilities.join('、') || '未填写' : abilities || '未填写'
 })
-const showDraftEditor = ref(false)
 const unassignedDiscussHint = '此榜文尚未点将，暂不可开议'
 const isFundedTask = task => task?.funding?.mode === 'FUNDED_SINGLE_AGENT'
 const fundedClaimBlocked = (task, agent) => {
@@ -688,40 +670,6 @@ const taskAssigneeIds = (task) => {
   return task.assignedAgentId ? [task.assignedAgentId] : []
 }
 
-const submitCreateTask = () => {
-  if (!taskForm.value.title.trim() || !taskForm.value.description.trim()) return
-  if (taskForm.value.funded && (!validGrossAmount.value || taskMaterials.value.length)) return
-  const payload = {
-    title: taskForm.value.title,
-    description: taskForm.value.description,
-    requiredAbilities: taskForm.value.requiredAbilities
-      .split(',')
-      .map(item => item.trim())
-      .filter(Boolean)
-  }
-  if (props.fundedPreviewEnabled && taskForm.value.funded) {
-    payload.grossBountyAmountMicro = taskForm.value.grossBountyAmountMicro
-    payload.settlementPolicy = 'GROSS_INCLUSIVE'
-  } else {
-    payload.attachments = taskMaterials.value.map(({ fileId, version }) => ({ fileId, version }))
-  }
-  if (createPending.value || props.requirementCreateBusy) return
-  const attempt = ++createAttempt
-  const originalDraft = JSON.stringify({ form: taskForm.value, refs: taskMaterials.value })
-  createPending.value = true
-  emit('create-task', payload, (created) => {
-    if (attempt !== createAttempt) return
-    createPending.value = false
-    // Reset only after the parent receives a definitive success acknowledgement.
-    // Recoverable/ambiguous failures retain the exact funded draft for retry.
-    if (created && originalDraft === JSON.stringify({ form: taskForm.value, refs: taskMaterials.value })) {
-      taskMaterials.value = []
-      taskForm.value = { title: '', description: '', requiredAbilities: '', funded: false, grossBountyAmountMicro: '' }
-      showCreateForm.value = false
-    }
-  })
-}
-
 const toggleAssignee = (agent) => {
   if (isFundedTask(detailTask.value) || !props.canAssign(detailTask.value, agent)) return
   const id = agent?.agentId
@@ -745,12 +693,6 @@ const closeTask = () => {
   emit('select-task', null)
 }
 
-const openCreateRequirement = () => {
-  if (modalTask.value) closeTask()
-  showCreateForm.value = true
-  return true
-}
-
 watch(() => props.selectedTask, (task) => {
   if (!task) {
     modalTask.value = null
@@ -768,7 +710,7 @@ const back = () => {
   closeTask()
   return true
 }
-defineExpose({ openTask, openCreateRequirement, canGoBack, back })
+defineExpose({ openTask, canGoBack, back })
 </script>
 <style scoped>
 .bounty-panel {
@@ -797,13 +739,49 @@ button {
   font: inherit;
 }
 
+.ordinary-cancellation {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 16px 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--hall-border, #eadfd4);
+}
+
+.ordinary-cancellation > p {
+  margin: 0;
+  color: var(--hall-text-secondary, #68716b);
+  font-size: 13px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.ordinary-cancel-action {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 9px 14px;
+  border: 1px solid var(--hall-brand, #923f30);
+  border-radius: 8px;
+  background: var(--hall-surface, #fffefa);
+  color: var(--hall-brand, #923f30);
+  font-weight: 500;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.ordinary-cancel-action:hover:not(:disabled) { background: #f6eee8; border-color: #793326; }
+.ordinary-cancel-action:focus-visible { outline: 3px solid #923f3080; outline-offset: 3px; }
+.ordinary-cancel-action:disabled { opacity: .55; cursor: not-allowed; }
+
 button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
 
 .panel-toolbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr) 44px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
@@ -813,7 +791,6 @@ button:disabled {
   font-size: 13px;
 }
 
-.task-create-actions { display: inline-flex; flex: 0 0 auto; gap: 8px; }
 
 .panel-toolbar button {
   display: inline-flex;
@@ -826,20 +803,43 @@ button:disabled {
   color: #4a3423;
 }
 
-.task-search {
-  display: grid;
-  grid-template-columns: minmax(160px, 1fr) minmax(118px, 150px);
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-}
+.task-search { display: contents; }
 
 .task-search input,
-.task-search select,
-.task-create-form input,
-.task-material-picker { grid-column: 1 / -1; min-width: 0; }
+.task-search select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--hall-border-strong, #d7c3a2);
+  border-radius: 8px;
+  background: var(--work-paper, #fffdf6);
+  color: var(--work-ink, #3f2815);
+  font: inherit;
+}
 
-.task-create-form { max-height: min(55vh, 30rem); overflow-y: auto; }
+.task-search input:focus-visible,
+.task-search select:focus-visible,
+.task-refresh:focus-visible {
+  outline: 2px solid var(--work-brand, #a44330);
+  outline-offset: 2px;
+}
+
+.panel-toolbar .task-refresh {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--work-line, #d7c3a2);
+}
+
+.task-refresh .toolbar-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
 
 .requirement-create-recovery {
   flex: 0 1 auto;
@@ -857,39 +857,6 @@ button:disabled {
 
 .requirement-create-recovery p { margin: 6px 0; }
 .requirement-create-recovery button { margin-right: 8px; padding: 6px 10px; border-radius: 6px; }
-
-.task-create-form textarea {
-  min-width: 0;
-  height: 36px;
-  padding: 0 10px;
-  border: 1px solid #d7c3a2;
-  border-radius: 8px;
-  background: #fffdf6;
-  color: #3f2815;
-  outline: none;
-}
-
-.task-create-form {
-  display: grid;
-  flex: 0 0 auto;
-  grid-template-columns: minmax(150px, 1fr) minmax(180px, 1.4fr) minmax(140px, 0.8fr) auto;
-  gap: 8px;
-  padding: 0 16px 12px;
-}
-
-.task-create-form textarea {
-  height: 36px;
-  padding-top: 8px;
-  resize: vertical;
-}
-
-.task-create-form button {
-  min-height: 36px;
-  padding: 0 12px;
-  border-radius: 8px;
-  background: #7c1f1b;
-  color: #fff8e8;
-}
 
 .task-data-state {
   margin: 0 16px 8px;
@@ -1500,12 +1467,6 @@ button:disabled {
     padding: 10px;
   }
 
-  .panel-toolbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .task-search,
   .task-panel-body {
     grid-template-columns: 1fr;
   }
@@ -1543,10 +1504,6 @@ button:disabled {
     height: 34px;
   }
 
-  .task-create-form {
-    grid-template-columns: 1fr;
-  }
-
   .bounty-modal {
     width: 100%;
     max-width: 100%;
@@ -1555,9 +1512,6 @@ button:disabled {
 }
 
 /* ECO-V0 funded-preview additions; legacy bounty layout stays intact. */
-.funded-create-toggle { display: inline-flex; align-items: center; gap: 6px; color: #765f40; font-size: 12px; }
-.gross-bounty-input { min-width: 180px; }
-.funded-input-error { color: #b42318; font-size: 12px; }
 .funded-quote-confirmation { max-height: 50vh; overflow-y: auto; flex-shrink: 0; padding: 12px; }
 .funding-summary { margin: 8px 0 0; color: #75430b !important; font-weight: 700; }
 .funded-preview-details { margin: 10px 0; padding: 10px; border-radius: 8px; background: #fff3cc; color: #6b4a12; font-size: 12px; }

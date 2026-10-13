@@ -55,6 +55,19 @@ describe('typed natural discussion interaction adapter', () => {
       expect(posts).to.have.length(1)
     } finally { lane.dispose() }
   })
+  it('identifies a missing assignment before catalog preparation, not as a slow index', async () => {
+    const calls = []
+    const lane = useHallTypedDeliberation({ chatApi: { create: async () => calls.push('POST') },
+      actorScopeKey: ref('owner'), authorizationGeneration: ref(1),
+      getContext: () => ({ conversationId: '7', conversationGeneration: '1', taskId: '450', targetAgentId: 'wuyong', assignmentRevision: '' }),
+      getContextGeneration: () => 1, getCatalogEntries: () => [],
+      prepareCatalog: async () => { calls.push('catalog'); return true }, enabled: () => true })
+    try {
+      expect(await lane.submit({ content: '识别图片' })).to.equal(false)
+      expect(calls).to.deep.equal([]); expect(lane.error.value).to.include('指派上下文')
+      expect(lane.error.value).not.to.include('成果索引')
+    } finally { lane.dispose() }
+  })
   it('reports a missing current assignment context instead of silently dropping the draft', async () => {
     const calls = []
     const lane = useHallTypedDeliberation({ chatApi: { create: async () => calls.push('POST') },
@@ -537,6 +550,29 @@ describe('actual mixed media basis natural discussion and frozen original recove
         expect(posted[2].sourceSelectors).to.deep.equal(expected)
         expect(posted[2].parentOutcomeId).to.equal(sources.at(-1).outcome.outcomeId)
         expect(posted[2].expectedParentStateVersion).to.equal('0')
+      } finally { lane.dispose() }
+    }
+  })
+  it('allows a fresh media discussion after failed admission, retains the failure, and never replays it', async () => {
+    for (const state of ['FAILED', 'QUEUED']) {
+      const failed = JSON.parse(JSON.stringify(group.mediaTwo))
+      failed.requestId = 'failed-edit-request'; failed.turnId = 'failed-edit-turn'
+      failed.outcome.outcomeId = 'failed-edit-outcome'; failed.outcome.assistantMessageId = '9999'
+      failed.outcome.finalDigest = `sha256:${'f'.repeat(64)}`
+      failed.outcome.deliveryRelation = { mode: 'APPEND', parentOutcomeId: group.updated.outcome.outcomeId, parentFinalDigest: group.updated.outcome.finalDigest }
+      failed.actionProgress = { ...failed.actionProgress, state, childRequestId: null, childRoute: null, childStateVersion: null }
+      const sources = [...values, failed]; const { lane, calls } = create(store(), sources)
+      try {
+        for (const raw of sources) expect(await lane.readOne(raw.requestId)).not.to.equal(null)
+        await lane.submit({ content: '基于原图继续改图' })
+        const posts = calls.filter(call => call[0] === 'POST')
+        expect(posts).to.have.length(state === 'FAILED' ? 1 : 0)
+        expect(lane.projections.value.find(value => value.requestId === failed.requestId).actionProgress.state).to.equal(state)
+        if (state === 'FAILED') {
+          expect(posts[0][2].sourceSelectors).to.deep.equal(expected)
+          expect(posts[0][2].parentOutcomeId).to.equal(group.updated.outcome.outcomeId)
+          expect(posts[0][1]).to.equal('/conversations/42/interactions/discussion')
+        }
       } finally { lane.dispose() }
     }
   })

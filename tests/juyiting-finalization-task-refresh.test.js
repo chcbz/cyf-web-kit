@@ -1,3 +1,4 @@
+import * as discussionContract from '../src/components/juyiting/discussionPanelContract.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import * as Vue from 'vue'
@@ -13,6 +14,7 @@ const script = compileScript(descriptor, { id: 'bounty-completed-task-refresh', 
     (_, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
   .replace(/^import\s+(ChatPanel|BountyDeliberationStatus|BountyExecutionTermination|BountyExecutionOutputs|BountyFollowupConsentPanel)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_, name) => `var { ${name} } = deps`)
   .replace(/^import\s+\{\s*bountyDeliberationPresentation\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { bountyDeliberationPresentation } = deps')
+  .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\/discussionPanelContract\.js['"];?\s*$/gm, (_, names) => `var { ${names} } = deps`)
   .replace('export default', 'return')
 
 describe('validated finalization completion refresh boundary', () => {
@@ -27,7 +29,7 @@ describe('validated finalization completion refresh boundary', () => {
     const Gallery = Vue.defineComponent({ emits: ['task-completed'], setup: (_, { emit }) => () =>
       Vue.h('button', { class: 'validated-gallery-completion', onClick: () => emit('task-completed', receipt) }, '完成回执') })
     const ChatPanel = Vue.defineComponent({ setup: (_, { slots }) => () => Vue.h('div', {}, slots['bounty-results']?.()) })
-    const Component = new Function('Vue', 'deps', script)(Vue, { ChatPanel,
+    const Component = new Function('Vue', 'deps', script)(Vue, { ...discussionContract, ChatPanel,
       BountyExecutionTermination: { render: () => null }, BountyDeliberationStatus: { render: () => null }, BountyExecutionOutputs: Gallery, BountyFollowupConsentPanel: { render: () => null }, bountyDeliberationPresentation })
     const task = { id: 'task-1', title: '画鸟', status: 'running', version: '9' }
     const wrapper = mount(Component, { props: { selectedTask: task, conversationId: 'conversation-1', identityScope: 'owner-a',

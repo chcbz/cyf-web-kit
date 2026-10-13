@@ -1,3 +1,5 @@
+import { useOutputs } from '../src/composables/useOutputs.js'
+import { useHallBountyAcceptance } from '../src/composables/juyiting/useHallBountyAcceptance.js'
 import { useHallDrafts } from '../src/composables/juyiting/useHallDrafts.js'
 import { bountyInteractionTargetId } from '../src/composables/juyiting/useHallChatContext.js'
 import { createHydratedIdentityScope, hasHydratedIdentity } from '../src/utils/identityScope.js'
@@ -170,6 +172,9 @@ const makeHallPageMocks = ({ mode, counters, voiceLocked = Vue.ref(false) }) => 
     env: {}, isMultimediaDeliberationUiEnabled: () => false,
     useHallDrafts,
     useHallRequirementCreate: () => ({ state: Vue.ref({ error: '' }), busy: Vue.ref(false), create: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, readOriginal: () => ({ state: 'ABSENT' }), dispose: noop }),
+    // Real read adapters stay inert without a cancelled-task source.
+    useOutputs, useHallBountyAcceptance,
+    useHallBountyAssignmentContext: () => ({ projection: Vue.ref(null), error: Vue.ref(''), refresh: async () => false, dispose: noop }),
     useHallBountyRequestCatalog: () => ({ entries: Vue.ref([]), hint: noop, reset: noop, refresh: asyncNoop, dispose: noop }),
     useHallBountyFollowup: () => ({ state: Vue.ref({}), busy: Vue.ref(false), prepareGenerate: async () => false, prepareEdit: async () => false, confirm: async () => false, checkOriginal: async () => false, invalidate: noop, dispose: noop }),
     useHallTypedDeliberation: () => ({ refresh: asyncNoop, readOne: asyncNoop, recover: asyncNoop, invalidate: noop, dispose: noop }), typedLong: () => '',

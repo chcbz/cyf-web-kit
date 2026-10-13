@@ -12,35 +12,41 @@ export const useHallBountyRequestCatalog = ({ chatApi, enabled = () => false, id
   const current = captured => !disposed && enabled?.() && captured.generation === generation.value && captured.scope === scope.value &&
     captured.auth === unref(typeof authorizationGeneration === 'function' ? authorizationGeneration() : authorizationGeneration) &&
     captured.contextGeneration === getContextGeneration?.() && JSON.stringify(captured.context) === JSON.stringify(getContext?.() || {})
-  const reset = () => { generation.value++; activeScan = null; entries.value = []; error.value = ''; loading.value = false }
-  const refresh = async () => {
-    if (loading.value) { refreshQueued = true; return false }
+  const reset = () => { generation.value++; activeScan?.controller.abort(); activeScan = null; refreshQueued = false; entries.value = []; error.value = ''; loading.value = false }
+  const refresh = () => {
+    // A send joins the same fenced read, rather than interpreting "busy" as failure.
+    if (activeScan && current(activeScan.captured)) { refreshQueued = true; return activeScan.promise }
+    if (activeScan) reset()
     const captured = capture(); const context = captured.context
-    if (!enabled?.() || !context.conversationId || !context.taskId) return false
-    const scan = {}; activeScan = scan
+    if (disposed || !enabled?.() || !context.conversationId || !context.taskId) return Promise.resolve(false)
+    const scan = { controller: new AbortController(), captured }; activeScan = scan
     loading.value = true; error.value = ''
-    try {
-      let after = '0'; let through = null; let expectedGeneration = context.conversationGeneration || null; let next = true; let merged = entries.value
-      while (next) {
-        const params = query({ ...(expectedGeneration ? { expectedGeneration } : {}), after, ...(through != null ? { through } : {}) })
-        const page = catalogPage(unwrap(await chatApi.get(`/conversations/${encodeURIComponent(context.conversationId)}/requests`, params, { autoLoading: false, needAuth: true })),
-          { conversationId: context.conversationId, taskId: context.taskId, generation: expectedGeneration, after, through })
-        if (!current(captured) || !page) return false
-        if (through != null && page.through !== through) throw new Error('悬赏成果索引分页边界不一致')
-        through = page.through; expectedGeneration = page.scope.conversationGeneration
-        const nextMerged = mergeCatalogEntries(merged, page)
-        if (!nextMerged) throw new Error('悬赏成果索引回执冲突')
-        merged = nextMerged; after = page.nextAfter || page.through; next = page.hasMore
+    scan.promise = (async () => {
+      try {
+        let after = '0'; let through = null; let expectedGeneration = context.conversationGeneration || null; let next = true; let merged = entries.value
+        while (next) {
+          const params = query({ ...(expectedGeneration ? { expectedGeneration } : {}), after, ...(through != null ? { through } : {}) })
+          const page = catalogPage(unwrap(await chatApi.get(`/conversations/${encodeURIComponent(context.conversationId)}/requests`, params, { autoLoading: false, needAuth: true, signal: scan.controller.signal })),
+            { conversationId: context.conversationId, taskId: context.taskId, generation: expectedGeneration, after, through })
+          if (!current(captured)) return false
+          if (!page) throw new Error('悬赏成果索引格式或会话绑定不匹配')
+          if (through != null && page.through !== through) throw new Error('悬赏成果索引分页边界不一致')
+          through = page.through; expectedGeneration = page.scope.conversationGeneration
+          const nextMerged = mergeCatalogEntries(merged, page)
+          if (!nextMerged) throw new Error('悬赏成果索引回执冲突')
+          merged = nextMerged; after = page.nextAfter || page.through; next = page.hasMore
+        }
+        if (!current(captured)) return false
+        entries.value = merged
+        return true
+      } catch (cause) { if (current(captured)) error.value = cause?.message || '读取悬赏成果索引失败'; return false } finally {
+        if (activeScan === scan) {
+          activeScan = null; loading.value = false
+          if (refreshQueued) { refreshQueued = false; void refresh() }
+        }
       }
-      if (!current(captured)) return false
-      entries.value = merged
-      return true
-    } catch (cause) { if (current(captured)) error.value = cause?.message || '读取悬赏成果索引失败'; return false } finally {
-      if (activeScan === scan) {
-        activeScan = null; loading.value = false
-        if (refreshQueued) { refreshQueued = false; void refresh() }
-      }
-    }
+    })()
+    return scan.promise
   }
   const hint = () => { if (!enabled?.()) return false; void refresh(); return true }
   const executionSteps = computed(() => catalogExecutionSteps(entries.value, getContext?.() || {}))

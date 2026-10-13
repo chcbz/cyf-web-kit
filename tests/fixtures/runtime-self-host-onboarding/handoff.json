@@ -1,0 +1,15 @@
+{
+  "scope": {
+    "tenantId": "tenant-real",
+    "clientId": "client-real",
+    "canonicalAgentId": "agent-real"
+  },
+  "request": {
+    "installationId": "rti_3decfa02938098ba374d853da87f0151",
+    "canonicalAgentId": "agent-real",
+    "manifestVersion": "1",
+    "manifestSha256": "da29d500bd152b8542f3370c877c226b3a219f23db75cebcae91b5c9e3da86cd",
+    "enrollmentSecretSha256": "465be4597a9e858b5eb5e0eca20e7e9a5fd471cac5b969d5d7006f7a4cab0762",
+    "enrollmentExpiresAt": 4102444800000
+  }
+}
