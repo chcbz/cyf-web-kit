@@ -150,9 +150,9 @@ describe('task-linked reference input resolver', () => {
     const calls = []
     let assigned = false
     const facts = resolved.inputRefs.map(inputFact)
-    const receipt = () => ({ schemaVersion: 1, taskId: 'task-1', targetAgentId: 'agent-1', requirementRevision: '3',
+    const receipt = () => ({ schemaVersion: 2, taskId: 'task-1', targetAgentId: 'agent-1', requirementRevision: '3',
       assignmentRevision: '7', taskVersion: '7', grantId: 'grant-1', grantVersion: '1', grantState: 'ACTIVE',
-      permittedOperations: ['DELIBERATE', 'INSPECT_INPUTS'], inputs: facts, bootstrapId: 'bootstrap-1', bootstrapState: 'PENDING',
+      permittedOperations: ['DELIBERATE', 'EXECUTE_SKILL'], inputs: facts, bootstrapId: 'bootstrap-1', bootstrapState: 'PENDING',
       stateVersion: '0', initialOperation: 'DELIBERATE', conversationId: null, initialRequestId: null, currentAssignment: true })
     const pointApi = {
       get: async path => {

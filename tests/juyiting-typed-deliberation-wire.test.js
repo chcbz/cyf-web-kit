@@ -1,12 +1,12 @@
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
-import { discussionAccepted, discussionBody, typedOutcomeProjection } from '../src/composables/juyiting/hallTypedDeliberation.js'
+import { discussionAccepted, discussionBody, sourceSelector, historicalSourceSelector, typedOutcomeProjection } from '../src/composables/juyiting/hallTypedDeliberation.js'
 
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/juyiting/typed-deliberation-atomic-followup-v1.json', import.meta.url)))
 const clone = value => JSON.parse(JSON.stringify(value))
 describe('typed natural deliberation frozen wire', () => {
   it('preserves empty/whitespace user bodies only with exact nonempty attachments', () => {
-    const selector = { kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'file-1', version: '7', purpose: 'INPUT', assetId: null, assetRevision: null }
+    const selector = { kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'file-1', version: '7', purpose: 'INPUT' }
     for (const content of ['', '  ', ' \t\n']) {
       const command = { intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content, sourceSelectors: [selector] }
       expect(discussionBody(command).content).to.equal(content)
@@ -17,20 +17,20 @@ describe('typed natural deliberation frozen wire', () => {
       expect(discussionBody({ ...reply, sourceSelectors: [] })).to.equal(null)
     }
   })
-  it('copies the frozen fixture byte-exact and emits only the exact ten-key discussion body', () => {
+  it('emits the exact eleven-key discussion-v2 body while retaining the audit fixture', () => {
     const body = discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content: fixture.golden.discussion.content })
-    expect(body).to.deep.equal(fixture.golden.discussion)
-    expect(Object.keys(body)).to.have.length(10)
+    expect(body).to.deep.equal({ ...fixture.golden.discussion, schemaVersion: 2, materialScope: 'TASK_DEFAULT' })
+    expect(Object.keys(body)).to.have.length(11)
   })
-  it('accepts only exact six-key selected workspace versions as optional available references', () => {
-    const selector = { kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'file-1', version: '7', purpose: 'REFERENCE', assetId: null, assetRevision: null }
+  it('accepts only exact four-key selected workspace versions as optional available references', () => {
+    const selector = { kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'file-1', version: '7', purpose: 'REFERENCE' }
     const body = discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content: '请参考此稿。', sourceSelectors: [selector] })
     expect(body.sourceSelectors).to.deep.equal([selector])
     expect(discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content: '请参考此稿。', sourceSelectors: [{ ...selector, extra: true }] })).to.equal(null)
   })
   it('carries up to 32 unified materials with exact roles instead of coercing everything to reference', () => {
     const sourceSelectors = Array.from({ length: 32 }, (_, i) => ({ kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: `file-${i}`,
-      version: '7', purpose: i % 2 ? 'REFERENCE' : 'INPUT', assetId: null, assetRevision: null }))
+      version: '7', purpose: i % 2 ? 'REFERENCE' : 'INPUT' }))
     const command = { intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content: '查看这些资料', sourceSelectors }
     expect(discussionBody(command).sourceSelectors).to.deep.equal(sourceSelectors)
     expect(discussionBody({ ...command, sourceSelectors: [...sourceSelectors, { ...sourceSelectors[0], fileId: 'extra' }] })).to.equal(null)
@@ -89,4 +89,16 @@ describe('typed inspection v2 wire', () => {
     expect(typedOutcomeProjection(inspection)).to.equal(null)
     expect(inspectionOutcomeProjection({ ...inspection, schemaVersion: 3 })).to.equal(null)
   })
+})
+
+
+describe('historical selectors remain audit-only', () => {
+  const legacy = { kind: 'CURRENT_CONVERSATION_ASSET', fileId: null, version: null, purpose: null, assetId: 'upload-1', assetRevision: '1' }
+  it('reads exact historical attachment metadata but rejects it in new discussion-v2', () => {
+    expect(historicalSourceSelector(legacy)).to.deep.equal(legacy)
+    expect(sourceSelector(legacy)).to.equal(null)
+    expect(discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content: '资料', materialScope: 'EXPLICIT', sourceSelectors: [legacy] })).to.equal(null)
+  })
+  for (const altered of [{ ...legacy, fileId: 'hidden-file' }, { ...legacy, producerExecutionId: 'invented' }, { ...legacy, assetRevision: '01' }])
+    it(`rejects ambiguous historical metadata ${JSON.stringify(altered)}`, () => { expect(historicalSourceSelector(altered)).to.equal(null) })
 })

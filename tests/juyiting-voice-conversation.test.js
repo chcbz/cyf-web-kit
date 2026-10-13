@@ -1,3 +1,5 @@
+import { currentBountyAssignmentRevision } from '../src/composables/juyiting/hallBountyAssignmentContext.js'
+import { useHallSkillCapabilities } from '../src/composables/juyiting/useHallSkillCapabilities.js'
 import { useOutputs } from '../src/composables/useOutputs.js'
 import { useHallBountyAcceptance } from '../src/composables/juyiting/useHallBountyAcceptance.js'
 import { getHallCapabilities } from './fixtures/hall-current-protocol.js'
@@ -77,7 +79,7 @@ const loadActualJuyiHall = mocks => {
     .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = mocks.${name}`)
     .replace(/import\.meta\.env/g, 'mocks.env')
     .replace('export default', 'return')
-  return new Function('Vue', 'mocks', body)(Vue, mocks)
+  return new Function('Vue', 'mocks', body)(Vue, { useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
 }
 const requireSource = relativePath => {
   const { readFileSync } = globalThis.__voiceFs

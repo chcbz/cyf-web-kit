@@ -145,7 +145,8 @@ describe('exact requirement/reference create contract', () => {
     expect(exactPointAndStartScope(scopeA)).to.equal(true)
     const storage = memoryStorage(), body = pointAndStartBody({ agentId: 'agent-1', taskVersion: '0', requirementRevision: '1', requestedOperations: ['GENERATE_IMAGE'], initialOperation: 'GENERATE_IMAGE' })
     const record = { schemaVersion: 1, taskId: 'task-1', key: 'assign-key', body, postAcknowledged: false, grant: null, projection: null }
-    expect(createPointAndStartIntentStore({ storage, scope: scopeA, taskId: 'task-1' }).write(record).state).to.equal('PRESENT')
+    storage.setItem(`cyf.juyiting.point-and-start.v1.${encodeURIComponent(scopeA)}.task-1`, JSON.stringify(record))
+    expect(createPointAndStartIntentStore({ storage, scope: scopeA, taskId: 'task-1' }).read().state).to.equal('PRESENT')
     let reads = 0
     const h = owned(useHallPointAndStart({ agentApi: { get: async () => { reads++; throw Object.assign(new Error('unknown'), { status: 404 }) } }, actorScopeKey: ref(scopeA), storage }))
     expect(await h.checkOriginal('task-1')).to.equal(false); expect(reads).to.equal(1); expect(h.state.value.intent.key).to.equal('assign-key')

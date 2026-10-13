@@ -12,7 +12,7 @@ describe('Juyi Hall conversation material references', () => {
     assert.match(source, /usePersonalWorkspaceTaskLinks/)
     assert.match(source, /本次需求的资料/)
     assert.match(source, /\['INPUT', 'REFERENCE'\]/)
-    assert.match(source, /图片、文档、音频等都可以作为资料/)
+    assert.match(source, /默认使用本任务有效资料/)
     assert.match(source, /class="typed-source-selector"/)
     assert.match(source, /sourceSelectors: typedSourceSelectors/)
     assert.doesNotMatch(source, /参看资料：/)

@@ -24,6 +24,17 @@ export const sourceSelector = value => {
     typedId(value.executionId) && /^[a-f0-9]{64}$/.test(value.resultDigest)) return freeze(value)
   return null
 }
+// Historical metadata/proposals are audit-only. Never accept this six-key shape for new discussion writes.
+export const historicalSourceSelector = value => {
+  const current = sourceSelector(value)
+  if (current) return current
+  if (!exactKeys(value, ['kind', 'fileId', 'version', 'purpose', 'assetId', 'assetRevision'])) return null
+  const candidate = value.kind === 'TASK_LINKED_WORKSPACE_VERSION' && value.assetId === null && value.assetRevision === null
+    ? { kind: value.kind, fileId: value.fileId, version: value.version, purpose: value.purpose }
+    : value.kind === 'CURRENT_CONVERSATION_ASSET' && value.fileId === null && value.version === null && value.purpose === null
+      ? { kind: value.kind, assetId: value.assetId, assetRevision: value.assetRevision } : null
+  return candidate && sourceSelector(candidate) ? freeze(value) : null
+}
 export const discussionBody = ({ intent, taskId, assignmentRevision, content, parentOutcomeId = null,
   expectedParentStateVersion = null, pendingQuestionId = null, expectedPendingQuestionStateVersion = null, sourceSelectors = [], materialScope = 'TASK_DEFAULT' }) => {
   if (!['DISCUSSION', 'CLARIFICATION_REPLY'].includes(intent) || !typedId(taskId) || !typedLong(assignmentRevision, { allowZero: true }) ||
@@ -63,7 +74,7 @@ const outcome = value => {
     value.proposal.state === 'PROPOSED' && value.proposal.stateVersion === '0' && ['GENERATE_IMAGE', 'EDIT_IMAGE'].includes(value.proposal.operation) &&
     validText(value.proposal.instruction) && Array.isArray(value.proposal.sourceRefIds) && value.proposal.sourceRefIds.every(typedId) &&
     new Set(value.proposal.sourceRefIds).size === value.proposal.sourceRefIds.length && Array.isArray(value.proposal.sourceSelectors) &&
-    value.proposal.sourceSelectors.length === value.proposal.sourceRefIds.length && value.proposal.sourceSelectors.map(sourceSelector).every(Boolean) &&
+    value.proposal.sourceSelectors.length === value.proposal.sourceRefIds.length && value.proposal.sourceSelectors.map(historicalSourceSelector).every(Boolean) &&
     (value.proposal.parent === null || (exactKeys(value.proposal.parent, parentFields) && typedId(value.proposal.parent.requestId) && typedId(value.proposal.parent.stepId)))) {
     if ((value.proposal.operation === 'GENERATE_IMAGE' && value.proposal.parent === null) ||
       (value.proposal.operation === 'EDIT_IMAGE' && value.proposal.sourceSelectors.length === 1 && value.proposal.sourceSelectors[0].kind === 'CURRENT_CONVERSATION_ASSET' && value.proposal.parent)) return freeze(value)

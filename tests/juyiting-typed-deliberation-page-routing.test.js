@@ -31,13 +31,13 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
     const send = async () => { calls.push(['legacy']); return true }
     const actual = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled', 'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', 'typedAssignmentRevision', `return (${handler('handleSendHallMessage')})`)({ close: () => {} }, { cancel: () => {} }, () => {}, enabled, typed, draft, value => calls.push(['draft', value]), () => {}, send, () => '4')
     expect(await actual()).to.equal(true)
-    expect(calls).to.deep.equal([['typed', { content: '画一只鸟', sourceSelectors: [] }], ['draft', '']])
+    expect(calls).to.deep.equal([['typed', { content: '画一只鸟', sourceSelectors: [], materialScope: 'TASK_DEFAULT' }], ['draft', '']])
     enabled.value = false
     expect(await actual()).to.equal(true)
     expect(calls.at(-1)).to.deep.equal(['legacy'])
     enabled.value = true
     await actual({ sourceSelectors: [{ kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'file-1', version: '7', purpose: 'REFERENCE', assetId: null, assetRevision: null }] })
-    expect(calls.at(-2)).to.deep.equal(['typed', { content: '画一只鸟', sourceSelectors: [{ kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'file-1', version: '7', purpose: 'REFERENCE', assetId: null, assetRevision: null }] }])
+    expect(calls.at(-2)).to.deep.equal(['typed', { content: '画一只鸟', sourceSelectors: [{ kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'file-1', version: '7', purpose: 'REFERENCE', assetId: null, assetRevision: null }], materialScope: 'TASK_DEFAULT' }])
   })
   it('read-only resolves the server binding without an original browser intent and fences identity changes before sending', async () => {
     for (const switchIdentity of [false, true]) {

@@ -2257,10 +2257,6 @@ typedDeliberation = useHallTypedDeliberation({
   }
 })
 
-const taskSkillDirectory = useHallSkillCapabilities({ api: agentApi, getContext: typedDeliberationContext,
-  identityKey: () => `${hallIdentityScope.value}\u0000${apiStore.authorizationGeneration}\u0000${followupContextGeneration.value}`,
-  enabled: () => typedDeliberationEnabled.value })
-
 // Every user-visible task/target/auth context change fences in-flight original
 // projection reads. The one canonical task replacement performed by a verified
 // admission is marked below, so its own reactive write cannot cancel adoption.
@@ -2317,6 +2313,12 @@ const {
   },
   onAdmitted: attachAdmittedPointAndStart
 })
+// The directory starts an immediate context watch; initialize the assignment
+// state first so mounted private and bounty panels share the same safe fence.
+const taskSkillDirectory = useHallSkillCapabilities({ api: agentApi, getContext: typedDeliberationContext,
+  identityKey: () => `${hallIdentityScope.value}\u0000${apiStore.authorizationGeneration}\u0000${followupContextGeneration.value}`,
+  enabled: () => typedDeliberationEnabled.value })
+
 const pointAndStartPresentationState = pointAndStartState
 const explainPointAndStartState = () => ({
   UNKNOWN: '正在确认点将结果，请刷新状态。',

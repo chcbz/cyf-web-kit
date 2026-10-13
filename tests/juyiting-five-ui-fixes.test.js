@@ -1,3 +1,5 @@
+import * as skillResults from '../src/composables/juyiting/useHallSkillResults.js'
+import * as skillResultData from '../src/composables/juyiting/hallSkillResults.js'
 import { expect } from 'chai'
 import { readFileSync, writeFileSync } from 'node:fs'
 import * as Vue from 'vue'
@@ -21,7 +23,7 @@ const Empty = Vue.defineComponent({ render: () => Vue.h('span') })
 const compile = (name, imports) => {
   const filename = new URL(`../src/components/juyiting/${name}.vue`, import.meta.url)
   const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename: filename.pathname })
-  const modules = new Proxy({ vue: Vue, ...imports }, { get: (obj, path) => obj[path] || Empty })
+  const modules = new Proxy({ vue: Vue, '../../composables/juyiting/useHallSkillResults.js': skillResults, '../../composables/juyiting/hallSkillResults.js': skillResultData, ...imports }, { get: (obj, path) => obj[path] || Empty })
   const code = compileScript(descriptor, { id: `five-${name}`, inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_, names, path) => `const { ${names.replace(/\s+as\s+/g, ': ')} } = imports[${JSON.stringify(path)}]`)
     .replace(/^import\s+(\w+)\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_, name, path) => `const ${name} = imports[${JSON.stringify(path)}]`)

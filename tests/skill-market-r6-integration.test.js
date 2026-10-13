@@ -1,3 +1,4 @@
+import * as skillCostContract from '../src/composables/juyiting/hallSkillCapabilities.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
@@ -138,8 +139,8 @@ const varlet = () => {
 }
 
 const components = async (id) => {
-  const Card = compile('../src/components/economy/SkillProductCard.vue', `${id}-card`, { vue: Vue, '@/composables/useSkillMarket.js': marketModule })
-  const Dialog = compile('../src/components/economy/SkillPurchaseDialog.vue', `${id}-dialog`, { vue: Vue, '@/composables/useSkillMarket.js': marketModule })
+  const Card = compile('../src/components/economy/SkillProductCard.vue', `${id}-card`, { vue: Vue, '@/composables/useSkillMarket.js': marketModule, '@/composables/juyiting/hallSkillCapabilities.js': skillCostContract })
+  const Dialog = compile('../src/components/economy/SkillPurchaseDialog.vue', `${id}-dialog`, { vue: Vue, '@/composables/useSkillMarket.js': marketModule, '@/composables/juyiting/hallSkillCapabilities.js': skillCostContract })
   const Market = compile('../src/components/economy/SkillMarket.vue', `${id}-market`, {
     vue: Vue,
     './SkillProductCard.vue': Card,
