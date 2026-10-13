@@ -625,8 +625,11 @@
             :capability-state="capabilityState"
             :deliberation-v2-enabled="multimediaDeliberationUiEnabled"
             :typed-outcomes="typedDeliberation.cards.value"
+            :conversation-generation="typedConversationGeneration()"
             :typed-pending-question="typedDeliberation.selectedPending.value"
             :typed-enabled="typedDeliberationEnabled"
+            :skill-directory="taskSkillDirectory.projection.value" :skill-directory-error="taskSkillDirectory.error.value" :skill-directory-loading="taskSkillDirectory.loading.value"
+            @skill-directory-refresh="taskSkillDirectory.refresh"
             :typed-recovery-available="typedDeliberation.recoveryAvailable.value"
             :typed-inspection-status="typedDeliberation.inspectionStatus.value"
             :draft="draft"
@@ -798,6 +801,7 @@ import { createPointAndStartIntentStore } from '@/composables/juyiting/hallPoint
 import { pointAndStartRecoveryLane } from '@/composables/juyiting/hallPointAndStartRecoveryLane'
 import { useHallBountyRequestCatalog } from '@/composables/juyiting/useHallBountyRequestCatalog'
 import { useHallTypedDeliberation } from '@/composables/juyiting/useHallTypedDeliberation'
+import { useHallSkillCapabilities } from '@/composables/juyiting/useHallSkillCapabilities'
 import { typedLong } from '@/composables/juyiting/hallTypedDeliberation'
 import { pointAndStartIntentReadLane } from '@/composables/juyiting/hallNativeBountyCapability'
 import { useHallDrafts } from '@/composables/juyiting/useHallDrafts'
@@ -2253,6 +2257,10 @@ typedDeliberation = useHallTypedDeliberation({
   }
 })
 
+const taskSkillDirectory = useHallSkillCapabilities({ api: agentApi, getContext: typedDeliberationContext,
+  identityKey: () => `${hallIdentityScope.value}\u0000${apiStore.authorizationGeneration}\u0000${followupContextGeneration.value}`,
+  enabled: () => typedDeliberationEnabled.value })
+
 // Every user-visible task/target/auth context change fences in-flight original
 // projection reads. The one canonical task replacement performed by a verified
 // admission is marked below, so its own reactive write cannot cancel adoption.
@@ -2858,6 +2866,7 @@ onUnmounted(() => {
   disposeRequirementCreate()
   disposePointAndStart()
   typedDeliberation?.dispose?.()
+  taskSkillDirectory.dispose()
   bountyAssignmentContext.dispose()
   disposeHallConversation()
   hallBackendSceneState?.dispose()

@@ -15,6 +15,7 @@
       class="typed-recovery"
       @click="$emit('typed-resume')"
     >刷新处理状态</button>
+    <TaskSkillCapabilities v-if="typedEnabled" :projection="skillDirectory" :error="skillDirectoryError" :loading="skillDirectoryLoading" @refresh="$emit('skill-directory-refresh')" />
     <ChatPanel
       @update:draft="$emit('update:draft', $event)"
       discussion-variant="bounty"
@@ -44,6 +45,9 @@
           :task-completed="selectedTask?.status === 'completed'"
           :request="activeRequest"
           :catalog="requestCatalog"
+          :typed-outcomes="typedOutcomes"
+          :task-id="selectedTask?.id || ''"
+          :conversation-generation="conversationGeneration"
           :conversation-id="conversationId"
           :identity-key="`${identityEpoch}\u0000${identityScope}`"
           :task-version="selectedTask?.taskVersion ?? selectedTask?.version"
@@ -57,6 +61,7 @@
 <script setup>
 import { computed } from 'vue'
 import ChatPanel from './ChatPanel.vue'
+import TaskSkillCapabilities from './TaskSkillCapabilities.vue'
 import { discussionPanelProps, discussionPanelEmits } from './discussionPanelContract.js'
 import BountyDeliberationStatus from './BountyDeliberationStatus.vue'
 import BountyExecutionTermination from './BountyExecutionTermination.vue'
@@ -70,15 +75,17 @@ const props = defineProps({
   activeTurns: { type: Array, default: () => [] },
   capabilityState: { type: Object, default: null },
   deliberationV2Enabled: { type: Boolean, default: false },
+  conversationGeneration: { type: String, default: '' },
   typedOutcomes: { type: Array, default: () => [] },
   typedPendingQuestion: { type: Object, default: null },
   typedEnabled: { type: Boolean, default: false },
+  skillDirectory: { type: Object, default: null }, skillDirectoryError: { type: String, default: '' }, skillDirectoryLoading: { type: Boolean, default: false },
   typedRecoveryAvailable: { type: Boolean, default: false },
   typedInspectionStatus: { type: String, default: '' },
   identityScope: { type: String, default: '' },
 })
 
-defineEmits([...discussionPanelEmits, 'execution-settled', 'task-completed', 'typed-reply', 'typed-resume'])
+defineEmits([...discussionPanelEmits, 'execution-settled', 'task-completed', 'typed-reply', 'typed-resume', 'skill-directory-refresh'])
 
 const v2Presentation = computed(() => bountyDeliberationPresentation({
   enabled: props.deliberationV2Enabled,

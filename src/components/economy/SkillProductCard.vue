@@ -7,6 +7,7 @@
       </div>
       <strong>{{ formatMoney(product.priceMicro) }}</strong>
     </div>
+    <p class="run-cost">{{ skillCostText(product.costInfo) }}</p>
     <p class="description">{{ product.description || '平台自营技能' }}</p>
     <p v-if="product.creatorName || product.creatorAgentName" class="creator">
       创作者：{{ product.creatorName || product.creatorAgentName }}
@@ -29,6 +30,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { skillCostText } from '@/composables/juyiting/hallSkillCapabilities.js'
 import { formatSilverMicro, formatSkillProductIdentity } from '@/composables/useSkillMarket.js'
 
 const props = defineProps({

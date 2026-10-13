@@ -1,5 +1,5 @@
 <template>
-  <section v-if="enabled && (acceptance || scopedSteps.length || finalizeState.intent || finalizeState.message)" class="bounty-output-gallery" aria-label="悬赏议事成果">
+  <section v-if="enabled && (acceptance || scopedSteps.length || skillResults.results.value.length || skillResults.error.value || finalizeState.intent || finalizeState.message)" class="bounty-output-gallery" aria-label="悬赏议事成果">
     <header class="output-gallery-heading">
       <strong>{{ acceptance ? '本次成果与验收' : '议事成果' }}</strong>
       <button
@@ -11,6 +11,12 @@
     </header>
     <p v-if="error" role="alert">{{ error }} <button type="button" @click="refreshFromUser">重新读取</button></p>
     <p v-else-if="!displayItems.length" role="status">{{ loading ? '正在读取已提交成果…' : deliveryMessage || '结果完成后会显示在这里。' }}</p>
+    <p v-if="skillResults.error.value" role="alert">{{ skillResults.error.value }} <button type="button" @click="skillResults.refresh">重新读取</button></p>
+    <article v-for="result in skillResults.results.value" :key="result.executionId" class="bounty-output">
+      <strong>技能结果</strong><span>{{ result.complete ? '已归档' : result.phase === 'ARCHIVING' ? '正在归档（尚未完成）' : result.phase }}</span>
+      <pre v-if="result.complete && result.data !== null" class="bounty-output-text">{{ skillResultDataText(result.data) }}</pre>
+      <small v-if="result.complete && result.data !== null">数据结果不制造文件资产，不表示任务已验收。</small>
+    </article>
     <div v-for="item in displayItems" :key="outputItemKey(item)" class="bounty-output">
       <strong>{{ previewKind(item.contentMimeType) === 'image' ? '图片' : previewKind(item.contentMimeType) === 'audio' ? '音频' : previewKind(item.contentMimeType) === 'text' ? '文本' : '文件' }}</strong>
       <p v-if="item.messageSource" class="bounty-output-text">{{ item.text }}</p>
@@ -56,6 +62,8 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { createApi } from '../../composables/useHttp.js'
 import { exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, currentOutputDelivery, completedTextItem, completedExecutionDelivery, outputRequestPending } from '../../composables/juyiting/bountyOutputCatalog.js'
+import { useHallSkillResults } from '../../composables/juyiting/useHallSkillResults.js'
+import { skillResultDataText } from '../../composables/juyiting/hallSkillResults.js'
 import { saveOutputBlob } from '../../utils/outputDownload.js'
 import { useHallConversationArchive } from '../../composables/juyiting/useHallConversationArchive.js'
 import { useHallBountyFinalization, safeFinalizationVersion } from '../../composables/juyiting/useHallBountyFinalization.js'
@@ -66,11 +74,24 @@ const props = defineProps({
   taskCompleted: { type: Boolean, default: false },
   enabled: { type: Boolean, default: false }, request: { type: Object, default: null },
   conversationId: { type: String, default: '' }, identityKey: { type: String, default: '' },
+  typedOutcomes: { type: Array, default: () => [] }, conversationGeneration: { type: String, default: '' },
   catalog: { type: Array, default: () => [] },
   taskVersion: { type: [String, Number], default: '' }, taskId: { type: String, default: '' }
 })
 const api = createApi('/chat')
 const agentApi = createApi('/agent')
+const skillResults = useHallSkillResults({ api, getContext: () => ({ conversationId: props.conversationId,
+  conversationGeneration: props.conversationGeneration, taskId: props.taskId }), getOutcomes: () => props.typedOutcomes,
+  identityKey: () => props.identityKey, enabled: () => props.enabled && !!props.identityKey })
+const resultItems = computed(() => skillResults.results.value.flatMap(result => result.outputs))
+const allItems = computed(() => [...new Map([...items.value, ...resultItems.value].map(item => [outputItemKey(item), item])).values()])
+const allDeliveries = computed(() => {
+  const map = new Map(executionDeliveries.value.map(value => [value.outcomeId, value]))
+  for (const result of skillResults.results.value) if (result.complete && result.outputs.length && result.reference.progressState === 'COMPLETED')
+    map.set(result.reference.outcomeId, { outcomeId: result.reference.outcomeId, finalDigest: result.reference.finalDigest,
+      deliveryRelation: result.reference.deliveryRelation, requestId: result.requestId, stepId: result.stepId })
+  return [...map.values()]
+})
 const archives = useHallConversationArchive({ api,
   conversationId: () => props.enabled && props.identityKey ? props.conversationId : null,
   identityEpoch: () => `${props.enabled}\u0000${props.identityKey}`,
@@ -96,13 +117,13 @@ const effectiveTaskCompleted = computed(() => props.taskCompleted || finalizatio
 // Once acceptance starts, display only the original exact references from its durable intent.
 // A new output/late poll cannot replace accepted or in-flight displayed content.
 const deliveryProjection = computed(() => {
-  if (!props.acceptance) return { items: items.value, message: '' }
+  if (!props.acceptance) return { items: allItems.value, message: '' }
   const frozen = finalizeState.value.intent?.body.selectedOutputs
   if (frozen) {
-    const list = frozen.map(source => items.value.find(item => outputItemKey(item) === outputItemKey(source) && item.sha256 === source.sha256))
+    const list = frozen.map(source => allItems.value.find(item => outputItemKey(item) === outputItemKey(source) && item.sha256 === source.sha256))
     return list.every(Boolean) ? { items: list, message: '' } : { items: [], message: '正在读取本次验收冻结的原成果；不会换用新稿。' }
   }
-  try { return { items: currentOutputDelivery(items.value, executionDeliveries.value), message: '' } }
+  try { return { items: currentOutputDelivery(allItems.value, allDeliveries.value), message: '' } }
   catch (cause) { return { items: [], message: cause.message } }
 })
 const displayItems = computed(() => deliveryProjection.value.items)
@@ -193,7 +214,7 @@ const list = async () => {
   }
 }
 const refresh = () => { error.value = ''; if (timer != null) clearTimeout(timer); timer = null; if (abort) refreshQueued = true; else void list() }
-const refreshFromUser = () => { emit('catalog-refresh-needed'); refresh() }
+const refreshFromUser = () => { void skillResults.refresh(); emit('catalog-refresh-needed'); refresh() }
 const bytes = async (item, preview) => {
   const generation = epoch; const controller = new AbortController(); inFlight.add(controller)
   try {
@@ -262,7 +283,7 @@ watch(effectiveTaskCompleted, completed => {
   if (timer != null) clearTimeout(timer); timer = null
   if (!completed && validRootRequest()) refresh()
 })
-onBeforeUnmount(cleanup)
+onBeforeUnmount(() => { cleanup(); skillResults.dispose() })
 </script>
 <style scoped>
 .bounty-output-gallery { display: grid; gap: 8px; padding: 10px; background: #f7fbf7; }
