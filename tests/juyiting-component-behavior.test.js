@@ -2664,6 +2664,8 @@ describe('O04 shared panel session contract', () => {
 
 const loadActualJuyiHall = (mocks) => {
   const effectiveMocks = {
+    useHallSkillCapabilities,
+    currentBountyAssignmentRevision,
     // Match the real legacy namespace: cached local IDs are not hydrated identity.
     browserBusinessNamespace: (apiStore, globalStore) =>
       createHydratedIdentityScope(globalStore?.user, apiStore?.oauthClientId),
