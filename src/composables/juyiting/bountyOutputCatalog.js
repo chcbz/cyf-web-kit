@@ -1,3 +1,4 @@
+import { isTerminalRequestState, isTerminalTurnState } from './hallDeliberationState.js'
 import { typedOutcomeProjection } from './hallTypedDeliberation.js'
 
 /** Browser-safe projection of the owner-authorized conversation output catalog. */
@@ -20,6 +21,13 @@ export function outputAssetPart (item) {
   return Object.freeze({ state: 'ready', kind: previewKind(item.contentMimeType),
     assetId: item.assetRef.assetId, revision: item.assetRef.revision })
 }
+
+// A final parent can still own a live EXECUTE step or a pending turn. Unknown
+// wire states keep refreshing; only verified terminal projections go quiet.
+export const outputRequestPending = request => !isTerminalRequestState(request?.state) ||
+  (request.turns || []).some(turn => !isTerminalTurnState(turn.state)) ||
+  (request.steps || []).some(step => step.kind === 'EXECUTE' &&
+    !['OUTPUT_COMMITTED', 'RESULT_COMMITTED', 'COMPLETED', 'FAILED', 'CANCELLED', 'ABANDONED'].includes(step.executionState))
 
 export function scopedExecutionSteps (request, conversationId) {
   if (!exactOutputId(request?.requestId) || request?.conversationId !== conversationId) return []
@@ -139,7 +147,7 @@ export async function completedTextItem (raw, request, turn, taskId) {
     conversationGeneration: request.conversationGeneration, requestId: request.requestId,
     requestRevision: request.requestRevision, turnId: turn.turnId, taskId })
   if (!value) throw new Error('文字成果来源回执不匹配。')
-  if (value.schemaVersion !== 3 || value.state !== 'READY' || value.outcome?.deliverable !== true) return null
+  if (![3, 4].includes(value.schemaVersion) || value.state !== 'READY' || value.outcome?.deliverable !== true) return null
   const source = value.outcome.messageSource
   if (request.state !== 'COMPLETED' || turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state) ||
     source.messageId !== turn.finalMessageId || source.snapshotId !== turn.contextSnapshotId ||
@@ -205,7 +213,7 @@ export function completedExecutionDelivery (raw, request, turn, snapshots, taskI
     conversationGeneration: request.conversationGeneration, requestId: request.requestId,
     requestRevision: request.requestRevision, turnId: turn.turnId, taskId })
   if (!value) throw new Error('媒体交付来源回执不匹配。')
-  if (value.schemaVersion !== 3 || value.state !== 'READY' || value.outcome?.kind !== 'ACTION_REQUEST') return null
+  if (![3, 4].includes(value.schemaVersion) || value.state !== 'READY' || value.outcome?.kind !== 'ACTION_REQUEST') return null
   const outcome = value.outcome; const progress = value.actionProgress
   if (!outcome.deliveryRelation && progress.childRoute !== 'EXECUTE') return null
   if (request.state !== 'COMPLETED' || turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state) ||
@@ -213,6 +221,10 @@ export function completedExecutionDelivery (raw, request, turn, snapshots, taskI
     turn.requestId !== request.requestId || turn.requestRevision !== request.requestRevision ||
     turn.conversationId !== request.conversationId || turn.conversationGeneration !== request.conversationGeneration ||
     !exactOutputId(taskId) || outcome.taskId !== taskId) throw new Error('媒体交付与原动作快照不一致。')
+  // A durable pre-admission failure has no execution or deliverable to wait for.
+  // Keep its failure card/history, but do not poison the committed media basis.
+  if (progress.state === 'FAILED' && progress.childRequestId === null &&
+    progress.childRoute === null && progress.childStateVersion === null) return null
   const node = { outcomeId: outcome.outcomeId, finalDigest: outcome.finalDigest,
     deliveryRelation: outcome.deliveryRelation ? Object.freeze({ ...outcome.deliveryRelation }) : null, requestId: progress.childRequestId, stepId: null }
   if (progress.childRoute != null && progress.childRoute !== 'EXECUTE') throw new Error('查阅动作不是媒体交付。')
@@ -220,10 +232,10 @@ export function completedExecutionDelivery (raw, request, turn, snapshots, taskI
   const children = snapshots.filter(child => child.requestId === progress.childRequestId)
   if (children.length !== 1) return Object.freeze(node) // Late catalog page: keep polling, no guessed child.
   const child = children[0]; const steps = child.steps || []
-  if (child.state !== 'OUTPUT_COMMITTED' || child.requestRevision !== '1' || child.stateVersion !== progress.childStateVersion ||
+  if (child.state !== (value.schemaVersion === 4 ? 'RESULT_COMMITTED' : 'OUTPUT_COMMITTED') || child.requestRevision !== '1' || child.stateVersion !== progress.childStateVersion ||
     child.conversationId !== request.conversationId || child.conversationGeneration !== request.conversationGeneration ||
-    steps.length !== 1 || steps[0].kind !== 'EXECUTE' || steps[0].state !== 'OUTPUT_COMMITTED' ||
-    steps[0].executionState !== 'OUTPUT_COMMITTED' || steps[0].taskId !== taskId ||
+    steps.length !== 1 || steps[0].kind !== 'EXECUTE' || steps[0].state !== (value.schemaVersion === 4 ? 'RESULT_COMMITTED' : 'OUTPUT_COMMITTED') ||
+    steps[0].executionState !== (value.schemaVersion === 4 ? 'RESULT_COMMITTED' : 'OUTPUT_COMMITTED') || steps[0].taskId !== taskId ||
     steps[0].assignmentRevision !== outcome.assignmentRevision || steps[0].targetAgentId !== turn.targetAgentId ||
     !exactOutputId(steps[0].stepId) || !exactOutputId(steps[0].executionId)) throw new Error('媒体交付执行来源不一致。')
   return Object.freeze({ ...node, stepId: steps[0].stepId })

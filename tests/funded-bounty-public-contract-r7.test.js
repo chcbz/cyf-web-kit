@@ -1,3 +1,4 @@
+import * as ordinaryCancellation from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
@@ -24,7 +25,7 @@ const compile = async () => {
       `const ${name} = imports[${JSON.stringify(path)}]`)
     .replace('export default', 'return')
   return new Function('imports', code)({
-    vue: Vue,
+    vue: Vue, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation,
     './BountyActionIcon.vue': Vue.defineComponent({ render: () => Vue.h('span') }),
     '@/utils/silverAmount': silverAmount
   })
@@ -142,7 +143,6 @@ describe('W11 funded-create public composable contract', () => {
     })
     const wrapper = mount(Harness)
     wrappers.push(wrapper)
-    wrapper.findComponent(BountyPanel).vm.$.exposed.openCreateRequirement()
     await Vue.nextTick()
 
     const recoveryText = wrapper.find('.funded-create-recovery').text()
@@ -193,7 +193,6 @@ describe('W11 funded-create public composable contract', () => {
     })
     const wrapper = mount(Harness)
     wrappers.push(wrapper)
-    wrapper.findComponent(BountyPanel).vm.$.exposed.openCreateRequirement()
     await Vue.nextTick()
 
     scope.value = 'actor-a'
@@ -266,7 +265,6 @@ describe('W11 funded-create public composable contract', () => {
     })
     const wrapper = mount(Harness)
     wrappers.push(wrapper)
-    wrapper.findComponent(BountyPanel).vm.$.exposed.openCreateRequirement()
     await Vue.nextTick()
     expect(wrapper.find('.funded-create-recovery').text()).to.include('原榜文名目：B 待恢复原文')
 

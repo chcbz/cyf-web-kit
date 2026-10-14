@@ -1,3 +1,7 @@
+import { currentBountyAssignmentRevision } from '../src/composables/juyiting/hallBountyAssignmentContext.js'
+import { useHallSkillCapabilities } from '../src/composables/juyiting/useHallSkillCapabilities.js'
+import { useOutputs } from '../src/composables/useOutputs.js'
+import { useHallBountyAcceptance } from '../src/composables/juyiting/useHallBountyAcceptance.js'
 import { getHallCapabilities } from './fixtures/hall-current-protocol.js'
 import { bountyInteractionTargetId } from '../src/composables/juyiting/useHallChatContext.js'
 import { createHydratedIdentityScope, hasHydratedIdentity } from '../src/utils/identityScope.js'
@@ -67,6 +71,8 @@ const loadSfc = (relativePath, children = {}) => {
 
 const loadActualJuyiHall = mocks => {
   const effectiveMocks = {
+    useHallSkillCapabilities,
+    currentBountyAssignmentRevision,
     browserBusinessNamespace: (apiStore, globalStore) => {
       const owner = String(globalStore?.user?.id || globalStore?.user?.openid || globalStore?.getUserId || globalStore?.getOpenid || '').trim()
       const tenant = String(globalStore?.user?.tenantId || globalStore?.user?.tenantCode || globalStore?.user?.tenant || '').trim()
@@ -308,9 +314,12 @@ const createActualHallVoiceMocks = ({
     loadNativeBountyCapability: async () => null, capabilityAllowsNewStart: () => false, capabilityAllowsOriginalReplay: () => false, pointAndStartIntentReadLane: () => 'ABSENT',
     useHallPointAndStartControlledBridge: () => ({ state: Vue.ref({ status: 'IDLE', intent: null }), busy: Vue.ref(false), selectContext: () => true, start: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, dispose: noop, invalidate: noop }),
     useHallPointAndStart: () => ({ state: Vue.ref({ status: 'IDLE', intent: null }), busy: Vue.ref(false), start: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, observeOriginal: async () => false, stopObservation: noop, dispose: noop }),
+    // Real read adapters stay inert without a cancelled-task source.
+    useOutputs, useHallBountyAcceptance,
     useHallBountyRequestCatalog: () => ({ entries: Vue.ref([]), error: text, loading: Vue.ref(false), hint: noop, refresh: async () => false, reset: noop }),
     useHallDrafts: () => ({ unresolvedIntent: Vue.ref(null) }),
     useHallBountyFollowup: () => ({ state: Vue.ref({ status: 'IDLE' }), busy: Vue.ref(false), prepareGenerate: async () => false, prepareEdit: async () => false, confirm: async () => false, checkOriginal: async () => false, invalidate: noop, dispose: noop }),
+    useHallBountyAssignmentContext: () => ({ projection: Vue.ref(null), error: Vue.ref(''), refresh: async () => false, dispose: noop }),
     useHallTypedDeliberation: () => ({ projections: Vue.ref([]), cards: Vue.ref([]), selectedPending: Vue.ref(null), error: text, busy: Vue.ref(false), recoveryAvailable: Vue.ref(false), refresh: async () => false, readOne: async () => null, submit: async () => false, recover: async () => false, resumeUnknown: async () => false, choosePending: () => false, confirmProposal: async () => false, invalidate: noop, dispose: noop }),
     typedLong: value => typeof value === 'string' ? value : '',
     useHallConversation: options => {

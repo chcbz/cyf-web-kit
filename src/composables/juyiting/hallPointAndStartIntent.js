@@ -4,7 +4,8 @@ import { controlledImageBridgeExtension } from './hallControlledImagePointAndSta
 
 const PREFIX = 'cyf.juyiting.point-and-start.v1'
 const clone = value => JSON.parse(JSON.stringify(value))
-const operations = new Set(['DELIBERATE', 'GENERATE_IMAGE', 'EDIT_IMAGE', 'INSPECT_INPUTS', 'GENERATE_AUDIO', 'EDIT_AUDIO'])
+const operations = new Set(['DELIBERATE', 'EXECUTE_SKILL'])
+const historicalOperations = new Set(['DELIBERATE', 'GENERATE_IMAGE', 'EDIT_IMAGE', 'INSPECT_INPUTS', 'GENERATE_AUDIO', 'EDIT_AUDIO'])
 export const exactPointAndStartId = (value, max = 100) => typeof value === 'string' && value.length > 0 &&
   [...value].length <= max && value.trim() === value && [...value].every(c => {
   const p = c.codePointAt(0)
@@ -21,8 +22,8 @@ const safeNumber = (value, zero = false) => pointAndStartLong(value, zero) &&
 const receiptLong = (value, zero = false) => Number.isSafeInteger(value) && value >= 0
   ? (pointAndStartLong(String(value), zero) ? String(value) : null)
   : (pointAndStartLong(value, zero) ? value : null)
-const sortedOperations = list => Array.isArray(list) && list.length > 0 &&
-  list.every(item => operations.has(item)) && new Set(list).size === list.length ? [...list].sort() : null
+const sortedOperations = (list, known = operations) => Array.isArray(list) && list.length > 0 &&
+  list.every(item => known.has(item)) && new Set(list).size === list.length ? [...list].sort() : null
 const inputs = list => {
   if (!Array.isArray(list) || list.length > 32) return null
   const result = []
@@ -41,7 +42,7 @@ const inputs = list => {
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 export const pointAndStartBody = ({ agentId, taskVersion, requirementRevision, requestedOperations,
   initialOperation, inputRefs = [] }) => {
-  const ops = sortedOperations(requestedOperations)
+  const ops = sortedOperations(requestedOperations, historicalOperations)
   const refs = inputs(inputRefs)
   const version = safeNumber(taskVersion, true)
   const revision = safeNumber(requirementRevision)
@@ -73,7 +74,7 @@ const inputFacts = (list, legacy = false) => {
   return refs.map(ref => facts.find(item => equal(ref, { fileId: item.fileId, version: item.version, purpose: item.purpose })))
 }
 export const pointAndStartGrant = (value, intent) => {
-  const ops = sortedOperations(value?.permittedOperations)
+  const ops = sortedOperations(value?.permittedOperations, intent?.schemaVersion === 2 ? operations : historicalOperations)
   const facts = inputFacts(value?.inputs, true)
   if (!value || value.taskId !== intent.taskId || value.targetAgentId !== intent.body.agentId ||
     !exactPointAndStartId(value.grantId) || value.state !== 'ACTIVE' || !ops || !facts ||
@@ -85,18 +86,18 @@ export const pointAndStartGrant = (value, intent) => {
     grantVersion: receiptLong(value.grantVersion), inputs: facts }
 }
 export const pointAndStartProjection = (value, intent, previous = null) => {
-  const ops = sortedOperations(value?.permittedOperations)
+  const ops = sortedOperations(value?.permittedOperations, intent?.schemaVersion === 2 ? operations : historicalOperations)
   const facts = inputFacts(value?.inputs)
   const generic = intent?.schemaVersion === 2
   const states = ['PENDING', 'CLAIMED', 'RETRY', 'ADMITTED', 'DEAD']
-  if (!value || value.schemaVersion !== 1 || value.taskId !== intent.taskId ||
+  if (!value || value.schemaVersion !== (generic ? 2 : 1) || value.taskId !== intent.taskId ||
     value.targetAgentId !== pointAndStartTarget(intent) || value.requirementRevision !== String(intent.body.requirementRevision) ||
     !pointAndStartLong(value.assignmentRevision, true) || !pointAndStartLong(value.taskVersion, true) ||
     !pointAndStartLong(value.grantVersion) || !pointAndStartLong(value.stateVersion, true) ||
     !exactPointAndStartId(value.grantId) || !exactPointAndStartId(value.bootstrapId) ||
     !['ACTIVE', 'REVOKED', 'SUPERSEDED'].includes(value.grantState) || !states.includes(value.bootstrapState) ||
     typeof value.currentAssignment !== 'boolean' || !ops || !facts ||
-    !equal(ops, generic ? ['DELIBERATE', 'INSPECT_INPUTS'] : intent.body.requestedOperations) ||
+    (generic ? !ops.includes('DELIBERATE') : !equal(ops, intent.body.requestedOperations)) ||
     (!generic && !equal(inputs(facts), intent.body.inputRefs)) ||
     value.initialOperation !== (generic ? 'DELIBERATE' : intent.body.initialOperation) ||
     BigInt(value.taskVersion) < BigInt(value.assignmentRevision) ||
@@ -105,7 +106,7 @@ export const pointAndStartProjection = (value, intent, previous = null) => {
   if (value.bootstrapState === 'ADMITTED') {
     if (!bountyBootstrapReference(value)) return null
   } else if (value.conversationId !== null || value.initialRequestId !== null) return null
-  const result = { schemaVersion: 1, taskId: value.taskId, targetAgentId: value.targetAgentId,
+  const result = { schemaVersion: generic ? 2 : 1, taskId: value.taskId, targetAgentId: value.targetAgentId,
     requirementRevision: value.requirementRevision, assignmentRevision: value.assignmentRevision,
     taskVersion: value.taskVersion, grantId: value.grantId, grantVersion: value.grantVersion,
     grantState: value.grantState, permittedOperations: ops, inputs: facts, bootstrapId: value.bootstrapId,
@@ -155,7 +156,7 @@ export const createPointAndStartIntentStore = ({ storage, scope, taskId }) => {
   }
   return { read, write: record => {
     const old = read()
-    if (!validIntent(record) || record.taskId !== taskId || !['ABSENT', 'PRESENT'].includes(old.state)) return { state: 'UNAVAILABLE' }
+    if (record?.schemaVersion !== 2 || !validIntent(record) || record.taskId !== taskId || !['ABSENT', 'PRESENT'].includes(old.state)) return { state: 'UNAVAILABLE' }
     if (old.state === 'PRESENT' && (old.record.schemaVersion !== record.schemaVersion || old.record.key !== record.key || !equal(old.record.body, record.body) ||
       (old.record.postAcknowledged && !record.postAcknowledged) ||
       (old.record.grant && !equal(old.record.grant, record.grant)) ||

@@ -26,7 +26,7 @@ describe('ordinary JuyiHall request routing', () => {
     for (const content of ['画一只鸟', '把上一张改成蓝色', '整理这份文档']) {
       draft.value = content
       expect(await send({ sourceSelectors: [source], inspection: true })).to.equal(true)
-      expect(calls.at(-1)).to.deep.equal({ content, sourceSelectors: [source] })
+      expect(calls.at(-1)).to.deep.equal({ content, sourceSelectors: [source], materialScope: 'TASK_DEFAULT' })
       expect(draft.value).to.equal('')
     }
     expect(calls).to.have.length(3)

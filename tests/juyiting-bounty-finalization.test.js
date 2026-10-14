@@ -46,6 +46,40 @@ describe('MMD finalization immutable owner acceptance', () => {
     expect(validFinalizationReceipt(missing, intent())).to.equal(false)
     expect(validFinalizationReceipt(completed(), { ...intent(), operationId: 'other-operation' })).to.equal(false)
   })
+  it('accepts actual nullable media receipt slots without relaxing the frozen source or request union', async () => {
+    const wire = completed({ selectedOutputs: [{ ...body().selectedOutputs[0], messageSource: null }] })
+    expect(validFinalizationReceipt(wire, intent())).to.equal(true)
+    for (const patch of [{ messageSource: {} }, { messageSource: { turnId: 'forged' } },
+      { sha256: 'b'.repeat(64) }, { stepId: 'other-step' }, { outputId: 'other-output' },
+      { requestId: 'other-request' }, { title: 'changed' }, { purpose: 'changed' }, { extra: null }]) {
+      const changed = structuredClone(wire); Object.assign(changed.selectedOutputs[0], patch)
+      expect(validFinalizationReceipt(changed, intent()), JSON.stringify(patch)).to.equal(false)
+    }
+    const { client, calls } = setup(() => ({ data: wire }))
+    try {
+      const hybrid = body(); hybrid.selectedOutputs[0].messageSource = null
+      expect(await client.submit({ taskId: 'task-1', body: hybrid })).to.equal(null)
+      expect(calls).to.have.length(0)
+      expect((await send(client)).state).to.equal('completed')
+      expect(client.status.value.state).to.equal('completed')
+      expect(calls).to.have.length(1)
+      expect(calls[0].data.selectedOutputs[0]).not.to.have.property('messageSource')
+    } finally { client.dispose() }
+  })
+  it('reads a nullable media completion on remount without resubmitting', async () => {
+    const { client, storage, calls, api } = setup(() => { throw new TypeError('lost response') })
+    await send(client); client.dispose()
+    api.execute = async request => { calls.push(request); return { data: completed({ selectedOutputs: [{ ...body().selectedOutputs[0], messageSource: null }] }) } }
+    const restored = useHallBountyFinalization({ api, storage, conversationId: 'conversation-1', identityKey: 'owner-a',
+      idempotencyKeyFactory: () => { throw new Error('must keep original key') } })
+    try {
+      await flushPromises()
+      expect(restored.status.value.state).to.equal('completed')
+      expect(calls.map(c => c.method)).to.deep.equal(['POST', 'GET'])
+      await restored.resume()
+      expect(calls.map(c => c.method)).to.deep.equal(['POST', 'GET', 'GET'])
+    } finally { restored.dispose() }
+  })
   it('persists and reads back the immutable intent before its first POST', async () => {
     const { client, calls, storage } = setup(request => {
       expect(storage.values.size).to.equal(1)

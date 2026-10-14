@@ -115,3 +115,19 @@ it('an old scan completion cannot clear the slot or loading state of the new con
     resolveNew(body); expect(await next).to.equal(true); expect(lane.loading.value).to.equal(false)
   } finally {lane.dispose()}
 })
+
+it('joins an in-flight catalog scan for send preparation and propagates its result', async () => {
+  for (const valid of [true, false]) {
+    let resolve; let calls = 0
+    const body = { data: { data: page('0','1',[{ordinal:'1',request:request('one')}]) } }
+    const lane = useHallBountyRequestCatalog({ chatApi: { get: () => ++calls === 1 ? new Promise(done => { resolve = done }) : Promise.resolve(body) },
+      enabled: () => true, identityScope: ref('owner'), authorizationGeneration: ref(1),
+      getContext: () => ({ conversationId:'conversation_1', taskId:'task_1' }), getContextGeneration: () => 1 })
+    try {
+      const first = lane.refresh(); const joined = lane.refresh()
+      expect(joined).to.equal(first); expect(calls).to.equal(1)
+      resolve(valid ? body : { data: {} })
+      expect(await first).to.equal(valid); expect(await joined).to.equal(valid)
+    } finally { lane.dispose() }
+  }
+})

@@ -204,6 +204,8 @@ describe('C07A task workspace wiring', () => {
     const assignTaskSource = hallSource.slice(assignTaskStart, hallSource.indexOf('\n\nwatch(', assignTaskStart))
     const autoAssignTaskSource = hallSource.slice(hallSource.indexOf('const autoAssignTask'), hallSource.indexOf('const archiveTask'))
     const conversationSource = hallSource.slice(hallSource.indexOf('const handleStartAgentConversation'), hallSource.indexOf('const canStartAgentConversation'))
+    expect(conversationSource).to.include("if (!draft.value.trim()) setDraft('请报眼下动静、可领何榜、还需哪路照应。')")
+    expect(conversationSource).not.to.include('insertAgentMention(')
     expect(selectAgentSource).to.include('taskWorkspaceBinding.selectExplicitActor(agent)')
     expect(selectAgentSource).not.to.include('selectedAgent.value = agent')
     expect(briefSource).not.to.include('taskWorkspaceBinding.')

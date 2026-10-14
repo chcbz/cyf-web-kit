@@ -1,3 +1,7 @@
+import { currentBountyAssignmentRevision } from '../src/composables/juyiting/hallBountyAssignmentContext.js'
+import { useHallSkillCapabilities } from '../src/composables/juyiting/useHallSkillCapabilities.js'
+import { useOutputs } from '../src/composables/useOutputs.js'
+import { useHallBountyAcceptance } from '../src/composables/juyiting/useHallBountyAcceptance.js'
 import { useHallDrafts } from '../src/composables/juyiting/useHallDrafts.js'
 import { bountyInteractionTargetId } from '../src/composables/juyiting/useHallChatContext.js'
 import { createHydratedIdentityScope, hasHydratedIdentity } from '../src/utils/identityScope.js'
@@ -60,6 +64,8 @@ const loadSelectedAgentCard = () => {
 
 const loadActualJuyiHall = mocks => {
   const effectiveMocks = {
+    useHallSkillCapabilities,
+    currentBountyAssignmentRevision,
     browserBusinessNamespace: (apiStore, globalStore) => {
       const owner = String(globalStore?.user?.id || globalStore?.user?.openid || globalStore?.getUserId || globalStore?.getOpenid || '').trim()
       const tenant = String(globalStore?.user?.tenantId || globalStore?.user?.tenantCode || globalStore?.user?.tenant || '').trim()
@@ -106,6 +112,9 @@ const createHallMocks = ({ SelectedAgentCard, counters }) => {
     env: {}, isMultimediaDeliberationUiEnabled: () => false,
     useHallDrafts,
     useHallRequirementCreate: () => ({ state: Vue.ref({ error: '' }), busy: Vue.ref(false), create: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, readOriginal: () => ({ state: 'ABSENT' }), dispose: noop }),
+    // Real read adapters stay inert without a cancelled-task source.
+    useOutputs, useHallBountyAcceptance,
+    useHallBountyAssignmentContext: () => ({ projection: Vue.ref(null), error: Vue.ref(''), refresh: async () => false, dispose: noop }),
     useHallBountyRequestCatalog: () => ({ entries: Vue.ref([]), hint: noop, reset: noop, refresh: asyncNoop, dispose: noop }),
     useHallBountyFollowup: () => ({ state: Vue.ref({}), busy: Vue.ref(false), prepareGenerate: async () => false, prepareEdit: async () => false, confirm: async () => false, checkOriginal: async () => false, invalidate: noop, dispose: noop }),
     useHallTypedDeliberation: () => ({ refresh: asyncNoop, readOne: asyncNoop, recover: asyncNoop, invalidate: noop, dispose: noop }), typedLong: () => '',

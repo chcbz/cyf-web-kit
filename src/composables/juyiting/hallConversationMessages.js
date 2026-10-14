@@ -1,4 +1,4 @@
-import { sourceSelector, typedId } from './hallTypedDeliberation.js'
+import { historicalSourceSelector, typedId } from './hallTypedDeliberation.js'
 import { applyMessagePartEvent, isMessagePartEvent, mergeMessageParts } from './hallMessageParts.js'
 import { isOwnMessage, normalizeDisplayName, resolveAccountDisplayName, resolveDisplayName } from '../../utils/displayName.js'
 
@@ -54,7 +54,7 @@ export const normalizeHallMessage = (item, identity) => {
     typedTaskId: sender === 'USER' && metadata.conversationScopeType === 'bounty' ? typedId(metadata.selectedTaskId) : '',
     typedSourceSelectors: sender === 'USER' && metadata.conversationScopeType === 'bounty' &&
       Array.isArray(metadata.typedSourceSelectors) && metadata.typedSourceSelectors.length <= 32
-      ? metadata.typedSourceSelectors.map(sourceSelector).filter(Boolean) : [],
+      ? metadata.typedSourceSelectors.map(historicalSourceSelector).filter(Boolean) : [],
     parts: mergeMessageParts([], Array.isArray(item.parts) ? item.parts : []),
     timestamp: item.createTime || metadata.timestamp || Date.now(),
     streaming: false,

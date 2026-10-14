@@ -1,8 +1,22 @@
 <template>
-  <section v-if="enabled && (acceptance || scopedSteps.length || finalizeState.intent || finalizeState.message)" class="bounty-output-gallery" aria-label="悬赏议事成果">
-    <strong>{{ acceptance ? '本次成果与验收' : '议事成果' }}</strong>
-    <p v-if="error" role="alert">{{ error }} <button type="button" @click="refresh">重新读取</button></p>
+  <section v-if="enabled && (acceptance || scopedSteps.length || skillResults.results.value.length || skillResults.error.value || finalizeState.intent || finalizeState.message)" class="bounty-output-gallery" aria-label="悬赏议事成果">
+    <header class="output-gallery-heading">
+      <strong>{{ acceptance ? '本次成果与验收' : '议事成果' }}</strong>
+      <button
+        type="button"
+        class="output-refresh hall-output-action"
+        :disabled="loading"
+        @click="refreshFromUser"
+      >重新读取成果</button>
+    </header>
+    <p v-if="error" role="alert">{{ error }} <button type="button" @click="refreshFromUser">重新读取</button></p>
     <p v-else-if="!displayItems.length" role="status">{{ loading ? '正在读取已提交成果…' : deliveryMessage || '结果完成后会显示在这里。' }}</p>
+    <p v-if="skillResults.error.value" role="alert">{{ skillResults.error.value }} <button type="button" @click="skillResults.refresh">重新读取</button></p>
+    <article v-for="result in skillResults.results.value" :key="result.executionId" class="bounty-output">
+      <strong>技能结果</strong><span>{{ result.complete ? '已归档' : result.phase === 'ARCHIVING' ? '正在归档（尚未完成）' : result.phase }}</span>
+      <pre v-if="result.complete && result.data !== null" class="bounty-output-text">{{ skillResultDataText(result.data) }}</pre>
+      <small v-if="result.complete && result.data !== null">数据结果不制造文件资产，不表示任务已验收。</small>
+    </article>
     <div v-for="item in displayItems" :key="outputItemKey(item)" class="bounty-output">
       <strong>{{ previewKind(item.contentMimeType) === 'image' ? '图片' : previewKind(item.contentMimeType) === 'audio' ? '音频' : previewKind(item.contentMimeType) === 'text' ? '文本' : '文件' }}</strong>
       <p v-if="item.messageSource" class="bounty-output-text">{{ item.text }}</p>
@@ -27,15 +41,15 @@
       <small v-if="item.replaces">改稿关联：{{ item.replaces.outputId }}（原稿仍保留）</small>
       <small v-if="!effectiveTaskCompleted">需要调整？直接在会话中告诉 Agent。</small>
     </div>
-    <button v-if="acceptance && !taskCompleted && (effectiveTaskCompleted || displayItems.length || finalizeState.intent)" type="button" class="finalize-button" :disabled="effectiveTaskCompleted || loading || !!error || finalizeState.busy || finalizeState.state === 'recovery_error' || (finalizeState.receipt?.state === 'failed' && !finalizeState.receipt.retryable)" @click="finalizeSelected">{{ effectiveTaskCompleted ? '需求已完成' : finalizeState.busy ? '正在验收…' : finalizeState.intent ? '继续验收' : '确认验收' }}</button>
-    <button v-if="acceptance && finalizeState.intent && !finalizationCompleted" type="button" class="finalize-status-button" :disabled="finalizeState.busy" @click="finalizations.check">查询验收状态</button>
+    <button v-if="acceptance && !taskCompleted && (effectiveTaskCompleted || displayItems.length || finalizeState.intent)" type="button" class="finalize-button hall-output-action primary" :disabled="effectiveTaskCompleted || loading || !!error || finalizeState.busy || finalizeState.state === 'recovery_error' || (finalizeState.receipt?.state === 'failed' && !finalizeState.receipt.retryable)" @click="finalizeSelected">{{ effectiveTaskCompleted ? '需求已完成' : finalizeState.busy ? '正在验收…' : finalizeState.intent ? '继续验收' : '确认验收' }}</button>
+    <button v-if="acceptance && finalizeState.intent && !finalizationCompleted" type="button" class="finalize-status-button hall-output-action" :disabled="finalizeState.busy" @click="finalizations.check">查询验收状态</button>
     <small v-if="acceptance && !effectiveTaskCompleted && finalizeState.intent">本次验收已冻结 {{ finalizeState.intent.body.selectedOutputs.length }} 项成果；可刷新查看进度。</small>
     <p v-if="effectiveTaskCompleted" role="status">{{ finalizationCompleted ? '验收完成。' : '任务已完成。' }}</p>
     <p v-if="finalizeState.message && !finalizationCompleted" :role="finalizeState.busy ? 'status' : 'alert'">{{ finalizeState.message }}</p>
     <button
       v-if="acceptance && !effectiveTaskCompleted"
       type="button"
-      class="continue-modification"
+      class="continue-modification hall-output-action"
       @click="$emit('continue-modification')"
     >继续修改</button>
     <small>可以预览、下载或保存；保存不是验收前置。</small>
@@ -47,22 +61,37 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { createApi } from '../../composables/useHttp.js'
-import { exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, currentOutputDelivery, completedTextItem, completedExecutionDelivery } from '../../composables/juyiting/bountyOutputCatalog.js'
+import { exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, currentOutputDelivery, completedTextItem, completedExecutionDelivery, outputRequestPending } from '../../composables/juyiting/bountyOutputCatalog.js'
+import { useHallSkillResults } from '../../composables/juyiting/useHallSkillResults.js'
+import { skillResultDataText } from '../../composables/juyiting/hallSkillResults.js'
 import { saveOutputBlob } from '../../utils/outputDownload.js'
 import { useHallConversationArchive } from '../../composables/juyiting/useHallConversationArchive.js'
 import { useHallBountyFinalization, safeFinalizationVersion } from '../../composables/juyiting/useHallBountyFinalization.js'
 
-const emit = defineEmits(['task-completed', 'continue-modification'])
+const emit = defineEmits(['task-completed', 'continue-modification', 'catalog-refresh-needed'])
 const props = defineProps({
   acceptance: { type: Boolean, default: false },
   taskCompleted: { type: Boolean, default: false },
   enabled: { type: Boolean, default: false }, request: { type: Object, default: null },
   conversationId: { type: String, default: '' }, identityKey: { type: String, default: '' },
+  typedOutcomes: { type: Array, default: () => [] }, conversationGeneration: { type: String, default: '' },
   catalog: { type: Array, default: () => [] },
   taskVersion: { type: [String, Number], default: '' }, taskId: { type: String, default: '' }
 })
 const api = createApi('/chat')
 const agentApi = createApi('/agent')
+const skillResults = useHallSkillResults({ api, getContext: () => ({ conversationId: props.conversationId,
+  conversationGeneration: props.conversationGeneration, taskId: props.taskId }), getOutcomes: () => props.typedOutcomes,
+  identityKey: () => props.identityKey, enabled: () => props.enabled && !!props.identityKey })
+const resultItems = computed(() => skillResults.results.value.flatMap(result => result.outputs))
+const allItems = computed(() => [...new Map([...items.value, ...resultItems.value].map(item => [outputItemKey(item), item])).values()])
+const allDeliveries = computed(() => {
+  const map = new Map(executionDeliveries.value.map(value => [value.outcomeId, value]))
+  for (const result of skillResults.results.value) if (result.complete && result.outputs.length && result.reference.progressState === 'COMPLETED')
+    map.set(result.reference.outcomeId, { outcomeId: result.reference.outcomeId, finalDigest: result.reference.finalDigest,
+      deliveryRelation: result.reference.deliveryRelation, requestId: result.requestId, stepId: result.stepId })
+  return [...map.values()]
+})
 const archives = useHallConversationArchive({ api,
   conversationId: () => props.enabled && props.identityKey ? props.conversationId : null,
   identityEpoch: () => `${props.enabled}\u0000${props.identityKey}`,
@@ -76,7 +105,7 @@ const scopedSteps = computed(() => requestSnapshots.value.flatMap(request => sco
 const executionDeliveries = ref([])
 const items = ref([]); const loading = ref(false); const error = ref('')
 const previewUrls = ref({}); const textPreviews = ref({}); const itemErrors = ref({})
-const expandedUrl = ref('')
+const expandedUrl = ref(''); const pendingAction = ref(false)
 const finalizations = useHallBountyFinalization({ api: agentApi,
   conversationId: () => props.enabled ? props.conversationId : null, identityKey: () => props.identityKey, taskId: () => props.taskId || null
 })
@@ -88,13 +117,13 @@ const effectiveTaskCompleted = computed(() => props.taskCompleted || finalizatio
 // Once acceptance starts, display only the original exact references from its durable intent.
 // A new output/late poll cannot replace accepted or in-flight displayed content.
 const deliveryProjection = computed(() => {
-  if (!props.acceptance) return { items: items.value, message: '' }
+  if (!props.acceptance) return { items: allItems.value, message: '' }
   const frozen = finalizeState.value.intent?.body.selectedOutputs
   if (frozen) {
-    const list = frozen.map(source => items.value.find(item => outputItemKey(item) === outputItemKey(source) && item.sha256 === source.sha256))
+    const list = frozen.map(source => allItems.value.find(item => outputItemKey(item) === outputItemKey(source) && item.sha256 === source.sha256))
     return list.every(Boolean) ? { items: list, message: '' } : { items: [], message: '正在读取本次验收冻结的原成果；不会换用新稿。' }
   }
-  try { return { items: currentOutputDelivery(items.value, executionDeliveries.value), message: '' } }
+  try { return { items: currentOutputDelivery(allItems.value, allDeliveries.value), message: '' } }
   catch (cause) { return { items: [], message: cause.message } }
 })
 const displayItems = computed(() => deliveryProjection.value.items)
@@ -110,7 +139,7 @@ watch(() => finalizeState.value.receipt, receipt => {
   emit('task-completed', Object.freeze({ taskId: receipt.taskId, conversationId: receipt.conversationId,
     operationId: receipt.operationId, deliveryId: receipt.deliveryId, taskVersion: receipt.taskVersion }))
 }, { flush: 'sync' })
-let abort = null; let timer = null; let epoch = 0
+let abort = null; let timer = null; let epoch = 0; let refreshQueued = false
 const inFlight = new Set()
 const validRootRequest = () => props.enabled && catalogRequests.value.length > 0 && catalogRequests.value.every(request => exactOutputId(request?.requestId) && request.conversationId === props.conversationId)
 const sha256Blob = async blob => Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', await blob.arrayBuffer())), byte => byte.toString(16).padStart(2, '0')).join('')
@@ -121,7 +150,7 @@ const archiveState = item => {
     message: '成果已提交，正在等待持久会话资产登记；暂不能保存。' }
 }
 const cleanup = () => {
-  epoch++; if (timer != null) clearTimeout(timer); timer = null; abort?.abort(); abort = null
+  epoch++; refreshQueued = false; pendingAction.value = false; if (timer != null) clearTimeout(timer); timer = null; abort?.abort(); abort = null
   for (const controller of inFlight) controller.abort(); inFlight.clear()
   for (const url of Object.values(previewUrls.value)) URL.revokeObjectURL(url)
   requestSnapshots.value = []; items.value = []; executionDeliveries.value = []; previewUrls.value = {}; textPreviews.value = {}
@@ -144,17 +173,20 @@ const list = async () => {
     for (const id of ids) snapshots.push(await fetchRequest(id, controller))
     if (generation !== epoch || controller.signal.aborted) return
     requestSnapshots.value = snapshots
-    const catalog = []; const deliveries = []
+    const catalog = []; const deliveries = []; let actionPending = false
     if (props.acceptance && props.taskId) for (const request of snapshots) {
       for (const turn of request.turns || []) {
         if (turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state)) continue
         const response = await api.get(`/conversations/${encodeURIComponent(props.conversationId)}/requests/${encodeURIComponent(request.requestId)}/typed-outcome`, {},
           { autoLoading: false, needAuth: true, signal: controller.signal })
-        const text = await completedTextItem(response?.data?.data ?? response?.data, request, turn, props.taskId)
+        const outcome = response?.data?.data ?? response?.data
+        const text = await completedTextItem(outcome, request, turn, props.taskId)
         if (controller.signal.aborted || generation !== epoch) return
         if (text) catalog.push(text)
         const delivery = completedExecutionDelivery(response?.data?.data ?? response?.data, request, turn, snapshots, props.taskId)
         if (delivery) deliveries.push(delivery)
+        // Validated typed projections may precede a child appearing in the index.
+        if (outcome.state === 'PENDING' || ['QUEUED', 'RUNNING'].includes(outcome.actionProgress?.state)) actionPending = true
       }
     }
     for (const step of scopedSteps.value) {
@@ -169,11 +201,20 @@ const list = async () => {
     if (generation !== epoch || controller.signal.aborted) return
     const current = new Map(catalog.map(item => [outputItemKey(item), item.sha256]))
     for (const previous of items.value) if (current.get(outputItemKey(previous)) !== previous.sha256 && previewUrls.value[outputItemKey(previous)]) URL.revokeObjectURL(previewUrls.value[outputItemKey(previous)])
-    items.value = catalog; executionDeliveries.value = deliveries; error.value = ''
+    items.value = catalog; executionDeliveries.value = deliveries; pendingAction.value = actionPending; error.value = ''
+    if (actionPending && !effectiveTaskCompleted.value) emit('catalog-refresh-needed')
   } catch (cause) { if (!controller.signal.aborted && generation === epoch) error.value = cause?.message || '读取成果失败' }
-  finally { if (generation === epoch) { abort = null; loading.value = false; if (validRootRequest() && !error.value) timer = setTimeout(list, 2500) } }
+  finally {
+    if (generation === epoch) {
+      abort = null; loading.value = false
+      if (refreshQueued) { refreshQueued = false; void list() }
+      else if (validRootRequest() && !effectiveTaskCompleted.value && !error.value &&
+        (pendingAction.value || requestSnapshots.value.some(outputRequestPending))) timer = setTimeout(() => { timer = null; void list() }, 2500)
+    }
+  }
 }
-const refresh = () => { error.value = ''; if (timer != null) clearTimeout(timer); timer = null; void list() }
+const refresh = () => { error.value = ''; if (timer != null) clearTimeout(timer); timer = null; if (abort) refreshQueued = true; else void list() }
+const refreshFromUser = () => { void skillResults.refresh(); emit('catalog-refresh-needed'); refresh() }
 const bytes = async (item, preview) => {
   const generation = epoch; const controller = new AbortController(); inFlight.add(controller)
   try {
@@ -235,8 +276,14 @@ watch(() => `${props.enabled}\u0000${props.identityKey}\u0000${props.conversatio
   }
 }, { immediate: true })
 // A new projection must refresh the list without discarding in-flight write intents.
-watch(() => props.request?.stateVersion, () => { if (validRootRequest()) refresh() })
-onBeforeUnmount(cleanup)
+watch(() => JSON.stringify(catalogRequests.value.map(request => [request.requestId, request.state, request.stateVersion,
+  (request.turns || []).map(turn => [turn.turnId, turn.state, turn.stateVersion]),
+  (request.steps || []).map(step => [step.stepId, step.stateVersion, step.executionState])])), () => { if (validRootRequest()) refresh() })
+watch(effectiveTaskCompleted, completed => {
+  if (timer != null) clearTimeout(timer); timer = null
+  if (!completed && validRootRequest()) refresh()
+})
+onBeforeUnmount(() => { cleanup(); skillResults.dispose() })
 </script>
 <style scoped>
 .bounty-output-gallery { display: grid; gap: 8px; padding: 10px; background: #f7fbf7; }
@@ -245,7 +292,13 @@ onBeforeUnmount(cleanup)
 .bounty-output audio, .bounty-output-text, .bounty-output > p { flex-basis: 100%; max-width: 100%; }
 .bounty-output-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .image-preview { flex-basis: 100%; padding: 0; border: 0; background: transparent; cursor: zoom-in; }
-.finalize-button { min-height: 40px; }
+.output-gallery-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.hall-output-action { min-height: 44px; padding: 9px 14px; border: 1px solid var(--hall-brand, #923f30); border-radius: 8px; background: var(--hall-surface, #fffefa); color: var(--hall-brand, #923f30); font: inherit; font-weight: 500; cursor: pointer; }
+.hall-output-action.primary { background: var(--hall-brand, #923f30); color: #fffefa; }
+.hall-output-action:hover:not(:disabled) { background: #f6eee8; border-color: #793326; }
+.hall-output-action.primary:hover:not(:disabled) { background: #793326; }
+.hall-output-action:focus-visible { outline: 3px solid #923f3080; outline-offset: 3px; }
+.hall-output-action:disabled { opacity: .55; cursor: not-allowed; }
 .image-overlay { position: fixed; inset: 0; z-index: 1200; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 18px; background: rgba(9, 19, 19, .9); }
 .image-overlay img { max-width: 95vw; max-height: 84vh; object-fit: contain; }
 </style>

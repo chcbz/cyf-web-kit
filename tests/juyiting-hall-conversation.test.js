@@ -312,6 +312,38 @@ describe('useHallConversation scoped message loading', () => {
     expect(conversation.draft.value).to.equal('@宋江 ')
   })
 
+  it('prefills private discussion without a mention, preserving drafts and explicit mentions', () => {
+    const selectedAgent = ref(null)
+    const chatMode = ref('public')
+    const panels = []
+    const agent = { agentId: 'wuyong', name: '吴用' }
+    const conversation = useHallConversation({
+      apiStore: {}, chatApi: {}, chatContext: ref({}), chatMode,
+      globalStore: { user: {} }, log: { warn: () => {}, error: () => {} },
+      openPanel: panel => panels.push(panel), outgoingMetadata: ref({}),
+      portraitShortName: agent => agent.name, selectedAgent,
+      selectedTask: ref(null), showToast: () => {}
+    })
+    try {
+      conversation.startAgentConversation(agent)
+      expect(conversation.draft.value).to.equal('请报眼下动静、可领何榜、还需哪路照应。')
+      expect(chatMode.value).to.equal('private')
+      expect(selectedAgent.value.agentId).to.equal('wuyong')
+      expect(panels).to.deep.equal(['chat'])
+      conversation.setDraft('  保留我写的 @宋江 内容  ')
+      conversation.startAgentConversation(agent)
+      expect(conversation.draft.value).to.equal('  保留我写的 @宋江 内容  ')
+      conversation.setDraft('   ')
+      conversation.startAgentConversation(agent)
+      expect(conversation.draft.value).to.equal('请报眼下动静、可领何榜、还需哪路照应。')
+      conversation.setDraft('')
+      conversation.mentionAgent(agent)
+      expect(conversation.draft.value).to.equal('@吴用 ')
+    } finally {
+      conversation.disposeHallConversation()
+    }
+  })
+
   it('trims sent hall messages while preserving scoped payload fields', async () => {
     const chatContext = ref({
       conversationScopeType: 'private',
@@ -1637,14 +1669,16 @@ describe('Hall stream transport failure read-only recovery', () => {
           expect(id).to.equal('1001')
           readCount += 1
           opts.onSuccess({ data: [{ id: 'reply-old', senderType: 'agent', content: '旧回话' },
-            ...(persistedFinal ? [{ id: 'reply-new', senderType: 'agent', content: '吴用本次完整回话' }] : [])] })
+            ...(persistedFinal ? [{ id: '902', senderType: 'agent', content: '吴用本次完整回话' }] : [])] })
         },
         get: async path => {
           if (path === '/capabilities') return getHallCapabilities(path)
           expect(path).to.equal(`/requests/${conversation.activeRequest.value.requestId}`)
           return { data: { requestId: conversation.activeRequest.value.requestId, requestRevision: '1',
-            conversationId: '1001', state: requestComplete ? 'COMPLETED' : 'RUNNING', stateVersion: requestComplete ? '2' : '1',
-            turns: [{ turnId: 'recovery-turn', state: requestComplete ? 'PUBLISHED' : 'GENERATING', stateVersion: requestComplete ? '2' : '1' }] } }
+            conversationId: '1001', conversationGeneration: '1', state: requestComplete ? 'COMPLETED' : 'RUNNING', stateVersion: requestComplete ? '2' : '1',
+            turns: [{ turnId: 'recovery-turn', requestId: conversation.activeRequest.value.requestId, requestRevision: '1',
+              conversationId: '1001', conversationGeneration: '1', targetAgentId: 'a', lastDeltaSeq: '0', finalMessageId: requestComplete ? '902' : null,
+              state: requestComplete ? 'PUBLISHED' : 'GENERATING', stateVersion: requestComplete ? '2' : '1' }] } }
         },
         create: async (_url, _payload, opts) => {
           postCount += 1
@@ -1663,12 +1697,12 @@ describe('Hall stream transport failure read-only recovery', () => {
       expect(callbacks).to.have.length(0)
       persistedFinal = true
       await poll()
-      expect(callbacks.map(value => value.messageId)).to.deep.equal(['reply-new'])
+      expect(callbacks.map(value => value.messageId)).to.deep.equal(['902'])
       expect(conversation.isAwaitingReply.value).to.equal(true)
       expect(await conversation.sendHallMessage({ content: '仍有待处理回话，禁止覆盖' })).to.equal(false)
       requestComplete = true
       await poll()
-      expect(callbacks.map(value => value.messageId)).to.deep.equal(['reply-new'])
+      expect(callbacks.map(value => value.messageId)).to.deep.equal(['902'])
       expect(conversation.isAwaitingReply.value).to.equal(false)
       expect(postCount).to.equal(1)
     } finally {

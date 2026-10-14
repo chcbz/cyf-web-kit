@@ -125,12 +125,14 @@ const page = readFileSync(new URL('../src/components/world/JuyiHall.vue', import
 const quickCreateBody = page.match(/const handleQuickRequest = async \(request, settle = \(\) => \{\}\) => \{([\s\S]*?)\n\}\n\nconst openOverviewTask/)?.[1]
 if (!quickCreateBody) throw new Error('Actual quick creation closure missing')
 describe('new product entry wiring, no quick legacy task/link writes', () => {
-  it('both forms use one neutral picker and Hall config enables only atomic schema2 for new requirements', () => {
-    for (const name of ['HallOverview', 'BountyPanel']) {
-      const source = readFileSync(new URL(`../src/components/juyiting/${name}.vue`, import.meta.url), 'utf8')
-      expect(source).to.include('import HallMaterialPicker')
-      expect(source).not.to.include('HallReferenceImagePicker')
-    }
+  it('keeps overview atomic intake while the task board has no creation form or picker', () => {
+    const overview = readFileSync(new URL('../src/components/juyiting/HallOverview.vue', import.meta.url), 'utf8')
+    const bounty = readFileSync(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url), 'utf8')
+    expect(overview).to.include('import HallMaterialPicker')
+    expect(overview).not.to.include('HallReferenceImagePicker')
+    expect(bounty).not.to.include('import HallMaterialPicker')
+    expect(bounty).not.to.include('task-create-form')
+    expect(page).to.include('return openPrivateDraft()')
     const setup = page.match(/\} = useHallRequirementCreate\(\{([\s\S]*?)\n\}\)/)?.[1]
     expect(setup).to.include('schemaVersion: 2')
     expect(page).not.to.include('useHallQuickMatter')

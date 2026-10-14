@@ -14,9 +14,9 @@ const req = () => ({ taskId: 'task-1', taskVersion: '6', requirementRevision: '3
 const task = () => ({ id: 'task-1', taskVersion: '6', status: 'open' })
 const canonical = () => ({ id: 'task-1', taskVersion: '7', status: 'assigned', assignedAgentId: 'agent-1', title: '画一只鸟' })
 const grant = () => projection()
-const projection = () => ({ schemaVersion: 1, taskId: 'task-1', targetAgentId: 'agent-1', requirementRevision: '3',
+const projection = () => ({ schemaVersion: 2, taskId: 'task-1', targetAgentId: 'agent-1', requirementRevision: '3',
   assignmentRevision: '7', taskVersion: '7', grantId: 'grant-1', grantVersion: '1', grantState: 'ACTIVE',
-  permittedOperations: ['DELIBERATE', 'INSPECT_INPUTS'], inputs: [], bootstrapId: 'bootstrap-1',
+  permittedOperations: ['DELIBERATE', 'EXECUTE_SKILL'], inputs: [], bootstrapId: 'bootstrap-1',
   bootstrapState: 'ADMITTED', stateVersion: '2', initialOperation: 'DELIBERATE',
   conversationId: '9007199254740993', initialRequestId: 'initial-1', currentAssignment: true })
 const args = () => ({ task: task(), agent: { agentId: 'agent-1' } })
@@ -326,7 +326,7 @@ describe('persisted exact point-and-start source contract', () => {
       h.calls.push(['get', path])
       throw Object.assign(new Error('unknown'), { status: 404, code: 'ASSIGNMENT_OPERATION_UNAVAILABLE' })
     } } })
-    h.seed(old)
+    h.memory.setItem(`cyf.juyiting.point-and-start.v1.${encodeURIComponent(h.scope.value)}.task-1`, JSON.stringify(old))
     expect(await h.flow.start(args())).to.equal(false)
     expect(await h.flow.resumeOriginal('task-1')).to.equal(false)
     expect(h.calls).to.deep.equal([['get', '/tasks/task-1/assignment-operation']])
