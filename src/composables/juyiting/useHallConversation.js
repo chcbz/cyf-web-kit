@@ -544,7 +544,7 @@ export const useHallConversation = ({
       const response = await fetchHallConversationEvents({
         apiStore,
         url: apiStreamUrl('/chat/conversation/events', { id }),
-        headers: cursor ? { 'Last-Event-ID': cursor } : {},
+        headers: cursor ? { 'Last-Event-ID': `conversation:${id}:${cursor}` } : {},
         signal: eventSignal.signal
       })
       if (!guardCurrent(streamGuard) || !response) {
@@ -563,7 +563,7 @@ export const useHallConversation = ({
       const decoder = new TextDecoder()
       let pendingServerResyncCursor = ''
       const parser = createHallSseParser({
-        conversationId: id,
+        conversationId: id, requestId: response.headers.get('X-Request-Id'),
         onEvent: (event, candidateCursor) => {
           if (!guardCurrent(streamGuard)) return false
           if (event.type === 'stream_ready') { hallEventReconnectFailures = 0; return true }

@@ -1,3 +1,4 @@
+import { decodeMessage } from '../../utils/messageEnvelope.js'
 import { canonicalWireString } from './hallConversationMessages.js'
 
 const nextLine = buffer => {
@@ -12,17 +13,18 @@ const nextLine = buffer => {
   return null
 }
 
-const emptyFrame = () => ({ hasId: false, id: '', data: [] })
+const emptyFrame = () => ({ hasId: false, id: '', event: '', hasEvent: false, data: [] })
 const canonicalField = (event, key, options) => {
   if (!Object.hasOwn(event, key)) return { present: false, value: '' }
   return { present: true, value: canonicalWireString(event[key], options) }
 }
 
-export const createHallSseParser = ({ conversationId, onEvent, onCursor, onCommitted, onInvalid }) => {
+export const createHallSseParser = ({ conversationId, requestId, onEvent, onCursor, onCommitted, onInvalid }) => {
   let buffer = ''
   let failed = false
   let frame = emptyFrame()
   const invalid = reason => {
+    if (failed) return false
     failed = true
     onInvalid?.(reason)
     frame = emptyFrame()
@@ -33,18 +35,24 @@ export const createHallSseParser = ({ conversationId, onEvent, onCursor, onCommi
       frame = emptyFrame()
       return true
     }
-    const id = frame.hasId ? canonicalWireString(frame.id) : ''
-    if (frame.hasId && !id) return invalid('invalid_event_id')
-    let event
-    try {
-      event = JSON.parse(frame.data.join('\n'))
-    } catch {
-      return invalid('invalid_json')
-    }
+    let message
+    try { message = decodeMessage(frame.data.join('\n')) } catch { return invalid('invalid_json') }
+    if (Object.hasOwn(message, 'correlationId') || !frame.hasId || !frame.hasEvent || frame.id !== message.messageId ||
+        frame.event !== message.messageType || requestId !== undefined && message.requestId !== requestId) return invalid('invalid_envelope')
+    let event = message.data
     if (!event || Array.isArray(event) || typeof event !== 'object') return invalid('invalid_event')
-    if (event.type !== 'stream_ready') {
-      if (!Object.hasOwn(event, 'conversationId')) event.conversationId = conversationId
-      else if (event.conversationId !== conversationId) return invalid('conversation_conflict')
+    if (event.conversationId !== conversationId) return invalid('conversation_conflict')
+    const ready = message.messageType === 'conversation.stream.ready'
+    let id = ''
+    if (ready) {
+      if (event.type !== 'stream_ready' || !message.messageId.startsWith(`conversation:${conversationId}:ready:`)) return invalid('invalid_ready')
+    } else {
+      if (message.messageType !== 'conversation.event' || event.type === 'stream_ready' ||
+          !message.messageId.startsWith(`conversation:${conversationId}:`)) return invalid('invalid_event_id')
+      id = canonicalWireString(message.messageId.slice(`conversation:${conversationId}:`.length))
+      if (!id || !Number.isSafeInteger(event.occurredAt) || !Number.isFinite(new Date(event.occurredAt).getTime())) return invalid('invalid_event_id')
+      // The existing UI reducer uses a decimal timestamp; only the public wire is epoch-number.
+      event = { ...event, occurredAt: String(event.occurredAt) }
     }
 
     const sequence = canonicalField(event, 'eventSequence')
@@ -78,7 +86,12 @@ export const createHallSseParser = ({ conversationId, onEvent, onCursor, onCommi
   const consume = line => {
     if (line === '') return dispatch()
     if (line.startsWith(':')) return true
+    if (line.startsWith('event:')) {
+      if (frame.hasEvent) return invalid('duplicate_event')
+      frame.hasEvent = true; frame.event = line.slice(6).replace(/^ /, ''); return true
+    }
     if (line.startsWith('id:')) {
+      if (frame.hasId) return invalid('duplicate_id')
       frame.hasId = true
       frame.id = line.slice(3).replace(/^ /, '')
       return true
@@ -96,7 +109,7 @@ export const createHallSseParser = ({ conversationId, onEvent, onCursor, onCommi
       let parsed
       while ((parsed = nextLine(buffer))) {
         buffer = parsed.rest
-        consume(parsed.line)
+        if (consume(parsed.line) === false) break
       }
     },
     finish () {

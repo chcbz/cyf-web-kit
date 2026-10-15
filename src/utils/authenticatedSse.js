@@ -1,3 +1,5 @@
+import { resolveRequestId } from '../composables/useRequestRum.js'
+import { validRequestId, protocolError } from './apiEnvelope.js'
 import { initiateReauthentication } from './reauthentication.js'
 import { registerIdentityCleanup } from './identityLifecycle.js'
 import { combineAbortSignals, throwIfAborted } from './abortSignals.js'
@@ -86,9 +88,13 @@ async function fetchAuthenticatedSse ({
 
   try {
     throwIfAborted(combined.signal)
+    const suppliedId = new Headers(headers).get('X-Request-Id')
+    if (suppliedId !== null && !validRequestId(suppliedId)) throw protocolError('PROTOCOL_INVALID_ENVELOPE')
+    const requestId = suppliedId ?? resolveRequestId()
+    const requestHeaders = new Headers(headers); requestHeaders.set('Authorization', `Bearer ${token}`); requestHeaders.set('X-Request-Id', requestId)
     const response = await fetchImpl(url, {
       method: 'GET',
-      headers: { ...headers, Authorization: `Bearer ${token}` },
+      headers: Object.fromEntries(requestHeaders.entries()),
       signal: combined.signal
     })
     if (response.status === 401) {
@@ -105,6 +111,10 @@ async function fetchAuthenticatedSse ({
       }
       cleanup()
       return null
+    }
+    if (response.ok && (response.headers.get('X-Request-Id') !== requestId ||
+        !/^text\/event-stream(?:;|$)/i.test(response.headers.get('Content-Type') || ''))) {
+      await response.body?.cancel(); throw protocolError('PROTOCOL_INVALID_RESPONSE')
     }
     return responseWithCleanup(response, combined.signal, cleanup)
   } catch (error) {

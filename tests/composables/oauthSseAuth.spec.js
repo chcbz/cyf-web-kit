@@ -169,7 +169,7 @@ describe('direct SSE authentication boundary', () => {
             controller.enqueue(new TextEncoder().encode('data: ok\n\n'))
             controller.close()
           }
-        }), { status: 200 })
+        }), { status: 200, headers: { 'Content-Type': 'text/event-stream', 'X-Request-Id': new Headers(options.headers).get('X-Request-Id') } })
       }
     })
     await response.text()
@@ -186,9 +186,9 @@ describe('direct SSE authentication boundary', () => {
         apiStore: { authorizationGeneration: 3, token: async () => 'token' },
         url: 'https://api.example/events',
         signal: caller.signal,
-        fetchImpl: async () => new Response(new ReadableStream({
+        fetchImpl: async (_url, options) => new Response(new ReadableStream({
           cancel (reason) { cancelReason = reason; cancelCount += 1 }
-        }), { status: 200 })
+        }), { status: 200, headers: { 'Content-Type': 'text/event-stream', 'X-Request-Id': new Headers(options.headers).get('X-Request-Id') } })
       })
 
       expect(response.status).to.equal(200)

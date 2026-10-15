@@ -1,5 +1,6 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { createApi } from '../useHttp'
+import { decodeMessage } from '../../utils/messageEnvelope.js'
 import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
 
 const DECIMAL = /^(?:0|[1-9][0-9]{0,18})$/
@@ -1055,23 +1056,26 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       if (frame.invalid || frame.id !== null || frame.event !== 'message') recoverQuestion(questionId, generation)
       return
     }
-    if (frame.event === 'resync_required') {
-      let value
-      try { value = JSON.parse(frame.data.join('\n')) } catch { recoverQuestion(questionId, generation); return }
-      if (frame.invalid || (frame.id !== null && frame.id !== '') || !exactKeys(value, ['schemaVersion', 'questionId', 'type']) ||
-        value.schemaVersion !== 1 || value.questionId !== questionId || value.type !== 'resync_required') {
-        recoverQuestion(questionId, generation)
-        return
-      }
-      recoverQuestion(questionId, generation)
-      return
+    let message
+    try { message = decodeMessage(frame.data.join('\n')) } catch { recoverQuestion(questionId, generation); return }
+    if (frame.invalid || frame.id !== message.messageId || frame.event !== message.messageType || hasOwn(message, 'correlationId')) {
+      recoverQuestion(questionId, generation); return
+    }
+    if (message.messageType === 'archive.question.resync.required') {
+      const value = message.data
+      if (!message.messageId.startsWith(`archive:question:${questionId}:resync:`) ||
+        !exactKeys(value, ['schemaVersion', 'questionId', 'type']) || value.schemaVersion !== 1 ||
+        value.questionId !== questionId || value.type !== 'resync_required') { recoverQuestion(questionId, generation); return }
+      recoverQuestion(questionId, generation); return
     }
     let event
-    try { event = requireQuestionEvent(JSON.parse(frame.data.join('\n')), questionId) } catch { recoverQuestion(questionId, generation); return }
-    if (frame.invalid || frame.event !== event.type || !isCanonicalDecimal(frame.id) || frame.id !== event.sequence) {
-      recoverQuestion(questionId, generation)
-      return
-    }
+    try {
+      const value = message.data
+      if (message.messageType !== 'archive.question.event' || !value ||
+        !Number.isSafeInteger(value.occurredAt) || !Number.isFinite(new Date(value.occurredAt).getTime())) throw new Error('Invalid archive event')
+      event = requireQuestionEvent({ ...value, occurredAt: new Date(value.occurredAt).toISOString() }, questionId)
+    } catch { recoverQuestion(questionId, generation); return }
+    if (message.messageId !== `archive:question:${questionId}:${event.sequence}`) { recoverQuestion(questionId, generation); return }
     const current = question.value
     if (!current || !isCanonicalDecimal(current.currentSequence)) { recoverQuestion(questionId, generation); return }
     if (compareDecimal(event.sequence, current.currentSequence) <= 0) return
@@ -1130,7 +1134,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     }
     api.execute({
       url: `/me/questions/${encodeURIComponent(questionId)}/events`, method: 'GET', autoLoading: false,
-      headers: { 'Last-Event-ID': cursor }, responseType: 'stream', streamChunks: true, signal: controller.signal,
+      headers: { 'Last-Event-ID': `archive:question:${questionId}:${cursor}` }, responseType: 'stream', streamChunks: true, signal: controller.signal,
       onStreamOpen: handle => {
         if (isCurrentStream()) questionStreamReader = handle
         else handle.cancel?.()

@@ -46,6 +46,7 @@ import { useAgentStore } from '../../stores/agent'
 import { useI18n } from 'vue-i18n'
 import { chatApi, phraseApi } from '../../composables/useHttp'
 import { log } from '../../utils/logger'
+import { createHallSseParser } from '../../composables/juyiting/hallConversationSse.js'
 import { fetchChatConversationEvents } from '../../utils/authenticatedSse.js'
 import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
 import { combineAbortSignals } from '../../utils/abortSignals.js'
@@ -269,20 +270,14 @@ const startConversationEventStream = async () => {
 
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
-    let buffer = ''
+    const parser = createHallSseParser({ conversationId: id, requestId: response.headers.get('X-Request-Id'),
+      onEvent: event => { if (event.type !== 'stream_ready') appendConversationEventMessage(event); return true },
+      onInvalid: () => { throw new Error('Invalid conversation event') } })
     while (true) {
       const { done, value } = await reader.read()
-      if (done || chatDisposed || generation !== chatLifecycleGeneration) break
-      buffer += decoder.decode(value, { stream: true })
-      let eventEndIndex
-      while ((eventEndIndex = buffer.indexOf('\n')) !== -1) {
-        const line = buffer.substring(0, eventEndIndex).trim()
-        buffer = buffer.substring(eventEndIndex + 1)
-        if (!line.startsWith('data:')) continue
-        const payload = line.slice(5).trim()
-        if (!payload) continue
-        appendConversationEventMessage(JSON.parse(payload))
-      }
+      if (chatDisposed || generation !== chatLifecycleGeneration) break
+      if (done) { parser.push(decoder.decode()); parser.finish(); break }
+      parser.push(decoder.decode(value, { stream: true }))
     }
   } catch (error) {
     if (error.name !== 'AbortError' && !chatDisposed && generation === chatLifecycleGeneration) {

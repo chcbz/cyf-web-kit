@@ -29,7 +29,7 @@ global.Node = global.window?.Node
 
 const editionId = 'shuihuzhuan-zh-120-v1'
 const manifestSha256 = 'b'.repeat(64)
-const response = data => ({ data: { data, status: 200 } })
+const response = data => data
 const deferred = () => {
   let resolve
   let reject
@@ -495,8 +495,14 @@ const makeQuestionApi = ({
     emit: (index, event, name = event.type, id = event.sequence) => {
       const session = sessions[index]
       const eventQuestionId = session.options.url.split('/')[3]
-      const idLine = id === null ? '' : `id: ${id}\n`
-      session.options.onStream(`event: ${name}\n${idLine}data: ${JSON.stringify({ ...event, questionId: eventQuestionId })}\n\n`)
+      const resync = event.type === 'resync_required'
+      const messageType = resync ? 'archive.question.resync.required' : 'archive.question.event'
+      const messageId = `archive:question:${eventQuestionId}:${resync ? 'resync:fixture' : event.sequence}`
+      const wireId = id === null ? null : resync && id === undefined ? messageId : `archive:question:${eventQuestionId}:${id}`
+      const message = { protocolVersion: 1, requestId: 'archive-test', messageType, messageId,
+        data: { ...event, questionId: eventQuestionId, ...(!resync ? { occurredAt: Date.parse(event.occurredAt) } : {}) } }
+      const idLine = wireId === null ? '' : `id: ${wireId}\n`
+      session.options.onStream(`event: ${name === event.type ? messageType : name}\n${idLine}data: ${JSON.stringify(message)}\n\n`)
     },
     chunk: (index, value) => sessions[index].options.onStream(value),
     end: index => sessions[index].options.onStreamEnd(),
@@ -515,11 +521,11 @@ describe('archive reader contract behavior', () => {
     let mounted
     try {
       globalThis.fetch = async (url, options) => {
-        const body = JSON.parse(options.body)
+        const envelope = JSON.parse(options.body); const body = envelope.data; expect(envelope.protocolVersion).to.equal(1)
         requests.push({ body, options, url: String(url) })
         return new Response(JSON.stringify({
-          status: 200,
-          code: 'OK',
+          protocolVersion: 1, requestId: envelope.requestId,
+          code: 'E0',
           msg: 'ok',
           data: {
             editionId,
@@ -527,7 +533,7 @@ describe('archive reader contract behavior', () => {
             state: 'IN_PROGRESS',
             version: '1'
           }
-        }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+        }), { status: 200, headers: { 'Content-Type': 'application/json', 'X-Request-Id': envelope.requestId } })
       }
 
       const authStore = {
@@ -2613,9 +2619,9 @@ describe('archive reader contract behavior', () => {
     expect(api.sessions[0].cancelled).to.equal(true)
 
     const delta = { ...questionEvent('2', 'ANSWER_DELTA', { delta: '跨块 CRLF' }), questionId: mounted.reader.question.value.questionId }
-    api.chunk(1, `event: ${delta.type}\r`)
-    api.chunk(1, `\nid: ${delta.sequence}\r`)
-    api.chunk(1, `\ndata: ${JSON.stringify(delta)}\r`)
+    api.chunk(1, `event: archive.question.event\r`)
+    api.chunk(1, `\nid: archive:question:${delta.questionId}:${delta.sequence}\r`)
+    api.chunk(1, `\ndata: ${JSON.stringify({ protocolVersion: 1, requestId: 'archive-test', messageType: 'archive.question.event', messageId: `archive:question:${delta.questionId}:${delta.sequence}`, data: { ...delta, occurredAt: Date.parse(delta.occurredAt) } })}\r`)
     api.chunk(1, '\n\r')
     api.chunk(1, '\n')
     await settle()
