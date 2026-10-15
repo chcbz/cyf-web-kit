@@ -76,7 +76,7 @@ export const useHallBackendSceneState = ({
     snapshotLoading.value = true
     snapshotError.value = ''
     try {
-      const response = await request({ url: SNAPSHOT_URL, method: 'GET', responseType: 'text' })
+      const response = await request({ url: SNAPSHOT_URL, method: 'GET' })
       const value = unwrapPayload(response)
       const cursor = normalizeVersion(value?.sceneVersion)
       if (!value || value.sceneId !== SCENE_ID || cursor == null) {

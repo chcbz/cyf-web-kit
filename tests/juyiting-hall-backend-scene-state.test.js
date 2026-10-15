@@ -5,17 +5,20 @@ import { useHallBackendSceneState } from '../src/composables/juyiting/useHallBac
 const tick = () => new Promise(resolve => setTimeout(resolve, 0))
 
 function snapshot (sceneVersion) {
-  return { sceneId: 'juyiting-main', sceneVersion, generatedAt: 1000, agents: [], states: [] }
+  return { sceneId: 'juyiting-main', sceneVersion: String(sceneVersion), generatedAt: 1000, agents: [], states: [] }
 }
 
 function event (sceneVersion) {
   return {
-    sceneVersion,
+    sceneVersion: String(sceneVersion),
     eventType: 'agent-scene-state-updated',
     occurredAt: 1200,
-    state: { agentId: 'agent-songjiang', personaCode: 'songjiang', stateVersion: sceneVersion }
+    state: { agentId: 'agent-songjiang', personaCode: 'songjiang', stateVersion: String(sceneVersion) }
   }
 }
+
+function envelope(data) { return { protocolVersion: 1, requestId: 'scene-test', messageId: `scene:juyiting-main:${data.sceneVersion}`, messageType: data.eventType === 'resync-required' ? 'scene.resync.required' : 'scene.event', data } }
+function frame(data) { const message=envelope(data); return `id:${message.messageId}\nevent:${message.messageType}\ndata:${JSON.stringify(message)}\n\n` }
 
 function harness ({ snapshots = [snapshot(128)], sseEnabled = true } = {}) {
   const calls = []
@@ -27,9 +30,9 @@ function harness ({ snapshots = [snapshot(128)], sseEnabled = true } = {}) {
       calls.push(request)
       if (request.method === 'GET') {
         const value = snapshots.shift()
-        return { data: { status: 200, data: value } }
+        return value
       }
-      return { data: { status: 200, data: { result: 'accepted' } } }
+      return { result: 'accepted' }
     }
   }
   const streamFactory = (options) => {
@@ -64,7 +67,7 @@ describe('backend scene state', () => {
           if (!url.endsWith('/snapshot')) throw new Error('unexpected request')
           snapshotCalls += 1
           if (snapshotCalls === 1) throw new Error('temporary snapshot failure')
-          return { data: { sceneId: 'juyiting-main', sceneVersion: 7, states: [] } }
+          return { sceneId: 'juyiting-main', sceneVersion: '7', states: [] }
         }
       },
       sseEnabled: false,
@@ -81,7 +84,7 @@ describe('backend scene state', () => {
 
     const recovered = await backend.start()
     expect(snapshotCalls).to.equal(2)
-    expect(recovered).to.include({ sceneId: 'juyiting-main', sceneVersion: 7 })
+    expect(recovered).to.include({ sceneId: 'juyiting-main', sceneVersion: '7' })
     expect(backend.snapshotReady.value).to.equal(true)
     expect(backend.snapshotError.value).to.equal('')
     expect(backend.snapshotLoading.value).to.equal(false)
@@ -97,17 +100,17 @@ describe('backend scene state', () => {
       method: 'GET'
     })
     expect(streams[0].url).to.equal('/agent/scenes/juyiting-main/events')
-    expect(streams[0].params).to.deep.equal({ sinceVersion: 128 })
-    expect(streams[0].headers).to.deep.include({ 'Last-Event-ID': '128' })
-    const payload = JSON.stringify(event(129))
-    streams[0].onChunk(`id: 129\r\nevent: agent-scene-state-updated\r\ndata: ${payload.slice(0, 20)}`)
+    expect(streams[0].params).to.deep.equal({ sinceVersion: '128' })
+    expect(streams[0].headers).to.deep.include({ 'Last-Event-ID': 'scene:juyiting-main:128' })
+    const payload = JSON.stringify(envelope(event(129)))
+    streams[0].onChunk(`id: scene:juyiting-main:129\r\nevent: scene.event\r\ndata: ${payload.slice(0, 20)}`)
     streams[0].onChunk(`${payload.slice(20)}\r\ndata:\r\n\r\n`)
-    streams[0].onChunk(`id: 129\nevent: agent-scene-state-updated\ndata: ${payload}\n\n`)
+    streams[0].onChunk(frame(event(129)))
     await tick()
 
     expect(state.snapshotReady.value).to.equal(true)
     expect(state.sseConnected.value).to.equal(true)
-    expect(state.sceneVersion.value).to.equal(129)
+    expect(state.sceneVersion.value).to.equal('129')
     expect(state.lastEventAt.value).to.equal(5000)
     expect(appliedEvents).to.have.length(1)
     state.stop()
@@ -119,15 +122,15 @@ describe('backend scene state', () => {
     })
     await state.start()
 
-    streams[0].onChunk(`id: 12\nevent: agent-scene-state-updated\ndata: ${JSON.stringify(event(12))}\n\n`)
+    streams[0].onChunk(frame(event(12)))
     await tick()
 
     expect(streams[0].closed).to.equal(true)
     expect(calls.filter(call => call.method === 'GET')).to.have.length(2)
     expect(state.resyncCount.value).to.equal(1)
-    expect(state.sceneVersion.value).to.equal(20)
+    expect(state.sceneVersion.value).to.equal('20')
     expect(appliedEvents).to.have.length(0)
-    expect(streams[1].params).to.deep.equal({ sinceVersion: 20 })
+    expect(streams[1].params).to.deep.equal({ sinceVersion: '20' })
     state.stop()
   })
 
@@ -135,11 +138,11 @@ describe('backend scene state', () => {
     const { state, streams, appliedEvents } = harness()
     await state.start()
 
-    streams[0].onChunk(`id: 129\nevent: agent-scene-state-updated\ndata: ${JSON.stringify(event(129))}`)
+    streams[0].onChunk(frame(event(129)).trimEnd())
     streams[0].onClose()
     await tick()
 
-    expect(state.sceneVersion.value).to.equal(128)
+    expect(state.sceneVersion.value).to.equal('128')
     expect(appliedEvents).to.have.length(0)
     state.stop()
   })
@@ -148,11 +151,11 @@ describe('backend scene state', () => {
     const { state, streams } = harness({ snapshots: [snapshot(4), snapshot(9)] })
     await state.start()
 
-    streams[0].onChunk('id: 8\nevent: resync-required\ndata: {"sceneVersion":8,"eventType":"resync-required"}\n\n')
+    streams[0].onChunk(frame({sceneVersion:'8',eventType:'resync-required'}))
     await tick()
 
     expect(state.resyncCount.value).to.equal(1)
-    expect(state.sceneVersion.value).to.equal(9)
+    expect(state.sceneVersion.value).to.equal('9')
     expect(streams[0].closed).to.equal(true)
     state.stop()
   })
@@ -166,7 +169,7 @@ describe('backend scene state', () => {
       agentApi: {
         execute: async request => {
           calls.push(request)
-          return { data: { data: values.shift() } }
+          return values.shift()
         }
       },
       sseEnabled: false,
@@ -183,7 +186,7 @@ describe('backend scene state', () => {
     window.dispatchEvent(new window.Event('focus'))
     await tick()
     expect(calls).to.have.length(3)
-    expect(state.sceneVersion.value).to.equal(3)
+    expect(state.sceneVersion.value).to.equal('3')
 
     state.stop()
     expect(cleared).to.deep.equal([77])
@@ -213,7 +216,7 @@ describe('backend scene state', () => {
       execute: async request => {
         calls.push(request)
         if (request.method === 'GET' && request.responseType !== 'stream') {
-          return { data: { data: snapshot(3) } }
+          return snapshot(3)
         }
         request.onStreamOpen?.({ cancel () {} })
         return { data: null }
@@ -255,7 +258,7 @@ describe('backend scene state', () => {
     })
 
     const result = await state.reportPhase({
-      reportId: 'report-1', agentId: 'agent-songjiang', stateVersion: 7,
+      reportId: 'report-1', agentId: 'agent-songjiang', stateVersion: '7',
       phase: 'arrived', regionId: 'council-table', occurredAt: 1234
     })
 
@@ -274,7 +277,7 @@ describe('backend scene state', () => {
     const attempts = []
     const timers = []
     const source = {
-      reportId: 'report-wire', agentId: 'agent-songjiang', stateVersion: 7,
+      reportId: 'report-wire', agentId: 'agent-songjiang', stateVersion: '7',
       phase: 'arrived', regionId: 'council-table',
       occurredAt: '2026-07-17T08:00:00.123Z', path: [{ x: 1, y: 2 }], token: 'secret'
     }
@@ -283,7 +286,7 @@ describe('backend scene state', () => {
         execute: async request => {
           attempts.push(request)
           if (attempts.length < 3) throw new Error('offline')
-          return { data: { data: { result: 'accepted' } } }
+          return { result: 'accepted' }
         }
       },
       setTimeoutFn: callback => {
@@ -306,7 +309,7 @@ describe('backend scene state', () => {
     expect(attempts.map(item => item.data)).to.satisfy(values => values.every(value => value === values[0]))
     expect(Object.isFrozen(attempts[0].data)).to.equal(true)
     expect(attempts[0].data).to.deep.equal({
-      reportId: 'report-wire', agentId: 'agent-songjiang', stateVersion: 7,
+      reportId: 'report-wire', agentId: 'agent-songjiang', stateVersion: '7',
       phase: 'arrived', regionId: 'council-table', occurredAt: 1784275200123
     })
   })
@@ -323,7 +326,7 @@ describe('backend scene state', () => {
         execute: async request => {
           calls.push(request)
           if (request.responseType === 'stream') throw disabled
-          return { data: { data: values.shift() } }
+          return values.shift()
         }
       },
       setIntervalFn: (callback, delay) => {
@@ -342,7 +345,7 @@ describe('backend scene state', () => {
     window.dispatchEvent(new window.Event('focus'))
     await tick()
     expect(calls.filter(call => call.method === 'GET' && call.responseType !== 'stream')).to.have.length(3)
-    expect(state.sceneVersion.value).to.equal(6)
+    expect(state.sceneVersion.value).to.equal('6')
     state.stop()
   })
 
@@ -355,7 +358,7 @@ describe('backend scene state', () => {
       agentApi: {
         execute: async request => {
           attempts.push(request)
-          if (request.url.endsWith('/snapshot')) return { data: { data: snapshot(1) } }
+          if (request.url.endsWith('/snapshot')) return snapshot(1)
           throw new Error('offline')
         }
       },
@@ -373,7 +376,7 @@ describe('backend scene state', () => {
     await state.start()
 
     const resultPromise = state.reportPhase({
-      reportId: 'report-cancel', agentId: 'agent-songjiang', stateVersion: 7,
+      reportId: 'report-cancel', agentId: 'agent-songjiang', stateVersion: '7',
       phase: 'blocked', regionId: 'council-table', occurredAt: 1234
     })
     await tick()
@@ -400,7 +403,7 @@ describe('backend scene state', () => {
 
     const starting = state.start()
     state.stop()
-    resolveSnapshot({ data: { data: snapshot(9) } })
+    resolveSnapshot(snapshot(9))
     await starting
 
     expect(state.snapshotReady.value).to.equal(false)
@@ -415,10 +418,7 @@ describe('backend scene state', () => {
     const max = '9223372036854775807'
     const state = useHallBackendSceneState({
       agentApi: {
-        execute: async request => ({ data: request.responseType === 'text'
-          ? `{"status":200,"data":{"sceneId":"juyiting-main","sceneVersion":${beforeMax},` +
-            '"generatedAt":1000,"agents":[],"states":[]}}'
-          : null })
+        execute: async () => snapshot(beforeMax)
       },
       streamFactory: options => {
         streams.push(options)
@@ -430,10 +430,9 @@ describe('backend scene state', () => {
     await state.start()
     expect(state.sceneVersion.value).to.equal(beforeMax)
     expect(streams[0].params).to.deep.equal({ sinceVersion: beforeMax })
-    expect(streams[0].headers).to.deep.include({ 'Last-Event-ID': beforeMax })
+    expect(streams[0].headers).to.deep.include({ 'Last-Event-ID': `scene:juyiting-main:${beforeMax}` })
 
-    streams[0].onChunk(`id: ${max}\nevent: agent-scene-state-updated\n` +
-      `data: {"sceneVersion":${max},"eventType":"agent-scene-state-updated","state":null}\n\n`)
+    streams[0].onChunk(frame(event(max)))
     expect(state.sceneVersion.value).to.equal(max)
     state.stop()
   })
@@ -444,7 +443,7 @@ describe('backend scene disposal', () => {
     const intervals = []
     const cleared = []
     const state = useHallBackendSceneState({
-      agentApi: { execute: async () => ({ data: { data: snapshot(1) } }) },
+      agentApi: { execute: async () => snapshot(1) },
       sseEnabled: false,
       setIntervalFn: callback => { intervals.push(callback); return 17 },
       clearIntervalFn: id => cleared.push(id)
@@ -462,7 +461,7 @@ describe('backend scene stream recovery policy', () => {
     const timers = []
     const streams = []
     const state = useHallBackendSceneState({
-      agentApi: { execute: async () => ({ data: { data: snapshot(1) } }) },
+      agentApi: { execute: async () => snapshot(1) },
       streamFactory: options => {
         const stream = { ...options, close () { this.closed = true } }
         streams.push(stream)
@@ -492,7 +491,7 @@ describe('backend scene stream recovery policy', () => {
     // Recreate the state with the owned document so visibility state is deterministic.
     state.stop()
     const resumed = useHallBackendSceneState({
-      agentApi: { execute: async () => ({ data: { data: snapshot(128) } }) },
+      agentApi: { execute: async () => snapshot(128) },
       documentRef,
       streamFactory: options => {
         const stream = { ...options, close () { this.closed = true } }
@@ -510,7 +509,7 @@ describe('backend scene stream recovery policy', () => {
     documentRef.visibilityState = 'visible'
     documentRef.dispatchEvent(new Event('visibilitychange'))
     expect(streams).to.have.length(2)
-    expect(streams[1].headers['Last-Event-ID']).to.equal('128')
+    expect(streams[1].headers['Last-Event-ID']).to.equal('scene:juyiting-main:128')
     resumed.stop()
   })
 
@@ -519,7 +518,7 @@ describe('backend scene stream recovery policy', () => {
       const timers = []
       const streams = []
       const state = useHallBackendSceneState({
-        agentApi: { execute: async () => ({ data: { data: snapshot(1) } }) },
+        agentApi: { execute: async () => snapshot(1) },
         streamFactory: options => {
           streams.push(options)
           options.onError(Object.assign(new Error('denied'), { status }))
