@@ -11,7 +11,7 @@ const harness = get => {
 }
 describe('current assignment read without browser point-and-start storage', () => {
   it('uses one authenticated GET and keeps assignment revision distinct from task version', async () => {
-    const calls = []; const { lane } = harness(async (...args) => { calls.push(args); return { data: { data: projection() } } })
+    const calls = []; const { lane } = harness(async (...args) => { calls.push(args); return ((projection())) })
     try {
       expect(await lane.refresh()).to.equal(true)
       expect(lane.projection.value.assignmentRevision).to.equal('1')
@@ -21,7 +21,7 @@ describe('current assignment read without browser point-and-start storage', () =
   })
   for (const field of ['conversationId', 'conversationGeneration', 'taskId', 'targetAgentId', 'taskVersion', 'assignmentRevision', 'baselineGrantVersion', 'requirementRevision']) {
     it(`rejects malformed or foreign ${field}`, async () => {
-      const h = harness(async () => ({ data: { data: { ...projection(), [field]: 'wrong' } } }))
+      const h = harness(async () => ((({ ...projection(), [field]: 'wrong' }))))
       try { expect(await h.lane.refresh()).to.equal(false); expect(h.lane.projection.value).to.equal(null) }
       finally { h.lane.dispose() }
     })
@@ -33,7 +33,7 @@ describe('current assignment read without browser point-and-start storage', () =
       try {
         const first = h.lane.refresh(); expect(h.lane.refresh()).to.equal(first)
         h[key].value = key === 'ctx' ? { ...context(), taskVersion: '9' } : key === 'enabled' ? false : 'changed'
-        resolve({ data: { data: projection() } })
+        resolve(((projection())))
         expect(await first).to.equal(false); expect(h.lane.projection.value).to.equal(null)
       } finally { h.lane.dispose() }
     })
@@ -42,14 +42,14 @@ describe('current assignment read without browser point-and-start storage', () =
     const pending = []; const h = harness(() => new Promise(resolve => pending.push(resolve)))
     try {
       const old = h.lane.refresh(); h.epoch.value++
-      const fresh = h.lane.refresh(); pending[0]({ data: { data: projection() } })
+      const fresh = h.lane.refresh(); pending[0](((projection())))
       expect(await old).to.equal(false); expect(h.lane.loading.value).to.equal(true)
-      pending[1]({ data: { data: projection() } }); expect(await fresh).to.equal(true)
+      pending[1](((projection()))); expect(await fresh).to.equal(true)
       h.owner.value = 'different'; expect(h.lane.projection.value).to.equal(null)
     } finally { h.lane.dispose() }
   })
   it('fails closed on server errors without writing or retaining an old grant', async () => {
-    let fail = false; const h = harness(async () => { if (fail) throw new Error('409'); return { data: { data: projection() } } })
+    let fail = false; const h = harness(async () => { if (fail) throw new Error('409'); return ((projection())) })
     try {
       expect(await h.lane.refresh()).to.equal(true); fail = true
       expect(await h.lane.refresh()).to.equal(false); expect(h.lane.projection.value).to.equal(null)

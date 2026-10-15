@@ -36,7 +36,7 @@ export const validAbandonmentReceipt = (receipt, intent) => validIntent(intent) 
   receipt.providerAlreadyStarted === true && receipt.providerStopped === false && receipt.paidFactsPreserved === true
 const browserStorage = () => { try { return globalThis.window?.sessionStorage ?? null } catch { return null } }
 const uuid = () => { if (!globalThis.crypto?.randomUUID) throw new Error('无法创建安全操作标识'); return `abandon-${globalThis.crypto.randomUUID()}` }
-const unwrap = value => value?.data?.data ?? value?.data ?? value
+const unwrap = result => result
 const initial = () => ({ state: 'idle', busy: false, message: '', intent: null, receipt: null })
 
 /** Explicit owner action only. Recovery keeps the original key/body; it never retries generation. */

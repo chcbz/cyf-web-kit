@@ -1,3 +1,4 @@
+import { validMaterialVersion } from './materialVersion.js'
 import { bountyBootstrapReference } from './hallBountyBootstrap.js'
 import { providerConsentExtension } from './hallPointAndStartProviderConsent.js'
 import { controlledImageBridgeExtension } from './hallControlledImagePointAndStartBridge.js'
@@ -29,8 +30,7 @@ const inputs = list => {
   const result = []
   const seen = new Set()
   for (const item of list) {
-    if (!exactPointAndStartId(item?.fileId) || !Number.isSafeInteger(item.version) || item.version < 1 ||
-      item.version > 2147483647 || !['INPUT', 'REFERENCE'].includes(item.purpose)) return null
+    if (!exactPointAndStartId(item?.fileId) || !validMaterialVersion(item.version) || !['INPUT', 'REFERENCE'].includes(item.purpose)) return null
     const key = JSON.stringify([item.fileId, item.version, item.purpose])
     if (seen.has(key)) return null
     seen.add(key)

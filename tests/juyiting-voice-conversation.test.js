@@ -17,7 +17,9 @@ import {
   captureHallVoiceSnapshot,
   useHallVoiceConversation
 } from '../src/composables/juyiting/useHallVoiceConversation.js'
-import { useHallConversation } from '../src/composables/juyiting/useHallConversation.js'
+import { useHallConversation as actualHallConversation } from '../src/composables/juyiting/useHallConversation.js'
+import { currentChatStreamMock } from './fixtures/current-chat-stream-mock.js'
+const useHallConversation = options => actualHallConversation({ ...options, chatApi: currentChatStreamMock(options.chatApi) })
 import { createPcm16MonoWav, validatePcm16MonoWav } from '../src/utils/pcmWavRecorder.js'
 import { identityCleanupHandlerCount, stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 import { resolveLiveMapPreviewActivation } from '../src/composables/juyiting/liveMapPreviewPolicy.js'
@@ -118,11 +120,11 @@ const installWorkletCaptureFakes = () => {
     constructor () {
       const node = this
       const recorder = new FakeRecorder({
-        onPcmData: data => node.port.onmessage?.({ data: { type: 'pcm', data: data.buffer } })
+        onPcmData: data => node.port.onmessage?.(({ data: { type: 'pcm', data: data.buffer } }))
       })
       this.port = {
         onmessage: null,
-        postMessage: ({ type }) => { if (type === 'flush') queueMicrotask(() => this.port.onmessage?.({ data: { type: 'flushed' } })) },
+        postMessage: ({ type }) => { if (type === 'flush') queueMicrotask(() => this.port.onmessage?.(({ data: { type: 'flushed' } }))) },
         close: () => {}
       }
       this.connect = () => {}
@@ -205,7 +207,7 @@ const createVoice = ({ enabled = true, browser, createRecorder = options => new 
   let currentContext = context
   const voice = useHallVoiceConversation({
     apiStore: { token: async () => 'token' },
-    chatApi: { create: chatCreate || (async () => ({ data: { data: { text: '林教头请看榜文' } } })) },
+    chatApi: { create: chatCreate || (async () => ((({ text: '林教头请看榜文' })))) },
     enabled,
     getContext: () => currentContext,
     getDraft: () => currentDraft,
@@ -226,7 +228,7 @@ const transcribeToReview = async voice => {
   expect(await voice.startRecording(), `voice recording start failed from ${voice.state}: ${voice.error}`).to.equal(true)
   const recorder = FakeRecorder.instances.at(-1)
   expect(recorder, 'active MediaRecorder instance').to.exist
-  recorder.ondataavailable({ data: new Blob(['voice']) })
+  recorder.ondataavailable(({ data: new Blob(['voice']) }))
   voice.stopRecording()
   await flush()
   expect(voice.state).to.equal('review')
@@ -355,7 +357,7 @@ describe('Juyi Hall voice mounted facade', () => {
       await wrapper.get('.voice-start').trigger('click')
       await flush()
       const recorder = FakeRecorder.instances.at(-1)
-      recorder.ondataavailable({ data: new Blob(['voice']) })
+      recorder.ondataavailable(({ data: new Blob(['voice']) }))
       state.voice.stopRecording()
       await flush()
       expect(editableDraft).to.equal('已有草稿\n林教头请看榜文')
@@ -457,7 +459,7 @@ describe('Juyi Hall voice mounted facade', () => {
     expect(on.get('.is-recording').attributes('aria-label')).to.equal('停止录音并转写')
     expect(on.get('.voice-inline-status').element.textContent).to.contain('正在录音')
     const recorder = FakeRecorder.instances.at(-1)
-    recorder.ondataavailable({ data: new Blob(['voice']) })
+    recorder.ondataavailable(({ data: new Blob(['voice']) }))
     onVoice.stopRecording()
     await flush()
     expect(onVoice.state).to.equal('review')
@@ -581,7 +583,7 @@ describe('Juyi Hall voice recording format support', () => {
       chatCreate: async (path, body) => {
         expect(path).to.equal('/speech/transcriptions')
         uploaded = body.get('audio')
-        return { data: { data: { text: 'WAV 转写' } } }
+        return (({ text: 'WAV 转写' }))
       }
     })
     await transcribeToReview(voice)
@@ -628,7 +630,7 @@ describe('Juyi Hall voice lifecycle', () => {
     expect(voice.state).to.equal('recording')
     expect(voice.voiceInteractionLocked).to.equal(true)
     const recorder = FakeRecorder.instances.at(-1)
-    recorder.ondataavailable({ data: { size: HALL_VOICE_MAX_AUDIO_BYTES + 1 } })
+    recorder.ondataavailable(({ data: { size: HALL_VOICE_MAX_AUDIO_BYTES + 1 } }))
     expect(voice.state).to.equal('error')
     expect(voice.voiceInteractionLocked).to.equal(false)
     expect(harness.tracks.at(-1).stopped).to.equal(true)
@@ -659,7 +661,7 @@ describe('Juyi Hall voice lifecycle', () => {
     let uploads = 0
     const delayed = createVoice({
       browser: harness.browser,
-      chatCreate: async () => { uploads += 1; return { data: { data: { text: '不应上传' } } } },
+      chatCreate: async () => { uploads += 1; return (({ text: '不应上传' })) },
       createRecorder: () => ({
         start: async () => {},
         stop: async () => ({ type: 'audio/wav', size: 46, arrayBuffer: () => arrayBuffer.promise }),
@@ -689,12 +691,12 @@ describe('Juyi Hall voice lifecycle', () => {
       chatCreate: async (_path, _body, options) => {
         uploadCount += 1
         if (uploadCount === 1) { uploadSignal = options.signal; return upload.promise }
-        return { data: { data: { text: '林教头请看榜文' } } }
+        return (({ text: '林教头请看榜文' }))
       }
     })
     await voice.startRecording()
     const recorder = FakeRecorder.instances.at(-1)
-    recorder.ondataavailable({ data: new Blob(['voice']) })
+    recorder.ondataavailable(({ data: new Blob(['voice']) }))
     voice.stopRecording()
     expect(voice.state).to.equal('stopping')
     expect(voice.voiceInteractionLocked).to.equal(true)
@@ -705,14 +707,14 @@ describe('Juyi Hall voice lifecycle', () => {
     harness.documentListeners.get('visibilitychange')()
     expect(uploadSignal.aborted).to.equal(true)
     expect(voice.state).to.equal('idle')
-    upload.resolve({ data: { data: { text: 'late' } } })
+    upload.resolve((({ text: 'late' })))
     await flush()
     expect(voice.transcript).to.equal('')
 
     voice.setAutoSendEnabled(true)
     await voice.startRecording()
     const nextRecorder = FakeRecorder.instances.at(-1)
-    nextRecorder.ondataavailable({ data: new Blob(['voice']) })
+    nextRecorder.ondataavailable(({ data: new Blob(['voice']) }))
     voice.stopRecording()
     await flush()
     expect(voice.state).to.equal('pending_send')
@@ -749,7 +751,7 @@ describe('Juyi Hall voice current-generation abort recovery', () => {
     }).voice
     await sttVoice.startRecording()
     const recorder = FakeRecorder.instances.at(-1)
-    recorder.ondataavailable({ data: new Blob(['voice']) })
+    recorder.ondataavailable(({ data: new Blob(['voice']) }))
     sttVoice.stopRecording()
     await flush()
     expect(sttVoice.state).to.equal('error')
@@ -797,11 +799,11 @@ describe('Juyi Hall voice identity and capture controls', () => {
     const stoppingHarness = browserHarness()
     const stoppingVoice = createVoice({
       browser: stoppingHarness.browser,
-      chatCreate: async () => { uploads += 1; return { data: { data: { text: '不应上传' } } } }
+      chatCreate: async () => { uploads += 1; return (({ text: '不应上传' })) }
     }).voice
     await stoppingVoice.startRecording()
     const stoppingRecorder = FakeRecorder.instances.at(-1)
-    stoppingRecorder.ondataavailable({ data: new Blob(['voice']) })
+    stoppingRecorder.ondataavailable(({ data: new Blob(['voice']) }))
     stoppingVoice.stopRecording()
     expect(stoppingVoice.state).to.equal('stopping')
     stopIdentityBoundWork()
@@ -823,14 +825,14 @@ describe('Juyi Hall voice identity and capture controls', () => {
     }).voice
     await transcriptionVoice.startRecording()
     const transcriptionRecorder = FakeRecorder.instances.at(-1)
-    transcriptionRecorder.ondataavailable({ data: new Blob(['voice']) })
+    transcriptionRecorder.ondataavailable(({ data: new Blob(['voice']) }))
     transcriptionVoice.stopRecording()
     await flush()
     expect(transcriptionVoice.state).to.equal('transcribing')
     stopIdentityBoundWork()
     expect(transcriptionSignal.aborted).to.equal(true)
     expect(transcriptionVoice.state).to.equal('idle')
-    transcription.resolve({ data: { data: { text: '迟到转写' } } })
+    transcription.resolve((({ text: '迟到转写' })))
     await flush()
     expect(transcriptionVoice.transcript).to.equal('')
     transcriptionVoice.dispose()
@@ -897,11 +899,11 @@ describe('Juyi Hall voice identity and capture controls', () => {
     const harness = browserHarness()
     const voice = createVoice({
       browser: harness.browser,
-      chatCreate: async () => { uploads += 1; return { data: { data: { text: '不应上传' } } } }
+      chatCreate: async () => { uploads += 1; return (({ text: '不应上传' })) }
     }).voice
     await voice.startRecording()
     const recorder = FakeRecorder.instances.at(-1)
-    recorder.ondataavailable({ data: new Blob(['voice']) })
+    recorder.ondataavailable(({ data: new Blob(['voice']) }))
     const wrapper = mount(HallVoiceControls, { props: { voice }, global: { stubs: { 'var-icon': true } } })
     await wrapper.get('.voice-cancel').trigger('click')
     await flush()
@@ -930,7 +932,7 @@ describe('Juyi Hall voice identity and capture controls', () => {
     countdownVoice.setAutoSendEnabled(true)
     await countdownVoice.startRecording()
     const recorder = FakeRecorder.instances.at(-1)
-    recorder.ondataavailable({ data: new Blob(['voice']) })
+    recorder.ondataavailable(({ data: new Blob(['voice']) }))
     countdownVoice.stopRecording()
     await flush()
     expect(countdownVoice.state).to.equal('pending_send')
@@ -1099,7 +1101,7 @@ describe('Juyi Hall portrait voice lock', () => {
 
       await voiceRef.value.startRecording()
       const recorder = FakeRecorder.instances.at(-1)
-      recorder.ondataavailable({ data: new Blob(['voice']) })
+      recorder.ondataavailable(({ data: new Blob(['voice']) }))
       voiceRef.value.stopRecording()
       await flush()
       expect(voiceRef.value.state).to.equal('transcribing')
@@ -1110,7 +1112,7 @@ describe('Juyi Hall portrait voice lock', () => {
       expect(wrapper.find('.panel-chat').exists()).to.equal(true)
       await wrapper.get('.panel-chat .voice-cancel').trigger('click')
       expect(uploadSignal.aborted).to.equal(true)
-      upload.resolve({ data: { data: { text: '迟到转写' } } })
+      upload.resolve((({ text: '迟到转写' })))
       await flush()
       expect(voiceRef.value.state).to.equal('idle')
       expect(voiceRef.value.transcript).to.equal('')
@@ -1450,14 +1452,14 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
       create: async (path, _payload, options) => {
         if (path === '/speech/transcriptions') {
           transcriptionCount += 1
-          return { data: { data: { text: transcriptionCount === 1 ? '甲轮传令' : '乙轮传令' } } }
+          return (({ text: transcriptionCount === 1 ? '甲轮传令' : '乙轮传令' }))
         }
         expect(path).to.equal('/stream')
         const pending = deferred()
         const entry = { options, pending, cancelReason: null }
         streams.push(entry)
         options.onStreamOpen({ cancel: reason => { entry.cancelReason = reason } })
-        options.onStream(JSON.stringify({ requestId: _payload.requestId, turnId: 'voice-turn', state: 'STREAMING', stateVersion: '1' }))
+        options.onStream(JSON.stringify({ requestId: _payload.requestId, conversationId: 'conversation-a', turnId: 'voice-turn', state: 'STREAMING', stateVersion: '1' }))
         return pending.promise
       },
       list: async () => {},

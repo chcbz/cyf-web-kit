@@ -69,6 +69,7 @@
 </template>
 
 <script setup>
+import { validMaterialVersion } from '../../composables/juyiting/materialVersion.js'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { savePersonalWorkspaceBlob, usePersonalWorkspace } from '@/composables/usePersonalWorkspace'
 import { useHallDrafts } from '@/composables/juyiting/useHallDrafts'
@@ -99,7 +100,7 @@ const currentExecution = computed(() => drafts.receipt.value?.execution || draft
 const receiptInputs = computed(() => drafts.receipt.value?.inputs || currentExecution.value?.inputs || drafts.caseView.value?.inputs || drafts.draft.value?.editableFields?.inputs || [])
 const resultPreviewItem = ref(null)
 const resultPreviewVersion = ref(null)
-const resultVersions = computed(() => workspace.detail.value?.file?.fileId === resultPreviewItem.value?.fileId ? (workspace.detail.value.versions || []).filter(version => Number.isSafeInteger(version.version) && version.version <= resultPreviewItem.value.fileVersion) : [])
+const resultVersions = computed(() => workspace.detail.value?.file?.fileId === resultPreviewItem.value?.fileId ? (workspace.detail.value.versions || []).filter(version => validMaterialVersion(version.version) && BigInt(version.version) <= BigInt(resultPreviewItem.value.fileVersion)) : [])
 const selectedPreviewPart = computed(() => workspace.preview.value?.parts?.[workspace.preview.value?.selectedIndex] || null)
 const previewFile = computed(() => workspace.items.value.find(file => file.fileId === previewFileId.value) || null)
 const busy = computed(() => sourceReadState.value === 'loading' || ['creating', 'saving', 'loading', 'discarding'].includes(drafts.state.value) || ['submitting', 'reconciling'].includes(drafts.submissionState.value))
@@ -137,7 +138,7 @@ const toggleTemporary = (fileId, version) => { temporaryInputs.value = temporary
 const applyMaterials = () => { form.inputs = temporaryInputs.value.map(input => ({ ...input })); view.value = 'draft' }
 const cancelMaterials = () => { view.value = 'draft' }
 const openPreview = (fileId, version) => { previewFileId.value = fileId; previewVersion.value = version; view.value = 'preview'; if (workspace.select) void workspace.select(fileId).then(() => workspace.previewVersion(version)) }
-const usePreviewMaterial = () => { if (previewFileId.value && Number.isSafeInteger(previewVersion.value) && !temporaryHas(previewFileId.value, previewVersion.value)) temporaryInputs.value = [...temporaryInputs.value, { fileId: previewFileId.value, version: previewVersion.value }]; view.value = 'materials' }
+const usePreviewMaterial = () => { if (previewFileId.value && validMaterialVersion(previewVersion.value) && !temporaryHas(previewFileId.value, previewVersion.value)) temporaryInputs.value = [...temporaryInputs.value, { fileId: previewFileId.value, version: previewVersion.value }]; view.value = 'materials' }
 const goBack = () => { if (activeView.value === 'preview') { view.value = 'materials'; return true }; if (activeView.value === 'materials' || activeView.value === 'confirm') { view.value = 'draft'; return true }; return false }
 const loadRecoverable = () => { void drafts.list() }
 const openDraft = async id => { const loaded = await drafts.load(id); if (loaded) { fill(loaded.editableFields); view.value = 'draft'; if (!isTaskCreate.value) void drafts.loadCapabilities() } }
@@ -148,7 +149,7 @@ const removeUnsupportedFormalFields = () => { form.targetAgentId = ''; form.outp
 const refreshCase = () => { const ref = displayedRef.value; if (ref?.sourceType === 'PRIVATE_CASE') void drafts.loadCase(ref.sourceId); else if (ref?.sourceType === 'LEGACY_EXECUTION') void drafts.loadExecution(ref.sourceId) }
 const openResults = execution => { if (execution?.executionId) { caseTab.value = 'results'; void drafts.loadResults(execution.executionId) } }
 const previewResult = async item => { if (item?.availability !== 'AVAILABLE' || !await workspace.select(item.fileId)) return; resultPreviewItem.value = item; resultPreviewVersion.value = item.fileVersion; void workspace.previewVersion(item.fileVersion) }
-const previewResultVersion = () => { if (resultPreviewItem.value && Number.isSafeInteger(resultPreviewVersion.value)) void workspace.previewVersion(resultPreviewVersion.value) }
+const previewResultVersion = () => { if (resultPreviewItem.value && validMaterialVersion(resultPreviewVersion.value)) void workspace.previewVersion(resultPreviewVersion.value) }
 const downloadResult = async item => { if (item?.availability === 'AVAILABLE' && await workspace.select(item.fileId)) { const result = await workspace.download(item.fileVersion); if (result) savePersonalWorkspaceBlob(result) } }
 const resultExecution = executionId => drafts.caseView.value?.executions?.find(item => item.execution.executionId === executionId)?.execution || null
 const startRevision = item => { const executionId = drafts.executionResults.value?.executionId; if (!executionId || !drafts.caseView.value?.caseId || item?.availability !== 'AVAILABLE' || !canCreateRevision.value) return; revisionSource.value = { executionId, outputId: item.outputId, fileId: item.fileId, fileVersion: item.fileVersion }; fill({ title: `修改：${item.filename}`, instruction: '', targetAgentId: resultExecution(executionId)?.targetAgentId || '', outputMime: item.mime, inputs: [] }); view.value = 'draft' }

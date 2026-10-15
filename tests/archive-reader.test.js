@@ -597,7 +597,7 @@ describe('archive reader contract behavior', () => {
   })
 
   it('treats a successful JsonResult with omitted data as null and initializes the first save', async () => {
-    const progressEnvelope = { data: { status: 200, code: 'E0', msg: 'ok' } }
+    const progressEnvelope = ({ status: 200, code: 'E0', msg: 'ok' })
     const api = makeApi({ progressEnvelope })
     const mounted = mountReader(api)
     await mounted.reader.initialize()

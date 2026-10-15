@@ -1,3 +1,4 @@
+import { displayFixtures } from './fixtures/juyiting/interface-display-fixture.mjs'
 import { useHallSkillResults } from '../src/composables/juyiting/useHallSkillResults.js'
 import { skillResultDataText } from '../src/composables/juyiting/hallSkillResults.js'
 import { before, after } from 'mocha'
@@ -33,7 +34,7 @@ const zeroDigest = createHash('sha256').update(Buffer.alloc(20)).digest('hex')
 const item = stepId => {
   const url = `/chat/requests/request-1/steps/${stepId}/outputs/output_1`
   return { outputId: 'output_1', contentMimeType: 'image/png', sha256: zeroDigest,
-    byteLength: 20, previewUrl: url, downloadUrl: `${url}?download=true`, assetRef: { assetId: `ast_${stepId}`, revision: '1' } }
+    byteLength: '20', previewUrl: url, downloadUrl: `${url}?download=true`, assetRef: { assetId: `ast_${stepId}`, revision: '1' } }
 }
 const step = id => ({ stepId: id, kind: 'EXECUTE', executionId: `execution-${id}` })
 
@@ -62,14 +63,14 @@ describe('bounty output gallery live owner scope', () => {
     let poll; let requestReads = 0; let created = 0
     const revoked = []; const previewObservers = new Set()
     const mockApi = { get: async path => {
-      if (path === '/requests/request-1') return { data: { data: {
+      if (path === '/requests/request-1') return (({
         requestId: 'request-1', conversationId: 'conversation-1',
         steps: (requestReads++ === 0) ? [step('step-1')] : [step('step-1'), step('step-2')]
-      } } }
-      if (path.endsWith('/steps/step-1/outputs')) return { data: { data: [item('step-1')] } }
-      if (path.endsWith('/steps/step-2/outputs')) return { data: { data: [item('step-2')] } }
+      }))
+      if (path.endsWith('/steps/step-1/outputs')) return (([item('step-1')]))
+      if (path.endsWith('/steps/step-2/outputs')) return (([item('step-2')]))
       throw new Error(`unexpected GET ${path}`)
-    }, execute: async () => ({ data: new Blob([new Uint8Array(20)], { type: 'image/png' }) }) }
+    }, execute: async () => ((new Blob([new Uint8Array(20)], { type: 'image/png' }))) }
     const Component = new Function('Vue', 'deps', script)(Vue, { useHallSkillResults, skillResultDataText, createApi: () => mockApi, exactOutputId, outputCatalogItems, outputItemKey,
       previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, currentOutputDelivery, outputAssetPart, completedTextItem, completedExecutionDelivery, outputRequestPending, useHallBountyFinalization, safeFinalizationVersion, useHallConversationArchive, readOutputRecovery, writeOutputRecovery, saveOutputBlob: () => {}
     })
@@ -122,9 +123,9 @@ describe('bounty output gallery live owner scope', () => {
     const oldClear = globalThis.clearTimeout
     const writes = []
     const chatApi = { get: async path => {
-      if (path === '/requests/request-1') return { data: { data: { requestId: 'request-1', conversationId: 'conversation-1',
-        steps: [{ ...step('step-1'), taskId: 'task-1', assignmentRevision: '3' }] } } }
-      if (path.endsWith('/steps/step-1/outputs')) return { data: { data: [item('step-1')] } }
+      if (path === '/requests/request-1') return (({ requestId: 'request-1', conversationId: 'conversation-1',
+        steps: [{ ...step('step-1'), taskId: 'task-1', assignmentRevision: '3' }] }))
+      if (path.endsWith('/steps/step-1/outputs')) return (([item('step-1')]))
       throw new Error(`unexpected GET ${path}`)
     }, execute: async payload => { writes.push(payload); throw new Error('the output card must never POST an interaction') } }
     const Component = new Function('Vue', 'deps', script)(Vue, { useHallSkillResults, skillResultDataText,
@@ -155,13 +156,13 @@ describe('bounty output gallery live owner scope', () => {
     let downloaded = 0
     const chatApi = {
       get: async path => {
-        if (path === '/requests/request-1') return { data: { data: {
+        if (path === '/requests/request-1') return (({
           requestId: 'request-1', conversationId: 'conversation-1', steps: [step('step-1')]
-        } } }
-        if (path.endsWith('/steps/step-1/outputs')) return { data: { data: [itemForCatalog] } }
+        }))
+        if (path.endsWith('/steps/step-1/outputs')) return (([itemForCatalog]))
         throw new Error(`unexpected GET ${path}`)
       },
-      execute: async () => ({ data: responses.shift() })
+      execute: async () => ((responses.shift()))
     }
     const Component = new Function('Vue', 'deps', script)(Vue, { useHallSkillResults, skillResultDataText,
       createApi: () => chatApi, exactOutputId, outputCatalogItems, outputItemKey,
@@ -193,18 +194,18 @@ describe('bounty output gallery live owner scope', () => {
     const oldClear = globalThis.clearTimeout
     let submitted
     let finalizationRequests = 0
-    const catalogItem = { ...item('step-1'), byteLength: 20 }
+    const catalogItem = { ...item('step-1'), byteLength: '20' }
     const chatApi = { get: async path => {
-      if (path === '/requests/request-1') return { data: { data: { requestId: 'request-1', conversationId: 'conversation-1',
-        steps: [{ ...step('step-1'), taskId: 'task-1', assignmentRevision: '3' }] } } }
-      if (path.endsWith('/steps/step-1/outputs')) return { data: { data: [catalogItem] } }
+      if (path === '/requests/request-1') return (({ requestId: 'request-1', conversationId: 'conversation-1',
+        steps: [{ ...step('step-1'), taskId: 'task-1', assignmentRevision: '3' }] }))
+      if (path.endsWith('/steps/step-1/outputs')) return (([catalogItem]))
       throw new Error(`unexpected GET ${path}`)
     }, execute: async () => { throw new Error('unexpected chat write') } }
-    const agentApi = { execute: async request => { finalizationRequests++; if (request.method === 'POST') submitted = request; return { data: { data: {
-      operationId: 'finalization-1', taskId: 'task-1', conversationId: 'conversation-1', state: 'completed',
+    const agentApi = { execute: async request => { finalizationRequests++; if (request.method === 'POST') submitted = request; return (({
+      operationId: 'finalization-1', taskId: 'task-1', conversationId: 'conversation-1', state: 'COMPLETED',
       stateVersion: '5', stage: 'TASK_COMPLETED', expectedTaskVersion: '9', expectedAssignmentRevision: '3',
-      selectedOutputs: submitted.data.selectedOutputs, deliveryId: 'delivery-1', deliveryState: 'accepted',
-      taskState: 'completed', taskVersion: '12', errorCode: null, retryable: false } } } } }
+      selectedOutputs: submitted.data.selectedOutputs, deliveryId: 'delivery-1', deliveryState: 'ACCEPTED',
+      taskState: 'COMPLETED', taskVersion: '12', errorCode: null, retryable: false })) } }
     const Component = new Function('Vue', 'deps', script)(Vue, { useHallSkillResults, skillResultDataText,
       createApi: base => base === '/agent' ? agentApi : chatApi, exactOutputId, outputCatalogItems, outputItemKey,
       previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, currentOutputDelivery, outputAssetPart, completedTextItem, completedExecutionDelivery, outputRequestPending, useHallBountyFinalization, safeFinalizationVersion, useHallConversationArchive, readOutputRecovery, writeOutputRecovery, saveOutputBlob: () => {}
@@ -219,8 +220,8 @@ describe('bounty output gallery live owner scope', () => {
       expect(wrapper.find('input[type="checkbox"]').exists()).to.equal(false)
       await wrapper.find('.finalize-button').trigger('click')
       await flushPromises()
-      expect(submitted.data.expectedTaskVersion).to.equal(9)
-      expect(submitted.data.expectedAssignmentRevision).to.equal(3)
+      expect(submitted.data.expectedTaskVersion).to.equal('9')
+      expect(submitted.data.expectedAssignmentRevision).to.equal('3')
       expect(wrapper.text()).to.include('需求已完成')
       expect(wrapper.find('.finalize-button').attributes('disabled')).to.equal('')
       expect(wrapper.find('.continue-modification').exists()).to.equal(false)
@@ -265,9 +266,9 @@ describe('bounty output gallery live owner scope', () => {
     let finishWrite; let sent
     const catalogItem = item('step-1')
     const chatApi = { get: async path => {
-      if (path === '/requests/request-1') return { data: { data: { requestId: 'request-1', conversationId: 'conversation-1',
-        steps: [{ ...step('step-1'), taskId: 'task-1', assignmentRevision: '3' }] } } }
-      if (path.endsWith('/steps/step-1/outputs')) return { data: { data: [catalogItem] } }
+      if (path === '/requests/request-1') return (({ requestId: 'request-1', conversationId: 'conversation-1',
+        steps: [{ ...step('step-1'), taskId: 'task-1', assignmentRevision: '3' }] }))
+      if (path.endsWith('/steps/step-1/outputs')) return (([catalogItem]))
       throw new Error(`unexpected GET ${path}`)
     }, execute: request => { sent = request; return new Promise(resolve => { finishWrite = resolve }) } }
     const Component = new Function('Vue', 'deps', script)(Vue, { useHallSkillResults, skillResultDataText,
@@ -289,7 +290,7 @@ describe('bounty output gallery live owner scope', () => {
       expect(wrapper.text()).to.include('正在提交保存请求')
       await wrapper.setProps({ identityKey: 'owner-b' })
       await flushPromises()
-      finishWrite({ data: { data: { operationId: 'operation-a', state: 'saved', revision: '1', items: [{ ...catalogItem.assetRef, state: 'saved', fileId: 'file-a', version: 1 }] } } })
+      finishWrite((({ operationId: 'operation-a', state: 'saved', revision: '1', items: [{ ...catalogItem.assetRef, state: 'saved', fileId: 'file-a', version: '1' }] })))
       await flushPromises()
       expect(wrapper.text()).not.to.include('file-a')
       expect(wrapper.text()).not.to.include('已保存到工作空间')
@@ -301,9 +302,9 @@ describe('bounty output gallery live owner scope', () => {
     const oldClear = globalThis.clearTimeout
     let finishWrite
     const chatApi = { get: async path => {
-      if (path === '/requests/request-1') return { data: { data: { requestId: 'request-1', conversationId: 'conversation-1',
-        steps: [{ ...step('step-1'), taskId: 'task-1', assignmentRevision: '3' }] } } }
-      if (path.endsWith('/steps/step-1/outputs')) return { data: { data: [item('step-1')] } }
+      if (path === '/requests/request-1') return (({ requestId: 'request-1', conversationId: 'conversation-1',
+        steps: [{ ...step('step-1'), taskId: 'task-1', assignmentRevision: '3' }] }))
+      if (path.endsWith('/steps/step-1/outputs')) return (([item('step-1')]))
       throw new Error(`unexpected GET ${path}`)
     } }
     const agentApi = { execute: () => new Promise(resolve => { finishWrite = resolve }) }
@@ -324,7 +325,7 @@ describe('bounty output gallery live owner scope', () => {
       expect(wrapper.text()).to.include('正在验收')
       await wrapper.setProps({ identityKey: 'owner-b' })
       await flushPromises()
-      finishWrite({ data: { data: { stage: 'TASK_COMPLETED', deliveryState: 'accepted', deliveryId: 'delivery-a' } } })
+      finishWrite((({ stage: 'TASK_COMPLETED', deliveryState: 'ACCEPTED', deliveryId: 'delivery-a' })))
       await flushPromises()
       expect(wrapper.emitted('task-completed')).to.equal(undefined)
       expect(wrapper.text()).not.to.include('delivery-a')
@@ -340,12 +341,12 @@ describe('bounty output gallery live owner scope', () => {
     const opaque = { ...item('step-1'), outputId: 'opaque_1', contentMimeType: 'image/svg+xml', previewUrl: null,
       downloadUrl: '/chat/requests/request-1/steps/step-1/outputs/opaque_1?download=true' }
     const chatApi = { get: async path => {
-      if (path === '/requests/request-1') return { data: { data: { requestId: 'request-1', conversationId: 'conversation-1', steps: [step('step-1')] } } }
-      if (path.endsWith('/steps/step-1/outputs')) return { data: { data: [png, opaque] } }
+      if (path === '/requests/request-1') return (({ requestId: 'request-1', conversationId: 'conversation-1', steps: [step('step-1')] }))
+      if (path.endsWith('/steps/step-1/outputs')) return (([png, opaque]))
       throw new Error(`unexpected GET ${path}`)
-    }, execute: async request => ({ data: new Blob([new Uint8Array(20)], {
+    }, execute: async request => ((new Blob([new Uint8Array(20)], {
       type: request.url.includes('/opaque_1?') ? 'application/octet-stream' : 'image/png'
-    }) }) }
+    }))) }
     const Component = new Function('Vue', 'deps', script)(Vue, { useHallSkillResults, skillResultDataText,
       createApi: () => chatApi, exactOutputId, outputCatalogItems, outputItemKey,
       previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, currentOutputDelivery, outputAssetPart, completedTextItem, completedExecutionDelivery, outputRequestPending, useHallBountyFinalization, safeFinalizationVersion, useHallConversationArchive,
@@ -375,14 +376,14 @@ describe('bounty output gallery live owner scope', () => {
     let poll; let projected = false; const writes = []
     const catalog = () => ({ ...item('step-1'), assetRef: projected ? { assetId: 'ast_ready', revision: '1' } : null })
     const chatApi = { get: async path => {
-      if (path === '/requests/request-1') return { data: { data: { requestId: 'request-1', conversationId: 'conversation-1', steps: [step('step-1')] } } }
-      if (path.endsWith('/steps/step-1/outputs')) return { data: { data: [catalog()] } }
+      if (path === '/requests/request-1') return (({ requestId: 'request-1', conversationId: 'conversation-1', steps: [step('step-1')] }))
+      if (path.endsWith('/steps/step-1/outputs')) return (([catalog()]))
       throw new Error(`unexpected GET ${path}`)
     }, execute: async options => {
       writes.push(options)
-      return { data: { data: { operationId: 'archive-ready', state: 'saved', revision: '1', items: [
-        { assetId: 'ast_ready', revision: '1', state: 'saved', fileId: 'workspace-bird', version: 1 }
-      ] } } }
+      return (({ operationId: 'archive-ready', state: 'saved', revision: '1', items: [
+        { assetId: 'ast_ready', revision: '1', state: 'saved', fileId: 'workspace-bird', version: '1' }
+      ] }))
     } }
     const stored = new Map(); const storage = { getItem: key => stored.get(key) || null, setItem: (key, value) => stored.set(key, value) }
     const Component = new Function('Vue', 'deps', script)(Vue, { useHallSkillResults, skillResultDataText,
@@ -419,19 +420,19 @@ describe('bounty output gallery live owner scope', () => {
     const oldTimeout = globalThis.setTimeout; const oldClear = globalThis.clearTimeout
     const calls = []; let reads = 0; let posts = 0
     const pending = state => ({ operationId: 'archive-recovered', state, revision: '1', items: [
-      { ...item('step-1').assetRef, state, ...(state === 'saved' ? { fileId: 'workspace-recovered', version: 1 } : {}) }
+      { ...item('step-1').assetRef, state, ...(state === 'saved' ? { fileId: 'workspace-recovered', version: '1' } : {}) }
     ] })
     const chatApi = { get: async path => {
-      if (path === '/requests/request-1') return { data: { data: { requestId: 'request-1', conversationId: 'conversation-1', steps: [step('step-1')] } } }
-      if (path.endsWith('/steps/step-1/outputs')) return { data: { data: [item('step-1')] } }
+      if (path === '/requests/request-1') return (({ requestId: 'request-1', conversationId: 'conversation-1', steps: [step('step-1')] }))
+      if (path.endsWith('/steps/step-1/outputs')) return (([item('step-1')]))
       throw new Error(`unexpected GET ${path}`)
     }, execute: async options => {
       calls.push(options)
       if (options.method === 'POST') {
         if (++posts === 1) throw new TypeError('saved on server but ACK lost')
-        return { data: { data: pending('pending') } }
+        return ((pending('pending')))
       }
-      return { data: { data: pending(++reads === 1 ? 'pending' : 'saved') } }
+      return ((pending(++reads === 1 ? 'pending' : 'saved')))
     } }
     const stored = new Map(); const storage = { getItem: key => stored.get(key) || null, setItem: (key, value) => stored.set(key, value) }
     const Component = new Function('Vue', 'deps', script)(Vue, { useHallSkillResults, skillResultDataText,
@@ -469,9 +470,9 @@ describe('bounty output gallery live owner scope', () => {
     const oldTimeout = globalThis.setTimeout; const oldClear = globalThis.clearTimeout
     const calls = []; let reads = 0; let completedReceipt = null
     const chatApi = { get: async path => {
-      if (path === '/requests/request-1') return { data: { data: { requestId: 'request-1', conversationId: 'conversation-1',
-        steps: [{ ...step('step-1'), taskId: 'task-1', assignmentRevision: '3' }] } } }
-      if (path.endsWith('/steps/step-1/outputs')) return { data: { data: [item('step-1')] } }
+      if (path === '/requests/request-1') return (({ requestId: 'request-1', conversationId: 'conversation-1',
+        steps: [{ ...step('step-1'), taskId: 'task-1', assignmentRevision: '3' }] }))
+      if (path.endsWith('/steps/step-1/outputs')) return (([item('step-1')]))
       throw new Error(`unexpected GET ${path}`)
     } }
     const agentApi = { execute: async request => {
@@ -479,14 +480,14 @@ describe('bounty output gallery live owner scope', () => {
       if (calls.length === 1) throw new TypeError('lost POST ACK')
       if (request.method === 'GET') {
         reads++
-        if (completedReceipt) return { data: { data: completedReceipt } }
+        if (completedReceipt) return ((completedReceipt))
         throw Object.assign(new Error('not visible yet'), { status: 404 })
       }
       completedReceipt = { operationId: 'finalization-original', taskId: 'task-1', conversationId: 'conversation-1',
-        state: 'completed', stateVersion: '5', stage: 'TASK_COMPLETED', expectedTaskVersion: '9', expectedAssignmentRevision: '3',
-        selectedOutputs: request.data.selectedOutputs, deliveryId: 'delivery-original', deliveryState: 'accepted',
-        taskState: 'completed', taskVersion: '12', errorCode: null, retryable: false }
-      return { data: { data: completedReceipt } }
+        state: 'COMPLETED', stateVersion: '5', stage: 'TASK_COMPLETED', expectedTaskVersion: '9', expectedAssignmentRevision: '3',
+        selectedOutputs: request.data.selectedOutputs, deliveryId: 'delivery-original', deliveryState: 'ACCEPTED',
+        taskState: 'COMPLETED', taskVersion: '12', errorCode: null, retryable: false }
+      return ((completedReceipt))
     } }
     const Component = new Function('Vue', 'deps', script)(Vue, { useHallSkillResults, skillResultDataText,
       createApi: base => base === '/agent' ? agentApi : chatApi, exactOutputId, outputCatalogItems, outputItemKey,
@@ -549,9 +550,9 @@ describe('bounty output gallery live owner scope', () => {
       const oldTimeout = globalThis.setTimeout; const oldClear = globalThis.clearTimeout
       const writes = []
       const chatApi = { get: async path => {
-        if (path === '/requests/request-1') return { data: { data: { requestId: 'request-1', conversationId: 'conversation-1',
-          steps: [{ ...step('step-1'), taskId: 'task-1', assignmentRevision: revision }] } } }
-        return { data: { data: [item('step-1')] } }
+        if (path === '/requests/request-1') return (({ requestId: 'request-1', conversationId: 'conversation-1',
+          steps: [{ ...step('step-1'), taskId: 'task-1', assignmentRevision: revision }] }))
+        return (([item('step-1')]))
       } }
       const Component = new Function('Vue', 'deps', script)(Vue, { useHallSkillResults, skillResultDataText,
         createApi: base => base === '/agent' ? { execute: async request => { writes.push(request) } } : chatApi,
@@ -576,7 +577,7 @@ describe('bounty output gallery live owner scope', () => {
     const oldTimeout = globalThis.setTimeout; const oldClear = globalThis.clearTimeout
     const downloads = []; const output = (requestId, stepId) => {
       const url = `/chat/requests/${requestId}/steps/${stepId}/outputs/output_1`
-      return { outputId: 'output_1', contentMimeType: 'image/png', sha256: zeroDigest, byteLength: 20,
+      return { outputId: 'output_1', contentMimeType: 'image/png', sha256: zeroDigest, byteLength: '20',
         previewUrl: url, downloadUrl: `${url}?download=true`, assetRef: { assetId: `asset_${requestId}`, revision: '1' } }
     }
     const catalog = [
@@ -587,14 +588,14 @@ describe('bounty output gallery live owner scope', () => {
     ]
     const reads = []; const chatApi = { get: async path => {
       reads.push(path)
-      if (path === '/requests/request-old') return { data: { data: catalog[0].request } }
-      if (path === '/requests/request-current') return { data: { data: catalog[1].request } }
-      if (path.endsWith('/steps/step-old/outputs')) return { data: { data: [output('request-old', 'step-old')] } }
-      if (path.endsWith('/steps/step-current/outputs')) return { data: { data: [output('request-current', 'step-current')] } }
+      if (path === '/requests/request-old') return ((catalog[0].request))
+      if (path === '/requests/request-current') return ((catalog[1].request))
+      if (path.endsWith('/steps/step-old/outputs')) return (([output('request-old', 'step-old')]))
+      if (path.endsWith('/steps/step-current/outputs')) return (([output('request-current', 'step-current')]))
       throw new Error(`unexpected GET ${path}`)
     }, execute: async request => {
       expect(request.method).to.equal('GET')
-      return { data: new Blob([new Uint8Array(20)], { type: 'image/png' }) }
+      return (new Blob([new Uint8Array(20)], { type: 'image/png' }))
     } }
     const Component = new Function('Vue', 'deps', script)(Vue, { useHallSkillResults, skillResultDataText,
       createApi: () => chatApi, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps,
@@ -632,7 +633,7 @@ describe('bounty output gallery live owner scope', () => {
     const calls = []; let catalog = []; let addLate = false
     const output = (requestId, outputId, mime, replaces = null) => {
       const url = `/chat/requests/${requestId}/steps/step-1/outputs/${outputId}`
-      return { outputId, contentMimeType: mime, sha256: zeroDigest, byteLength: 20, replaces,
+      return { outputId, contentMimeType: mime, sha256: zeroDigest, byteLength: '20', replaces,
         downloadUrl: `${url}?download=true`, previewUrl: mime === 'application/pdf' ? null : url }
     }
     const first = output('request-1', 'bird', 'image/png')
@@ -645,10 +646,10 @@ describe('bounty output gallery live owner scope', () => {
     catalog = [{ ordinal: '1', request: request('request-1') }, { ordinal: '2', request: request('request-edit') }]
     const chatApi = { get: async path => {
       const source = [...catalog, ...(addLate ? [{ request: request('request-late') }] : [])].find(entry => path === `/requests/${entry.request.requestId}`)
-      if (source) return { data: { data: source.request } }
-      if (path === '/requests/request-1/steps/step-1/outputs') return { data: { data: [first, other] } }
-      if (path === '/requests/request-edit/steps/step-1/outputs') return { data: { data: [edit] } }
-      if (path === '/requests/request-late/steps/step-1/outputs') return { data: { data: [late] } }
+      if (source) return ((source.request))
+      if (path === '/requests/request-1/steps/step-1/outputs') return (([first, other]))
+      if (path === '/requests/request-edit/steps/step-1/outputs') return (([edit]))
+      if (path === '/requests/request-late/steps/step-1/outputs') return (([late]))
       throw new Error(`unexpected source read ${path}`)
     }, execute: async () => { throw new Error('no archive or tool execution before acceptance') } }
     const agentApi = { execute: async payload => { calls.push(payload); throw new TypeError('unknown acceptance ACK') } }
@@ -690,7 +691,7 @@ describe('bounty output gallery live owner scope', () => {
   })
 
   it('renders an explicit real text final and submits original message refs without tools or saving, including remount', async () => {
-    const raw = JSON.parse(readFileSync(new URL('./fixtures/juyiting/completed-message-delivery-v3.json', import.meta.url), 'utf8'))
+    const raw = displayFixtures(JSON.parse(readFileSync(new URL('./fixtures/juyiting/completed-message-delivery-v3.json', import.meta.url), 'utf8')))
     const request = { requestId: raw.requestId, requestRevision: raw.requestRevision, conversationId: raw.conversationId,
       conversationGeneration: raw.conversationGeneration, state: 'COMPLETED', stateVersion: '1', steps: [], turns: [{
         turnId: raw.turnId, requestId: raw.requestId, requestRevision: raw.requestRevision, conversationId: raw.conversationId,
@@ -700,8 +701,8 @@ describe('bounty output gallery live owner scope', () => {
     const calls = []; const reads = []; const downloads = []
     const chatApi = { get: async path => {
       reads.push(path)
-      if (path === `/requests/${raw.requestId}`) return { data: { data: request } }
-      if (path === `/conversations/${raw.conversationId}/requests/${raw.requestId}/typed-outcome`) return { data: { data: raw } }
+      if (path === `/requests/${raw.requestId}`) return ((request))
+      if (path === `/conversations/${raw.conversationId}/requests/${raw.requestId}/typed-outcome`) return ((raw))
       throw new Error(`unexpected read ${path}`)
     }, execute: async () => { throw new Error('no fake output bytes, tools, archive or personal-space prerequisite') } }
     const agentApi = { execute: async options => { calls.push(options); throw new TypeError('unknown ACK') } }
@@ -750,7 +751,7 @@ describe('bounty output gallery live owner scope', () => {
   })
 
   it('renders API-generated text append/replace/reset and freezes exactly the displayed source list on acceptance', async () => {
-    const groups = JSON.parse(readFileSync(new URL('./fixtures/juyiting/text-delivery-relations-v3.json', import.meta.url), 'utf8'))
+    const groups = displayFixtures(JSON.parse(readFileSync(new URL('./fixtures/juyiting/text-delivery-relations-v3.json', import.meta.url), 'utf8')))
     const oldTimeout = globalThis.setTimeout; const oldClear = globalThis.clearTimeout
     globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : oldTimeout(fn, delay, ...args)
     globalThis.clearTimeout = id => { if (id !== 999) oldClear(id) }
@@ -766,9 +767,9 @@ describe('bounty output gallery live owner scope', () => {
         const calls = []
         const chatApi = { get: async path => {
           const request = requests.find(request => path === `/requests/${request.requestId}`)
-          if (request) return { data: { data: request } }
+          if (request) return ((request))
           const raw = sources.find(raw => path === `/conversations/${raw.conversationId}/requests/${raw.requestId}/typed-outcome`)
-          if (raw) return { data: { data: raw } }
+          if (raw) return ((raw))
           throw new Error(`unexpected source read ${path}`)
         }, execute: async () => { throw new Error('must not execute tools or invent output files') } }
         const agentApi = { execute: async options => { calls.push(options); throw new TypeError('unknown acceptance ACK') } }
@@ -804,7 +805,7 @@ describe('bounty output gallery live owner scope', () => {
   })
 
   it('renders clarified text chains and preserves exact displayed sources through unknown acceptance and remount', async () => {
-    const groups = JSON.parse(readFileSync(new URL('./fixtures/juyiting/clarified-text-delivery-v3.json', import.meta.url), 'utf8'))
+    const groups = displayFixtures(JSON.parse(readFileSync(new URL('./fixtures/juyiting/clarified-text-delivery-v3.json', import.meta.url), 'utf8')))
     const oldTimeout = globalThis.setTimeout; const oldClear = globalThis.clearTimeout
     globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : oldTimeout(fn, delay, ...args)
     globalThis.clearTimeout = id => { if (id !== 999) oldClear(id) }
@@ -820,9 +821,9 @@ describe('bounty output gallery live owner scope', () => {
         const calls = []
         const chatApi = { get: async path => {
           const request = requests.find(request => path === `/requests/${request.requestId}`)
-          if (request) return { data: { data: request } }
+          if (request) return ((request))
           const raw = sources.find(raw => path === `/conversations/${raw.conversationId}/requests/${raw.requestId}/typed-outcome`)
-          if (raw) return { data: { data: raw } }
+          if (raw) return ((raw))
           throw new Error(`unexpected source read ${path}`)
         }, execute: async () => { throw new Error('must not execute tools or invent output files') } }
         const agentApi = { execute: async options => { calls.push(options); throw new TypeError('unknown acceptance ACK') } }
@@ -858,7 +859,7 @@ describe('bounty output gallery live owner scope', () => {
   })
 
   it('renders an earlier replacement and retains the appended item through exact unknown acceptance and remount', async () => {
-    const groups = [JSON.parse(readFileSync(new URL('./fixtures/juyiting/retained-text-delivery-v3.json', import.meta.url), 'utf8'))]
+    const groups = [displayFixtures(JSON.parse(readFileSync(new URL('./fixtures/juyiting/retained-text-delivery-v3.json', import.meta.url), 'utf8')))]
     const oldTimeout = globalThis.setTimeout; const oldClear = globalThis.clearTimeout
     globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : oldTimeout(fn, delay, ...args)
     globalThis.clearTimeout = id => { if (id !== 999) oldClear(id) }
@@ -874,9 +875,9 @@ describe('bounty output gallery live owner scope', () => {
         const calls = []
         const chatApi = { get: async path => {
           const request = requests.find(request => path === `/requests/${request.requestId}`)
-          if (request) return { data: { data: request } }
+          if (request) return ((request))
           const raw = sources.find(raw => path === `/conversations/${raw.conversationId}/requests/${raw.requestId}/typed-outcome`)
-          if (raw) return { data: { data: raw } }
+          if (raw) return ((raw))
           throw new Error(`unexpected source read ${path}`)
         }, execute: async () => { throw new Error('must not execute tools or invent output files') } }
         const agentApi = { execute: async options => { calls.push(options); throw new TypeError('unknown acceptance ACK') } }
@@ -917,8 +918,8 @@ describe('bounty output gallery live owner scope', () => {
   it('does not offer fake acceptance for empty, unrelated, or ambiguous deliverables', async () => {
     const oldTimeout = globalThis.setTimeout; const oldClear = globalThis.clearTimeout
     const chatApi = { get: async path => path === '/requests/request-1'
-      ? { data: { data: { requestId: 'request-1', conversationId: 'conversation-1', steps: [step('step-1'), step('step-2')] } } }
-      : { data: { data: [item(path.includes('step-1') ? 'step-1' : 'step-2')] } } }
+      ? (({ requestId: 'request-1', conversationId: 'conversation-1', steps: [step('step-1'), step('step-2')] }))
+      : (([item(path.includes('step-1') ? 'step-1' : 'step-2')])) }
     const Component = new Function('Vue', 'deps', script)(Vue, { useHallSkillResults, skillResultDataText,
       createApi: () => chatApi, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps,
       downloadMimeType, outputDownloadName, currentOutputDelivery, outputAssetPart, completedTextItem, completedExecutionDelivery, outputRequestPending,
@@ -937,7 +938,7 @@ describe('bounty output gallery live owner scope', () => {
     } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
   })
 
-  for (const group of JSON.parse(readFileSync(new URL('./fixtures/juyiting/execution-batch-delivery-v3.json', import.meta.url), 'utf8'))) {
+  for (const group of displayFixtures(JSON.parse(readFileSync(new URL('./fixtures/juyiting/execution-batch-delivery-v3.json', import.meta.url), 'utf8')))) {
     it(`mounted API ${group.mode} text/media delivery freezes exact shown refs on unknown ACK and remount`, async () => {
       const request = raw => ({ requestId: raw.requestId, requestRevision: raw.requestRevision, conversationId: raw.conversationId,
         conversationGeneration: raw.conversationGeneration, state: 'COMPLETED', steps: [], turns: [{ turnId: raw.turnId,
@@ -950,15 +951,15 @@ describe('bounty output gallery live owner scope', () => {
         steps: [{ stepId: 'batch-step', executionId: 'fixture-execution', kind: 'EXECUTE', state: 'OUTPUT_COMMITTED', executionState: 'OUTPUT_COMMITTED',
           taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' }] }
       const outputs = ['bird', 'tree'].map(outputId => { const url = `/chat/requests/${child.requestId}/steps/batch-step/outputs/${outputId}`
-        return { outputId, sha256: zeroDigest, byteLength: 20, contentMimeType: 'image/png', previewUrl: url, downloadUrl: `${url}?download=true`, assetRef: null } })
+        return { outputId, sha256: zeroDigest, byteLength: '20', contentMimeType: 'image/png', previewUrl: url, downloadUrl: `${url}?download=true`, assetRef: null } })
       let addLate = false; const late = { ...child, requestId: 'unlinked-late' }
       const snapshots = [initial, action, child]; const reads = []; const writes = []
       const api = { get: async path => { reads.push(path)
-        if (path.endsWith('/typed-outcome')) return { data: { data: path.includes('/batch-action/') ? group.completed : group.initial } }
-        if (path.endsWith('/outputs')) return { data: { data: path.includes('/unlinked-late/') ? outputs.map(value => ({ ...value,
-          previewUrl: value.previewUrl.replace(child.requestId, 'unlinked-late'), downloadUrl: value.downloadUrl.replace(child.requestId, 'unlinked-late') })) : outputs } }
+        if (path.endsWith('/typed-outcome')) return ((path.includes('/batch-action/') ? group.completed : group.initial))
+        if (path.endsWith('/outputs')) return ((path.includes('/unlinked-late/') ? outputs.map(value => ({ ...value,
+          previewUrl: value.previewUrl.replace(child.requestId, 'unlinked-late'), downloadUrl: value.downloadUrl.replace(child.requestId, 'unlinked-late') })) : outputs))
         const snapshot = [...snapshots, ...(addLate ? [late] : [])].find(value => path === `/requests/${value.requestId}`)
-        if (snapshot) return { data: { data: snapshot } }
+        if (snapshot) return ((snapshot))
         throw new Error('unexpected GET ' + path)
       } }
       const agentApi = { execute: async value => {
@@ -1012,7 +1013,7 @@ describe('bounty output gallery live owner scope', () => {
   }
 
   it('mounted actual media causal edit retains four media sources and freezes the exact mixed acceptance through remount', async () => {
-    const group = JSON.parse(readFileSync(new URL('./fixtures/juyiting/media-basis-delivery-v3.json', import.meta.url), 'utf8'))
+    const group = displayFixtures(JSON.parse(readFileSync(new URL('./fixtures/juyiting/media-basis-delivery-v3.json', import.meta.url), 'utf8')))
     const request = raw => ({ requestId: raw.requestId, requestRevision: raw.requestRevision, conversationId: raw.conversationId,
       conversationGeneration: raw.conversationGeneration, state: 'COMPLETED', steps: [], turns: [{ turnId: raw.turnId,
         requestId: raw.requestId, requestRevision: raw.requestRevision, conversationId: raw.conversationId,
@@ -1027,16 +1028,16 @@ describe('bounty output gallery live owner scope', () => {
     let addLate = false; const late = { ...child, requestId: 'unlinked-mixed-late' }
     const snapshots = [...values.map(request), ...children]; const reads = []; const writes = []
     const api = { get: async path => { reads.push(path)
-      if (path.endsWith('/typed-outcome')) return { data: { data: values.find(value => path.includes(`/requests/${value.requestId}/`)) } }
+      if (path.endsWith('/typed-outcome')) return ((values.find(value => path.includes(`/requests/${value.requestId}/`))))
       if (path.endsWith('/outputs')) {
         const manifest = group.manifests.find(value => path.includes(`/requests/${value.requestId}/`)) || group.manifests[1]
         const requestId = path.includes('/unlinked-mixed-late/') ? late.requestId : manifest.requestId
-        return { data: { data: manifest.outputs.map(output => { const url = `/chat/requests/${requestId}/steps/${manifest.stepId}/outputs/${output.outputId}`
-          return { ...output, previewUrl: url, downloadUrl: `${url}?download=true`, assetRef: null }
-        }) } }
+        return ((manifest.outputs.map(output => { const url = `/chat/requests/${requestId}/steps/${manifest.stepId}/outputs/${output.outputId}`
+          return { ...output, byteLength: String(output.byteLength), previewUrl: url, downloadUrl: `${url}?download=true`, assetRef: null }
+        })))
       }
       const snapshot = [...snapshots, ...(addLate ? [late] : [])].find(value => path === `/requests/${value.requestId}`)
-      if (snapshot) return { data: { data: snapshot } }
+      if (snapshot) return ((snapshot))
       throw new Error('unexpected GET ' + path)
     } }
     const agentApi = { execute: async value => {
@@ -1088,7 +1089,7 @@ describe('bounty output gallery live owner scope', () => {
   })
 
   it('mounted actual individual media edits retain exact remaining sources and freezes the exact mixed acceptance through remount', async () => {
-    const group = JSON.parse(readFileSync(new URL('./fixtures/juyiting/mixed-media-edit-v3.json', import.meta.url), 'utf8'))
+    const group = displayFixtures(JSON.parse(readFileSync(new URL('./fixtures/juyiting/mixed-media-edit-v3.json', import.meta.url), 'utf8')))
     const request = raw => ({ requestId: raw.requestId, requestRevision: raw.requestRevision, conversationId: raw.conversationId,
       conversationGeneration: raw.conversationGeneration, state: 'COMPLETED', steps: [], turns: [{ turnId: raw.turnId,
         requestId: raw.requestId, requestRevision: raw.requestRevision, conversationId: raw.conversationId,
@@ -1102,16 +1103,16 @@ describe('bounty output gallery live owner scope', () => {
     let addLate = false; const late = { ...child, requestId: 'unlinked-mixed-late' }
     const snapshots = [...values.map(request), ...children]; const reads = []; const writes = []
     const api = { get: async path => { reads.push(path)
-      if (path.endsWith('/typed-outcome')) return { data: { data: values.find(value => path.includes(`/requests/${value.requestId}/`)) } }
+      if (path.endsWith('/typed-outcome')) return ((values.find(value => path.includes(`/requests/${value.requestId}/`))))
       if (path.endsWith('/outputs')) {
         const manifest = group.manifests.find(value => path.includes(`/requests/${value.requestId}/`)) || group.manifests[3]
         const requestId = path.includes('/unlinked-mixed-late/') ? late.requestId : manifest.requestId
-        return { data: { data: manifest.outputs.map(output => { const url = `/chat/requests/${requestId}/steps/${manifest.stepId}/outputs/${output.outputId}`
-          return { ...output, previewUrl: url, downloadUrl: `${url}?download=true`, assetRef: null }
-        }) } }
+        return ((manifest.outputs.map(output => { const url = `/chat/requests/${requestId}/steps/${manifest.stepId}/outputs/${output.outputId}`
+          return { ...output, byteLength: String(output.byteLength), previewUrl: url, downloadUrl: `${url}?download=true`, assetRef: null }
+        })))
       }
       const snapshot = [...snapshots, ...(addLate ? [late] : [])].find(value => path === `/requests/${value.requestId}`)
-      if (snapshot) return { data: { data: snapshot } }
+      if (snapshot) return ((snapshot))
       throw new Error('unexpected GET ' + path)
     } }
     const agentApi = { execute: async value => {

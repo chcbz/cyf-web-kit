@@ -1,3 +1,4 @@
+import { validMaterialVersion } from './materialVersion.js'
 const ACKNOWLEDGEMENT = 'UNPRICED_EXTERNAL_ACCOUNT_ONE_IMAGE_REQUEST_ATTEMPT'
 const ASSIGNMENT_FIELDS = ['agentId', 'workflowVersion', 'businessAction', 'expectedTaskVersion', 'requirementRevision', 'requestedOperations', 'initialOperation', 'inputRefs']
 const BINDING_FIELDS = ['bindingId', 'bindingEpoch']
@@ -22,7 +23,7 @@ const canonicalRefs = value => {
   const seen = new Set()
   const refs = []
   for (const item of value) {
-    if (!fields(item, ['fileId', 'version', 'purpose']) || !exactId(item.fileId) || !safeInteger(item.version, 1) ||
+    if (!fields(item, ['fileId', 'version', 'purpose']) || !exactId(item.fileId) || !validMaterialVersion(item.version) ||
       !['INPUT', 'REFERENCE'].includes(item.purpose)) return null
     const identity = JSON.stringify([item.fileId, item.version, item.purpose])
     if (seen.has(identity)) return null

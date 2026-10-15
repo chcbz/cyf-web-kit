@@ -6,7 +6,9 @@ import { createRequire } from 'node:module'
 import * as Vue from 'vue'
 import { ref } from 'vue'
 import { mount } from '@vue/test-utils'
-import { useHallConversation } from '../src/composables/juyiting/useHallConversation.js'
+import { useHallConversation as actualHallConversation } from '../src/composables/juyiting/useHallConversation.js'
+import { currentChatStreamMock } from './fixtures/current-chat-stream-mock.js'
+const useHallConversation = options => actualHallConversation({ ...options, chatApi: currentChatStreamMock(options.chatApi) })
 import { compileScript } from '@vue/compiler-sfc'
 const require = createRequire(import.meta.url)
 const { parse } = require('@vue/compiler-sfc')
@@ -23,7 +25,7 @@ const option = (callee, name) => {
   if (!property) throw new Error(`missing ${callee}.${name}`)
   return script.slice(property.value.start, property.value.end)
 }
-const typedReceipt = (requestId = 'request-typed-1', turnId = 'turn-typed-1') => ({ schemaVersion: 1, intent: 'DISCUSSION', requestId, userMessageId: '100', turnIds: [turnId], state: 'ADMITTED', stateVersion: '0', eventCursor: '1', statusUrl: `/chat/requests/${requestId}`, typedOutcomeUrl: `/chat/conversations/7/requests/${requestId}/typed-outcome`, replay: false, pendingQuestionId: null })
+const typedReceipt = (requestId = 'request-typed-1', turnId = 'turn-typed-1') => ({ schemaVersion: 3, intent: 'DISCUSSION', requestId, userMessageId: '100', turnIds: [turnId], state: 'ADMITTED', stateVersion: '0', eventCursor: '1', statusUrl: `/chat/requests/${requestId}`, typedOutcomeUrl: `/chat/conversations/7/requests/${requestId}/typed-outcome`, replay: false, pendingQuestionId: null })
 const typedRequest = (requestId = 'request-typed-1', turnId = 'turn-typed-1', { state = 'RUNNING', stateVersion = '0', turnState = 'RECEIVED', turnStateVersion = '0', finalMessageId = null } = {}) => ({ requestId, requestRevision: '1', stateVersion, conversationId: '7', conversationGeneration: '1', userMessageId: '100', state, turns: [{ turnId, requestId, requestRevision: '1', stateVersion: turnStateVersion, conversationId: '7', conversationGeneration: '1', targetAgentId: 'agent-1', state: turnState, lastDeltaSeq: '0', finalMessageId }] })
 describe('actual JuyiHall typed natural follow-up routing', () => {
   it('routes the one bounty composer through typed DISCUSSION only when the strict default-off flag is enabled', async () => {
@@ -111,9 +113,9 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
     const selectedTask = ref({ id: 'task-1' }); const selectedAgent = ref({ agentId: 'agent-1', name: '吴用' })
     const requestView = typedRequest()
     const conversation = useHallConversation({ apiStore: { authorizationGeneration: 1, token: async () => null }, chatContext, chatMode: ref('bounty'),
-      chatApi: { list: async (_path, _body, options) => { calls.push('LIST'); options.onSuccess({ data: [{ id: '7', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task-1' }] }) },
-        getById: async (_path, id, options) => { calls.push(`CONTENT:${id}`); options.onSuccess({ data: [{ id: 'message-user-1', senderType: 'user', content: '请画一只鸟' }] }) },
-        get: async path => { calls.push(`GET:${path}`); return { data: { data: requestView } } },
+      chatApi: { list: async (_path, _body, options) => { calls.push('LIST'); options.onSuccess({ items: [{ id: '7', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task-1' }], nextCursor: null, hasMore: false }) },
+        getById: async (_path, id, options) => { calls.push(`CONTENT:${id}`); options.onSuccess(([{ id: 'message-user-1', senderType: 'user', content: '请画一只鸟' }])) },
+        get: async path => { calls.push(`GET:${path}`); return ((requestView)) },
         create: async () => { calls.push('POST'); throw new Error('must not post') } },
       globalStore: { getJiacn: 'owner', user: {} }, log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}), portraitShortName: agent => agent?.name || '', selectedAgent, selectedTask, showToast: () => {} })
     try {
@@ -133,8 +135,8 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
     const calls = []; const chatContext = ref({ conversationScopeType: 'bounty', conversationScopeKey: 'task-1', mode: 'bounty', targetAgentIds: ['agent-1'], targetAgentId: 'agent-1', taskId: 'task-1' })
     const requestView = typedRequest('request-typed-final', 'turn-typed-final', { state: 'COMPLETED', stateVersion: '1', turnState: 'FINAL_PERSISTED', turnStateVersion: '3', finalMessageId: '101' })
     const conversation = useHallConversation({ apiStore: { authorizationGeneration: 1, token: async () => null }, chatContext, chatMode: ref('bounty'),
-      chatApi: { list: async (_path, _body, options) => options.onSuccess({ data: [{ id: '7', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task-1' }] }),
-        getById: async (_path, id, options) => { calls.push(`CONTENT:${id}`); options.onSuccess({ data: [] }) }, get: async path => { calls.push(`GET:${path}`); return { data: { data: requestView } } }, create: async () => { calls.push('POST'); throw new Error('must not post') } },
+      chatApi: { list: async (_path, _body, options) => options.onSuccess({ items: [{ id: '7', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task-1' }], nextCursor: null, hasMore: false }),
+        getById: async (_path, id, options) => { calls.push(`CONTENT:${id}`); options.onSuccess(([])) }, get: async path => { calls.push(`GET:${path}`); return ((requestView)) }, create: async () => { calls.push('POST'); throw new Error('must not post') } },
       globalStore: { getJiacn: 'owner', user: {} }, log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}), portraitShortName: agent => agent?.name || '', selectedAgent: ref({ agentId: 'agent-1', name: '吴用' }), selectedTask: ref({ id: 'task-1' }), showToast: () => {} })
     try {
       expect(await conversation.loadHallMessages()).to.equal(true)
@@ -149,8 +151,8 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
     const calls = []; let requestView = typedRequest('request-typed-progress', 'turn-typed-progress', { state: 'COMPLETED', stateVersion: '2', turnState: 'FINAL_PERSISTED', turnStateVersion: '4', finalMessageId: '101' })
     const chatContext = ref({ conversationScopeType: 'bounty', conversationScopeKey: 'task-1', mode: 'bounty', targetAgentIds: ['agent-1'], targetAgentId: 'agent-1', taskId: 'task-1' })
     const conversation = useHallConversation({ apiStore: { authorizationGeneration: 1, token: async () => null }, chatContext, chatMode: ref('bounty'),
-      chatApi: { list: async (_path, _body, options) => options.onSuccess({ data: [{ id: '7', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task-1' }] }),
-        getById: async (_path, id, options) => { calls.push(`CONTENT:${id}`); options.onSuccess({ data: [] }) }, get: async path => { calls.push(`GET:${path}`); return { data: { data: requestView } } }, create: async () => { calls.push('POST'); throw new Error('must not post') } },
+      chatApi: { list: async (_path, _body, options) => options.onSuccess({ items: [{ id: '7', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task-1' }], nextCursor: null, hasMore: false }),
+        getById: async (_path, id, options) => { calls.push(`CONTENT:${id}`); options.onSuccess(([])) }, get: async path => { calls.push(`GET:${path}`); return ((requestView)) }, create: async () => { calls.push('POST'); throw new Error('must not post') } },
       globalStore: { getJiacn: 'owner', user: {} }, log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}), portraitShortName: agent => agent?.name || '', selectedAgent: ref({ agentId: 'agent-1', name: '吴用' }), selectedTask: ref({ id: 'task-1' }), showToast: () => {} })
     const receipt = typedReceipt('request-typed-progress', 'turn-typed-progress')
     const context = { conversationId: '7', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4', conversationGeneration: '1' }
@@ -171,15 +173,15 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
     const chatContext = ref({ conversationScopeType: 'bounty', conversationScopeKey: 'task-1', mode: 'bounty', targetAgentIds: ['agent-1'], targetAgentId: 'agent-1', taskId: 'task-1' })
     const selectedTask = ref({ id: 'task-1' }); const selectedAgent = ref({ agentId: 'agent-1', name: '吴用' })
     const conversation = useHallConversation({ apiStore: { authorizationGeneration: 1, token: async () => null }, chatContext, chatMode: ref('bounty'),
-      chatApi: { list: async (_path, _body, options) => options.onSuccess({ data: [{ id: '7', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task-1' }] }),
-        getById: async (_path, _id, options) => { contentReads++; options.onSuccess({ data: [] }) },
+      chatApi: { list: async (_path, _body, options) => options.onSuccess({ items: [{ id: '7', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task-1' }], nextCursor: null, hasMore: false }),
+        getById: async (_path, _id, options) => { contentReads++; options.onSuccess(([])) },
         get: () => new Promise(resolve => { resolveRequest = resolve }), create: async () => { posts++; throw new Error('unexpected') } },
       globalStore: { getJiacn: 'owner', user: {} }, log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}), portraitShortName: agent => agent?.name || '', selectedAgent, selectedTask, showToast: () => {} })
     try {
       expect(await conversation.loadHallMessages()).to.equal(true)
       const pending = conversation.adoptTypedDiscussionReceipt({ receipt: typedReceipt('request-typed-late', 'turn-typed-late'), context: { conversationId: '7', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4', conversationGeneration: '1' }, isCurrent: () => true })
       selectedAgent.value = { agentId: 'agent-2', name: '公孙胜' }
-      resolveRequest({ data: { data: typedRequest('request-typed-late', 'turn-typed-late') } })
+      resolveRequest(((typedRequest('request-typed-late', 'turn-typed-late'))))
       expect(await pending).to.equal(false)
       expect(conversation.activeRequest.value).to.equal(null)
       expect(contentReads).to.equal(1); expect(posts).to.equal(0)
@@ -198,8 +200,8 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       let contentReads = 0; let posts = 0; const requestView = typedRequest(); mutate(requestView)
       const chatContext = ref({ conversationScopeType: 'bounty', conversationScopeKey: 'task-1', mode: 'bounty', targetAgentIds: ['agent-1'], targetAgentId: 'agent-1', taskId: 'task-1' })
       const conversation = useHallConversation({ apiStore: { authorizationGeneration: 1, token: async () => null }, chatContext, chatMode: ref('bounty'),
-        chatApi: { list: async (_path, _body, options) => options.onSuccess({ data: [{ id: '7', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task-1' }] }),
-          getById: async (_path, _id, options) => { contentReads++; options.onSuccess({ data: [] }) }, get: async () => ({ data: { data: requestView } }), create: async () => { posts++; throw new Error('unexpected') } },
+        chatApi: { list: async (_path, _body, options) => options.onSuccess({ items: [{ id: '7', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task-1' }], nextCursor: null, hasMore: false }),
+          getById: async (_path, _id, options) => { contentReads++; options.onSuccess(([])) }, get: async () => (((requestView))), create: async () => { posts++; throw new Error('unexpected') } },
         globalStore: { getJiacn: 'owner', user: {} }, log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}), portraitShortName: agent => agent?.name || '', selectedAgent: ref({ agentId: 'agent-1', name: '吴用' }), selectedTask: ref({ id: 'task-1' }), showToast: () => {} })
       try {
         expect(await conversation.loadHallMessages()).to.equal(true)
@@ -220,8 +222,8 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       scenario.mutateRequest?.(requestView); scenario.mutateReceipt?.(receipt)
       const chatContext = ref({ conversationScopeType: 'bounty', conversationScopeKey: 'task-1', mode: 'bounty', targetAgentIds: ['agent-1'], targetAgentId: 'agent-1', taskId: 'task-1' })
       const conversation = useHallConversation({ apiStore: { authorizationGeneration: 1, token: async () => null }, chatContext, chatMode: ref('bounty'),
-        chatApi: { list: async (_path, _body, options) => options.onSuccess({ data: [{ id: '7', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task-1' }] }),
-          getById: async (_path, _id, options) => { contentReads++; options.onSuccess({ data: [] }) }, get: async () => ({ data: { data: requestView } }), create: async () => { posts++; throw new Error('unexpected') } },
+        chatApi: { list: async (_path, _body, options) => options.onSuccess({ items: [{ id: '7', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task-1' }], nextCursor: null, hasMore: false }),
+          getById: async (_path, _id, options) => { contentReads++; options.onSuccess(([])) }, get: async () => (((requestView))), create: async () => { posts++; throw new Error('unexpected') } },
         globalStore: { getJiacn: 'owner', user: {} }, log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}), portraitShortName: agent => agent?.name || '', selectedAgent: ref({ agentId: 'agent-1', name: '吴用' }), selectedTask: ref({ id: 'task-1' }), showToast: () => {} })
       try {
         expect(await conversation.loadHallMessages(), scenario.name).to.equal(true)

@@ -4,7 +4,9 @@ import * as Vue from 'vue'
 import { normalizeHallMessage, appendHallEventMessage } from '../src/composables/juyiting/hallConversationMessages.js'
 import { applyMessagePartEvent, conversationAssetContentPath, mergeMessageParts, safeMediaKind } from '../src/composables/juyiting/hallMessageParts.js'
 import { createHallSseParser } from '../src/composables/juyiting/hallConversationSse.js'
-import { useHallConversation } from '../src/composables/juyiting/useHallConversation.js'
+import { useHallConversation as actualHallConversation } from '../src/composables/juyiting/useHallConversation.js'
+import { currentChatStreamMock, conversationFrame } from './fixtures/current-chat-stream-mock.js'
+const useHallConversation = options => actualHallConversation({ ...options, chatApi: currentChatStreamMock(options.chatApi) })
 
 const image = (revision, changes = {}) => ({ partId: 'img-1', revision: String(revision), kind: 'image', state: 'ready', assetId: 'asset-1', mime: 'image/png', filename: 'bird.png', ...changes })
 const state = () => ({ conversationId: '77', messages: [{ localId: '32', sender: 'AGENT', content: '鸟', parts: [], streaming: false }], isAwaitingReply: false, isStreaming: false, turnStates: new Map() })
@@ -64,8 +66,8 @@ describe('bounty conversation persisted media parts', () => {
   it('uses a single durable SSE cursor, mixed audio/file, and safe MIME preview policy', () => {
     const current = state()
     const cursors = []
-    const parser = createHallSseParser({ conversationId: '77', onEvent: event => appendHallEventMessage(current, event, 'owner').type === 'part', onCursor: value => cursors.push(value), onInvalid: reason => { throw new Error(reason) } })
-    parser.push('id: 42\ndata: {"type":"part.ready","conversationId":"77","eventSequence":"42","messageId":"32","part":{"partId":"sound","revision":"1","kind":"audio","state":"ready","assetId":"audio-2","mime":"audio/mpeg"}}\n\n')
+    const parser = createHallSseParser({ conversationId: '77', requestId: 'test-events', onEvent: event => appendHallEventMessage(current, event, 'owner').type === 'part', onCursor: value => cursors.push(value), onInvalid: reason => { throw new Error(reason) } })
+    parser.push(conversationFrame({ type: 'part.ready', conversationId: '77', eventSequence: '42', messageId: '32', part: { partId: 'sound', revision: '1', kind: 'audio', state: 'ready', assetId: 'audio-2', mime: 'audio/mpeg' } }, '42'))
     expect(cursors).to.deep.equal(['42'])
     expect(safeMediaKind(current.messages[0].parts[0])).to.equal('audio')
     expect(safeMediaKind({ kind: 'image', mime: 'image/svg+xml' })).to.equal('file')
@@ -96,7 +98,7 @@ describe('bounty conversation persisted media parts', () => {
     try {
       conversation.conversationId.value = '77'
       conversation.messages.value.push(state().messages[0])
-      expect(await conversation.sendHallMessage({ content: '改成蓝色' })).to.equal(true)
+      expect(await conversation.sendHallMessage({ content: '改成蓝色' })).to.equal(false)
       const persisted = conversation.messages.value.find(message => message.localId === '32')
       expect(persisted.parts).to.have.length(1)
       expect(persisted.parts[0]).to.include({ assetId: 'asset-1', state: 'ready', revision: '1' })

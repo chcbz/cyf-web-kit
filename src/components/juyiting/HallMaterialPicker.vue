@@ -78,6 +78,7 @@
 </template>
 
 <script setup>
+import { validMaterialVersion } from '../../composables/juyiting/materialVersion.js'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { savePersonalWorkspaceBlob, usePersonalWorkspace } from '@/composables/usePersonalWorkspace'
 
@@ -155,8 +156,8 @@ const previewSelectedMaterial = async material => {
 const stageQuickMaterial = () => {
   if (props.disabled || !materialPickerOpen.value) return
   const detail = pickerDetail.value
-  const version = Number(pickerVersion.value)
-  if (!detail || !Number.isSafeInteger(version) || !detail.versions.some(item => item.version === version)) return
+  const version = pickerVersion.value
+  if (!detail || !validMaterialVersion(version) || !detail.versions.some(item => item.version === version)) return
   const material = { fileId: detail.file.fileId, version, displayName: detail.file.displayName, contentMimeType: detail.versions.find(item => item.version === version).contentMimeType }
   const others = draftMaterials.value.filter(item => materialKey(item) !== materialKey(material))
   if (others.length >= 32) { workspace.error.value = '最多添加 32 份资料。'; return }

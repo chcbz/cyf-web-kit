@@ -1,7 +1,9 @@
 import { getHallCapabilities } from './fixtures/hall-current-protocol.js'
 import { expect } from 'chai'
 import { ref } from 'vue'
-import { useHallConversation } from '../src/composables/juyiting/useHallConversation.js'
+import { useHallConversation as actualHallConversation } from '../src/composables/juyiting/useHallConversation.js'
+import { currentChatStreamMock, conversationFrame } from './fixtures/current-chat-stream-mock.js'
+const useHallConversation = options => actualHallConversation({ ...options, chatApi: currentChatStreamMock(options.chatApi) })
 import { stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 import { createHallVoiceReplyCorrelation } from '../src/composables/juyiting/hallVoiceReplyCorrelation.js'
 import {
@@ -68,8 +70,8 @@ describe('useHallConversation scoped message loading', () => {
           }
         },
         chatApi: {
-          list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation()] }),
-          getById: async (_path, _id, options) => options.onSuccess({ data: [] })
+          list: async (_path, _payload, options) => options.onSuccess(({ items: [scopedConversation()], nextCursor: null, hasMore: false })),
+          getById: async (_path, _id, options) => options.onSuccess(([]))
         },
         chatContext,
         chatMode: ref('public'),
@@ -115,8 +117,8 @@ describe('useHallConversation scoped message loading', () => {
       const conversation = useHallConversation({
         apiStore: { token: async () => 'token', authorizationGeneration: 1 },
         chatApi: {
-          list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation()] }),
-          getById: async (_path, _id, options) => { contentLoads += 1; options.onSuccess({ data: [] }) }
+          list: async (_path, _payload, options) => options.onSuccess(({ items: [scopedConversation()], nextCursor: null, hasMore: false })),
+          getById: async (_path, _id, options) => { contentLoads += 1; options.onSuccess(([])) }
         },
         chatContext: ref({ conversationScopeType: 'public', conversationScopeKey: 'public', mode: 'public', participantAgentIds: [], targetAgentIds: [] }),
         chatMode: ref('public'), globalStore: { getJiacn: 'jia-user', user: {} },
@@ -160,8 +162,8 @@ describe('useHallConversation scoped message loading', () => {
           beginAuthorization: async () => { authorizationCount += 1 }
         },
         chatApi: {
-          list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation()] }),
-          getById: async (_path, _id, options) => options.onSuccess({ data: [] })
+          list: async (_path, _payload, options) => options.onSuccess(({ items: [scopedConversation()], nextCursor: null, hasMore: false })),
+          getById: async (_path, _id, options) => options.onSuccess(([]))
         },
         chatContext: ref({
           conversationScopeType: 'public',
@@ -213,7 +215,7 @@ describe('useHallConversation scoped message loading', () => {
       chatApi: {
         list: async (_path, payload, options) => {
           listPayloads.push(payload)
-          await options.onSuccess({ data: [] })
+          await options.onSuccess(({ items: [], nextCursor: null, hasMore: false }))
         },
         getById: async () => {
           throw new Error('content should not load without a scoped conversation')
@@ -626,19 +628,19 @@ describe('useHallConversation authenticated public restore', () => {
     showToast: () => {}
   })
 
-  it('restores a safe numeric backend Long using exact public scope and no trusted local jiacn', async () => {
+  it('restores exact decimal-string backend IDs using exact public scope and no trusted local jiacn', async () => {
     const payloads = []
     const contentIds = []
     const conversation = createConversation({
       chatApi: {
         list: async (_path, payload) => {
           payloads.push(payload)
-          const id = payloads.length === 1 ? 1001 : '9223372036854775807'
-          return { data: { data: [scopedConversation(id)] } }
+          const id = payloads.length === 1 ? '1001' : '9223372036854775807'
+          return { items: [scopedConversation(id)], nextCursor: null, hasMore: false }
         },
         getById: async (_path, id, options) => {
           contentIds.push(id)
-          await options.onSuccess({ data: [] })
+          await options.onSuccess(([]))
         }
       }
     })
@@ -662,7 +664,7 @@ describe('useHallConversation authenticated public restore', () => {
       let contentCalls = 0
       const conversation = createConversation({
         chatApi: {
-          list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation(id)] }),
+          list: async (_path, _payload, options) => options.onSuccess(({ items: [scopedConversation(id)], nextCursor: null, hasMore: false })),
           getById: async () => { contentCalls += 1 }
         }
       })
@@ -683,7 +685,7 @@ describe('useHallConversation authenticated public restore', () => {
       let contentCalls = 0
       const conversation = createConversation({
         chatApi: {
-          list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation(1001, overrides)] }),
+          list: async (_path, _payload, options) => options.onSuccess(({ items: [scopedConversation(1001, overrides)], nextCursor: null, hasMore: false })),
           getById: async () => { contentCalls += 1 }
         }
       })
@@ -704,7 +706,7 @@ describe('useHallConversation authenticated public restore', () => {
         list: async (_path, _payload, options) => {
           listCalls += 1
           await gate.promise
-          await options.onSuccess({ data: [scopedConversation(1001)] })
+          await options.onSuccess(({ items: [scopedConversation('1001')], nextCursor: null, hasMore: false }))
         },
         getById: async () => { contentCalls += 1 }
       }
@@ -731,12 +733,12 @@ describe('useHallConversation authenticated public restore', () => {
       chatApi: {
         list: async () => {
           listCalls += 1
-          return { data: { data: listCalls === 1 ? [] : [scopedConversation(1001)] } }
+          return (({ items: listCalls === 1 ? [] : [scopedConversation('1001')], nextCursor: null, hasMore: false }))
         },
         getById: async (_path, _id, options) => {
           contentCalls += 1
           await contentGate.promise
-          options.onSuccess({ data: [] })
+          options.onSuccess(([]))
         }
       }
     })
@@ -761,7 +763,7 @@ describe('useHallConversation authenticated public restore', () => {
       chatApi: {
         list: async () => {
           await gate.promise
-          return { data: { data: [scopedConversation(1001)] } }
+          return (({ items: [scopedConversation('1001')], nextCursor: null, hasMore: false }))
         },
         getById: async () => { contentCalls += 1 }
       }
@@ -784,12 +786,12 @@ describe('useHallConversation authenticated public restore', () => {
       chatApi: {
         list: async () => {
           listCalls += 1
-          return { data: { data: [scopedConversation(1001)] } }
+          return (({ items: [scopedConversation('1001')], nextCursor: null, hasMore: false }))
         },
         getById: async (_path, _id, options) => {
           contentCalls += 1
           await gate.promise
-          options.onSuccess({ data: [{ id: '9', senderType: 'agent', content: 'stale' }] })
+          options.onSuccess(([{ id: '9', senderType: 'agent', content: 'stale' }]))
         }
       }
     })
@@ -824,7 +826,7 @@ describe('useHallConversation finalized reply routing', () => {
     const originalClearTimeout = window.clearTimeout
     const originalFetch = global.fetch
     const timers = []
-    let sseController = null
+    let sseController = null; let eventRequestId
     let contentCalls = 0
     window.setTimeout = (callback, delay) => {
       const timer = { callback, delay, cleared: false }
@@ -833,9 +835,9 @@ describe('useHallConversation finalized reply routing', () => {
     }
     window.clearTimeout = timer => { if (timer) timer.cleared = true }
     if (duplicatePath === 'live_sse') {
-      global.fetch = async () => new Response(new ReadableStream({
+      global.fetch = async (_url, options) => { eventRequestId = new Headers(options.headers).get('X-Request-Id'); return new Response(new ReadableStream({
         start (controller) { sseController = controller }
-      }), { status: 200, headers: { 'content-type': 'text/event-stream' } })
+      }), { status: 200, headers: { 'content-type': 'text/event-stream', 'X-Request-Id': eventRequestId } }) }
     }
 
     const finalConversationId = existingConversationId || 'conversation-new-9223372036854775807'
@@ -851,7 +853,7 @@ describe('useHallConversation finalized reply routing', () => {
       conversation = useHallConversation({
         apiStore: { token: async () => duplicatePath === 'live_sse' ? 'token' : null },
         chatApi: {
-          list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation(existingConversationId)] }),
+          list: async (_path, _payload, options) => options.onSuccess(({ items: [scopedConversation(existingConversationId)], nextCursor: null, hasMore: false })),
           get: getHallCapabilities,
           create: async (_path, _payload, options) => {
             const finalEvent = JSON.stringify({
@@ -872,7 +874,7 @@ describe('useHallConversation finalized reply routing', () => {
             }
 
             if (duplicatePath === 'live_sse') {
-              sseController.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+              sseController.enqueue(new TextEncoder().encode(conversationFrame({
                 type: 'agent_message',
                 conversationId: finalConversationId,
                 messageId: finalMessageId,
@@ -880,8 +882,8 @@ describe('useHallConversation finalized reply routing', () => {
                 senderType: 'agent',
                 senderName: '吴用',
                 content: '实时副本残片',
-                timestamp: 1787999999999
-              })}\n`))
+                timestamp: 1787999999999, eventSequence: '1', eventVersion: '1'
+              }, '1', eventRequestId)))
               sseController.close()
               await flushMicrotasks()
               expect(callbacks, 'live SSE duplicate must remain pending during the built-in turn').to.have.length(0)
@@ -906,14 +908,14 @@ describe('useHallConversation finalized reply routing', () => {
             expect(id).to.equal(finalConversationId)
             contentCalls += 1
             const isInitialSseLoad = duplicatePath === 'live_sse' && contentCalls === 1
-            await options.onSuccess({ data: isInitialSseLoad ? [] : [{
+            await options.onSuccess((isInitialSseLoad ? [] : [{
               id: finalMessageId,
               senderType: 'agent',
               senderName: '吴用',
               content: '轮询副本残片',
               createTime: 1787999999999,
               metadata: JSON.stringify({ agentId: 'wuyong' })
-            }] })
+            }]))
           }
         },
         chatContext: ref({
@@ -1056,12 +1058,12 @@ describe('Hall conversation identity lifecycle', () => {
       chatApi: {
         list: async (_path, _payload, options) => {
           listOptions = options
-          await options.onSuccess({ data: [scopedConversation()] })
+          await options.onSuccess(({ items: [scopedConversation()], nextCursor: null, hasMore: false }))
         },
         getById: async (_path, _id, options) => {
           contentOptions = options
           await new Promise(resolve => { resolveContent = resolve })
-          options.onSuccess({ data: [{ id: '9', senderType: 'agent', content: 'late reply' }] })
+          options.onSuccess(([{ id: '9', senderType: 'agent', content: 'late reply' }]))
         }
       },
       chatContext: ref({ conversationScopeType: 'public', conversationScopeKey: 'public', targetAgentIds: [] }),
@@ -1210,11 +1212,11 @@ describe('useHallConversation history selection', () => {
       chatApi: {
         list: async (path, payload, options) => {
           calls.push({ path, payload })
-          options.onSuccess({ data: [
+          options.onSuccess(({ items: [
             scopedConversation('1002', { title: '厅前旧议', updateTime: 1782000000000 }),
             scopedConversation('1003', { conversationScopeType: 'task_thread', conversationScopeKey: 'task:2', title: '保留任务线' }),
             scopedConversation('1004', { conversationType: 'normal', title: '非聚义厅' })
-          ] })
+          ], nextCursor: null, hasMore: false }))
         }
       }
     })
@@ -1239,10 +1241,10 @@ describe('useHallConversation history selection', () => {
     const contentIds = []
     const conversation = createConversation({
       chatApi: {
-        list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation('1002', { title: '旧议' })] }),
+        list: async (_path, _payload, options) => options.onSuccess(({ items: [scopedConversation('1002', { title: '旧议' })], nextCursor: null, hasMore: false })),
         getById: async (_path, id, options) => {
           contentIds.push(id)
-          options.onSuccess({ data: [{ id: '99', senderType: 'user', content: '旧话', createTime: 1 }] })
+          options.onSuccess(([{ id: '99', senderType: 'user', content: '旧话', createTime: 1 }]))
         }
       }
     })
@@ -1267,7 +1269,7 @@ describe('useHallConversation history selection', () => {
 
     const loading = conversation.loadHallConversationHistory()
     chatContext.value = { conversationScopeType: 'bounty', conversationScopeKey: 'task:2', mode: 'bounty', targetAgentIds: ['wuyong'] }
-    request.resolve({ data: { data: [scopedConversation('1002', { title: '旧厅议' })] } })
+    request.resolve((([scopedConversation('1002', { title: '旧厅议' })])))
     await loading
 
     expect(conversation.conversationHistory.value).to.deep.equal([])
@@ -1281,10 +1283,10 @@ describe('useHallConversation history selection', () => {
     const conversation = createConversation({
       chatContext,
       chatApi: {
-        list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation('1002', { title: '旧议' })] }),
+        list: async (_path, _payload, options) => options.onSuccess(({ items: [scopedConversation('1002', { title: '旧议' })], nextCursor: null, hasMore: false })),
         getById: async (_path, _id, options) => {
           await request.promise
-          options.onSuccess({ data: [{ id: '99', senderType: 'user', content: '过期旧话', createTime: 1 }] })
+          options.onSuccess(([{ id: '99', senderType: 'user', content: '过期旧话', createTime: 1 }]))
         }
       }
     })
@@ -1348,7 +1350,7 @@ describe('useHallConversation history remediation', () => {
         list: async (_path, payload, options) => {
           pageCalls.push(payload.pageNum)
           const rows = payload.pageNum === 1 ? firstPage : (payload.pageNum === 2 ? secondPage : [])
-          options.onSuccess({ data: rows, total: 100, pageNum: 1 })
+          options.onSuccess({ items: rows, total: 199, pageNum: payload.pageNum, pageSize: payload.pageSize, hasMore: payload.pageNum < 3 })
         }
       }
     })
@@ -1374,7 +1376,7 @@ describe('useHallConversation history remediation', () => {
           const rows = listCalls === 1
             ? [scopedConversation('1002', { title: '待删除旧议' }), scopedConversation('1003', { title: '保留旧议' })]
             : [scopedConversation('1003', { title: '保留旧议' })]
-          options.onSuccess({ data: rows })
+          options.onSuccess({ items: rows, nextCursor: null, hasMore: false })
         },
         delete: async (path, id, options) => {
           deleteCalls.push({ path, id, signal: options.signal })
@@ -1402,7 +1404,7 @@ describe('useHallConversation history remediation', () => {
       chatApi: {
         list: async (_path, _payload, options) => {
           listCalls += 1
-          options.onSuccess({ data: listCalls === 1 ? [scopedConversation('1002', { title: '删除中旧议' })] : [] })
+          options.onSuccess(({ items: listCalls === 1 ? [scopedConversation('1002', { title: '删除中旧议' })] : [], nextCursor: null, hasMore: false }))
         },
         delete: async () => deletion.promise,
         get: getHallCapabilities,
@@ -1434,10 +1436,10 @@ describe('useHallConversation history remediation', () => {
       chatApi: {
         list: async (_path, _payload, options) => {
           listCalls += 1
-          options.onSuccess({ data: listCalls === 1 ? [scopedConversation('1002', { title: '当前旧议' })] : [] })
+          options.onSuccess(({ items: listCalls === 1 ? [scopedConversation('1002', { title: '当前旧议' })] : [], nextCursor: null, hasMore: false }))
         },
         getById: async (_path, _id, options) => {
-          options.onSuccess({ data: [{ id: '99', senderType: 'user', content: '即将删除', createTime: 1 }] })
+          options.onSuccess(([{ id: '99', senderType: 'user', content: '即将删除', createTime: 1 }]))
         },
         delete: async () => {}
       }
@@ -1459,7 +1461,7 @@ describe('useHallConversation history remediation', () => {
   it('keeps the history item visible when deletion fails', async () => {
     const conversation = createConversation({
       chatApi: {
-        list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation('1002', { title: '不可删旧议' })] }),
+        list: async (_path, _payload, options) => options.onSuccess(({ items: [scopedConversation('1002', { title: '不可删旧议' })], nextCursor: null, hasMore: false })),
         delete: async () => { throw new Error('delete failed') }
       }
     })
@@ -1480,7 +1482,7 @@ describe('useHallConversation history remediation', () => {
       chatApi: {
         list: async (_path, _payload, options) => {
           listCalls += 1
-          options.onSuccess({ data: [scopedConversation('1002', { title: '需重取旧议' })] })
+          options.onSuccess(({ items: [scopedConversation('1002', { title: '需重取旧议' })], nextCursor: null, hasMore: false }))
         },
         getById: async (_path, id, options) => {
           contentAttempts += 1
@@ -1489,7 +1491,7 @@ describe('useHallConversation history remediation', () => {
             return
           }
           expect(id).to.equal('1002')
-          options.onSuccess({ data: [{ id: '99', senderType: 'user', content: '重取成功', createTime: 1 }] })
+          options.onSuccess(([{ id: '99', senderType: 'user', content: '重取成功', createTime: 1 }]))
         },
         get: getHallCapabilities,
         create: async () => { throw new Error('send must remain blocked after selected content failure') }
@@ -1516,7 +1518,7 @@ describe('useHallConversation history remediation', () => {
     expect(conversation.conversationHistoryLoading.value).to.equal(true)
     conversation.newHallConversation()
     expect(conversation.conversationHistoryLoading.value).to.equal(false)
-    request.resolve({ data: { data: [scopedConversation('1002', { title: '过期旧议' })] } })
+    request.resolve((([scopedConversation('1002', { title: '过期旧议' })])))
     await loading
 
     expect(conversation.conversationHistory.value).to.deep.equal([])
@@ -1533,8 +1535,8 @@ describe('useHallConversation event-stream recovery policy', () => {
   const createConversation = ({ apiStore = { token: async () => 'token' } } = {}) => useHallConversation({
     apiStore,
     chatApi: {
-      list: async (_path, _payload, options) => options.onSuccess({ data: [scopedConversation()] }),
-      getById: async (_path, _id, options) => options.onSuccess({ data: [] })
+      list: async (_path, _payload, options) => options.onSuccess(({ items: [scopedConversation()], nextCursor: null, hasMore: false })),
+      getById: async (_path, _id, options) => options.onSuccess(([]))
     },
     chatContext: ref({ conversationScopeType: 'public', conversationScopeKey: 'public', mode: 'public', participantAgentIds: [], targetAgentIds: [] }),
     chatMode: ref('public'),
@@ -1659,21 +1661,21 @@ describe('Hall stream transport failure read-only recovery', () => {
     let conversation
     try {
       conversation = options({
-        list: async (_url, _search, opts) => opts.onSuccess({ data: [scopedConversation('1001')] }),
+        list: async (_url, _search, opts) => opts.onSuccess(({ items: [scopedConversation('1001')], nextCursor: null, hasMore: false })),
         getById: async (_url, id, opts) => {
           expect(id).to.equal('1001')
           readCount += 1
-          opts.onSuccess({ data: [{ id: 'reply-old', senderType: 'agent', content: '旧回话' },
-            ...(persistedFinal ? [{ id: '902', senderType: 'agent', content: '吴用本次完整回话' }] : [])] })
+          opts.onSuccess(([{ id: 'reply-old', senderType: 'agent', content: '旧回话' },
+            ...(persistedFinal ? [{ id: '902', senderType: 'agent', content: '吴用本次完整回话' }] : [])]))
         },
         get: async path => {
           if (path === '/capabilities') return getHallCapabilities(path)
           expect(path).to.equal(`/requests/${conversation.activeRequest.value.requestId}`)
-          return { data: { requestId: conversation.activeRequest.value.requestId, requestRevision: '1',
+          return ({ requestId: conversation.activeRequest.value.requestId, requestRevision: '1',
             conversationId: '1001', conversationGeneration: '1', state: requestComplete ? 'COMPLETED' : 'RUNNING', stateVersion: requestComplete ? '2' : '1',
             turns: [{ turnId: 'recovery-turn', requestId: conversation.activeRequest.value.requestId, requestRevision: '1',
               conversationId: '1001', conversationGeneration: '1', targetAgentId: 'a', lastDeltaSeq: '0', finalMessageId: requestComplete ? '902' : null,
-              state: requestComplete ? 'PUBLISHED' : 'GENERATING', stateVersion: requestComplete ? '2' : '1' }] } }
+              state: requestComplete ? 'PUBLISHED' : 'GENERATING', stateVersion: requestComplete ? '2' : '1' }] })
         },
         create: async (_url, _payload, opts) => {
           postCount += 1

@@ -33,9 +33,9 @@ const harness = (overrides = {}) => {
   const api = {
     get: async (path, query, opts) => {
       calls.push(['get', path, opts?.headers?.['Idempotency-Key']])
-      if (path.endsWith('/requirements/current')) return { data: req() }
-      if (path.endsWith('/point-and-deliberate/request')) return { data: projection() }
-      return { data: sent ? canonical() : task() }
+      if (path.endsWith('/requirements/current')) return (req())
+      if (path.endsWith('/point-and-deliberate/request')) return (projection())
+      return (sent ? canonical() : task())
     },
     create: async (path, body, opts) => {
       calls.push(['post', path, copy(body), opts.headers['Idempotency-Key']])
@@ -44,7 +44,7 @@ const harness = (overrides = {}) => {
       expect(original.record.key).to.equal(opts.headers['Idempotency-Key'])
       expect(original.record.body).to.deep.equal(body)
       sent = true
-      return { data: grant() }
+      return (grant())
     }, ...overrides.api
   }
   const flow = useHallPointAndStart({ agentApi: api, actorScopeKey: scope, storage: memory,
@@ -74,13 +74,13 @@ describe('persisted exact point-and-start source contract', () => {
   })
 
   it('preserves exact fixed-version optional reference with metadata/hash projected by server', async () => {
-    const input = { fileId: 'image-1', version: 2, purpose: 'REFERENCE' }
+    const input = { fileId: 'image-1', version: '2', purpose: 'REFERENCE' }
     const facts = { ...input, contentMimeType: 'image/png', byteLength: '12', contentHash: 'b'.repeat(64) }
     let taskReads = 0
     const h = harness({ api: {
-      get: async path => ({ data: path.endsWith('/requirements/current') ? req() : path.endsWith('/point-and-deliberate/request')
-        ? { ...projection(), inputs: [facts] } : taskReads++ === 0 ? task() : canonical() }),
-      create: async (path, body) => { h.calls.push(['post', path, copy(body)]); return { data: { ...grant(), inputs: [{ ...facts, byteLength: '12' }] } } }
+      get: async path => ((path.endsWith('/requirements/current') ? req() : path.endsWith('/point-and-deliberate/request')
+        ? { ...projection(), inputs: [facts] } : taskReads++ === 0 ? task() : canonical())),
+      create: async (path, body) => { h.calls.push(['post', path, copy(body)]); return ({ ...grant(), inputs: [{ ...facts, byteLength: '12' }] }) }
     } })
     expect(await h.flow.start({ ...args(), inputRefs: [input] })).to.equal(true)
     expect(h.calls.find(c => c[0] === 'post')[2]).to.deep.equal(record().body)
@@ -102,7 +102,7 @@ describe('persisted exact point-and-start source contract', () => {
     ['bad source', r => { r.source = 'TASK_PLAN' }]
   ]) it(`never writes with ${name}`, async () => {
     const value = req(); mutate(value)
-    const h = harness({ api: { get: async path => ({ data: path.endsWith('/requirements/current') ? value : task() }) } })
+    const h = harness({ api: { get: async path => ((path.endsWith('/requirements/current') ? value : task())) } })
     expect(await h.flow.start(args())).to.equal(false)
     expect(h.calls.filter(c => c[0] === 'post')).to.have.length(0)
     expect(h.seed(record()).state).to.equal('PRESENT') // no unsafe intent was persisted
@@ -135,7 +135,7 @@ describe('persisted exact point-and-start source contract', () => {
     expect(h.flow.state.value.status).to.equal('UNKNOWN')
     const original = copy(h.flow.state.value.intent)
     h.flow.dispose()
-    const next = harness({ storage: memory, api: { get: async path => ({ data: path.endsWith('/point-and-deliberate/request') ? projection() : canonical() }) } })
+    const next = harness({ storage: memory, api: { get: async path => ((path.endsWith('/point-and-deliberate/request') ? projection() : canonical())) } })
     expect(await next.flow.checkOriginal('task-1')).to.equal(true)
     expect(next.calls.every(c => c[0] === 'get')).to.equal(true)
     expect(next.flow.state.value.intent.body).to.deep.equal(original.body)
@@ -163,7 +163,7 @@ describe('persisted exact point-and-start source contract', () => {
       if (path.endsWith('/point-and-deliberate/request') && reads++ === 0) {
         const e = new Error('not yet observed'); e.status = 404; e.code = 'ASSIGNMENT_OPERATION_UNAVAILABLE'; throw e
       }
-      return { data: path.endsWith('/point-and-deliberate/request') ? projection() : canonical() }
+      return (path.endsWith('/point-and-deliberate/request') ? projection() : canonical())
     } } }); h.seed()
     expect(await h.flow.resumeOriginal('task-1')).to.equal(true)
     expect(h.calls.filter(c => c[0] === 'post')).to.have.length(1)
@@ -171,7 +171,7 @@ describe('persisted exact point-and-start source contract', () => {
   })
 
   it('explicit recovery replays persisted reference versions even when an external catalog could have changed', async () => {
-    const input = { fileId: 'image-original', version: 2, purpose: 'REFERENCE' }
+    const input = { fileId: 'image-original', version: '2', purpose: 'REFERENCE' }
     const facts = { ...input, contentMimeType: 'image/png', byteLength: '12', contentHash: 'c'.repeat(64) }
     const original = record()
     let actionReads = 0
@@ -180,11 +180,11 @@ describe('persisted exact point-and-start source contract', () => {
         if (path.endsWith('/point-and-deliberate/request') && actionReads++ === 0) {
           throw Object.assign(new Error('not yet observed'), { status: 404, code: 'ASSIGNMENT_OPERATION_UNAVAILABLE' })
         }
-        return { data: path.endsWith('/point-and-deliberate/request') ? { ...projection(), inputs: [facts] } : canonical() }
+        return (path.endsWith('/point-and-deliberate/request') ? { ...projection(), inputs: [facts] } : canonical())
       },
       create: async (path, body, options) => {
         h.calls.push(['post', path, copy(body), options.headers['Idempotency-Key']])
-        return { data: { ...grant(), inputs: [{ ...facts, byteLength: '12' }] } }
+        return ({ ...grant(), inputs: [{ ...facts, byteLength: '12' }] })
       }
     } })
     h.seed(original)
@@ -204,7 +204,7 @@ describe('persisted exact point-and-start source contract', () => {
 
   it('PENDING preparation uses no new first-turn/send/POST', async () => {
     const value = { ...projection(), bootstrapState: 'PENDING', stateVersion: '0', conversationId: null, initialRequestId: null }
-    const h = harness({ api: { get: async () => ({ data: value }) } }); h.seed()
+    const h = harness({ api: { get: async () => ((value)) } }); h.seed()
     expect(await h.flow.resumeOriginal('task-1')).to.equal(true)
     expect(await h.flow.checkOriginal('task-1')).to.equal(true)
     expect(h.flow.state.value.status).to.equal('PREPARING')
@@ -215,7 +215,7 @@ describe('persisted exact point-and-start source contract', () => {
   })
 
   it('reassigned/revoked historical original can be read but never automatically attached', async () => {
-    const h = harness({ api: { get: async () => ({ data: { ...projection(), grantState: 'REVOKED', grantVersion: '2', currentAssignment: false } }) } }); h.seed()
+    const h = harness({ api: { get: async () => (({ ...projection(), grantState: 'REVOKED', grantVersion: '2', currentAssignment: false })) } }); h.seed()
     expect(await h.flow.checkOriginal('task-1')).to.equal(true)
     expect(h.flow.state.value.status).to.equal('HISTORICAL')
     expect(h.admitted).to.have.length(0)
@@ -226,7 +226,7 @@ describe('persisted exact point-and-start source contract', () => {
     const h = harness({ api: { create: async () => new Promise(done => { resolve = done }) } })
     const sending = h.flow.start(args()); await pause()
     h.scope.value = 'owner-b/client-b'
-    resolve({ data: grant() })
+    resolve((grant()))
     expect(await sending).to.equal(false)
     expect(h.flow.state.value.status).to.equal('IDLE')
     expect(h.admitted).to.have.length(0)
@@ -239,13 +239,13 @@ describe('persisted exact point-and-start source contract', () => {
     let resolve, reads = 0
     const h = harness({ api: { get: async path => {
       if (path.endsWith('/requirements/current')) return new Promise(done => { resolve = done })
-      return { data: path.endsWith('/point-and-deliberate/request') ? projection() : reads++ === 0 ? task() : canonical() }
+      return (path.endsWith('/point-and-deliberate/request') ? projection() : reads++ === 0 ? task() : canonical())
     } } })
     const original = args()
     const running = h.flow.start(original)
     original.requestedOperations = ['GENERATE_IMAGE']
-    original.inputRefs = [{ fileId: 'new', version: 1, purpose: 'REFERENCE' }]
-    resolve({ data: req() })
+    original.inputRefs = [{ fileId: 'new', version: '1', purpose: 'REFERENCE' }]
+    resolve((req()))
     expect(await running).to.equal(true)
     expect(h.calls.find(c => c[0] === 'post')[2]).to.deep.equal(record().body)
   })
@@ -256,7 +256,7 @@ describe('persisted exact point-and-start source contract', () => {
     const original = args()
     const running = h.flow.start(original)
     original.agent.agentId = 'other'
-    resolve({ data: req() })
+    resolve((req()))
     expect(await running).to.equal(false)
     expect(h.calls.filter(c => c[0] === 'post')).to.have.length(0)
   })
@@ -264,11 +264,11 @@ describe('persisted exact point-and-start source contract', () => {
   it('canonical read failure retains confirmed grant and uses original key for a pure read retry', async () => {
     let reads = 0
     const h = harness({ api: { get: async path => {
-      if (path.endsWith('/requirements/current')) return { data: req() }
-      if (path.endsWith('/point-and-deliberate/request')) return { data: projection() }
-      if (reads++ === 0) return { data: task() }
+      if (path.endsWith('/requirements/current')) return (req())
+      if (path.endsWith('/point-and-deliberate/request')) return (projection())
+      if (reads++ === 0) return (task())
       if (reads === 2) throw new Error('snapshot offline')
-      return { data: canonical() }
+      return (canonical())
     } } })
     expect(await h.flow.start(args())).to.equal(false)
     expect(h.flow.state.value.status).to.equal('ADMITTED')
@@ -280,9 +280,9 @@ describe('persisted exact point-and-start source contract', () => {
 
   it('newer canonical root requires fresh original-assignment verification before attaching', async () => {
     let actionReads = 0
-    const h = harness({ api: { get: async path => ({ data: path.endsWith('/point-and-deliberate/request')
+    const h = harness({ api: { get: async path => ((path.endsWith('/point-and-deliberate/request')
       ? { ...projection(), taskVersion: actionReads++ === 0 ? '7' : '8' }
-      : { ...canonical(), taskVersion: '8' } }) } }); h.seed()
+      : { ...canonical(), taskVersion: '8' })) } }); h.seed()
     expect(await h.flow.checkOriginal('task-1')).to.equal(true)
     expect(actionReads).to.equal(2)
     expect(h.admitted[0].task.taskVersion).to.equal('8')
@@ -291,9 +291,9 @@ describe('persisted exact point-and-start source contract', () => {
 
   it('same-target but changed assignment epoch fails fresh read and never attaches an old request', async () => {
     let actionReads = 0
-    const h = harness({ api: { get: async path => ({ data: path.endsWith('/point-and-deliberate/request')
+    const h = harness({ api: { get: async path => ((path.endsWith('/point-and-deliberate/request')
       ? { ...projection(), taskVersion: actionReads++ === 0 ? '7' : '8', currentAssignment: actionReads === 1 }
-      : { ...canonical(), taskVersion: '8' } }) } }); h.seed()
+      : { ...canonical(), taskVersion: '8' })) } }); h.seed()
     expect(await h.flow.checkOriginal('task-1')).to.equal(false)
     expect(h.admitted).to.have.length(0)
     expect(h.calls.filter(c => c[0] === 'post')).to.have.length(0)
@@ -308,7 +308,7 @@ describe('persisted exact point-and-start source contract', () => {
   }
 
   it('bad grant ACK retains original intent and never copies it into task or blindly replays', async () => {
-    const h = harness({ api: { create: async () => ({ data: { ...grant(), targetAgentId: 'foreign' } }) } })
+    const h = harness({ api: { create: async () => (({ ...grant(), targetAgentId: 'foreign' })) } })
     const original = args()
     expect(await h.flow.start(original)).to.equal(false)
     expect(h.flow.state.value.status).to.equal('UNKNOWN')
@@ -335,18 +335,18 @@ describe('persisted exact point-and-start source contract', () => {
   })
 
   it('server-frozen mixed catalogue accepts 32 versions without requesting image roles from browser', async () => {
-    const inputs = Array.from({ length: 32 }, (_, index) => ({ fileId: `file-${index}`, version: 1, purpose: 'INPUT',
+    const inputs = Array.from({ length: 32 }, (_, index) => ({ fileId: `file-${index}`, version: '1', purpose: 'INPUT',
       contentMimeType: ['image/png', 'application/pdf', 'audio/ogg', 'text/plain'][index % 4], byteLength: '12', contentHash: 'd'.repeat(64) }))
     let taskReads = 0
     const h = harness({ api: {
-      get: async path => ({ data: path.endsWith('/requirements/current') ? req() : path.endsWith('/point-and-deliberate/request')
-        ? { ...projection(), inputs } : taskReads++ === 0 ? task() : canonical() }),
-      create: async (path, body) => { h.calls.push(['post', path, body]); return { data: { ...projection(), inputs } } }
+      get: async path => ((path.endsWith('/requirements/current') ? req() : path.endsWith('/point-and-deliberate/request')
+        ? { ...projection(), inputs } : taskReads++ === 0 ? task() : canonical())),
+      create: async (path, body) => { h.calls.push(['post', path, body]); return ({ ...projection(), inputs }) }
     } })
     expect(await h.flow.start(args())).to.equal(true)
     expect(h.calls.find(c => c[0] === 'post')[2]).to.deep.equal(record().body)
     expect(h.flow.state.value.projection.inputs).to.have.length(32)
-    const altered = [...inputs]; altered[0] = { ...altered[0], version: 2 }
+    const altered = [...inputs]; altered[0] = { ...altered[0], version: '2' }
     expect(pointAndStartProjection({ ...projection(), inputs: altered }, record(), h.flow.state.value.projection)).to.equal(null)
   })
 
@@ -355,7 +355,7 @@ describe('persisted exact point-and-start source contract', () => {
     const h = harness({ api: { get: async () => new Promise(done => { resolve = done }) } })
     const first = h.flow.start(args())
     expect(await h.flow.start(args())).to.equal(false)
-    h.flow.dispose(); resolve({ data: req() })
+    h.flow.dispose(); resolve((req()))
     expect(await first).to.equal(false)
     expect(h.admitted).to.have.length(0)
   })
@@ -369,7 +369,7 @@ describe('independent generic action/grant/root fences', () => {
     ['altered grant set', p => { p.permittedOperations = ['GENERATE_IMAGE'] }],
     ['numeric stateVersion', p => { p.stateVersion = 2 }],
     ['missing admitted request', p => { p.initialRequestId = null }],
-    ['extra injected input', p => { p.inputs = [{ fileId: 'x', version: 1, purpose: 'REFERENCE' }] }]
+    ['extra injected input', p => { p.inputs = [{ fileId: 'x', version: '1', purpose: 'REFERENCE' }] }]
   ]) it(`rejects ${name}`, () => {
     const p = projection(); mutate(p)
     expect(pointAndStartProjection(p, record())).to.equal(null)

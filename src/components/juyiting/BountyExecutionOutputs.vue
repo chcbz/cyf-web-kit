@@ -34,15 +34,38 @@
       <p v-if="itemErrors[outputItemKey(item)]" role="alert">{{ itemErrors[outputItemKey(item)] }}</p>
       <p v-if="textPreviews[outputItemKey(item)]" class="bounty-output-text">{{ textPreviews[outputItemKey(item)] }}</p>
       <template v-if="previewUrls[outputItemKey(item)]">
-        <button v-if="previewKind(item.contentMimeType) === 'image'" class="image-preview" type="button" @click="expandedUrl = previewUrls[outputItemKey(item)]"><img :src="previewUrls[outputItemKey(item)]" alt="议事生成图片" /></button>
-        <audio v-else-if="previewKind(item.contentMimeType) === 'audio'" :src="previewUrls[outputItemKey(item)]" controls preload="none" aria-label="议事生成音频" />
+        <button
+          v-if="previewKind(item.contentMimeType) === 'image'"
+          class="image-preview"
+          type="button"
+          @click="expandedUrl = previewUrls[outputItemKey(item)]"
+        ><img :src="previewUrls[outputItemKey(item)]" alt="议事生成图片" /></button>
+        <audio
+          v-else-if="previewKind(item.contentMimeType) === 'audio'"
+          :src="previewUrls[outputItemKey(item)]"
+          controls
+          preload="none"
+          aria-label="议事生成音频"
+        ></audio>
         <span v-else>此格式请下载查看。</span>
       </template>
       <small v-if="item.replaces">改稿关联：{{ item.replaces.outputId }}（原稿仍保留）</small>
       <small v-if="!effectiveTaskCompleted">需要调整？直接在会话中告诉 Agent。</small>
     </div>
-    <button v-if="acceptance && !taskCompleted && (effectiveTaskCompleted || displayItems.length || finalizeState.intent)" type="button" class="finalize-button hall-output-action primary" :disabled="effectiveTaskCompleted || loading || !!error || finalizeState.busy || finalizeState.state === 'recovery_error' || (finalizeState.receipt?.state === 'failed' && !finalizeState.receipt.retryable)" @click="finalizeSelected">{{ effectiveTaskCompleted ? '需求已完成' : finalizeState.busy ? '正在验收…' : finalizeState.intent ? '继续验收' : '确认验收' }}</button>
-    <button v-if="acceptance && finalizeState.intent && !finalizationCompleted" type="button" class="finalize-status-button hall-output-action" :disabled="finalizeState.busy" @click="finalizations.check">查询验收状态</button>
+    <button
+      v-if="acceptance && !taskCompleted && (effectiveTaskCompleted || displayItems.length || finalizeState.intent)"
+      type="button"
+      class="finalize-button hall-output-action primary"
+      :disabled="effectiveTaskCompleted || loading || !!error || finalizeState.busy || finalizeState.state === 'recovery_error' || (finalizeState.receipt?.state === 'FAILED' && !finalizeState.receipt.retryable)"
+      @click="finalizeSelected"
+    >{{ effectiveTaskCompleted ? '需求已完成' : finalizeState.busy ? '正在验收…' : finalizeState.intent ? '继续验收' : '确认验收' }}</button>
+    <button
+      v-if="acceptance && finalizeState.intent && !finalizationCompleted"
+      type="button"
+      class="finalize-status-button hall-output-action"
+      :disabled="finalizeState.busy"
+      @click="finalizations.check"
+    >查询验收状态</button>
     <small v-if="acceptance && !effectiveTaskCompleted && finalizeState.intent">本次验收已冻结 {{ finalizeState.intent.body.selectedOutputs.length }} 项成果；可刷新查看进度。</small>
     <p v-if="effectiveTaskCompleted" role="status">{{ finalizationCompleted ? '验收完成。' : '任务已完成。' }}</p>
     <p v-if="finalizeState.message && !finalizationCompleted" :role="finalizeState.busy ? 'status' : 'alert'">{{ finalizeState.message }}</p>
@@ -53,7 +76,15 @@
       @click="$emit('continue-modification')"
     >继续修改</button>
     <small>可以预览、下载或保存；保存不是验收前置。</small>
-    <div v-if="expandedUrl" class="image-overlay" role="dialog" aria-modal="true" aria-label="放大查看议事图片" @click.self="expandedUrl = ''" @keydown.esc="expandedUrl = ''">
+    <div
+      v-if="expandedUrl"
+      class="image-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="放大查看议事图片"
+      @click.self="expandedUrl = ''"
+      @keydown.esc="expandedUrl = ''"
+    >
       <button type="button" @click="expandedUrl = ''">关闭</button><img :src="expandedUrl" alt="放大后的议事图片" />
     </div>
   </section>
@@ -88,7 +119,7 @@ const allItems = computed(() => [...new Map([...items.value, ...resultItems.valu
 const allDeliveries = computed(() => {
   const map = new Map(executionDeliveries.value.map(value => [value.outcomeId, value]))
   for (const result of skillResults.results.value) if (result.complete && result.outputs.length && result.reference.progressState === 'COMPLETED')
-    map.set(result.reference.outcomeId, { outcomeId: result.reference.outcomeId, finalDigest: result.reference.finalDigest,
+    map.set(result.reference.outcomeId, { outcomeId: result.reference.outcomeId, finalSha256: result.reference.finalSha256,
       deliveryRelation: result.reference.deliveryRelation, requestId: result.requestId, stepId: result.stepId })
   return [...map.values()]
 })
@@ -111,7 +142,7 @@ const finalizations = useHallBountyFinalization({ api: agentApi,
 })
 const finalizeState = finalizations.status
 // A validated completed receipt is immediate terminal authority even while the parent task DTO is stale.
-const finalizationCompleted = computed(() => finalizeState.value.state === 'completed' &&
+const finalizationCompleted = computed(() => finalizeState.value.state === 'COMPLETED' &&
   finalizeState.value.receipt?.taskId === props.taskId && finalizeState.value.receipt?.conversationId === props.conversationId)
 const effectiveTaskCompleted = computed(() => props.taskCompleted || finalizationCompleted.value)
 // Once acceptance starts, display only the original exact references from its durable intent.
@@ -130,7 +161,7 @@ const displayItems = computed(() => deliveryProjection.value.items)
 const deliveryMessage = computed(() => deliveryProjection.value.message)
 let lastCompletedOperation = ''
 watch(() => finalizeState.value.receipt, receipt => {
-  if (!props.enabled || finalizeState.value.state !== 'completed' || !receipt) return
+  if (!props.enabled || finalizeState.value.state !== 'COMPLETED' || !receipt) return
   const key = JSON.stringify([props.identityKey, props.conversationId, receipt.operationId])
   if (key === lastCompletedOperation) return
   lastCompletedOperation = key
@@ -222,7 +253,7 @@ const bytes = async (item, preview) => {
     if (controller.signal.aborted || generation !== epoch) return null
     if (!(response instanceof Blob)) throw new Error('服务端未返回可读取的成果字节。')
     const blob = response
-    if (blob.size !== item.byteLength) throw new Error('成果字节长度与清单不一致，已拒绝使用。')
+    if (String(blob.size) !== item.byteLength) throw new Error('成果字节长度与清单不一致，已拒绝使用。')
     if (await sha256Blob(blob) !== item.sha256) throw new Error('成果摘要校验失败，已拒绝使用。')
     if (controller.signal.aborted || generation !== epoch) return null
     if (blob.type !== (preview ? item.contentMimeType : downloadMimeType(item.contentMimeType))) throw new Error('媒体类型不匹配，已拒绝使用。')
@@ -260,7 +291,7 @@ const finalizeSelected = async () => {
   const taskIds = [...new Set(steps.map(step => step.taskId))]
   if (taskIds.length !== 1 || !exactOutputId(taskIds[0])) return invalid('最终成果不属于同一任务。')
   return finalizations.submit({ taskId: taskIds[0], body: {
-    expectedTaskVersion: taskVersion, expectedAssignmentRevision: assignmentRevisions[0],
+    expectedTaskVersion: String(taskVersion), expectedAssignmentRevision: String(assignmentRevisions[0]),
     conversationId: props.conversationId, summary: '聚义厅本次成果验收',
     selectedOutputs: selected.map(item => item.messageSource
       ? { requestId: item.requestId, messageSource: item.messageSource, sha256: item.sha256, title: item.title, purpose: item.purpose }

@@ -7,9 +7,9 @@ const MAX_ID_LENGTH = 100
 const valueOf = value => typeof value === 'function' ? value() : unref(value)
 const validId = value => typeof value === 'string' && value.length > 0 && value.length <= MAX_ID_LENGTH &&
   value === value.trim() && ![...value].some(character => character.codePointAt(0) < 32)
-const validInput = value => value && validId(value.fileId) && Number.isSafeInteger(Number(value.version)) && Number(value.version) > 0
+const validInput = value => value && validId(value.fileId) && typeof value.version === 'string' && /^[1-9]\d{0,9}$/.test(value.version) && BigInt(value.version) <= 2147483647n
 const scopeText = value => String(valueOf(value) ?? '').trim()
-const sameInputs = (left, right) => left.length === right.length && left.every((item, index) => item.fileId === right[index].fileId && Number(item.version) === Number(right[index].version))
+const sameInputs = (left, right) => left.length === right.length && left.every((item, index) => item.fileId === right[index].fileId && item.version === right[index].version)
 const scopeMatches = (value, scope) => value && value.executionMode === 'TASK' &&
   value.businessTaskId === scope.taskId && validId(value.workItemId) &&
   value.taskId === scope.taskId && value.conversationId === scope.conversationId &&
@@ -118,7 +118,7 @@ export function useFormalTaskExecution ({
   const normalizeInputs = inputs => {
     if (!Array.isArray(inputs) || !inputs.every(validInput)) return null
     if (!inputs.length && execution.generationEnabled.value !== true) return null
-    const normalized = inputs.map(input => ({ fileId: input.fileId, version: Number(input.version) }))
+    const normalized = inputs.map(input => ({ fileId: input.fileId, version: input.version }))
     if (new Set(normalized.map(input => input.fileId)).size !== normalized.length) return null
     return normalized
   }
@@ -159,7 +159,7 @@ export function useFormalTaskExecution ({
     })
     if (!result) return null
     if (!isFormalExecution(result) || !sameInputs(
-      result.inputs.map(input => ({ fileId: input.fileId, version: Number(input.version) })), normalized
+      result.inputs.map(input => ({ fileId: input.fileId, version: input.version })), normalized
     )) {
       scopeError.value = '执行回执未精确回显本任务、TASK 模式、工作项、会话、目标、PDF 或输入版本；未显示为成功，请仅恢复查询。'
       return null

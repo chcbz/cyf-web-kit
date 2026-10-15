@@ -1,3 +1,4 @@
+import { validMaterialVersion } from './materialVersion.js'
 import { computed, getCurrentInstance, onBeforeUnmount, ref, unref, watch } from 'vue'
 import { agentApi as defaultAgentApi } from '../useHttp.js'
 import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
@@ -25,17 +26,13 @@ export const hallDraftFieldError = fields => {
   if (!OPTIONAL_EXACT(fields?.outputMime, 160)) return '期望格式标识最多160字，且须完整匹配支持的格式；原值已保留。'
   return ''
 }
-const VERSION = value => Number.isSafeInteger(value) && value >= 1 && value <= 2147483647
-const REVISION = value => Number.isSafeInteger(value) && value >= 1
+const VERSION = validMaterialVersion
+const DECIMAL = value => typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value) && value.length <= 19 && BigInt(value) <= 9223372036854775807n
+const REVISION = value => DECIMAL(value) && value !== '0'
 const valueOf = value => typeof value === 'function' ? value() : unref(value)
 const abortError = message => new DOMException(message, 'AbortError')
 const randomKey = () => globalThis.crypto?.randomUUID?.() || `hall-draft-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
-const unwrap = result => {
-  let value = result
-  for (let index = 0; index < 2 && value && typeof value === 'object' && Object.hasOwn(value, 'data'); index += 1) value = value.data
-  return value
-}
 const sameScope = value => typeof value === 'string' && value.trim() && value.length <= 256 ? value.trim() : ''
 const validInputs = inputs => Array.isArray(inputs) && inputs.length <= MAX_INPUTS &&
   inputs.every(input => ID(input?.fileId) && VERSION(input?.version)) &&
@@ -70,7 +67,7 @@ const validReceipt = (value, kind = null) => {
 }
 const validResultItem = value => value && typeof value === 'object' && ID(value.outputId) && ID(value.fileId) &&
   VERSION(value.fileVersion) && typeof value.mime === 'string' && value.mime.length > 0 && TEXT(value.filename) &&
-  Number.isSafeInteger(value.byteLength) && value.byteLength >= 0 && typeof value.sha256 === 'string' &&
+  DECIMAL(value.byteLength) && typeof value.sha256 === 'string' &&
   /^[a-f0-9]{64}$/i.test(value.sha256) && ['AVAILABLE', 'UNAVAILABLE'].includes(value.availability)
 const validResults = value => value && typeof value === 'object' && ID(value.executionId) &&
   ['QUEUED', 'INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'FAILED'].includes(value.state) &&
@@ -80,10 +77,9 @@ const validResults = value => value && typeof value === 'object' && ID(value.exe
     ? ID(value.manifestId) && value.items.length > 0 && value.allowedActions.includes('VIEW')
     : value.manifestId == null && value.items.length === 0)
 const validCase = value => value && typeof value === 'object' && ID(value.caseId) && TEXT(value.title) &&
-  Number.isSafeInteger(value.revision) && value.revision >= 0 && Array.isArray(value.executions) &&
+  DECIMAL(value.revision) && Array.isArray(value.executions) &&
   Array.isArray(value.allowedActions) && value.sourceRef && typeof value.sourceRef === 'object' &&
-  value.executions.every(item => item && typeof item === 'object' && Number.isSafeInteger(item.revisionNo) &&
-    item.revisionNo >= 1 && validExecution(item.execution))
+  value.executions.every(item => item && typeof item === 'object' && REVISION(item.revisionNo) && validExecution(item.execution))
 const normalizedEditable = fields => ({
   title: String(fields?.title || ''),
   instruction: String(fields?.instruction || ''),
@@ -212,7 +208,7 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
     try {
       const response = await agentApi.execute({ ...options, autoLoading: false, needAuth: true, signal: controller.signal })
       if (!current(snapshot, controller)) throw abortError('Hall draft context changed')
-      return unwrap(response)
+      return response
     } finally { controllers.delete(controller) }
   }
   const apply = value => {

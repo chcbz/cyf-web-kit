@@ -5,12 +5,12 @@ import { createRequirementCreateIntentStore, requirementCreateBody, requirementM
 import { useHallRequirementCreate } from '../src/composables/juyiting/useHallRequirementCreate.js'
 
 const scopeA = '0\u0000client\u0000owner-a', scopeB = '0\u0000client\u0000owner-b'
-const attachments = () => ['audio', 'document', 'image', 'text'].map(kind => ({ fileId: `pwf_${kind}`, version: 2 }))
+const attachments = () => ['audio', 'document', 'image', 'text'].map(kind => ({ fileId: `pwf_${kind}`, version: '2' }))
 const draft = () => ({ title: ' 汇总资料🦜 ', description: '完整需求\n', attachments: attachments() })
 const intent = (schemaVersion = 2) => ({ schemaVersion, key: 'original-key', receipt: null,
-  body: schemaVersion === 2 ? requirementMaterialsBody(draft()) : requirementCreateBody({ title: '旧需求', inputRefs: [{ fileId: 'old', version: 1, purpose: 'REFERENCE' }] }) })
+  body: schemaVersion === 2 ? requirementMaterialsBody(draft()) : requirementCreateBody({ title: '旧需求', inputRefs: [{ fileId: 'old', version: '1', purpose: 'REFERENCE' }] }) })
 const receipt = record => ({ schemaVersion: record.schemaVersion, operationId: record.schemaVersion === 2 ? 'atco2_1' : 'atco_1', taskId: 'task-1',
-  requirementRevision: 1, state: 'COMMITTED', task: { id: 'task-1' },
+  requirementRevision: '1', state: 'COMMITTED', task: { id: 'task-1' },
   ...(record.schemaVersion === 2 ? { attachments: record.body.attachments } : { inputRefs: record.body.inputRefs }) })
 const memoryStorage = () => {
   const rows = new Map()
@@ -21,8 +21,8 @@ const owned = []
 const harness = ({ storage = memoryStorage(), post, get, onCommitted, schemaVersion = 2 } = {}) => {
   const calls = [], adopted = [], scope = ref(scopeA), epoch = ref(1)
   const api = {
-    create: async (path, body, options) => { calls.push({ method: 'POST', path, body, key: options.headers['Idempotency-Key'] }); return post ? post(body) : { data: receipt({ schemaVersion: path.endsWith('/v2') ? 2 : 1, body }) } },
-    get: async (path, _query, options) => { calls.push({ method: 'GET', path, key: options.headers['Idempotency-Key'] }); return get ? get() : { data: receipt(intent(path.includes('/v2/') ? 2 : 1)) } }
+    create: async (path, body, options) => { calls.push({ method: 'POST', path, body, key: options.headers['Idempotency-Key'] }); return post ? post(body) : (receipt({ schemaVersion: path.endsWith('/v2') ? 2 : 1, body })) },
+    get: async (path, _query, options) => { calls.push({ method: 'GET', path, key: options.headers['Idempotency-Key'] }); return get ? get() : (receipt(intent(path.includes('/v2/') ? 2 : 1))) }
   }
   const h = useHallRequirementCreate({ agentApi: api, storage, schemaVersion, actorScopeKey: scope, identityEpoch: epoch,
     createIdempotencyKey: () => 'new-key', onCommitted: onCommitted || (value => { adopted.push(value); return true }) })
@@ -41,16 +41,16 @@ describe('neutral materials v2 atomic creation and immutable dual-version recove
     expect(requirementMaterialsBody({ title: '讨论', attachments: null })).to.equal(null)
   })
   it('sorts exact IDs by UTF-8 bytes rather than UTF-16, retaining the selected version', () => {
-    expect(requirementMaterialInputs([{ fileId: '𐀀', version: 1 }, { fileId: '\uE000', version: 3 }, { fileId: '\uE000', version: 1 }]))
-      .to.deep.equal([{ fileId: '\uE000', version: 1 }, { fileId: '\uE000', version: 3 }, { fileId: '𐀀', version: 1 }])
+    expect(requirementMaterialInputs([{ fileId: '𐀀', version: '1' }, { fileId: '\uE000', version: '3' }, { fileId: '\uE000', version: '1' }]))
+      .to.deep.equal([{ fileId: '\uE000', version: '1' }, { fileId: '\uE000', version: '3' }, { fileId: '𐀀', version: '1' }])
   })
   for (const field of ['purpose', 'role', 'contentMimeType', 'owner', 'url', 'path', 'operation']) it(`rejects attachment ${field} rather than granting client-supplied authority`, () => {
     expect(requirementMaterialsBody({ ...draft(), attachments: [{ ...attachments()[0], [field]: 'x' }] })).to.equal(null)
   })
   for (const [name, list] of [
     ['duplicates', [attachments()[0], attachments()[0]]], ['latest', [{ fileId: 'a', version: 'latest' }]],
-    ['overflow', [{ fileId: 'a', version: 2147483648 }]], ['invalid Unicode', [{ fileId: '\uD800', version: 1 }]],
-    ['capacity', Array.from({ length: 33 }, (_, n) => ({ fileId: `f${n}`, version: 1 }))]
+    ['overflow', [{ fileId: 'a', version: '2147483648' }]], ['invalid Unicode', [{ fileId: '\uD800', version: '1' }]],
+    ['capacity', Array.from({ length: 33 }, (_, n) => ({ fileId: `f${n}`, version: '1' }))]
   ]) it(`rejects ${name} without dropping selected material`, () => { expect(requirementMaterialInputs(list)).to.equal(null) })
   it('rejects image-only contract and execution/funding fields in v2', () => {
     for (const key of ['inputRefs', 'grossBountyAmountMicro', 'targetAgentId', 'costAuthorizationRef'])
@@ -98,7 +98,7 @@ describe('neutral materials v2 atomic creation and immutable dual-version recove
   for (const invalid of [receipt(intent(1)), { ...receipt(intent()), attachments: [] }, { ...receipt(intent()), task: { id: 'other' } }])
     it('never settles a wrong-schema/selection/task receipt', async () => {
       expect(requirementMaterialsReceipt(invalid, intent())).to.equal(null)
-      const h = harness({ post: () => ({ data: invalid }) }); expect(await h.create(draft())).to.equal(false)
+      const h = harness({ post: () => ((invalid)) }); expect(await h.create(draft())).to.equal(false)
       expect(h.adopted).to.deep.equal([]); expect(h.readOriginal().record.receipt).to.equal(null)
     })
   it('known committed v2 receipt reconciles via GET only', async () => {
@@ -110,7 +110,7 @@ describe('neutral materials v2 atomic creation and immutable dual-version recove
   })
   for (const boundary of ['scope', 'epoch', 'dispose']) it(`fences late v2 responses across ${boundary}`, async () => {
     let resolve
-    const h = harness({ post: body => new Promise(done => { resolve = () => done({ data: receipt({ schemaVersion: 2, body }) }) }), get: () => { throw new Error('unknown') } })
+    const h = harness({ post: body => new Promise(done => { resolve = () => done((receipt({ schemaVersion: 2, body }))) }), get: () => { throw new Error('unknown') } })
     const pending = h.create(draft())
     if (boundary === 'scope') h.scope.value = scopeB
     if (boundary === 'epoch') h.epoch.value++

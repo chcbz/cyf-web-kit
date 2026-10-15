@@ -15,7 +15,7 @@ export const useHallSkillCapabilities = ({ api, getContext, identityKey, enabled
     try {
       const result = await api.get(`/tasks/${encodeURIComponent(context.taskId)}/skill-capabilities`, { targetAgentId: context.targetAgentId }, { autoLoading: false, needAuth: true, signal: own.signal })
       if (!current()) return false
-      const value = skillCapabilityProjection(result?.data?.data ?? result?.data ?? result)
+      const value = skillCapabilityProjection(result)
       if (!value) throw new Error('技能目录回执格式不可信')
       projection.value = value; return true
     } catch (cause) { if (current()) error.value = cause?.status === 404 ? '当前事项不可访问' : '技能目录暂不可用；费用未知不影响权限判断'; return false }

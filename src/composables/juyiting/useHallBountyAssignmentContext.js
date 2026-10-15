@@ -23,7 +23,7 @@ export const useHallBountyAssignmentContext = ({ chatApi, identityScope, authori
         const result = await chatApi.get(`/conversations/${encodeURIComponent(context.conversationId)}/interactions/context`,
           undefined, { autoLoading: false, needAuth: true, signal: scan.controller.signal })
         if (!current()) return false
-        const value = bountyAssignmentContextProjection(result?.data?.data ?? result?.data ?? result, context)
+        const value = bountyAssignmentContextProjection(result, context)
         if (!value) throw new Error('当前指派与会话绑定不一致，请刷新事项后重试；未发送消息。')
         projection.value = value
         return true

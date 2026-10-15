@@ -2,7 +2,9 @@ import { getHallCapabilities } from './fixtures/hall-current-protocol.js'
 import { expect } from 'chai'
 import { describe, it } from 'mocha'
 import { ref } from 'vue'
-import { useHallConversation } from '../src/composables/juyiting/useHallConversation.js'
+import { useHallConversation as actualHallConversation } from '../src/composables/juyiting/useHallConversation.js'
+import { currentChatStreamMock } from './fixtures/current-chat-stream-mock.js'
+const useHallConversation = options => actualHallConversation({ ...options, chatApi: currentChatStreamMock(options.chatApi) })
 import { stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 
 const scope = (type, key, extras = {}) => ({

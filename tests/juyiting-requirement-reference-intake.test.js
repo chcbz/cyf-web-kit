@@ -11,11 +11,11 @@ import { createPointAndStartIntentStore, exactPointAndStartScope, pointAndStartB
 import { useHallPointAndStart } from '../src/composables/juyiting/useHallPointAndStart.js'
 
 const scopeA = '0\u0000client-a\u0000owner-a', scopeB = '0\u0000client-a\u0000owner-b'
-const image = (version = 2) => ({ fileId: 'pwf_image', version, purpose: 'REFERENCE' })
+const image = (version = '2') => ({ fileId: 'pwf_image', version: String(version), purpose: 'REFERENCE' })
 const payload = (inputRefs = [image()]) => ({ title: ' 画一只鸟🦜 ', description: '完整原文\n照片风格\n', requiredAbilities: ['image'], inputRefs })
 const intent = body => ({ schemaVersion: 1, key: 'original-key', body: requirementCreateBody(body || payload()), receipt: null })
 const receipt = (record, taskId = 'task-1') => ({ schemaVersion: 1, operationId: 'atco_1', taskId,
-  requirementRevision: 1, state: 'COMMITTED', inputRefs: record.body.inputRefs, task: { id: taskId, title: 'bird', status: 'open' } })
+  requirementRevision: '1', state: 'COMMITTED', inputRefs: record.body.inputRefs, task: { id: taskId, title: 'bird', status: 'open' } })
 const flush = async () => { for (let i = 0; i < 8; i++) { await Promise.resolve(); await nextTick() } }
 const memoryStorage = () => {
   const rows = new Map()
@@ -24,8 +24,8 @@ const memoryStorage = () => {
 const harness = ({ storage = memoryStorage(), scope = ref(scopeA), epoch = ref(1), post, get, onCommitted } = {}) => {
   const calls = [], adopted = []; let keyCount = 0
   const api = {
-    create: async (path, body, options) => { calls.push({ method: 'POST', path, body, key: options.headers['Idempotency-Key'] }); return post ? post(body) : { data: receipt({ body }) } },
-    get: async (path, _query, options) => { calls.push({ method: 'GET', path, key: options.headers['Idempotency-Key'] }); return get ? get() : { data: receipt(intent()) } }
+    create: async (path, body, options) => { calls.push({ method: 'POST', path, body, key: options.headers['Idempotency-Key'] }); return post ? post(body) : (receipt({ body })) },
+    get: async (path, _query, options) => { calls.push({ method: 'GET', path, key: options.headers['Idempotency-Key'] }); return get ? get() : (receipt(intent())) }
   }
   const h = useHallRequirementCreate({ agentApi: api, actorScopeKey: scope, identityEpoch: epoch, storage,
     createIdempotencyKey: () => `create-${++keyCount}`, onCommitted: onCommitted || ((value, fence) => { if (!fence.isCurrent()) return false; adopted.push(value); return true }) })
@@ -44,7 +44,7 @@ describe('exact requirement/reference create contract', () => {
   })
   it('allows empty references and canonicalizes only exact selection ordering', () => {
     expect(requirementCreateBody({ title: 'bird' }).inputRefs).to.deep.equal([])
-    const other = { fileId: 'pwf_a', version: 4, purpose: 'REFERENCE' }
+    const other = { fileId: 'pwf_a', version: '4', purpose: 'REFERENCE' }
     expect(requirementReferenceInputs([image(), other])).to.deep.equal([other, image()])
   })
   for (const [name, refs] of [
@@ -84,7 +84,7 @@ describe('exact requirement/reference create contract', () => {
   })
   it('double-clicks or payload edits in flight cannot replace fixed body/key', async () => {
     let resolve
-    const h = owned(harness({ post: body => new Promise(done => { resolve = () => done({ data: receipt({ body }) }) }) }))
+    const h = owned(harness({ post: body => new Promise(done => { resolve = () => done((receipt({ body }))) }) }))
     const p = payload(), pending = h.create(p); p.title = 'new draft'; p.inputRefs[0].version = 5
     expect(await h.create(payload([]))).to.equal(false); expect(h.calls).to.have.length(1); expect(h.keyCount()).to.equal(1)
     expect(h.calls[0].body).to.deep.equal(intent().body); resolve(); expect(await pending).to.equal(true)
@@ -112,7 +112,7 @@ describe('exact requirement/reference create contract', () => {
   })
   for (const boundary of ['scope', 'epoch', 'dispose']) it(`fences late POST at ${boundary} boundary`, async () => {
     let resolve
-    const h = owned(harness({ post: body => new Promise(done => { resolve = () => done({ data: receipt({ body }) }) }),
+    const h = owned(harness({ post: body => new Promise(done => { resolve = () => done((receipt({ body }))) }),
       get: () => { throw Object.assign(new Error('unknown'), { status: 404 }) } }))
     const pending = h.create(payload())
     if (boundary === 'scope') h.scope.value = scopeB
@@ -136,8 +136,8 @@ describe('exact requirement/reference create contract', () => {
     expect(h.state.value.intent.receipt.taskId).to.equal('task-1'); expect(await h.create(payload())).to.equal(false); expect(h.calls).to.have.length(1)
   })
   it('incompatible/grant-looking responses never acknowledge successful task creation', async () => {
-    for (const value of [{ grantId: 'g', taskId: 'task-1' }, { ...receipt(intent()), requirementRevision: 2 }, { ...receipt(intent()), inputRefs: [image(6)] }]) {
-      const h = owned(harness({ post: () => ({ data: value }) }))
+    for (const value of [{ grantId: 'g', taskId: 'task-1' }, { ...receipt(intent()), requirementRevision: '2' }, { ...receipt(intent()), inputRefs: [image(6)] }]) {
+      const h = owned(harness({ post: () => ((value)) }))
       expect(await h.create(payload())).to.equal(false); expect(h.adopted).to.deep.equal([]); expect(h.readOriginal().record.receipt).to.equal(null)
     }
   })
@@ -272,7 +272,7 @@ describe('mounted Bounty read/manage surface and original recovery', () => {
     expect(open.text()).to.include('在议事中协作交付')
     expect(open.text()).not.to.include('一份可预览、下载和验收的正式 PDF')
 
-    const bridgeIntent = { taskId: 'existing-task', body: { agentId: 'agent-image', requirementRevision: 1, requestedOperations: ['GENERATE_IMAGE'], initialOperation: 'GENERATE_IMAGE', inputRefs: [] }, controlledImageBridge: { schemaVersion: 1, wrapper: { schemaVersion: 1, assignment: {}, providerConsent: {} }, receipt: { schemaVersion: 1 } } }
+    const bridgeIntent = { taskId: 'existing-task', body: { agentId: 'agent-image', requirementRevision: '1', requestedOperations: ['GENERATE_IMAGE'], initialOperation: 'GENERATE_IMAGE', inputRefs: [] }, controlledImageBridge: { schemaVersion: 1, wrapper: { schemaVersion: 1, assignment: {}, providerConsent: {} }, receipt: { schemaVersion: 1 } } }
     // No controlledConsentOffer is supplied: this models its normal clear after a
     // successful BOUND bridge response, then an explicit close/re-entry to detail.
     const controlled = panel({ embeddedHall: true, formalTaskExecutionContext,

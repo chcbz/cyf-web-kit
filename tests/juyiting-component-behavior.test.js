@@ -3720,7 +3720,7 @@ describe('W11 R9 actual JuyiHall stale funded acknowledgement', () => {
 
           expect(wrapper.find('.funded-create-recovery').text()).to.include('原榜文名目：B 草稿标题')
           expect(state.selectedTask).to.deep.equal(bSelection)
-          if (outcome === 'success') delayedA.resolve({ data: { code: 'E0', data: { id: 'a-created', ...originalA } } })
+          if (outcome === 'success') delayedA.resolve(({ code: 'E0', data: { id: 'a-created', ...originalA } }))
           else delayedA.reject(new TypeError('A 响应丢失'))
           await flushPromises()
           await flushPromises()

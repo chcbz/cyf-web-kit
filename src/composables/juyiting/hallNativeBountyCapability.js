@@ -21,19 +21,7 @@ const exactId = value => typeof value === 'string' && value.length > 0 && value.
 const reasons = value => Array.isArray(value) && value.every(exactId) ? [...value] : null
 const operations = value => Array.isArray(value) && value.length <= 1 && value.every(item => item === OPERATION) &&
   new Set(value).size === value.length ? [...value] : null
-const unwrap = result => {
-  const envelope = result && own(result, 'code') ? result : result?.data ?? result
-  if (envelope && own(envelope, 'code')) {
-    if (![undefined, null, 'E0', '0', 0, '200', 200].includes(envelope.code)) {
-      const error = new Error(envelope.msg || envelope.message || '原生办理能力读取被拒绝')
-      error.code = envelope.code
-      error.status = envelope.status
-      throw error
-    }
-    return envelope.data?.data ?? envelope.data
-  }
-  return envelope?.data ?? envelope
-}
+const unwrap = result => result
 
 /** Strictly accepts only the frozen native bounty capability response shape. */
 export const parseNativeBountyCapability = value => {

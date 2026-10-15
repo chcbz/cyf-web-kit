@@ -25,6 +25,7 @@
 </template>
 
 <script setup>
+import { validMaterialVersion } from '../../composables/juyiting/materialVersion.js'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { createApi } from '../../composables/useHttp.js'
 
@@ -117,7 +118,7 @@ const archive = async retry => {
     } else if (value.state === 'partial_failed') {
       state.value = { state: 'error', busy: false, message: typeof item.message === 'string' && item.message ? item.message : '服务端确认文字片段未保存。', intent }
     } else {
-      if (typeof item.fileId !== 'string' || !item.fileId.trim() || !Number.isSafeInteger(item.version) || item.version < 1) throw receiptUnknown()
+      if (typeof item.fileId !== 'string' || !item.fileId.trim() || !validMaterialVersion(item.version)) throw receiptUnknown()
       state.value = { state: 'saved', busy: false, message: `文字片段已保存：${item.fileId} v${item.version}`, intent }
     }
   } catch (cause) {

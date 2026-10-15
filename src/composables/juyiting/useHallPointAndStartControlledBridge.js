@@ -4,7 +4,7 @@ import { providerConsentReceipt } from './hallPointAndStartProviderConsent.js'
 import { controlledImagePointAndStartReceipt } from './hallControlledImagePointAndStartBridge.js'
 const clone = value => JSON.parse(JSON.stringify(value))
 const state0 = () => ({ status: 'IDLE', intent: null, receipt: null, error: null })
-const unwrap = result => { const e = result && Object.hasOwn(result, 'code') ? result : result?.data ?? result; if (e && Object.hasOwn(e, 'code')) { if (![undefined, null, 'E0', '0', 0, '200', 200].includes(e.code)) { const x = new Error(e.msg || e.message || '受控点将请求被拒绝'); x.code = e.code; x.status = e.status; throw x }; return e.data?.data ?? e.data }; return e?.data ?? e }
+const unwrap = result => result
 /** Historical GET-only audit. Retired image/consent intents can never issue or replay a write. */
 export const useHallPointAndStartControlledBridge = ({ agentApi, actorScopeKey, storage = null, onBound = null }) => {
   const scope = computed(() => unref(typeof actorScopeKey === 'function' ? actorScopeKey() : actorScopeKey)); const state = ref(state0()); const busy = ref(false)

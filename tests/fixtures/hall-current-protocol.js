@@ -5,5 +5,5 @@ export const hallCapabilities = Object.freeze({
 
 export const getHallCapabilities = async path => {
   if (path !== '/capabilities') throw new Error(`Unexpected Hall GET: ${path}`)
-  return { data: { data: hallCapabilities } }
+  return hallCapabilities
 }

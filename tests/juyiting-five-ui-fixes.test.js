@@ -1,3 +1,4 @@
+import { displayFixture } from './fixtures/juyiting/interface-display-fixture.mjs'
 import * as skillResults from '../src/composables/juyiting/useHallSkillResults.js'
 import * as skillResultData from '../src/composables/juyiting/hallSkillResults.js'
 import { expect } from 'chai'
@@ -12,7 +13,7 @@ import { useHallBountyAcceptance } from '../src/composables/juyiting/useHallBoun
 import { useHallBountyFinalization, safeFinalizationVersion } from '../src/composables/juyiting/useHallBountyFinalization.js'
 import { useHallConversationArchive } from '../src/composables/juyiting/useHallConversationArchive.js'
 
-const raw = JSON.parse(readFileSync(new URL('./fixtures/juyiting/completed-message-delivery-v3.json', import.meta.url)))
+const raw = displayFixture(JSON.parse(readFileSync(new URL('./fixtures/juyiting/completed-message-delivery-v3.json', import.meta.url))))
 const request = () => ({ requestId: raw.requestId, requestRevision: raw.requestRevision, conversationId: raw.conversationId,
   conversationGeneration: raw.conversationGeneration, userMessageId: '1', state: 'COMPLETED', stateVersion: '1', steps: [], turns: [{
     turnId: raw.turnId, requestId: raw.requestId, requestRevision: raw.requestRevision, conversationId: raw.conversationId,
@@ -40,14 +41,14 @@ const timers = () => {
 }
 const acceptanceHarness = () => {
   const reads = []; let snapshot = request()
-  const api = { list: async () => ({ data: [{ id: raw.conversationId, conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }] }),
+  const api = { list: async () => ({ items: [{ id: raw.conversationId, conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }], nextCursor: null, hasMore: false }),
     get: async (path, params) => {
       reads.push({ path, params })
-      if (path.endsWith('/requests')) return { data: { schemaVersion: 1, scope: { conversationId: raw.conversationId, conversationGeneration: raw.conversationGeneration, taskId: 'task' },
-        after: '0', through: '1', nextAfter: null, hasMore: false, entries: [{ ordinal: '1', request: snapshot }] } }
-      if (path.endsWith('/typed-outcome')) return { data: raw }
-      if (path.endsWith('/outputs')) return { data: [] }
-      if (path === `/requests/${raw.requestId}`) return { data: snapshot }
+      if (path.endsWith('/requests')) return ({ schemaVersion: 1, scope: { conversationId: raw.conversationId, conversationGeneration: raw.conversationGeneration, taskId: 'task' },
+        after: '0', through: '1', nextAfter: null, hasMore: false, entries: [{ ordinal: '1', request: snapshot }] })
+      if (path.endsWith('/typed-outcome')) return (raw)
+      if (path.endsWith('/outputs')) return ([])
+      if (path === `/requests/${raw.requestId}`) return (snapshot)
       throw new Error('unexpected read ' + path)
     }, execute: async () => { throw new Error('No mutations allowed') } }
   const shared = { '../../composables/useHttp.js': { createApi: () => api }, '../../composables/juyiting/bountyOutputCatalog.js': outputs,
@@ -128,7 +129,7 @@ describe('five fixes cancellation thin confirmation layer', () => {
   it('keeps unresolved as a GET-only check via the original composable, without another Dialog or POST', async () => {
     const task = Vue.ref(panelTask()); const calls = []
     const actions = ordinary.useHallOrdinaryCancellation({ selectedTask: task, tasks: Vue.ref([task.value]), identityScope: Vue.ref('owner-five'),
-      agentApi: { create: async () => { calls.push('POST'); throw new TypeError('ACK lost') }, get: async () => { calls.push('GET'); return { data: task.value } } }, log: { warn() {} } })
+      agentApi: { create: async () => { calls.push('POST'); throw new TypeError('ACK lost') }, get: async () => { calls.push('GET'); return (task.value) } }, log: { warn() {} } })
     let wrapper
     try {
       await actions.cancelTask(task.value)
@@ -226,20 +227,20 @@ describe('five fixes poll lifecycle and projection hints', () => {
   it('aborts an in-flight catalog on disable and never admits its late response', async () => {
     const clock = timers(); const enabled = Vue.ref(true); let resolve, signal
     const source = useHallBountyAcceptance({ taskId: () => 'task', identityKey: () => 'owner-abort', enabled: () => enabled.value,
-      api: { list: async () => ({ data: [{ id: raw.conversationId, conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }] }),
+      api: { list: async () => ({ items: [{ id: raw.conversationId, conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }], nextCursor: null, hasMore: false }),
         get: (_path, _params, options) => { signal = options.signal; return new Promise(done => { resolve = done }) } } })
     try {
       await settle(); enabled.value = false; expect(signal.aborted).to.equal(true)
-      resolve({ data: {} }); await settle(); expect(source.scope.value).to.equal(null); expect(source.catalog.entries.value).to.deep.equal([])
+      resolve(({})); await settle(); expect(source.scope.value).to.equal(null); expect(source.catalog.entries.value).to.deep.equal([])
       expect(clock.jobs.size).to.equal(0)
     } finally { source.dispose(); clock.restore() }
   })
   it('does not lose a stateVersion refresh hint while the original catalogue read is in flight', async () => {
     const clock = timers(); const version = Vue.ref('1'); let resolve, reads = 0
-    const entryPage = snapshot => ({ data: { schemaVersion: 1, scope: { conversationId: '42', conversationGeneration: '1', taskId: 'task' },
-      after: '0', through: '1', nextAfter: null, hasMore: false, entries: [{ ordinal: '1', request: snapshot }] } })
+    const entryPage = snapshot => (({ schemaVersion: 1, scope: { conversationId: '42', conversationGeneration: '1', taskId: 'task' },
+      after: '0', through: '1', nextAfter: null, hasMore: false, entries: [{ ordinal: '1', request: snapshot }] }))
     const source = useHallBountyAcceptance({ taskId: () => 'task', identityKey: () => 'version-inflight', stateVersion: () => version.value,
-      api: { list: async () => ({ data: [{ id: '42', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }] }),
+      api: { list: async () => ({ items: [{ id: '42', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }], nextCursor: null, hasMore: false }),
         get: async () => { reads++; return reads === 1 ? new Promise(done => { resolve = done }) : entryPage({ ...request(), state: 'RUNNING', stateVersion: '2', turns: [] }) } } })
     try {
       await settle(); version.value = '2'
@@ -251,10 +252,10 @@ describe('five fixes poll lifecycle and projection hints', () => {
   it('queues a gallery version refresh during GET, and aborts/fences a late old-identity response', async () => {
     const clock = timers(); let wrapper, resolve, capturedSignal, reads = 0
     const lateApi = { get: async (path, _params, options) => {
-      if (path.endsWith('/typed-outcome')) return { data: raw }
+      if (path.endsWith('/typed-outcome')) return (raw)
       reads++; capturedSignal = options.signal
       if (reads === 1) return new Promise(done => { resolve = done })
-      return { data: request() }
+      return (request())
     }, execute: async () => { throw new Error('read only') } }
     const Gallery = compile('BountyExecutionOutputs', { '../../composables/useHttp.js': { createApi: () => lateApi },
       '../../composables/juyiting/bountyOutputCatalog.js': outputs, '../../utils/outputDownload.js': { saveOutputBlob() {} },
@@ -263,12 +264,12 @@ describe('five fixes poll lifecycle and projection hints', () => {
     try {
       wrapper = mount(Gallery, { props: { enabled: true, acceptance: true, taskId: 'task', conversationId: '42', identityKey: 'old', request: request() } })
       await settle(); await wrapper.setProps({ request: { ...request(), stateVersion: '2' } })
-      resolve({ data: request() }); await settle(); expect(reads).to.equal(2)
+      resolve((request())); await settle(); expect(reads).to.equal(2)
       // Same context stays fenced; a different identity must synchronously abort.
       reads = 0; await wrapper.setProps({ identityKey: 'delayed-owner' }); await settle()
       expect(reads).to.equal(1); const oldSignal = capturedSignal
       await wrapper.setProps({ enabled: false }); expect(oldSignal.aborted).to.equal(true)
-      resolve({ data: request() }); await settle()
+      resolve((request())); await settle()
       expect(wrapper.find('.bounty-output-text').exists()).to.equal(false); expect(clock.jobs.size).to.equal(0)
     } finally { wrapper?.unmount(); clock.restore() }
   })
@@ -277,9 +278,9 @@ describe('five fixes poll lifecycle and projection hints', () => {
     // Same composable used by JuyiHall terminalConversationHistory, not an output replacement.
     let reads = 0
     const source = useHallBountyAcceptance({ taskId: () => 'task', identityKey: () => 'cancelled-history', taskCompleted: () => true,
-      api: { list: async () => ({ data: [{ id: '42', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }] }),
-        get: async () => { reads++; return { data: { schemaVersion: 1, scope: { conversationId: '42', conversationGeneration: '1', taskId: 'task' },
-          after: '0', through: '1', nextAfter: null, hasMore: false, entries: [{ ordinal: '1', request: { ...request(), state: 'RUNNING', turns: [] } }] } } } } })
+      api: { list: async () => ({ items: [{ id: '42', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }], nextCursor: null, hasMore: false }),
+        get: async () => { reads++; return ({ schemaVersion: 1, scope: { conversationId: '42', conversationGeneration: '1', taskId: 'task' },
+          after: '0', through: '1', nextAfter: null, hasMore: false, entries: [{ ordinal: '1', request: { ...request(), state: 'RUNNING', turns: [] } }] }) } } })
     try { await settle(); for (let i = 0; i < 3; i++) await clock.tick(); expect(reads).to.equal(1); expect(clock.jobs.size).to.equal(0) }
     finally { source.dispose(); clock.restore() }
   })

@@ -20,3 +20,15 @@ test('wrong scope, correlation, timestamp types, duplicate framing and old roots
     const result=run(wire);assert.equal(result.errors.length,1,wire);assert.equal(result.events.length,0)
   }
 })
+test('CRLF split across chunks and multiline JSON preserve event and commit cursor only after validation',()=>{
+ const events=[],cursors=[],errors=[];const parser=createHallSseParser({conversationId:'42',requestId:'request-test',onEvent:e=>events.push(e),onCursor:c=>cursors.push(c),onInvalid:e=>errors.push(e)})
+ const m=message('8'), wire=`event: ${m.messageType}\r\nid: ${m.messageId}\r\ndata: ${JSON.stringify(m)}\r\n\r\n`
+ for(const char of wire) parser.push(char)
+ parser.finish();assert.deepEqual(errors,[]);assert.equal(events.length,1);assert.deepEqual(cursors,['8'])
+})
+test('conflicting scope or cursor and rejected reducer never advance replay cursor',()=>{
+ for(const patch of [{conversationId:'43'},{cursor:'9'},{eventSequence:'9'}]){
+  const m=message('8');const result=run(frame({...m,data:{...m.data,...patch}}));assert.equal(result.events.length,0);assert.deepEqual(result.cursors,[]);assert.equal(result.errors.length,1)
+ }
+ const cursors=[],errors=[];const parser=createHallSseParser({conversationId:'42',requestId:'request-test',onEvent:()=>false,onCursor:c=>cursors.push(c),onInvalid:e=>errors.push(e)});parser.push(frame(message('8')));assert.deepEqual(cursors,[]);assert.equal(errors.length,1)
+})

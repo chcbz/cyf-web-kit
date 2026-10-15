@@ -1,3 +1,4 @@
+import { validMaterialVersion } from '../src/composables/juyiting/materialVersion.js'
 import { expect } from 'chai'
 import { after, before, describe, it } from 'mocha'
 import { readFileSync } from 'node:fs'
@@ -24,8 +25,9 @@ const loadEditor = (deps = editorDeps()) => {
     .replace(/^import\s+\{\s*useHallDrafts\s*\}\s+from\s+['"]@\/composables\/juyiting\/useHallDrafts['"];?\s*$/gm, 'var { useHallDrafts } = deps')
     .replace(/^import\s+HallPrivateMark\s+from\s+['"]\.\/HallPrivateMark\.vue['"];?\s*$/gm, 'var HallPrivateMark = { name: \'HallPrivateMark\', props: [\'sourceRef\', \'resultRef\', \'identityScope\', \'identityEpoch\'], template: \'<section class="private-mark-test-slot" />\' }')
     .replace(/^import\s+\{\s*deliveryTypeText\s*\}\s+from\s+['"]@\/utils\/executionFormats['"];?\s*$/gm, 'var { deliveryTypeText } = deps')
+    .replace(/^import\s+\{\s*validMaterialVersion\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { validMaterialVersion } = deps')
     .replace('export default', 'return')
-  return new Function('Vue', 'deps', script)(Vue, { ...deps, deliveryTypeText })
+  return new Function('Vue', 'deps', script)(Vue, { ...deps, deliveryTypeText, validMaterialVersion })
 }
 
 const editorDeps = () => {

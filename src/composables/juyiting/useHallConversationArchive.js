@@ -44,12 +44,13 @@ const defaultIdempotencyKey = () => {
 const validIdempotencyKey = value => typeof value === 'string' && /^[A-Za-z0-9._~:/+-]{8,160}$/.test(value)
 const validPart = part => part && part.state === 'ready' && ['text', 'image', 'audio', 'file'].includes(part.kind) &&
   ID(part.assetId) && revisionOf(part.revision)
+const fileVersion = value => typeof value === 'string' && /^[1-9][0-9]{0,9}$/.test(value) && BigInt(value) <= BigInt(MAX_FILE_VERSION)
 const operationItem = (value, expected) => value && typeof value === 'object' && !Array.isArray(value) &&
   Object.keys(value).every(key => ['sourceKind', 'assetId', 'revision', 'textSelection', 'state', 'fileId', 'version', 'errorCode', 'message'].includes(key)) &&
   // Current receipts discriminate assetRef/textSelection; legacy asset receipts omit the discriminator.
   (!Object.hasOwn(value, 'sourceKind') || value.sourceKind === 'assetRef') && value.textSelection == null &&
   value.assetId === expected.assetId && revisionOf(value.revision) === expected.revision && itemStates.has(value.state) &&
-  (value.fileId == null || ID(value.fileId)) && (value.version == null || (Number.isInteger(value.version) && value.version >= 1 && value.version <= MAX_FILE_VERSION)) &&
+  (value.fileId == null || ID(value.fileId)) && (value.version == null || fileVersion(value.version)) &&
   (value.errorCode == null || typeof value.errorCode === 'string') && (value.message == null || typeof value.message === 'string')
 const operationReceipt = (value, expected) => {
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
@@ -58,7 +59,7 @@ const operationReceipt = (value, expected) => {
   const item = value.items[0]
   if (!operationItem(item, expected)) return null
   // A completed archive must identify the concrete workspace version. A status label alone is never success.
-  if (value.state === 'saved' && (item.state !== 'saved' || !ID(item.fileId) || !Number.isInteger(item.version) || item.version < 1)) return null
+  if (value.state === 'saved' && (item.state !== 'saved' || !ID(item.fileId) || !fileVersion(item.version))) return null
   if (value.state !== 'saved' && item.state === 'saved') return null
   return { operationId: value.operationId, state: value.state, revision: revisionOf(value.revision), item: { ...item } }
 }

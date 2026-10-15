@@ -121,7 +121,7 @@ export const useHallConversation = ({
 
   const exactRuntimeId = exactHallConversationId
   const now = () => Date.now()
-  const apiData = response => response?.data?.data ?? response?.data ?? response
+  const apiData = response => response
   const authEpoch = () => apiStore?.authorizationGeneration
   const v2Supported = capability => capability?.schemaVersion === '2' && capability.requestId === true &&
     capability.requestRevision === true && capability.contextSnapshot === true && capability.durableTurns === true &&
@@ -919,7 +919,7 @@ export const useHallConversation = ({
 
   const readHistoryRows = result => Array.isArray(result?.items) ? result.items : []
 
-  const loadHallConversationHistory = ({ force = false, loadMore = false } = {}) => {
+  const loadHallConversationHistory = ({ force: _force = false, loadMore = false } = {}) => {
     if (disposed) return Promise.resolve([])
     const expectedScope = scopeSnapshot()
     if (!expectedScope || conversationHistoryDeletingId.value || (loadMore && !conversationHistoryHasMore.value)) return Promise.resolve([])
@@ -1611,7 +1611,7 @@ export const useHallConversation = ({
   const typedAcceptedReceipt = (receipt, context) => {
     const fields = ['schemaVersion', 'intent', 'requestId', 'userMessageId', 'turnIds', 'state', 'stateVersion', 'eventCursor', 'statusUrl', 'typedOutcomeUrl', 'replay', 'pendingQuestionId']
     if (!receipt || Array.isArray(receipt) || typeof receipt !== 'object' || Object.keys(receipt).length !== fields.length ||
-        Object.keys(receipt).some(key => !fields.includes(key)) || receipt.schemaVersion !== 1 ||
+        Object.keys(receipt).some(key => !fields.includes(key)) || receipt.schemaVersion !== 3 ||
         !['DISCUSSION', 'CLARIFICATION_REPLY'].includes(receipt.intent) || !typedId(receipt.requestId) ||
         !canonicalWireString(receipt.userMessageId) || !Array.isArray(receipt.turnIds) || receipt.turnIds.length !== 1 ||
         !typedId(receipt.turnIds[0]) || receipt.state !== 'ADMITTED' || receipt.stateVersion !== '0' ||

@@ -5,8 +5,8 @@ import { FORMAL_TASK_OUTPUT_MIME_TYPE, useFormalTaskExecution } from '../src/com
 
 const executionRecord = (overrides = {}) => ({
   executionId: 'exec_task_1', taskId: 'task_1', runId: 'run_1', conversationId: 'conversation_1', targetAgentId: 'agent_1',
-  state: 'QUEUED', executionMode: 'TASK', businessTaskId: 'task_1', workItemId: 'work_1', workItemState: 'running', grantRevision: 1, outputContentMimeType: FORMAL_TASK_OUTPUT_MIME_TYPE,
-  inputs: [{ inputRef: 'input_1', fileId: 'file_1', version: 2 }], runtimeCommand: null, ...overrides
+  state: 'QUEUED', executionMode: 'TASK', businessTaskId: 'task_1', workItemId: 'work_1', workItemState: 'running', grantRevision: '1', outputContentMimeType: FORMAL_TASK_OUTPUT_MIME_TYPE,
+  inputs: [{ inputRef: 'input_1', fileId: 'file_1', version: '2' }], runtimeCommand: null, ...overrides
 })
 
 const executionMock = () => {
@@ -19,7 +19,7 @@ const executionMock = () => {
     selectAgent: agentId => { if (agentId !== 'agent_1') return false; state.selectedAgentId.value = agentId; return true },
     create: async payload => {
       createCalls.push(payload)
-      const value = executionRecord({ inputs: payload.inputs.map((input, index) => ({ inputRef: `input_${index}`, fileId: input.fileId, version: Number(input.version) })) })
+      const value = executionRecord({ inputs: payload.inputs.map((input, index) => ({ inputRef: `input_${index}`, fileId: input.fileId, version: input.version })) })
       state.execution.value = value
       state.receipt.value = value
       return value
@@ -42,24 +42,24 @@ describe('formal TASK execution boundary', () => {
     assert.match(formal.readyReason.value, /conversationId/)
     const reasoned = useFormalTaskExecution({ taskId, conversationId, targetAgentId, conversationConfirmed, executionAuthorized, executionAuthorizationReason: ref('请先进入本榜文议事；不会使用其他榜文会话。'), identityEpoch: ref(1), identityScope: ref('owner_a'), executionFactory: () => executionMock().state })
     assert.match(reasoned.readyReason.value, /不会使用其他榜文会话/)
-    assert.equal(await formal.begin({ inputs: [{ fileId: 'file_1', version: 2 }], instruction: '请制作正式 PDF', confirmed: true }), null)
+    assert.equal(await formal.begin({ inputs: [{ fileId: 'file_1', version: '2' }], instruction: '请制作正式 PDF', confirmed: true }), null)
     assert.equal(mock.createCalls.length, 0)
 
     conversationId.value = 'conversation_1'
     conversationConfirmed.value = true
     executionAuthorized.value = true
     await formal.refreshReadiness()
-    assert.equal(await formal.begin({ inputs: [{ fileId: 'file_1', version: 2 }], instruction: '请制作正式 PDF', confirmed: false }), null)
+    assert.equal(await formal.begin({ inputs: [{ fileId: 'file_1', version: '2' }], instruction: '请制作正式 PDF', confirmed: false }), null)
     assert.equal(mock.createCalls.length, 0)
     // A corrected confirmation/input must not remain blocked by the prior recoverable error.
-    assert.equal(await formal.begin({ inputs: [{ fileId: 'file_1', version: 2 }, { fileId: 'file_1', version: 3 }], instruction: '请制作正式 PDF', confirmed: true }), null)
+    assert.equal(await formal.begin({ inputs: [{ fileId: 'file_1', version: '2' }, { fileId: 'file_1', version: '3' }], instruction: '请制作正式 PDF', confirmed: true }), null)
     assert.equal(mock.createCalls.length, 0)
 
-    const result = await formal.begin({ inputs: [{ fileId: 'file_1', version: 2 }], instruction: '请制作正式 PDF', confirmed: true })
+    const result = await formal.begin({ inputs: [{ fileId: 'file_1', version: '2' }], instruction: '请制作正式 PDF', confirmed: true })
     assert.equal(result?.executionId, 'exec_task_1')
     assert.deepEqual(mock.createCalls, [{
       taskId: 'task_1', conversationId: 'conversation_1',
-      inputs: [{ fileId: 'file_1', version: 2 }], instruction: '请制作正式 PDF', outputContentMimeType: 'application/pdf'
+      inputs: [{ fileId: 'file_1', version: '2' }], instruction: '请制作正式 PDF', outputContentMimeType: 'application/pdf'
     }])
     assert.equal(formal.activeExecution.value?.taskId, 'task_1')
     assert.match(formal.stateText.value, /不表示 Provider 已开始/)
@@ -111,7 +111,7 @@ describe('formal TASK execution boundary', () => {
 describe('formal owner input revocation', () => {
   const memory = () => { const values = new Map(); return { getItem: k => values.get(k) || null, setItem: (k,v) => values.set(k,v), removeItem: k => values.delete(k) } }
   const setup = (storage, mock = executionMock(), task = ref('task_1'), authorized = ref(false)) => {
-    mock.state.execution.value = executionRecord({ grantRevision: 1 })
+    mock.state.execution.value = executionRecord({ grantRevision: '1' })
     const formal = useFormalTaskExecution({ taskId: task, conversationId: ref('conversation_1'), targetAgentId: ref('agent_1'), conversationConfirmed: ref(true), executionAuthorized: authorized, identityEpoch: ref(1), identityScope: ref('owner_a'), executionFactory: () => mock.state, storage })
     return { formal, mock, task }
   }
@@ -121,7 +121,7 @@ describe('formal owner input revocation', () => {
     mock.state.revokeInputs = async ({ idempotencyKey }) => {
       assert.ok(idempotencyKey.length > 0 && idempotencyKey.length <= 100)
       calls++
-      const value = executionRecord({ state: 'INPUTS_REVOKED', grantRevision: 2 })
+      const value = executionRecord({ state: 'INPUTS_REVOKED', grantRevision: '2' })
       mock.state.execution.value = value
       return value
     }
@@ -157,13 +157,13 @@ describe('formal owner input revocation', () => {
     await first.formal.revokeOriginal({ confirmed: true })
     const second = setup(storage, executionMock(), ref('task_1'), ref(true))
     second.mock.state.execution.value = executionRecord({ executionId: 'unrelated-history', state: 'FAILED' })
-    assert.equal(await second.formal.begin({ inputs: [{ fileId: 'file_1', version: 2 }], instruction: 'no duplicate', confirmed: true }), null)
+    assert.equal(await second.formal.begin({ inputs: [{ fileId: 'file_1', version: '2' }], instruction: 'no duplicate', confirmed: true }), null)
     assert.equal(second.mock.createCalls.length, 0)
     assert.match(second.formal.readyReason.value, /原撤销请求结果待核对/)
     const reads = []
     second.mock.state.recoverExecution = async id => {
       reads.push(id)
-      second.mock.state.execution.value = executionRecord({ state: 'INPUTS_REVOKED', grantRevision: 2 })
+      second.mock.state.execution.value = executionRecord({ state: 'INPUTS_REVOKED', grantRevision: '2' })
       return second.mock.state.execution.value
     }
     assert.equal((await second.formal.recoverOriginalRequest()).state, 'INPUTS_REVOKED')
@@ -188,9 +188,9 @@ describe('formal owner input revocation', () => {
     mock.state.revokeInputs = async () => null
     await formal.revokeOriginal({ confirmed: true })
     mock.state.execution.value = executionRecord({ executionId: 'other-exec', state: 'INPUTS_REVOKED' })
-    mock.state.execution.value = executionRecord({ grantRevision: 1 })
+    mock.state.execution.value = executionRecord({ grantRevision: '1' })
     assert.equal(formal.canRevoke.value, false)
-    mock.state.execution.value = executionRecord({ grantRevision: 2, state: 'INPUTS_REVOKED' })
+    mock.state.execution.value = executionRecord({ grantRevision: '2', state: 'INPUTS_REVOKED' })
     const next = setup(storage)
     assert.equal(next.formal.canRevoke.value, true)
   })

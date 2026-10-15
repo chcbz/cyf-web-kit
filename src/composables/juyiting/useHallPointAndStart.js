@@ -3,19 +3,7 @@ import { bountyBootstrapReference } from './hallBountyBootstrap.js'
 import { createPointAndStartIntentStore, exactPointAndStartId, exactPointAndStartScope, pointAndDeliberateBody,
   pointAndStartReadPath, pointAndStartTarget, pointAndStartLong, pointAndStartProjection } from './hallPointAndStartIntent.js'
 
-const unwrap = result => {
-  const envelope = result && Object.hasOwn(result, 'code') ? result : result?.data ?? result
-  if (envelope && Object.hasOwn(envelope, 'code')) {
-    if (![undefined, null, 'E0', '0', 0, '200', 200].includes(envelope.code)) {
-      const error = new Error(envelope.msg || '点将读取或办理被拒绝')
-      error.code = envelope.code
-      error.status = envelope.status
-      throw error
-    }
-    return envelope.data?.data ?? envelope.data
-  }
-  return envelope?.data ?? envelope
-}
+const unwrap = result => result
 const clone = value => JSON.parse(JSON.stringify(value))
 const initialState = () => ({ status: 'IDLE', intent: null, projection: null, error: null })
 const statusForProjection = projection => !projection ? 'UNKNOWN' : !projection.currentAssignment ? 'HISTORICAL' :

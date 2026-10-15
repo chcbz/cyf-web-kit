@@ -6,30 +6,23 @@ const MAX_ID_LENGTH = 100
 const RECOVERY_PREFIX = 'cyf.personal-workspace.execution-recovery.v1'
 const BROWSER_KEY = `${RECOVERY_PREFIX}.browser`
 export const PERSONAL_WORKSPACE_EXECUTION_MIME_TYPES = Object.freeze([
-  'image/png', 'image/jpeg', 'application/pdf',
+  'text/plain', 'image/png', 'image/jpeg', 'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation'
 ])
-// Inputs are a separate server-declared contract: plain text may be consumed to create
-// a PDF/Office/image output, but it must never become a selectable delivery format.
+// Separate server-declared input/output capabilities remain the authority for selection.
 export const PERSONAL_WORKSPACE_EXECUTION_INPUT_MIME_TYPES = Object.freeze([
-  ...PERSONAL_WORKSPACE_EXECUTION_MIME_TYPES,
-  'text/plain'
+  ...PERSONAL_WORKSPACE_EXECUTION_MIME_TYPES
 ])
 const EXECUTION_MIME_TYPES = new Set(PERSONAL_WORKSPACE_EXECUTION_MIME_TYPES)
 const EXECUTION_INPUT_MIME_TYPES = new Set(PERSONAL_WORKSPACE_EXECUTION_INPUT_MIME_TYPES)
 const ID = value => typeof value === 'string' && value.length > 0 && value.length <= MAX_ID_LENGTH && !/^\s|\s$/u.test(value)
 const TEXT = (value, maximum) => typeof value === 'string' && value.trim().length > 0 && value.length <= maximum
-const REVISION = value => (typeof value === 'string' && /^(0|[1-9]\d*)$/u.test(value)) || (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)
+const REVISION = value => typeof value === 'string' && /^[1-9]\d{0,18}$/u.test(value) && BigInt(value) <= 9223372036854775807n
 const TIMESTAMP = value => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 const valueOf = value => typeof value === 'function' ? value() : unref(value)
 const randomKey = () => globalThis.crypto?.randomUUID?.() || `pws-execution-${Date.now()}-${Math.random().toString(36).slice(2)}`
-const unwrap = result => {
-  let value = result
-  for (let index = 0; index < 2 && value && typeof value === 'object' && Object.hasOwn(value, 'data'); index += 1) value = value.data
-  return value
-}
 const rosterItems = payload => Array.isArray(payload) ? payload : (Array.isArray(payload?.items) ? payload.items : (Array.isArray(payload?.list) ? payload.list : (Array.isArray(payload?.records) ? payload.records : (Array.isArray(payload?.rows) ? payload.rows : []))))
 const validAgent = value => value && typeof value === 'object' && ID(value.agentId || value.id)
 const normalizeAgent = value => ({
@@ -37,7 +30,7 @@ const normalizeAgent = value => ({
   name: TEXT(value.name, 160) ? value.name : (TEXT(value.personaName, 160) ? value.personaName : (value.agentId || value.id)),
   status: typeof value.status === 'string' ? value.status : ''
 })
-const validSelection = value => value && typeof value === 'object' && ID(value.fileId) && REVISION(value.version)
+const validSelection = value => value && typeof value === 'object' && ID(value.fileId) && REVISION(value.version) && BigInt(value.version) <= 2147483647n
 const validSelections = value => Array.isArray(value) && value.length <= 128 && value.every(validSelection) && new Set(value.map(item => item.fileId)).size === value.length
 const validOutputMime = value => EXECUTION_MIME_TYPES.has(value)
 const validInputMime = value => EXECUTION_INPUT_MIME_TYPES.has(value)
@@ -47,18 +40,22 @@ const validCapabilities = value => value && typeof value === 'object' && Array.i
   typeof value.generationEnabled === 'boolean'
 export const validPersonalWorkspaceExecutionCapabilities = validCapabilities
 const validInput = value => validSelection(value) && ID(value.inputRef)
-const EXECUTION_STATES = new Set(['QUEUED', 'INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'FAILED'])
-const TERMINAL_EXECUTION_STATES = new Set(['INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'FAILED'])
+const PRIVATE_STATES = new Set(['QUEUED', 'INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'FAILED'])
+const TASK_STATES = new Set([...PRIVATE_STATES, 'OUTPUT_STAGED'])
+const CONVERSATION_STATES = new Set([...PRIVATE_STATES, 'RESULT_COMMITTED'])
+const EXECUTION_STATES = new Set([...TASK_STATES, ...CONVERSATION_STATES])
+const modeState = value => ({ PRIVATE: PRIVATE_STATES, TASK: TASK_STATES, CONVERSATION: CONVERSATION_STATES })[value.executionMode]?.has(value.state) === true
+const TERMINAL_EXECUTION_STATES = new Set(['INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'RESULT_COMMITTED', 'FAILED'])
 const validRuntimeCommand = value => value == null || (value && typeof value === 'object' && ID(value.taskId) && ID(value.runId) && Array.isArray(value.inputManifest) && Array.isArray(value.outputManifest))
 const validFailure = value => value?.state !== 'FAILED'
   ? value?.failureCode == null && value?.failureMessage == null
   : value.failureCode === 'AGENT_DELIVERY_FAILED' && TEXT(value.failureMessage, 255)
 const validExecution = value => value && typeof value === 'object' && ID(value.executionId) && ID(value.taskId) && ID(value.runId) &&
-  (value.conversationId == null || ID(value.conversationId)) && ID(value.targetAgentId) && EXECUTION_STATES.has(value.state) &&
-  validFailure(value) && REVISION(value.grantRevision) && validOutputMime(value.outputContentMimeType) && Array.isArray(value.inputs) &&
+  (value.conversationId == null || ID(value.conversationId)) && ID(value.targetAgentId) && modeState(value) &&
+  validFailure(value) && REVISION(value.grantRevision) && (value.outputContentMimeType === null || validOutputMime(value.outputContentMimeType)) && Array.isArray(value.inputs) &&
   value.inputs.every(validInput) && validRuntimeCommand(value.runtimeCommand)
 const validExecutionSummary = value => value && typeof value === 'object' && ID(value.executionId) && ID(value.targetAgentId) &&
-  EXECUTION_STATES.has(value.state) && validOutputMime(value.outputContentMimeType) && TIMESTAMP(value.createdAt)
+  EXECUTION_STATES.has(value.state) && (value.outputContentMimeType === null || validOutputMime(value.outputContentMimeType)) && TIMESTAMP(value.createdAt)
 const validCursor = value => value == null || (value && typeof value === 'object' && TIMESTAMP(value.createdAt) && ID(value.executionId))
 const descendingHistory = items => items.every((item, index) => index === 0 || items[index - 1].createdAt > item.createdAt || (items[index - 1].createdAt === item.createdAt && items[index - 1].executionId > item.executionId))
 const abortError = message => new DOMException(message, 'AbortError')
@@ -165,7 +162,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     try {
       const response = await api.execute({ ...options, autoLoading: false, needAuth: true, signal: controller.signal })
       if (!stillCurrent(snapshot, controller)) throw abortError('Workspace context changed')
-      return unwrap(response)
+      return response
     } finally { controllers.delete(controller) }
   }
   const applySummary = value => {

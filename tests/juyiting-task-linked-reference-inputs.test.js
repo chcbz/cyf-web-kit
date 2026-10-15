@@ -4,21 +4,21 @@ import { useHallTaskLinkedReferenceInputs } from '../src/composables/juyiting/ha
 import { useHallPointAndStart } from '../src/composables/juyiting/useHallPointAndStart.js'
 
 const taskLink = (overrides = {}) => ({
-  relationId: 'relation-1', taskId: 'task-1', fileId: 'image-b', version: 2,
-  role: 'REFERENCE', state: 'ACTIVE', relationRevision: 1, createdAt: 1, ...overrides
+  relationId: 'relation-1', taskId: 'task-1', fileId: 'image-b', version: '2',
+  role: 'REFERENCE', state: 'ACTIVE', relationRevision: '1', createdAt: 1, ...overrides
 })
 const version = (fileId, number, contentMimeType = 'image/png') => ({
-  fileId, version: number, originalFilename: `${fileId}-v${number}.png`, contentMimeType, byteLength: 12
+  fileId, version: String(number), originalFilename: `${fileId}-v${number}.png`, contentMimeType, byteLength: '12'
 })
 const fileDetail = (fileId, versions = [version(fileId, 2)], overrides = {}) => {
   const { file: fileOverrides = {}, ...rootOverrides } = overrides
   return { ...rootOverrides,
-    file: { fileId, displayName: fileId, originKind: 'USER_UPLOAD', state: 'ACTIVE', latestVersion: versions.at(-1).version, metadataRevision: 1,
+    file: { fileId, displayName: fileId, originKind: 'USER_UPLOAD', state: 'ACTIVE', latestVersion: versions.at(-1).version, metadataRevision: '1',
       ...fileOverrides },
     latestVersion: versions.at(-1), versions, relations: [], derivation: [] }
 }
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done }); return { promise, resolve } }
-const apiHarness = ({ pages = [{ items: [], nextCursor: null }], details = {}, fail } = {}) => {
+const apiHarness = ({ pages = [{ items: [], nextCursor: null, hasMore: false }], details = {}, fail } = {}) => {
   const calls = []
   const api = { execute: async options => {
     calls.push(options)
@@ -26,12 +26,12 @@ const apiHarness = ({ pages = [{ items: [], nextCursor: null }], details = {}, f
     if (options.url.includes('/file-links')) {
       const cursor = options.params?.cursor
       const index = cursor ? Number(cursor.replace('page-', '')) : 0
-      return { data: pages[index] }
+      return (pages[index])
     }
     const fileId = decodeURIComponent(options.url.split('/').at(-1))
     const detail = details[fileId]
     if (detail instanceof Error) throw detail
-    return { data: detail }
+    return (detail)
   } }
   return { api, calls }
 }
@@ -58,14 +58,14 @@ describe('task-linked reference input resolver', () => {
     const h = resolverHarness({
       pages: [
         { items: [
-          taskLink({ relationId: 'rel-z', fileId: 'image-z', version: 2 }),
+          taskLink({ relationId: 'rel-z', fileId: 'image-z', version: '2' }),
           taskLink({ relationId: 'rel-input', fileId: 'text-a', role: 'INPUT' }),
           taskLink({ relationId: 'rel-detached', fileId: 'image-old', state: 'DETACHED' })
-        ], nextCursor: 'page-1' },
+        ], nextCursor: 'page-1', hasMore: true },
         { items: [
-          taskLink({ relationId: 'rel-a2', fileId: 'image-a', version: 2 }),
-          taskLink({ relationId: 'rel-a3', fileId: 'image-a', version: 3 })
-        ], nextCursor: null }
+          taskLink({ relationId: 'rel-a2', fileId: 'image-a', version: '2' }),
+          taskLink({ relationId: 'rel-a3', fileId: 'image-a', version: '3' })
+        ], nextCursor: null, hasMore: false }
       ],
       details: {
         'image-z': fileDetail('image-z', [version('image-z', 2), version('image-z', 3)]),
@@ -76,9 +76,9 @@ describe('task-linked reference input resolver', () => {
     const result = await h.resolver.resolve({ taskId: 'task-1', inputRefsPolicy: 'TASK_LINKED_REFERENCE' })
 
     expect(result).to.deep.equal({ state: 'READY', reason: null, inputRefs: [
-      { fileId: 'image-a', version: 2, purpose: 'REFERENCE' },
-      { fileId: 'image-a', version: 3, purpose: 'REFERENCE' },
-      { fileId: 'image-z', version: 2, purpose: 'REFERENCE' }
+      { fileId: 'image-a', version: '2', purpose: 'REFERENCE' },
+      { fileId: 'image-a', version: '3', purpose: 'REFERENCE' },
+      { fileId: 'image-z', version: '2', purpose: 'REFERENCE' }
     ] })
     expect(h.calls.filter(call => call.url.includes('/file-links')).map(call => call.params || null)).to.deep.equal([null, { cursor: 'page-1' }])
     expect(h.calls.filter(call => call.url.includes('/personal-workspace/files/')).map(call => call.url)).to.deep.equal([
@@ -87,10 +87,10 @@ describe('task-linked reference input resolver', () => {
   })
 
   it('distinguishes a complete empty catalog from EMPTY_ONLY references that must not be silently discarded', async () => {
-    const empty = resolverHarness({ pages: [{ items: [taskLink({ role: 'OUTPUT' })], nextCursor: null }] })
+    const empty = resolverHarness({ pages: [{ items: [taskLink({ role: 'OUTPUT' })], nextCursor: null, hasMore: false }] })
     expect(await empty.resolver.resolve({ taskId: 'task-1', inputRefsPolicy: 'EMPTY_ONLY' })).to.deep.equal({ state: 'READY', reason: null, inputRefs: [] })
 
-    const nonempty = resolverHarness({ pages: [{ items: [taskLink()], nextCursor: null }], details: { 'image-b': fileDetail('image-b') } })
+    const nonempty = resolverHarness({ pages: [{ items: [taskLink()], nextCursor: null, hasMore: false }], details: { 'image-b': fileDetail('image-b') } })
     expect(await nonempty.resolver.resolve({ taskId: 'task-1', inputRefsPolicy: 'EMPTY_ONLY' })).to.deep.equal({
       state: 'BLOCKED', reason: 'REFERENCES_NOT_ALLOWED', inputRefs: []
     })
@@ -103,17 +103,17 @@ describe('task-linked reference input resolver', () => {
     ['duplicate linked version rows', {}, fileDetail('image-b', [version('image-b', 2), version('image-b', 2)]), 'REFERENCE_VERSION_MISMATCH'],
     ['wrong version owner', {}, fileDetail('image-b', [version('foreign-file', 2)]), 'FILE_DETAIL_MISMATCH']
   ]) it(`fails closed for ${name}`, async () => {
-    const h = resolverHarness({ pages: [{ items: [taskLink(linkOverride)], nextCursor: null }], details: { 'image-b': detail } })
+    const h = resolverHarness({ pages: [{ items: [taskLink(linkOverride)], nextCursor: null, hasMore: false }], details: { 'image-b': detail } })
     expect((await h.resolver.resolve({ taskId: 'task-1', inputRefsPolicy: 'TASK_LINKED_REFERENCE' })).reason).to.equal(reason)
   })
 
   it('rejects duplicate exact references and the 33rd reference without truncation or detail reads', async () => {
-    const duplicate = resolverHarness({ pages: [{ items: [taskLink(), taskLink({ relationId: 'relation-2' })], nextCursor: null }] })
+    const duplicate = resolverHarness({ pages: [{ items: [taskLink(), taskLink({ relationId: 'relation-2' })], nextCursor: null, hasMore: false }] })
     expect((await duplicate.resolver.resolve({ taskId: 'task-1', inputRefsPolicy: 'TASK_LINKED_REFERENCE' })).reason).to.equal('DUPLICATE_REFERENCE')
     expect(duplicate.calls.filter(call => call.url.includes('/personal-workspace/files/'))).to.have.length(0)
 
-    const manyLinks = Array.from({ length: 33 }, (_, index) => taskLink({ relationId: `relation-${index}`, fileId: `image-${index}`, version: 1 }))
-    const many = resolverHarness({ pages: [{ items: manyLinks, nextCursor: null }] })
+    const manyLinks = Array.from({ length: 33 }, (_, index) => taskLink({ relationId: `relation-${index}`, fileId: `image-${index}`, version: '1' }))
+    const many = resolverHarness({ pages: [{ items: manyLinks, nextCursor: null, hasMore: false }] })
     expect((await many.resolver.resolve({ taskId: 'task-1', inputRefsPolicy: 'TASK_LINKED_REFERENCE' })).reason).to.equal('TOO_MANY_REFERENCES')
     expect(many.calls.filter(call => call.url.includes('/personal-workspace/files/'))).to.have.length(0)
   })
@@ -128,9 +128,9 @@ describe('task-linked reference input resolver', () => {
   it('drops a late detail after identity/auth epoch changes and preserves no stale READY result', async () => {
     const wait = deferred()
     const identity = ref('owner-a\u00001')
-    const h = resolverHarness({ identity, pages: [{ items: [taskLink()], nextCursor: null }], fail: options => {
-      if (options.url.includes('/file-links')) return { data: { items: [taskLink()], nextCursor: null } }
-      options.signal.addEventListener('abort', () => wait.resolve({ data: fileDetail('image-b') }), { once: true })
+    const h = resolverHarness({ identity, pages: [{ items: [taskLink()], nextCursor: null, hasMore: false }], fail: options => {
+      if (options.url.includes('/file-links')) return ({ items: [taskLink()], nextCursor: null, hasMore: false })
+      options.signal.addEventListener('abort', () => wait.resolve((fileDetail('image-b'))), { once: true })
       return wait.promise
     } })
     const pending = h.resolver.resolve({ taskId: 'task-1', inputRefsPolicy: 'TASK_LINKED_REFERENCE' })
@@ -141,7 +141,7 @@ describe('task-linked reference input resolver', () => {
   })
 
   it('new point/start ignores old image-only selector arguments and uses the server-frozen task catalogue', async () => {
-    const h = resolverHarness({ pages: [{ items: [taskLink()], nextCursor: null }], details: {
+    const h = resolverHarness({ pages: [{ items: [taskLink()], nextCursor: null, hasMore: false }], details: {
       'image-b': fileDetail('image-b', [version('image-b', 2), version('image-b', 3)])
     } })
     const resolved = await h.resolver.resolve({ taskId: 'task-1', inputRefsPolicy: 'TASK_LINKED_REFERENCE' })
@@ -157,17 +157,17 @@ describe('task-linked reference input resolver', () => {
     const pointApi = {
       get: async path => {
         calls.push({ method: 'GET', path })
-        if (path.endsWith('/requirements/current')) return { data: { taskId: 'task-1', taskVersion: '6', requirementRevision: '3',
-          title: '画一只鸟', description: null, contentSha256: 'a'.repeat(64), source: 'CREATE' } }
-        if (path.endsWith('/point-and-deliberate/request')) return { data: receipt() }
-        return { data: assigned
+        if (path.endsWith('/requirements/current')) return ({ taskId: 'task-1', taskVersion: '6', requirementRevision: '3',
+          title: '画一只鸟', description: null, contentSha256: 'a'.repeat(64), source: 'CREATE' })
+        if (path.endsWith('/point-and-deliberate/request')) return (receipt())
+        return (assigned
           ? { id: 'task-1', taskVersion: '7', status: 'assigned', assignedAgentId: 'agent-1' }
-          : { id: 'task-1', taskVersion: '6', status: 'open' } }
+          : { id: 'task-1', taskVersion: '6', status: 'open' })
       },
       create: async (path, body, options) => {
         calls.push({ method: 'POST', path, body, key: options.headers['Idempotency-Key'] })
         assigned = true
-        return { data: receipt() }
+        return (receipt())
       }
     }
     const flow = useHallPointAndStart({ agentApi: pointApi, actorScopeKey: ref('owner-a/client-a'), storage: memoryStorage(),

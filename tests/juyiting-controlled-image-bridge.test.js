@@ -59,7 +59,7 @@ describe('retired controlled image bridge: history GET only', () => {
       const storage = memory(); seed(storage); const calls = []; const receipt = copy(fixture.wire.wrapper_receipt)
       if (foreign) receipt.taskId = 'foreign'
       const flow = useHallPointAndStartControlledBridge({ actorScopeKey: ref(scope), storage, agentApi: {
-        get: async path => { calls.push(['GET', path]); return { data: receipt } }, create: async path => calls.push(['POST', path]) } })
+        get: async path => { calls.push(['GET', path]); return (receipt) }, create: async path => calls.push(['POST', path]) } })
       try { expect(await flow.checkOriginal('task_fixture_1')).to.equal(!foreign); expect(calls).to.deep.equal([['GET', '/tasks/task_fixture_1/point-and-start-controlled-image/request']]) }
       finally { flow.dispose() }
     }

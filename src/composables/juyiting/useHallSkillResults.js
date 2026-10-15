@@ -1,11 +1,13 @@
 import { ref, watch } from 'vue'
-import { skillResultProjection, skillResultReferences } from './hallSkillResults.js'
+import { skillResultAdvances, skillResultProjection, skillResultReferences } from './hallSkillResults.js'
 /** Read-only execution polling, fenced by full identity and conversation generation. */
 export const useHallSkillResults = ({ api, getContext, getOutcomes, identityKey, enabled }) => {
   const results = ref([]); const error = ref(''); const loading = ref(false)
   let epoch = 0; let disposed = false; let controller = null; let timer = null
-  const fingerprint = () => JSON.stringify([identityKey(), enabled(), getContext(), getOutcomes()])
-  const reset = () => { epoch++; controller?.abort(); controller = null; clearTimeout(timer); timer = null; results.value = []; error.value = ''; loading.value = false }
+  const scopeFingerprint = () => JSON.stringify([identityKey(), enabled(), getContext()])
+  const fingerprint = () => JSON.stringify([scopeFingerprint(), getOutcomes()])
+  let previousScope = null
+  const reset = (clear = true) => { epoch++; controller?.abort(); controller = null; clearTimeout(timer); timer = null; if (clear) results.value = []; error.value = ''; loading.value = false }
   const refresh = async () => {
     if (disposed || controller || !enabled()) return
     const generation = epoch; const key = fingerprint(); const context = { ...getContext() }
@@ -19,13 +21,17 @@ export const useHallSkillResults = ({ api, getContext, getOutcomes, identityKey,
         try {
           const response = await api.get(`/conversations/${encodeURIComponent(context.conversationId)}/executions/${encodeURIComponent(reference.executionId)}/result`, {}, { autoLoading: false, needAuth: true, signal: own.signal })
           if (!current()) return
-          const result = skillResultProjection(response?.data?.schemaVersion === 1 ? response.data : response?.data?.data ?? response?.data ?? response, reference)
+          const result = skillResultProjection(response, reference)
           if (!result) throw new Error('技能结果来源或归档状态不匹配')
-          next.push(Object.freeze({ ...result, reference }))
+          const previous = results.value.find(item => item.executionId === result.executionId)
+          if (previous?.executionStateVersion != null && !skillResultAdvances(previous, result)) next.push(previous)
+          else next.push(Object.freeze({ ...result, reference }))
         } catch (cause) {
           if (!current()) return
           if ((cause?.response?.status ?? cause?.status) !== 404) throw cause
           // The exact child is not yet visible; never replace it with a history item.
+          const previous = results.value.find(item => item.executionId === reference.executionId)
+          if (previous) { next.push(previous); continue }
           next.push(Object.freeze({ executionId: reference.executionId, phase: 'QUEUED', complete: false, data: null, outputs: [], reference }))
         }
       }
@@ -39,6 +45,6 @@ export const useHallSkillResults = ({ api, getContext, getOutcomes, identityKey,
       }
     }
   }
-  const stop = watch(fingerprint, () => { reset(); if (enabled()) void refresh() }, { immediate: true, flush: 'sync' })
+  const stop = watch(fingerprint, () => { const scope = scopeFingerprint(); reset(scope !== previousScope); previousScope = scope; if (enabled()) void refresh() }, { immediate: true, flush: 'sync' })
   return { results, error, loading, refresh, dispose: () => { disposed = true; reset(); stop() } }
 }

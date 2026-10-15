@@ -132,7 +132,7 @@ describe('native bounty capability contract', () => {
     const calls = []
     const agentApi = { get: async (path, query, options) => {
       calls.push({ path, query, options })
-      return { data: { data: capability() } }
+      return ((capability()))
     } }
     const parsed = await loadNativeBountyCapability({ agentApi, taskId: 'task-1', targetAgentId: 'agent-1' })
     expect(parsed?.taskId).to.equal('task-1')
@@ -140,7 +140,7 @@ describe('native bounty capability contract', () => {
     expect(calls[0].query).to.deep.equal({ targetAgentId: 'agent-1' })
     expect(calls[0].options.autoLoading).to.equal(false)
     const mismatched = await loadNativeBountyCapability({
-      agentApi: { get: async () => ({ data: { data: capability({ targetAgentId: 'other-agent' }) } }) },
+      agentApi: { get: async () => (((capability({ targetAgentId: 'other-agent' })))) },
       taskId: 'task-1', targetAgentId: 'agent-1'
     })
     expect(mismatched).to.equal(null)
