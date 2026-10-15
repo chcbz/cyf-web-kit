@@ -198,6 +198,9 @@ export function useHttp (options = {}) {
 
       // 处理流式响应
       if (responseType === 'stream') {
+        if (httpResponse.headers.get('x-request-id') !== rumRequestId) {
+          throw protocolError('PROTOCOL_REQUEST_ID_MISMATCH')
+        }
         if (!httpResponse.body) {
           throw new Error('Response body is not available for streaming')
         }

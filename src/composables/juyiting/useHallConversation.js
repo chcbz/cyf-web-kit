@@ -1,3 +1,4 @@
+import { decodeChatStreamFrame } from '../../utils/chatStreamWire.js'
 import { computed, ref, watch } from 'vue'
 import {
   appendHallEventMessage as reduceHallEventMessage,
@@ -1430,13 +1431,15 @@ export const useHallConversation = ({
           selectedTaskId
         }
       }
+      let streamRequestId
       const transport = chatApi.create('/stream', body, {
         responseType: 'stream',
         autoLoading: false,
         timeout: 1800000,
         signal: replySignal.signal,
         headers: { 'Idempotency-Key': requestId },
-        onStreamOpen: handle => {
+        onStreamOpen: (handle, response) => {
+          streamRequestId = response.headers.get('x-request-id')
           if (!isCurrentReplyTurn()) {
             handle.cancel?.(new DOMException('Stale Hall reply stream', 'AbortError'))
             return
@@ -1446,13 +1449,12 @@ export const useHallConversation = ({
         },
         onStream: eventData => {
           if (!isCurrentReplyTurn()) return
-          let event
-          try { event = JSON.parse(String(eventData || '').replace(/^data:\s?/, '').trim()) } catch { /* text frame */ }
+          const event = decodeChatStreamFrame(eventData, streamRequestId)
           const conversationReplay = isMessagePartEvent(event) || event?.type === 'execution_abandoned'
           if (session.roundCloseout && !conversationReplay && event && typeof event === 'object' && event.requestId &&
               (event.requestId !== session.requestId || !bindSendEvent(session, event))) return
           const previousConversationId = conversationId.value
-          const accepted = processStream(eventData)
+          const accepted = processStream(JSON.stringify(event))
           if (accepted) recordObservation('first_response', request)
           if (conversationId.value && conversationId.value !== previousConversationId) onConversationResolved?.(conversationId.value)
         },
