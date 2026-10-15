@@ -72,7 +72,7 @@ describe('personal workspace execution adapter', () => {
 
     assert.equal(created.executionId, 'exec_1')
     assert.equal(calls[0].url, '/roster')
-    assert.deepEqual(calls[0].data, { pageNum: '1', pageSize: '100' })
+    assert.deepEqual(calls[0].data, { pageNum: 1, pageSize: 100 })
     assert.equal(calls[1].url, '/personal-workspace/executions/capabilities')
     assert.equal(calls[2].url, '/personal-workspace/executions')
     assert.deepEqual(calls[2].data, {

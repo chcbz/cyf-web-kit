@@ -243,7 +243,7 @@ const unwrap = response => response
 const loadAccounts = async () => {
   loading.value = true
   try {
-    const result = unwrap(await wxApi.list('/mp/info/list', { pageNum: '1', pageSize: '100', search: {} }))
+    const result = unwrap(await wxApi.list('/mp/info/list', { pageNum: 1, pageSize: 100, search: {} }))
     accounts.value = Array.isArray(result?.items) ? result.items : []
     if (selectedAccount.value) {
       selectedAccount.value = accounts.value.find((account) => account.acid === selectedAccount.value.acid) || accounts.value[0] || null

@@ -73,7 +73,7 @@ const loadWallet = async () => {
     }
     const [walletResult, ledgerResult] = await Promise.all([
       economyApi.get('/wallet', undefined, { autoLoading: false }),
-      economyApi.get('/ledger', { pageSize: '50' }, { autoLoading: false })
+      economyApi.get('/ledger', { pageSize: 50 }, { autoLoading: false })
     ])
     const nextWallet = unwrap(walletResult)
     const nextLedger = unwrap(ledgerResult)

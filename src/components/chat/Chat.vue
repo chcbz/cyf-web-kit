@@ -361,8 +361,8 @@ const loadConversations = async () => {
     const searchFilter = { jiacn: globalStore.getJiacn }
     if (conversationType.value) searchFilter.conversationType = conversationType.value
     await chatApi.list('/conversation/list', {
-      pageNum: '1',
-      pageSize: '100',
+      pageNum: 1,
+      pageSize: 100,
       orderBy: 'update_time desc',
       search: searchFilter
     }, {

@@ -17,7 +17,7 @@ describe('economy preview wallet and funded bounty integration', () => {
   it('keeps wallet presentation default-off and formats canonical amounts without number money conversion', () => {
     expect(walletSource).to.include("isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)")
     expect(walletSource).to.include("economyApi.get('/wallet'")
-    expect(walletSource).to.include("economyApi.get('/ledger', { pageSize: '50' }")
+    expect(walletSource).to.include("economyApi.get('/ledger', { pageSize: 50 }")
     expect(walletSource).to.include('formatSilverMicro')
     expect(walletSource).not.to.match(/parseFloat\(|Number\(wallet\.(availableMicro|heldMicro)/)
     expect(httpSource).to.include("export const economyApi = createApi('/economy')")
@@ -244,7 +244,7 @@ describe('funded bounty remediation', () => {
       expect(requestUrl.pathname).to.match(/\/agent\/roster$/)
       expect(requestUrl.search).to.equal('')
       expect(options.method).to.equal('POST')
-      expect(JSON.parse(options.body).data).to.deep.equal({ pageNum: '1', pageSize: '50' })
+      expect(JSON.parse(options.body).data).to.deep.equal({ pageNum: 1, pageSize: 50 })
       expect(options.headers.Authorization).to.equal('Bearer test-only-token')
       expect(options.signal.aborted).to.equal(false)
       expect(result).to.deep.equal(roster)

@@ -26,7 +26,7 @@ describe('useHallData bounty status counts', () => {
         const data = params.status
           ? allTasks.filter(task => task.status === params.status)
           : allTasks
-        options.onSuccess({ items: data, pageNum: '1', pageSize: '100', total: "0" })
+        options.onSuccess({ items: data, pageNum: 1, pageSize: 100, total: "0" })
       },
       get: async () => {}
     }
@@ -77,7 +77,7 @@ describe('useHallData operable roster', () => {
     const agentApi = {
       search: async (url, params, options) => {
         calls.push({ url, params })
-        options.onSuccess({ items: roster, pageNum: '1', pageSize: '100', total: "0" })
+        options.onSuccess({ items: roster, pageNum: 1, pageSize: 100, total: "0" })
       },
       get: async (url, _params, options) => options.onSuccess((url === '/personas/catalog' ? [
         { personaCode: 'huyanzhuo', boundToMe: true },
@@ -97,14 +97,14 @@ describe('useHallData operable roster', () => {
 
     expect(hallData.operableRosterAgents.value.map(agent => agent.agentId)).to.deep.equal(['huyanzhuo', 'personal-runtime'])
     expect(calls.filter(call => call.url === '/roster')).to.have.length(1)
-    expect(calls.find(call => call.params.status === undefined && call.params.pageSize === '100')).to.exist
+    expect(calls.find(call => call.params.status === undefined && call.params.pageSize === 100)).to.exist
   })
 
   it('keeps an explicitly operable offline roster selection when the shared map refresh omits it', async () => {
     const selectedAgent = ref({ agentId: 'huyanzhuo', boundToMe: true, canOperate: true, status: 'offline' })
     const agentApi = {
       get: async (url, _params, options) => options.onSuccess((url === '/personas/catalog' ? [] : [])),
-      search: async (_url, _params, options) => options.onSuccess({ items: [selectedAgent.value], pageNum: '1', pageSize: '100', total: "0" })
+      search: async (_url, _params, options) => options.onSuccess({ items: [selectedAgent.value], pageNum: 1, pageSize: 100, total: "0" })
     }
     const hallData = useHallData({
       agentApi,
@@ -138,7 +138,7 @@ describe('useHallData operable roster', () => {
       search: async (url, _params, options) => {
         if (url !== '/roster') throw new Error(`unexpected ${url}`)
         rosterReads += 1
-        options.onSuccess({ items: rosterReads === 1 ? first : refreshed, pageNum: '1', pageSize: '100', total: "0" })
+        options.onSuccess({ items: rosterReads === 1 ? first : refreshed, pageNum: 1, pageSize: 100, total: "0" })
       }
     }
     const hallData = useHallData({ agentApi, log: { warn: () => {} }, normalizeStatus: (status = '') => status.toLowerCase(), selectedAgent, selectedTask: ref(null), taskAgentMatchScore: () => 0 })
@@ -153,7 +153,7 @@ describe('useHallData operable roster', () => {
     expect(rosterReads).to.equal(2)
 
     const omittedCatalogData = useHallData({
-      agentApi: { get: async (_url, _params, options) => options.onSuccess(([])), search: async (_url, _params, options) => options.onSuccess({ items: first, pageNum: '1', pageSize: '100', total: "0" }) },
+      agentApi: { get: async (_url, _params, options) => options.onSuccess(([])), search: async (_url, _params, options) => options.onSuccess({ items: first, pageNum: 1, pageSize: 100, total: "0" }) },
       log: { warn: () => {} }, normalizeStatus: (status = '') => status.toLowerCase(), selectedAgent: ref(null), selectedTask: ref(null), taskAgentMatchScore: () => 0
     })
     await omittedCatalogData.loadAgents()
@@ -166,7 +166,7 @@ describe('useHallData operable roster', () => {
     const selectedAgent = ref(oldSelection)
     const agentApi = {
       get: async (url, _params, options) => options.onSuccess((url === '/personas/catalog' ? [] : [freshMapAgent])),
-      search: async (_url, _params, options) => options.onSuccess({ items: [{ ...freshMapAgent }], pageNum: '1', pageSize: '100', total: "0" })
+      search: async (_url, _params, options) => options.onSuccess({ items: [{ ...freshMapAgent }], pageNum: 1, pageSize: 100, total: "0" })
     }
     const hallData = useHallData({
       agentApi,
@@ -248,7 +248,7 @@ describe('useHallData operable roster', () => {
       get: async (_url, _params, options) => options.onSuccess(([])),
       search: async (url, _params, options) => {
         calls.push({ url })
-        options.onSuccess({ items: [], pageNum: '1', pageSize: '100', total: "0" })
+        options.onSuccess({ items: [], pageNum: 1, pageSize: 100, total: "0" })
       }
     }
     const hallData = useHallData({
@@ -307,7 +307,7 @@ describe('useHallData deferred Juyi Hall sources', () => {
       agentApi: {
         search: async (url, _params, options) => {
           if (url === '/tasks/search') {
-            options.onSuccess({ items: [{ id: 'task-1', status: 'open' }], pageNum: '1', pageSize: '100', total: "0" })
+            options.onSuccess({ items: [{ id: 'task-1', status: 'open' }], pageNum: 1, pageSize: 100, total: "0" })
             return
           }
           if (url === '/tasks/status-counts') throw new Error('counts offline')
@@ -412,7 +412,7 @@ describe('useHallData bounty title reload', () => {
     }
     const agentApi = {
       search: async (url, _params, options) => {
-        options.onSuccess({ items: url === '/tasks/search' ? [persistedTask] : { total: 1, open: 1 }, pageNum: '1', pageSize: '100', total: "0" })
+        options.onSuccess({ items: url === '/tasks/search' ? [persistedTask] : { total: 1, open: 1 }, pageNum: 1, pageSize: 100, total: "0" })
       },
       get: async () => {}
     }
@@ -430,5 +430,21 @@ describe('useHallData bounty title reload', () => {
 
     expect(hallData.tasks.value).to.deep.equal([persistedTask])
     expect(hallData.tasks.value[0].title).to.equal('夜探祝家庄榜文')
+  })
+})
+
+describe('Hall roster request wire types', () => {
+  it('sends bounded page integers, not int64 decimal strings', async () => {
+    const calls = []
+    const hall = useHallData({
+      agentApi: { search: async (url, data, options) => {
+        calls.push({ url, data })
+        options.onSuccess({ items: [], pageNum: 1, pageSize: 100, total: '0' })
+      } },
+      log: { warn: () => {} }, selectedAgent: ref(null), selectedTask: ref(null),
+      normalizeStatus: value => value, taskAgentMatchScore: () => 0
+    })
+    await hall.loadRosterAgents({ derive: false })
+    expect(calls).to.deep.equal([{ url: '/roster', data: { pageNum: 1, pageSize: 100 } }])
   })
 })

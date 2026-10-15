@@ -35,17 +35,17 @@ describe('task acceptance existing scoped source reads', () => {
       expect(source.scope.value).to.deep.equal({ taskId: 'task-1', conversationId: '101' })
       expect(source.catalog.entries.value).to.have.length(1); expect(source.error.value).to.equal('')
       expect(source.legacy.value).to.equal(false)
-      expect(calls[0]).to.deep.equal(['/conversation/list', { pageNum: '1', pageSize: '2', orderBy: 'id asc',
+      expect(calls[0]).to.deep.equal(['/conversation/list', { pageNum: 1, pageSize: 2, orderBy: 'id asc',
         search: { conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task-1' } }, true])
       expect(calls[1]).to.deep.equal(['/conversations/101/requests', true])
     } finally { source.dispose() }
   })
   it('searches the existing paginated history for the exact original, never substituting its first or latest row', async () => {
-    const calls = []; const api = { list: async (_path, body) => { calls.push(body.pageNum); return response(body.pageNum === '1'
+    const calls = []; const api = { list: async (_path, body) => { calls.push(body.pageNum); return response(body.pageNum === 1
       ? Array.from({ length: 100 }, (_, i) => scoped(String(i + 1))) : [scoped('999')]) },
     get: async path => { expect(path).to.equal('/conversations/999/requests'); return response(page('999')) } }
     const source = useHallBountyAcceptance({ api, taskId: () => 'task-1', identityKey: () => 'owner-1', conversationId: () => '999' })
-    try { await flushPromises(); expect(calls).to.deep.equal(['1', '2']); expect(source.scope.value.conversationId).to.equal('999') }
+    try { await flushPromises(); expect(calls).to.deep.equal([1, 2]); expect(source.scope.value.conversationId).to.equal('999') }
     finally { source.dispose() }
   })
   for (const [label, rows, wanted] of [['ambiguous', [scoped('101'), scoped('102')], ''], ['foreign', [scoped('101', 'foreign')], ''],

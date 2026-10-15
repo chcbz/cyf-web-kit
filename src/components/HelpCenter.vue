@@ -140,8 +140,8 @@ const loadFaqs = async () => {
 
   try {
     const result = await kefuApi.list('/faq/list', {
-      pageNum: '1',
-      pageSize: '50',
+      pageNum: 1,
+      pageSize: 50,
       orderBy: 'id desc',
       search: {
         status: 1

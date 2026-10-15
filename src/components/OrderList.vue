@@ -168,8 +168,8 @@ const onClickOpMenu = (item) => {
 const fetchOrders = () => {
   const jiacn = globalStore.getJiacn
   giftApi.search('/usage/list/user/' + jiacn, {
-    pageNum: '1',
-    pageSize: '999',
+    pageNum: 1,
+    pageSize: 999,
     orderBy: 'create_time desc'
   }, {
     onSuccess: (data) => {

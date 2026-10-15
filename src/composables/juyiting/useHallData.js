@@ -223,8 +223,8 @@ export const useHallData = ({
     rosterError.value = ''
     try {
       await agentApi.search('/roster', {
-        pageNum: '1',
-        pageSize: '100'
+        pageNum: 1,
+        pageSize: 100
       }, {
         autoLoading: false,
         onSuccess: (result) => {
@@ -304,8 +304,8 @@ export const useHallData = ({
     const baseParams = {
       ability: taskAbilityFilter.value || undefined,
       keyword: taskKeyword.value || undefined,
-      pageNum: '1',
-      pageSize: '30'
+      pageNum: 1,
+      pageSize: 30
     }
     const displayParams = {
       ...baseParams,
