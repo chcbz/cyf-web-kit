@@ -63,3 +63,23 @@ test('malformed public stream never invokes the successful stream-end callback',
     assert.equal(ended, false)
   } finally { globalThis.fetch = original }
 })
+
+test('stream lifecycle distinguishes a real terminal frame from transport EOF or cancellation', async () => {
+  const { createChatStreamDecoder } = await import('../src/utils/chatStreamWire.js')
+  const started = wire({ type: 'stream_started', conversationId: '42' }, 'chat.stream.started')
+  const completed = wire({ type: 'stream_completed', conversationId: '42' }, 'chat.stream.completed')
+  const decoder = createChatStreamDecoder()
+  assert.equal(decoder.accept(started, 'transport'), null)
+  assert.deepEqual(decoder.accept(wire({ v: 'hello' }, 'chat.stream.delta'), 'transport'), { v: 'hello' })
+  assert.equal(decoder.accept(completed, 'transport'), null)
+  decoder.finish()
+  assert.throws(() => decoder.accept(completed, 'transport'))
+  for (const frames of [[], [started], [started, wire({ v: 'partial' }, 'chat.stream.delta')]]) {
+    const incomplete = createChatStreamDecoder()
+    for (const frame of frames) incomplete.accept(frame, 'transport')
+    assert.throws(() => incomplete.finish(), error => error.code === 'CHAT_STREAM_INCOMPLETE')
+  }
+  assert.throws(() => createChatStreamDecoder().accept(completed, 'transport'))
+  const mismatch = createChatStreamDecoder(); mismatch.accept(started, 'transport')
+  assert.throws(() => mismatch.accept(wire({ conversationId: '43' }), 'transport'))
+})

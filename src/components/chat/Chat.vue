@@ -36,7 +36,7 @@
 </template>
 
 <script setup>
-import { decodeChatStreamFrame } from '../../utils/chatStreamWire.js'
+import { createChatStreamDecoder } from '../../utils/chatStreamWire.js'
 import { marked } from 'marked'
 import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -511,6 +511,7 @@ const sendMessage = async (message) => {
   if (chatDisposed || !message || isLoading.value) return
   const generation = chatLifecycleGeneration
   let streamRequestId
+  const streamDecoder = createChatStreamDecoder()
 
   isLoading.value = true
   isStreaming.value = true
@@ -559,10 +560,12 @@ const sendMessage = async (message) => {
       onStream: eventData => {
         if (chatDisposed || generation !== chatLifecycleGeneration) return
         log.debug('Stream data received:', eventData)
-        processBotResponse(decodeChatStreamFrame(eventData, streamRequestId))
+        const data = streamDecoder.accept(eventData, streamRequestId)
+        if (data) processBotResponse(data)
       },
       onStreamEnd: () => {
         if (chatDisposed || generation !== chatLifecycleGeneration) return
+        streamDecoder.finish()
         log.debug('Stream ended')
         isStreaming.value = false
         isLoading.value = false

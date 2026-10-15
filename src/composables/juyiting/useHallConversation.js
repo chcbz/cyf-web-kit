@@ -1,4 +1,4 @@
-import { decodeChatStreamFrame } from '../../utils/chatStreamWire.js'
+import { createChatStreamDecoder } from '../../utils/chatStreamWire.js'
 import { computed, ref, watch } from 'vue'
 import {
   appendHallEventMessage as reduceHallEventMessage,
@@ -1432,6 +1432,7 @@ export const useHallConversation = ({
         }
       }
       let streamRequestId
+      const streamDecoder = createChatStreamDecoder()
       const transport = chatApi.create('/stream', body, {
         responseType: 'stream',
         autoLoading: false,
@@ -1449,7 +1450,8 @@ export const useHallConversation = ({
         },
         onStream: eventData => {
           if (!isCurrentReplyTurn()) return
-          const event = decodeChatStreamFrame(eventData, streamRequestId)
+          const event = streamDecoder.accept(eventData, streamRequestId)
+          if (!event) return
           const conversationReplay = isMessagePartEvent(event) || event?.type === 'execution_abandoned'
           if (session.roundCloseout && !conversationReplay && event && typeof event === 'object' && event.requestId &&
               (event.requestId !== session.requestId || !bindSendEvent(session, event))) return
@@ -1460,6 +1462,7 @@ export const useHallConversation = ({
         },
         onStreamEnd: () => {
           if (!isCurrentReplyTurn()) return
+          streamDecoder.finish()
           session.streamHandle = null
           hallReplyStreamHandle = null
           publishStreamFinals()

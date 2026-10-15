@@ -3,7 +3,7 @@ import { protocolError } from './apiEnvelope.js'
 
 const messageTypes = new Set([
   'chat.stream.delta', 'chat.stream.title', 'chat.stream.error', 'chat.stream.event',
-  'chat.message', 'chat.message.delta'
+  'chat.message', 'chat.message.delta', 'chat.stream.started', 'chat.stream.completed'
 ])
 
 // /chat/stream uses data-only SSE frames (no resumable id/event). Durable recovery
@@ -18,7 +18,9 @@ export function decodeChatStreamFrame (line, requestId) {
   }
   const data = { ...message.data }
   const expectedType = Object.hasOwn(data, 'error') ? 'chat.stream.error'
-    : Object.hasOwn(data, 'v') ? 'chat.stream.delta'
+    : data.type === 'stream_started' ? 'chat.stream.started'
+      : data.type === 'stream_completed' ? 'chat.stream.completed'
+        : Object.hasOwn(data, 'v') ? 'chat.stream.delta'
       : Object.hasOwn(data, 't') ? 'chat.stream.title'
         : data.type === 'agent_message' ? 'chat.message'
           : data.type === 'agent_message_delta' ? 'chat.message.delta' : 'chat.stream.event'
@@ -32,4 +34,34 @@ export function decodeChatStreamFrame (line, requestId) {
   }
   if (message.messageType === 'chat.stream.error') throw protocolError('CHAT_STREAM_FAILED')
   return data
+}
+
+
+export function createChatStreamDecoder () {
+  let started = false
+  let completed = false
+  let conversationId
+  return {
+    accept (line, requestId) {
+      if (completed) throw protocolError('CHAT_STREAM_AFTER_COMPLETION')
+      const data = decodeChatStreamFrame(line, requestId)
+      if (data.type === 'stream_started') {
+        if (started || typeof data.conversationId !== 'string' || !data.conversationId) throw protocolError('CHAT_STREAM_INVALID_START')
+        started = true
+        conversationId = data.conversationId
+        return null
+      }
+      if (!started) throw protocolError('CHAT_STREAM_MISSING_START')
+      if (Object.hasOwn(data, 'conversationId') && data.conversationId !== conversationId) throw protocolError('CHAT_STREAM_SCOPE_MISMATCH')
+      if (data.type === 'stream_completed') {
+        if (data.conversationId !== conversationId) throw protocolError('CHAT_STREAM_SCOPE_MISMATCH')
+        completed = true
+        return null
+      }
+      return data
+    },
+    finish () {
+      if (!started || !completed) throw protocolError('CHAT_STREAM_INCOMPLETE')
+    }
+  }
 }
