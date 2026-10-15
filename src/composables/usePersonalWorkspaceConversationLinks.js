@@ -6,14 +6,15 @@ const MAX_ID_LENGTH = 100
 const MAX_CURSOR_LENGTH = 512
 const MAX_INT = 2147483647
 const LINK_FIELDS = new Set(['relationId', 'conversationId', 'fileId', 'version', 'role', 'state', 'relationRevision', 'createdAt'])
-const LIST_FIELDS = new Set(['items', 'nextCursor'])
+const LIST_FIELDS = new Set(['items', 'nextCursor', 'hasMore'])
 const DETACH_FIELDS = new Set(['link', 'executionSnapshotsPreserved'])
 const ID = value => typeof value === 'string' && value.length > 0 && value.length <= MAX_ID_LENGTH &&
   !/^\s|\s$/u.test(value) && ![...value].some(char => char.codePointAt(0) < 32)
 const CURSOR = value => typeof value === 'string' && value.length > 0 && value.length <= MAX_CURSOR_LENGTH &&
   ![...value].some(char => char.codePointAt(0) < 32)
-const VERSION = value => Number.isInteger(value) && value >= 1 && value <= MAX_INT
-const REVISION = value => Number.isSafeInteger(value) && value >= 1
+const DECIMAL = value => typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value) && BigInt(value) <= 9223372036854775807n
+const VERSION = value => DECIMAL(value) && BigInt(value) >= 1n && BigInt(value) <= BigInt(MAX_INT)
+const REVISION = value => DECIMAL(value) && BigInt(value) >= 1n
 const valueOf = value => typeof value === 'function' ? value() : unref(value)
 const abortError = message => new DOMException(message, 'AbortError')
 const randomKey = () => globalThis.crypto?.randomUUID?.() || `pws-conversation-link-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -30,7 +31,7 @@ const validLink = (value, conversationId) => exactKeys(value, LINK_FIELDS) && va
   Number.isSafeInteger(value.createdAt) && value.createdAt >= 0
 const etagFor = link => validLink(link, link?.conversationId) ? `"${link.relationId}:${link.relationRevision}"` : ''
 const validEtag = (value, link) => typeof value === 'string' && value === etagFor(link)
-const validList = (value, conversationId) => exactKeys(value, LIST_FIELDS) && Array.isArray(value.items) &&
+const validList = (value, conversationId) => exactKeys(value, LIST_FIELDS) && typeof value.hasMore === 'boolean' && value.hasMore === (value.nextCursor !== null) && Array.isArray(value.items) &&
   value.items.length <= 50 && value.items.every(item => validLink(item, conversationId)) &&
   (value.nextCursor == null || CURSOR(value.nextCursor)) &&
   new Set(value.items.map(item => item.relationId)).size === value.items.length

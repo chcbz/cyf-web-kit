@@ -2039,7 +2039,7 @@ const {
     hallReadRevision.value += 1
     syncAfterPersonaChanged()
   },
-  fundedActorScopeKey: computed(() => economyPreviewCapability.value?.principalScopeFingerprint || ''),
+  fundedActorScopeKey: computed(() => economyPreviewCapability.value?.principalScopeSha256 || ''),
   resolveFundedAgent: agent => agents.value.find(item => item.agentId === agent.agentId),
   canAssign,
   log,

@@ -2,7 +2,7 @@
   <var-dialog v-model:show="visible" :title="product?.name || product?.skillKey || '购买技能'" :confirm-button="false" :cancel-button="false">
     <div v-if="product" class="purchase-dialog">
       <p class="identity">{{ productIdentity }}</p>
-      <p class="price">报价：{{ formatMoney(quote?.priceMicro ?? product.priceMicro) }}</p>
+      <p class="price">报价：{{ formatMoney(quote?.price ?? product.price) }}</p>
       <p class="target">目标 Agent：{{ targetAgent?.name || targetAgent?.agentId || targetAgent?.id || '未选择' }}</p>
       <p v-if="!previewEnabled" class="reason">预览购买功能未启用。</p>
       <p v-else-if="product.canPurchase !== true" class="reason">{{ product.canPurchaseReason || product.purchaseReason || product.reason || '服务端未允许购买。' }}</p>
@@ -25,7 +25,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { codeUnitCompare, formatSilverMicro, formatSkillProductIdentity, normalizeApprovedPermissions } from '@/composables/useSkillMarket.js'
+import { codeUnitCompare, formatSkillMoney, formatSkillProductIdentity, normalizeApprovedPermissions } from '@/composables/useSkillMarket.js'
 
 const props = defineProps({
   show: { type: Boolean, default: false },
@@ -44,7 +44,7 @@ const emit = defineEmits(['update:show', 'update:approved-permissions', 'quote',
 const visible = computed({ get: () => props.show, set: value => emit('update:show', value) })
 const permissions = computed(() => normalizeApprovedPermissions(props.product?.permissions))
 const productIdentity = computed(() => formatSkillProductIdentity(props.product))
-const formatMoney = (amount) => props.moneyFormatter ? props.moneyFormatter(amount) : formatSilverMicro(amount)
+const formatMoney = (amount) => props.moneyFormatter ? props.moneyFormatter(amount) : formatSkillMoney(amount)
 const toggle = (permission, checked) => {
   const next = new Set(props.approvedPermissions)
   if (checked) next.add(permission)

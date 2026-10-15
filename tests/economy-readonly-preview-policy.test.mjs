@@ -8,10 +8,10 @@ import {
 
 function validCapabilities(overrides = {}) {
   return {
-    contractVersion: 'economy-readonly-v1',
+    contractVersion: 'economy-readonly-v2',
     mode: 'READ_ONLY_PREVIEW',
     enabled: true,
-    principalScopeFingerprint: 'opaque-A',
+    principalScopeSha256: 'a'.repeat(64),
     features: {
       wallet: true,
       ledger: true,
@@ -85,7 +85,7 @@ test('contains missing, wrong-type, and unknown contract payloads as unavailable
   assert.equal(assessReadOnlyPreviewCapabilities(validCapabilities({ enabled: 'true' })).reason,
     'CAPABILITIES_MALFORMED');
   assert.equal(assessReadOnlyPreviewCapabilities(validCapabilities({
-    principalScopeFingerprint: '',
+    principalScopeSha256: '',
   })).reason, 'CAPABILITIES_MALFORMED');
   assert.equal(assessReadOnlyPreviewCapabilities(validCapabilities({
     features: { wallet: true },

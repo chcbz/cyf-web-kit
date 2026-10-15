@@ -16,8 +16,8 @@ const post = async (path, payload, options) => readEconomyReadOnlyPreviewPayload
 export const economyReadOnlyPreviewClient = Object.freeze({
   capabilities: options => get('/capabilities', undefined, options),
   wallet: options => get('/wallet', undefined, options),
-  ledger: ({ cursor, limit = '50' } = {}, options) => get('/ledger', { ...(cursor ? { cursor } : {}), limit }, options),
-  catalog: ({ offset = '0', limit = '50' } = {}, options) => get('/skill-products', { offset, limit }, options),
+  ledger: ({ cursor, pageSize = 50 } = {}, options) => get('/ledger', { ...(cursor ? { cursor } : {}), pageSize }, options),
+  catalog: ({ cursor, pageSize = 50 } = {}, options) => get('/skill-products', { ...(cursor ? { cursor } : {}), pageSize }, options),
   product: (productId, options) => get(`/skill-products/${encodeURIComponent(productId)}`, undefined, options),
   agentSkills: (agentId, options) => get(`/agents/${encodeURIComponent(agentId)}/skills`, undefined, options),
   hostingPlan: options => get('/hosting-plan', undefined, options),

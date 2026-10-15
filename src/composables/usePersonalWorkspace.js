@@ -25,7 +25,8 @@ const ID = value => typeof value === 'string' && value.length > 0 && value.lengt
   !/^\s|\s$/.test(value) && ![...value].some(char => char.codePointAt(0) < 32)
 const TEXT = (value, maximum) => typeof value === 'string' && value.length > 0 && value.length <= maximum &&
   !/^\s|\s$/.test(value) && ![...value].some(char => char.codePointAt(0) < 32)
-const VERSION = value => Number.isInteger(Number(value)) && Number(value) >= 1 && Number(value) <= MAX_INT
+const DECIMAL = value => typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value) && BigInt(value) <= 9223372036854775807n
+const VERSION = value => DECIMAL(value) && BigInt(value) >= 1n && BigInt(value) <= BigInt(MAX_INT)
 const abortError = message => new DOMException(message, 'AbortError')
 const valueOf = value => typeof value === 'function' ? value() : unref(value)
 
@@ -62,32 +63,28 @@ const errorMessage = error => {
 }
 const previewPartMimeTypes = new Set(PERSONAL_WORKSPACE_MIME_TYPES.filter(mime =>
   mime === 'text/plain' || mime.startsWith('image/') || mime.startsWith('audio/')))
-// PreviewView from the current API does not carry a representation field. A known
-// label is tolerated during rollout but never controls rendering or authorization.
-const PREVIEW_REPRESENTATIONS = new Set(['EXTRACTED_TEXT', 'PAGED_IMAGE', 'SHEET_TEXT', 'PAGED_TEXT'])
 const validPreviewPart = part => part && typeof part === 'object' && !Array.isArray(part) &&
   Object.keys(part).every(key => ['partId', 'contentMimeType'].includes(key)) && ID(part.partId) && previewPartMimeTypes.has(normalizeMime(part.contentMimeType))
 const validPreviewView = value => {
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
-    !Object.keys(value).every(key => ['state', 'representation', 'parts', 'partial', 'reason'].includes(key)) ||
-    value.state !== 'READY' || (value.representation != null && !PREVIEW_REPRESENTATIONS.has(value.representation)) ||
+    !Object.keys(value).every(key => ['state', 'parts', 'partial', 'reason'].includes(key)) ||
+    value.state !== 'READY' ||
     typeof value.partial !== 'boolean' || (value.reason != null && !TEXT(value.reason, 255)) ||
     !Array.isArray(value.parts) || !value.parts.length || !value.parts.every(validPreviewPart) ||
     new Set(value.parts.map(part => part.partId)).size !== value.parts.length) return false
   return true
 }
-// Rich PPT/PDF/XLSX previews append content/text only for old clients. Named parts
-// remain the user-facing navigation sequence for every rich preview type.
+// Prefer named document parts over the complete text part for navigation.
 const displayPreviewParts = preview => preview.parts.some(part => part.partId !== 'content')
   ? preview.parts.filter(part => part.partId !== 'content')
   : preview.parts
 const validFile = file => file && typeof file.name === 'string' && TEXT(file.name, 255) && Number.isFinite(file.size) && file.size >= 0
 const validFileView = value => value && typeof value === 'object' && ID(value.fileId) && TEXT(value.displayName, 255) &&
   (value.originKind == null || ['USER_UPLOAD', 'AGENT_DELIVERY'].includes(value.originKind)) &&
-  ['ACTIVE', 'TRASHED'].includes(value.state) && VERSION(value.latestVersion) && Number.isSafeInteger(value.metadataRevision) && value.metadataRevision >= 1
+  ['ACTIVE', 'TRASHED'].includes(value.state) && VERSION(value.latestVersion) && DECIMAL(value.metadataRevision) && BigInt(value.metadataRevision) >= 1n
 const validVersion = value => value && typeof value === 'object' && ID(value.fileId) && VERSION(value.version) &&
   TEXT(value.originalFilename, 255) && ALLOWED_MIME_TYPES.has(normalizeMime(value.contentMimeType)) &&
-  Number.isSafeInteger(value.byteLength) && value.byteLength >= 0
+  DECIMAL(value.byteLength)
 
 /**
  * Browser adapter for the 1.10 owner-scoped upload-only workspace API. It deliberately
@@ -170,7 +167,7 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     if (cursor) params.cursor = cursor
     try {
       const { data } = await request({ url: '/personal-workspace/files', method: 'GET', params }, snapshot)
-      if (!data || !Array.isArray(data.items) || !data.items.every(validFileView) || (data.nextCursor != null && !ID(data.nextCursor))) {
+      if (!data || !Array.isArray(data.items) || typeof data.hasMore !== 'boolean' || data.hasMore !== (data.nextCursor !== null) || !data.items.every(validFileView) || (data.nextCursor != null && !ID(data.nextCursor))) {
         throw new Error('工作空间目录返回格式无效，未展示可能不完整的数据。')
       }
       if (append) {
@@ -300,7 +297,7 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     const snapshot = { generation, epoch: currentEpoch.value }
     try {
       const { data } = await request({ url: `/personal-workspace/files/${encodeURIComponent(file.fileId)}/usage`, method: 'GET' }, snapshot)
-      if (!data || !Number.isSafeInteger(data.impactRevision) || !Array.isArray(data.taskReferences) || !Array.isArray(data.activeExecutions)) throw new Error('文件引用信息返回无效。')
+      if (!data || !DECIMAL(data.impactRevision) || !Array.isArray(data.taskReferences) || !Array.isArray(data.activeExecutions)) throw new Error('文件引用信息返回无效。')
       return data
     } catch (cause) {
       if (cause?.name !== 'AbortError' && snapshot.generation === generation) error.value = errorMessage(cause)
@@ -309,20 +306,20 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
   }
   const trash = async (usageView) => {
     const file = detail.value?.file
-    if (!validFileView(file) || !usageView || !Number.isSafeInteger(usageView.impactRevision)) return null
+    if (!validFileView(file) || !usageView || !DECIMAL(usageView.impactRevision)) return null
     return mutate(`/personal-workspace/files/${encodeURIComponent(file.fileId)}/trash`, {
       impactRevision: usageView.impactRevision, acknowledgeExistingReferences: true
     })
   }
   const restore = async () => {
     const file = detail.value?.file
-    return validFileView(file) ? mutate(`/personal-workspace/files/${encodeURIComponent(file.fileId)}/restore`, {}) : null
+    return validFileView(file) ? mutate(`/personal-workspace/files/${encodeURIComponent(file.fileId)}/restore`, null) : null
   }
   const readBlob = async (fileId, version, suffix = 'content') => {
     if (!ID(fileId) || !VERSION(version)) throw new Error('文件版本无效。')
     const snapshot = { generation, epoch: currentEpoch.value }
     const { data, headers } = await request({
-      url: `/personal-workspace/files/${encodeURIComponent(fileId)}/versions/${Number(version)}/${suffix}`,
+      url: `/personal-workspace/files/${encodeURIComponent(fileId)}/versions/${version}/${suffix}`,
       method: 'GET', responseType: 'blob'
     }, snapshot)
     if (!(data instanceof Blob)) throw new Error('文件内容响应无效。')
@@ -331,7 +328,7 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
   const download = async (version = detail.value?.latestVersion) => {
     const file = detail.value?.file
     if (!validFileView(file) || !VERSION(version)) return null
-    const versionInfo = detail.value?.versions?.find(item => Number(item.version) === Number(version)) || detail.value?.latestVersion
+    const versionInfo = detail.value?.versions?.find(item => item.version === version) || detail.value?.latestVersion
     try {
       const content = await readBlob(file.fileId, version)
       return { ...content, filename: safeDownloadFilename(versionInfo?.originalFilename || file.displayName) }
@@ -356,7 +353,7 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
       snapshot.epoch === currentEpoch.value && previewRequest === previewGeneration
     const requireCurrent = () => { if (!current()) throw abortError('Workspace preview changed') }
     try {
-      const { data } = await request({ url: `/personal-workspace/files/${encodeURIComponent(file.fileId)}/versions/${Number(version)}/preview`, method: 'GET', params: { view: 'parts' } }, snapshot)
+      const { data } = await request({ url: `/personal-workspace/files/${encodeURIComponent(file.fileId)}/versions/${version}/preview`, method: 'GET', params: { view: 'parts' } }, snapshot)
       requireCurrent()
       if (!validPreviewView(data)) {
         preview.value = { kind: 'unsupported', message: data?.reason || '此文件可下载，但暂时无法生成可用预览。' }

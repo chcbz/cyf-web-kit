@@ -351,7 +351,6 @@ onMounted(() => {
     productId: 'GIF' + (Array(7).join('0') + route.query.id).slice(-7),
     appid
   }, {
-    responseType: 'text',
     onSuccess: (data) => {
       qrcodeUrl.value = data
     }

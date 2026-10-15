@@ -1,6 +1,6 @@
 import { computed, getCurrentScope, onScopeDispose, ref, watch } from 'vue'
 import { agentApi as defaultAgentApi } from './useHttp.js'
-import { formatSilverMicro as formatCanonicalSilverMicro, isCanonicalMicroAmount } from '../utils/silverAmount.js'
+import { formatSilverMoney as formatCanonicalSilverMoney, isSilverMoney } from '../utils/silverAmount.js'
 
 export const SKILL_ORDER_STATUSES = Object.freeze({
   FUNDS_HELD: 'FUNDS_HELD',
@@ -41,19 +41,20 @@ export const normalizeApprovedPermissions = (permissions) => [...new Set(
 // HTTP code/status validation and envelope decoding occur once in useHttp.
 export const readSkillApiPayload = result => result
 
-const productList = (payload) => {
-  if (Array.isArray(payload)) return payload
-  return asArray(payload?.items || payload?.list || payload?.records || payload?.products)
+const exactList = payload => {
+  if (!Array.isArray(payload)) throw Object.assign(new Error('Invalid skill catalog response'), { code: 'PROTOCOL_INVALID_SKILL_LIST' })
+  return payload
 }
-
-const entitlementList = (payload) => {
-  if (Array.isArray(payload)) return payload
-  return asArray(payload?.items || payload?.entitlements || payload?.list || payload?.records)
-}
+const productList = exactList
+const entitlementList = exactList
 
 const idempotencyKey = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
-  return `skill-order-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  if (typeof crypto === 'undefined' || typeof crypto.getRandomValues !== 'function') throw Object.assign(new Error('Secure randomness unavailable'), { code: 'SECURE_RANDOM_UNAVAILABLE' })
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  bytes[6] = (bytes[6] & 15) | 64; bytes[8] = (bytes[8] & 63) | 128
+  const hex = [...bytes].map(byte => byte.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
 const browserStorage = () => {
@@ -90,18 +91,13 @@ export const formatEntitlementSkillFact = (entitlement) => formatSkillProductIde
 const orderStatus = (value) => requiredString(value?.status || value).toUpperCase()
 const isTerminalOrder = (value) => TERMINAL_ORDER_STATUSES.has(orderStatus(value))
 const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
-const decimalEpochMilliseconds = (value) => {
-  const raw = typeof value === 'string' ? value : ''
-  if (!/^(0|[1-9]\d*)$/.test(raw)) return null
-  const parsed = Number(raw)
-  return Number.isSafeInteger(parsed) ? parsed : null
-}
-const validPriceMicro = isCanonicalMicroAmount
+const epochMilliseconds = value => Number.isSafeInteger(value) && value >= 0 && Number.isFinite(new Date(value).getTime()) ? value : null
+const validPrice = isSilverMoney
 const validVersion = canonicalDecimalString
 
 /** Formats canonical decimal-string micro-silver without Number conversion. */
-export const formatSilverMicro = value => {
-  try { return formatCanonicalSilverMicro(value) } catch { return '—' }
+export const formatSkillMoney = value => {
+  try { return formatCanonicalSilverMoney(value) } catch { return '—' }
 }
 
 export const formatInstalledSkillFact = (skill) => {
@@ -171,7 +167,7 @@ const validJournalRecord = (record) => {
   return record.phase === 'ORDER' && Boolean(quoteKey) && Boolean(orderKey) && purchase &&
     Boolean(requiredString(purchase.quoteId)) && Boolean(requiredString(purchase.productVersionId)) &&
     Boolean(requiredString(purchase.targetAgentId)) && Boolean(validVersion(purchase.expectedAgentVersion)) &&
-    validPriceMicro(purchase.expectedPriceMicro) && Array.isArray(purchase.approvedPermissions) &&
+    validPrice(purchase.expectedPrice) && Array.isArray(purchase.approvedPermissions) &&
     sameString(purchase.productVersionId, record.productVersionId) &&
     sameString(purchase.targetAgentId, record.targetAgentId) &&
     sameString(purchase.expectedAgentVersion, record.expectedAgentVersion) &&
@@ -254,8 +250,8 @@ export function useSkillMarket ({
   const unresolvedOperations = computed(() => purchaseJournal.value)
   const quoteIsUsable = computed(() => {
     const currentQuote = quote.value
-    const expiresAt = decimalEpochMilliseconds(currentQuote?.expiresAt)
-    return Boolean(requiredString(currentQuote?.quoteId)) && validPriceMicro(currentQuote?.priceMicro) && expiresAt !== null && now() < expiresAt &&
+    const expiresAt = epochMilliseconds(currentQuote?.expiresAt)
+    return Boolean(requiredString(currentQuote?.quoteId)) && validPrice(currentQuote?.price) && expiresAt !== null && now() < expiresAt &&
       sameString(currentQuote?.productVersionId, productVersionId.value) &&
       sameString(currentQuote?.targetAgentId, target.value.targetAgentId) &&
       sameString(currentQuote?.expectedAgentVersion, target.value.expectedAgentVersion) &&
@@ -471,8 +467,8 @@ export function useSkillMarket ({
   })
 
   const quoteMatchesIntent = (candidate, request) => {
-    const expiresAt = decimalEpochMilliseconds(candidate?.expiresAt)
-    return Boolean(requiredString(candidate?.quoteId)) && validPriceMicro(candidate?.priceMicro) && expiresAt !== null && now() < expiresAt &&
+    const expiresAt = epochMilliseconds(candidate?.expiresAt)
+    return Boolean(requiredString(candidate?.quoteId)) && validPrice(candidate?.price) && expiresAt !== null && now() < expiresAt &&
       sameString(candidate?.productVersionId, request.productVersionId) &&
       sameString(candidate?.targetAgentId, request.targetAgentId) &&
       validVersion(candidate?.expectedAgentVersion) &&
@@ -546,7 +542,7 @@ export function useSkillMarket ({
       quoteId: currentQuote.quoteId,
       productVersionId: record.productVersionId,
       targetAgentId: record.targetAgentId,
-      expectedPriceMicro: currentQuote.priceMicro,
+      expectedPrice: currentQuote.price,
       expectedAgentVersion: record.expectedAgentVersion,
       approvedPermissions: [...record.approvedPermissions]
     }
