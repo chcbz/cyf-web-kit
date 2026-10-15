@@ -216,7 +216,7 @@ describe('direct SSE authentication boundary', () => {
       '\nconst stopStream = async () => {'
     )
     expect(stream).to.include('signal: streamSignal.signal')
-    expect(stream).to.include('onStreamOpen: handle =>')
+    expect(stream).to.include('onStreamOpen: (handle, response) =>')
     expect(stream).to.include('readerRef.value = handle')
     expect(stream).to.match(/AbortError[\s\S]*?generation !== chatLifecycleGeneration/)
   })

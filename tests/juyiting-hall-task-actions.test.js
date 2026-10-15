@@ -18,7 +18,10 @@ const createHarness = (response, { canAssign = () => true } = {}) => {
   const agentApi = {
     create: async (url, payload, options) => {
       apiCalls.push({ payload, url })
-      return options.onSuccess(response)
+      if (response.code !== 'E0') throw Object.assign(new Error(response.msg), { code: response.code, status: response.status })
+      const data = response.data ?? null
+      options.onSuccess?.(data)
+      return data
     }
   }
 
@@ -156,7 +159,7 @@ describe('useHallTaskActions', () => {
     const selectedAgent = ref({ agentId: 'hidden-agent', status: 'online' })
     const selectedTask = ref(null)
     const actions = useHallTaskActions({
-      agentApi: { create: async (url, payload) => { apiCalls.push({ url, payload }); return url.endsWith('/quotes') ? { data: { data: fundedQuote({ quoteId: 'q1' }) } } : { data: { data: fundedReceipt({ quoteId: 'q1' }) } } } },
+      agentApi: { create: async (url, payload) => { apiCalls.push({ url, payload }); return url.endsWith('/quotes') ? fundedQuote({ quoteId: 'q1' }) : fundedReceipt({ quoteId: 'q1' }) } },
       canAssign: () => true, confirmFundedQuote: async () => true, createIdempotencyKey: () => 'idem', log: { warn: () => {} }, playError: () => {}, playSuccess: () => {}, selectedAgent, selectedTask, showToast: () => {}, tasks: ref([funded])
     })
     expect(await actions.assignTask(funded, agent)).to.equal(true)

@@ -1,11 +1,12 @@
+const reply = (options, data, headers) => { options.onSuccess?.(data, { headers }); return data }
 import { strict as assert } from 'node:assert'
 import { describe, it } from 'mocha'
 import { ref } from 'vue'
 import { usePersonalWorkspaceConversationLinks } from '../src/composables/usePersonalWorkspaceConversationLinks.js'
 
 const link = (overrides = {}) => ({
-  relationId: 'rel_a', conversationId: 'conversation_a', fileId: 'file_a', version: 2,
-  role: 'INPUT', state: 'ACTIVE', relationRevision: 1, createdAt: 1, ...overrides
+  relationId: 'rel_a', conversationId: 'conversation_a', fileId: 'file_a', version: '2',
+  role: 'INPUT', state: 'ACTIVE', relationRevision: '1', createdAt: 1, ...overrides
 })
 const deferred = () => { let resolve; const promise = new Promise(res => { resolve = res }); return { promise, resolve } }
 
@@ -15,22 +16,22 @@ describe('personal workspace conversation link adapter', () => {
   it('lists exact conversation links, writes explicit pinned versions, and sends a conditional idempotent detach', async () => {
     const calls = []
     const initial = link()
-    const detached = link({ state: 'DETACHED', relationRevision: 2 })
+    const detached = link({ state: 'DETACHED', relationRevision: '2' })
     const api = { execute: async options => {
       calls.push(options)
-      if (options.method === 'GET') return { data: { items: [initial], nextCursor: null } }
-      if (options.method === 'POST') return { data: link({ relationId: 'rel_b', fileId: 'file_b', role: 'REFERENCE' }), headers: { etag: '"rel_b:1"' } }
-      return { data: { link: detached, executionSnapshotsPreserved: true }, headers: { etag: etag(detached) } }
+      if (options.method === 'GET') return ({ items: [initial], nextCursor: null, hasMore: false })
+      if (options.method === 'POST') return reply(options, link({ relationId: 'rel_b', fileId: 'file_b', role: 'REFERENCE' }), { etag: '"rel_b:1"' })
+      return reply(options, { link: detached, executionSnapshotsPreserved: true }, { etag: etag(detached) })
     } }
     const adapter = usePersonalWorkspaceConversationLinks({ api, conversationId: ref('conversation_a'), identityEpoch: ref('owner-a') })
 
     assert.equal(await adapter.load(), true)
-    const attached = await adapter.attach({ fileId: 'file_b', version: 3, role: 'REFERENCE' })
+    const attached = await adapter.attach({ fileId: 'file_b', version: '3', role: 'REFERENCE' })
     const result = await adapter.detach(initial)
 
     assert.equal(calls[0].url, '/conversations/conversation_a/file-links')
     assert.equal(calls[0].method, 'GET')
-    assert.deepEqual(calls[1].data, { fileId: 'file_b', version: 3, role: 'REFERENCE' })
+    assert.deepEqual(calls[1].data, { fileId: 'file_b', version: '3', role: 'REFERENCE' })
     assert.ok(calls[1].headers['Idempotency-Key'])
     assert.equal(attached.relationId, 'rel_b')
     assert.equal(calls[2].url, '/conversations/conversation_a/file-links/rel_a')
@@ -42,7 +43,7 @@ describe('personal workspace conversation link adapter', () => {
   })
 
   it('rejects malformed server data instead of displaying an incomplete association directory', async () => {
-    const api = { execute: async () => ({ data: { items: [link({ ownerJiacn: 'forged-owner' })], nextCursor: null } }) }
+    const api = { execute: async () => (({ items: [link({ ownerJiacn: 'forged-owner' })], nextCursor: null, hasMore: false })) }
     const adapter = usePersonalWorkspaceConversationLinks({ api, conversationId: ref('conversation_a'), identityEpoch: ref('owner-a') })
 
     assert.equal(await adapter.load(), false)
@@ -60,7 +61,7 @@ describe('personal workspace conversation link adapter', () => {
     const adapter = usePersonalWorkspaceConversationLinks({ api, conversationId: ref('conversation_a'), identityEpoch: epoch })
     const pending = adapter.load()
     epoch.value = 'owner-b'
-    wait.resolve({ data: { items: [link()], nextCursor: null } })
+    wait.resolve(({ items: [link()], nextCursor: null, hasMore: false }))
 
     assert.equal(await pending, false)
     assert.equal(signal.aborted, true)
@@ -78,10 +79,10 @@ describe('personal workspace conversation link adapter', () => {
     } }
     const adapter = usePersonalWorkspaceConversationLinks({ api, conversationId: ref('conversation_a'), identityEpoch: ref('owner-a') })
 
-    assert.equal(await adapter.attach({ fileId: 'file_a', version: 2, role: 'OUTPUT' }), null)
+    assert.equal(await adapter.attach({ fileId: 'file_a', version: '2', role: 'OUTPUT' }), null)
     assert.equal(calls.length, 0)
     assert.match(adapter.error.value, /输入资料或参考资料/)
-    assert.equal(await adapter.attach({ fileId: 'file_a', version: 2, role: 'INPUT' }), null)
+    assert.equal(await adapter.attach({ fileId: 'file_a', version: '2', role: 'INPUT' }), null)
     assert.match(adapter.error.value, /已有操作不一致/)
     assert.equal(await adapter.detach(link()), null)
     assert.match(adapter.error.value, /版本前提缺失/)

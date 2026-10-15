@@ -46,7 +46,7 @@ export function useHallBountyAcceptance ({ api, taskId, identityKey, conversatio
         // the existing paginated history, never replaced by a newer conversation.
         const pageSize = wanted ? 100 : 2
         let callbackResult
-        const response = await api.list('/conversation/list', { pageNum, pageSize,
+        const response = await api.list('/conversation/list', { pageNum: String(pageNum), pageSize: String(pageSize),
           orderBy: 'id asc', search: { conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: `task:${taskId()}` } },
         { autoLoading: false, needAuth: true, signal, onSuccess: value => { callbackResult = value } })
         if (!valid(captured)) return false

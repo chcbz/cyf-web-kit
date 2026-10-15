@@ -107,13 +107,13 @@ export function useEconomyReadOnlyPreview ({ client = economyReadOnlyPreviewClie
   const loadLedger = (cursor = '') => {
     if (!requireFeature('ledger')) return null
     const prior = cursor && Array.isArray(cards.ledger.state.value.data?.items) ? cards.ledger.state.value.data.items : []
-    return finish(cards.ledger, options => client.ledger({ cursor, pageSize: 50 }, options), { preserveData: prior.length ? cards.ledger.state.value.data : null })
+    return finish(cards.ledger, options => client.ledger({ cursor, pageSize: '50' }, options), { preserveData: prior.length ? cards.ledger.state.value.data : null })
       .then(result => appendPage(cards.ledger, prior, result, item => `${item?.transactionId || ''}:${item?.entryId || ''}`))
   }
   const loadCatalog = (cursor = '') => {
     if (!requireFeature('catalog')) return null
     const prior = cursor && Array.isArray(cards.catalog.state.value.data?.items) ? cards.catalog.state.value.data.items : []
-    return finish(cards.catalog, options => client.catalog({ cursor, pageSize: 50 }, options), { preserveData: prior.length ? cards.catalog.state.value.data : null })
+    return finish(cards.catalog, options => client.catalog({ cursor, pageSize: '50' }, options), { preserveData: prior.length ? cards.catalog.state.value.data : null })
       .then(result => appendPage(cards.catalog, prior, result, item => item?.productId || ''))
   }
   const loadDetail = productId => typeof productId === 'string' && productId ? finish(cards.detail, options => client.product(productId, options)) : null

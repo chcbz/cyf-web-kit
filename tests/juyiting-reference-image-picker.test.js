@@ -1,3 +1,4 @@
+const reply = (options, data, headers) => { options.onSuccess?.(data, { headers }); return data }
 import { strict as assert } from 'node:assert'
 import { readFileSync } from 'node:fs'
 import { describe, it } from 'mocha'
@@ -17,8 +18,8 @@ const fileView = (fileId, overrides = {}) => ({
   displayName: `${fileId}.png`,
   mediaFamily: 'IMAGE',
   state: 'ACTIVE',
-  metadataRevision: 1,
-  latestVersion: 1,
+  metadataRevision: '1',
+  latestVersion: '1',
   ...overrides
 })
 const versionView = (fileId, version, contentMimeType = 'image/png', overrides = {}) => ({
@@ -26,11 +27,11 @@ const versionView = (fileId, version, contentMimeType = 'image/png', overrides =
   version,
   originalFilename: `${fileId}-v${version}.${contentMimeType === 'image/jpeg' ? 'jpg' : 'png'}`,
   contentMimeType,
-  byteLength: 8,
+  byteLength: '8',
   ...overrides
 })
-const detailView = (fileId, versions = [versionView(fileId, 1)], overrides = {}) => {
-  const latestVersion = Math.max(...versions.map(item => Number(item.version)))
+const detailView = (fileId, versions = [versionView(fileId, '1')], overrides = {}) => {
+  const latestVersion = String(Math.max(...versions.map(item => Number(item.version))))
   return {
     file: fileView(fileId, { latestVersion, ...(overrides.file || {}) }),
     latestVersion: versions.find(item => Number(item.version) === Number(overrides.latestVersion ?? latestVersion)) || versions[0],
@@ -64,25 +65,25 @@ function createFixture ({ details = new Map(), detailHandler, partHandler, listI
       assert.equal(options.method, 'GET')
       assert.match(options.url, /^\/personal-workspace\/files(?:\/|$)/)
       if (options.url === '/personal-workspace/files') {
-        return { data: { items: listItems || [...details.keys()].map(fileId => details.get(fileId).file), nextCursor: null } }
+        return ({ items: listItems || [...details.keys()].map(fileId => details.get(fileId).file), nextCursor: null, hasMore: false })
       }
       const detailMatch = /^\/personal-workspace\/files\/([^/]+)$/.exec(options.url)
       if (detailMatch) {
         const fileId = decodeURIComponent(detailMatch[1])
         if (detailHandler) return detailHandler(fileId, options)
-        return { data: details.get(fileId), headers: { etag: `"${fileId}:1"` } }
+        return reply(options, details.get(fileId), { etag: `"${fileId}:1"` })
       }
       const partMatch = /^\/personal-workspace\/files\/([^/]+)\/versions\/(\d+)\/preview\/parts\/content$/.exec(options.url)
       if (partMatch) {
         if (partHandler) return partHandler(decodeURIComponent(partMatch[1]), Number(partMatch[2]), options)
-        return { data: new Blob(['image'], { type: details.get(decodeURIComponent(partMatch[1])).versions.find(item => Number(item.version) === Number(partMatch[2])).contentMimeType }) }
+        return (new Blob(['image'], { type: details.get(decodeURIComponent(partMatch[1])).versions.find(item => Number(item.version) === Number(partMatch[2])).contentMimeType }))
       }
       const previewMatch = /^\/personal-workspace\/files\/([^/]+)\/versions\/(\d+)\/preview$/.exec(options.url)
       if (previewMatch) {
         const fileId = decodeURIComponent(previewMatch[1])
         const version = Number(previewMatch[2])
         const mime = details.get(fileId).versions.find(item => Number(item.version) === version).contentMimeType
-        return { data: { state: 'READY', parts: [{ partId: 'content', contentMimeType: mime }], partial: false } }
+        return ({ state: 'READY', parts: [{ partId: 'content', contentMimeType: mime }], partial: false })
       }
       throw new Error(`Unexpected request: ${options.url}`)
     }
@@ -109,33 +110,33 @@ describe('hall requirement-draft reference image selection', () => {
     const selection = useHallReferenceImageSelection({ api: fixture.api, identityEpoch: ref('owner-a'), urlApi: fixture.urlApi })
 
     assert.deepEqual(selection.draftReferences.value, [])
-    assert.deepEqual(toHallDraftReference({ fileId: 'file-1', version: 1, purpose: 'REFERENCE' }), { fileId: 'file-1', version: 1, purpose: 'REFERENCE' })
-    assert.equal(toHallDraftReference({ fileId: 'file-1', version: 1, purpose: 'INPUT' }), null)
+    assert.deepEqual(toHallDraftReference({ fileId: 'file-1', version: '1', purpose: 'REFERENCE' }), { fileId: 'file-1', version: '1', purpose: 'REFERENCE' })
+    assert.equal(toHallDraftReference({ fileId: 'file-1', version: '1', purpose: 'INPUT' }), null)
     assert.equal(normalizeHallReferenceVersion(0), null)
     assert.equal(normalizeHallReferenceVersion(JAVA_INT_MAX + 1), null)
     assert.equal(normalizeHallReferenceVersion(1.5), null)
-    assert.equal(normalizeHallReferenceVersion('1'), null)
+    assert.equal(normalizeHallReferenceVersion(1), null)
     assert.equal(fixture.calls.length, 0)
     selection.dispose()
   })
 
   it('selects authorized JPEG/PNG exact versions and retains an old version when latest changes', async () => {
     const details = new Map([
-      ['jpeg-file', detailView('jpeg-file', [versionView('jpeg-file', 3, 'image/png'), versionView('jpeg-file', 2, 'image/jpeg')], { file: { displayName: '参考照片.jpg' } })],
-      ['png-file', detailView('png-file', [versionView('png-file', 1, 'image/png')], { file: { displayName: '构图.png' } })]
+      ['jpeg-file', detailView('jpeg-file', [versionView('jpeg-file', '3', 'image/png'), versionView('jpeg-file', '2', 'image/jpeg')], { file: { displayName: '参考照片.jpg' } })],
+      ['png-file', detailView('png-file', [versionView('png-file', '1', 'image/png')], { file: { displayName: '构图.png' } })]
     ])
     const fixture = createFixture({ details })
     const selection = useHallReferenceImageSelection({ api: fixture.api, identityEpoch: ref('owner-a'), urlApi: fixture.urlApi })
 
-    assert.deepEqual(await addExact(selection, 'jpeg-file', 2), { fileId: 'jpeg-file', version: 2, purpose: 'REFERENCE' })
-    details.set('jpeg-file', detailView('jpeg-file', [versionView('jpeg-file', 4, 'image/png'), versionView('jpeg-file', 3, 'image/png'), versionView('jpeg-file', 2, 'image/jpeg')], { file: { displayName: '参考照片.jpg' } }))
+    assert.deepEqual(await addExact(selection, 'jpeg-file', '2'), { fileId: 'jpeg-file', version: '2', purpose: 'REFERENCE' })
+    details.set('jpeg-file', detailView('jpeg-file', [versionView('jpeg-file', '4', 'image/png'), versionView('jpeg-file', '3', 'image/png'), versionView('jpeg-file', '2', 'image/jpeg')], { file: { displayName: '参考照片.jpg' } }))
     await selection.openFile('jpeg-file')
-    assert.deepEqual(selection.draftReferences.value, [{ fileId: 'jpeg-file', version: 2, purpose: 'REFERENCE' }])
+    assert.deepEqual(selection.draftReferences.value, [{ fileId: 'jpeg-file', version: '2', purpose: 'REFERENCE' }])
 
-    assert.deepEqual(await addExact(selection, 'png-file', 1), { fileId: 'png-file', version: 1, purpose: 'REFERENCE' })
+    assert.deepEqual(await addExact(selection, 'png-file', '1'), { fileId: 'png-file', version: '1', purpose: 'REFERENCE' })
     assert.deepEqual(selection.draftReferences.value, [
-      { fileId: 'jpeg-file', version: 2, purpose: 'REFERENCE' },
-      { fileId: 'png-file', version: 1, purpose: 'REFERENCE' }
+      { fileId: 'jpeg-file', version: '2', purpose: 'REFERENCE' },
+      { fileId: 'png-file', version: '1', purpose: 'REFERENCE' }
     ])
     assert.ok(fixture.calls.some(call => call.url === '/personal-workspace/files/jpeg-file/versions/2/preview'))
     assert.ok(fixture.calls.some(call => call.url === '/personal-workspace/files/png-file/versions/1/preview/parts/content'))
@@ -167,15 +168,15 @@ describe('hall requirement-draft reference image selection', () => {
     staleSelection.dispose()
 
     const badDetails = new Map([
-      ['trashed', detailView('trashed', [versionView('trashed', 1)], { file: { state: 'TRASHED' } })],
-      ['text-version', detailView('text-version', [versionView('text-version', 1, 'text/plain')])],
-      ['ambiguous', detailView('ambiguous', [versionView('ambiguous', 1), versionView('ambiguous', 1)])]
+      ['trashed', detailView('trashed', [versionView('trashed', '1')], { file: { state: 'TRASHED' } })],
+      ['text-version', detailView('text-version', [versionView('text-version', '1', 'text/plain')])],
+      ['ambiguous', detailView('ambiguous', [versionView('ambiguous', '1'), versionView('ambiguous', '1')])]
     ])
     const bad = createFixture({ details: badDetails })
     const selection = useHallReferenceImageSelection({ api: bad.api, identityEpoch: ref('owner-a'), urlApi: bad.urlApi })
     assert.equal(await selection.openFile('trashed'), null)
     assert.ok(await selection.openFile('text-version'))
-    assert.equal(await selection.addReference('text-version', 1), null)
+    assert.equal(await selection.addReference('text-version', '1'), null)
     assert.match(selection.error.value, /JPEG|PNG/)
     assert.equal(await selection.openFile('ambiguous'), null)
     assert.match(selection.error.value, /歧义/)
@@ -195,7 +196,7 @@ describe('hall requirement-draft reference image selection', () => {
     }
     const selection = useHallReferenceImageSelection({ api: fixture.api, identityEpoch: epoch, urlApi: fixture.urlApi })
     assert.ok(await selection.openFile('file-a'))
-    assert.equal(await selection.addReference('file-a', 1), null)
+    assert.equal(await selection.addReference('file-a', '1'), null)
     await flush()
 
     assert.deepEqual(selection.draftReferences.value, [])
@@ -212,18 +213,18 @@ describe('hall requirement-draft reference image selection', () => {
     const fixture = createFixture({ details })
     const selection = useHallReferenceImageSelection({ api: fixture.api, identityEpoch: ref('owner-a'), urlApi: fixture.urlApi })
     for (let index = 1; index <= HALL_REFERENCE_MAX_ITEMS; index += 1) {
-      assert.ok(await addExact(selection, `file-${index}`, 1))
+      assert.ok(await addExact(selection, `file-${index}`, '1'))
     }
     assert.equal(selection.draftReferences.value.length, HALL_REFERENCE_MAX_ITEMS)
 
     await selection.openFile('file-1')
     const callsBeforeDuplicate = fixture.calls.length
-    assert.equal(await selection.addReference('file-1', 1), null)
+    assert.equal(await selection.addReference('file-1', '1'), null)
     assert.equal(fixture.calls.length, callsBeforeDuplicate)
     assert.match(selection.error.value, /重复|已选择/)
 
     await selection.openFile(`file-${HALL_REFERENCE_MAX_ITEMS + 1}`)
-    assert.equal(await selection.addReference(`file-${HALL_REFERENCE_MAX_ITEMS + 1}`, 1), null)
+    assert.equal(await selection.addReference(`file-${HALL_REFERENCE_MAX_ITEMS + 1}`, '1'), null)
     assert.match(selection.error.value, /32/)
     selection.dispose()
   })
@@ -240,18 +241,18 @@ describe('hall requirement-draft reference image selection', () => {
       details,
       detailHandler: fileId => fileId === 'old-1'
         ? pendingOldDetail.promise
-        : { data: details.get(fileId), headers: { etag: `"${fileId}:1"` } }
+        : reply(fileId, details.get(fileId), { etag: `"${fileId}:1"` })
     })
     const selection = useHallReferenceImageSelection({ api: fixture.api, identityEpoch: epoch, urlApi: fixture.urlApi })
     const oldReplacement = selection.replaceReferences([
-      { fileId: 'old-1', version: 1, purpose: 'REFERENCE' },
-      { fileId: 'old-2', version: 1, purpose: 'REFERENCE' }
+      { fileId: 'old-1', version: '1', purpose: 'REFERENCE' },
+      { fileId: 'old-2', version: '1', purpose: 'REFERENCE' }
     ])
     await Promise.resolve()
     assert.ok(fixture.calls.some(call => call.url === '/personal-workspace/files/old-1'))
 
     epoch.value = 'owner-b'
-    const newReference = { fileId: 'new-file', version: 1, purpose: 'REFERENCE' }
+    const newReference = { fileId: 'new-file', version: '1', purpose: 'REFERENCE' }
     assert.deepEqual(await selection.replaceReferences([newReference]), [newReference])
     const newPreviewUrl = selection.selected.value[0].previewUrl
     assert.ok(newPreviewUrl)
@@ -276,17 +277,17 @@ describe('hall requirement-draft reference image selection', () => {
     const epoch = ref('owner-a')
     const selection = useHallReferenceImageSelection({ api: fixture.api, identityEpoch: epoch, urlApi: fixture.urlApi })
 
-    await addExact(selection, 'file-a', 1)
+    await addExact(selection, 'file-a', '1')
     const removedUrl = selection.selected.value[0].previewUrl
-    assert.equal(selection.removeReference('file-a', 1), true)
+    assert.equal(selection.removeReference('file-a', '1'), true)
     assert.ok(fixture.revoked.includes(removedUrl))
 
-    await addExact(selection, 'file-a', 1)
+    await addExact(selection, 'file-a', '1')
     const closedUrl = selection.selected.value[0].previewUrl
     selection.close()
     assert.ok(fixture.revoked.includes(closedUrl))
 
-    await selection.replaceReferences([{ fileId: 'file-b', version: 1, purpose: 'REFERENCE' }])
+    await selection.replaceReferences([{ fileId: 'file-b', version: '1', purpose: 'REFERENCE' }])
     const replacedUrl = selection.selected.value[0].previewUrl
     await selection.replaceReferences([])
     assert.ok(fixture.revoked.includes(replacedUrl))
@@ -306,7 +307,7 @@ describe('hall requirement-draft reference image selection', () => {
     globalThis.Element = window.Element
     try {
       const wrapper = mount(Harness)
-      await addExact(exposed, 'file-a', 1)
+      await addExact(exposed, 'file-a', '1')
       const unmountedUrl = exposed.selected.value[0].previewUrl
       wrapper.unmount()
       assert.ok(fixture.revoked.includes(unmountedUrl))
@@ -326,7 +327,7 @@ describe('hall requirement-draft reference image selection', () => {
       ['restore-file', deferred()]
     ])
     const replacements = []
-    const reference = fileId => ({ fileId, version: 1, purpose: 'REFERENCE' })
+    const reference = fileId => ({ fileId, version: '1', purpose: 'REFERENCE' })
     const selectionModule = {
       HALL_REFERENCE_MAX_ITEMS,
       useHallReferenceImageSelection: ({ identityEpoch }) => {

@@ -162,7 +162,8 @@ export const useHallTaskActions = ({
   const unresolvedClaims = new Map()
   const confirmedClaims = new Map()
   const validString = value => typeof value === 'string' && Boolean(value.trim())
-  const unexpired = quote => isCanonicalDecimalString(quote?.expiresAt) && BigInt(quote.expiresAt) > BigInt(now())
+  const timestamp = value => Number.isSafeInteger(value) && value >= 0
+  const unexpired = quote => timestamp(quote?.expiresAt) && BigInt(quote.expiresAt) > BigInt(now())
   const matchingQuote = (quote, id, agentId, version) =>
     validString(quote?.quoteId) && quote.taskId === id && quote.agentId === agentId &&
     isCanonicalDecimalString(quote.taskVersion) && quote.taskVersion === version &&
@@ -171,7 +172,7 @@ export const useHallTaskActions = ({
     ['input', 'cachedInput', 'output', 'reasoning'].every(key => isCanonicalDecimalString(quote.estimatedTokens?.[key])) &&
     ['estimatedComputeMicro', 'worstComputeMicro', 'platformFeeMicro', 'estimatedAgentPayoutMicro',
       'worstAgentPayoutMicro', 'minimumAcceptedPayoutMicro'].every(key => isCanonicalDecimalString(quote[key])) &&
-    isCanonicalDecimalString(quote.expiresAt)
+    timestamp(quote.expiresAt)
   const definitiveClaimFailures = new Set(['QUOTE_EXPIRED', 'TASK_VERSION_CONFLICT', 'AGENT_NOT_READY',
     'REQUIRED_SKILLS_MISMATCH', 'INSUFFICIENT_BOUNTY_BUDGET'])
   const agentVersionOf = agent => agent?.version ?? agent?.agentVersion ?? agent?.expectedAgentVersion
@@ -190,7 +191,7 @@ export const useHallTaskActions = ({
     receipt.status === 'assigned' && isCanonicalDecimalString(receipt.taskVersion) &&
     // W05 receiptVersion = request.taskVersion + 1, including idempotent replay.
     BigInt(receipt.taskVersion) === BigInt(operation.body.taskVersion) + 1n &&
-    isCanonicalDecimalString(receipt.claimedAt)
+    timestamp(receipt.claimedAt)
 
   const refreshClaimedTask = async (task, receipt) => {
     const snapshot = await agentApi.get(`/tasks/${encodeURIComponent(receipt.taskId)}`, undefined, { autoLoading: false })

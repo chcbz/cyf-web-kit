@@ -200,7 +200,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
   const loadAgents = async () => {
     const snapshot = snapshotNow(); rosterState.value = 'loading'; rosterError.value = ''
     try {
-      const payload = await request({ url: '/roster', method: 'POST', data: { pageNum: 1, pageSize: 100 } }, snapshot)
+      const payload = await request({ url: '/roster', method: 'POST', data: { pageNum: '1', pageSize: '100' } }, snapshot)
       const next = rosterItems(payload).filter(validAgent).map(normalizeAgent); agents.value = next
       if (!next.some(agent => agent.agentId === selectedAgentId.value)) selectedAgentId.value = ''
       rosterState.value = next.length ? 'ready' : 'empty'; return next

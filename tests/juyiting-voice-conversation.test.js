@@ -1459,7 +1459,7 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
         const entry = { options, pending, cancelReason: null }
         streams.push(entry)
         options.onStreamOpen({ cancel: reason => { entry.cancelReason = reason } })
-        options.onStream(JSON.stringify({ requestId: _payload.requestId, conversationId: 'conversation-a', turnId: 'voice-turn', state: 'STREAMING', stateVersion: '1' }))
+        options.onStream(JSON.stringify({ requestId: options.headers['Idempotency-Key'], conversationId: '101', turnId: 'voice-turn', state: 'STREAMING', stateVersion: '1' }))
         return pending.promise
       },
       list: async () => {},
@@ -1521,11 +1521,11 @@ describe('Juyi Hall voice CAS and reply correlation', () => {
       expect(card().attributes('inert')).to.equal(undefined)
 
       const finalA = JSON.stringify({
-        type: 'agent_message', turnId: 'voice-turn', state: 'PUBLISHED', stateVersion: '2', conversationId: 'conversation-a', messageId: 'reply-a', agentId: 'wuyong',
+        type: 'agent_message', turnId: 'voice-turn', state: 'PUBLISHED', stateVersion: '2', conversationId: '101', messageId: '201', agentId: 'wuyong',
         senderType: 'agent', senderName: '吴用', content: '甲轮完整回话', timestamp: 1788000000000
       })
       streams[0].options.onStream(finalA)
-      streams[0].options.onStream(JSON.stringify({ conversationId: 'conversation-a' }))
+      streams[0].options.onStream(JSON.stringify({ conversationId: '101' }))
       streams[0].options.onStreamEnd()
       streams[0].pending.resolve()
       expect(await sendA).to.equal(false)

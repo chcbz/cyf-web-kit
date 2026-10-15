@@ -24,7 +24,7 @@ const aggregate = partitions => {
 export const canOpenHallItem = item => Boolean(actions[item?.ref?.sourceType] === item?.nextAction && item?.allowedActions?.includes(item.nextAction))
 
 const validResultRef = value => value === null || (id(value?.executionId) && id(value?.manifestId))
-const validMark = value => value && timestamp(value.revision) && typeof value.archived === 'boolean' && validResultRef(value.viewedResultRef)
+const validMark = value => value && typeof value.revision === 'string' && /^(0|[1-9][0-9]*)$/.test(value.revision) && BigInt(value.revision) <= 9223372036854775807n && typeof value.archived === 'boolean' && validResultRef(value.viewedResultRef)
 const validReview = value => value?.code === 'FORMAL_DELIVERY_SUBMITTED' && id(value.deliveryId) && id(value.workItemId) &&
   text(value.deliveryVersion) && text(value.taskVersion)
 const validItem = (item, source) => item && sourceTypes[source].includes(item.ref?.sourceType) && id(item.ref.sourceId) &&

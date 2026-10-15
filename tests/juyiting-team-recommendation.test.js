@@ -1,3 +1,4 @@
+import { currentHttpResponse } from './fixtures/current-http-response.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { ref } from 'vue'
@@ -39,8 +40,8 @@ describe('E07 team recommendation preview client', () => {
     const requests = []
     try {
       globalThis.fetch = async (url, options) => {
-        requests.push({ url: String(url), method: options.method, body: JSON.parse(options.body), headers: options.headers })
-        return new Response(JSON.stringify(preview()), { status: 200, headers: { 'Content-Type': 'application/json' } })
+        requests.push({ url: String(url), method: options.method, body: JSON.parse(options.body).data, headers: options.headers })
+        return currentHttpResponse(options, preview(), { status: 200, headers: { 'Content-Type': 'application/json' } })
       }
       const api = createApi('/agent')
       const plan = fixture({ api: { execute: options => api.execute({ ...options, authStore: { authorizationGeneration: 1, token: async () => 'team-token' } }) } })

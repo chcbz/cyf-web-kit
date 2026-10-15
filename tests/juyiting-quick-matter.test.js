@@ -1,3 +1,4 @@
+const reply = (options, data, headers) => { options.onSuccess?.(data, { headers }); return data }
 import { expect } from 'chai'
 import { describe, it } from 'mocha'
 import { ref } from 'vue'
@@ -12,7 +13,7 @@ const memoryStorage = () => {
   }
 }
 const savedDraft = data => ({
-  draftId: 'draft-quick-1', revision: 1, state: 'EDITING', savedAt: 1,
+  draftId: 'draft-quick-1', revision: '1', state: 'EDITING', savedAt: 1,
   kind: 'TASK_CREATE', editableFields: {
     title: data.title, instruction: data.instruction, targetAgentId: null, outputMime: null, inputs: []
   }, sourceSummary: {}, submissionRef: null
@@ -58,7 +59,7 @@ describe('Juyi Hall one-sentence matter adapter', () => {
   it('links each selected fixed version after TASK creation and reports partial success without recreating the task', async () => {
     const calls = []
     const link = ({ relationId, fileId, version, role }) => ({
-      relationId, taskId: 'task-quick-1', fileId, version, role, state: 'ACTIVE', relationRevision: 1, createdAt: 3
+      relationId, taskId: 'task-quick-1', fileId, version, role, state: 'ACTIVE', relationRevision: '1', createdAt: 3
     })
     const model = useHallQuickMatter({
       identityScope: 'tenant\u0000client\u0000owner-a', identityEpoch: ref(1), storage: memoryStorage(), keyFactory: () => 'quick-material-key',
@@ -69,23 +70,23 @@ describe('Juyi Hall one-sentence matter adapter', () => {
         if (request.url === '/tasks/task-quick-1') return taskDetail()
         if (request.url === '/tasks/task-quick-1/file-links' && request.method === 'POST' && request.data.fileId === 'file-a') {
           const saved = link({ relationId: 'rel-a', ...request.data })
-          return { data: saved, headers: { etag: '"rel-a:1"' } }
+          return reply(request, saved, { etag: '"rel-a:1"' })
         }
         if (request.url === '/tasks/task-quick-1/file-links' && request.method === 'POST') throw Object.assign(new Error('unavailable'), { status: 503 })
         throw new Error(`unexpected request ${request.method} ${request.url}`)
       } }
     })
     const result = await model.submit({ request: '整理活动方案', materials: [
-      { fileId: 'file-a', version: 1, role: 'INPUT', displayName: '活动说明' },
-      { fileId: 'file-b', version: 4, role: 'REFERENCE', displayName: '参考案例' }
+      { fileId: 'file-a', version: '1', role: 'INPUT', displayName: '活动说明' },
+      { fileId: 'file-b', version: '4', role: 'REFERENCE', displayName: '参考案例' }
     ] })
 
-    expect(result.linkedMaterials.map(item => [item.fileId, item.version, item.role])).to.deep.equal([['file-a', 1, 'INPUT']])
+    expect(result.linkedMaterials.map(item => [item.fileId, item.version, item.role])).to.deep.equal([['file-a', '1', 'INPUT']])
     expect(result.failedMaterials.map(item => item.fileId)).to.deep.equal(['file-b'])
     expect(model.message.value).to.include('已关联 1 份固定版本资料，1 份未关联')
     expect(calls.filter(call => call.url === '/hall/drafts')).to.have.length(1)
     expect(calls.filter(call => call.url.endsWith('/file-links')).map(call => call.data)).to.deep.equal([
-      { fileId: 'file-a', version: 1, role: 'INPUT' }, { fileId: 'file-b', version: 4, role: 'REFERENCE' }
+      { fileId: 'file-a', version: '1', role: 'INPUT' }, { fileId: 'file-b', version: '4', role: 'REFERENCE' }
     ])
     expect(calls.some(call => call.url.includes('/personal-workspace/executions'))).to.equal(false)
     model.materialLinks.dispose(); model.drafts.dispose()

@@ -1,3 +1,4 @@
+import { displayFixture } from './fixtures/juyiting/interface-display-fixture.mjs'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import * as Vue from 'vue'
@@ -8,9 +9,9 @@ import { useHallTypedDeliberation } from '../src/composables/juyiting/useHallTyp
 
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/juyiting/action-final-projection-v3.json', import.meta.url)))
 const clone = value => JSON.parse(JSON.stringify(value))
-const action = () => clone(fixture.chatAction)
+const action = () => displayFixture(fixture.chatAction)
 const context = { conversationId: '42', conversationGeneration: '1', taskId: 'task', requestId: 'request', requestRevision: '1', turnId: 'turn', assignmentRevision: '3', targetAgentId: 'agent' }
-const digest = char => `sha256:${char.repeat(64)}`
+const digest = char => char.repeat(64)
 const card = () => {
   const source = readFileSync(new URL('../src/components/juyiting/BountyTypedOutcomeCard.vue', import.meta.url), 'utf8')
   const descriptor = parse(source).descriptor
@@ -23,9 +24,9 @@ const card = () => {
 describe('ordinary v3 Agent outcome projection', () => {
   it('reads the same exact projection vector as the Java final service without converting it to an image proposal', () => {
     const actual = typedOutcomeProjection(action(), context)
-    expect(actual).to.deep.equal({ ...fixture.chatAction, purpose: 'CHAT' })
+    expect(actual).to.deep.equal({ ...displayFixture(fixture.chatAction), purpose: 'CHAT' })
     expect(actual.outcome.action.actionId).to.equal('write-document')
-    expect(actual.outcome).not.to.have.property('proposal')
+    expect(actual.outcome.proposal).to.equal(null)
     expect(inspectionOutcomeProjection(action(), context)).to.equal(null)
   })
 
@@ -49,7 +50,7 @@ describe('ordinary v3 Agent outcome projection', () => {
     expect(typedOutcomeProjection(extra, context)).to.equal(null)
     const legacy = action(); legacy.outcome.kind = 'EXECUTION_PROPOSAL'
     expect(typedOutcomeProjection(legacy, context)).to.equal(null)
-    const injected = action(); injected.outcome.proposal = null
+    const injected = action(); injected.outcome.proposal = {}
     expect(typedOutcomeProjection(injected, context)).to.equal(null)
   })
 
@@ -67,10 +68,10 @@ describe('ordinary v3 Agent outcome projection', () => {
 
   it('keeps the exact mixed-input receipt on inspection reads and never claims pending material was read', () => {
     const value = action(); value.route = 'INSPECT'; value.outcome.kind = 'ANSWER'; value.outcome.action = null; value.actionProgress = null
-    value.inspection = { authorizationId: 'inspection', manifestDigest: digest('a'), sourceRefIds: ['source-text', 'source-audio'],
-      inputSummary: { inputDigest: digest('b'), sources: [
-        { sourceRefId: 'source-text', sha256: 'a'.repeat(64), byteLength: '9007199254740993', carrier: 'DIRECT_TEXT', contributionDigest: digest('c') },
-        { sourceRefId: 'source-audio', sha256: 'b'.repeat(64), byteLength: '12', carrier: 'LOCAL_AUDIO', contributionDigest: digest('d') }
+    value.inspection = { authorizationId: 'inspection', manifestSha256: digest('a'), sourceRefIds: ['source-text', 'source-audio'],
+      inputSummary: { inputSha256: digest('b'), sources: [
+        { sourceRefId: 'source-text', sha256: 'a'.repeat(64), byteLength: '9007199254740993', carrier: 'DIRECT_TEXT', contributionSha256: digest('c') },
+        { sourceRefId: 'source-audio', sha256: 'b'.repeat(64), byteLength: '12', carrier: 'LOCAL_AUDIO', contributionSha256: digest('d') }
       ] } }
     expect(inspectionOutcomeProjection(value, context).purpose).to.equal('INSPECT')
     expect(typedOutcomeProjection(value, context)).to.equal(null)
@@ -93,7 +94,7 @@ describe('ordinary v3 Agent outcome projection', () => {
 
   it('hydrates and refreshes actions with GET only and rejects rewriting an immutable final', async () => {
     const value = action(); let gets = 0; let posts = 0; let proposals = 0
-    const lane = useHallTypedDeliberation({ chatApi: { get: async () => { gets++; return { data: { data: clone(value) } } }, create: async () => { posts++ } },
+    const lane = useHallTypedDeliberation({ chatApi: { get: async () => { gets++; return clone(value) }, create: async () => { posts++ } },
       actorScopeKey: Vue.ref('owner'), authorizationGeneration: Vue.ref(1), getContext: () => context, getContextGeneration: () => 1,
       getCatalogEntries: () => [], enabled: () => true, onProposal: () => { proposals++ } })
     try {
@@ -125,7 +126,7 @@ describe('ordinary v3 Agent outcome projection', () => {
 
   it('refreshes queued/running/completed without rewriting final, regressing state or creating another request', async () => {
     let value = action(); let posts = 0
-    const lane = useHallTypedDeliberation({ chatApi: { get: async () => ({ data: clone(value) }), create: async () => { posts++ } },
+    const lane = useHallTypedDeliberation({ chatApi: { get: async () => clone(value), create: async () => { posts++ } },
       actorScopeKey: Vue.ref('owner'), authorizationGeneration: Vue.ref(1), getContext: () => context, getContextGeneration: () => 1,
       getCatalogEntries: () => [], enabled: () => true })
     try {
@@ -163,8 +164,8 @@ describe('ordinary v3 Agent outcome projection', () => {
       const earlier = lane.readOne('request'), later = lane.readOne('request')
       const completed = action(); completed.actionProgress = { ...completed.actionProgress, state: 'COMPLETED', dispatchVersion: '2',
         childRequestId: 'child', childRoute: 'INSPECT', childStateVersion: '4' }
-      pending[1]({ data: completed }); await later
-      pending[0]({ data: action() }); expect(await earlier).to.equal(null)
+      pending[1](completed); await later
+      pending[0](action()); expect(await earlier).to.equal(null)
       expect(lane.cards.value[0].actionProgress.state).to.equal('COMPLETED')
     } finally { lane.dispose() }
   })

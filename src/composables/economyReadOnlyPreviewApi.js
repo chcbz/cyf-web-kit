@@ -23,5 +23,5 @@ export const economyReadOnlyPreviewClient = Object.freeze({
   hostingPlan: options => get('/hosting-plan', undefined, options),
   hostingLease: (agentId, options) => get(`/agents/${encodeURIComponent(agentId)}/hosting-lease`, undefined, options),
   estimate: (payload, options) => post('/bounty-estimates', payload, options),
-  roster: options => agentApi.create('/roster', { pageNum: 1, pageSize: 50 }, { autoLoading: false, ...options })
+  roster: options => agentApi.create('/roster', { pageNum: '1', pageSize: '50' }, { autoLoading: false, ...options })
 })

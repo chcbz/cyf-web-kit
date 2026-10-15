@@ -146,8 +146,8 @@ const useMessageStoreBase = defineStore('message', {
         const pageNum = options.pageNum || this.pageNum
         const statusFilter = options.statusFilter || this.statusFilter
         const result = await msgApi.list('/list', {
-          pageNum,
-          pageSize: this.pageSize,
+          pageNum: String(pageNum),
+          pageSize: String(this.pageSize),
           orderBy: 'id desc',
           search: this.buildSearch(userId, statusFilter)
         }, { authStore: operation.authStore, autoLoading: false, signal: operation.signal })
@@ -184,8 +184,8 @@ const useMessageStoreBase = defineStore('message', {
         }
 
         const result = await msgApi.list('/list', {
-          pageNum: 1,
-          pageSize: 1,
+          pageNum: '1',
+          pageSize: '1',
           search: {
             userId,
             status: MSG_STATUS.UNREAD

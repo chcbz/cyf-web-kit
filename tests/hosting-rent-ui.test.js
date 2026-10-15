@@ -9,14 +9,14 @@ import { hostingPersona, hostingQuote, hostingReceipt, hostingLookup, activeHost
 let Vue, mount, flushPromises, HostingRentPanel
 let makeRent
 const wrappers = []
-const ok = data => ({ data: { code: 'E0', data } })
+const ok = data => data
 
 const controller = (overrides = {}) => {
   const requests = []
   let key = 0
   const rent = useHostingRent({ enabled: true, storage: memoryHostingStorage(), now: () => 2000,
     createKey: () => `00000000-0000-4000-8000-${String(++key).padStart(12, '0')}`,
-    loadCapability: async () => ({ economyPreviewEnabled: true, principalScopeFingerprint: 'ui-test-scope' }),
+    loadCapability: async () => ({ economyPreviewEnabled: true, principalScopeSha256: 'c3bc3be1d84b8bfb021dd87ffae84531399c4e0c20bf1d63ebcb972325b3c755' }),
     economyApi: { get: async () => ok({ currency: 'SILVER', availableMicro: '9999999999', heldMicro: '0' }), create: async () => ok({ transactionId: 'etx-welcome', status: 'POSTED', amountMicro: '1000000000', campaignRef: 'hosting-welcome-v1' }) },
     agentApi: {
       create: async (url, body) => { requests.push({ url, body }); return ok(url.endsWith('/quotes') ? hostingQuote() : hostingReceipt()) },
@@ -109,7 +109,7 @@ describe('hosting rent actual quote/lease UI', () => {
       create: async (url, body) => {
         requests.push({ url, body })
         if (url.endsWith('/renewal-quotes')) return ok(hostingQuote({ purpose: 'RENEWAL', leaseId: 'hl-1', expectedLeaseVersion: '3' }))
-        lookup = activeHostingLookup({ lease: { version: '4' }, reprovision: { requestId: 'hr-1', version: '1', status: 'ACCEPTED', requestedAt: '2000', serviceReadyAt: null } })
+        lookup = activeHostingLookup({ lease: { version: '4' }, reprovision: { requestId: 'hr-1', version: '1', status: 'ACCEPTED', requestedAt: 2000, serviceReadyAt: null } })
         return ok(freeReprovisionReceipt())
       }
     } })

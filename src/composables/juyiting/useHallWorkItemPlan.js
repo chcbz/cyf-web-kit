@@ -5,11 +5,7 @@ const MAX_ITEMS = 8
 const ID = value => typeof value === 'string' && value.length > 0 && value.length <= 100 &&
   !/^[\s]|[\s]$|[\x00-\x1f\x7f]/.test(value)
 const clone = value => JSON.parse(JSON.stringify(value))
-const unwrap = result => {
-  let value = result
-  for (let index = 0; index < 3 && value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, 'data'); index += 1) value = value.data
-  return value
-}
+const unwrap = result => result
 const requestKey = () => globalThis.crypto?.randomUUID?.() || `work-plan-${Date.now()}-${Math.random().toString(36).slice(2)}`
 const stable = value => JSON.stringify(value)
 const editableItem = item => ({

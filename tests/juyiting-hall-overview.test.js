@@ -170,7 +170,7 @@ describe('JYT-UX-W05 independent Hall read model', () => {
 
   it('preserves compatible private mark and formal review evidence without conflating action types', async () => {
     const response = overview()
-    const personalMark = { revision: 0, archived: false, viewedResultRef: null }
+    const personalMark = { revision: '0', archived: false, viewedResultRef: null }
     const review = { code: 'FORMAL_DELIVERY_SUBMITTED', deliveryId: 'delivery-1', workItemId: 'work-1', deliveryVersion: '0', taskVersion: '9007199254740993' }
     response.sections.recent.partitions.private.items[0].personalMark = personalMark
     response.sections.recent.partitions.task.items[0].review = review
@@ -188,7 +188,7 @@ describe('JYT-UX-W05 independent Hall read model', () => {
       if (options.url === '/hall/overview') return overview()
       return page(options.params.kind, options.params.kind === 'draft'
         ? part([], { status: 'error', errorCode: 'HALL_DRAFT_ARCHIVE_UNAVAILABLE' })
-        : part([{ ...item('PRIVATE_CASE', 'archived-case'), personalMark: { revision: 2, archived: true, viewedResultRef: null } }]), 'archive')
+        : part([{ ...item('PRIVATE_CASE', 'archived-case'), personalMark: { revision: '2', archived: true, viewedResultRef: null } }]), 'archive')
     })
     try {
       await model.refresh()

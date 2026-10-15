@@ -1,3 +1,4 @@
+import { currentHttpResponse } from '../fixtures/current-http-response.js'
 import { expect } from 'chai'
 import { cleanup } from '../setup.js'
 import { createApi, useHttp } from '../../src/composables/useHttp.js'
@@ -105,7 +106,7 @@ describe('useHttp', () => {
           streamController.enqueue(new TextEncoder().encode('lo\n\n'))
           streamController.close()
         }
-      }), { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
+      }), { status: 200, headers: { 'X-Request-Id': config.headers['X-Request-Id'],  'Content-Type': 'text/event-stream' } })
     }
 
     try {
@@ -131,11 +132,11 @@ describe('useHttp', () => {
   it('reports a stream read failure once', async () => {
     const originalFetch = global.fetch
     const errors = []
-    global.fetch = async () => new Response(new ReadableStream({
+    global.fetch = async (_url, config) => new Response(new ReadableStream({
       start (controller) {
         controller.error(new Error('stream failed'))
       }
-    }), { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
+    }), { status: 200, headers: { 'X-Request-Id': config.headers['X-Request-Id'],  'Content-Type': 'text/event-stream' } })
 
     try {
       let failure
@@ -159,11 +160,10 @@ describe('useHttp', () => {
 
   it('exposes controlled backend error codes to stream lifecycle callers', async () => {
     const originalFetch = global.fetch
-    global.fetch = async () => new Response(JSON.stringify({
-      status: 503,
+    global.fetch = async (_url, config) => currentHttpResponse(config, {
       code: 'SCENE_EVENTS_DISABLED',
       msg: 'Scene event stream is disabled'
-    }), { status: 503, headers: { 'Content-Type': 'application/json' } })
+    }, { status: 503, headers: { 'Content-Type': 'application/json' } })
 
     try {
       let failure
@@ -190,7 +190,7 @@ describe('useHttp', () => {
         return new AbortController().signal
       }
     })
-    global.fetch = async () => new Response(JSON.stringify({ ok: true }), { status: 200 })
+    global.fetch = async (_url, config) => currentHttpResponse(config, { code: 'E0', data: { ok: true } }, { status: 200 })
 
     try {
       await useHttp().get('/ordinary-json', {}, { needAuth: false })
@@ -210,7 +210,7 @@ describe('useHttp', () => {
     global.fetch = (_url, config) => {
       receivedSignal = config.signal
       return new Promise(resolve => {
-        setTimeout(() => resolve(new Response(JSON.stringify({ ok: true }), { status: 200 })), 5001)
+        setTimeout(() => resolve(currentHttpResponse(config, { code: 'E0', data: { ok: true } }, { status: 200 })), 5001)
       })
     }
 
@@ -224,7 +224,7 @@ describe('useHttp', () => {
       timers.advanceBy(5001)
       const result = await pending
 
-      expect(result.data).to.deep.equal({ ok: true })
+      expect(result).to.deep.equal({ ok: true })
       expect(receivedSignal).to.equal(undefined)
       expect(reports).to.have.length(1)
       expect(reports[0]).to.include({ route: '/agent/map', durationMs: 5001, status: '2xx' })
@@ -246,7 +246,7 @@ describe('useHttp', () => {
         return new AbortController().signal
       }
     })
-    global.fetch = async () => new Response('ok', { status: 200 })
+    global.fetch = async (_url, config) => _url.includes('/upload') ? currentHttpResponse(config, { code: 'E0', data: null }) : new Response('ok', { status: 200, headers: { 'X-Request-Id': config.headers['X-Request-Id'] } })
 
     try {
       await useHttp().get('/events', {}, { needAuth: false, responseType: 'stream', timeout: 60_000 })
@@ -264,9 +264,9 @@ describe('useHttp', () => {
     const originalFetch = global.fetch
     const timers = installFakeTimers()
     let fetchCalls = 0
-    global.fetch = async () => {
+    global.fetch = async (_url, config) => {
       fetchCalls += 1
-      return new Response(JSON.stringify({ ok: true }), { status: 200 })
+      return currentHttpResponse(config, { code: 'E0', data: { ok: true } }, { status: 200 })
     }
 
     try {
@@ -279,7 +279,7 @@ describe('useHttp', () => {
       timers.advanceBy(5001)
       const result = await pending
 
-      expect(result.data).to.deep.equal({ ok: true })
+      expect(result).to.deep.equal({ ok: true })
       expect(fetchCalls).to.equal(1)
     } finally {
       timers.restore()
@@ -297,9 +297,9 @@ describe('useHttp', () => {
       writable: true,
       value: () => timeoutController.signal
     })
-    global.fetch = async () => {
+    global.fetch = async (_url, config) => {
       fetchCalls += 1
-      return new Response(JSON.stringify({ ok: true }), { status: 200 })
+      return currentHttpResponse(config, { code: 'E0', data: { ok: true } }, { status: 200 })
     }
 
     try {

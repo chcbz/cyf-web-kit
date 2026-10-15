@@ -55,10 +55,10 @@ const editorDeps = () => {
       draft, summaries, nextCursor, state, error, reloadRequired, receipt, submissionState, caseView, submissionRecovery, unresolvedIntent, executionResults, resultsState, resultsError,
       create: async fields => {
         created.push(fields)
-        draft.value = { draftId: `draft-${created.length}`, revision: 1, state: 'EDITING', editableFields: fields }
+        draft.value = { draftId: `draft-${created.length}`, revision: '1', state: 'EDITING', editableFields: fields }
         return draft.value
       },
-      save: async fields => { draft.value = { ...draft.value, revision: 2, editableFields: fields }; return draft.value },
+      save: async fields => { draft.value = { ...draft.value, revision: '2', editableFields: fields }; return draft.value },
       list: async () => true, loadMore: async () => false, load: async () => null, discard: async () => null,
       submit: async () => null, reconcileSubmission: async () => null, loadCase: async () => null,
       loadResults: async executionId => {
@@ -66,8 +66,8 @@ const editorDeps = () => {
         executionResults.value = {
           executionId, state: 'OUTPUT_COMMITTED', manifestId: 'manifest-1', allowedActions: ['VIEW', 'CREATE_REVISION'],
           items: [
-            { outputId: 'output-1', fileId: 'file-1', fileVersion: 2, mime: 'application/pdf', filename: '结案.pdf', byteLength: 12, sha256: 'a'.repeat(64), availability: 'AVAILABLE' },
-            { outputId: 'output-2', fileId: 'file-2', fileVersion: 7, mime: 'text/plain', filename: '缺失.txt', byteLength: 3, sha256: 'b'.repeat(64), availability: 'UNAVAILABLE' }
+            { outputId: 'output-1', fileId: 'file-1', fileVersion: '2', mime: 'application/pdf', filename: '结案.pdf', byteLength: '12', sha256: 'a'.repeat(64), availability: 'AVAILABLE' },
+            { outputId: 'output-2', fileId: 'file-2', fileVersion: '7', mime: 'text/plain', filename: '缺失.txt', byteLength: '3', sha256: 'b'.repeat(64), availability: 'UNAVAILABLE' }
           ]
         }
         resultsState.value = 'ready'
@@ -129,9 +129,9 @@ describe('JYT-UX-W03 HallDraftEditor boundary', () => {
     const wrapper = mount(HallDraftEditor, {
       props: { agents: [], selectedAgent: null, identityEpoch: 7, identityScope: 'tenant\u0000client\u0000owner' }
     })
-    editorState.draft.value = { draftId: 'draft-submitted', revision: 1, state: 'SUBMITTED', editableFields: {} }
+    editorState.draft.value = { draftId: 'draft-submitted', revision: '1', state: 'SUBMITTED', editableFields: {} }
     editorState.receipt.value = { ref: { sourceType: 'PRIVATE_CASE', sourceId: 'case-1' }, execution: { executionId: 'exec-1', targetAgentId: 'agent-1', state: 'OUTPUT_COMMITTED' }, task: null, submittedAt: 1 }
-    editorState.caseView.value = { caseId: 'case-1', executions: [{ revisionNo: 1, execution: { executionId: 'exec-1', targetAgentId: 'agent-1', state: 'OUTPUT_COMMITTED' } }] }
+    editorState.caseView.value = { caseId: 'case-1', executions: [{ revisionNo: '1', execution: { executionId: 'exec-1', targetAgentId: 'agent-1', state: 'OUTPUT_COMMITTED' } }] }
     await Vue.nextTick()
     expect(wrapper.text()).to.include('可查看已登记的固定版本成果')
     await button(wrapper, '查看成果').trigger('click')
@@ -144,7 +144,7 @@ describe('JYT-UX-W03 HallDraftEditor boundary', () => {
     await button(wrapper, '预览').trigger('click')
     await button(wrapper, '下载').trigger('click')
     expect(editorState.workspaceCalls).to.deep.equal([
-      ['select', 'file-1'], ['preview', 2], ['select', 'file-1'], ['download', 2], ['save', '结案.pdf']
+      ['select', 'file-1'], ['preview', '2'], ['select', 'file-1'], ['download', '2'], ['save', '结案.pdf']
     ])
     editorState.executionResults.value = { ...editorState.executionResults.value, allowedActions: ['VIEW'] }
     await Vue.nextTick()
@@ -157,7 +157,7 @@ describe('JYT-UX-W03 HallDraftEditor boundary', () => {
     await wrapper.find('form').trigger('submit')
     expect(editorState.created).to.have.length(1)
     expect(editorState.created[0]).to.include({ kind: 'REVISION', caseId: 'case-1' })
-    expect(editorState.created[0].sourceOutputRef).to.deep.equal({ executionId: 'exec-1', outputId: 'output-1', fileId: 'file-1', fileVersion: 2 })
+    expect(editorState.created[0].sourceOutputRef).to.deep.equal({ executionId: 'exec-1', outputId: 'output-1', fileId: 'file-1', fileVersion: '2' })
     wrapper.unmount()
   })
 })
@@ -187,7 +187,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
   const settle = async () => { await new Promise(resolve => setTimeout(resolve, 0)); await Vue.nextTick() }
 
   it('restores the exact saved draft revision through GET without creating a replacement', async () => {
-    const { component, calls, writes, entries } = await setupReader(() => ({ draftId: 'draft-a', revision: 7, state: 'EDITING', savedAt: 100, kind: 'CREATE',
+    const { component, calls, writes, entries } = await setupReader(() => ({ draftId: 'draft-a', revision: '7', state: 'EDITING', savedAt: 100, kind: 'CREATE',
       editableFields: { title: '已存名目', instruction: '固定正文', targetAgentId: 'agent-a', outputMime: 'text/plain', inputs: [] }, sourceSummary: {}, submissionRef: null }))
     const wrapper = mount(component, { props: { ...base, initialRef: { sourceType: 'DRAFT', sourceId: 'draft-a' } } })
     try {
@@ -203,7 +203,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
 
   it('restores formal draft editing without presenting a private-submission confirmation', async () => {
     for (const kind of ['TASK_CREATE', 'TASK_ACTION']) {
-      const { component, calls } = await setupReader(() => ({ draftId: 'formal-draft', revision: 3, state: 'EDITING', savedAt: 100, kind,
+      const { component, calls } = await setupReader(() => ({ draftId: 'formal-draft', revision: '3', state: 'EDITING', savedAt: 100, kind,
         editableFields: { title: '正式草稿', instruction: '原正式交代', targetAgentId: 'agent-a', outputMime: 'text/plain', inputs: [] }, sourceSummary: {}, submissionRef: null }))
       const wrapper = mount(component, { props: { ...base, initialRef: { sourceType: 'DRAFT', sourceId: 'formal-draft' } } })
       try {
@@ -224,8 +224,8 @@ describe('JYT-UX-W05 real editor source restoration', () => {
   })
 
   it('opens PRIVATE_CASE progress without fabricating a submission receipt or resubmitting', async () => {
-    const { component, calls, writes, entries } = await setupReader(() => ({ caseId: 'case-a', title: '原事项', revision: 1, sourceRef: {}, allowedActions: ['VIEW'],
-      executions: [{ revisionNo: 1, execution: { executionId: 'exec-a', targetAgentId: 'agent-a', state: 'QUEUED' } }] }))
+    const { component, calls, writes, entries } = await setupReader(() => ({ caseId: 'case-a', title: '原事项', revision: '1', sourceRef: {}, allowedActions: ['VIEW'],
+      executions: [{ revisionNo: '1', execution: { executionId: 'exec-a', targetAgentId: 'agent-a', state: 'QUEUED' } }] }))
     const wrapper = mount(component, { props: { ...base, initialRef: { sourceType: 'PRIVATE_CASE', sourceId: 'case-a' } } })
     try {
       await settle()
@@ -265,7 +265,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
   })
 
   it('rejects a different draft ID returned for an exact overview reference', async () => {
-    const { component, calls } = await setupReader(() => ({ draftId: 'another-draft', revision: 1, state: 'EDITING', savedAt: 100, kind: 'CREATE',
+    const { component, calls } = await setupReader(() => ({ draftId: 'another-draft', revision: '1', state: 'EDITING', savedAt: 100, kind: 'CREATE',
       editableFields: { title: '不能代替原事项', instruction: '另一事项正文', targetAgentId: null, outputMime: null, inputs: [] }, sourceSummary: {}, submissionRef: null }))
     const wrapper = mount(component, { props: { ...base, initialRef: { sourceType: 'DRAFT', sourceId: 'exact-draft' } } })
     try {
@@ -278,7 +278,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
   })
 
   const formalSaved = (fields = {}, overrides = {}) => ({
-    draftId: 'formal-draft', revision: 1, state: 'EDITING', savedAt: 100, kind: 'TASK_CREATE',
+    draftId: 'formal-draft', revision: '1', state: 'EDITING', savedAt: 100, kind: 'TASK_CREATE',
     editableFields: { title: '任务名目', instruction: '任务简述', targetAgentId: null, outputMime: null, inputs: [], ...fields },
     sourceSummary: { originRef: 'juyiting', sourceRef: null, conversationId: null }, submissionRef: null, ...overrides
   })
@@ -344,7 +344,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
   it('preserves oversized restored formal text and saves it without truncation, but requires correction before confirmation', async () => {
     const title = '长'.repeat(31)
     const instruction = '文'.repeat(201)
-    const { component, calls } = await setupReader(request => formalSaved({ title, instruction }, { revision: request.method === 'PUT' ? 2 : 1 }))
+    const { component, calls } = await setupReader(request => formalSaved({ title, instruction }, { revision: request.method === 'PUT' ? '2' : '1' }))
     const wrapper = mount(component, { props: { ...base, initialRef: { sourceType: 'DRAFT', sourceId: 'formal-draft' } } })
     try {
       await settle()
@@ -364,10 +364,10 @@ describe('JYT-UX-W05 real editor source restoration', () => {
   })
 
   it('keeps incompatible formal agent/format/fixed inputs until explicit removal and withdraws saved-snapshot authorization on edit', async () => {
-    const existing = { targetAgentId: 'old-agent', outputMime: 'application/pdf', inputs: [{ fileId: 'old-file', version: 7 }] }
+    const existing = { targetAgentId: 'old-agent', outputMime: 'application/pdf', inputs: [{ fileId: 'old-file', version: '7' }] }
     const { component, calls, entries } = await setupReader(request => {
       if (request.method === 'GET') return formalSaved(existing)
-      if (request.method === 'PUT') return formalSaved(request.data, { revision: calls.filter(call => call.method === 'PUT').length + 1 })
+      if (request.method === 'PUT') return formalSaved(request.data, { revision: String(calls.filter(call => call.method === 'PUT').length + 1) })
       return formalReceipt
     })
     const wrapper = mount(component, { props: { ...base, initialRef: { sourceType: 'DRAFT', sourceId: 'formal-draft' } } })
@@ -400,14 +400,14 @@ describe('JYT-UX-W05 real editor source restoration', () => {
       await button(wrapper, '确认创建正式任务').trigger('click')
       await settle()
       const post = calls.find(call => call.url.endsWith('/submit'))
-      expect(post.data).to.deep.equal({ expectedRevision: 4, authorizationAcknowledgement: true })
+      expect(post.data).to.deep.equal({ expectedRevision: '4', authorizationAcknowledgement: true })
       expect(calls.filter(call => call.method === 'PUT').at(-1).data.instruction).to.equal('用户后来修改的简述')
       expect(JSON.stringify(entries())).not.to.match(/用户后来|old-agent|old-file|application\/pdf/)
     } finally { wrapper.unmount() }
   })
 
   it('never erases immutable formal source/conversation metadata or creates a replacement draft to bypass it', async () => {
-    for (const sourceSummary of [{ sourceRef: { sourceType: 'FILE', sourceId: 'private-file', version: 1 } }, { conversationId: 'private-chat' }]) {
+    for (const sourceSummary of [{ sourceRef: { sourceType: 'FILE', sourceId: 'private-file', version: '1' } }, { conversationId: 'private-chat' }]) {
       const { component, calls } = await setupReader(() => formalSaved({}, { sourceSummary }))
       const wrapper = mount(component, { props: { ...base, initialRef: { sourceType: 'DRAFT', sourceId: 'formal-draft' } } })
       try {
@@ -505,7 +505,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
 
   it('keeps a restored supported non-text format instead of silently replacing it with the default', async () => {
     const { component, calls } = await setupReader(request => formalSaved({ title: '原格式', instruction: '保留 PDF', targetAgentId: 'agent-a', outputMime: 'application/pdf' },
-      { kind: 'CREATE', revision: request.method === 'PUT' ? 2 : 1 }), () => ({ allowedMimeTypes: ['text/plain', 'application/pdf'], generationEnabled: true }))
+      { kind: 'CREATE', revision: request.method === 'PUT' ? '2' : '1' }), () => ({ allowedMimeTypes: ['text/plain', 'application/pdf'], generationEnabled: true }))
     const wrapper = mount(component, { props: { ...base, initialRef: { sourceType: 'DRAFT', sourceId: 'formal-draft' } } })
     try {
       await settle()
@@ -520,7 +520,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
   it('keeps long saved private text and format visible when capabilities are unavailable, without allowing submission', async () => {
     const instruction = '合法正文'.repeat(5000)
     const { component, calls } = await setupReader(request => formalSaved({ title: '原稿', instruction, outputMime: 'application/pdf', targetAgentId: 'agent-a' },
-      { kind: 'CREATE', revision: request.method === 'PUT' ? 2 : 1 }), () => { throw Object.assign(new Error('unavailable'), { status: 503 }) })
+      { kind: 'CREATE', revision: request.method === 'PUT' ? '2' : '1' }), () => { throw Object.assign(new Error('unavailable'), { status: 503 }) })
     const wrapper = mount(component, { props: { ...base, initialRef: { sourceType: 'DRAFT', sourceId: 'formal-draft' } } })
     try {
       await settle()
@@ -553,7 +553,7 @@ describe('W04 saved-source exit boundary', () => {
     let finishSave
     const commands = []
     model.create = async command => { commands.push(command); return null }
-    const source = { originRef: 'juyiting:file', sourceRef: { sourceType: 'FILE', sourceId: 'file-source', version: 2 }, inputs: [{ fileId: 'file-source', version: 2 }] }
+    const source = { originRef: 'juyiting:file', sourceRef: { sourceType: 'FILE', sourceId: 'file-source', version: '2' }, inputs: [{ fileId: 'file-source', version: '2' }] }
     const wrapper = mount(loadEditor(deps), { props: { identityScope: 'client:owner', initialContext: source } })
     try {
       await Vue.nextTick()
@@ -566,7 +566,7 @@ describe('W04 saved-source exit boundary', () => {
       expect(commands[0].inputs).to.deep.equal(source.inputs)
       model.create = command => new Promise(resolve => {
         finishSave = () => {
-          model.draft.value = { draftId: 'saved-file-draft', revision: 1, state: 'EDITING', editableFields: command }
+          model.draft.value = { draftId: 'saved-file-draft', revision: '1', state: 'EDITING', editableFields: command }
           resolve(model.draft.value)
         }
       })
@@ -591,7 +591,7 @@ describe('JYT-UX-W02 visible draft-step regressions', () => {
     const model = deps.useHallDrafts()
     deps.useHallDrafts = () => model
     let failed = false
-    model.create = async fields => { model.draft.value = { draftId: 'draft-visible', revision: 1, state: 'EDITING', editableFields: fields }; return model.draft.value }
+    model.create = async fields => { model.draft.value = { draftId: 'draft-visible', revision: '1', state: 'EDITING', editableFields: fields }; return model.draft.value }
     model.save = async () => { failed = true; model.error.value = '保存失败，请重试。'; return null }
     const wrapper = mount(loadEditor(deps), { props: base })
     try {
@@ -650,10 +650,10 @@ describe('JYT-UX-W02 visible draft-step regressions', () => {
     const workspace = deps.usePersonalWorkspace()
     deps.useHallDrafts = () => model
     deps.usePersonalWorkspace = () => workspace
-    workspace.items.value = [{ fileId: 'file-a', displayName: '资料A.pdf', latestVersion: 2 }]
-    workspace.detail.value = { file: { fileId: 'result-1' }, versions: [{ version: 1, originalFilename: '旧版.pdf' }, { version: 2, originalFilename: '固定输出.pdf' }, { version: 3, originalFilename: '后来上传.pdf' }] }
-    model.draft.value = { draftId: 'draft-v1', revision: 1, state: 'EDITING', editableFields: { title: '事项', instruction: '说明', targetAgentId: 'agent-a', outputMime: 'application/pdf', inputs: [{ fileId: 'file-a', version: 1 }] } }
-    const wrapper = mount(loadEditor(deps), { props: { ...base, initialContext: { title: '事项', instruction: '说明', targetAgentId: 'agent-a', outputMime: 'application/pdf', inputs: [{ fileId: 'file-a', version: 1 }] } } })
+    workspace.items.value = [{ fileId: 'file-a', displayName: '资料A.pdf', latestVersion: '2' }]
+    workspace.detail.value = { file: { fileId: 'result-1' }, versions: [{ version: '1', originalFilename: '旧版.pdf' }, { version: '2', originalFilename: '固定输出.pdf' }, { version: '3', originalFilename: '后来上传.pdf' }] }
+    model.draft.value = { draftId: 'draft-v1', revision: '1', state: 'EDITING', editableFields: { title: '事项', instruction: '说明', targetAgentId: 'agent-a', outputMime: 'application/pdf', inputs: [{ fileId: 'file-a', version: '1' }] } }
+    const wrapper = mount(loadEditor(deps), { props: { ...base, initialContext: { title: '事项', instruction: '说明', targetAgentId: 'agent-a', outputMime: 'application/pdf', inputs: [{ fileId: 'file-a', version: '1' }] } } })
     try {
       await settle()
       await button(wrapper, '添加资料').trigger('click')
@@ -665,8 +665,8 @@ describe('JYT-UX-W02 visible draft-step regressions', () => {
       expect(wrapper.text()).not.to.include('已选固定 v1')
       await button(wrapper, '取消').trigger('click')
       model.receipt.value = { ref: { sourceType: 'PRIVATE_CASE', sourceId: 'case-1' }, execution: { executionId: 'exec-1', state: 'OUTPUT_COMMITTED' } }
-      model.caseView.value = { caseId: 'case-1', executions: [{ revisionNo: 1, execution: model.receipt.value.execution }] }
-      model.executionResults.value = { executionId: 'exec-1', state: 'OUTPUT_COMMITTED', allowedActions: ['VIEW'], items: [{ outputId: 'out-1', fileId: 'result-1', fileVersion: 2, filename: '固定输出.pdf', mime: 'application/pdf', availability: 'AVAILABLE' }] }
+      model.caseView.value = { caseId: 'case-1', executions: [{ revisionNo: '1', execution: model.receipt.value.execution }] }
+      model.executionResults.value = { executionId: 'exec-1', state: 'OUTPUT_COMMITTED', allowedActions: ['VIEW'], items: [{ outputId: 'out-1', fileId: 'result-1', fileVersion: '2', filename: '固定输出.pdf', mime: 'application/pdf', availability: 'AVAILABLE' }] }
       await settle()
       await button(wrapper, '成果').trigger('click')
       await button(wrapper, '预览').trigger('click')

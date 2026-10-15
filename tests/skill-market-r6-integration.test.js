@@ -1,3 +1,4 @@
+import { currentHttpResponse } from './fixtures/current-http-response.js'
 import * as skillCostContract from '../src/composables/juyiting/hallSkillCapabilities.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
@@ -12,7 +13,7 @@ let pinia
 let useApiStore
 const wrappers = []
 const domDescriptors = {}
-const storageKey = 'cyf.skill-market.purchase-journal.v3.actor-a'
+const storageKey = 'cyf.skill-market.purchase-journal.v3.' + 'a'.repeat(64)
 const locks = { request: async (_name, _options, callback) => callback({}) }
 
 const compile = (file, id, imports) => {
@@ -25,10 +26,7 @@ const compile = (file, id, imports) => {
   return new Function('imports', code)(imports)
 }
 
-const response = (data, status = 200) => new Response(JSON.stringify({ code: 'E0', data }), {
-  status,
-  headers: { 'Content-Type': 'application/json' }
-})
+const response = (options, data, status = 200) => currentHttpResponse(options, { code: 'E0', data }, { status })
 
 // Keep the actual capability utility in the Route chain while injecting its one
 // aliased dependency for Node's SFC Function harness.
@@ -217,7 +215,7 @@ const product = (id, skillKey) => ({
   productVersionId: `pv-${id}`,
   skillKey,
   skillVersion: '1',
-  priceMicro: '1',
+  price: { amountMinor: '1', currency: 'SILVER' },
   permissions: [],
   canPurchase: true
 })
@@ -257,19 +255,19 @@ describe('R6 actual skill-market route purchase chain', () => {
     const originalFetch = globalThis.fetch
     const transport = trackedFetch(async (url, options = {}) => {
       const path = new URL(String(url), 'http://localhost').pathname
-      const body = options.body ? JSON.parse(options.body) : null
+      const body = options.body ? JSON.parse(options.body).data : null
       requests.push({ path, method: options.method, body, key: options.headers?.['Idempotency-Key'] })
-      if (path === '/economy/capabilities') return response({ economyPreviewEnabled: true, skillMarketplaceEnabled: true, principalScopeFingerprint: 'actor-a' })
-      if (path === '/agent/roster') return response({ items: [{ agentId: 'agent-a', name: 'Agent A', version: rosterVersion, boundToMe: true, canOperate: true }] })
-      if (path === '/agent/skill-products') return response({ items: products })
-      if (path.startsWith('/agent/skill-products/')) return response(products.find(item => path.endsWith(item.productId)))
-      if (path === '/agent/skill-orders/quotes') return response({ quoteId: `quote-${body.productVersionId}`, productVersionId: body.productVersionId, targetAgentId: body.targetAgentId, expectedAgentVersion: body.expectedAgentVersion, priceMicro: '1', expiresAt: String(Date.now() + 60_000) })
+      if (path === '/economy/capabilities') return response(options, { economyPreviewEnabled: true, skillMarketplaceEnabled: true, principalScopeSha256: 'a'.repeat(64) })
+      if (path === '/agent/roster') return response(options, { items: [{ agentId: 'agent-a', name: 'Agent A', version: rosterVersion, boundToMe: true, canOperate: true }] })
+      if (path === '/agent/skill-products') return response(options, products)
+      if (path.startsWith('/agent/skill-products/')) return response(options, products.find(item => path.endsWith(item.productId)))
+      if (path === '/agent/skill-orders/quotes') return response(options, { quoteId: `quote-${body.productVersionId}`, productVersionId: body.productVersionId, targetAgentId: body.targetAgentId, expectedAgentVersion: body.expectedAgentVersion, price: { amountMinor: '1', currency: 'SILVER' }, expiresAt: Date.now() + 60_000 })
       if (path === '/agent/skill-orders' && options.method === 'POST') {
         createdOrders += 1
         rosterVersion = '8'
-        return response({ orderId: `order-${createdOrders}`, productVersionId: body.productVersionId, targetAgentId: body.targetAgentId, expectedAgentVersion: body.expectedAgentVersion, status: 'ACTIVE' })
+        return response(options, { orderId: `order-${createdOrders}`, productVersionId: body.productVersionId, targetAgentId: body.targetAgentId, expectedAgentVersion: body.expectedAgentVersion, status: 'ACTIVE' })
       }
-      if (path.endsWith('/skill-entitlements')) return response({ entitlements: [] })
+      if (path.endsWith('/skill-entitlements')) return response(options, [])
       throw new Error(`unexpected HTTP ${options.method} ${path}`)
     })
     globalThis.fetch = transport.fetch
@@ -306,15 +304,15 @@ describe('R6 actual skill-market route purchase chain', () => {
     const originalFetch = globalThis.fetch
     const transport = trackedFetch(async (url, options = {}) => {
       const path = new URL(String(url), 'http://localhost').pathname
-      const body = options.body ? JSON.parse(options.body) : null
+      const body = options.body ? JSON.parse(options.body).data : null
       requests.push({ path, method: options.method, body, key: options.headers?.['Idempotency-Key'] })
-      if (path === '/economy/capabilities') return response({ economyPreviewEnabled: true, skillMarketplaceEnabled: true, principalScopeFingerprint: 'actor-a' })
-      if (path === '/agent/roster') return response({ items: roster })
-      if (path === '/agent/skill-products') return response({ items: [savedProduct] })
-      if (path === '/agent/skill-products/a') return response(savedProduct)
-      if (path === '/agent/skill-orders/quotes') return response({ quoteId: 'quote-a', productVersionId: body.productVersionId, targetAgentId: body.targetAgentId, expectedAgentVersion: body.expectedAgentVersion, priceMicro: '1', expiresAt: String(Date.now() + 60_000) })
-      if (path === '/agent/skill-orders' && options.method === 'POST') return response({ orderId: 'order-a', productVersionId: body.productVersionId, targetAgentId: body.targetAgentId, expectedAgentVersion: body.expectedAgentVersion, status: 'FUNDS_HELD' })
-      if (path.endsWith('/skill-entitlements')) return response({ entitlements: [] })
+      if (path === '/economy/capabilities') return response(options, { economyPreviewEnabled: true, skillMarketplaceEnabled: true, principalScopeSha256: 'a'.repeat(64) })
+      if (path === '/agent/roster') return response(options, { items: roster })
+      if (path === '/agent/skill-products') return response(options, [savedProduct])
+      if (path === '/agent/skill-products/a') return response(options, savedProduct)
+      if (path === '/agent/skill-orders/quotes') return response(options, { quoteId: 'quote-a', productVersionId: body.productVersionId, targetAgentId: body.targetAgentId, expectedAgentVersion: body.expectedAgentVersion, price: { amountMinor: '1', currency: 'SILVER' }, expiresAt: Date.now() + 60_000 })
+      if (path === '/agent/skill-orders' && options.method === 'POST') return response(options, { orderId: 'order-a', productVersionId: body.productVersionId, targetAgentId: body.targetAgentId, expectedAgentVersion: body.expectedAgentVersion, status: 'FUNDS_HELD' })
+      if (path.endsWith('/skill-entitlements')) return response(options, [])
       throw new Error(`unexpected HTTP ${options.method} ${path}`)
     })
     globalThis.fetch = transport.fetch
@@ -359,14 +357,14 @@ describe('R6 actual skill-market route purchase chain', () => {
     const originalFetch = globalThis.fetch
     const transport = trackedFetch(async (url, options = {}) => {
       const path = new URL(String(url), 'http://localhost').pathname
-      const body = options.body ? JSON.parse(options.body) : null
+      const body = options.body ? JSON.parse(options.body).data : null
       const key = options.headers?.['Idempotency-Key']
       requests.push({ path, method: options.method, body, key })
-      if (path === '/economy/capabilities') return response({ economyPreviewEnabled: true, skillMarketplaceEnabled: true, principalScopeFingerprint: 'actor-a' })
-      if (path === '/agent/roster') return response({ items: [{ agentId: 'agent-a', name: 'Agent A', version: '7', boundToMe: true, canOperate: true }] })
-      if (path === '/agent/skill-products') return response({ items: [item] })
-      if (path === '/agent/skill-products/one') return response(item)
-      if (path === '/agent/skill-orders/quotes') return response({ quoteId: `quote-${requests.filter(request => request.path === path).length}`, productVersionId: body.productVersionId, targetAgentId: body.targetAgentId, expectedAgentVersion: body.expectedAgentVersion, priceMicro: '1', expiresAt: String(Date.now() + 60_000) })
+      if (path === '/economy/capabilities') return response(options, { economyPreviewEnabled: true, skillMarketplaceEnabled: true, principalScopeSha256: 'a'.repeat(64) })
+      if (path === '/agent/roster') return response(options, { items: [{ agentId: 'agent-a', name: 'Agent A', version: '7', boundToMe: true, canOperate: true }] })
+      if (path === '/agent/skill-products') return response(options, [item])
+      if (path === '/agent/skill-products/one') return response(options, item)
+      if (path === '/agent/skill-orders/quotes') return response(options, { quoteId: `quote-${requests.filter(request => request.path === path).length}`, productVersionId: body.productVersionId, targetAgentId: body.targetAgentId, expectedAgentVersion: body.expectedAgentVersion, price: { amountMinor: '1', currency: 'SILVER' }, expiresAt: Date.now() + 60_000 })
       if (path === '/agent/skill-orders' && options.method === 'POST') {
         if (!orderReceiptsByKey.has(key)) {
           chargeCount += 1
@@ -376,9 +374,9 @@ describe('R6 actual skill-market route purchase chain', () => {
           firstOrderResponseIsLost = false
           throw new TypeError('connection lost after server accepted the order')
         }
-        return response(orderReceiptsByKey.get(key))
+        return response(options, orderReceiptsByKey.get(key))
       }
-      if (path.endsWith('/skill-entitlements')) return response({ entitlements: [] })
+      if (path.endsWith('/skill-entitlements')) return response(options, [])
       throw new Error(`unexpected HTTP ${options.method} ${path}`)
     })
     globalThis.fetch = transport.fetch

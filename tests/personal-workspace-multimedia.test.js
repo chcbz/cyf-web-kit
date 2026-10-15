@@ -9,8 +9,8 @@ const formats = [
   ['sound.webm', 'audio/webm'], ['bird.webp', 'image/webp'], ['bird.gif', 'image/gif']
 ]
 const detail = (filename, mime, fileId = 'file-a') => {
-  const version = { fileId, version: 1, originalFilename: filename, contentMimeType: mime, byteLength: 5 }
-  return { file: { fileId, displayName: filename, state: 'ACTIVE', metadataRevision: 1, latestVersion: 1 }, latestVersion: version, versions: [version] }
+  const version = { fileId, version: '1', originalFilename: filename, contentMimeType: mime, byteLength: '5' }
+  return { file: { fileId, displayName: filename, state: 'ACTIVE', metadataRevision: '1', latestVersion: '1' }, latestVersion: version, versions: [version] }
 }
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r }); return { promise, resolve } }
 
@@ -33,7 +33,7 @@ describe('workspace general multimedia compatibility (no Provider)', () => {
         const candidate = new Blob(['bytes'], { type: mime }); Object.defineProperty(candidate, 'name', { value: filename })
         assert.ok(await workspace.upload(candidate))
         assert.equal(calls[0].data.get('file').type, mime)
-        const preview = await workspace.previewVersion(1)
+        const preview = await workspace.previewVersion('1')
         assert.equal(preview.kind, mime.startsWith('audio/') ? 'audio' : 'image')
         assert.equal(preview.url, 'blob:owned-preview')
         assert.equal(created[0].type, mime)
@@ -47,7 +47,7 @@ describe('workspace general multimedia compatibility (no Provider)', () => {
     const calls = []; const created = []
     const workspace = usePersonalWorkspace({ urlApi: { createObjectURL: value => { created.push(value); return 'blob:unsafe' } }, api: { execute: async options => {
       calls.push(options)
-      if (options.url === '/personal-workspace/files') return { items: [], nextCursor: null }
+      if (options.url === '/personal-workspace/files') return { items: [], nextCursor: null, hasMore: false }
       if (options.url.endsWith('/preview')) return { state: 'READY', parts: [{ partId: 'content', contentMimeType: 'audio/mpeg' }], partial: false }
       if (options.url.includes('/parts/')) return new Blob(['<script>bad()</script>'], { type: 'text/html' })
       return detail('sound.mp3', 'audio/mpeg')
@@ -56,7 +56,7 @@ describe('workspace general multimedia compatibility (no Provider)', () => {
       assert.equal(await workspace.refresh({ mediaFamily: 'AUDIO' }), true)
       assert.equal(calls[0].params.mediaFamily, 'AUDIO')
       await workspace.select('file-a')
-      assert.equal(await workspace.previewVersion(1), null)
+      assert.equal(await workspace.previewVersion('1'), null)
       assert.match(workspace.error.value, /类型无效/)
       assert.deepEqual(created, [])
       for (const [filename, type] of [['evil.svg', 'image/svg+xml'], ['evil.html', 'text/html'], ['evil.js', 'text/javascript'], ['video.mp4', 'video/mp4'], ['video.webm', 'video/webm'], ['renamed.mp3', 'text/html']]) {
@@ -78,8 +78,8 @@ describe('workspace general multimedia compatibility (no Provider)', () => {
       return detail('sound.wav', 'audio/wav', options.url.endsWith('file-b') ? 'file-b' : 'file-a')
     } } })
     try {
-      await workspace.select('file-a'); const pending = workspace.previewVersion(1)
-      await workspace.select('file-b'); await workspace.previewVersion(1)
+      await workspace.select('file-a'); const pending = workspace.previewVersion('1')
+      await workspace.select('file-b'); await workspace.previewVersion('1')
       old.resolve({ state: 'UNSUPPORTED', reason: 'stale file' })
       assert.equal(await pending, null)
       assert.equal(workspace.preview.value.kind, 'audio')
@@ -109,7 +109,7 @@ describe('workspace general multimedia compatibility (no Provider)', () => {
       return detail('sound.mp3', 'audio/mpeg')
     } } })
     try {
-      await workspace.select('file-a'); const preview = workspace.previewVersion(1)
+      await workspace.select('file-a'); const preview = workspace.previewVersion('1')
       await new Promise(resolve => setTimeout(resolve, 0))
       epoch.value = 'owner-b'; pendingBytes.resolve(new Blob(['old owner bytes'], { type: 'audio/mpeg' }))
       assert.equal(await preview, null)

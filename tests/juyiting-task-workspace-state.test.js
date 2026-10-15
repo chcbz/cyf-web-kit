@@ -9,6 +9,9 @@ import { useTaskWorkspace } from '../src/composables/juyiting/useTaskWorkspace.j
 const V = '9007199254740993'
 const NEXT = nextTaskEventVersion(V)
 const HASH = 'a'.repeat(64)
+const taskMessage = data => ({ protocolVersion: 1, requestId: 'fixture-event', messageType: 'task.event', messageId: `task:task-a:${data.version}`, data })
+const taskWire = data => `event: task.event\nid: task:task-a:${data.version}\ndata: ${JSON.stringify(taskMessage(data))}\n\n`
+const resyncWire = () => `event: task.resync.required\nid: task:task-a:resync:fixture\ndata: ${JSON.stringify({ protocolVersion: 1, requestId: 'fixture-resync', messageType: 'task.resync.required', messageId: 'task:task-a:resync:fixture', data: { currentVersion: V, reason: 'gap' } })}\n\n`
 
 function timeline (version) {
   if (version === '0') return []
@@ -139,18 +142,18 @@ describe('C06 task workspace state', () => {
 
   it('parses CRLF/LF/chunks/comments but rejects duplicate or missing ids, mismatch, names, and truncated bytes', () => {
     const events = []; const failures = []
-    const parser = createTaskSseParser({ onEvent: event => events.push(event), onMalformed: reason => failures.push(reason) })
-    const wire = `: comment\r\nevent: task_event\r\nid: ${NEXT}\r\ndata: {"version":"${NEXT}",\r\ndata: "eventType":"PROGRESS_REPORTED"}\r\n\r\n`
+    const parser = createTaskSseParser({ taskId: 'task-a', onEvent: event => events.push(event), onMalformed: reason => failures.push(reason) })
+    const wire = `: comment\r\n${taskWire({ version: NEXT, eventType: "PROGRESS_REPORTED" }).replaceAll("\n", "\r\n").replace(',"data":', ',\r\ndata: "data":')}`
     parser.push(wire.slice(0, 17)); parser.push(wire.slice(17))
     for (const boundary of ['\n\n', '\r\n\r\n', '\n\r\n', '\r\n\n']) {
-      const mixed = `data: {"version":"${NEXT}"}\r\nid: ${NEXT}\nevent: task_event${boundary}`
-      const mixedParser = createTaskSseParser({ onEvent: event => events.push(event), onMalformed: reason => failures.push(reason) })
+      const mixed = `data: ${JSON.stringify(taskMessage({ version: NEXT }))}\r\nid: task:task-a:${NEXT}\nevent: task.event${boundary}`
+      const mixedParser = createTaskSseParser({ taskId: 'task-a', onEvent: event => events.push(event), onMalformed: reason => failures.push(reason) })
       mixedParser.push(mixed.slice(0, mixed.length - 2)); mixedParser.push(mixed.slice(-2))
     }
     assert.equal(events.length, 5)
-    for (const bad of [`event: task_event\nid: 0\ndata: {"version":"0"}\n\n`, `event: task_event\ndata: {"version":"${NEXT}"}\n\n`, `event: task_event\nid: ${NEXT}\ndata: {"version":"${V}"}\n\n`, `event: unknown\nid: ${NEXT}\ndata: {"version":"${NEXT}"}\n\n`, `event: resync_required\n\r\ndata: {"currentVersion":"${V}","reason":"gap"}\n\n`]) createTaskSseParser({ onMalformed: value => failures.push(value) }).push(bad)
-    const truncated = createTaskSseParser({ onMalformed: value => failures.push(value) }); truncated.push(`event: task_event\nid: ${NEXT}\ndata: {"version":"${NEXT}"}`); truncated.finish()
-    const noDelimiter = createTaskSseParser({ onMalformed: value => failures.push(value) }); noDelimiter.push(`event: task_event\nid: ${NEXT}\ndata: {"version":"${NEXT}"}\n`); noDelimiter.finish()
+    for (const bad of [`event: task_event\nid: 0\ndata: {"version":"0"}\n\n`, `event: task_event\ndata: {"version":"${NEXT}"}\n\n`, `event: task_event\nid: ${NEXT}\ndata: {"version":"${V}"}\n\n`, `event: unknown\nid: ${NEXT}\ndata: {"version":"${NEXT}"}\n\n`, `event: resync_required\n\r\ndata: {"currentVersion":"${V}","reason":"gap"}\n\n`]) createTaskSseParser({ taskId: 'task-a', onMalformed: value => failures.push(value) }).push(bad)
+    const truncated = createTaskSseParser({ taskId: 'task-a', onMalformed: value => failures.push(value) }); truncated.push(`event: task_event\nid: ${NEXT}\ndata: {"version":"${NEXT}"}`); truncated.finish()
+    const noDelimiter = createTaskSseParser({ taskId: 'task-a', onMalformed: value => failures.push(value) }); noDelimiter.push(`event: task_event\nid: ${NEXT}\ndata: {"version":"${NEXT}"}\n`); noDelimiter.finish()
     assert.equal(failures.length, 7)
   })
 
@@ -159,11 +162,11 @@ describe('C06 task workspace state', () => {
     const api = { execute: options => {
       if (options.url.endsWith('/workspace')) {
         snapshots += 1
-        return Promise.resolve({ data: { data: snapshot(snapshots === 1 ? V : NEXT) } })
+        return Promise.resolve(snapshot(snapshots === 1 ? V : NEXT))
       }
       streams += 1
       options.onStreamOpen({ cancel () {} })
-      if (streams === 1) options.onStream(`event: resync_required\ndata: {"currentVersion":"${V}","reason":"gap"}\n\n`)
+      if (streams === 1) options.onStream(resyncWire())
       return new Promise(() => {})
     } }
     const instance = useTaskWorkspace({ agentApi: api, documentRef: new FakeDocument(), windowRef: new EventTarget(), jitter: () => 0, snapshotTimeoutMs: 0, setTimeoutFn: (callback, delay) => { timers.push({ callback, delay }); return timers.length }, clearTimeoutFn: () => {} })
@@ -185,7 +188,7 @@ describe('C06 task workspace state', () => {
 
   it('bounds unterminated SSE input by UTF-8 bytes and fails only once', () => {
     const failures = []
-    const parser = createTaskSseParser({ onMalformed: reason => failures.push(reason) })
+    const parser = createTaskSseParser({ taskId: 'task-a', onMalformed: reason => failures.push(reason) })
     parser.push('x'.repeat(16 * 1024 * 1024 + 1))
     parser.push('\n')
     assert.deepEqual(failures, ['oversize_sse'])
@@ -194,7 +197,7 @@ describe('C06 task workspace state', () => {
   it('bounds multiline SSE data accumulation before it can dispatch', () => {
     const events = []; const failures = []
     const padding = 'x'.repeat(16 * 1024)
-    const parser = createTaskSseParser({ onEvent: event => events.push(event), onMalformed: reason => failures.push(reason) })
+    const parser = createTaskSseParser({ taskId: 'task-a', onEvent: event => events.push(event), onMalformed: reason => failures.push(reason) })
     parser.push(`event: task_event\nid: ${NEXT}\ndata: {"version":"${NEXT}",\ndata: "padding":"${padding}"}\n\n`)
     assert.deepEqual(events, [])
     assert.deepEqual(failures, ['oversize_sse'])
@@ -202,13 +205,13 @@ describe('C06 task workspace state', () => {
 
   it('accepts a 16KiB UTF-8 multibyte SSE data record split across chunks', () => {
     const events = []; const failures = []; const encoder = new TextEncoder()
-    const emptyPayload = JSON.stringify({ version: NEXT, padding: '' })
+    const emptyPayload = JSON.stringify(taskMessage({ version: NEXT, padding: '' }))
     const paddingBytes = 16 * 1024 - encoder.encode(emptyPayload).byteLength
     const padding = '€'.repeat(Math.floor(paddingBytes / 3)) + 'x'.repeat(paddingBytes % 3)
-    const payload = JSON.stringify({ version: NEXT, padding })
+    const payload = JSON.stringify(taskMessage({ version: NEXT, padding }))
     assert.equal(encoder.encode(payload).byteLength, 16 * 1024)
-    const wire = `event: task_event\r\nid: ${NEXT}\r\ndata: ${payload}\r\n\r\n`
-    const parser = createTaskSseParser({ onEvent: event => events.push(event), onMalformed: reason => failures.push(reason) })
+    const wire = `event: task.event\r\nid: task:task-a:${NEXT}\r\ndata: ${payload}\r\n\r\n`
+    const parser = createTaskSseParser({ taskId: 'task-a', onEvent: event => events.push(event), onMalformed: reason => failures.push(reason) })
     parser.push(wire.slice(0, 41)); parser.push(wire.slice(41, 999)); parser.push(wire.slice(999))
     assert.equal(events.length, 1)
     assert.equal(events[0].version, NEXT)
@@ -217,7 +220,7 @@ describe('C06 task workspace state', () => {
 
   it('stops a 64MiB unterminated line after the bounded prefix without buffering or TextEncoder allocation', () => {
     const failures = []; let encoderCalls = 0; let largeChunkReads = 0
-    const parser = createTaskSseParser({ onMalformed: reason => failures.push(reason) })
+    const parser = createTaskSseParser({ taskId: 'task-a', onMalformed: reason => failures.push(reason) })
     const originalEncoder = globalThis.TextEncoder; const originalCharCodeAt = String.prototype.charCodeAt
     globalThis.TextEncoder = class { constructor () { encoderCalls += 1 } encode () { throw new Error('unexpected encoder use') } }
     String.prototype.charCodeAt = function (...args) {
@@ -238,10 +241,10 @@ describe('C06 task workspace state', () => {
   it('parses multiple near-limit frames from one mixed-ending transport chunk', () => {
     const events = []; const failures = []
     const padding = 'x'.repeat(11 * 1024)
-    const payload = JSON.stringify({ version: NEXT, padding })
-    const crlf = `event: task_event\r\nid: ${NEXT}\r\ndata: ${payload}\r\n\r\n`
-    const lf = `event: task_event\nid: ${NEXT}\ndata: ${payload}\n\n`
-    const parser = createTaskSseParser({ onEvent: event => events.push(event), onMalformed: reason => failures.push(reason) })
+    const payload = JSON.stringify(taskMessage({ version: NEXT, padding }))
+    const crlf = `event: task.event\r\nid: task:task-a:${NEXT}\r\ndata: ${payload}\r\n\r\n`
+    const lf = `event: task.event\nid: task:task-a:${NEXT}\ndata: ${payload}\n\n`
+    const parser = createTaskSseParser({ taskId: 'task-a', onEvent: event => events.push(event), onMalformed: reason => failures.push(reason) })
     parser.push(crlf + lf)
     assert.equal(events.length, 2)
     assert.deepEqual(events.map(event => event.version), [NEXT, NEXT])
@@ -250,7 +253,7 @@ describe('C06 task workspace state', () => {
 
   it('rejects multi-chunk input once its bounded unterminated line budget is exhausted', () => {
     const failures = []
-    const parser = createTaskSseParser({ onMalformed: reason => failures.push(reason) })
+    const parser = createTaskSseParser({ taskId: 'task-a', onMalformed: reason => failures.push(reason) })
     parser.push('x'.repeat(12 * 1024))
     parser.push('y'.repeat(9 * 1024))
     assert.deepEqual(failures, ['oversize_sse'])
@@ -263,7 +266,7 @@ describe('C06 task workspace state', () => {
       stream.open({ taskId: 'task-a', actorAgentId: 'agent-a', sinceVersion: V, generation: 1 })
       if (action === 'malformed') options.onStream(`event: task_event\ndata: {}\n\n`)
       if (action === 'oversize') options.onStream('x'.repeat(32 * 1024))
-      if (action === 'resync') options.onStream(`event: resync_required\ndata: {"currentVersion":"${V}","reason":"gap"}\n\n`)
+      if (action === 'resync') options.onStream(resyncWire())
       if (action === 'end') options.onStreamEnd()
       await Promise.resolve()
       assert.equal(cancelled, 1)
@@ -305,7 +308,7 @@ describe('C06 task workspace state', () => {
   it('keeps the Vue workspace snapshot plain while live SSE events replace whole state', async () => {
     let streamOptions
     const api = { execute: options => {
-      if (options.url.endsWith('/workspace')) return Promise.resolve({ data: { data: snapshot() } })
+      if (options.url.endsWith('/workspace')) return Promise.resolve(snapshot())
       streamOptions = options
       return new Promise(() => {})
     } }
@@ -313,20 +316,20 @@ describe('C06 task workspace state', () => {
     await instance.open({ taskId: 'task-a', actorAgentId: 'agent-a' })
     assert.equal(isProxy(instance.workspace.value), false)
     streamOptions.onStreamOpen({ cancel () {} })
-    assert.doesNotThrow(() => streamOptions.onStream(`event: task_event\nid: ${NEXT}\ndata: ${JSON.stringify(progress())}\n\n`))
+    assert.doesNotThrow(() => streamOptions.onStream(taskWire(progress())))
     assert.equal(instance.workspace.value.currentVersion, NEXT)
     assert.equal(instance.workspace.value.task.status, 'assigned')
     assert.equal(instance.workspace.value.recentEvents.at(-1).version, NEXT)
-    assert.doesNotThrow(() => streamOptions.onStream(`event: task_event\nid: ${V}\ndata: ${JSON.stringify(progress(V))}\n\n`))
+    assert.doesNotThrow(() => streamOptions.onStream(taskWire(progress(V))))
     assert.equal(instance.workspace.value.currentVersion, NEXT)
     const gap = nextTaskEventVersion(NEXT)
-    assert.doesNotThrow(() => streamOptions.onStream(`event: task_event\nid: ${gap}\ndata: ${JSON.stringify(progress(gap))}\n\n`))
+    assert.doesNotThrow(() => streamOptions.onStream(taskWire(progress(gap))))
     instance.dispose()
   })
 
   it('uses explicit task and actor, only enters live on true stream open, and terminals stream ACL errors', async () => {
     const calls = []; let streamOptions
-    const api = { execute: options => { calls.push(options); if (options.url.endsWith('/workspace')) return Promise.resolve({ data: { data: snapshot() } }); streamOptions = options; return new Promise(() => {}) } }
+    const api = { execute: options => { calls.push(options); if (options.url.endsWith('/workspace')) return Promise.resolve(snapshot()); streamOptions = options; return new Promise(() => {}) } }
     const instance = useTaskWorkspace({ agentApi: api, documentRef: new FakeDocument(), windowRef: new EventTarget() })
     await instance.open({ taskId: 'task-a', actorAgentId: 'agent-a' })
     assert.equal(instance.connectionState.value, 'snapshot_ready')
@@ -344,7 +347,7 @@ describe('C06 task workspace state', () => {
     const api = { execute: options => {
       if (options.url.endsWith('/workspace')) {
         workspaceCalls += 1
-        return workspaceCalls === 1 ? first.promise : Promise.resolve({ data: { data: snapshot(V, 'task-b') } })
+        return workspaceCalls === 1 ? first.promise : Promise.resolve(snapshot(V, 'task-b'))
       }
       options.onStreamOpen?.({ cancel () {} })
       return new Promise(() => {})
@@ -354,10 +357,10 @@ describe('C06 task workspace state', () => {
     await instance.open({ taskId: 'task-b', actorAgentId: 'agent-b' })
     assert.equal(workspaceCalls, 2)
     assert.equal(instance.subject.value.taskId, 'task-b')
-    first.resolve({ data: { data: snapshot(V, 'task-a') } })
+    first.resolve(snapshot(V, 'task-a'))
     await opening
     assert.equal(instance.workspace.value.task.taskId, 'task-b')
-    const terminalApi = { execute: options => options.url.endsWith('/workspace') ? Promise.resolve({ data: { data: snapshot() } }) : Promise.reject(Object.assign(new Error('forbidden'), { status: 403 })) }
+    const terminalApi = { execute: options => options.url.endsWith('/workspace') ? Promise.resolve(snapshot()) : Promise.reject(Object.assign(new Error('forbidden'), { status: 403 })) }
     const terminal = useTaskWorkspace({ agentApi: terminalApi, documentRef: new FakeDocument(), windowRef: new EventTarget(), setTimeoutFn: callback => { timers.push(callback); return timers.length }, clearTimeoutFn: () => {}, snapshotTimeoutMs: 0 })
     await terminal.open({ taskId: 'task-a', actorAgentId: 'agent-a' }); await Promise.resolve()
     assert.equal(terminal.connectionState.value, 'error')
@@ -401,7 +404,7 @@ describe('C06 task workspace state', () => {
     const api = { execute: options => {
       if (options.url.endsWith('/workspace')) {
         snapshots += 1; signal = options.signal
-        return snapshots === 1 ? Promise.resolve({ data: { data: snapshot() } }) : new Promise(() => {})
+        return snapshots === 1 ? Promise.resolve(snapshot()) : new Promise(() => {})
       }
       return new Promise(() => {})
     } }
@@ -446,14 +449,14 @@ describe('C06 task workspace state', () => {
   it('defers stream creation while hidden, reloads on visible/focus, and sends Last-Event-ID', async () => {
     const documentRef = new FakeDocument(); documentRef.visibilityState = 'hidden'
     const calls = []
-    const api = { execute: options => { calls.push(options); return options.url.endsWith('/workspace') ? Promise.resolve({ data: { data: snapshot() } }) : new Promise(() => {}) } }
+    const api = { execute: options => { calls.push(options); return options.url.endsWith('/workspace') ? Promise.resolve(snapshot()) : new Promise(() => {}) } }
     const instance = useTaskWorkspace({ agentApi: api, documentRef, windowRef: new EventTarget() })
     await instance.open({ taskId: 'task-a', actorAgentId: 'agent-a' })
     assert.equal(calls.length, 1)
     documentRef.visibilityState = 'visible'; documentRef.dispatchEvent(new Event('visibilitychange'))
     await Promise.resolve(); await Promise.resolve()
     const eventCall = calls.find(call => call.url.endsWith('/events'))
-    assert.equal(eventCall.headers['Last-Event-ID'], V)
+    assert.equal(eventCall.headers['Last-Event-ID'], `task:task-a:${V}`)
     instance.dispose()
   })
 
@@ -469,7 +472,7 @@ describe('C06 task workspace state', () => {
   it('mirrors Java identifier whitespace rules and permits U+FEFF while rejecting Java space characters', async () => {
     const feffTask = '\ufefftask-a'; const calls = []
     const response = snapshot(V, feffTask); response.recentEvents.forEach(event => { event.aggregateId = feffTask })
-    const accepted = useTaskWorkspace({ agentApi: { execute: options => { calls.push(options); return Promise.resolve({ data: { data: response } }) } }, documentRef: new FakeDocument(), windowRef: new EventTarget() })
+    const accepted = useTaskWorkspace({ agentApi: { execute: options => { calls.push(options); return Promise.resolve(response) } }, documentRef: new FakeDocument(), windowRef: new EventTarget() })
     await accepted.open({ taskId: feffTask, actorAgentId: 'agent-a' })
     assert.equal(calls[0].url, `/agent/tasks/${encodeURIComponent(feffTask)}/workspace`)
     assert.equal(applyTaskWorkspaceEvent(snapshot(), { ...progress(), payload: { ...progress().payload, noteId: '\ufeffnote-a' } }).kind, 'applied')
@@ -495,13 +498,13 @@ describe('C06 task workspace state', () => {
   it('backs off persistent resync or malformed SSE before degrading to single-flight polling', async () => {
     for (const failureWire of [
       'event: task_event\ndata: {}\n\n',
-      `event: resync_required\ndata: {"currentVersion":"${V}","reason":"gap"}\n\n`
+      resyncWire()
     ]) {
       const timers = []; let snapshots = 0; let streams = 0
       const api = { execute: options => {
         if (options.url.endsWith('/workspace')) {
           snapshots += 1
-          return Promise.resolve({ data: { data: snapshot() } })
+          return Promise.resolve(snapshot())
         }
         streams += 1
         options.onStreamOpen({ cancel () {} })
@@ -532,7 +535,7 @@ describe('C06 task workspace state', () => {
 
   it('does not reset repeated open-to-EOF failures on open, then enters bounded degraded polling', async () => {
     const timers = []; let opens = 0
-    const api = { execute: options => { if (options.url.endsWith('/workspace')) return Promise.resolve({ data: { data: snapshot() } }); opens += 1; options.onStreamOpen({ cancel () {} }); options.onStreamEnd(); return Promise.resolve() } }
+    const api = { execute: options => { if (options.url.endsWith('/workspace')) return Promise.resolve(snapshot()); opens += 1; options.onStreamOpen({ cancel () {} }); options.onStreamEnd(); return Promise.resolve() } }
     const instance = useTaskWorkspace({ agentApi: api, documentRef: new FakeDocument(), windowRef: new EventTarget(), setTimeoutFn: callback => { timers.push(callback); return timers.length }, clearTimeoutFn: () => {}, snapshotTimeoutMs: 0, retryFailureThreshold: 2 })
     await instance.open({ taskId: 'task-a', actorAgentId: 'agent-a' })
     await Promise.resolve(); timers.shift()(); await Promise.resolve(); await Promise.resolve()
@@ -547,7 +550,7 @@ describe('C06 task workspace state', () => {
     const api = { execute: options => {
       if (options.url.endsWith('/workspace')) {
         snapshotCalls += 1
-        return snapshotCalls === 3 ? pollSnapshot.promise : Promise.resolve({ data: { data: snapshot() } })
+        return snapshotCalls === 3 ? pollSnapshot.promise : Promise.resolve(snapshot())
       }
       options.onStreamOpen({ cancel () {} }); options.onStreamEnd(); return Promise.resolve()
     } }
@@ -559,7 +562,7 @@ describe('C06 task workspace state', () => {
     const poll = timers.at(-1); assert.equal(poll.delay, 77)
     poll.callback(); poll.callback()
     assert.equal(snapshotCalls, 3)
-    pollSnapshot.resolve({ data: { data: snapshot() } })
+    pollSnapshot.resolve(snapshot())
     await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
     assert.equal(timers.at(-1).delay, 77)
     instance.dispose()
@@ -570,9 +573,9 @@ describe('C06 task workspace state', () => {
     const api = { execute: options => {
       if (options.url.endsWith('/workspace')) {
         snapshots += 1
-        if (snapshots === 1) return Promise.resolve({ data: { data: snapshot(V, 'task-a') } })
+        if (snapshots === 1) return Promise.resolve(snapshot(V, 'task-a'))
         if (snapshots === 2) return stalePoll.promise
-        if (snapshots === 3) return Promise.resolve({ data: { data: snapshot(V, 'task-b') } })
+        if (snapshots === 3) return Promise.resolve(snapshot(V, 'task-b'))
         return currentPoll.promise
       }
       options.onStreamOpen({ cancel () {} }); options.onStreamEnd(); return Promise.resolve()
@@ -583,7 +586,7 @@ describe('C06 task workspace state', () => {
     await instance.open({ taskId: 'task-b', actorAgentId: 'agent-b' })
     const currentPollTimer = timers.shift(); currentPollTimer.callback(); await Promise.resolve()
     assert.equal(snapshots, 4)
-    stalePoll.resolve({ data: { data: snapshot(V, 'task-a') } })
+    stalePoll.resolve(snapshot(V, 'task-a'))
     await Promise.resolve(); await Promise.resolve()
     currentPollTimer.callback()
     assert.equal(snapshots, 4)
@@ -634,7 +637,7 @@ describe('C06 task workspace state', () => {
     const opening = instance.open({ taskId: 'task-a', actorAgentId: 'agent-a' })
     await instance.open({ taskId: 'task-b', actorAgentId: 'agent-b' })
     assert.equal(signal.aborted, true)
-    first.resolve({ data: { data: snapshot() } })
+    first.resolve(snapshot())
     await opening
     await Promise.resolve()
     assert.equal(delays[0], 150)

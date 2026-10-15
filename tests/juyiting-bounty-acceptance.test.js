@@ -12,7 +12,7 @@ const request = (conversationId = '101', _taskId = 'task-1') => ({ requestId: 'r
   conversationGeneration: '1', userMessageId: '1', state: 'COMPLETED', stateVersion: '1', turns: [], steps: [] })
 const page = (conversationId = '101', taskId = 'task-1', entries = [{ ordinal: '1', request: request(conversationId, taskId) }]) => ({ schemaVersion: 1,
   scope: { conversationId, conversationGeneration: '1', taskId }, after: '0', through: entries.length ? '1' : '0', nextAfter: null, hasMore: false, entries })
-const response = value => ({ data: { data: value } })
+const response = value => Array.isArray(value) ? { items: value } : value
 const deferred = () => { let resolve; return { promise: new Promise(done => { resolve = done }), resolve: value => resolve(value) } }
 
 describe('task acceptance existing scoped source reads', () => {
@@ -25,7 +25,7 @@ describe('task acceptance existing scoped source reads', () => {
   afterEach(() => { for (const [key, value] of originals) globalThis[key] = value; originals.clear() })
   it('cold-reads a unique task conversation and its durable catalogue, supporting existing callback responses without a write', async () => {
     const calls = []; const api = {
-      list: async (path, body, options) => { calls.push([path, body, options.needAuth]); options.onSuccess({ data: [scoped()] }) },
+      list: async (path, body, options) => { calls.push([path, body, options.needAuth]); options.onSuccess({ items: [scoped()] }) },
       get: async (path, _params, options) => { calls.push([path, options.needAuth]); return response(page()) },
       execute: () => { throw new Error('read only') }
     }
@@ -35,17 +35,17 @@ describe('task acceptance existing scoped source reads', () => {
       expect(source.scope.value).to.deep.equal({ taskId: 'task-1', conversationId: '101' })
       expect(source.catalog.entries.value).to.have.length(1); expect(source.error.value).to.equal('')
       expect(source.legacy.value).to.equal(false)
-      expect(calls[0]).to.deep.equal(['/conversation/list', { pageNum: 1, pageSize: 2, orderBy: 'id asc',
+      expect(calls[0]).to.deep.equal(['/conversation/list', { pageNum: '1', pageSize: '2', orderBy: 'id asc',
         search: { conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task-1' } }, true])
       expect(calls[1]).to.deep.equal(['/conversations/101/requests', true])
     } finally { source.dispose() }
   })
   it('searches the existing paginated history for the exact original, never substituting its first or latest row', async () => {
-    const calls = []; const api = { list: async (_path, body) => { calls.push(body.pageNum); return response(body.pageNum === 1
+    const calls = []; const api = { list: async (_path, body) => { calls.push(body.pageNum); return response(body.pageNum === '1'
       ? Array.from({ length: 100 }, (_, i) => scoped(String(i + 1))) : [scoped('999')]) },
     get: async path => { expect(path).to.equal('/conversations/999/requests'); return response(page('999')) } }
     const source = useHallBountyAcceptance({ api, taskId: () => 'task-1', identityKey: () => 'owner-1', conversationId: () => '999' })
-    try { await flushPromises(); expect(calls).to.deep.equal([1, 2]); expect(source.scope.value.conversationId).to.equal('999') }
+    try { await flushPromises(); expect(calls).to.deep.equal(['1', '2']); expect(source.scope.value.conversationId).to.equal('999') }
     finally { source.dispose() }
   })
   for (const [label, rows, wanted] of [['ambiguous', [scoped('101'), scoped('102')], ''], ['foreign', [scoped('101', 'foreign')], ''],

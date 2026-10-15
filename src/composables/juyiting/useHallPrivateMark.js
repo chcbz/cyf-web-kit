@@ -6,14 +6,14 @@ const PREFIX = 'cyf.hall.private-mark-intent.v1'
 const valueOf = value => typeof value === 'function' ? value() : unref(value)
 const id = value => typeof value === 'string' && value.length > 0 && value.length <= 100 && value === value.trim() &&
   ![...value].some(char => char.codePointAt(0) < 32)
-const revision = value => Number.isSafeInteger(value) && value >= 0
+const revision = value => typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value) && BigInt(value) <= 9223372036854775807n
 export const privateMarkRef = value => ['PRIVATE_CASE', 'LEGACY_EXECUTION'].includes(value?.sourceType) && id(value.sourceId)
 export const markResultRef = value => value === null || Boolean(id(value?.executionId) && id(value?.manifestId))
 export const sameMarkResult = (first, second) => first?.executionId === second?.executionId && first?.manifestId === second?.manifestId
 const sameRef = (first, second) => first?.sourceType === second?.sourceType && first?.sourceId === second?.sourceId
 const validView = (value, source) => value && sameRef(value.ref, source) && revision(value.revision) &&
-  typeof value.archived === 'boolean' && markResultRef(value.viewedResultRef) && revision(value.updatedAt)
-const validCommand = value => value && revision(value.expectedRevision) && value.expectedRevision < Number.MAX_SAFE_INTEGER &&
+  typeof value.archived === 'boolean' && markResultRef(value.viewedResultRef) && Number.isSafeInteger(value.updatedAt) && value.updatedAt >= 0
+const validCommand = value => value && revision(value.expectedRevision) && BigInt(value.expectedRevision) < 9223372036854775807n &&
   typeof value.archived === 'boolean' && markResultRef(value.viewedResultRef)
 const validIntent = (value, source) => value && sameRef(value.ref, source) && id(value.key) && validCommand(value.command)
 const abort = () => new DOMException('Private mark identity changed', 'AbortError')
@@ -113,7 +113,7 @@ export function useHallPrivateMark ({ sourceRef, identityScope = '', identityEpo
     let accepted = null
     try {
       const value = await request({ url: endpoint(), method: 'PATCH', headers: { 'Idempotency-Key': intent.key }, data: intent.command })
-      if (!validView(value, source.value) || value.revision !== intent.command.expectedRevision + 1 ||
+      if (!validView(value, source.value) || value.revision !== (BigInt(intent.command.expectedRevision) + 1n).toString() ||
         value.archived !== intent.command.archived || (intent.command.viewedResultRef && !sameMarkResult(value.viewedResultRef, intent.command.viewedResultRef))) {
         throw new Error('invalid mark receipt')
       }

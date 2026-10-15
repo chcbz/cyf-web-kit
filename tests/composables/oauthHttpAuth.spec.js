@@ -80,7 +80,8 @@ describe('useHttp authentication boundary', () => {
       return {
         ok: false,
         status: 401,
-        clone: () => ({ json: () => body })
+        headers: new Headers({ 'X-Request-Id': options.headers['X-Request-Id'], 'Content-Type': 'application/json' }),
+        text: () => body
       }
     }
 
@@ -88,7 +89,7 @@ describe('useHttp authentication boundary', () => {
     await new Promise(resolve => window.setTimeout(resolve, 0))
     store.clearIdentity()
     const abortReason = requestSignal.reason
-    resolveBody({ message: 'unauthorized' })
+    resolveBody(JSON.stringify({ code: 'UNAUTHENTICATED', msg: 'unauthorized', data: null }))
 
     let failure
     try { await pending } catch (error) { failure = error }

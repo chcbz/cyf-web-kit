@@ -20,13 +20,13 @@ describe('useHallData bounty status counts', () => {
       search: async (url, params, options) => {
         calls.push({ url, params })
         if (url === '/tasks/status-counts') {
-          options.onSuccess({ data: countByStatus })
+          options.onSuccess((countByStatus))
           return
         }
         const data = params.status
           ? allTasks.filter(task => task.status === params.status)
           : allTasks
-        options.onSuccess({ data })
+        options.onSuccess({ items: data, pageNum: '1', pageSize: '100', total: "0" })
       },
       get: async () => {}
     }
@@ -77,12 +77,12 @@ describe('useHallData operable roster', () => {
     const agentApi = {
       search: async (url, params, options) => {
         calls.push({ url, params })
-        options.onSuccess({ data: roster })
+        options.onSuccess({ items: roster, pageNum: '1', pageSize: '100', total: "0" })
       },
-      get: async (url, _params, options) => options.onSuccess({ data: url === '/personas/catalog' ? [
+      get: async (url, _params, options) => options.onSuccess((url === '/personas/catalog' ? [
         { personaCode: 'huyanzhuo', boundToMe: true },
         { personaCode: 'stale-persona', boundToMe: false }
-      ] : [] })
+      ] : []))
     }
     const hallData = useHallData({
       agentApi,
@@ -97,14 +97,14 @@ describe('useHallData operable roster', () => {
 
     expect(hallData.operableRosterAgents.value.map(agent => agent.agentId)).to.deep.equal(['huyanzhuo', 'personal-runtime'])
     expect(calls.filter(call => call.url === '/roster')).to.have.length(1)
-    expect(calls.find(call => call.params.status === undefined && call.params.pageSize === 100)).to.exist
+    expect(calls.find(call => call.params.status === undefined && call.params.pageSize === '100')).to.exist
   })
 
   it('keeps an explicitly operable offline roster selection when the shared map refresh omits it', async () => {
     const selectedAgent = ref({ agentId: 'huyanzhuo', boundToMe: true, canOperate: true, status: 'offline' })
     const agentApi = {
-      get: async (url, _params, options) => options.onSuccess({ data: url === '/personas/catalog' ? [] : [] }),
-      search: async (_url, _params, options) => options.onSuccess({ data: [selectedAgent.value] })
+      get: async (url, _params, options) => options.onSuccess((url === '/personas/catalog' ? [] : [])),
+      search: async (_url, _params, options) => options.onSuccess({ items: [selectedAgent.value], pageNum: '1', pageSize: '100', total: "0" })
     }
     const hallData = useHallData({
       agentApi,
@@ -134,11 +134,11 @@ describe('useHallData operable roster', () => {
     const selectedAgent = ref(first[0])
     let rosterReads = 0
     const agentApi = {
-      get: async (url, _params, options) => options.onSuccess({ data: url === '/personas/catalog' ? [{ personaCode: 'huyanzhuo', boundToMe: true }] : [] }),
+      get: async (url, _params, options) => options.onSuccess((url === '/personas/catalog' ? [{ personaCode: 'huyanzhuo', boundToMe: true }] : [])),
       search: async (url, _params, options) => {
         if (url !== '/roster') throw new Error(`unexpected ${url}`)
         rosterReads += 1
-        options.onSuccess({ data: rosterReads === 1 ? first : refreshed })
+        options.onSuccess({ items: rosterReads === 1 ? first : refreshed, pageNum: '1', pageSize: '100', total: "0" })
       }
     }
     const hallData = useHallData({ agentApi, log: { warn: () => {} }, normalizeStatus: (status = '') => status.toLowerCase(), selectedAgent, selectedTask: ref(null), taskAgentMatchScore: () => 0 })
@@ -153,7 +153,7 @@ describe('useHallData operable roster', () => {
     expect(rosterReads).to.equal(2)
 
     const omittedCatalogData = useHallData({
-      agentApi: { get: async (_url, _params, options) => options.onSuccess({ data: [] }), search: async (_url, _params, options) => options.onSuccess({ data: first }) },
+      agentApi: { get: async (_url, _params, options) => options.onSuccess(([])), search: async (_url, _params, options) => options.onSuccess({ items: first, pageNum: '1', pageSize: '100', total: "0" }) },
       log: { warn: () => {} }, normalizeStatus: (status = '') => status.toLowerCase(), selectedAgent: ref(null), selectedTask: ref(null), taskAgentMatchScore: () => 0
     })
     await omittedCatalogData.loadAgents()
@@ -165,8 +165,8 @@ describe('useHallData operable roster', () => {
     const freshMapAgent = { agentId: 'huyanzhuo', boundToMe: true, canOperate: false, status: 'busy' }
     const selectedAgent = ref(oldSelection)
     const agentApi = {
-      get: async (url, _params, options) => options.onSuccess({ data: url === '/personas/catalog' ? [] : [freshMapAgent] }),
-      search: async (_url, _params, options) => options.onSuccess({ data: [{ ...freshMapAgent }] })
+      get: async (url, _params, options) => options.onSuccess((url === '/personas/catalog' ? [] : [freshMapAgent])),
+      search: async (_url, _params, options) => options.onSuccess({ items: [{ ...freshMapAgent }], pageNum: '1', pageSize: '100', total: "0" })
     }
     const hallData = useHallData({
       agentApi,
@@ -190,7 +190,7 @@ describe('useHallData operable roster', () => {
     const agentApi = {
       delete: async (url) => {
         calls.push(url)
-        return { data: { status: 409, code: 'AGENT_BUSY', msg: 'Agent cannot be unbound while it has durable active work' } }
+        throw Object.assign(new Error('Agent cannot be unbound while it has durable active work'), { status: 409, code: 'AGENT_BUSY' })
       },
       get: async () => { throw new Error('refresh must not run after rejected DELETE') },
       search: async () => { throw new Error('refresh must not run after rejected DELETE') }
@@ -216,9 +216,9 @@ describe('useHallData operable roster', () => {
     expect(calls).to.deep.equal(['/personas/huyanzhuo/bind'])
   })
 
-  it('does not let an HTTP-style success status mask an application error code', async () => {
+  it('does not refresh after the HTTP boundary rejects an application error', async () => {
     const agentApi = {
-      delete: async () => ({ data: { status: 200, code: 'AGENT_BUSY', msg: 'still busy' } }),
+      delete: async () => { throw Object.assign(new Error('still busy'), { status: 409, code: 'AGENT_BUSY' }) },
       get: async () => { throw new Error('refresh must not run after rejected DELETE') },
       search: async () => { throw new Error('refresh must not run after rejected DELETE') }
     }
@@ -238,17 +238,17 @@ describe('useHallData operable roster', () => {
       failure = error
     }
     expect(failure?.code).to.equal('AGENT_BUSY')
-    expect(failure?.status).to.equal(200)
+    expect(failure?.status).to.equal(409)
   })
 
   it('reports an unbind no-op truthfully and refreshes every roster projection after DELETE', async () => {
     const calls = []
     const agentApi = {
       delete: async (url, options) => calls.push({ options, url }),
-      get: async (_url, _params, options) => options.onSuccess({ data: [] }),
+      get: async (_url, _params, options) => options.onSuccess(([])),
       search: async (url, _params, options) => {
         calls.push({ url })
-        options.onSuccess({ data: [] })
+        options.onSuccess({ items: [], pageNum: '1', pageSize: '100', total: "0" })
       }
     }
     const hallData = useHallData({
@@ -276,7 +276,7 @@ describe('useHallData deferred Juyi Hall sources', () => {
         get: async (url, _params, options) => {
           calls.push(url)
           if (url !== '/map') throw new Error(`unexpected get ${url}`)
-          options.onSuccess({ data: [{ agentId: 'map-agent', status: 'online' }] })
+          options.onSuccess(([{ agentId: 'map-agent', status: 'online' }]))
         },
         search: async url => {
           calls.push(url)
@@ -307,7 +307,7 @@ describe('useHallData deferred Juyi Hall sources', () => {
       agentApi: {
         search: async (url, _params, options) => {
           if (url === '/tasks/search') {
-            options.onSuccess({ data: [{ id: 'task-1', status: 'open' }] })
+            options.onSuccess({ items: [{ id: 'task-1', status: 'open' }], pageNum: '1', pageSize: '100', total: "0" })
             return
           }
           if (url === '/tasks/status-counts') throw new Error('counts offline')
@@ -336,7 +336,7 @@ describe('useHallData deferred Juyi Hall sources', () => {
       agentApi: {
         get: async (url, _params, options) => {
           if (url !== '/map') throw new Error(`unexpected get ${url}`)
-          options.onSuccess({ data: [{ agentId: 'map-agent', status: 'online' }] })
+          options.onSuccess(([{ agentId: 'map-agent', status: 'online' }]))
         },
         search: async () => { throw new Error('roster offline') }
       },
@@ -362,7 +362,7 @@ describe('useHallData E01 candidate compatibility', () => {
     const selectedTask = ref({ id: 'task-e01', status: 'open', requiredAbilities: ['planning'] })
     const hallData = useHallData({
       agentApi: {
-        create: async (_url, _body, options) => options.onSuccess({ data: [{
+        create: async (_url, _body, options) => options.onSuccess(([{
           score: 74,
           eligible: false,
           exclusionReasons: ['AGENT_ABILITY_MISMATCH'],
@@ -373,7 +373,7 @@ describe('useHallData E01 candidate compatibility', () => {
         }, {
           score: 94,
           agent: { agentId: 'agent-legacy', status: 'online', canOperate: true }
-        }] })
+        }]))
       },
       log: { warn: () => {} },
       normalizeStatus: (status = '') => status.toLowerCase(),
@@ -412,9 +412,7 @@ describe('useHallData bounty title reload', () => {
     }
     const agentApi = {
       search: async (url, _params, options) => {
-        options.onSuccess({
-          data: url === '/tasks/search' ? [persistedTask] : { total: 1, open: 1 }
-        })
+        options.onSuccess({ items: url === '/tasks/search' ? [persistedTask] : { total: 1, open: 1 }, pageNum: '1', pageSize: '100', total: "0" })
       },
       get: async () => {}
     }

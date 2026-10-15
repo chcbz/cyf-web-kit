@@ -210,8 +210,9 @@ describe('account security session boundary', () => {
       expect(url).to.equal('https://api.example/user/my')
       requestSignal = options.signal
       return {
-        ok: true,
-        json: () => new Promise(resolve => { resolveProfile = resolve })
+        ok: true, status: 200,
+        headers: new Headers({ 'X-Request-Id': options.headers['X-Request-Id'], 'Content-Type': 'application/json' }),
+        text: () => new Promise(resolve => { resolveProfile = value => resolve(JSON.stringify({ protocolVersion: 1, requestId: options.headers['X-Request-Id'], code: 'E0', msg: 'ok', data: value.data })) })
       }
     }
 
@@ -244,11 +245,12 @@ describe('account security session boundary', () => {
     })
     let resolveProfile
     const urls = []
-    global.fetch = async (url) => {
+    global.fetch = async (url, options) => {
       urls.push(url)
       return {
-        ok: true,
-        json: () => new Promise(resolve => { resolveProfile = resolve })
+        ok: true, status: 200,
+        headers: new Headers({ 'X-Request-Id': options.headers['X-Request-Id'], 'Content-Type': 'application/json' }),
+        text: () => new Promise(resolve => { resolveProfile = value => resolve(JSON.stringify({ protocolVersion: 1, requestId: options.headers['X-Request-Id'], code: 'E0', msg: 'ok', data: value.data })) })
       }
     }
 

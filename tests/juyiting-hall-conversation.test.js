@@ -647,7 +647,7 @@ describe('useHallConversation authenticated public restore', () => {
 
     await conversation.loadHallMessages()
 
-    expect(payloads[0]).to.deep.include({ pageNum: 1, pageSize: 1, orderBy: 'update_time desc' })
+    expect(payloads[0]).to.deep.include({ pageNum: '1', pageSize: '1', orderBy: 'update_time desc' })
     expect(payloads[0].search).to.deep.equal({ conversationType: 'juyiting', conversationScopeType: 'public', conversationScopeKey: 'public' })
     expect(contentIds).to.deep.equal(['1001'])
     expect(conversation.conversationId.value).to.equal('1001')
@@ -1349,8 +1349,8 @@ describe('useHallConversation history remediation', () => {
       chatApi: {
         list: async (_path, payload, options) => {
           pageCalls.push(payload.pageNum)
-          const rows = payload.pageNum === 1 ? firstPage : (payload.pageNum === 2 ? secondPage : [])
-          options.onSuccess({ items: rows, total: 199, pageNum: payload.pageNum, pageSize: payload.pageSize, hasMore: payload.pageNum < 3 })
+          const rows = payload.pageNum === '1' ? firstPage : (payload.pageNum === '2' ? secondPage : [])
+          options.onSuccess({ items: rows, total: '199', pageNum: payload.pageNum, pageSize: payload.pageSize, hasMore: payload.pageNum < 3 })
         }
       }
     })
@@ -1359,7 +1359,7 @@ describe('useHallConversation history remediation', () => {
     await conversation.loadMoreHallConversationHistory()
     await conversation.loadMoreHallConversationHistory()
 
-    expect(pageCalls).to.deep.equal([1, 2, 3])
+    expect(pageCalls).to.deep.equal(['1', '2', '3'])
     expect(conversation.conversationHistory.value).to.have.length(199)
     expect(conversation.conversationHistory.value.filter(item => item.id === '100')).to.have.length(1)
     expect(conversation.conversationHistoryHasMore.value).to.equal(false)

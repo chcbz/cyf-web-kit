@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { createEconomyRequestIntentStore } from '../src/composables/juyiting/economyRequestIntent.js'
 import { useHallTaskActions } from '../src/composables/juyiting/useHallTaskActions.js'
 
-const success = data => ({ data: { code: 'E0', data } })
+const success = data => data
 const deferred = () => {
   let resolve
   const promise = new Promise(done => { resolve = done })

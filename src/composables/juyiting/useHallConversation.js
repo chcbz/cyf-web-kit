@@ -865,8 +865,8 @@ export const useHallConversation = ({
     try {
       let callbackResult
       const response = await chatApi.list('/conversation/list', {
-        pageNum: 1,
-        pageSize: 1,
+        pageNum: '1',
+        pageSize: '1',
         orderBy: 'update_time desc',
         search: {
           conversationType: 'juyiting',
@@ -946,8 +946,8 @@ export const useHallConversation = ({
       try {
         let callbackResult
         const response = await chatApi.list('/conversation/list', {
-          pageNum,
-          pageSize: HALL_HISTORY_PAGE_SIZE,
+          pageNum: String(pageNum),
+          pageSize: String(HALL_HISTORY_PAGE_SIZE),
           orderBy: 'update_time desc',
           search: {
             conversationType: 'juyiting',

@@ -8,6 +8,8 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { usePersonalWorkspace } from '../src/composables/usePersonalWorkspace.js'
 import { canOpenHallItem, HALL_SOURCES, useHallOverview } from '../src/composables/juyiting/useHallOverview.js'
 
+import { validMaterialVersion } from '../src/composables/juyiting/materialVersion.js'
+
 const overviewSource = readFileSync(new URL('../src/components/juyiting/HallOverview.vue', import.meta.url), 'utf8')
 
 for (const name of ['Element', 'HTMLElement', 'SVGElement', 'Node']) {
@@ -23,8 +25,9 @@ const loadMaterialPicker = (workspace, save) => {
   const code = compileScript(descriptor, { id: 'hall-material-picker-mount', inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_line, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]@\/composables\/usePersonalWorkspace['"];?\s*$/gm, 'var { usePersonalWorkspace, savePersonalWorkspaceBlob } = deps')
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\.\/\.\.\/composables\/juyiting\/materialVersion\.js['"];?\s*$/gm, 'var { validMaterialVersion } = deps')
     .replace('export default', 'return')
-  return new Function('Vue', 'deps', code)(Vue, { usePersonalWorkspace: () => workspace, savePersonalWorkspaceBlob: save })
+  return new Function('Vue', 'deps', code)(Vue, { validMaterialVersion, usePersonalWorkspace: () => workspace, savePersonalWorkspaceBlob: save })
 }
 const load = (api, workspace = emptyWorkspace(), save = () => {}) => {
   const filename = fileURLToPath(new URL('../src/components/juyiting/HallOverview.vue', import.meta.url))
@@ -34,16 +37,17 @@ const load = (api, workspace = emptyWorkspace(), save = () => {}) => {
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]@\/composables\/juyiting\/useHallOverview['"];?\s*$/gm, 'var { canOpenHallItem, HALL_SOURCES, useHallOverview } = deps')
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]@\/composables\/usePersonalWorkspace['"];?\s*$/gm, 'var { usePersonalWorkspace, savePersonalWorkspaceBlob } = deps')
     .replace(/^import HallMaterialPicker from ['"]\.\/HallMaterialPicker\.vue['"];?\s*$/gm, 'var HallMaterialPicker = deps.HallMaterialPicker')
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\.\/\.\.\/composables\/juyiting\/materialVersion\.js['"];?\s*$/gm, 'var { validMaterialVersion } = deps')
     .replace('export default', 'return')
-  return new Function('Vue', 'deps', code)(Vue, { HallMaterialPicker: loadMaterialPicker(workspace, save), canOpenHallItem, HALL_SOURCES, useHallOverview: options => useHallOverview({ ...options, api }), usePersonalWorkspace: () => workspace, savePersonalWorkspaceBlob: save })
+  return new Function('Vue', 'deps', code)(Vue, { validMaterialVersion, HallMaterialPicker: loadMaterialPicker(workspace, save), canOpenHallItem, HALL_SOURCES, useHallOverview: options => useHallOverview({ ...options, api }), usePersonalWorkspace: () => workspace, savePersonalWorkspaceBlob: save })
 }
 const summary = (sourceType, sourceId, nextAction) => ({ ref: { sourceType, sourceId }, title: sourceId,
   status: { code: 'QUEUED', evidenceSource: 'PERSISTED', observedAt: 100 }, targetAgent: null, nextAction, allowedActions: [nextAction], updatedAt: 100 })
 const response = () => {
   const partitions = {
-    private: { items: [summary('PRIVATE_CASE', 'case-a', 'OPEN_CASE'), summary('LEGACY_EXECUTION', 'exec-a', 'OPEN_EXECUTION')], status: 'partial', nextCursor: null, count: null, errorCode: 'VIEWED_RESULT_NOT_TRACKED' },
-    task: { items: [summary('TASK', 'task-a', 'OPEN_TASK')], status: 'partial', nextCursor: null, count: null, errorCode: 'TASK_REVIEW_NOT_PROJECTED' },
-    draft: { items: [summary('DRAFT', 'draft-a', 'EDIT_DRAFT')], status: 'complete', nextCursor: null, count: null, errorCode: null }
+    private: { items: [summary('PRIVATE_CASE', 'case-a', 'OPEN_CASE'), summary('LEGACY_EXECUTION', 'exec-a', 'OPEN_EXECUTION')], status: 'partial', nextCursor: null, hasMore: false, count: null, errorCode: 'VIEWED_RESULT_NOT_TRACKED' },
+    task: { items: [summary('TASK', 'task-a', 'OPEN_TASK')], status: 'partial', nextCursor: null, hasMore: false, count: null, errorCode: 'TASK_REVIEW_NOT_PROJECTED' },
+    draft: { items: [summary('DRAFT', 'draft-a', 'EDIT_DRAFT')], status: 'complete', nextCursor: null, hasMore: false, count: null, errorCode: null }
   }
   const statuses = Object.fromEntries(Object.entries(partitions).map(([key, value]) => [key, { status: value.status, errorCode: value.errorCode }]))
   return { schemaVersion: 1, sections: { recent: { status: 'partial', partitions }, needsAction: { status: 'partial', partitions } }, sourceStatus: { recent: statuses, needsAction: statuses }, asOf: 100 }
@@ -164,14 +168,14 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
     const detail = Vue.ref(null)
     const refreshes = []
     const workspace = {
-      items: Vue.ref([{ fileId: 'file-a', displayName: '活动底稿', latestVersion: 2 }, { fileId: 'file-b', displayName: '另一份底稿', latestVersion: 3 }]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), error: Vue.ref(''), detail,
+      items: Vue.ref([{ fileId: 'file-a', displayName: '活动底稿', latestVersion: '2' }, { fileId: 'file-b', displayName: '另一份底稿', latestVersion: '3' }]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), error: Vue.ref(''), detail,
       refresh: async options => { refreshes.push(options); return true }, loadMore: async () => false,
       select: async fileId => {
         if (fileId === 'file-b') {
-          detail.value = { file: { fileId, displayName: '另一份底稿', state: 'ACTIVE', latestVersion: 3 }, latestVersion: { version: 3, contentMimeType: 'image/jpeg' }, versions: [{ version: 3, originalFilename: 'other-v3.jpg', contentMimeType: 'image/jpeg' }] }
+          detail.value = { file: { fileId, displayName: '另一份底稿', state: 'ACTIVE', latestVersion: '3' }, latestVersion: { version: '3', contentMimeType: 'image/jpeg' }, versions: [{ version: '3', originalFilename: 'other-v3.jpg', contentMimeType: 'image/jpeg' }] }
           return detail.value
         }
-        detail.value = { file: { fileId: 'file-a', displayName: '活动底稿', state: 'ACTIVE', latestVersion: 2 }, latestVersion: { version: 2, contentMimeType: 'image/jpeg' }, versions: [{ version: 1, originalFilename: 'bird-v1.png', contentMimeType: 'image/png' }, { version: 2, originalFilename: 'bird-v2.jpg', contentMimeType: 'image/jpeg' }] }
+        detail.value = { file: { fileId: 'file-a', displayName: '活动底稿', state: 'ACTIVE', latestVersion: '2' }, latestVersion: { version: '2', contentMimeType: 'image/jpeg' }, versions: [{ version: '1', originalFilename: 'bird-v1.png', contentMimeType: 'image/png' }, { version: '2', originalFilename: 'bird-v2.jpg', contentMimeType: 'image/jpeg' }] }
         return detail.value
       }, dispose: () => {}
     }
@@ -212,7 +216,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
 
       await wrapper.get('textarea').setValue('整理活动方案')
       await wrapper.get('.overview-quick-request').trigger('submit')
-      expect(wrapper.emitted('quick-request')[0][0]).to.deep.equal({ request: '整理活动方案', materials: [{ fileId: 'file-a', version: 2 }] })
+      expect(wrapper.emitted('quick-request')[0][0]).to.deep.equal({ request: '整理活动方案', materials: [{ fileId: 'file-a', version: '2' }] })
       await wrapper.setProps({ identityScope: 'tenant\u0000client\u0000owner-b', identityEpoch: 2 })
       expect(wrapper.find('.quick-material-summary').exists()).to.equal(false)
     } finally { wrapper.unmount() }
@@ -222,10 +226,10 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
     const detail = Vue.ref(null)
     const refreshes = []
     const workspace = {
-      items: Vue.ref([{ fileId: 'file-pdf', displayName: '执行说明', latestVersion: 3 }]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), error: Vue.ref(''), detail,
+      items: Vue.ref([{ fileId: 'file-pdf', displayName: '执行说明', latestVersion: '3' }]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), error: Vue.ref(''), detail,
       refresh: async options => { refreshes.push(options); return true }, loadMore: async () => false,
       select: async () => {
-        detail.value = { file: { fileId: 'file-pdf', displayName: '执行说明', state: 'ACTIVE', latestVersion: 3 }, latestVersion: { version: 3, contentMimeType: 'application/pdf' }, versions: [{ version: 2, originalFilename: 'brief-v2.pdf', contentMimeType: 'application/pdf' }, { version: 3, originalFilename: 'brief-v3.pdf', contentMimeType: 'application/pdf' }] }
+        detail.value = { file: { fileId: 'file-pdf', displayName: '执行说明', state: 'ACTIVE', latestVersion: '3' }, latestVersion: { version: '3', contentMimeType: 'application/pdf' }, versions: [{ version: '2', originalFilename: 'brief-v2.pdf', contentMimeType: 'application/pdf' }, { version: '3', originalFilename: 'brief-v3.pdf', contentMimeType: 'application/pdf' }] }
         return detail.value
       }, dispose: () => {}
     }
@@ -245,18 +249,18 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       expect(wrapper.get('.quick-material-summary').text()).not.to.include('application/pdf')
       await wrapper.get('textarea').setValue('整理活动方案')
       await wrapper.get('.overview-quick-request').trigger('submit')
-      expect(wrapper.emitted('quick-request')[0][0]).to.deep.equal({ request: '整理活动方案', materials: [{ fileId: 'file-pdf', version: 3 }] })
+      expect(wrapper.emitted('quick-request')[0][0]).to.deep.equal({ request: '整理活动方案', materials: [{ fileId: 'file-pdf', version: '3' }] })
     } finally { wrapper.unmount() }
   })
 
   it('mixes image/document/audio/text using the real workspace adapter, previews, downloads and removes without writes', async () => {
     const types = [['bird.png', 'image/png', 'IMAGE'], ['brief.pdf', 'application/pdf', 'PDF'], ['song.mp3', 'audio/mpeg', 'AUDIO'], ['notes.txt', 'text/plain', 'TEXT']]
     const calls = []; const saves = []; const revoked = []
-    const files = types.map(([name, , family], index) => ({ fileId: `file-${index}`, displayName: name, mediaFamily: family, state: 'ACTIVE', metadataRevision: 1, latestVersion: 2 }))
-    const versions = index => [1, 2].map(version => ({ fileId: `file-${index}`, version, originalFilename: types[index][0], contentMimeType: types[index][1], byteLength: 10 }))
+    const files = types.map(([name, , family], index) => ({ fileId: `file-${index}`, displayName: name, mediaFamily: family, state: 'ACTIVE', metadataRevision: '1', latestVersion: '2' }))
+    const versions = index => ['1', '2'].map(version => ({ fileId: `file-${index}`, version, originalFilename: types[index][0], contentMimeType: types[index][1], byteLength: '10' }))
     const workspace = usePersonalWorkspace({ identityEpoch: Vue.ref('owner-a'), urlApi: { createObjectURL: blob => `blob:${blob.type}`, revokeObjectURL: url => revoked.push(url) }, api: { execute: async options => {
       calls.push(options)
-      if (options.url === '/personal-workspace/files') return { items: files, nextCursor: null }
+      if (options.url === '/personal-workspace/files') return { items: files, nextCursor: null, hasMore: false }
       const index = Number(/files\/file-(\d+)/.exec(options.url)[1])
       const mime = index === 1 ? 'text/plain' : types[index][1]
       if (options.url.endsWith('/preview')) return { state: 'READY', parts: [{ partId: 'content', contentMimeType: mime }], partial: false }
@@ -286,7 +290,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       await wrapper.get('.quick-material-confirm').trigger('click')
       await wrapper.get('textarea').setValue('结合全部资料整理方案，不生成图片')
       await wrapper.get('.overview-quick-request').trigger('submit')
-      expect(wrapper.emitted('quick-request')[0][0].materials).to.deep.equal(files.map(file => ({ fileId: file.fileId, version: 2 })))
+      expect(wrapper.emitted('quick-request')[0][0].materials).to.deep.equal(files.map(file => ({ fileId: file.fileId, version: '2' })))
       expect(saves.map(content => content.filename)).to.deep.equal(types.map(type => type[0]))
       expect(calls.every(call => call.method === 'GET')).to.equal(true)
       expect(calls.filter(call => call.url === '/personal-workspace/files')[0].params).to.deep.equal({ state: 'ACTIVE' })
@@ -353,8 +357,8 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       if (options.url === '/hall/overview') return response()
       const kind = options.params.kind
       const archived = { ...summary(kind === 'private' ? 'PRIVATE_CASE' : 'TASK', `${kind}-archived`, kind === 'private' ? 'OPEN_CASE' : 'OPEN_TASK'),
-        personalMark: kind === 'private' ? { revision: 1, archived: true, viewedResultRef: null } : null }
-      const part = { items: [archived], status: 'complete', nextCursor: null, count: null, errorCode: null }
+        personalMark: kind === 'private' ? { revision: '1', archived: true, viewedResultRef: null } : null }
+      const part = { items: [archived], status: 'complete', nextCursor: null, hasMore: false, count: null, errorCode: null }
       return { schemaVersion: 1, kind, view: 'archive', q: '', section: { status: 'complete', partitions: { [kind]: part } }, sourceStatus: { [kind]: { status: 'complete', errorCode: null } }, asOf: 100 }
     } }), { props })
     try {

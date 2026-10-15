@@ -20,8 +20,8 @@ const request = (overrides = {}) => ({ installationId: 'rti_0123456789abcdef0123
 const handoff = (scope = {}, req = request()) => ({ scope: { tenantId: setup.tenantId, clientId: setup.clientId, canonicalAgentId: setup.canonicalAgentId, ...scope }, request: req })
 const setupResult = { mode: 'local', runtimeSetup: setup, agentId: 'agent-real', profileId: 'profile-real', envExample: 'OPENCLAW_API_KEY=legacy-secret', profileExample: 'apiKey=legacy-secret' }
 const props = { setupResult, identityScope: 'owner-a', identityEpoch: 1, runtimeRole: 'agent-real', portraitName: () => '', portraitStyle: () => ({}) }
-const viewFor = (req, status = 'PENDING', overrides = {}) => ({ installationId: req.installationId, tenantId: setup.tenantId, clientId: setup.clientId, canonicalAgentId: req.canonicalAgentId, manifestVersion: req.manifestVersion, manifestSha256: req.manifestSha256, enrollmentExpiresAt: req.enrollmentExpiresAt, status, lastHeartbeatAt: null, ...overrides })
-const envelope = (data, code = 'E0', extra = {}) => ({ data: { code, data, ...extra }, status: 200, statusText: 'OK' })
+const viewFor = (req, status = 'PENDING', overrides = {}) => ({ runtimeInstallationId: req.runtimeInstallationId ?? req.installationId, tenantId: setup.tenantId, clientId: setup.clientId, canonicalAgentId: req.canonicalAgentId, manifestVersion: req.manifestVersion, manifestSha256: req.manifestSha256, enrollmentExpiresAt: req.enrollmentExpiresAt, status, lastHeartbeatAt: null, ...overrides })
+const envelope = (data, code = 'E0', extra = {}) => { if (code !== 'E0') throw new Error(extra.msg || code); return data }
 const setFile = (wrapper, file) => {
   const input = wrapper.get('input[type="file"]').element
   Object.defineProperty(input, 'files', { configurable: true, value: [file] })
@@ -94,8 +94,9 @@ describe('runtime self-host onboarding panel', () => {
       await wrapper.get('.runtime-actions .catalog-action.primary').trigger('click')
       expect(calls).to.have.length(1)
       expect(calls[0][1]).to.equal('/runtime/v1/installations')
-      expect(Object.keys(calls[0][2]).sort()).to.deep.equal(['canonicalAgentId', 'enrollmentExpiresAt', 'enrollmentSecretSha256', 'installationId', 'manifestSha256', 'manifestVersion'].sort())
-      expect(calls[0][2]).to.deep.equal(req)
+      expect(Object.keys(calls[0][2]).sort()).to.deep.equal(['canonicalAgentId', 'enrollmentExpiresAt', 'enrollmentSecretSha256', 'runtimeInstallationId', 'manifestSha256', 'manifestVersion'].sort())
+      const { installationId, ...registration } = req
+      expect(calls[0][2]).to.deep.equal({ ...registration, runtimeInstallationId: installationId })
       expect(wrapper.text()).to.include('PENDING').and.include('不代表在线')
       expect(wrapper.text()).not.to.include(req.installationId)
       await wrapper.get('.runtime-actions .catalog-action.subtle').trigger('click')
