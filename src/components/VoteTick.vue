@@ -55,7 +55,7 @@ export default {
       jiacn
     }, {
       onSuccess: (data) => {
-        _this.question = data.data
+        _this.question = data
         for (let i = 0; i < _this.question.items.length; i++) {
           _this.totalNum += _this.question.items[i].num
           if (_this.question.items[i].tick === 1) {
@@ -80,7 +80,7 @@ export default {
         opt
       }, {
         onSuccess: (data) => {
-          if (data.data) {
+          if (data) {
             Dialog({
               title: _this.$t('app.notify'),
               message: _this.$t('vote.right_alert', {

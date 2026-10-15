@@ -334,9 +334,9 @@ const loadRandomPhrase = async (generation = chatLifecycleGeneration) => {
       signal: chatLifecycleController.signal,
       onSuccess: (data) => {
         if (chatDisposed || generation !== chatLifecycleGeneration) return
-        if (data && data.data) {
-          randomPhrase.value = data.data.content
-          void phraseApi.getById('/read', data.data.id, { signal: chatLifecycleController.signal })
+        if (data) {
+          randomPhrase.value = data.content
+          void phraseApi.post('/read', null, { params: { id: data.id }, signal: chatLifecycleController.signal })
             .catch(error => {
               if (error?.name !== 'AbortError' && !chatDisposed && generation === chatLifecycleGeneration) {
                 log.warn('记录随机短语读取失败:', error)
@@ -374,8 +374,8 @@ const loadConversations = async () => {
       signal: chatLifecycleController.signal,
       onSuccess: (data) => {
         if (chatDisposed || generation !== chatLifecycleGeneration) return
-        if (data && data.data) {
-          conversations.value = data.data.map(conv => ({
+        if (data) {
+          conversations.value = data.items.map(conv => ({
             id: conv.id.toString(),
             title: conv.title || '新会话',
             lastUpdated: conv.updateTime,
@@ -411,7 +411,7 @@ const loadConversation = async (id) => {
       signal: chatLifecycleController.signal,
       onSuccess: (data) => {
         if (chatDisposed || generation !== chatLifecycleGeneration) return
-        const msgList = data?.data || []
+        const msgList = data || []
         messages.value = msgList.map(msg => normalizeLoadedMessage(msg, id))
         scrollToBottom()
         startConversationEventStream()

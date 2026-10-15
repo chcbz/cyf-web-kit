@@ -2453,7 +2453,7 @@ watch([() => terminalHistory.cacheKey.value, () => terminalConversationHistory.s
       const requestId = entry.request?.requestId
       if (!requestId) continue
       const response = await chatApi.get(`/requests/${encodeURIComponent(requestId)}`, {}, { autoLoading: false, signal: controller.signal })
-      const request = response?.data?.data ?? response?.data
+      const request = response
       if (request?.requestId !== requestId || request.conversationId !== scope.conversationId) throw new Error('历史议事来源不匹配')
       for (const turn of request.turns || []) {
         if (turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state)) continue

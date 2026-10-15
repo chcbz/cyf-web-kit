@@ -38,19 +38,8 @@ export const normalizeApprovedPermissions = (permissions) => [...new Set(
     .filter(Boolean)
 )].sort(codeUnitCompare)
 
-export const readSkillApiPayload = (result) => {
-  const body = result?.data ?? result
-  if (body && typeof body === 'object' && hasOwn(body, 'code')) {
-    if (body.code !== 'E0') {
-      const error = new Error(body.msg || body.message || `技能市场请求失败：${body.code}`)
-      error.code = body.code
-      error.businessFailure = true
-      throw error
-    }
-    return body.data
-  }
-  return body && typeof body === 'object' && hasOwn(body, 'data') ? body.data : body
-}
+// HTTP code/status validation and envelope decoding occur once in useHttp.
+export const readSkillApiPayload = result => result
 
 const productList = (payload) => {
   if (Array.isArray(payload)) return payload

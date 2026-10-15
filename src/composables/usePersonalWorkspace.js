@@ -29,12 +29,6 @@ const VERSION = value => Number.isInteger(Number(value)) && Number(value) >= 1 &
 const abortError = message => new DOMException(message, 'AbortError')
 const valueOf = value => typeof value === 'function' ? value() : unref(value)
 
-const unwrap = result => {
-  let value = result
-  for (let index = 0; index < 2 && value && typeof value === 'object' && Object.hasOwn(value, 'data'); index += 1) value = value.data
-  return value
-}
-const responseHeaders = response => response?.headers && typeof response.headers === 'object' ? response.headers : {}
 const getHeader = (headers, name) => Object.entries(headers).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1] || ''
 const normalizeMime = value => typeof value === 'string' ? value.split(';', 1)[0].trim().toLowerCase() : ''
 const extensionFor = filename => {
@@ -144,9 +138,16 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     const controller = new AbortController()
     controllers.add(controller)
     try {
-      const response = await api.execute({ ...options, autoLoading: false, needAuth: true, signal: controller.signal })
+      let metadata
+      const response = await api.execute({
+        ...options, autoLoading: false, needAuth: true, signal: controller.signal,
+        onSuccess: (value, currentMetadata) => {
+          metadata = currentMetadata
+          options.onSuccess?.(value, currentMetadata)
+        }
+      })
       if (!stillCurrent(snapshot, controller)) throw abortError('Workspace context changed')
-      return { data: unwrap(response), headers: responseHeaders(response) }
+      return { data: response, headers: metadata?.headers || {} }
     } finally {
       controllers.delete(controller)
     }

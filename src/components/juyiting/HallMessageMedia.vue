@@ -49,8 +49,8 @@ const discard = () => {
 const getBlob = async signal => {
   const url = conversationAssetContentPath({ conversationId: props.conversationId, assetId: props.part.assetId })
   const response = await api.execute({ url, method: 'GET', responseType: 'blob', autoLoading: false, needAuth: true, signal })
-  if (!(response?.data instanceof Blob)) throw new Error('无法读取会话资产。')
-  return response.data
+  if (!(response instanceof Blob)) throw new Error('无法读取会话资产。')
+  return response
 }
 const loadPreview = async () => {
   if (previewUrl.value || loading.value || mediaKind.value === 'file') return

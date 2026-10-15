@@ -3,30 +3,8 @@ import { useHallOrdinaryCancellation } from './useHallOrdinaryCancellation.js'
 import { isCanonicalDecimalString } from '../../utils/silverAmount.js'
 import { createEconomyRequestIntentStore } from './economyRequestIntent.js'
 
-const responseBody = result => result && Object.prototype.hasOwnProperty.call(result, 'code') ? result : result?.data ?? result
-
-const isBusinessSuccess = (result) => {
-  const code = responseBody(result)?.code
-  return code === undefined || code === null || code === 'E0' || code === '0' || code === 0 || code === '200' || code === 200
-}
-
-const ensureBusinessSuccess = (result) => {
-  const body = responseBody(result)
-  if (isBusinessSuccess(body)) return body
-
-  const error = new Error(body?.msg || body?.message || '请求被拒绝')
-  error.code = body?.code
-  error.status = body?.status
-  error.businessFailure = true
-  throw error
-}
-
+// The HTTP boundary returns business DTOs and throws on unsuccessful responses.
 const failureReason = (error, fallback) => error?.message || fallback
-const unwrap = (result) => {
-  const body = responseBody(result)
-  if (body && typeof body === 'object' && Object.prototype.hasOwnProperty.call(body, 'code')) return body.data?.data ?? body.data
-  return body?.data ?? body
-}
 const isFundedTask = task => task?.funding?.mode === 'FUNDED_SINGLE_AGENT'
 const hasExplicitAgentId = item => typeof item?.agentId === 'string' && Boolean(item.agentId.trim())
 const taskVersion = task => {
@@ -83,7 +61,7 @@ export const useHallTaskActions = ({
   const fundedRequest = async (operation, send) => {
     try {
       const result = await send(acquirePendingOperationKey(operation))
-      const payload = unwrap(ensureBusinessSuccess(result))
+      const payload = result
       // A successful decoded response is completion certainty. Only documented
       // definitive no-effect failures release a key; unknown outcomes replay it.
       settlePendingOperation(operation)
@@ -112,9 +90,9 @@ export const useHallTaskActions = ({
     readFundedCreateRecovery()
   }, { immediate: true, flush: 'sync' })
   const sendFundedCreate = async (intent, scope) => {
-    const task = unwrap(ensureBusinessSuccess(await agentApi.create('/tasks', intent.body, {
-      autoLoading: false, headers: { 'Idempotency-Key': intent.key }, onSuccess: ensureBusinessSuccess
-    })))
+    const task = await agentApi.create('/tasks', intent.body, {
+      autoLoading: false, headers: { 'Idempotency-Key': intent.key }
+    })
     const removed = intentStoreForScope(scope).remove('funded-create')
     if (removed.state !== 'ABSENT') throw new Error(fundedCreateStorageFailure(removed.state))
     // An old principal's success is durable, but it must not replace the newer
@@ -131,7 +109,7 @@ export const useHallTaskActions = ({
     const funded = Boolean(payload?.grossBountyAmountMicro)
     if (!funded) {
       try {
-        const task = unwrap(ensureBusinessSuccess(await agentApi.create('/tasks', payload, { autoLoading: false, onSuccess: ensureBusinessSuccess })))
+        const task = await agentApi.create('/tasks', payload, { autoLoading: false })
         if (task) { tasks.value = [task, ...tasks.value.filter(item => item.id !== task.id)]; selectedTask.value = task }
         playSuccess(); showToast('榜文已张'); return true
       } catch (error) { log.warn('create bounty task failed:', error); playError(); showToast(`张榜未成：${failureReason(error, '请稍后再试')}`); return false }
@@ -215,7 +193,7 @@ export const useHallTaskActions = ({
     isCanonicalDecimalString(receipt.claimedAt)
 
   const refreshClaimedTask = async (task, receipt) => {
-    const snapshot = unwrap(ensureBusinessSuccess(await agentApi.get(`/tasks/${encodeURIComponent(receipt.taskId)}`, undefined, { autoLoading: false })))
+    const snapshot = await agentApi.get(`/tasks/${encodeURIComponent(receipt.taskId)}`, undefined, { autoLoading: false })
     if (snapshot?.id !== receipt.taskId || !validString(snapshot.status) || !isCanonicalDecimalString(snapshot.taskVersion) ||
       BigInt(snapshot.taskVersion) < BigInt(receipt.taskVersion) ||
       (snapshot.taskVersion === receipt.taskVersion && (snapshot.status !== 'assigned' ||
@@ -269,7 +247,7 @@ export const useHallTaskActions = ({
           contextRevision: version,
           minimumAcceptedPayoutMicro: '0'
         }
-        const quote = await fundedRequest(`funded-quote:${id}:${agentId}:${version}`, key => agentApi.create(`/tasks/${encodeURIComponent(id)}/quotes`, quoteRequest, { autoLoading: false, headers: { 'Idempotency-Key': key }, onSuccess: ensureBusinessSuccess }))
+        const quote = await fundedRequest(`funded-quote:${id}:${agentId}:${version}`, key => agentApi.create(`/tasks/${encodeURIComponent(id)}/quotes`, quoteRequest, { autoLoading: false, headers: { 'Idempotency-Key': key } }))
         if (!matchingQuote(quote, id, agentId, version) || !unexpired(quote) ||
           !isCurrentPreview(id, task, agent, agentId, version, agentVersion)) throw new Error('报价已过期或榜文/好汉已变，请重新预览')
         operation = {
@@ -299,9 +277,9 @@ export const useHallTaskActions = ({
       setFundedClaimState({ taskId: id, agentId, quoteId: operation.body.quoteId, status: 'confirming' })
       let receipt
       try {
-        receipt = unwrap(ensureBusinessSuccess(await agentApi.create(`/tasks/${encodeURIComponent(id)}/claim`, { ...operation.body }, {
-          autoLoading: false, headers: { 'Idempotency-Key': operation.key }, onSuccess: ensureBusinessSuccess
-        })))
+        receipt = await agentApi.create(`/tasks/${encodeURIComponent(id)}/claim`, { ...operation.body }, {
+          autoLoading: false, headers: { 'Idempotency-Key': operation.key }
+        })
         if (!matchingReceipt(receipt, operation)) throw new Error('领令回执不匹配；请核对原领令，不要重新取价')
       } catch (error) {
         if (isDefinitiveFundedFailure(error) || definitiveClaimFailures.has(error?.code)) unresolvedClaims.delete(id)
@@ -344,10 +322,10 @@ export const useHallTaskActions = ({
     const targetAgent = targetAgents[0]
     let assignmentSucceeded = false
     try {
-      const assigned = unwrap(ensureBusinessSuccess(await agentApi.create(`/tasks/${task.id}/assign`, {
+      const assigned = await agentApi.create(`/tasks/${task.id}/assign`, {
         agentId: targetAgent.agentId,
         agentIds: targetAgents.map(item => item.agentId)
-      }, { autoLoading: false, onSuccess: ensureBusinessSuccess })))
+      }, { autoLoading: false })
       Object.assign(task, assigned || {
         status: 'assigned',
         assignedAgentIds: targetAgents.map(item => item.agentId),
@@ -375,7 +353,7 @@ export const useHallTaskActions = ({
   const loadSettlement = async (task) => {
     if (!task?.id || !isFundedTask(task)) return null
     try {
-      const settlement = unwrap(ensureBusinessSuccess(await agentApi.get(`/tasks/${task.id}/settlement`, undefined, { autoLoading: false })))
+      const settlement = await agentApi.get(`/tasks/${task.id}/settlement`, undefined, { autoLoading: false })
       task.settlement = settlement
       selectedTask.value = task
       return settlement
@@ -393,14 +371,14 @@ export const useHallTaskActions = ({
     try {
       const receipt = await fundedRequest(`funded-cancel:${task.id}:${version}`, key => agentApi.create(`/tasks/${task.id}/funding/cancel`, {
         expectedTaskVersion: version
-      }, { autoLoading: false, headers: { 'Idempotency-Key': key }, onSuccess: ensureBusinessSuccess }))
+      }, { autoLoading: false, headers: { 'Idempotency-Key': key } }))
       if (receipt?.taskId !== task.id || receipt?.fundingStatus !== 'REFUNDED' ||
         !validString(receipt?.refundTransactionId) || !['refundedMicro', 'remainingMicro', 'taskVersion', 'fundingVersion', 'refundedAt'].every(field => isCanonicalDecimalString(receipt?.[field])) ||
         BigInt(receipt.taskVersion) <= BigInt(version)) {
         throw new Error('撤榜回执不匹配；请核对原撤榜，不要重复扣款')
       }
       try {
-        const canonical = unwrap(ensureBusinessSuccess(await agentApi.get(`/tasks/${encodeURIComponent(task.id)}`, undefined, { autoLoading: false })))
+        const canonical = await agentApi.get(`/tasks/${encodeURIComponent(task.id)}`, undefined, { autoLoading: false })
         if (canonical?.id !== task.id || !isCanonicalDecimalString(taskVersion(canonical)) || BigInt(taskVersion(canonical)) < BigInt(receipt.taskVersion)) {
           throw new Error('榜文快照尚未同步')
         }
@@ -428,7 +406,7 @@ export const useHallTaskActions = ({
   const autoAssignTask = async (task) => {
     if (!task || task.status !== 'open' || isFundedTask(task)) return false
     try {
-      const assigned = unwrap(ensureBusinessSuccess(await agentApi.create(`/tasks/${task.id}/auto-assign`, {}, { autoLoading: false, onSuccess: ensureBusinessSuccess }))) || { ...task, status: 'assigned' }
+      const assigned = await agentApi.create(`/tasks/${task.id}/auto-assign`, {}, { autoLoading: false }) || { ...task, status: 'assigned' }
       tasks.value = tasks.value.map(item => item.id === task.id ? { ...item, ...assigned } : item)
       selectedTask.value = { ...task, ...assigned }
       const assignedIds = assigned.assignedAgentIds || (assigned.assignedAgentId ? [assigned.assignedAgentId] : [])
@@ -447,7 +425,7 @@ export const useHallTaskActions = ({
   const archiveTask = async (task) => {
     if (!task) return false
     try {
-      const archived = unwrap(ensureBusinessSuccess(await agentApi.create(`/tasks/${task.id}/archive`, {}, { autoLoading: false, onSuccess: ensureBusinessSuccess }))) || { ...task, status: 'archived' }
+      const archived = await agentApi.create(`/tasks/${task.id}/archive`, {}, { autoLoading: false }) || { ...task, status: 'archived' }
       tasks.value = tasks.value.map(item => item.id === task.id ? archived : item)
       selectedTask.value = archived
       playSuccess()

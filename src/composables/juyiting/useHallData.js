@@ -110,7 +110,7 @@ export const useHallData = ({
     await agentApi.search('/tasks/search', params, {
       autoLoading: false,
       onSuccess: (result) => {
-        list = result?.data || []
+        list = result.items
       }
     })
     return list
@@ -127,7 +127,7 @@ export const useHallData = ({
       }, {
         autoLoading: false,
         onSuccess: (result) => {
-          counts = result?.data || {}
+          counts = result
         }
       })
       taskStatusCounts.value = counts
@@ -149,7 +149,7 @@ export const useHallData = ({
       await agentApi.create(`/tasks/${task.id}/recommend`, {}, {
         autoLoading: false,
         onSuccess: (result) => {
-          recommendations = result?.data || []
+          recommendations = result
           taskRecommendations.value = {
             ...taskRecommendations.value,
             [task.id]: recommendations
@@ -202,7 +202,7 @@ export const useHallData = ({
       await agentApi.get('/map', {}, {
         autoLoading: false,
         onSuccess: (result) => {
-          mapAgents.value = (result?.data || []).filter(agent => ['online', 'busy'].includes(normalizeStatus(agent.status)))
+          mapAgents.value = result.filter(agent => ['online', 'busy'].includes(normalizeStatus(agent.status)))
         }
       })
     } catch (error) {
@@ -228,7 +228,7 @@ export const useHallData = ({
       }, {
         autoLoading: false,
         onSuccess: (result) => {
-          allRosterAgents.value = result?.data || []
+          allRosterAgents.value = result.items
         }
       })
       if (derive) deriveRosterProjections()
@@ -249,7 +249,7 @@ export const useHallData = ({
       await agentApi.get('/personas/catalog', {}, {
         autoLoading: false,
         onSuccess: (result) => {
-          personaCatalog.value = result?.data || []
+          personaCatalog.value = result
         }
       })
       deriveRosterProjections()
@@ -263,24 +263,6 @@ export const useHallData = ({
     }
   }
 
-  const requireSuccessfulMutation = (response, fallbackMessage) => {
-    const envelope = response?.data && typeof response.data === 'object'
-      ? response.data
-      : (response && typeof response === 'object' ? response : null)
-    if (!envelope || (!Object.hasOwn(envelope, 'code') && !Object.hasOwn(envelope, 'status'))) return
-    const code = envelope.code
-    const status = Number(envelope.status)
-    const hasCode = code !== undefined && code !== null
-    const hasStatus = Number.isFinite(status)
-    const successfulCode = !hasCode || code === 'E0' || code === '0' || code === 0 ||
-      code === '200' || code === 200
-    const successfulStatus = !hasStatus || status === 200
-    if (successfulCode && successfulStatus) return
-    const error = new Error(envelope.msg || envelope.message || fallbackMessage)
-    error.code = code
-    if (Number.isFinite(status)) error.status = status
-    throw error
-  }
 
   const bindPersona = async (persona, mode = 'local') => {
     // Paid server INITIAL and free REPROVISION both require the hosting DTO flow.
@@ -291,10 +273,10 @@ export const useHallData = ({
     const response = await agentApi.post(`/personas/${persona.personaCode}/bind`, { mode }, {
       autoLoading: false,
       onSuccess: (result) => {
-        bindResult = result?.data || null
+        bindResult = result
       }
     })
-    requireSuccessfulMutation(response, '请贤未成')
+
     await Promise.all([loadPersonaCatalog(), loadRosterAgents({ derive: false }), loadMapAgents()])
     deriveRosterProjections()
     return bindResult
@@ -305,7 +287,7 @@ export const useHallData = ({
     const response = await agentApi.delete(`/personas/${persona.personaCode}/bind`, {
       autoLoading: false
     })
-    requireSuccessfulMutation(response, '除名未成')
+
     await Promise.all([loadPersonaCatalog(), loadRosterAgents({ derive: false }), loadMapAgents()])
     deriveRosterProjections()
     return true

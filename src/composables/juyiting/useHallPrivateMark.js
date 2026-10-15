@@ -17,7 +17,7 @@ const validCommand = value => value && revision(value.expectedRevision) && value
   typeof value.archived === 'boolean' && markResultRef(value.viewedResultRef)
 const validIntent = (value, source) => value && sameRef(value.ref, source) && id(value.key) && validCommand(value.command)
 const abort = () => new DOMException('Private mark identity changed', 'AbortError')
-const unwrap = response => response?.data?.data ?? response?.data ?? response
+const unwrap = response => response
 const defaultKey = () => globalThis.crypto?.randomUUID?.() || ''
 
 /** MARK-v1 only. Its explicit same-key PATCH reconciliation is never an execution retry. */

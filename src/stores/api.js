@@ -1,3 +1,4 @@
+import { encodeHttpRequest, decodeHttpResponse } from '../utils/apiEnvelope.js'
 import { defineStore, getActivePinia } from 'pinia'
 import { useUtilStore } from './util'
 import { useGlobalStore } from './global'
@@ -230,12 +231,14 @@ export const useApiStore = defineStore('api', {
       let accessToken = utilStore.getLocalStorage(wxJsTokenKey)
       if (!accessToken) {
         const xhr = new XMLHttpRequest()
-        xhr.open('GET', `${this.baseUrl}/wx/mp/jsapi/signature?appid=${globalStore.user.appid}&url=${url}`, false)
+        const requestId = crypto.randomUUID()
+        xhr.open('POST', `${this.baseUrl}/wx/mp/jsapi/signature?appid=${encodeURIComponent(globalStore.user.appid)}&url=${encodeURIComponent(url)}`, false)
+        xhr.setRequestHeader('X-Request-Id', requestId)
         xhr.setRequestHeader('Content-Type', 'application/json')
-        xhr.send(null)
-        const data = JSON.parse(xhr.responseText)
-        if (data && data.data) {
-          accessToken = data.data
+        xhr.send(JSON.stringify(encodeHttpRequest(null, requestId)))
+        const { value: data } = decodeHttpResponse(xhr.responseText, { status: xhr.status, requestId, responseRequestId: xhr.getResponseHeader('X-Request-Id') })
+        if (data) {
+          accessToken = data
           utilStore.setLocalStorage(wxJsTokenKey, accessToken, new Date().getTime() + 6000000)
         }
       }
@@ -255,18 +258,15 @@ export const useApiStore = defineStore('api', {
         operation.assertCurrent()
         if (!token) throw unauthenticatedError()
 
+        const requestId = crypto.randomUUID()
         const response = await fetch(`${this.baseUrl}/user/my`, {
           method: 'GET',
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${token}`, 'X-Request-Id': requestId },
           signal: operation.signal
         })
         operation.assertCurrent()
-        if (!response.ok) throw new Error('Failed to get user info')
-
-        const result = await response.json()
+        const { value: data } = decodeHttpResponse(await response.text(), { status: response.status, requestId, responseRequestId: response.headers.get('X-Request-Id') })
         operation.assertCurrent()
-        log.debug('User info retrieved:', result)
-        const data = result.data
         const globalStore = useGlobalStore()
         globalStore.setUser(data)
         if (data.jiacn) globalStore.setJiacn(data.jiacn)

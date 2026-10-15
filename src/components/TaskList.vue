@@ -161,21 +161,15 @@ const onClickOpMenu = (action) => {
       onConfirm: () => {
         taskApi.delete('/delete', selectId.value, {
           onSuccess: (data) => {
-            if (data.code === 'E0') {
+            {
               Dialog({
                 title: t('app.notify'),
-                message: data.data.msg,
+                message: '操作成功',
                 confirmButtonText: t('app.confirm'),
                 onConfirm: () => {
                   // 重新加载数据
                   fetchTasks()
                 }
-              })
-            } else {
-              Dialog({
-                title: t('app.alert'),
-                message: data.data.msg,
-                confirmButtonText: t('app.confirm')
               })
             }
           },
@@ -201,21 +195,15 @@ const onClickOpMenu = (action) => {
       onConfirm: () => {
         taskApi.delete('/cancel', selectId.value, {
           onSuccess: (data) => {
-            if (data.code === 'E0') {
+            {
               Dialog({
                 title: t('app.notify'),
-                message: data.data.msg,
+                message: '操作成功',
                 confirmButtonText: t('app.confirm'),
                 onConfirm: () => {
                   // 重新加载数据
                   fetchTasks()
                 }
-              })
-            } else {
-              Dialog({
-                title: t('app.alert'),
-                message: data.data.msg,
-                confirmButtonText: t('app.confirm')
               })
             }
           },
@@ -246,7 +234,7 @@ const fetchTasks = () => {
     }
   }, {
     onSuccess: (data) => {
-      list.value = Array.isArray(data.data) ? data.data : []
+      list.value = Array.isArray(data?.items) ? data.items : []
     },
     onError: (error) => {
       log.error('获取任务列表失败:', error)

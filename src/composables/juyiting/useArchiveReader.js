@@ -17,14 +17,7 @@ const QUESTION_SEGMENT_LIMIT = 16
 const RESPONDER = Object.freeze({ id: 'archive-clerk-v1', displayName: '案卷书吏', mode: 'fallback' })
 
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key)
-const unwrap = (response) => {
-  const envelope = response?.data
-  if (!envelope || typeof envelope !== 'object') return envelope ?? null
-  const isJsonResult = hasOwn(envelope, 'data') || (
-    hasOwn(envelope, 'status') && hasOwn(envelope, 'code') && hasOwn(envelope, 'msg')
-  )
-  return isJsonResult ? (hasOwn(envelope, 'data') ? envelope.data : null) : envelope
-}
+const unwrap = response => response
 const isCanonicalDecimal = value => typeof value === 'string' && DECIMAL.test(value) &&
   (value.length < MAX_DECIMAL.length || (value.length === MAX_DECIMAL.length && value <= MAX_DECIMAL))
 const lowerUuid = () => (globalThis.crypto?.randomUUID?.() ||

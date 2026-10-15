@@ -1,15 +1,7 @@
 import { economyApi } from '@/composables/useHttp'
 
-const responseBody = result => result?.data ?? result
-
-export const readEconomyCapability = (result) => {
-  const body = responseBody(result)
-  const code = body?.code
-  if (code !== undefined && code !== null && code !== 'E0' && code !== '0' && code !== 0 && code !== '200' && code !== 200) return null
-  const capability = body?.data ?? body
-  if (!capability || typeof capability !== 'object') return null
-  return capability
-}
+export const readEconomyCapability = capability =>
+  capability && typeof capability === 'object' && !Array.isArray(capability) ? capability : null
 
 export const isEconomyPreviewCapability = capability => capability?.economyPreviewEnabled === true
 export const isSkillMarketplaceCapability = capability => isEconomyPreviewCapability(capability) &&

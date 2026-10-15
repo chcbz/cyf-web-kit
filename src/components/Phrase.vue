@@ -149,7 +149,7 @@ const toTick = (opt) => {
     vote: opt
   }, {
     onSuccess: (data) => {
-      if (data.code === 'E0') {
+      {
         hasTick.value = true
         if (opt === 1) {
           phrase.value.up++
@@ -177,15 +177,15 @@ const payTips = () => {
     status: 0
   }, {
     onSuccess: (data) => {
-      if (data.code === 'E0') {
-        wxApi.get('/pay/createOrder', {
-          outTradeNo: 'TIP' + (Array(7).join('0') + data.data.id).slice(-7),
+      {
+        wxApi.post('/pay/createOrder/product', null, { params: {
+          outTradeNo: 'TIP' + (Array(7).join('0') + data.id).slice(-7),
           tradeType: 'JSAPI',
           appid
-        }, {
+        },
           onSuccess: (wxData) => {
-            if (wxData.data) {
-              weixinPay(wxData.data)
+            if (wxData) {
+              weixinPay(wxData)
             } else {
               Dialog({
                 title: t('app.alert'),
@@ -193,11 +193,6 @@ const payTips = () => {
               })
             }
           }
-        })
-      } else {
-        Dialog({
-          title: t('app.alert'),
-          message: data.msg
         })
       }
     }
@@ -259,22 +254,22 @@ onMounted(() => {
     jiacn
   }, {
     onSuccess: (data) => {
-      phrase.value = data.data
+      phrase.value = data
       // 阅读计数
-      phraseApi.getById('/read', data.data.id, {
+      phraseApi.post('/read', null, { params: { id: data.id },
         onSuccess: () => {
           phrase.value.pv++
         }
       })
-      if (data.data.jiacn) {
+      if (data.jiacn) {
         // 获取作者信息
         userApi.get('/get', {
           type: 'cn',
-          key: data.data.jiacn
+          key: data.jiacn
         }, {
           onSuccess: (userData) => {
-            if (userData.code === 'E0') {
-              author.value = userData.data.nickname
+            {
+              author.value = userData.nickname
             }
           }
         })

@@ -302,20 +302,14 @@ const doAdd = () => {
   taskApi.create('/create', taskData, {
     onSuccess: (data) => {
       loading.value = false
-      if (data.code === 'E0') {
+      {
         Dialog({
           title: t('app.notify'),
-          message: data.msg,
+          message: '操作成功',
           confirmButtonText: t('app.confirm'),
           onConfirm: () => {
             router.go(-1)
           }
-        })
-      } else {
-        Dialog({
-          title: t('app.alert'),
-          message: data.msg,
-          confirmButtonText: t('app.confirm')
         })
       }
     },

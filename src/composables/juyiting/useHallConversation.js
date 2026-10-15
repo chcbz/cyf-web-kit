@@ -790,7 +790,7 @@ export const useHallConversation = ({
         signal: lifecycleController.signal,
         onSuccess: (contentResult) => {
           if (!isCurrentContentLoad()) return
-          messages.value = (Array.isArray(contentResult?.data) ? contentResult.data : [])
+          messages.value = (Array.isArray(contentResult) ? contentResult : [])
             .map(item => normalizeHallMessage(item, globalStore.getJiacn)).filter(Boolean)
           const recovery = recoveringReplyTurn?.conversationId === exactId ? recoveringReplyTurn : null
           const finalAgentReplies = messages.value.filter(message => message.sender === 'AGENT' && !message.streaming &&
@@ -878,9 +878,9 @@ export const useHallConversation = ({
         onSuccess: result => { callbackResult = result }
       })
       if (!isCurrentLoad()) return false
-      const result = callbackResult ?? response?.data
-      if (!Array.isArray(result?.data)) return false
-      const hallConversation = result.data[0]
+      const result = callbackResult ?? response
+      if (!Array.isArray(result?.items)) return false
+      const hallConversation = result.items[0]
       if (!hallConversation) return false
       if (hallConversation.conversationType !== 'juyiting' ||
           hallConversation.conversationScopeType !== expectedScope.type ||
@@ -916,11 +916,7 @@ export const useHallConversation = ({
     })
   }
 
-  const readHistoryRows = result => {
-    if (Array.isArray(result?.data)) return result.data
-    if (Array.isArray(result?.data?.data)) return result.data.data
-    return []
-  }
+  const readHistoryRows = result => Array.isArray(result?.items) ? result.items : []
 
   const loadHallConversationHistory = ({ force = false, loadMore = false } = {}) => {
     if (disposed) return Promise.resolve([])
@@ -963,7 +959,7 @@ export const useHallConversation = ({
           onSuccess: result => { callbackResult = result }
         })
         if (!isCurrentHistoryLoad()) return []
-        const rawRows = readHistoryRows(callbackResult ?? response?.data)
+        const rawRows = readHistoryRows(callbackResult ?? response)
         const nextRows = rawRows.map(row => normalizeHallConversationHistory(row, expectedScope)).filter(Boolean)
         const merged = loadMore ? [...conversationHistory.value] : []
         const seen = new Set(merged.map(item => item.id))

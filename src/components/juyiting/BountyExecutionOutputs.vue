@@ -160,7 +160,7 @@ const cleanup = () => {
 }
 const fetchRequest = async (requestId, controller) => {
   const response = await api.get(`/requests/${encodeURIComponent(requestId)}`, {}, { autoLoading: false, needAuth: true, signal: controller.signal })
-  const value = response?.data?.data ?? response?.data
+  const value = response
   if (value?.requestId !== requestId || value?.conversationId !== props.conversationId) throw new Error('议事请求范围不匹配')
   return value
 }
@@ -179,11 +179,11 @@ const list = async () => {
         if (turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state)) continue
         const response = await api.get(`/conversations/${encodeURIComponent(props.conversationId)}/requests/${encodeURIComponent(request.requestId)}/typed-outcome`, {},
           { autoLoading: false, needAuth: true, signal: controller.signal })
-        const outcome = response?.data?.data ?? response?.data
+        const outcome = response
         const text = await completedTextItem(outcome, request, turn, props.taskId)
         if (controller.signal.aborted || generation !== epoch) return
         if (text) catalog.push(text)
-        const delivery = completedExecutionDelivery(response?.data?.data ?? response?.data, request, turn, snapshots, props.taskId)
+        const delivery = completedExecutionDelivery(response, request, turn, snapshots, props.taskId)
         if (delivery) deliveries.push(delivery)
         // Validated typed projections may precede a child appearing in the index.
         if (outcome.state === 'PENDING' || ['QUEUED', 'RUNNING'].includes(outcome.actionProgress?.state)) actionPending = true
@@ -192,7 +192,7 @@ const list = async () => {
     for (const step of scopedSteps.value) {
       try {
         const response = await api.get(`/requests/${encodeURIComponent(step.requestId)}/steps/${encodeURIComponent(step.stepId)}/outputs`, {}, { autoLoading: false, needAuth: true, signal: controller.signal })
-        const data = response?.data?.data ?? response?.data
+        const data = response
         const normalized = outputCatalogItems(data, step.requestId, step.stepId)
         if (Array.isArray(data) && normalized.length === data.length) catalog.push(...normalized)
         else if (Array.isArray(data) && data.length) throw new Error('服务端成果目录格式不可信')
@@ -220,8 +220,8 @@ const bytes = async (item, preview) => {
   try {
     const response = await api.execute({ url: (preview ? item.previewUrl : item.downloadUrl).replace(/^\/chat/, ''), method: 'GET', responseType: 'blob', autoLoading: false, needAuth: true, signal: controller.signal })
     if (controller.signal.aborted || generation !== epoch) return null
-    if (!(response?.data instanceof Blob)) throw new Error('服务端未返回可读取的成果字节。')
-    const blob = response.data
+    if (!(response instanceof Blob)) throw new Error('服务端未返回可读取的成果字节。')
+    const blob = response
     if (blob.size !== item.byteLength) throw new Error('成果字节长度与清单不一致，已拒绝使用。')
     if (await sha256Blob(blob) !== item.sha256) throw new Error('成果摘要校验失败，已拒绝使用。')
     if (controller.signal.aborted || generation !== epoch) return null

@@ -2,19 +2,20 @@ import { Ref } from 'vue'
 
 export interface HttpOptions {
   url?: string
-  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD'
   data?: any
   params?: Record<string, any>
   headers?: Record<string, string>
   autoLoading?: boolean
   needAuth?: boolean
-  responseType?: 'json' | 'stream'
+  responseType?: 'json' | 'stream' | 'blob' | 'text'
+  signal?: AbortSignal
   timeout?: number
   rum?: boolean
   rumRoute?: string
   rumSampleRate?: number
   rumReporter?: (payload: { route: string, requestId: string, durationMs: number, errorClass: string }) => void | Promise<void>
-  onSuccess?: (data: any, response: any) => void
+  onSuccess?: (data: any, metadata: { status: number, headers: Record<string, string>, requestId: string }) => void
   onError?: (errorMessage: string, error: any) => void
   onFinally?: () => void
   onStream?: (eventData: string) => void
@@ -25,7 +26,7 @@ export interface HttpReturn {
   loading: Ref<boolean>
   error: Ref<string | null>
   data: Ref<any>
-  response: Ref<any>
+  response: Ref<Response | null>
   execute: (options?: HttpOptions) => Promise<any>
   get: (url: string, options?: HttpOptions) => Promise<any>
   post: (url: string, data?: any, options?: HttpOptions) => Promise<any>

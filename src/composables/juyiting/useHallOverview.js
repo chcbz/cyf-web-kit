@@ -12,7 +12,7 @@ const valueOf = value => typeof value === 'function' ? value() : unref(value)
 const timestamp = value => Number.isSafeInteger(value) && value >= 0
 const id = value => typeof value === 'string' && value.length > 0 && value.length <= 100 && value === value.trim() && ![...value].some(char => char.codePointAt(0) < 32)
 const text = value => typeof value === 'string' && value.length > 0
-const unwrap = response => response?.data?.data ?? response?.data ?? response
+const unwrap = response => response
 const abort = () => new DOMException('Hall read context changed', 'AbortError')
 const partition = (status = 'idle', errorCode = null) => ({ items: [], status, nextCursor: null, count: null, errorCode, loading: false, readError: '', asOf: null })
 const section = (status = 'idle', errorCode = null) => ({ status, partitions: Object.fromEntries(HALL_SOURCES.map(source => [source, partition(status, errorCode)])) })

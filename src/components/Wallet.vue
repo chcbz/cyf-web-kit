@@ -56,7 +56,7 @@ const loading = ref(false)
 const refreshing = ref(false)
 const error = ref('')
 
-const unwrap = result => result?.data?.data ?? result?.data ?? result
+const unwrap = result => result
 const format = value => formatSilverMicro(typeof value === 'string' ? value : '0')
 const MAX_ECMASCRIPT_EPOCH_MILLIS = 8640000000000000n
 const formatPostedAt = value => {

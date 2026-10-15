@@ -132,13 +132,7 @@ const filteredFaqs = computed(() => {
   })
 })
 
-const normalizeListResult = (result) => {
-  const data = result?.data
-  if (Array.isArray(data)) return data
-  if (Array.isArray(data?.list)) return data.list
-  if (Array.isArray(data?.records)) return data.records
-  return []
-}
+const normalizeListResult = result => Array.isArray(result?.items) ? result.items : []
 
 const loadFaqs = async () => {
   faqLoading.value = true
@@ -186,10 +180,7 @@ const submitFeedback = async () => {
   formData.append('email', form.email.trim())
 
   try {
-    const result = await kefuApi.post('/message/create', formData, { autoLoading: false })
-    if (result?.data?.code && result.data.code !== 'E0') {
-      throw new Error(result.data.msg || t('help.feedback_failed'))
-    }
+    await kefuApi.post('/message/create', formData, { autoLoading: false })
     resetForm()
     Dialog({
       title: t('app.notify'),

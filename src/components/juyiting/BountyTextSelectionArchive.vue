@@ -96,7 +96,7 @@ const archive = async retry => {
     requestStarted = true
     const response = await api.execute({ url: `/conversations/${encodeURIComponent(props.conversationId)}/archive-operations`, method: 'POST', headers: { 'Idempotency-Key': intent.idempotencyKey }, data: intent.body, autoLoading: false, needAuth: true })
     if (!ownsAttempt()) return
-    const value = response?.data?.data ?? response?.data
+    const value = response
     const expected = intent.body.items[0].textSelection
     const item = Array.isArray(value?.items) && value.items.length === 1 ? value.items[0] : null
     const selected = item?.textSelection

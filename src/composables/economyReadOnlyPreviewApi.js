@@ -3,20 +3,8 @@ import { agentApi, createApi } from './useHttp.js'
 /** Dedicated read-only namespace; never route preview data through legacy economy mutations. */
 export const economyReadOnlyPreviewApi = createApi('/economy/preview')
 
-const successCode = code => code === 'E0'
-
-export function readEconomyReadOnlyPreviewPayload (result) {
-  const body = result?.data ?? result
-  if (!body || typeof body !== 'object') throw new Error('经济预览响应格式无效。')
-  if (!Object.prototype.hasOwnProperty.call(body, 'code')) throw new Error('经济预览响应缺少状态码。')
-  if (!successCode(body.code)) {
-    const error = new Error(body.message || body.msg || `经济预览请求失败：${body.code}`)
-    error.code = body.code
-    error.businessFailure = true
-    throw error
-  }
-  return body.data
-}
+// Errors are already rejected by the shared HTTP decoder.
+export const readEconomyReadOnlyPreviewPayload = result => result
 
 const get = async (path, params, options) => readEconomyReadOnlyPreviewPayload(
   await economyReadOnlyPreviewApi.get(path, params, { autoLoading: false, ...options })

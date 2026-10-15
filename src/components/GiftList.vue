@@ -130,14 +130,8 @@ const fetchGiftList = () => {
     }
   }, {
     onSuccess: (data) => {
-      if (data.code === 'E0') {
-        giftList.value = Array.isArray(data.data) ? data.data : []
-      } else {
-        Dialog({
-          title: t('app.alert'),
-          message: data.msg
-        })
-        giftList.value = []
+      {
+        giftList.value = Array.isArray(data?.items) ? data.items : []
       }
     },
     onError: (error) => {

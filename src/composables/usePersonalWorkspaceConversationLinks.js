@@ -18,12 +18,6 @@ const valueOf = value => typeof value === 'function' ? value() : unref(value)
 const abortError = message => new DOMException(message, 'AbortError')
 const randomKey = () => globalThis.crypto?.randomUUID?.() || `pws-conversation-link-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
-const unwrap = result => {
-  let value = result
-  for (let index = 0; index < 2 && value && typeof value === 'object' && Object.hasOwn(value, 'data'); index += 1) value = value.data
-  return value
-}
-const responseHeaders = response => response?.headers && typeof response.headers === 'object' ? response.headers : {}
 const header = (headers, name) => {
   if (typeof headers?.get === 'function') return headers.get(name) || ''
   return Object.entries(headers || {}).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1] || ''
@@ -89,9 +83,16 @@ export function usePersonalWorkspaceConversationLinks ({ api = createApi('/agent
     const controller = new AbortController()
     controllers.add(controller)
     try {
-      const response = await api.execute({ ...options, autoLoading: false, needAuth: true, signal: controller.signal })
+      let metadata
+      const response = await api.execute({
+        ...options, autoLoading: false, needAuth: true, signal: controller.signal,
+        onSuccess: (value, currentMetadata) => {
+          metadata = currentMetadata
+          options.onSuccess?.(value, currentMetadata)
+        }
+      })
       if (!stillCurrent(snapshot, controller)) throw abortError('Conversation link context changed')
-      return { data: unwrap(response), headers: responseHeaders(response) }
+      return { data: response, headers: metadata?.headers || {} }
     } finally {
       controllers.delete(controller)
     }

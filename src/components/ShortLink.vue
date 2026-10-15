@@ -169,14 +169,8 @@ export default {
         expireTime
       }, {
         onSuccess: (data) => {
-          if (data.code === 'E0') {
-            _this.shortUrl = apiStore.dwzDomain + data.data
-          } else {
-            Dialog({
-              title: _this.$t('app.alert'),
-              message: data.msg,
-              confirmButtonText: _this.$t('app.confirm')
-            })
+          {
+            _this.shortUrl = apiStore.dwzDomain + data
           }
         },
         onError: () => {
@@ -218,16 +212,10 @@ export default {
       if (uri.indexOf('/') !== -1) {
         uri = uri.substring(uri.lastIndexOf('/') + 1)
       }
-      dwzApi.get('/restore', { uri }, {
+      dwzApi.post('/restore', null, { params: { uri },
         onSuccess: (data) => {
-          if (data.code === 'E0') {
-            _this.longUrl = data.data
-          } else {
-            Dialog({
-              title: _this.$t('app.alert'),
-              message: data.msg,
-              confirmButtonText: _this.$t('app.confirm')
-            })
+          {
+            _this.longUrl = data
           }
         },
         onError: () => {

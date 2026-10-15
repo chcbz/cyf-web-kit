@@ -1,3 +1,4 @@
+import { encodeHttpRequest, decodeHttpResponse, validRequestId, protocolError } from '../utils/apiEnvelope.js'
 import { ref } from 'vue'
 import { log } from '../utils/logger.js'
 import { initiateReauthentication } from '../utils/reauthentication.js'
@@ -99,10 +100,6 @@ export function useHttp (options = {}) {
         headers
       }
 
-      // 添加请求数据
-      if (requestData && ['POST', 'PUT', 'PATCH'].includes(config.method)) {
-        config.body = isFormData ? requestData : JSON.stringify(requestData)
-      }
 
       // 添加URL参数和baseURL
       const runtimeEnv = import.meta.env ?? {}
@@ -126,8 +123,16 @@ export function useHttp (options = {}) {
       if (ordinaryJsonRequest) {
         rumStartedAt = performanceNow()
         rumSampled = rum !== false && sampleRequestTiming(rumSampleRate)
-        rumRequestId = resolveRequestId(findHeader(headers, 'X-Request-Id'))
-        setHeader(headers, 'X-Request-Id', rumRequestId)
+      }
+      // Correlation and request wire are independent of RUM sampling/response media.
+      const suppliedId = findHeader(headers, 'X-Request-Id')
+      if (suppliedId !== undefined && suppliedId !== null && !validRequestId(suppliedId)) {
+        throw protocolError('PROTOCOL_INVALID_ENVELOPE')
+      }
+      rumRequestId = suppliedId ?? resolveRequestId()
+      setHeader(headers, 'X-Request-Id', rumRequestId)
+      if (['POST', 'PUT', 'PATCH'].includes(config.method) || (config.method === 'DELETE' && requestData !== undefined)) {
+        config.body = isFormData ? requestData : JSON.stringify(encodeHttpRequest(requestData, rumRequestId))
       }
       const timeoutValue = resolveConfiguredTimeout(timeout, runtimeEnv)
       const identityController = needAuth ? new AbortController() : null
@@ -176,46 +181,28 @@ export function useHttp (options = {}) {
         delete fetchConfig.body
       }
 
-      const response = await fetch(requestUrl, fetchConfig)
-      if (ordinaryJsonRequest) {
-        rumRequestId = resolveRequestId(response.headers?.get?.('X-Request-Id') || rumRequestId)
-      }
+      const httpResponse = await fetch(requestUrl, fetchConfig)
 
       // 检查 HTTP 错误状态（fetch 不会自动抛出非 2xx 的错误）
-      if (!response.ok) {
-        let errorMessage = `HTTP error! status: ${response.status}`
-        let errorCode
-
-        // 尝试从响应中提取错误消息
+      if (!httpResponse.ok && httpResponse.status !== 304) {
         try {
-          const errorData = await response.clone().json()
-          if (errorData && typeof errorData.code === 'string') {
-            errorCode = errorData.code
-          }
-          if (errorData && errorData.msg) {
-            errorMessage = errorData.msg
-          } else if (errorData && errorData.message) {
-            errorMessage = errorData.message
-          }
-        } catch {
-        // 如果无法解析为 JSON，使用默认错误消息
+          decodeHttpResponse(await httpResponse.text(), {
+            status: httpResponse.status, requestId: rumRequestId,
+            responseRequestId: httpResponse.headers.get('x-request-id')
+          })
+        } catch (failure) {
+          failure.response = httpResponse
+          throw failure
         }
-        throwIfAborted(requestSignal.signal)
-
-        const error = new Error(errorMessage)
-        error.status = response.status
-        if (errorCode) error.code = errorCode
-        error.response = response
-        throw error
       }
 
       // 处理流式响应
       if (responseType === 'stream') {
-        if (!response.body) {
+        if (!httpResponse.body) {
           throw new Error('Response body is not available for streaming')
         }
 
-        const reader = response.body.getReader()
+        const reader = httpResponse.body.getReader()
         const decoder = new TextDecoder()
         let buffer = ''
         const streamHandle = {
@@ -223,7 +210,7 @@ export function useHttp (options = {}) {
           cancel: reason => reader.cancel(reason)
         }
         if (onStreamOpen) {
-          onStreamOpen(streamHandle, response)
+          onStreamOpen(streamHandle, httpResponse)
         }
 
         let streamFailure = null
@@ -282,9 +269,9 @@ export function useHttp (options = {}) {
         // 对于流式响应，返回包含流信息的对象
         return {
           data: null,
-          status: response.status,
-          statusText: response.statusText,
-          headers: Object.fromEntries(response.headers.entries()),
+          status: httpResponse.status,
+          statusText: httpResponse.statusText,
+          headers: Object.fromEntries(httpResponse.headers.entries()),
           config: fetchConfig,
           stream: streamHandle
         }
@@ -294,43 +281,36 @@ export function useHttp (options = {}) {
       let result
       let resultObj
       const responseMetadata = {
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries()),
+        status: httpResponse.status,
+        statusText: httpResponse.statusText,
+        headers: Object.fromEntries(httpResponse.headers.entries()),
         config: fetchConfig
       }
 
-      // Binary is an explicit, authenticated response mode. Do not feed it through the
+      // Binary is an explicit, authenticated httpResponse mode. Do not feed it through the
       // text/stream decoders: callers receive the exact Blob returned by the server.
-      if (responseType === 'blob') {
-        const blob = await response.blob()
-        result = blob
-        resultObj = { data: blob, ...responseMetadata }
-      } else {
-        const responseText = await response.text()
-        if (responseType === 'text') {
-          result = responseText
-          resultObj = { data: responseText, ...responseMetadata }
-        } else {
-          // 处理 JSON 响应（默认）
-          try {
-            const jsonResult = JSON.parse(responseText)
-            result = jsonResult
-            resultObj = { data: jsonResult, ...responseMetadata }
-          } catch {
-            // JSON 解析失败，作为文本处理
-            result = responseText
-            resultObj = { data: responseText, ...responseMetadata }
-          }
+      responseMetadata.requestId = rumRequestId
+      if (config.method === 'HEAD' || httpResponse.status === 204 || httpResponse.status === 304) {
+        result = null
+      } else if (responseType === 'blob') {
+        if (/\bjson\b/i.test(httpResponse.headers.get('content-type') || '')) {
+          throw protocolError('PROTOCOL_EXPECTED_BINARY', { status: httpResponse.status, requestId: rumRequestId })
         }
+        result = await httpResponse.blob()
+      } else if (responseType === 'text') {
+        result = await httpResponse.text()
+      } else {
+        const decoded = decodeHttpResponse(await httpResponse.text(), {
+          status: httpResponse.status, requestId: rumRequestId,
+          responseRequestId: httpResponse.headers.get('x-request-id')
+        })
+        result = decoded.value
       }
-
-      response.value = resultObj
+      throwIfAborted(requestSignal.signal)
+      resultObj = responseMetadata
+      response.value = httpResponse
       data.value = result
-
-      if (onSuccess) {
-        onSuccess(result, resultObj)
-      }
+      if (onSuccess) onSuccess(result, resultObj)
 
       reportRequestRum({
         startedAt: rumStartedAt,
@@ -338,11 +318,11 @@ export function useHttp (options = {}) {
         route: rumRoute,
         url: requestUrl,
         requestId: rumRequestId,
-        errorClass: classifyRequestOutcome({ status: response.status }),
+        errorClass: classifyRequestOutcome({ status: httpResponse.status }),
         reporter: rumReporter,
         endpoint: runtimeEnv.VITE_RUM_ENDPOINT
       })
-      return resultObj
+      return result
 
     } catch (err) {
       const aborted = requestSignal?.signal?.aborted

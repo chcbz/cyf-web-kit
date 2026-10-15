@@ -202,7 +202,7 @@ const toPay = () => {
     status: 1
   }, {
     onSuccess: (data) => {
-      if (data.code === 'E0') {
+      {
         if (payMoney.value === 0) {
           Dialog({
             title: t('app.notify'),
@@ -213,14 +213,14 @@ const toPay = () => {
           })
         } else {
           // 使用 wxApi 调用微信支付 API
-          wxApi.get('/pay/createOrder', {
-            outTradeNo: 'GIF' + (Array(7).join('0') + data.data.data.id).slice(-7),
+          wxApi.post('/pay/createOrder/product', null, { params: {
+            outTradeNo: 'GIF' + (Array(7).join('0') + data.id).slice(-7),
             tradeType: 'JSAPI',
             appid
-          }, {
+          },
             onSuccess: (wxData) => {
-              if (wxData.data) {
-                weixinPay(wxData.data)
+              if (wxData) {
+                weixinPay(wxData)
               } else {
                 Dialog({
                   title: t('app.alert'),
@@ -233,11 +233,6 @@ const toPay = () => {
             }
           })
         }
-      } else {
-        Dialog({
-          title: t('app.alert'),
-          message: data.msg
-        })
       }
     }
   })
@@ -338,7 +333,7 @@ onMounted(() => {
   // 获取礼品详情
   giftApi.getById('/get', route.query.id, {
     onSuccess: (data) => {
-      const giftData = data.data
+      const giftData = data
       giftId.value = giftData.id
       picUrl.value = giftData.picUrl
       name.value = giftData.name

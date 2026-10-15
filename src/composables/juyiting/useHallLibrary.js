@@ -30,7 +30,7 @@ export const useHallLibrary = ({
       }, {
         autoLoading: false,
         onSuccess: (result) => {
-          libraryResults.value = result?.data || []
+          libraryResults.value = result || []
         }
       })
     } catch (error) {

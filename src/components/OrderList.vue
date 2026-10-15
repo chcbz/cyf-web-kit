@@ -120,20 +120,15 @@ const doShowOpMenu = (item) => {
 }
 
 const handleDialogResponse = (data, successMessage, onSuccessCallback) => {
-  if (data.code === 'E0') {
+  {
     Dialog({
       title: t('app.notify'),
-      message: data.data.msg || successMessage,
+      message: successMessage,
       onConfirm: () => {
         if (onSuccessCallback) {
           onSuccessCallback()
         }
       }
-    })
-  } else {
-    Dialog({
-      title: t('app.alert'),
-      message: data.data.msg
     })
   }
 }
@@ -179,7 +174,7 @@ const fetchOrders = () => {
   }, {
     onSuccess: (data) => {
       list.value = []
-      data.data.forEach((element) => {
+      data.items.forEach((element) => {
         const orderItem = {
           id: element.id,
           title: element.name,
