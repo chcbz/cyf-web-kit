@@ -314,7 +314,7 @@ describe('useHallConversation scoped message loading', () => {
     expect(conversation.draft.value).to.equal('@宋江 ')
   })
 
-  it('prefills private discussion without a mention, preserving drafts and explicit mentions', () => {
+  it('opens private discussion without prefilling, preserving drafts and explicit mentions', () => {
     const selectedAgent = ref(null)
     const chatMode = ref('public')
     const panels = []
@@ -328,7 +328,7 @@ describe('useHallConversation scoped message loading', () => {
     })
     try {
       conversation.startAgentConversation(agent)
-      expect(conversation.draft.value).to.equal('请报眼下动静、可领何榜、还需哪路照应。')
+      expect(conversation.draft.value).to.equal('')
       expect(chatMode.value).to.equal('private')
       expect(selectedAgent.value.agentId).to.equal('wuyong')
       expect(panels).to.deep.equal(['chat'])
@@ -337,7 +337,7 @@ describe('useHallConversation scoped message loading', () => {
       expect(conversation.draft.value).to.equal('  保留我写的 @宋江 内容  ')
       conversation.setDraft('   ')
       conversation.startAgentConversation(agent)
-      expect(conversation.draft.value).to.equal('请报眼下动静、可领何榜、还需哪路照应。')
+      expect(conversation.draft.value).to.equal('   ')
       conversation.setDraft('')
       conversation.mentionAgent(agent)
       expect(conversation.draft.value).to.equal('@吴用 ')

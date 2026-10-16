@@ -1947,10 +1947,7 @@ const briefSelectedTask = (task = selectedTask.value, agent = selectedAgent.valu
   } else {
     enterBountyDiscussion(task)
   }
-  const abilities = (task.requiredAbilities || []).join(' / ') || '不拘本领'
-  const target = agent ? `可请 ${portraitShortName(agent)} / ${agent.name || agent.personaName || agent.agentId} 领令。` : '请点一位合适好汉领令。'
-  if (!draft.value.trim()) setDraft(`请就榜文「${task.title}」议事：榜号 ${task.id}，眼下 ${taskStatusText(task.status)}，所需本领 ${abilities}。${target}请说明险处与下一步章程。`)
-  showToast('议事话头已备')
+  showToast('已进入议事')
 }
 
 const discussTask = (task, explicitAgent) => {
@@ -1966,7 +1963,6 @@ const discussTask = (task, explicitAgent) => {
   // assignment itself non-authorizing, then bind only this exact task/actor pair.
   taskWorkspaceBinding.selectExplicitActor(actor)
   markDiscussionStarted(task, chatContext.value?.participantAgentIds || [])
-  if (!draft.value.trim()) setDraft(`请就榜文「${task.title}」议事。`)
   return true
 }
 
@@ -2754,7 +2750,6 @@ const handleStartAgentConversation = (candidate) => {
   playAgentSelect()
   enterPrivateConversation(agent)
   markAgentSpeaking(agent, '入席密议', 'system')
-  if (!draft.value.trim()) setDraft('请报眼下动静、可领何榜、还需哪路照应。')
   showToast(`正与 ${portraitShortName(agent)} 密议`)
   return true
 }
