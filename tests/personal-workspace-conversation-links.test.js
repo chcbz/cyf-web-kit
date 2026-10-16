@@ -20,7 +20,7 @@ describe('personal workspace conversation link adapter', () => {
     const api = { execute: async options => {
       calls.push(options)
       if (options.method === 'GET') return ({ items: [initial], nextCursor: null, hasMore: false })
-      if (options.method === 'POST') return reply(options, link({ relationId: 'rel_b', fileId: 'file_b', role: 'REFERENCE' }), { etag: '"rel_b:1"' })
+      if (options.method === 'POST') return reply(options, link({ relationId: 'rel_b', fileId: 'file_b', version: '3', role: 'REFERENCE' }), { etag: '"rel_b:1"' })
       return reply(options, { link: detached, executionSnapshotsPreserved: true }, { etag: etag(detached) })
     } }
     const adapter = usePersonalWorkspaceConversationLinks({ api, conversationId: ref('conversation_a'), identityEpoch: ref('owner-a') })

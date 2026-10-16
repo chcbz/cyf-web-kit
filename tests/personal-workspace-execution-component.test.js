@@ -1,3 +1,4 @@
+import { workspaceByteText, validMaterialVersion } from '../src/utils/personalWorkspaceProtocol.js'
 import { strict as assert } from 'node:assert'
 import { readFileSync } from 'node:fs'
 import { describe, it } from 'mocha'
@@ -19,15 +20,17 @@ script = script
   .replace(/^import\s+\{\s*savePersonalWorkspaceBlob,\s*usePersonalWorkspace\s*\}\s+from\s+['"]@\/composables\/usePersonalWorkspace['"];?\s*$/gm, 'var { savePersonalWorkspaceBlob, usePersonalWorkspace } = deps')
   .replace(/^import\s+\{\s*usePersonalWorkspaceExecution\s*\}\s+from\s+['"]@\/composables\/usePersonalWorkspaceExecution['"];?\s*$/gm, 'var { usePersonalWorkspaceExecution } = deps')
   .replace(/^import\s+\{\s*deliveryTypeText\s*\}\s+from\s+['"]@\/utils\/executionFormats['"];?\s*$/gm, 'var { deliveryTypeText } = deps')
+  .replace(/^import\s+\{\s*workspaceByteText,\s*validMaterialVersion\s*\}\s+from\s+['"]@\/utils\/personalWorkspaceProtocol['"];?\s*$/gm, 'var { workspaceByteText, validMaterialVersion } = deps')
   .replace('export default', 'return')
 
 const workspaceMock = () => {
   const detail = Vue.ref(null)
   const workspace = {
-    items: Vue.ref([{ fileId: 'file_1', displayName: '案卷.txt', mediaFamily: 'TEXT', originKind: 'USER_UPLOAD', latestVersion: 1, state: 'ACTIVE' }]), loading: Vue.ref(false), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), error: Vue.ref(''), lastOperation: Vue.ref(null), actionState: Vue.ref('idle'), preview: Vue.ref({ kind: 'none' }), detail,
-    refresh: async () => true, loadMore: async () => false, revokePreview: () => {}, upload: async () => null, rename: async () => null, appendVersion: async () => null, previewVersion: async () => null, selectPreviewPart: () => false, download: async () => null, usage: async () => null, trash: async () => null, restore: async () => null, dispose: () => {}
+    hasMoreVersions: Vue.ref(false), versionsState: Vue.ref('idle'), versionsError: Vue.ref(''), writeNotice: Vue.ref(''), detailRetryFileId: Vue.ref(null),
+    items: Vue.ref([{ fileId: 'file_1', displayName: '案卷.txt', mediaFamily: 'TEXT', originKind: 'USER_UPLOAD', latestVersion: '1', state: 'ACTIVE' }]), loading: Vue.ref(false), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), error: Vue.ref(''), lastOperation: Vue.ref(null), actionState: Vue.ref('idle'), preview: Vue.ref({ kind: 'none' }), detail,
+    closeDetail: () => { detail.value = null }, refresh: async () => true, loadMore: async () => false, revokePreview: () => {}, upload: async () => null, rename: async () => null, appendVersion: async () => null, previewVersion: async () => null, selectPreviewPart: () => false, download: async () => null, usage: async () => null, trash: async () => null, restore: async () => null, dispose: () => {}
   }
-  workspace.select = async fileId => { const value = { file: { fileId, displayName: '案卷.txt', state: 'ACTIVE', latestVersion: 1 }, latestVersion: { version: 1 }, versions: [{ version: 1, originalFilename: '案卷.txt', byteLength: 1, createdAt: 1, contentMimeType: 'text/plain' }] }; detail.value = value; return value }
+  workspace.select = async fileId => { const value = { file: { fileId, displayName: '案卷.txt', state: 'ACTIVE', latestVersion: '1' }, latestVersion: { version: '1' }, versions: [{ version: '1', originalFilename: '案卷.txt', byteLength: '1', createdAt: 1, contentMimeType: 'text/plain' }] }; detail.value = value; return value }
   return workspace
 }
 const executionMock = () => {
@@ -54,8 +57,8 @@ describe('personal workspace execution receipt presentation', () => {
         value.versions[0].originalFilename = 'song.mp3'
         return value
       }
-      workspace.previewVersion = async () => { workspace.preview.value = { kind: 'audio', url: 'blob:authorized-audio', parts: [{ kind: 'audio', url: 'blob:authorized-audio' }], selectedIndex: 0 }; return workspace.preview.value }
-      const component = new Function('Vue', 'deps', script)(Vue, {
+      workspace.previewVersion = async () => { workspace.preview.value = { kind: 'audio', message: '预览内容不完整，请下载原文件。', url: 'blob:authorized-audio', parts: [{ kind: 'audio', url: 'blob:authorized-audio' }], selectedIndex: 0 }; return workspace.preview.value }
+      const component = new Function('Vue', 'deps', script)(Vue, { workspaceByteText, validMaterialVersion,
         deliveryTypeText, useApiStore: () => ({ authorizationGeneration: 1, oauthClientId: 'web-client' }),
         useGlobalStore: () => ({ user: { id: 'owner-a', tenantId: 'tenant-a' } }),
         usePersonalWorkspace: () => workspace, usePersonalWorkspaceExecution: () => execution, savePersonalWorkspaceBlob: () => {}
@@ -73,19 +76,21 @@ describe('personal workspace execution receipt presentation', () => {
         await flushPromises()
         const audio = wrapper.get('audio')
         assert.equal(audio.attributes('src'), 'blob:authorized-audio')
+        assert.match(wrapper.text(), /预览内容不完整，请下载原文件/)
         assert.equal(audio.attributes('controls'), '')
         assert.equal(audio.attributes('preload'), 'none')
         assert.equal(audio.attributes('autoplay'), undefined)
-        workspace.preview.value = { kind: 'parts', parts: [{ kind: 'audio', url: 'blob:audio-part' }], selectedIndex: 0 }
+        workspace.preview.value = { kind: 'parts', message: '分片预览不完整', parts: [{ kind: 'audio', url: 'blob:audio-part' }], selectedIndex: 0 }
         await Vue.nextTick()
         assert.equal(wrapper.get('audio').attributes('src'), 'blob:audio-part')
+        assert.match(wrapper.text(), /分片预览不完整/)
       } finally { wrapper.unmount() }
     })
   }
 
   it('mounts the delivery receipt at submission location, shows terminal errors, and keeps file selection navigation working', async () => {
     const workspace = workspaceMock(); const execution = executionMock(); let executionOptions
-    const component = new Function('Vue', 'deps', script)(Vue, {
+    const component = new Function('Vue', 'deps', script)(Vue, { workspaceByteText, validMaterialVersion,
       deliveryTypeText,
       useApiStore: () => ({ authorizationGeneration: 1, oauthClientId: 'web-client' }), useGlobalStore: () => ({ user: { id: 'owner-a', tenantId: 'tenant-a' }, getUserId: 'owner-a', getOpenid: '' }),
       usePersonalWorkspace: () => workspace, usePersonalWorkspaceExecution: options => { executionOptions = options; return execution }, savePersonalWorkspaceBlob: () => {}
@@ -143,7 +148,7 @@ describe('personal workspace execution receipt presentation', () => {
     const execution = executionMock()
     let executionLoads = 0
     execution.loadAgents = execution.loadCapabilities = execution.recover = async () => { executionLoads += 1 }
-    const component = new Function('Vue', 'deps', script)(Vue, {
+    const component = new Function('Vue', 'deps', script)(Vue, { workspaceByteText, validMaterialVersion,
       deliveryTypeText,
       useApiStore: () => ({ authorizationGeneration: 1, oauthClientId: 'web-client' }),
       useGlobalStore: () => ({ user: { id: 'owner-a' } }),
@@ -178,12 +183,12 @@ describe('personal workspace execution receipt presentation', () => {
       assert.equal(list.isConnected, false)
       assert.equal(wrapper.find('.treasure-file-list').exists(), false)
       assert.equal(wrapper.text().includes('办事笺'), false)
-      workspace.detail.value.versions.push({ version: 2, originalFilename: '新版本.txt', contentMimeType: 'text/plain' })
+      workspace.detail.value.versions.push({ version: '2', originalFilename: '新版本.txt', contentMimeType: 'text/plain' })
       workspace.detail.value.file.latestVersion = 2
       await wrapper.findAll('button').find(button => button.text() === '用于新委托').trigger('click')
       assert.deepEqual(wrapper.emitted('start-draft')[0][0], {
-        originRef: 'juyiting:file', sourceRef: { sourceType: 'FILE', sourceId: 'file_1', version: 1 },
-        inputs: [{ fileId: 'file_1', version: 1 }]
+        originRef: 'juyiting:file', sourceRef: { sourceType: 'FILE', sourceId: 'file_1', version: '1' },
+        inputs: [{ fileId: 'file_1', version: '1' }]
       })
       assert.equal(workspace.detail.value.file.latestVersion, 2)
       assert.equal(executionLoads, 0)
@@ -202,10 +207,10 @@ describe('personal workspace execution receipt presentation', () => {
 
   it('prototype keeps cursor continuation honest and management is a third logical layer with inline recycle confirmation', async () => {
     const workspace = workspaceMock(); const calls = []; workspace.nextCursor.value = 'next-page'
-    workspace.loadMore = async () => { calls.push('more'); workspace.items.value.push({ fileId: 'out-1', displayName: '成果.pdf', originKind: 'AGENT_DELIVERY', latestVersion: 1, state: 'ACTIVE' }); workspace.nextCursor.value = null }
+    workspace.loadMore = async () => { calls.push('more'); workspace.items.value.push({ fileId: 'out-1', displayName: '成果.pdf', originKind: 'AGENT_DELIVERY', latestVersion: '1', state: 'ACTIVE' }); workspace.nextCursor.value = null }
     workspace.usage = async () => ({ taskReferences: [{ taskId: 'task-1' }], activeExecutions: [] })
     workspace.trash = async value => { calls.push(value); return { state: 'TRASHED' } }
-    const component = new Function('Vue', 'deps', script)(Vue, { deliveryTypeText, useApiStore: () => ({ authorizationGeneration: 1, oauthClientId: 'web-client' }), useGlobalStore: () => ({ user: { id: 'owner-a' } }), usePersonalWorkspace: () => workspace, usePersonalWorkspaceExecution: executionMock, savePersonalWorkspaceBlob: () => {} })
+    const component = new Function('Vue', 'deps', script)(Vue, { workspaceByteText, validMaterialVersion, deliveryTypeText, useApiStore: () => ({ authorizationGeneration: 1, oauthClientId: 'web-client' }), useGlobalStore: () => ({ user: { id: 'owner-a' } }), usePersonalWorkspace: () => workspace, usePersonalWorkspaceExecution: executionMock, savePersonalWorkspaceBlob: () => {} })
     const wrapper = mount(component, { props: { embedded: true } })
     const click = async text => { await wrapper.findAll('button').find(b => b.text() === text).trigger('click'); await Vue.nextTick(); await Vue.nextTick() }
     try {

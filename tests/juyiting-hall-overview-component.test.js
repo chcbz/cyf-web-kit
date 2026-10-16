@@ -16,10 +16,13 @@ for (const name of ['Element', 'HTMLElement', 'SVGElement', 'Node']) {
   if (!globalThis[name]) Object.defineProperty(globalThis, name, { value: globalThis.window[name], configurable: true })
 }
 const emptyWorkspace = () => ({
+  hasMoreVersions: Vue.ref(false), versionsState: Vue.ref('idle'), versionsError: Vue.ref(''),
+  closeDetail () { this.detail.value = null; this.revokePreview?.() },
   items: Vue.ref([]), nextCursor: Vue.ref(null), listState: Vue.ref('empty'), loading: Vue.ref(false), error: Vue.ref(''), detail: Vue.ref(null),
   refresh: async () => true, loadMore: async () => false, select: async () => null, dispose: () => {}
 })
 const loadMaterialPicker = (workspace, save) => {
+  workspace.closeDetail = () => { workspace.detail.value = null; workspace.revokePreview?.() }
   const filename = fileURLToPath(new URL('../src/components/juyiting/HallMaterialPicker.vue', import.meta.url))
   const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
   const code = compileScript(descriptor, { id: 'hall-material-picker-mount', inlineTemplate: true }).content

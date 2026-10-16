@@ -28,8 +28,10 @@
       <template v-else-if="workspace.detail.value">
         <div class="treasure-file-heading"><div><h2 ref="detailTitleRef" tabindex="-1">{{ workspace.detail.value.file.displayName }}</h2><p>{{ originText(workspace.detail.value.file.originKind) }} · {{ workspace.detail.value.file.state === 'TRASHED' ? '已回收' : '仅自己可见' }}</p></div><button v-if="treasureView === 'preview'" type="button" @click="treasureView = 'manage'">更多管理</button></div>
         <template v-if="treasureView === 'preview'">
-          <div class="treasure-preview-tools treasure-version-tools"><label><span class="treasure-version-label">版本</span><select v-model.number="selectedVersion" @change="preview(selectedVersion)"><option v-for="version in workspace.detail.value.versions" :key="version.version" :value="version.version">v{{ version.version }} · {{ version.originalFilename }}</option></select></label><button type="button" @click="download(selectedVersion)">下载</button></div>
+          <div class="treasure-preview-tools treasure-version-tools"><label><span class="treasure-version-label">版本</span><select v-model="selectedVersion" @change="preview(selectedVersion)"><option v-for="version in workspace.detail.value.versions" :key="version.version" :value="version.version">v{{ version.version }} · {{ version.originalFilename }}</option></select></label><button type="button" @click="download(selectedVersion)">下载</button></div>
+          <button v-if="workspace.hasMoreVersions.value" type="button" :disabled="workspace.versionsState.value === 'loading'" @click="workspace.loadMoreVersions">{{ workspace.versionsState.value === 'loading' ? '正在读取历史版本…' : '读取更早版本' }}</button><p v-if="workspace.versionsError.value" role="alert">{{ workspace.versionsError.value }}</p>
           <p class="treasure-note">本次使用固定的 v{{ selectedVersion }}；以后上传新版本，不会替换已交办的资料。</p>
+          <p v-if="workspace.preview.value.message && ['parts', 'text', 'audio', 'image'].includes(workspace.preview.value.kind)" class="treasure-note" role="status">{{ workspace.preview.value.message }}</p>
           <section class="treasure-preview" aria-label="文件预览" aria-live="polite">
             <p v-if="workspace.actionState.value === 'loading-preview'">正在读取预览…</p>
             <template v-else-if="workspace.preview.value.kind === 'parts'"><div class="treasure-preview-tools"><button type="button" :disabled="workspace.preview.value.selectedIndex === 0" @click="workspace.selectPreviewPart(workspace.preview.value.selectedIndex - 1)">上一页</button><span>第 {{ workspace.preview.value.selectedIndex + 1 }} / {{ workspace.preview.value.parts.length }} 页</span><button type="button" :disabled="workspace.preview.value.selectedIndex >= workspace.preview.value.parts.length - 1" @click="workspace.selectPreviewPart(workspace.preview.value.selectedIndex + 1)">下一页</button></div><audio v-if="selectedPreviewPart?.kind === 'audio'" :src="selectedPreviewPart.url" v-bind="{ controls: true, preload: 'none', 'aria-label': '文件固定版本音频预览' }"></audio><pre v-else-if="selectedPreviewPart?.kind === 'text'" v-text="selectedPreviewPart.text"></pre><img v-else-if="selectedPreviewPart?.kind === 'image'" :src="selectedPreviewPart.url" alt="文件固定版本预览" /></template>
@@ -40,7 +42,7 @@
         <section v-else class="treasure-management">
           <template v-if="workspace.detail.value.file.state === 'ACTIVE'">
             <form class="treasure-form" @submit.prevent="rename"><label><span>文件名称</span><input v-model="renameValue" maxlength="255" /></label><button type="submit" :disabled="workspace.actionState.value === 'saving'">保存名称</button></form>
-            <div class="treasure-form"><label><span>上传新版本</span><input type="file" :accept="acceptTypes" @change="onVersionFile" /></label><p>旧版本及已有事项的资料引用会保留。</p><button type="button" :disabled="!versionFile || workspace.actionState.value === 'appending-version'" @click="appendVersion">上传为新版本</button></div>
+            <div class="treasure-form"><label><span>上传新版本</span><input type="file" :accept="acceptTypes" @change="onVersionFile" /></label><p>旧版本及已有事项的资料引用会保留。</p><p v-if="!nextVersion" role="status">已达到文件版本上限。</p><button type="button" :disabled="!versionFile || !nextVersion || workspace.actionState.value === 'appending-version'" @click="appendVersion">上传为新版本</button></div>
             <div class="treasure-manage-danger"><button v-if="!trashUsage" type="button" @click="prepareTrash">移入回收站</button><div v-else role="group" aria-label="回收确认"><p>确认移入回收站？仍可恢复。{{ trashReferenceCount ? `此文件有 ${trashReferenceCount} 个关联引用。` : '' }}</p><div class="treasure-actions"><button type="button" @click="trashUsage = null">取消</button><button type="button" :disabled="workspace.actionState.value === 'saving'" @click="confirmTrash">确认回收</button></div></div></div>
           </template>
           <template v-else><p>恢复后可继续在资料列表中使用。本版不提供永久删除。</p><button class="treasure-primary" type="button" @click="restoreTreasure">恢复文件</button></template>
@@ -155,13 +157,13 @@
           :class="{ active: detailPane === 'execution' }"
           @click="detailPane = 'execution'"
         >办事笺</button></nav>
-        <section v-if="detailPane === 'summary'" class="detail-pane"><dl class="file-details"><div><dt>最新版本</dt><dd>v{{ workspace.detail.value.file.latestVersion }}</dd></div><div><dt>状态</dt><dd>{{ workspace.detail.value.file.state === 'TRASHED' ? '回收站' : '可用' }}</dd></div><div><dt>来源</dt><dd>{{ originText(workspace.detail.value.file.originKind) }}</dd></div></dl><template v-if="workspace.detail.value.file.state === 'ACTIVE'"><form class="inline-form" @submit.prevent="rename"><label><span>显示名</span><input v-model="renameValue" maxlength="255" /></label><button type="submit" :disabled="workspace.actionState.value === 'saving'">保存名称</button></form><div class="version-upload"><label class="file-picker"><span>追加新版本</span><input type="file" :accept="acceptTypes" @change="onVersionFile" /></label><span v-if="versionFile">将创建 v{{ workspace.detail.value.file.latestVersion + 1 }}：{{ versionFile.name }}</span><button type="button" :disabled="!versionFile || workspace.actionState.value === 'appending-version'" @click="appendVersion">上传为新版本</button></div></template><div class="danger-zone"><template v-if="workspace.detail.value.file.state === 'ACTIVE'"><p>移入回收站后仍可恢复。</p><button
+        <section v-if="detailPane === 'summary'" class="detail-pane"><dl class="file-details"><div><dt>最新版本</dt><dd>v{{ workspace.detail.value.file.latestVersion }}</dd></div><div><dt>状态</dt><dd>{{ workspace.detail.value.file.state === 'TRASHED' ? '回收站' : '可用' }}</dd></div><div><dt>来源</dt><dd>{{ originText(workspace.detail.value.file.originKind) }}</dd></div></dl><template v-if="workspace.detail.value.file.state === 'ACTIVE'"><form class="inline-form" @submit.prevent="rename"><label><span>显示名</span><input v-model="renameValue" maxlength="255" /></label><button type="submit" :disabled="workspace.actionState.value === 'saving'">保存名称</button></form><div class="version-upload"><label class="file-picker"><span>追加新版本</span><input type="file" :accept="acceptTypes" @change="onVersionFile" /></label><span v-if="versionFile && nextVersion">将创建 v{{ nextVersion }}：{{ versionFile.name }}</span><button type="button" :disabled="!versionFile || !nextVersion || workspace.actionState.value === 'appending-version'" @click="appendVersion">上传为新版本</button></div></template><div class="danger-zone"><template v-if="workspace.detail.value.file.state === 'ACTIVE'"><p>移入回收站后仍可恢复。</p><button
           type="button"
           class="danger"
           :disabled="workspace.actionState.value === 'saving'"
           @click="trash"
         >移入回收站</button></template><template v-else><p>本版不提供永久删除。</p><button type="button" :disabled="workspace.actionState.value === 'saving'" @click="restore">恢复文件</button></template></div></section>
-        <section v-else-if="detailPane === 'versions'" class="detail-pane"><div
+        <section v-else-if="detailPane === 'versions'" class="detail-pane"><button v-if="workspace.hasMoreVersions.value" type="button" :disabled="workspace.versionsState.value === 'loading'" @click="workspace.loadMoreVersions">{{ workspace.versionsState.value === 'loading' ? '正在读取历史版本…' : '读取更早版本' }}</button><p v-if="workspace.versionsError.value" role="alert">{{ workspace.versionsError.value }}</p><div
           v-for="version in workspace.detail.value.versions"
           :key="version.version"
           class="version-row"
@@ -171,7 +173,7 @@
           type="button"
           :disabled="!canAddVersionAsMaterial(version)"
           @click="addExecutionMaterial({ fileId: workspace.detail.value.file.fileId, version: version.version, displayName: workspace.detail.value.file.displayName, contentMimeType: version.contentMimeType })"
-        >{{ isExecutionMaterial(workspace.detail.value.file.fileId) ? '已选资料' : '加入资料' }}</button><button type="button" @click="preview(version.version)">预览</button><button type="button" @click="download(version.version)">下载</button></div></div><section class="preview" aria-live="polite"><p v-if="workspace.actionState.value === 'loading-preview'">正在读取预览…</p><template v-else-if="workspace.preview.value.kind === 'parts'"><div class="preview-navigation"><button type="button" :disabled="workspace.preview.value.selectedIndex === 0" @click="workspace.selectPreviewPart(workspace.preview.value.selectedIndex - 1)">上一页</button><span>第 {{ workspace.preview.value.selectedIndex + 1 }} / {{ workspace.preview.value.parts.length }} {{ selectedPreviewPart?.kind === 'text' ? '项' : '页' }}</span><button type="button" :disabled="workspace.preview.value.selectedIndex >= workspace.preview.value.parts.length - 1" @click="workspace.selectPreviewPart(workspace.preview.value.selectedIndex + 1)">下一页</button></div><audio v-if="selectedPreviewPart?.kind === 'audio'" :src="selectedPreviewPart.url" v-bind="{ controls: true, preload: 'none', 'aria-label': '文件固定版本音频预览' }"></audio><pre v-else-if="selectedPreviewPart?.kind === 'text'" v-text="selectedPreviewPart.text"></pre><img v-else-if="selectedPreviewPart?.kind === 'image'" :src="selectedPreviewPart.url" :alt="workspace.detail.value.file.displayName" /></template><audio v-else-if="workspace.preview.value.kind === 'audio'" :src="workspace.preview.value.url" v-bind="{ controls: true, preload: 'none', 'aria-label': '文件固定版本音频预览' }"></audio><pre v-else-if="workspace.preview.value.kind === 'text'" v-text="workspace.preview.value.text"></pre><img v-else-if="workspace.preview.value.kind === 'image'" :src="workspace.preview.value.url" :alt="workspace.detail.value.file.displayName" /><p v-else-if="workspace.preview.value.kind === 'unsupported'">{{ workspace.preview.value.message }}</p><p v-else-if="workspace.preview.value.kind === 'error'" class="workspace-error">{{ workspace.preview.value.message }}</p></section></section>
+        >{{ isExecutionMaterial(workspace.detail.value.file.fileId) ? '已选资料' : '加入资料' }}</button><button type="button" @click="preview(version.version)">预览</button><button type="button" @click="download(version.version)">下载</button></div></div><p v-if="workspace.preview.value.message && ['parts', 'text', 'audio', 'image'].includes(workspace.preview.value.kind)" class="workspace-note" role="status">{{ workspace.preview.value.message }}</p><section class="preview" aria-live="polite"><p v-if="workspace.actionState.value === 'loading-preview'">正在读取预览…</p><template v-else-if="workspace.preview.value.kind === 'parts'"><div class="preview-navigation"><button type="button" :disabled="workspace.preview.value.selectedIndex === 0" @click="workspace.selectPreviewPart(workspace.preview.value.selectedIndex - 1)">上一页</button><span>第 {{ workspace.preview.value.selectedIndex + 1 }} / {{ workspace.preview.value.parts.length }} {{ selectedPreviewPart?.kind === 'text' ? '项' : '页' }}</span><button type="button" :disabled="workspace.preview.value.selectedIndex >= workspace.preview.value.parts.length - 1" @click="workspace.selectPreviewPart(workspace.preview.value.selectedIndex + 1)">下一页</button></div><audio v-if="selectedPreviewPart?.kind === 'audio'" :src="selectedPreviewPart.url" v-bind="{ controls: true, preload: 'none', 'aria-label': '文件固定版本音频预览' }"></audio><pre v-else-if="selectedPreviewPart?.kind === 'text'" v-text="selectedPreviewPart.text"></pre><img v-else-if="selectedPreviewPart?.kind === 'image'" :src="selectedPreviewPart.url" :alt="workspace.detail.value.file.displayName" /></template><audio v-else-if="workspace.preview.value.kind === 'audio'" :src="workspace.preview.value.url" v-bind="{ controls: true, preload: 'none', 'aria-label': '文件固定版本音频预览' }"></audio><pre v-else-if="workspace.preview.value.kind === 'text'" v-text="workspace.preview.value.text"></pre><img v-else-if="workspace.preview.value.kind === 'image'" :src="workspace.preview.value.url" :alt="workspace.detail.value.file.displayName" /><p v-else-if="workspace.preview.value.kind === 'unsupported'">{{ workspace.preview.value.message }}</p><p v-else-if="workspace.preview.value.kind === 'error'" class="workspace-error">{{ workspace.preview.value.message }}</p></section></section>
         <section v-else class="detail-pane execution-pane"><p class="workspace-note">当前版本：{{ workspace.detail.value.file.displayName }} · v{{ selectedVersion }}</p><div class="material-actions"><button type="button" :disabled="!canAddSelectedMaterial" @click="addSelectedMaterial">加入执行资料</button><button
           v-for="item in executionMaterials"
           :key="item.fileId"
@@ -190,6 +192,7 @@
         >另起一项新交付（不重试当前）</button></div><section v-if="execution.receipt.value" class="execution-status"><dl class="file-details"><div><dt>执行状态</dt><dd>{{ executionStateText(execution.receipt.value.state) }}</dd></div><div><dt>目标 Agent</dt><dd>{{ execution.selectedExecutionAgent.value?.name || execution.receipt.value.targetAgentId }}</dd></div><div><dt>执行编号</dt><dd>{{ execution.receipt.value.executionId }}</dd></div></dl><p v-if="execution.receipt.value.state === 'QUEUED'" class="workspace-note">服务端已接受请求，正在等待结果；尚未确认任何运行阶段或交付完成。</p><div class="actions"><button type="button" @click="refreshExecution">刷新进度</button><button type="button" :disabled="execution.execution.value?.state !== 'QUEUED'" @click="revokeExecutionInputs">撤销尚未开始的输入授权</button></div></section><p v-if="execution.completionNotice.value" class="execution-notice" role="status">{{ execution.completionNotice.value }}</p><p v-if="execution.error.value" class="workspace-error" role="alert">{{ execution.error.value }}</p></section>
       </section>
     </section>
+    <p v-if="workspace.writeNotice.value" class="workspace-note workspace-page-message" role="status">{{ workspace.writeNotice.value }} <button v-if="workspace.detailRetryFileId.value" type="button" :disabled="workspace.actionState.value === 'loading-detail'" @click="retrySavedDetail">重读详情</button></p>
     <p v-if="workspace.error.value" class="workspace-error workspace-page-message" role="alert">{{ workspace.error.value }}</p><p v-if="workspace.lastOperation.value" class="workspace-receipt" role="status">最近操作：{{ workspace.lastOperation.value.operationId }}（{{ workspace.lastOperation.value.state }}）</p>
   </main>
 </template>
@@ -200,6 +203,7 @@ import { useApiStore } from '@/stores/api'
 import { useGlobalStore } from '@/stores/global'
 import { savePersonalWorkspaceBlob, usePersonalWorkspace } from '@/composables/usePersonalWorkspace'
 import { usePersonalWorkspaceExecution } from '@/composables/usePersonalWorkspaceExecution'
+import { workspaceByteText, validMaterialVersion } from '@/utils/personalWorkspaceProtocol'
 import { deliveryTypeText } from '@/utils/executionFormats'
 
 const { embedded, detailAllowed, compact } = defineProps({
@@ -234,8 +238,11 @@ const state = ref('ACTIVE')
 const activeModal = ref(embedded ? 'library' : 'home')
 const detailPane = ref('summary')
 const isLibraryModal = computed(() => activeModal.value === 'library' || activeModal.value === 'detail')
+let viewGeneration = 0
+const viewSnapshot = () => ({ generation: viewGeneration, epoch: identityEpoch.value })
+const ownsView = snapshot => snapshot.generation === viewGeneration && snapshot.epoch === identityEpoch.value
 const selectedId = ref('')
-const selectedVersion = ref(1)
+const selectedVersion = ref('1')
 const uploadFile = ref(null)
 const versionFile = ref(null)
 const uploadDisplayName = ref('')
@@ -261,7 +268,8 @@ const recentExecutionText = computed(() => {
 })
 const acceptTypes = '.webp,.gif,.mp3,.ogg,.oga,.wav,.m4a,.mp4,.webm,image/webp,image/gif,audio/mpeg,audio/ogg,audio/wav,audio/mp4,audio/webm,.png,.jpg,.jpeg,.txt,.pdf,.docx,.xlsx,.pptx,image/png,image/jpeg,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation'
 
-const byteText = size => Number.isFinite(size) ? size < 1024 ? `${size} B` : size < 1024 * 1024 ? `${Math.ceil(size / 1024)} KiB` : `${(size / (1024 * 1024)).toFixed(1)} MiB` : '大小未知'
+const byteText = workspaceByteText
+const nextVersion = computed(() => { const value = workspace.detail.value?.file.latestVersion; return validMaterialVersion(value) && BigInt(value) < 2147483647n ? String(BigInt(value) + 1n) : null })
 const formatDate = value => Number.isFinite(value) ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '时间未知'
 const familyText = value => ({ IMAGE: '图片', AUDIO: '音频', TEXT: '文本', DOCUMENT: 'Word 文档', SPREADSHEET: 'Excel 表格', PRESENTATION: 'PPT 演示', PDF: 'PDF' })[value] || '文件'
 const originText = value => ({ USER_UPLOAD: '本人上传', AGENT_DELIVERY: 'Agent 交付' })[value] || '来源待确认'
@@ -299,16 +307,54 @@ const openFile = async fileId => {
 const openRecentFile = () => { const recent = workspace.items.value[0]; if (recent) void openFile(recent.fileId) }
 const onUploadFile = event => { uploadFile.value = event.target.files?.[0] || null }
 const onVersionFile = event => { versionFile.value = event.target.files?.[0] || null }
-const upload = async () => { const result = await workspace.upload(uploadFile.value, uploadDisplayName.value); if (result) { uploadFile.value = null; uploadDisplayName.value = ''; activeModal.value = 'library'; selectedId.value = result.file.fileId; selectedVersion.value = result.version.version; await refresh() } }
-const select = async fileId => { const detail = await workspace.select(fileId); if (detail) { selectedId.value = fileId; selectedVersion.value = detail.latestVersion.version; renameValue.value = detail.file.displayName; versionFile.value = null }; return detail }
-const closeDetail = () => { selectedId.value = ''; versionFile.value = null; workspace.revokePreview(); workspace.detail.value = null }
-const rename = async () => { const result = await workspace.rename(renameValue.value); if (result) renameValue.value = result.displayName }
-const appendVersion = async () => { const result = await workspace.appendVersion(versionFile.value); if (result) { versionFile.value = null; selectedVersion.value = result.version.version; await refresh() } }
+const upload = async () => {
+  const snapshot = viewSnapshot(), file = uploadFile.value, name = uploadDisplayName.value
+  const result = await workspace.upload(file, name)
+  if (!result || !ownsView(snapshot)) return
+  if (uploadFile.value === file) uploadFile.value = null
+  if (uploadDisplayName.value === name) uploadDisplayName.value = ''
+  activeModal.value = 'library'; selectedId.value = result.file.fileId; selectedVersion.value = result.version.version
+  await refresh()
+}
+const select = async fileId => {
+  viewGeneration += 1
+  trashUsage.value = null
+  const snapshot = viewSnapshot()
+  const detail = await workspace.select(fileId)
+  if (!detail || !ownsView(snapshot)) return null
+  selectedId.value = fileId; selectedVersion.value = detail.latestVersion.version; renameValue.value = detail.file.displayName; versionFile.value = null
+  return detail
+}
+const closeDetail = () => { viewGeneration += 1; selectedId.value = ''; versionFile.value = null; trashUsage.value = null; workspace.closeDetail() }
+const retrySavedDetail = async () => {
+  const snapshot = viewSnapshot()
+  const detail = await workspace.retryDetail()
+  if (detail && ownsView(snapshot)) { selectedId.value = detail.file.fileId; selectedVersion.value = detail.latestVersion.version; renameValue.value = detail.file.displayName }
+}
+const rename = async () => {
+  const snapshot = viewSnapshot(), name = renameValue.value
+  const result = await workspace.rename(name)
+  if (result && ownsView(snapshot) && renameValue.value === name) renameValue.value = result.displayName
+}
+const appendVersion = async () => {
+  const snapshot = viewSnapshot(), file = versionFile.value
+  const result = await workspace.appendVersion(file)
+  if (result && ownsView(snapshot)) { if (versionFile.value === file) versionFile.value = null; selectedVersion.value = result.version.version; await refresh() }
+}
 const selectedPreviewPart = computed(() => workspace.preview.value?.parts?.[workspace.preview.value?.selectedIndex] || null)
 const preview = version => { selectedVersion.value = version; void workspace.previewVersion(version) }
 const download = async version => { const result = await workspace.download(version); if (result) savePersonalWorkspaceBlob(result) }
-const trash = async () => { const usage = await workspace.usage(); if (!usage) return; const references = (usage.taskReferences?.length || 0) + (usage.activeExecutions?.length || 0); const message = references ? `该文件仍有 ${references} 个关联引用，确认移入回收站吗？` : '确认将该文件移入回收站吗？'; if (!globalThis.confirm?.(message)) return; const result = await workspace.trash(usage); if (result) { closeDetail(); await refresh() } }
-const restore = async () => { const result = await workspace.restore(); if (result) { closeDetail(); await refresh() } }
+const trash = async () => {
+  const snapshot = viewSnapshot()
+  const usage = await workspace.usage()
+  if (!usage || !ownsView(snapshot)) return
+  const references = (usage.taskReferences?.length || 0) + (usage.activeExecutions?.length || 0)
+  const message = references ? `该文件仍有 ${references} 个关联引用，确认移入回收站吗？` : '确认将该文件移入回收站吗？'
+  if (!globalThis.confirm?.(message)) return
+  const result = await workspace.trash(usage)
+  if (result && ownsView(snapshot)) { closeDetail(); await refresh() }
+}
+const restore = async () => { const snapshot = viewSnapshot(); const result = await workspace.restore(); if (result && ownsView(snapshot)) { closeDetail(); await refresh() } }
 const loadExecutionAgents = () => execution.loadAgents()
 const loadExecutionCapabilities = async () => {
   const result = await execution.loadCapabilities()
@@ -321,7 +367,7 @@ const selectExecutionAgent = agentId => execution.selectAgent(agentId)
 const materialLabel = item => `${item.displayName || item.fileId} · v${item.version}`
 const isExecutionMaterial = fileId => executionMaterials.value.some(item => item.fileId === fileId)
 const canAddVersionAsMaterial = version => Boolean(version?.contentMimeType && execution.inputMimeTypes.value.includes(version.contentMimeType) && !isExecutionMaterial(workspace.detail.value.file.fileId))
-const addExecutionMaterial = item => { if (!item?.fileId || !Number.isSafeInteger(Number(item.version)) || isExecutionMaterial(item.fileId) || !execution.inputMimeTypes.value.includes(item.contentMimeType)) return; executionMaterials.value = [...executionMaterials.value, { fileId: item.fileId, version: String(item.version), displayName: item.displayName, contentMimeType: item.contentMimeType }]; if (!executionOutputMime.value) executionOutputMime.value = execution.allowedMimeTypes.value[0] || '' }
+const addExecutionMaterial = item => { if (!item?.fileId || !validMaterialVersion(item.version) || isExecutionMaterial(item.fileId) || !execution.inputMimeTypes.value.includes(item.contentMimeType)) return; executionMaterials.value = [...executionMaterials.value, { fileId: item.fileId, version: String(item.version), displayName: item.displayName, contentMimeType: item.contentMimeType }]; if (!executionOutputMime.value) executionOutputMime.value = execution.allowedMimeTypes.value[0] || '' }
 const addSelectedMaterial = () => addExecutionMaterial({ fileId: workspace.detail.value.file.fileId, version: selectedVersion.value, displayName: workspace.detail.value.file.displayName, contentMimeType: selectedExecutionVersion.value?.contentMimeType })
 const removeExecutionMaterial = fileId => { executionMaterials.value = executionMaterials.value.filter(item => item.fileId !== fileId) }
 const createExecution = () => execution.create({ inputs: executionMaterials.value.map(({ fileId, version }) => ({ fileId, version })), instruction: executionInstruction.value, outputContentMimeType: executionOutputMime.value })
@@ -357,20 +403,25 @@ const openTreasureFile = async fileId => {
   detailTitleRef.value?.focus({ preventScroll: true })
 }
 const uploadTreasure = async () => {
-  const result = await workspace.upload(uploadFile.value, uploadDisplayName.value)
-  if (!result) return
-  uploadFile.value = null; uploadDisplayName.value = ''; treasureView.value = 'list'; activeModal.value = 'library'
+  const snapshot = viewSnapshot(), file = uploadFile.value, name = uploadDisplayName.value
+  const result = await workspace.upload(file, name)
+  if (!result || !ownsView(snapshot)) return
+  if (uploadFile.value === file) uploadFile.value = null
+  if (uploadDisplayName.value === name) uploadDisplayName.value = ''
+  treasureView.value = 'list'; activeModal.value = 'library'
   treasureTab.value = 'all'; state.value = 'ACTIVE'; query.value = ''; await refresh()
 }
-const prepareTrash = async () => { trashUsage.value = await workspace.usage() }
+const prepareTrash = async () => { const snapshot = viewSnapshot(); const usage = await workspace.usage(); if (ownsView(snapshot)) trashUsage.value = usage }
 const confirmTrash = async () => {
   if (!trashUsage.value) return
+  const snapshot = viewSnapshot()
   const result = await workspace.trash(trashUsage.value)
-  if (result) { trashUsage.value = null; treasureView.value = 'list'; backToLibrary(); await refresh() }
+  if (result && ownsView(snapshot)) { trashUsage.value = null; treasureView.value = 'list'; backToLibrary(); await refresh() }
 }
 const restoreTreasure = async () => {
+  const snapshot = viewSnapshot()
   const result = await workspace.restore()
-  if (result) { treasureView.value = 'list'; backToLibrary(); await refresh() }
+  if (result && ownsView(snapshot)) { treasureView.value = 'list'; backToLibrary(); await refresh() }
 }
 const canGoBack = computed(() => embedded ? treasureView.value !== 'list' : activeModal.value === 'detail')
 const logicalDepth = computed(() => !embedded || treasureView.value === 'list' ? 1 : treasureView.value === 'manage' ? 3 : 2)

@@ -42,7 +42,7 @@ describe('personal workspace task link adapter', () => {
     adapter.dispose()
   })
 
-  it('confirms a 201 by authenticated readback when cross-origin ETag is not exposed, without repeating the POST', async () => {
+  it('accepts an exact business acknowledgement without requiring an exposed transport ETag', async () => {
     const calls = []
     const saved = link({ relationId: 'rel_saved', taskId: 'task_a', fileId: 'file_b', version: '1' })
     const api = { execute: async options => {
@@ -53,12 +53,12 @@ describe('personal workspace task link adapter', () => {
     } }
     const adapter = usePersonalWorkspaceTaskLinks({ api, taskId: ref('task_a'), identityEpoch: ref('owner-a') })
     assert.equal((await adapter.attach({ fileId: 'file_b', version: '1', role: 'INPUT' })).relationId, 'rel_saved')
-    assert.deepEqual(calls, ['POST', 'GET'])
+    assert.deepEqual(calls, ['POST'])
     assert.equal(adapter.links.value[0].state, 'ACTIVE')
     adapter.dispose()
   })
 
-  it('confirms a detach through a read-only GET when the browser cannot see its ETag', async () => {
+  it('accepts an exact detach acknowledgement without a transport ETag', async () => {
     const calls = []
     const detached = link({ state: 'DETACHED', relationRevision: '2' })
     const api = { execute: async options => {
@@ -69,21 +69,21 @@ describe('personal workspace task link adapter', () => {
     } }
     const adapter = usePersonalWorkspaceTaskLinks({ api, taskId: ref('task_a'), identityEpoch: ref('owner-a') })
     assert.equal((await adapter.detach(link())).link.state, 'DETACHED')
-    assert.deepEqual(calls, ['DELETE', 'GET'])
+    assert.deepEqual(calls, ['DELETE'])
     adapter.dispose()
   })
 
-  it('does not accept a 201 with no ETag when readback does not confirm that exact version', async () => {
+  it('rejects a write acknowledgement for a different version even without an ETag', async () => {
     const calls = []
     const api = { execute: async options => {
       calls.push(options.method)
       return options.method === 'POST'
-        ? reply(options, link({ fileId: 'file_b', version: '1' }), {})
+        ? reply(options, link({ fileId: 'file_b', version: '2' }), {})
         : ({ items: [link({ fileId: 'file_b', version: '2' })], nextCursor: null, hasMore: false })
     } }
     const adapter = usePersonalWorkspaceTaskLinks({ api, taskId: ref('task_a'), identityEpoch: ref('owner-a') })
     assert.equal(await adapter.attach({ fileId: 'file_b', version: '1', role: 'INPUT' }), null)
-    assert.deepEqual(calls, ['POST', 'GET'])
+    assert.deepEqual(calls, ['POST'])
     assert.match(adapter.error.value, /不要重复提交/)
     adapter.dispose()
   })

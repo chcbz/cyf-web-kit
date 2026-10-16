@@ -1,5 +1,6 @@
 import { computed, getCurrentInstance, onBeforeUnmount, ref, unref, watch } from 'vue'
 import { createApi } from './useHttp.js'
+import { workspaceRevisionTag } from '../utils/personalWorkspaceProtocol.js'
 import { registerIdentityCleanup } from '../utils/identityLifecycle.js'
 
 const MAX_ID_LENGTH = 100
@@ -19,18 +20,13 @@ const valueOf = value => typeof value === 'function' ? value() : unref(value)
 const abortError = message => new DOMException(message, 'AbortError')
 const randomKey = () => globalThis.crypto?.randomUUID?.() || `pws-task-link-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
-const header = (headers, name) => {
-  if (typeof headers?.get === 'function') return headers.get(name) || ''
-  return Object.entries(headers || {}).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1] || ''
-}
 const exactKeys = (value, fields) => value && typeof value === 'object' && !Array.isArray(value) &&
   Object.keys(value).length === fields.size && Object.keys(value).every(key => fields.has(key))
 const validLink = (value, taskId) => exactKeys(value, LINK_FIELDS) && value.taskId === taskId &&
   ID(value.relationId) && ID(value.fileId) && VERSION(value.version) && ['INPUT', 'REFERENCE', 'OUTPUT'].includes(value.role) &&
   ['ACTIVE', 'DETACHED'].includes(value.state) && REVISION(value.relationRevision) &&
   Number.isSafeInteger(value.createdAt) && value.createdAt >= 0
-const etagFor = link => validLink(link, link?.taskId) ? `"${link.relationId}:${link.relationRevision}"` : ''
-const validEtag = (value, link) => typeof value === 'string' && value === etagFor(link)
+const etagFor = link => validLink(link, link?.taskId) ? workspaceRevisionTag(link.relationId, link.relationRevision) : ''
 const validList = (value, taskId) => exactKeys(value, LIST_FIELDS) && typeof value.hasMore === 'boolean' && value.hasMore === (value.nextCursor !== null) && Array.isArray(value.items) &&
   value.items.length <= 50 && value.items.every(item => validLink(item, taskId)) &&
   (value.nextCursor == null || CURSOR(value.nextCursor)) &&
@@ -186,16 +182,6 @@ export function usePersonalWorkspaceTaskLinks ({ api = createApi('/agent'), task
       if (snapshot.generation === generation && snapshot.contextKey === contextKey.value) loading.value = false
     }
   }
-  // Cross-origin deployments may not expose ETag to fetch even when the server sets it.
-  // In that case verify the committed revision through an authenticated, read-only GET;
-  // never issue a second POST/DELETE to recover an uncertain write.
-  const confirmWithoutExposedEtag = async (link, selectedTaskId, snapshot) => {
-    const { data } = await request({
-      url: `/tasks/${encodeURIComponent(selectedTaskId)}/file-links`, method: 'GET'
-    }, snapshot)
-    if (!validList(data, selectedTaskId)) return false
-    return data.items.some(item => Object.keys(link).every(key => item[key] === link[key]))
-  }
   const attach = async ({ fileId, version, role } = {}) => {
     const selectedTaskId = currentTaskId.value
     if (!ID(selectedTaskId) || !ID(fileId) || !VERSION(version) || !['INPUT', 'REFERENCE'].includes(role)) {
@@ -206,15 +192,12 @@ export function usePersonalWorkspaceTaskLinks ({ api = createApi('/agent'), task
     const snapshot = { generation, contextKey: contextKey.value }
     actionState.value = 'saving'; error.value = ''
     try {
-      const { data, headers } = await request({
+      const { data } = await request({
         url: `/tasks/${encodeURIComponent(selectedTaskId)}/file-links`, method: 'POST',
         data: { fileId, version, role }, headers: { 'Idempotency-Key': randomKey() }
       }, snapshot)
-      const exposedEtag = header(headers, 'etag')
       if (!validLink(data, selectedTaskId) || data.state !== 'ACTIVE' ||
-          data.fileId !== fileId || data.version !== version || data.role !== role ||
-          (exposedEtag ? !validEtag(exposedEtag, data) :
-            !(await confirmWithoutExposedEtag(data, selectedTaskId, snapshot)))) {
+          data.fileId !== fileId || data.version !== version || data.role !== role) {
         throw new Error('任务资料关联回执无效，请刷新核对原关联；不要重复提交。')
       }
       replace(data)
@@ -238,14 +221,11 @@ export function usePersonalWorkspaceTaskLinks ({ api = createApi('/agent'), task
     const snapshot = { generation, contextKey: contextKey.value }
     actionState.value = 'removing'; error.value = ''
     try {
-      const { data, headers } = await request({
+      const { data } = await request({
         url: `/tasks/${encodeURIComponent(selectedTaskId)}/file-links/${encodeURIComponent(link.relationId)}`,
         method: 'DELETE', headers: { 'Idempotency-Key': randomKey(), 'If-Match': ifMatch }
       }, snapshot)
-      const exposedEtag = header(headers, 'etag')
-      if (!validDetach(data, selectedTaskId) || data.link.relationId !== link.relationId ||
-          (exposedEtag ? !validEtag(exposedEtag, data.link) :
-            !(await confirmWithoutExposedEtag(data.link, selectedTaskId, snapshot)))) {
+      if (!validDetach(data, selectedTaskId) || data.link.relationId !== link.relationId || data.link.fileId !== link.fileId || data.link.version !== link.version || data.link.role !== link.role) {
         throw new Error('解除任务资料关联回执无效，请刷新核对原关联；不要重复提交。')
       }
       replace(data.link)

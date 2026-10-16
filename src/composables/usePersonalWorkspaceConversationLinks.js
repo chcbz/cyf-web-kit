@@ -1,5 +1,6 @@
 import { computed, getCurrentInstance, onBeforeUnmount, ref, unref, watch } from 'vue'
 import { createApi } from './useHttp.js'
+import { workspaceRevisionTag } from '../utils/personalWorkspaceProtocol.js'
 import { registerIdentityCleanup } from '../utils/identityLifecycle.js'
 
 const MAX_ID_LENGTH = 100
@@ -19,18 +20,13 @@ const valueOf = value => typeof value === 'function' ? value() : unref(value)
 const abortError = message => new DOMException(message, 'AbortError')
 const randomKey = () => globalThis.crypto?.randomUUID?.() || `pws-conversation-link-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
-const header = (headers, name) => {
-  if (typeof headers?.get === 'function') return headers.get(name) || ''
-  return Object.entries(headers || {}).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1] || ''
-}
 const exactKeys = (value, fields) => value && typeof value === 'object' && !Array.isArray(value) &&
   Object.keys(value).length === fields.size && Object.keys(value).every(key => fields.has(key))
 const validLink = (value, conversationId) => exactKeys(value, LINK_FIELDS) && value.conversationId === conversationId &&
   ID(value.relationId) && ID(value.fileId) && VERSION(value.version) && ['INPUT', 'REFERENCE', 'OUTPUT'].includes(value.role) &&
   ['ACTIVE', 'DETACHED'].includes(value.state) && REVISION(value.relationRevision) &&
   Number.isSafeInteger(value.createdAt) && value.createdAt >= 0
-const etagFor = link => validLink(link, link?.conversationId) ? `"${link.relationId}:${link.relationRevision}"` : ''
-const validEtag = (value, link) => typeof value === 'string' && value === etagFor(link)
+const etagFor = link => validLink(link, link?.conversationId) ? workspaceRevisionTag(link.relationId, link.relationRevision) : ''
 const validList = (value, conversationId) => exactKeys(value, LIST_FIELDS) && typeof value.hasMore === 'boolean' && value.hasMore === (value.nextCursor !== null) && Array.isArray(value.items) &&
   value.items.length <= 50 && value.items.every(item => validLink(item, conversationId)) &&
   (value.nextCursor == null || CURSOR(value.nextCursor)) &&
@@ -144,11 +140,11 @@ export function usePersonalWorkspaceConversationLinks ({ api = createApi('/agent
     const snapshot = { generation, contextKey: contextKey.value }
     actionState.value = 'saving'; error.value = ''
     try {
-      const { data, headers } = await request({
+      const { data } = await request({
         url: `/conversations/${encodeURIComponent(selectedConversationId)}/file-links`, method: 'POST',
         data: { fileId, version, role }, headers: { 'Idempotency-Key': randomKey() }
       }, snapshot)
-      if (!validLink(data, selectedConversationId) || !validEtag(header(headers, 'etag'), data)) {
+      if (!validLink(data, selectedConversationId) || data.state !== 'ACTIVE' || data.fileId !== fileId || data.version !== version || data.role !== role) {
         throw new Error('议事资料关联回执无效，尚不能确认保存。')
       }
       replace(data)
@@ -172,11 +168,11 @@ export function usePersonalWorkspaceConversationLinks ({ api = createApi('/agent
     const snapshot = { generation, contextKey: contextKey.value }
     actionState.value = 'removing'; error.value = ''
     try {
-      const { data, headers } = await request({
+      const { data } = await request({
         url: `/conversations/${encodeURIComponent(selectedConversationId)}/file-links/${encodeURIComponent(link.relationId)}`,
         method: 'DELETE', headers: { 'Idempotency-Key': randomKey(), 'If-Match': ifMatch }
       }, snapshot)
-      if (!validDetach(data, selectedConversationId) || data.link.relationId !== link.relationId || !validEtag(header(headers, 'etag'), data.link)) {
+      if (!validDetach(data, selectedConversationId) || data.link.relationId !== link.relationId || data.link.fileId !== link.fileId || data.link.version !== link.version || data.link.role !== link.role) {
         throw new Error('解除议事资料关联回执无效，尚不能确认解除。')
       }
       replace(data.link)

@@ -75,7 +75,7 @@ const editorDeps = () => {
       },
       dispose: () => {}
     }),
-    usePersonalWorkspace: () => ({
+    usePersonalWorkspace: () => ({ closeDetail: () => {}, hasMoreVersions: Vue.ref(false), versionsState: Vue.ref('idle'), versionsError: Vue.ref(''),
       loading: Vue.ref(false), error: Vue.ref(''), items: Vue.ref([]), listState: Vue.ref('empty'), detail: Vue.ref(null), preview: Vue.ref(null),
       refresh: async () => true,
       select: async fileId => { workspaceCalls.push(['select', fileId]); return { file: { fileId } } },

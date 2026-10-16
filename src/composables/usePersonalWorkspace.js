@@ -1,5 +1,6 @@
-import { computed, getCurrentInstance, onBeforeUnmount, ref, unref, watch } from 'vue'
+import { computed, getCurrentInstance, onBeforeUnmount, ref, toRaw, unref, watch } from 'vue'
 import { createApi } from './useHttp.js'
+import { workspaceDecimal as DECIMAL, validMaterialVersion as VERSION, workspaceRevisionTag } from '../utils/personalWorkspaceProtocol.js'
 import { registerIdentityCleanup } from '../utils/identityLifecycle.js'
 
 export const PERSONAL_WORKSPACE_MIME_TYPES = Object.freeze([
@@ -20,17 +21,14 @@ const EXTENSION_MIME = Object.freeze({
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
 })
-const MAX_INT = 2147483647
+const CURSOR = value => typeof value === 'string' && value.length > 0 && value.length <= 512 && ![...value].some(char => char.codePointAt(0) < 32)
 const ID = value => typeof value === 'string' && value.length > 0 && value.length <= 100 &&
   !/^\s|\s$/.test(value) && ![...value].some(char => char.codePointAt(0) < 32)
 const TEXT = (value, maximum) => typeof value === 'string' && value.length > 0 && value.length <= maximum &&
   !/^\s|\s$/.test(value) && ![...value].some(char => char.codePointAt(0) < 32)
-const DECIMAL = value => typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value) && BigInt(value) <= 9223372036854775807n
-const VERSION = value => DECIMAL(value) && BigInt(value) >= 1n && BigInt(value) <= BigInt(MAX_INT)
 const abortError = message => new DOMException(message, 'AbortError')
 const valueOf = value => typeof value === 'function' ? value() : unref(value)
 
-const getHeader = (headers, name) => Object.entries(headers).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1] || ''
 const normalizeMime = value => typeof value === 'string' ? value.split(';', 1)[0].trim().toLowerCase() : ''
 const extensionFor = filename => {
   const match = typeof filename === 'string' ? /\.([^.]+)$/.exec(filename.trim()) : null
@@ -100,12 +98,33 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
   const detail = ref(null)
   const preview = ref({ kind: 'none', message: '' })
   const lastOperation = ref(null)
+  const writeNotice = ref('')
+  const detailRetryFileId = ref(null)
+  const versionsState = ref('idle')
+  const versionsError = ref('')
+  const versionsNextCursor = ref(null)
+  const versionsLoaded = ref(false)
+  const versionItems = computed(() => detail.value?.versions || [])
+  const hasMoreVersions = computed(() => Boolean(detail.value && (versionsLoaded.value ? versionsNextCursor.value : versionItems.value.length >= 100)))
   const currentEpoch = computed(() => String(valueOf(identityEpoch) ?? ''))
   const controllers = new Set()
   const activeUrls = new Set()
   let generation = 0
   let previewGeneration = 0
   let detailGeneration = 0
+  let listGeneration = 0
+  let activeQuery = null
+  let versionsGeneration = 0
+  const captureView = () => ({ generation, epoch: currentEpoch.value, detailGeneration })
+  const ownsView = snapshot => !disposed && snapshot.generation === generation &&
+    snapshot.epoch === currentEpoch.value && snapshot.detailGeneration === detailGeneration
+  const resetVersions = () => {
+    versionsGeneration += 1
+    versionsState.value = 'idle'
+    versionsError.value = ''
+    versionsNextCursor.value = null
+    versionsLoaded.value = false
+  }
   let disposed = false
 
   const revokePreview = () => {
@@ -117,6 +136,9 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
   const reset = () => {
     generation += 1
     detailGeneration += 1
+    listGeneration += 1
+    activeQuery = null
+    resetVersions()
     for (const controller of controllers) controller.abort(abortError('Workspace identity changed'))
     controllers.clear()
     items.value = []
@@ -127,6 +149,8 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     error.value = ''
     detail.value = null
     lastOperation.value = null
+    writeNotice.value = ''
+    detailRetryFileId.value = null
     revokePreview()
   }
   const stillCurrent = (snapshot, controller) => !disposed && snapshot.generation === generation &&
@@ -151,23 +175,35 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
   }
   const replaceFile = file => {
     if (!validFileView(file)) return
-    items.value = items.value.map(item => item.fileId === file.fileId ? file : item)
-    if (detail.value?.file?.fileId === file.fileId) detail.value = { ...detail.value, file }
+    items.value = items.value.map(item => item.fileId === file.fileId &&
+      BigInt(file.metadataRevision) >= BigInt(item.metadataRevision) && BigInt(file.latestVersion) >= BigInt(item.latestVersion) ? file : item)
   }
-  const refresh = async ({ q, mediaFamily, state = 'ACTIVE', cursor = null, append = false } = {}) => {
+  const queryParams = ({ q, mediaFamily, state = 'ACTIVE' } = {}) => {
+    const params = { state: ['ACTIVE', 'TRASHED'].includes(state) ? state : 'ACTIVE' }
+    if (TEXT(q, 100)) params.q = q
+    if (['IMAGE', 'AUDIO', 'TEXT', 'DOCUMENT', 'SPREADSHEET', 'PRESENTATION', 'PDF'].includes(mediaFamily)) params.mediaFamily = mediaFamily
+    return params
+  }
+  const refresh = async (options = {}) => {
+    const params = queryParams(options)
+    const append = options.append === true && JSON.stringify(params) === JSON.stringify(activeQuery)
+    if (append && (loading.value || !nextCursor.value)) return false
+    if (append) params.cursor = nextCursor.value
+    else {
+      activeQuery = { ...params }
+      items.value = []
+      nextCursor.value = null
+    }
     const snapshot = { generation, epoch: currentEpoch.value }
-    if (loading.value) return false
+    const listRequest = ++listGeneration
+    const current = () => !disposed && snapshot.generation === generation && snapshot.epoch === currentEpoch.value && listRequest === listGeneration
     loading.value = true
     listState.value = append ? listState.value : 'loading'
     error.value = ''
-    const params = {}
-    if (TEXT(q, 100)) params.q = q
-    if (['IMAGE', 'AUDIO', 'TEXT', 'DOCUMENT', 'SPREADSHEET', 'PRESENTATION', 'PDF'].includes(mediaFamily)) params.mediaFamily = mediaFamily
-    if (['ACTIVE', 'TRASHED'].includes(state)) params.state = state
-    if (cursor) params.cursor = cursor
     try {
       const { data } = await request({ url: '/personal-workspace/files', method: 'GET', params }, snapshot)
-      if (!data || !Array.isArray(data.items) || typeof data.hasMore !== 'boolean' || data.hasMore !== (data.nextCursor !== null) || !data.items.every(validFileView) || (data.nextCursor != null && !ID(data.nextCursor))) {
+      if (!current()) return false
+      if (!data || !Array.isArray(data.items) || typeof data.hasMore !== 'boolean' || data.hasMore !== (data.nextCursor !== null) || !data.items.every(validFileView) || (data.nextCursor != null && !CURSOR(data.nextCursor))) {
         throw new Error('工作空间目录返回格式无效，未展示可能不完整的数据。')
       }
       if (append) {
@@ -178,29 +214,42 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
       listState.value = items.value.length ? 'ready' : 'empty'
       return true
     } catch (cause) {
-      if (cause?.name !== 'AbortError' && snapshot.generation === generation) {
+      if (cause?.name !== 'AbortError' && current()) {
         error.value = errorMessage(cause)
         listState.value = 'error'
       }
       return false
     } finally {
-      if (snapshot.generation === generation) loading.value = false
+      if (current()) loading.value = false
     }
   }
-  const loadMore = options => nextCursor.value ? refresh({ ...options, cursor: nextCursor.value, append: true }) : false
+  const loadMore = (options = activeQuery || {}) => {
+    if (JSON.stringify(queryParams(options)) !== JSON.stringify(activeQuery)) return refresh(options)
+    return nextCursor.value ? refresh({ ...options, append: true }) : Promise.resolve(false)
+  }
+  const closeDetail = () => {
+    detailGeneration += 1
+    detail.value = null
+    actionState.value = 'idle'
+    error.value = ''
+    writeNotice.value = ''
+    detailRetryFileId.value = null
+    resetVersions()
+    revokePreview()
+  }
   const select = async fileId => {
     if (!ID(fileId)) return null
     const detailRequest = ++detailGeneration
     const snapshot = { generation, epoch: currentEpoch.value }
-    actionState.value = 'loading-detail'; error.value = ''; revokePreview()
+    actionState.value = 'loading-detail'; error.value = ''; detail.value = null; writeNotice.value = ''; detailRetryFileId.value = null; resetVersions(); revokePreview()
     try {
       const response = await request({ url: `/personal-workspace/files/${encodeURIComponent(fileId)}`, method: 'GET' }, snapshot)
       if (detailRequest !== detailGeneration) return null
       const data = response.data
-      if (!data || !validFileView(data.file) || !validVersion(data.latestVersion) || !Array.isArray(data.versions) || !data.versions.every(validVersion)) {
+      if (!data || !validFileView(data.file) || !validVersion(data.latestVersion) || !Array.isArray(data.versions) || !data.versions.every(validVersion) || data.file.fileId !== fileId || data.latestVersion.fileId !== fileId || data.versions.some(item => item.fileId !== fileId)) {
         throw new Error('文件详情返回格式无效。')
       }
-      detail.value = { ...data, etag: getHeader(response.headers, 'etag') || `"${data.file.fileId}:${data.file.metadataRevision}"` }
+      detail.value = { ...data, etag: workspaceRevisionTag(data.file.fileId, data.file.metadataRevision) }
       replaceFile(data.file)
       actionState.value = 'ready'
       return detail.value
@@ -208,6 +257,56 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
       if (cause?.name !== 'AbortError' && snapshot.generation === generation && detailRequest === detailGeneration) { error.value = errorMessage(cause); actionState.value = 'error' }
       return null
     }
+  }
+  const loadVersions = async ({ append = false } = {}) => {
+    const fileId = detail.value?.file.fileId
+    if (!ID(fileId) || versionsState.value === 'loading' || (append && !versionsNextCursor.value)) return false
+    const snapshot = captureView()
+    const serial = ++versionsGeneration
+    const current = () => ownsView(snapshot) && serial === versionsGeneration
+    const cursor = append ? versionsNextCursor.value : null
+    versionsState.value = 'loading'; versionsError.value = ''
+    try {
+      const { data } = await request({ url: `/personal-workspace/files/${encodeURIComponent(fileId)}/versions`, method: 'GET', params: cursor ? { cursor } : undefined }, snapshot)
+      if (!current()) return false
+      if (!data || !Array.isArray(data.items) || !data.items.every(item => validVersion(item) && item.fileId === fileId) ||
+        typeof data.hasMore !== 'boolean' || data.hasMore !== (data.nextCursor !== null) ||
+        (data.nextCursor != null && (!CURSOR(data.nextCursor) || data.nextCursor === cursor))) throw new Error('历史版本返回格式无效，请重新读取。')
+      const versions = new Map([...detail.value.versions, ...data.items].map(item => [item.version, item]))
+      detail.value = { ...detail.value, versions: [...versions.values()].sort((a, b) => Number(b.version) - Number(a.version)) }
+      versionsNextCursor.value = data.nextCursor
+      versionsLoaded.value = true
+      versionsState.value = 'ready'
+      return true
+    } catch (cause) {
+      if (current() && cause?.name !== 'AbortError') { versionsError.value = errorMessage(cause); versionsState.value = 'error' }
+      return false
+    }
+  }
+  const loadMoreVersions = () => loadVersions({ append: versionsLoaded.value })
+  const readCommittedDetail = async (fileId, label, snapshot) => {
+    if (!ownsView(snapshot)) return
+    const pending = select(fileId)
+    const readView = captureView()
+    writeNotice.value = `${label}已保存。`
+    detailRetryFileId.value = fileId
+    const result = await pending
+    if (!ownsView(readView)) return
+    if (result) { detailRetryFileId.value = null; actionState.value = 'ready' }
+    else { writeNotice.value = `${label}已保存，但详情读取失败；请重读详情，不要重复提交。`; actionState.value = 'ready' }
+  }
+  const retryDetail = async () => {
+    const fileId = detailRetryFileId.value
+    if (!fileId) return null
+    const pending = select(fileId)
+    const snapshot = captureView()
+    detailRetryFileId.value = fileId
+    writeNotice.value = '文件已保存，正在重新读取详情。'
+    const result = await pending
+    if (!ownsView(snapshot)) return null
+    if (result) { detailRetryFileId.value = null; writeNotice.value = '已保存，详情已重新读取。' }
+    else writeNotice.value = '文件已保存，但详情读取失败；请重读详情，不要重复提交。'
+    return result
   }
   const normalizedFile = candidate => {
     if (!validFile(candidate)) throw new Error('请选择一个有效文件。')
@@ -219,7 +318,7 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     return { file: candidate, mime }
   }
   const upload = async (candidate, displayName = '') => {
-    const snapshot = { generation, epoch: currentEpoch.value }
+    const snapshot = captureView()
     let input
     try { input = normalizedFile(candidate) } catch (cause) { error.value = cause.message; actionState.value = 'error'; return null }
     const name = String(displayName || '').trim()
@@ -230,21 +329,21 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     actionState.value = 'uploading'; error.value = ''
     try {
       const { data } = await request({ url: '/personal-workspace/files', method: 'POST', data: body, headers: { 'Idempotency-Key': randomKey() } }, snapshot)
-      if (!data?.operation || !validFileView(data.file) || !validVersion(data.version)) throw new Error('上传回执无效，尚不能确认保存。')
+      if (!data?.operation || !validFileView(data.file) || !validVersion(data.version) || data.version.fileId !== data.file.fileId) throw new Error('上传回执无效，尚不能确认保存。')
       lastOperation.value = data.operation
       replaceFile(data.file)
-      await select(data.file.fileId)
-      actionState.value = 'ready'
+      await readCommittedDetail(data.file.fileId, '上传', snapshot)
       return data
     } catch (cause) {
-      if (cause?.name !== 'AbortError' && snapshot.generation === generation) { error.value = errorMessage(cause); actionState.value = 'error' }
+      if (cause?.name !== 'AbortError' && ownsView(snapshot)) { error.value = errorMessage(cause); actionState.value = 'error' }
       return null
     }
   }
   const appendVersion = async candidate => {
     const file = detail.value?.file
     if (!validFileView(file)) { error.value = '请先选择一个当前可用文件。'; return null }
-    const snapshot = { generation, epoch: currentEpoch.value }
+    const snapshot = captureView()
+    if (file.latestVersion === '2147483647') { error.value = '已达到文件版本上限，不能追加新版本。'; return null }
     let input
     try { input = normalizedFile(candidate) } catch (cause) { error.value = cause.message; actionState.value = 'error'; return null }
     const body = new FormData()
@@ -256,30 +355,33 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
         url: `/personal-workspace/files/${encodeURIComponent(file.fileId)}/versions`, method: 'POST', data: body,
         headers: { 'Idempotency-Key': randomKey() }
       }, snapshot)
-      if (!data?.operation || !validFileView(data.file) || !validVersion(data.version)) throw new Error('版本追加回执无效，尚不能确认保存。')
+      if (!data?.operation || !validFileView(data.file) || !validVersion(data.version) || data.file.fileId !== file.fileId || data.version.fileId !== file.fileId) throw new Error('版本追加回执无效，尚不能确认保存。')
       lastOperation.value = data.operation
-      await select(file.fileId)
-      actionState.value = 'ready'
+      replaceFile(data.file)
+      await readCommittedDetail(file.fileId, '新版本', snapshot)
       return data
     } catch (cause) {
-      if (cause?.name !== 'AbortError' && snapshot.generation === generation) { error.value = errorMessage(cause); actionState.value = 'error' }
+      if (cause?.name !== 'AbortError' && ownsView(snapshot)) { error.value = errorMessage(cause); actionState.value = 'error' }
       return null
     }
   }
   const mutate = async (path, body, { method = 'POST' } = {}) => {
     const file = detail.value?.file
-    if (!validFileView(file) || !detail.value?.etag) { error.value = '请先刷新并选择一个文件。'; return null }
-    const snapshot = { generation, epoch: currentEpoch.value }
+    if (!validFileView(file)) { error.value = '请先刷新并选择一个文件。'; return null }
+    const snapshot = captureView()
+    const ifMatch = workspaceRevisionTag(file.fileId, file.metadataRevision)
     actionState.value = 'saving'; error.value = ''
     try {
-      const { data, headers } = await request({ url: path, method, data: body, headers: { 'Idempotency-Key': randomKey(), 'If-Match': detail.value.etag } }, snapshot)
-      if (!validFileView(data)) throw new Error('文件操作回执无效，尚不能确认保存。')
+      const { data } = await request({ url: path, method, data: body, headers: { 'Idempotency-Key': randomKey(), 'If-Match': ifMatch } }, snapshot)
+      if (!validFileView(data) || data.fileId !== file.fileId) throw new Error('文件操作回执无效，尚不能确认保存。')
       replaceFile(data)
-      detail.value = { ...detail.value, file: data, etag: getHeader(headers, 'etag') || `"${data.fileId}:${data.metadataRevision}"` }
-      actionState.value = 'ready'
+      if (ownsView(snapshot)) {
+        detail.value = { ...detail.value, file: data, etag: workspaceRevisionTag(data.fileId, data.metadataRevision) }
+        actionState.value = 'ready'
+      }
       return data
     } catch (cause) {
-      if (cause?.name !== 'AbortError' && snapshot.generation === generation) { error.value = errorMessage(cause); actionState.value = 'error' }
+      if (cause?.name !== 'AbortError' && ownsView(snapshot)) { error.value = errorMessage(cause); actionState.value = 'error' }
       return null
     }
   }
@@ -291,22 +393,27 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
       ? mutate(`/personal-workspace/files/${encodeURIComponent(file.fileId)}`, { displayName: name }, { method: 'PATCH' })
       : Promise.resolve(null)
   }
+  const usageContexts = new WeakMap()
   const usage = async () => {
     const file = detail.value?.file
     if (!validFileView(file)) return null
-    const snapshot = { generation, epoch: currentEpoch.value }
+    const snapshot = captureView()
     try {
       const { data } = await request({ url: `/personal-workspace/files/${encodeURIComponent(file.fileId)}/usage`, method: 'GET' }, snapshot)
       if (!data || !DECIMAL(data.impactRevision) || !Array.isArray(data.taskReferences) || !Array.isArray(data.activeExecutions)) throw new Error('文件引用信息返回无效。')
+      if (!ownsView(snapshot)) return null
+      usageContexts.set(toRaw(data), { ...snapshot, fileId: file.fileId })
       return data
     } catch (cause) {
-      if (cause?.name !== 'AbortError' && snapshot.generation === generation) error.value = errorMessage(cause)
+      if (cause?.name !== 'AbortError' && ownsView(snapshot)) error.value = errorMessage(cause)
       return null
     }
   }
   const trash = async (usageView) => {
     const file = detail.value?.file
     if (!validFileView(file) || !usageView || !DECIMAL(usageView.impactRevision)) return null
+    const context = usageContexts.get(toRaw(usageView))
+    if (!context || !ownsView(context) || context.fileId !== file.fileId) { error.value = '文件已切换，请重新确认引用信息。'; return null }
     return mutate(`/personal-workspace/files/${encodeURIComponent(file.fileId)}/trash`, {
       impactRevision: usageView.impactRevision, acknowledgeExistingReferences: true
     })
@@ -325,15 +432,17 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     if (!(data instanceof Blob)) throw new Error('文件内容响应无效。')
     return { blob: data, headers }
   }
-  const download = async (version = detail.value?.latestVersion) => {
+  const download = async (version = detail.value?.latestVersion?.version) => {
     const file = detail.value?.file
     if (!validFileView(file) || !VERSION(version)) return null
-    const versionInfo = detail.value?.versions?.find(item => item.version === version) || detail.value?.latestVersion
+    const versionInfo = detail.value?.versions?.find(item => item.version === version)
+    const snapshot = captureView()
     try {
       const content = await readBlob(file.fileId, version)
+      if (!ownsView(snapshot)) return null
       return { ...content, filename: safeDownloadFilename(versionInfo?.originalFilename || file.displayName) }
     } catch (cause) {
-      if (cause?.name !== 'AbortError') error.value = errorMessage(cause)
+      if (cause?.name !== 'AbortError' && ownsView(snapshot)) error.value = errorMessage(cause)
       return null
     }
   }
@@ -343,9 +452,9 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     preview.value = { ...preview.value, selectedIndex: index }
     return true
   }
-  const previewVersion = async (version = detail.value?.latestVersion) => {
+  const previewVersion = async (version = detail.value?.latestVersion?.version) => {
     const file = detail.value?.file
-    if (!validFileView(file) || !VERSION(version)) return null
+    if (!validFileView(file) || !VERSION(version)) { revokePreview(); error.value = '文件版本无效。'; preview.value = { kind: 'error', message: error.value }; return null }
     const snapshot = { generation, epoch: currentEpoch.value }
     revokePreview(); actionState.value = 'loading-preview'; error.value = ''
     const previewRequest = previewGeneration
@@ -426,6 +535,7 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
 
   return {
     items, nextCursor, listState, loading, actionState, error, detail, preview, lastOperation,
+    writeNotice, detailRetryFileId, retryDetail, versionItems, hasMoreVersions, versionsState, versionsError, versionsNextCursor, versionsLoaded, loadVersions, loadMoreVersions, closeDetail,
     refresh, loadMore, select, upload, appendVersion, rename, usage, trash, restore,
     download, previewVersion, selectPreviewPart, operation, revokePreview, reset, dispose
   }

@@ -105,7 +105,7 @@ const pickerDetail = computed(() => {
   return versions.length ? { ...detail, versions } : null
 })
 const materialKey = material => `${material.fileId}:${material.version}`
-const resetMaterialPicker = () => { pickerGeneration += 1; pickerFileId.value = ''; pickerVersion.value = null; workspace.detail.value = null; workspace.revokePreview?.() }
+const resetMaterialPicker = () => { pickerGeneration += 1; pickerFileId.value = ''; pickerVersion.value = null; workspace.closeDetail() }
 const openQuickMaterialPicker = async () => {
   if (!props.enabled || !props.identityScope || props.disabled) return
   draftMaterials.value = selectedMaterials.value.map(material => ({ ...material }))

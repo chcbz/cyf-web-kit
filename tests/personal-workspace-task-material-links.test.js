@@ -1,3 +1,4 @@
+import { validMaterialVersion } from '../src/composables/juyiting/materialVersion.js'
 import { isTerminalMatter } from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
 import { strict as assert } from 'node:assert'
 import { readFileSync } from 'node:fs'
@@ -11,13 +12,13 @@ const wrappers = []
 const domDescriptors = {}
 
 const taskLink = (overrides = {}) => ({
-  relationId: 'rel_input', taskId: 'task_a', fileId: 'file_a', version: 2,
-  role: 'INPUT', state: 'ACTIVE', relationRevision: 1, createdAt: 1, ...overrides
+  relationId: 'rel_input', taskId: 'task_a', fileId: 'file_a', version: '2',
+  role: 'INPUT', state: 'ACTIVE', relationRevision: '1', createdAt: 1, ...overrides
 })
 const workspaceDetail = () => ({
-  file: { fileId: 'file_a', displayName: '项目资料', state: 'ACTIVE', latestVersion: 2 },
-  latestVersion: { version: 2 },
-  versions: [{ version: 1, originalFilename: 'brief-v1.docx' }, { version: 2, originalFilename: 'brief-v2.docx' }]
+  file: { fileId: 'file_a', displayName: '项目资料', state: 'ACTIVE', latestVersion: '2' },
+  latestVersion: { version: '2' },
+  versions: [{ version: '1', originalFilename: 'brief-v1.docx' }, { version: '2', originalFilename: 'brief-v2.docx' }]
 })
 
 const installDom = () => {
@@ -50,7 +51,7 @@ const compile = () => {
     .replace(/^import\s+([^\s]+)\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_match, name, path) =>
       `const ${name} = imports[${JSON.stringify(path)}]`)
     .replace('export default', 'return')
-  return imports => new Function('imports', code)({ '@/composables/useFormalTaskExecution': { useFormalTaskExecution: formalExecutionStub }, ...imports })
+  return imports => new Function('imports', code)({ '../../composables/juyiting/materialVersion.js': { validMaterialVersion }, '@/composables/useFormalTaskExecution': { useFormalTaskExecution: formalExecutionStub }, ...imports })
 }
 
 describe('W06 workspace bounty material links', () => {
@@ -67,7 +68,7 @@ describe('W06 workspace bounty material links', () => {
     const detail = Vue.ref(null)
     const attached = []
     const workspace = {
-      items: Vue.ref([{ fileId: 'file_a', displayName: '项目资料', latestVersion: 2 }]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), error: Vue.ref(''), detail,
+      hasMoreVersions: Vue.ref(false), versionsState: Vue.ref('idle'), versionsError: Vue.ref(''), closeDetail: () => {}, items: Vue.ref([{ fileId: 'file_a', displayName: '项目资料', latestVersion: '2' }]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), error: Vue.ref(''), detail,
       refresh: async () => true, loadMore: async () => false,
       select: async () => { detail.value = workspaceDetail(); return detail.value }, dispose: () => {}
     }
@@ -89,7 +90,7 @@ describe('W06 workspace bounty material links', () => {
     await wrapper.get('select').setValue('1')
     await wrapper.get('.attach-material').trigger('click')
 
-    assert.deepEqual(attached, [{ fileId: 'file_a', version: 1, role: 'INPUT' }])
+    assert.deepEqual(attached, [{ fileId: 'file_a', version: '1', role: 'INPUT' }])
     assert.match(wrapper.text(), /不会启动 Agent 执行/)
     assert.match(wrapper.text(), /明确开始正式办理/)
   })
@@ -102,11 +103,11 @@ describe('W06 workspace bounty material links', () => {
     formal.execution.generationEnabled = Vue.ref(true)
     formal.begin = async payload => { begun.push(payload); return { executionId: 'exec-reference', state: 'QUEUED' } }
     const workspace = {
-      items: Vue.ref([{ fileId: 'file_ref', displayName: '真实参考资料', latestVersion: 3 }]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), error: Vue.ref(''), detail: Vue.ref(null),
+      hasMoreVersions: Vue.ref(false), versionsState: Vue.ref('idle'), versionsError: Vue.ref(''), closeDetail: () => {}, items: Vue.ref([{ fileId: 'file_ref', displayName: '真实参考资料', latestVersion: '3' }]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), error: Vue.ref(''), detail: Vue.ref(null),
       refresh: async () => true, loadMore: async () => false, select: async () => null, dispose: () => {}
     }
     const links = {
-      links: Vue.ref([taskLink({ relationId: 'rel_ref', fileId: 'file_ref', version: 2, role: 'REFERENCE' })]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), actionState: Vue.ref('idle'), error: Vue.ref(''),
+      links: Vue.ref([taskLink({ relationId: 'rel_ref', fileId: 'file_ref', version: '2', role: 'REFERENCE' })]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), actionState: Vue.ref('idle'), error: Vue.ref(''),
       load: async () => true, loadMore: async () => false, attach: async () => null, detach: async () => null, dispose: () => {}
     }
     const component = TaskMaterialLinks({ vue: Vue, '@/composables/useFormalTaskExecution': { useFormalTaskExecution: () => formal }, '@/composables/usePersonalWorkspace': { usePersonalWorkspace: () => workspace }, '@/composables/usePersonalWorkspaceTaskLinks': { usePersonalWorkspaceTaskLinks: () => links } })
@@ -118,11 +119,11 @@ describe('W06 workspace bounty material links', () => {
     assert.match(wrapper.text(), /明确勾选.*input manifest/)
     await wrapper.get('.formal-inputs input').setValue(true)
     await wrapper.get('.begin-formal-execution').trigger('click')
-    assert.deepEqual(begun, [{ inputs: [{ fileId: 'file_ref', version: 2 }], instruction: '整理正式成果', confirmed: true }])
+    assert.deepEqual(begun, [{ inputs: [{ fileId: 'file_ref', version: '2' }], instruction: '整理正式成果', confirmed: true }])
   })
 
   it('renders a server-returned OUTPUT link as an execution-managed reference without inventing formal delivery', () => {
-    const workspace = { items: Vue.ref([]), nextCursor: Vue.ref(null), listState: Vue.ref('empty'), loading: Vue.ref(false), error: Vue.ref(''), detail: Vue.ref(null), refresh: async () => true, loadMore: async () => false, select: async () => null, dispose: () => {} }
+    const workspace = { hasMoreVersions: Vue.ref(false), versionsState: Vue.ref('idle'), versionsError: Vue.ref(''), closeDetail: () => {}, items: Vue.ref([]), nextCursor: Vue.ref(null), listState: Vue.ref('empty'), loading: Vue.ref(false), error: Vue.ref(''), detail: Vue.ref(null), refresh: async () => true, loadMore: async () => false, select: async () => null, dispose: () => {} }
     const links = { links: Vue.ref([taskLink({ relationId: 'rel_output', role: 'OUTPUT' })]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), actionState: Vue.ref('idle'), error: Vue.ref(''), load: async () => true, loadMore: async () => false, attach: async () => null, detach: async () => null, dispose: () => {} }
     const component = TaskMaterialLinks({ vue: Vue, '@/composables/usePersonalWorkspace': { usePersonalWorkspace: () => workspace }, '@/composables/usePersonalWorkspaceTaskLinks': { usePersonalWorkspaceTaskLinks: () => links } })
     const wrapper = mount(component, { global: { stubs: { teleport: true } }, props: { taskId: 'task_a', identityEpoch: 1 } })
@@ -136,7 +137,7 @@ describe('W06 workspace bounty material links', () => {
 
   it('clears the local exact-version draft when the authenticated identity changes', async () => {
     const detail = Vue.ref(null)
-    const workspace = { items: Vue.ref([{ fileId: 'file_a', displayName: '项目资料', latestVersion: 2 }]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), error: Vue.ref(''), detail, refresh: async () => true, loadMore: async () => false, select: async () => { detail.value = workspaceDetail(); return detail.value }, dispose: () => {} }
+    const workspace = { hasMoreVersions: Vue.ref(false), versionsState: Vue.ref('idle'), versionsError: Vue.ref(''), closeDetail: () => {}, items: Vue.ref([{ fileId: 'file_a', displayName: '项目资料', latestVersion: '2' }]), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), error: Vue.ref(''), detail, refresh: async () => true, loadMore: async () => false, select: async () => { detail.value = workspaceDetail(); return detail.value }, dispose: () => {} }
     const links = { links: Vue.ref([]), nextCursor: Vue.ref(null), listState: Vue.ref('empty'), loading: Vue.ref(false), actionState: Vue.ref('idle'), error: Vue.ref(''), load: async () => true, loadMore: async () => false, attach: async () => null, detach: async () => null, dispose: () => {} }
     const component = TaskMaterialLinks({ vue: Vue, '@/composables/usePersonalWorkspace': { usePersonalWorkspace: () => workspace }, '@/composables/usePersonalWorkspaceTaskLinks': { usePersonalWorkspaceTaskLinks: () => links } })
     const wrapper = mount(component, { global: { stubs: { teleport: true } }, props: { taskId: 'task_a', identityEpoch: 1 } })
@@ -157,7 +158,7 @@ describe('W06 workspace bounty material links', () => {
     formal.activeExecution.value = { executionId: 'pwe_exact', state: 'QUEUED' }
     formal.canRevoke.value = true
     formal.revokeOriginal = async options => { calls.push(options); return receipt }
-    const workspace = { items: Vue.ref([]), nextCursor: Vue.ref(null), listState: Vue.ref('empty'), loading: Vue.ref(false), error: Vue.ref(''), detail: Vue.ref(null), refresh: async () => true, dispose: () => {} }
+    const workspace = { hasMoreVersions: Vue.ref(false), versionsState: Vue.ref('idle'), versionsError: Vue.ref(''), closeDetail: () => {}, items: Vue.ref([]), nextCursor: Vue.ref(null), listState: Vue.ref('empty'), loading: Vue.ref(false), error: Vue.ref(''), detail: Vue.ref(null), refresh: async () => true, dispose: () => {} }
     const links = { links: Vue.ref([]), nextCursor: Vue.ref(null), listState: Vue.ref('empty'), loading: Vue.ref(false), actionState: Vue.ref('idle'), error: Vue.ref(''), load: async () => true, dispose: () => {} }
     const component = TaskMaterialLinks({ vue: Vue, '@/composables/useFormalTaskExecution': { useFormalTaskExecution: () => formal }, '@/composables/usePersonalWorkspace': { usePersonalWorkspace: () => workspace }, '@/composables/usePersonalWorkspaceTaskLinks': { usePersonalWorkspaceTaskLinks: () => links } })
     const wrapper = mount(component, { global: { stubs: { teleport: true } }, props: { taskId: 'task_a', identityEpoch: 1 } })
@@ -175,9 +176,9 @@ describe('W06 workspace bounty material links', () => {
   })
 
   it('uses a non-modal full-page material picker whose scroll body and action footer stay separate with long lists', async () => {
-    const items = Array.from({ length: 19 }, (_, index) => ({ fileId: `file_${index + 1}`, displayName: `资料 ${index + 1}`, latestVersion: 1 }))
+    const items = Array.from({ length: 19 }, (_, index) => ({ fileId: `file_${index + 1}`, displayName: `资料 ${index + 1}`, latestVersion: '1' }))
     const detail = Vue.ref(null)
-    const workspace = { items: Vue.ref(items), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), error: Vue.ref(''), detail, refresh: async () => true, loadMore: async () => false, select: async fileId => { detail.value = { file: { fileId, displayName: fileId, state: 'ACTIVE', latestVersion: 1 }, latestVersion: { version: 1 }, versions: [{ version: 1, originalFilename: `${fileId}.pdf` }] }; return detail.value }, dispose: () => {} }
+    const workspace = { hasMoreVersions: Vue.ref(false), versionsState: Vue.ref('idle'), versionsError: Vue.ref(''), closeDetail: () => {}, items: Vue.ref(items), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), loading: Vue.ref(false), error: Vue.ref(''), detail, refresh: async () => true, loadMore: async () => false, select: async fileId => { detail.value = { file: { fileId, displayName: fileId, state: 'ACTIVE', latestVersion: '1' }, latestVersion: { version: '1' }, versions: [{ version: '1', originalFilename: `${fileId}.pdf` }] }; return detail.value }, dispose: () => {} }
     const links = { links: Vue.ref([]), nextCursor: Vue.ref(null), listState: Vue.ref('empty'), loading: Vue.ref(false), actionState: Vue.ref('idle'), error: Vue.ref(''), load: async () => true, loadMore: async () => false, attach: async () => null, detach: async () => null, dispose: () => {} }
     const component = TaskMaterialLinks({ vue: Vue, '@/composables/usePersonalWorkspace': { usePersonalWorkspace: () => workspace }, '@/composables/usePersonalWorkspaceTaskLinks': { usePersonalWorkspaceTaskLinks: () => links } })
     const wrapper = mount(component, { global: { stubs: { teleport: true } }, props: { taskId: 'task_a', identityEpoch: 1, defaultInstruction: '整理正式 PDF' } })
