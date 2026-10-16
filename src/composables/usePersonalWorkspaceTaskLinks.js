@@ -41,7 +41,7 @@ const errorMessage = error => {
   if (error?.code === 'TASK_FILE_LINK_CHANGED' || error?.status === 412) return '关联已变化，请刷新后再解除。'
   if (error?.code === 'PRECONDITION_REQUIRED' || error?.status === 428) return '关联版本前提缺失，请刷新后再解除。'
   if (error?.status === 400) return '关联请求格式无效，请检查文件版本和资料用途。'
-  if (error?.status === 503) return '任务资料关联暂不可用，请稍后刷新确认，不要重复提交。'
+  if (error?.status === 503) return '任务资料关联暂不可用；写入结果未确认时，请重试原操作，不要重复新建。'
   return error?.message || '任务资料关联请求未完成，请刷新确认。'
 }
 
@@ -209,7 +209,7 @@ export function usePersonalWorkspaceTaskLinks ({ api = createApi('/agent'), task
     actionState.value = 'saving'; error.value = ''; writeNotice.value = ''
     try {
       return await writes.run({
-        target: JSON.stringify([selectedTaskId, fileId]), input: ['CREATE', version, role], label: '关联任务资料',
+        target: JSON.stringify([selectedTaskId, fileId]), input: ['CREATE', version, role], label: `关联任务资料（${selectedTaskId} / ${fileId}）`,
         execute: async (key, replay) => {
           const { data } = await request({
             url: `/tasks/${encodeURIComponent(selectedTaskId)}/file-links`, method: 'POST',
@@ -247,7 +247,7 @@ export function usePersonalWorkspaceTaskLinks ({ api = createApi('/agent'), task
     actionState.value = 'removing'; error.value = ''; writeNotice.value = ''
     try {
       return await writes.run({
-        target: JSON.stringify([selectedTaskId, original.fileId]), input: ['DELETE', original.relationId, ifMatch], label: '解除任务资料关联',
+        target: JSON.stringify([selectedTaskId, original.fileId]), input: ['DELETE', original.relationId, ifMatch], label: `解除任务资料关联（${selectedTaskId} / ${original.fileId}）`,
         execute: async (key, replay) => {
           const { data } = await request({
             url: `/tasks/${encodeURIComponent(selectedTaskId)}/file-links/${encodeURIComponent(original.relationId)}`,

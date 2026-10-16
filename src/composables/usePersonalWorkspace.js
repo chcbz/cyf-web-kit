@@ -53,7 +53,7 @@ const errorMessage = error => {
   if (error?.code === 'FILE_TYPE_UNSUPPORTED' || error?.status === 415) return '此格式暂不支持，请选择工作空间支持的图片、音频、文本或办公文档。'
   if (error?.code === 'METADATA_CHANGED' || error?.status === 412) return '文件或关联情况已变化，请查看更新后的信息再确认。'
   if (error?.code === 'FILE_VERSION_CONFLICT' || error?.status === 409) return '文件版本已变化，请刷新后明确选择要追加的版本。'
-  if (error?.code === 'OPERATION_PROCESSING' || error?.status === 202) return '上一次操作仍在确认中，请使用原操作标识查询后再重试。'
+  if (error?.code === 'OPERATION_PROCESSING' || error?.status === 202) return '上一次操作仍在处理中，请点击“重试原操作”核对结果，不要重复新建。'
   if (error?.status === 503) return '工作空间存储暂不可用，请稍后重试。'
   return error?.message || '工作空间请求未完成，请刷新确认。'
 }
@@ -335,7 +335,7 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     if (name && !TEXT(name, 255)) { error.value = '文件显示名无效。'; actionState.value = 'error'; return null }
     actionState.value = 'uploading'; error.value = ''
     try {
-      return await writes.run({ target: 'CREATE', input: [input.file, name], label: '上传文件',
+      return await writes.run({ target: 'CREATE', input: [input.file, name], label: `上传文件：${name || input.file.name}`,
         execute: async key => {
           const body = new FormData()
           body.append('file', input.file, input.file.name)
@@ -365,7 +365,7 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     try { input = normalizedFile(candidate) } catch (cause) { error.value = errorMessage(cause); actionState.value = 'error'; return null }
     actionState.value = 'appending-version'; error.value = ''
     try {
-      return await writes.run({ target: file.fileId, input: ['APPEND', input.file, file.latestVersion], label: '追加版本',
+      return await writes.run({ target: file.fileId, input: ['APPEND', input.file, file.latestVersion], label: `追加版本：${file.displayName}`,
         execute: async key => {
           const body = new FormData()
           body.append('file', input.file, input.file.name)
@@ -394,7 +394,7 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     const payload = body == null ? body : { ...body }
     actionState.value = 'saving'; error.value = ''
     try {
-      return await writes.run({ target: file.fileId, input: [path, method, JSON.stringify(payload), ifMatch], label: '文件管理操作',
+      return await writes.run({ target: file.fileId, input: [path, method, JSON.stringify(payload), ifMatch], label: `${path.endsWith('/trash') ? '移入回收站' : path.endsWith('/restore') ? '恢复文件' : '重命名'}：${file.displayName}`,
         execute: async key => {
           try {
             const { data } = await request({ url: path, method, data: payload, headers: { 'Idempotency-Key': key, 'If-Match': ifMatch } }, snapshot)
