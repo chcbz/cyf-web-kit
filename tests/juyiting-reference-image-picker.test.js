@@ -149,7 +149,12 @@ describe('hall requirement-draft reference image selection', () => {
     const wrong = createFixture({ details: new Map([['file-a', detailView('file-b')]]) })
     const wrongSelection = useHallReferenceImageSelection({ api: wrong.api, identityEpoch: ref('owner-a'), urlApi: wrong.urlApi })
     assert.equal(await wrongSelection.openFile('file-a'), null)
-    assert.match(wrongSelection.error.value, /当前可读|归属/)
+    // The shared workspace boundary rejects foreign-file details before image selection.
+    assert.equal(wrongSelection.error.value, '文件详情返回格式无效。')
+    assert.equal(wrongSelection.currentDetail.value, null)
+    assert.deepEqual(wrongSelection.draftReferences.value, [])
+    assert.equal(wrong.calls.length, 1)
+    assert.equal(wrong.created.length, 0)
     wrongSelection.dispose()
 
     const pendingDetail = deferred()

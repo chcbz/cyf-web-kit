@@ -101,10 +101,13 @@ describe('task-linked reference input resolver', () => {
     ['unsupported MIME', {}, fileDetail('image-b', [version('image-b', 2, 'application/pdf')]), 'UNSUPPORTED_REFERENCE_MIME'],
     ['missing linked version', {}, fileDetail('image-b', [version('image-b', 3)]), 'REFERENCE_VERSION_MISMATCH'],
     ['duplicate linked version rows', {}, fileDetail('image-b', [version('image-b', 2), version('image-b', 2)]), 'REFERENCE_VERSION_MISMATCH'],
-    ['wrong version owner', {}, fileDetail('image-b', [version('foreign-file', 2)]), 'FILE_DETAIL_MISMATCH']
+    // Invalid ownership is rejected by workspace.select before the resolver receives a detail.
+    ['wrong version owner', {}, fileDetail('image-b', [version('foreign-file', 2)]), 'FILE_UNAVAILABLE']
   ]) it(`fails closed for ${name}`, async () => {
     const h = resolverHarness({ pages: [{ items: [taskLink(linkOverride)], nextCursor: null, hasMore: false }], details: { 'image-b': detail } })
-    expect((await h.resolver.resolve({ taskId: 'task-1', inputRefsPolicy: 'TASK_LINKED_REFERENCE' })).reason).to.equal(reason)
+    expect(await h.resolver.resolve({ taskId: 'task-1', inputRefsPolicy: 'TASK_LINKED_REFERENCE' })).to.deep.equal({
+      state: 'BLOCKED', reason, inputRefs: []
+    })
   })
 
   it('rejects duplicate exact references and the 33rd reference without truncation or detail reads', async () => {
