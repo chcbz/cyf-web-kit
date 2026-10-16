@@ -68,7 +68,7 @@
             <label><span>文件版本</span><select v-model="selectedVersion"><option v-for="version in workspace.detail.value.versions" :key="version.version" :value="version.version">v{{ version.version }} · {{ version.originalFilename }}</option></select></label>
             <label><span>资料用途</span><select v-model="selectedRole"><option value="INPUT">用于办理</option><option value="REFERENCE">仅供参考</option></select></label>
           </div>
-          <button v-if="workspace.hasMoreVersions.value" type="button" :disabled="workspace.versionsState.value === 'loading'" @click="workspace.loadMoreVersions">{{ workspace.versionsState.value === 'loading' ? '正在读取历史版本…' : '读取更早版本' }}</button><p v-if="workspace.versionsError.value" role="alert">{{ workspace.versionsError.value }}</p>
+            <template v-if="workspace.hasMoreVersions.value"><button type="button" :disabled="workspace.versionsState.value === 'loading'" @click="workspace.loadMoreVersions">{{ workspace.versionsState.value === 'loading' ? '正在读取历史版本…' : '读取更早版本' }}</button></template><p v-if="workspace.versionsError.value" role="alert">{{ workspace.versionsError.value }}</p>
           <button type="button" class="attach-material" :disabled="!canAttach" @click="attach">确认使用此版本</button>
         </template>
         <p v-else class="task-material-note">尚未选择资料。资料不是开始办理的前置条件。</p>

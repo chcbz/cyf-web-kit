@@ -29,7 +29,7 @@
         <div class="treasure-file-heading"><div><h2 ref="detailTitleRef" tabindex="-1">{{ workspace.detail.value.file.displayName }}</h2><p>{{ originText(workspace.detail.value.file.originKind) }} · {{ workspace.detail.value.file.state === 'TRASHED' ? '已回收' : '仅自己可见' }}</p></div><button v-if="treasureView === 'preview'" type="button" @click="treasureView = 'manage'">更多管理</button></div>
         <template v-if="treasureView === 'preview'">
           <div class="treasure-preview-tools treasure-version-tools"><label><span class="treasure-version-label">版本</span><select v-model="selectedVersion" @change="preview(selectedVersion)"><option v-for="version in workspace.detail.value.versions" :key="version.version" :value="version.version">v{{ version.version }} · {{ version.originalFilename }}</option></select></label><button type="button" @click="download(selectedVersion)">下载</button></div>
-          <button v-if="workspace.hasMoreVersions.value" type="button" :disabled="workspace.versionsState.value === 'loading'" @click="workspace.loadMoreVersions">{{ workspace.versionsState.value === 'loading' ? '正在读取历史版本…' : '读取更早版本' }}</button><p v-if="workspace.versionsError.value" role="alert">{{ workspace.versionsError.value }}</p>
+          <template v-if="workspace.hasMoreVersions.value"><button type="button" :disabled="workspace.versionsState.value === 'loading'" @click="workspace.loadMoreVersions">{{ workspace.versionsState.value === 'loading' ? '正在读取历史版本…' : '读取更早版本' }}</button></template><p v-if="workspace.versionsError.value" role="alert">{{ workspace.versionsError.value }}</p>
           <p class="treasure-note">本次使用固定的 v{{ selectedVersion }}；以后上传新版本，不会替换已交办的资料。</p>
           <p v-if="workspace.preview.value.message && ['parts', 'text', 'audio', 'image'].includes(workspace.preview.value.kind)" class="treasure-note" role="status">{{ workspace.preview.value.message }}</p>
           <section class="treasure-preview" aria-label="文件预览" aria-live="polite">
@@ -163,7 +163,7 @@
           :disabled="workspace.actionState.value === 'saving'"
           @click="trash"
         >移入回收站</button></template><template v-else><p>本版不提供永久删除。</p><button type="button" :disabled="workspace.actionState.value === 'saving'" @click="restore">恢复文件</button></template></div></section>
-        <section v-else-if="detailPane === 'versions'" class="detail-pane"><button v-if="workspace.hasMoreVersions.value" type="button" :disabled="workspace.versionsState.value === 'loading'" @click="workspace.loadMoreVersions">{{ workspace.versionsState.value === 'loading' ? '正在读取历史版本…' : '读取更早版本' }}</button><p v-if="workspace.versionsError.value" role="alert">{{ workspace.versionsError.value }}</p><div
+        <section v-else-if="detailPane === 'versions'" class="detail-pane"><template v-if="workspace.hasMoreVersions.value"><button type="button" :disabled="workspace.versionsState.value === 'loading'" @click="workspace.loadMoreVersions">{{ workspace.versionsState.value === 'loading' ? '正在读取历史版本…' : '读取更早版本' }}</button></template><p v-if="workspace.versionsError.value" role="alert">{{ workspace.versionsError.value }}</p><div
           v-for="version in workspace.detail.value.versions"
           :key="version.version"
           class="version-row"
@@ -192,7 +192,7 @@
         >另起一项新交付（不重试当前）</button></div><section v-if="execution.receipt.value" class="execution-status"><dl class="file-details"><div><dt>执行状态</dt><dd>{{ executionStateText(execution.receipt.value.state) }}</dd></div><div><dt>目标 Agent</dt><dd>{{ execution.selectedExecutionAgent.value?.name || execution.receipt.value.targetAgentId }}</dd></div><div><dt>执行编号</dt><dd>{{ execution.receipt.value.executionId }}</dd></div></dl><p v-if="execution.receipt.value.state === 'QUEUED'" class="workspace-note">服务端已接受请求，正在等待结果；尚未确认任何运行阶段或交付完成。</p><div class="actions"><button type="button" @click="refreshExecution">刷新进度</button><button type="button" :disabled="execution.execution.value?.state !== 'QUEUED'" @click="revokeExecutionInputs">撤销尚未开始的输入授权</button></div></section><p v-if="execution.completionNotice.value" class="execution-notice" role="status">{{ execution.completionNotice.value }}</p><p v-if="execution.error.value" class="workspace-error" role="alert">{{ execution.error.value }}</p></section>
       </section>
     </section>
-    <p v-if="workspace.writeNotice.value" class="workspace-note workspace-page-message" role="status">{{ workspace.writeNotice.value }} <button v-if="workspace.detailRetryFileId.value" type="button" :disabled="workspace.actionState.value === 'loading-detail'" @click="retrySavedDetail">重读详情</button></p>
+    <p v-if="workspace.writeNotice.value" class="workspace-note workspace-page-message" role="status">{{ workspace.writeNotice.value }} <template v-if="workspace.detailRetryFileId.value"><button type="button" :disabled="workspace.actionState.value === 'loading-detail'" @click="retrySavedDetail">重读详情</button></template></p>
     <p v-if="workspace.error.value" class="workspace-error workspace-page-message" role="alert">{{ workspace.error.value }}</p><p v-if="workspace.lastOperation.value" class="workspace-receipt" role="status">最近操作：{{ workspace.lastOperation.value.operationId }}（{{ workspace.lastOperation.value.state }}）</p>
   </main>
 </template>
