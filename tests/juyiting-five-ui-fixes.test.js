@@ -91,7 +91,7 @@ const openPanel = async (task = panelTask(), extra = {}) => {
 }
 
 describe('five fixes cancellation thin confirmation layer', () => {
-  it('dismisses without POST, then confirms the exact original integer version once, not a newly selected task', async () => {
+  it('dismisses without POST, then confirms the exact original decimal-string version once, not a newly selected task', async () => {
     const task = panelTask(); const wrapper = await openPanel(task)
     try {
       await wrapper.get('.ordinary-cancel-action').trigger('click')
@@ -101,7 +101,7 @@ describe('five fixes cancellation thin confirmation layer', () => {
       await wrapper.get('.ordinary-cancel-action').trigger('click')
       await wrapper.get('.confirm').trigger('click')
       expect(wrapper.emitted('cancel-task')).to.have.length(1)
-      expect(wrapper.emitted('cancel-task')[0][0]).to.include({ id: 'a', taskVersion: 2 })
+      expect(wrapper.emitted('cancel-task')[0][0]).to.include({ id: 'a', taskVersion: '2' })
       await wrapper.get('.ordinary-cancel-action').trigger('click')
       expect(wrapper.emitted('cancel-task')).to.have.length(1)
     } finally { wrapper.unmount() }

@@ -54,7 +54,7 @@ describe('flow gap actual UI consumers', () => {
       await button.trigger('click'); expect(wrapper.emitted('cancel-task')).to.equal(undefined)
       wrapper.get('var-dialog').element.dispatchEvent(new window.Event('confirm')); await Vue.nextTick()
       expect(wrapper.emitted('cancel-task')).to.have.length(1)
-      expect(wrapper.emitted('cancel-task')[0][0]).to.include({ id: 'a', taskVersion: 2 })
+      expect(wrapper.emitted('cancel-task')[0][0]).to.include({ id: 'a', taskVersion: '2' })
       await wrapper.setProps({ cancellationBusy: true }); await button.trigger('click')
       expect(button.attributes('disabled')).to.equal(''); expect(wrapper.emitted('cancel-task')).to.have.length(1)
       await wrapper.setProps({ cancellationBusy: false, cancellationState: { taskId: 'a', status: 'unresolved' } })
