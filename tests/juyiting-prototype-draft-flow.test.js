@@ -44,6 +44,7 @@ const deps = () => {
       loadCase: async () => null, loadExecution: async () => null, loadResults: async () => null, loadFormalTask: async () => null, dispose: () => {}
     }),
     usePersonalWorkspace: () => ({
+      closeDetail () { this.detail.value = null; this.preview.value = { kind: 'none' } },
       loading: Vue.ref(false), error: Vue.ref(''), items: workspaceItems, listState: Vue.ref('ready'), detail: Vue.ref(null), preview: Vue.ref({ kind: 'text', text: '固定版本预览' }),
       refresh: async () => true, select: async fileId => ({ file: { fileId } }), previewVersion: async () => true, download: async () => null, dispose: () => {}
     }),
