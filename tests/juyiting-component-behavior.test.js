@@ -159,7 +159,8 @@ const loadSfc = (relativePath, runtimeAgentApi = { post: async () => { throw new
     .replace(/^import\s+HallAccountEntry\s+from\s+['"]\.\/HallAccountEntry\.vue['"];?\s*$/gm, 'var HallAccountEntry = { name: \'HallAccountEntry\', template: \'<button class="hall-account-entry-stub" type="button"></button>\', props: [\'avatar\', \'compact\', \'displayName\', \'disabled\'], emits: [\'open-profile\'] }')
     .replace(/^import\s+\{\s*marked\s*\}\s+from\s+['"]marked['"];?\s*$/gm, 'var marked = { setOptions: () => {}, parse: value => value }')
     .replace(/^import\s+DOMPurify\s+from\s+['"]dompurify['"];?\s*$/gm, 'var DOMPurify = { sanitize: value => value }')
-    .replace('export default', 'return')
+    .replace(/^import\s+WorkspaceWriteRecovery\s+from\s+['"][^'"]+['"];?\s*$/gm, "var WorkspaceWriteRecovery = { template: '<section />', props: ['pending'], emits: ['retry'] }")
+  .replace('export default', 'return')
 
   const unresolvedImports = scriptBody.match(/^import\s.+$/gm)
   if (unresolvedImports?.length) throw new SyntaxError(`Unsupported SFC imports in ${relativePath}: ${unresolvedImports.join(', ')}`)
@@ -177,7 +178,7 @@ let chatPanelDependencies
 const createChatPanelDependencies = () => {
   const directory = () => ({
     links: Vue.ref([]), nextCursor: Vue.ref(null), listState: Vue.ref('empty'), loading: Vue.ref(false),
-    actionState: Vue.ref('idle'), error: Vue.ref(''), load: async () => true, loadMore: async () => false,
+    pendingWrites: Vue.ref([]), writeNotice: Vue.ref(''), retryWrite: async () => null, actionState: Vue.ref('idle'), error: Vue.ref(''), load: async () => true, loadMore: async () => false,
     attach: async () => null, detach: async () => null, dispose: () => {}
   })
   return {
@@ -2676,7 +2677,8 @@ const loadActualJuyiHall = (mocks) => {
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, imports) => `var { ${imports} } = mocks`)
     .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = mocks.${name}`)
     .replace(/import\.meta\.env/g, 'mocks.env')
-    .replace('export default', 'return')
+    .replace(/^import\s+WorkspaceWriteRecovery\s+from\s+['"][^'"]+['"];?\s*$/gm, "var WorkspaceWriteRecovery = { template: '<section />', props: ['pending'], emits: ['retry'] }")
+  .replace('export default', 'return')
   const component = new Function('Vue', 'mocks', body)(Vue, { useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
   const renderBody = template.code
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)

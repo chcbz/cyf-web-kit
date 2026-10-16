@@ -161,6 +161,8 @@
             {{ isTaskDiscussion ? '未确认当前事项标识，不能读取或展示资料。' : '请先发送一条消息建立话头，再从百宝箱引用资料。' }}
           </p>
           <template v-else>
+            <WorkspaceWriteRecovery :pending="selectedMaterialDirectory.pendingWrites.value" @retry="selectedMaterialDirectory.retryWrite" />
+            <p v-if="selectedMaterialDirectory.writeNotice.value" role="status">{{ selectedMaterialDirectory.writeNotice.value }}</p>
             <p v-if="materialError" class="material-reference-error" role="alert">{{ materialError }}</p>
             <div v-if="materialLoading" class="material-reference-state">正在查找百宝箱资料…</div>
             <div v-if="isTaskDiscussion" class="task-material-directory">
@@ -232,6 +234,7 @@ import DOMPurify from 'dompurify'
 import HallChatComposer from './HallChatComposer.vue'
 import HallConversationHistory from './HallConversationHistory.vue'
 import BountyTypedOutcomeCard from './BountyTypedOutcomeCard.vue'
+import WorkspaceWriteRecovery from '../personal-workspace/WorkspaceWriteRecovery.vue'
 import { usePersonalWorkspace } from '../../composables/usePersonalWorkspace.js'
 import { usePersonalWorkspaceConversationLinks } from '../../composables/usePersonalWorkspaceConversationLinks.js'
 import { usePersonalWorkspaceTaskLinks } from '../../composables/usePersonalWorkspaceTaskLinks.js'

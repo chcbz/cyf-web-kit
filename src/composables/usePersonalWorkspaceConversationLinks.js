@@ -1,5 +1,6 @@
 import { computed, getCurrentInstance, onBeforeUnmount, ref, unref, watch } from 'vue'
 import { createApi } from './useHttp.js'
+import { usePersonalWorkspaceWriteIntent } from './usePersonalWorkspaceWriteIntent.js'
 import { workspaceRevisionTag } from '../utils/personalWorkspaceProtocol.js'
 import { registerIdentityCleanup } from '../utils/identityLifecycle.js'
 
@@ -18,7 +19,6 @@ const VERSION = value => DECIMAL(value) && BigInt(value) >= 1n && BigInt(value) 
 const REVISION = value => DECIMAL(value) && BigInt(value) >= 1n
 const valueOf = value => typeof value === 'function' ? value() : unref(value)
 const abortError = message => new DOMException(message, 'AbortError')
-const randomKey = () => globalThis.crypto?.randomUUID?.() || `pws-conversation-link-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
 const exactKeys = (value, fields) => value && typeof value === 'object' && !Array.isArray(value) &&
   Object.keys(value).length === fields.size && Object.keys(value).every(key => fields.has(key))
@@ -32,7 +32,7 @@ const validList = (value, conversationId) => exactKeys(value, LIST_FIELDS) && ty
   (value.nextCursor == null || CURSOR(value.nextCursor)) &&
   new Set(value.items.map(item => item.relationId)).size === value.items.length
 const validDetach = (value, conversationId) => exactKeys(value, DETACH_FIELDS) && validLink(value.link, conversationId) &&
-  value.link.state === 'DETACHED' && value.executionSnapshotsPreserved === true
+  value.executionSnapshotsPreserved === true
 const errorMessage = error => {
   if (error?.name === 'AbortError') return ''
   if ([401, 403, 404].includes(error?.status)) return '当前身份或议事资料已不可访问，请刷新后重新选择。'
@@ -50,6 +50,8 @@ const errorMessage = error => {
  * remains exclusively server-side, and this adapter never derives it from a route or Agent.
  */
 export function usePersonalWorkspaceConversationLinks ({ api = createApi('/agent'), conversationId = null, identityEpoch = 0 } = {}) {
+  const writes = usePersonalWorkspaceWriteIntent()
+  const writeNotice = ref('')
   const links = ref([])
   const nextCursor = ref(null)
   const listState = ref('idle')
@@ -73,11 +75,13 @@ export function usePersonalWorkspaceConversationLinks ({ api = createApi('/agent
     loading.value = false
     actionState.value = 'idle'
     error.value = ''
+    writeNotice.value = ''
   }
   const stillCurrent = (snapshot, controller) => !disposed && snapshot.generation === generation &&
     snapshot.contextKey === contextKey.value && !controller.signal.aborted
   const request = async (options, snapshot = { generation, contextKey: contextKey.value }) => {
     const controller = new AbortController()
+    if (!stillCurrent(snapshot, controller)) throw abortError('Link context changed')
     controllers.add(controller)
     try {
       let metadata
@@ -98,7 +102,7 @@ export function usePersonalWorkspaceConversationLinks ({ api = createApi('/agent
     const index = links.value.findIndex(item => item.relationId === link.relationId)
     links.value = index < 0
       ? [link, ...links.value]
-      : links.value.map(item => item.relationId === link.relationId ? link : item)
+      : links.value.map(item => item.relationId === link.relationId && BigInt(link.relationRevision) >= BigInt(item.relationRevision) ? link : item)
   }
   const load = async ({ cursor = null, append = false } = {}) => {
     const selectedConversationId = currentConversationId.value
@@ -130,6 +134,18 @@ export function usePersonalWorkspaceConversationLinks ({ api = createApi('/agent
     }
   }
   const loadMore = () => nextCursor.value ? load({ cursor: nextCursor.value, append: true }) : Promise.resolve(false)
+  const retryWrite = async target => {
+    const originalParent = JSON.parse(target)[0]
+    if (originalParent !== currentConversationId.value) {
+      error.value = '请返回原议事后重试原操作。'
+      return null
+    }
+    const context = contextKey.value
+    try { return await writes.retry(target) } catch (cause) {
+      if (context === contextKey.value && !disposed) { error.value = errorMessage(cause); actionState.value = 'error' }
+      return null
+    }
+  }
   const attach = async ({ fileId, version, role } = {}) => {
     const selectedConversationId = currentConversationId.value
     if (!ID(selectedConversationId) || !ID(fileId) || !VERSION(version) || !['INPUT', 'REFERENCE'].includes(role)) {
@@ -137,21 +153,31 @@ export function usePersonalWorkspaceConversationLinks ({ api = createApi('/agent
       actionState.value = 'error'
       return null
     }
-    const snapshot = { generation, contextKey: contextKey.value }
-    actionState.value = 'saving'; error.value = ''
+    const originalContext = contextKey.value
+    actionState.value = 'saving'; error.value = ''; writeNotice.value = ''
     try {
-      const { data } = await request({
-        url: `/conversations/${encodeURIComponent(selectedConversationId)}/file-links`, method: 'POST',
-        data: { fileId, version, role }, headers: { 'Idempotency-Key': randomKey() }
-      }, snapshot)
-      if (!validLink(data, selectedConversationId) || data.state !== 'ACTIVE' || data.fileId !== fileId || data.version !== version || data.role !== role) {
-        throw new Error('议事资料关联回执无效，尚不能确认保存。')
-      }
-      replace(data)
-      actionState.value = 'ready'
-      return data
+      return await writes.run({
+        target: JSON.stringify([selectedConversationId, fileId]), input: ['CREATE', version, role], label: '关联议事资料',
+        execute: async (key, replay) => {
+          const { data } = await request({
+            url: `/conversations/${encodeURIComponent(selectedConversationId)}/file-links`, method: 'POST',
+            data: { fileId, version, role }, headers: { 'Idempotency-Key': key }
+          }, { generation, contextKey: originalContext })
+          if (!validLink(data, selectedConversationId) || (!replay && data.state !== 'ACTIVE') ||
+              data.fileId !== fileId || data.version !== version || data.role !== role) {
+            throw new Error('议事资料关联回执无效，请重试原操作核对。')
+          }
+          return data
+        },
+        committed: data => {
+          if (originalContext !== contextKey.value || disposed) return
+          replace(data)
+          actionState.value = 'ready'
+          writeNotice.value = data.state === 'ACTIVE' ? '原关联操作已提交。' : '原关联操作已提交，但当前关联已解除。'
+        }
+      })
     } catch (cause) {
-      if (cause?.name !== 'AbortError' && snapshot.generation === generation && snapshot.contextKey === contextKey.value) {
+      if (cause?.name !== 'AbortError' && originalContext === contextKey.value && !disposed) {
         error.value = errorMessage(cause); actionState.value = 'error'
       }
       return null
@@ -160,26 +186,37 @@ export function usePersonalWorkspaceConversationLinks ({ api = createApi('/agent
   const detach = async link => {
     const selectedConversationId = currentConversationId.value
     if (!ID(selectedConversationId) || !validLink(link, selectedConversationId) || link.state !== 'ACTIVE') {
-      error.value = '请先刷新并选择一个当前关联。'
-      actionState.value = 'error'
-      return null
+      error.value = '请先刷新并选择一个当前关联。'; actionState.value = 'error'; return null
     }
-    const ifMatch = etagFor(link)
-    const snapshot = { generation, contextKey: contextKey.value }
-    actionState.value = 'removing'; error.value = ''
+    // Never read a later reactive row when retrying the original destructive operation.
+    const original = { ...link }
+    const ifMatch = etagFor(original)
+    const originalContext = contextKey.value
+    actionState.value = 'removing'; error.value = ''; writeNotice.value = ''
     try {
-      const { data } = await request({
-        url: `/conversations/${encodeURIComponent(selectedConversationId)}/file-links/${encodeURIComponent(link.relationId)}`,
-        method: 'DELETE', headers: { 'Idempotency-Key': randomKey(), 'If-Match': ifMatch }
-      }, snapshot)
-      if (!validDetach(data, selectedConversationId) || data.link.relationId !== link.relationId || data.link.fileId !== link.fileId || data.link.version !== link.version || data.link.role !== link.role) {
-        throw new Error('解除议事资料关联回执无效，尚不能确认解除。')
-      }
-      replace(data.link)
-      actionState.value = 'ready'
-      return data
+      return await writes.run({
+        target: JSON.stringify([selectedConversationId, original.fileId]), input: ['DELETE', original.relationId, ifMatch], label: '解除议事资料关联',
+        execute: async (key, replay) => {
+          const { data } = await request({
+            url: `/conversations/${encodeURIComponent(selectedConversationId)}/file-links/${encodeURIComponent(original.relationId)}`,
+            method: 'DELETE', headers: { 'Idempotency-Key': key, 'If-Match': ifMatch }
+          }, { generation, contextKey: originalContext })
+          if (!validDetach(data, selectedConversationId) || (!replay && data.link.state !== 'DETACHED') ||
+              data.link.relationId !== original.relationId || data.link.fileId !== original.fileId ||
+              data.link.version !== original.version || data.link.role !== original.role) {
+            throw new Error('解除议事资料关联回执无效，请重试原操作核对。')
+          }
+          return data
+        },
+        committed: data => {
+          if (originalContext !== contextKey.value || disposed) return
+          replace(data.link)
+          actionState.value = 'ready'
+          writeNotice.value = data.link.state === 'DETACHED' ? '原解除操作已提交。' : '原解除操作已提交，但当前资料已重新关联。'
+        }
+      })
     } catch (cause) {
-      if (cause?.name !== 'AbortError' && snapshot.generation === generation && snapshot.contextKey === contextKey.value) {
+      if (cause?.name !== 'AbortError' && originalContext === contextKey.value && !disposed) {
         error.value = errorMessage(cause); actionState.value = 'error'
       }
       return null
@@ -187,14 +224,16 @@ export function usePersonalWorkspaceConversationLinks ({ api = createApi('/agent
   }
 
   watch(contextKey, reset, { immediate: true, flush: 'sync' })
-  const unregisterIdentityCleanup = registerIdentityCleanup(reset)
+  watch(currentEpoch, () => writes.clear(), { flush: 'sync' })
+  const unregisterIdentityCleanup = registerIdentityCleanup(() => { writes.clear(); reset() })
   const dispose = () => {
     if (disposed) return
     disposed = true
+    writes.clear()
     unregisterIdentityCleanup()
     reset()
   }
   if (getCurrentInstance()) onBeforeUnmount(dispose)
 
-  return { links, nextCursor, listState, loading, actionState, error, currentConversationId, load, loadMore, attach, detach, etagFor, reset, dispose }
+  return { pendingWrites: writes.pending, retryWrite, writeNotice, links, nextCursor, listState, loading, actionState, error, currentConversationId, load, loadMore, attach, detach, etagFor, reset, dispose }
 }

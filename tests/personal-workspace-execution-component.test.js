@@ -21,6 +21,7 @@ script = script
   .replace(/^import\s+\{\s*usePersonalWorkspaceExecution\s*\}\s+from\s+['"]@\/composables\/usePersonalWorkspaceExecution['"];?\s*$/gm, 'var { usePersonalWorkspaceExecution } = deps')
   .replace(/^import\s+\{\s*deliveryTypeText\s*\}\s+from\s+['"]@\/utils\/executionFormats['"];?\s*$/gm, 'var { deliveryTypeText } = deps')
   .replace(/^import\s+\{\s*workspaceByteText,\s*validMaterialVersion\s*\}\s+from\s+['"]@\/utils\/personalWorkspaceProtocol['"];?\s*$/gm, 'var { workspaceByteText, validMaterialVersion } = deps')
+  .replace(/^import\s+WorkspaceWriteRecovery\s+from\s+['"][^'"]+['"];?\s*$/gm, "var WorkspaceWriteRecovery = { template: '<section />', props: ['pending'], emits: ['retry'] }")
   .replace('export default', 'return')
 
 const workspaceMock = () => {
@@ -28,7 +29,7 @@ const workspaceMock = () => {
   const workspace = {
     hasMoreVersions: Vue.ref(false), versionsState: Vue.ref('idle'), versionsError: Vue.ref(''), writeNotice: Vue.ref(''), detailRetryFileId: Vue.ref(null),
     items: Vue.ref([{ fileId: 'file_1', displayName: '案卷.txt', mediaFamily: 'TEXT', originKind: 'USER_UPLOAD', latestVersion: '1', state: 'ACTIVE' }]), loading: Vue.ref(false), nextCursor: Vue.ref(null), listState: Vue.ref('ready'), error: Vue.ref(''), lastOperation: Vue.ref(null), actionState: Vue.ref('idle'), preview: Vue.ref({ kind: 'none' }), detail,
-    closeDetail: () => { detail.value = null }, refresh: async () => true, loadMore: async () => false, revokePreview: () => {}, upload: async () => null, rename: async () => null, appendVersion: async () => null, previewVersion: async () => null, selectPreviewPart: () => false, download: async () => null, usage: async () => null, trash: async () => null, restore: async () => null, dispose: () => {}
+    pendingWrites: Vue.ref([]), confirmationStale: Vue.ref(false), retryWrite: async () => null, closeDetail: () => { detail.value = null }, refresh: async () => true, loadMore: async () => false, revokePreview: () => {}, upload: async () => null, rename: async () => null, appendVersion: async () => null, previewVersion: async () => null, selectPreviewPart: () => false, download: async () => null, usage: async () => null, trash: async () => null, restore: async () => null, dispose: () => {}
   }
   workspace.select = async fileId => { const value = { file: { fileId, displayName: '案卷.txt', state: 'ACTIVE', latestVersion: '1' }, latestVersion: { version: '1' }, versions: [{ version: '1', originalFilename: '案卷.txt', byteLength: '1', createdAt: 1, contentMimeType: 'text/plain' }] }; detail.value = value; return value }
   return workspace
@@ -208,7 +209,7 @@ describe('personal workspace execution receipt presentation', () => {
   it('prototype keeps cursor continuation honest and management is a third logical layer with inline recycle confirmation', async () => {
     const workspace = workspaceMock(); const calls = []; workspace.nextCursor.value = 'next-page'
     workspace.loadMore = async () => { calls.push('more'); workspace.items.value.push({ fileId: 'out-1', displayName: '成果.pdf', originKind: 'AGENT_DELIVERY', latestVersion: '1', state: 'ACTIVE' }); workspace.nextCursor.value = null }
-    workspace.usage = async () => ({ taskReferences: [{ taskId: 'task-1' }], activeExecutions: [] })
+    workspace.usage = async () => ({ fileId: 'a', impactRevision: '1', counts: { taskReferences: '1', conversationReferences: '0', activeInputGrants: '0' } })
     workspace.trash = async value => { calls.push(value); return { state: 'TRASHED' } }
     const component = new Function('Vue', 'deps', script)(Vue, { workspaceByteText, validMaterialVersion, deliveryTypeText, useApiStore: () => ({ authorizationGeneration: 1, oauthClientId: 'web-client' }), useGlobalStore: () => ({ user: { id: 'owner-a' } }), usePersonalWorkspace: () => workspace, usePersonalWorkspaceExecution: executionMock, savePersonalWorkspaceBlob: () => {} })
     const wrapper = mount(component, { props: { embedded: true } })
@@ -221,7 +222,7 @@ describe('personal workspace execution receipt presentation', () => {
       await click('查看'); assert.equal(wrapper.vm.logicalDepth, 2)
       await click('更多管理'); assert.equal(wrapper.vm.logicalDepth, 3)
       assert.equal(wrapper.find('.treasure-preview').exists(), false)
-      await click('移入回收站'); assert.match(wrapper.text(), /1 个关联引用/)
+      await click('移入回收站'); assert.match(wrapper.text(), /任务引用 1 条；议事引用 0 条；现存输入授权 0 条/)
       assert.equal(calls.length, 1)
       await click('取消'); assert.equal(calls.length, 1)
       await click('移入回收站'); await click('确认回收'); assert.equal(calls.length, 2)

@@ -23,7 +23,7 @@ describe('workspace general multimedia compatibility (no Provider)', () => {
         createObjectURL: blob => { created.push(blob); return 'blob:owned-preview' }, revokeObjectURL: url => revoked.push(url)
       }, api: { execute: async options => {
         calls.push(options)
-        if (options.method === 'POST') return { operation: { operationId: 'op-a' }, file: value.file, version: value.latestVersion }
+        if (options.method === 'POST') return { operation: { operationId: 'op-a', state: 'COMMITTED' }, file: value.file, version: value.latestVersion }
         if (options.url.endsWith('/preview')) return { state: 'READY', parts: [{ partId: 'content', contentMimeType: mime }], partial: false }
         if (options.url.includes('/preview/parts/')) return new Blob(['bytes'], { type: mime })
         return value

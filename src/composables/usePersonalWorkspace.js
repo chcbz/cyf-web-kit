@@ -1,5 +1,6 @@
 import { computed, getCurrentInstance, onBeforeUnmount, ref, toRaw, unref, watch } from 'vue'
 import { createApi } from './useHttp.js'
+import { usePersonalWorkspaceWriteIntent } from './usePersonalWorkspaceWriteIntent.js'
 import { workspaceDecimal as DECIMAL, validMaterialVersion as VERSION, workspaceRevisionTag } from '../utils/personalWorkspaceProtocol.js'
 import { registerIdentityCleanup } from '../utils/identityLifecycle.js'
 
@@ -41,10 +42,7 @@ const inferredMime = file => {
   return !declared || declared === 'application/octet-stream' ? EXTENSION_MIME[extensionFor(file?.name)] || '' : ''
 }
 const fileNameMatchesMime = (name, mime) => EXTENSION_MIME[extensionFor(name)] === mime
-const randomKey = () => {
-  const value = globalThis.crypto?.randomUUID?.()
-  return typeof value === 'string' && value ? value : `pws-${Date.now()}-${Math.random().toString(36).slice(2)}`
-}
+
 const safeDownloadFilename = value => {
   const cleaned = String(value || 'workspace-file').replace(/[\\/:*?"<>|\p{Cc}]/gu, '_').replace(/^\.+/, '').trim()
   return (cleaned || 'workspace-file').slice(0, 180)
@@ -53,7 +51,7 @@ const errorMessage = error => {
   if (error?.name === 'AbortError') return ''
   if ([401, 403, 404].includes(error?.status)) return '当前身份或文件已不可访问，请刷新后重试。'
   if (error?.code === 'FILE_TYPE_UNSUPPORTED' || error?.status === 415) return '此格式暂不支持，请选择工作空间支持的图片、音频、文本或办公文档。'
-  if (error?.code === 'METADATA_CHANGED' || error?.status === 412) return '文件信息已变化，请刷新后再操作。'
+  if (error?.code === 'METADATA_CHANGED' || error?.status === 412) return '文件或关联情况已变化，请查看更新后的信息再确认。'
   if (error?.code === 'FILE_VERSION_CONFLICT' || error?.status === 409) return '文件版本已变化，请刷新后明确选择要追加的版本。'
   if (error?.code === 'OPERATION_PROCESSING' || error?.status === 202) return '上一次操作仍在确认中，请使用原操作标识查询后再重试。'
   if (error?.status === 503) return '工作空间存储暂不可用，请稍后重试。'
@@ -89,6 +87,8 @@ const validVersion = value => value && typeof value === 'object' && ID(value.fil
  * contains no task selector, Actor ID, artifact projection, or Agent execution call.
  */
 export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch = 0, urlApi = globalThis.URL } = {}) {
+  const writes = usePersonalWorkspaceWriteIntent()
+  const confirmationStale = ref(false)
   const items = ref([])
   const nextCursor = ref(null)
   const listState = ref('idle')
@@ -134,6 +134,8 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     preview.value = { kind: 'none', message: '' }
   }
   const reset = () => {
+    writes.clear()
+    confirmationStale.value = false
     generation += 1
     detailGeneration += 1
     listGeneration += 1
@@ -157,6 +159,7 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     !controller.signal.aborted && currentEpoch.value === snapshot.epoch
   const request = async (options, snapshot = { generation, epoch: currentEpoch.value }) => {
     const controller = new AbortController()
+    if (!stillCurrent(snapshot, controller)) throw abortError('Workspace context changed')
     controllers.add(controller)
     try {
       let metadata
@@ -317,69 +320,100 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     }
     return { file: candidate, mime }
   }
+  const retryWrite = async target => {
+    const snapshot = captureView()
+    try { return await writes.retry(target) } catch (cause) {
+      if (ownsView(snapshot)) { error.value = errorMessage(cause); actionState.value = 'error' }
+      return null
+    }
+  }
   const upload = async (candidate, displayName = '') => {
     const snapshot = captureView()
     let input
-    try { input = normalizedFile(candidate) } catch (cause) { error.value = cause.message; actionState.value = 'error'; return null }
+    try { input = normalizedFile(candidate) } catch (cause) { error.value = errorMessage(cause); actionState.value = 'error'; return null }
     const name = String(displayName || '').trim()
     if (name && !TEXT(name, 255)) { error.value = '文件显示名无效。'; actionState.value = 'error'; return null }
-    const body = new FormData()
-    body.append('file', input.file, input.file.name)
-    if (name) body.append('displayName', name)
     actionState.value = 'uploading'; error.value = ''
     try {
-      const { data } = await request({ url: '/personal-workspace/files', method: 'POST', data: body, headers: { 'Idempotency-Key': randomKey() } }, snapshot)
-      if (!data?.operation || !validFileView(data.file) || !validVersion(data.version) || data.version.fileId !== data.file.fileId) throw new Error('上传回执无效，尚不能确认保存。')
-      lastOperation.value = data.operation
-      replaceFile(data.file)
-      await readCommittedDetail(data.file.fileId, '上传', snapshot)
-      return data
+      return await writes.run({ target: 'CREATE', input: [input.file, name], label: '上传文件',
+        execute: async key => {
+          const body = new FormData()
+          body.append('file', input.file, input.file.name)
+          if (name) body.append('displayName', name)
+          const { data } = await request({ url: '/personal-workspace/files', method: 'POST', data: body,
+            headers: { 'Idempotency-Key': key } }, snapshot)
+          if (!data?.operation || data.operation.state !== 'COMMITTED' || !validFileView(data.file) || !validVersion(data.version) || data.version.fileId !== data.file.fileId) throw new Error('上传回执无效，尚不能确认保存。')
+          return data
+        },
+        committed: async data => {
+          lastOperation.value = data.operation
+          replaceFile(data.file)
+          await readCommittedDetail(data.file.fileId, '上传', snapshot)
+        }
+      })
     } catch (cause) {
       if (cause?.name !== 'AbortError' && ownsView(snapshot)) { error.value = errorMessage(cause); actionState.value = 'error' }
       return null
     }
   }
   const appendVersion = async candidate => {
-    const file = detail.value?.file
+    const file = detail.value?.file ? { ...detail.value.file } : null
     if (!validFileView(file)) { error.value = '请先选择一个当前可用文件。'; return null }
     const snapshot = captureView()
     if (file.latestVersion === '2147483647') { error.value = '已达到文件版本上限，不能追加新版本。'; return null }
     let input
-    try { input = normalizedFile(candidate) } catch (cause) { error.value = cause.message; actionState.value = 'error'; return null }
-    const body = new FormData()
-    body.append('file', input.file, input.file.name)
-    body.append('expectedPreviousVersion', String(file.latestVersion))
+    try { input = normalizedFile(candidate) } catch (cause) { error.value = errorMessage(cause); actionState.value = 'error'; return null }
     actionState.value = 'appending-version'; error.value = ''
     try {
-      const { data } = await request({
-        url: `/personal-workspace/files/${encodeURIComponent(file.fileId)}/versions`, method: 'POST', data: body,
-        headers: { 'Idempotency-Key': randomKey() }
-      }, snapshot)
-      if (!data?.operation || !validFileView(data.file) || !validVersion(data.version) || data.file.fileId !== file.fileId || data.version.fileId !== file.fileId) throw new Error('版本追加回执无效，尚不能确认保存。')
-      lastOperation.value = data.operation
-      replaceFile(data.file)
-      await readCommittedDetail(file.fileId, '新版本', snapshot)
-      return data
+      return await writes.run({ target: file.fileId, input: ['APPEND', input.file, file.latestVersion], label: '追加版本',
+        execute: async key => {
+          const body = new FormData()
+          body.append('file', input.file, input.file.name)
+          body.append('expectedPreviousVersion', file.latestVersion)
+          const { data } = await request({ url: `/personal-workspace/files/${encodeURIComponent(file.fileId)}/versions`, method: 'POST', data: body,
+            headers: { 'Idempotency-Key': key } }, snapshot)
+          if (!data?.operation || data.operation.state !== 'COMMITTED' || !validFileView(data.file) || !validVersion(data.version) || data.file.fileId !== file.fileId || data.version.fileId !== file.fileId || BigInt(data.version.version) !== BigInt(file.latestVersion) + 1n) throw new Error('版本追加回执无效，尚不能确认保存。')
+          return data
+        },
+        committed: async data => {
+          lastOperation.value = data.operation
+          replaceFile(data.file)
+          await readCommittedDetail(file.fileId, '新版本', snapshot)
+        }
+      })
     } catch (cause) {
       if (cause?.name !== 'AbortError' && ownsView(snapshot)) { error.value = errorMessage(cause); actionState.value = 'error' }
       return null
     }
   }
-  const mutate = async (path, body, { method = 'POST' } = {}) => {
-    const file = detail.value?.file
+  const mutate = async (path, body, { method = 'POST', ifMatch: confirmedMatch = null } = {}) => {
+    const file = detail.value?.file ? { ...detail.value.file } : null
     if (!validFileView(file)) { error.value = '请先刷新并选择一个文件。'; return null }
     const snapshot = captureView()
-    const ifMatch = workspaceRevisionTag(file.fileId, file.metadataRevision)
+    const ifMatch = confirmedMatch || workspaceRevisionTag(file.fileId, file.metadataRevision)
+    const payload = body == null ? body : { ...body }
     actionState.value = 'saving'; error.value = ''
     try {
-      const { data } = await request({ url: path, method, data: body, headers: { 'Idempotency-Key': randomKey(), 'If-Match': ifMatch } }, snapshot)
-      if (!validFileView(data) || data.fileId !== file.fileId) throw new Error('文件操作回执无效，尚不能确认保存。')
-      replaceFile(data)
-      if (ownsView(snapshot)) {
-        detail.value = { ...detail.value, file: data, etag: workspaceRevisionTag(data.fileId, data.metadataRevision) }
-        actionState.value = 'ready'
-      }
-      return data
+      return await writes.run({ target: file.fileId, input: [path, method, JSON.stringify(payload), ifMatch], label: '文件管理操作',
+        execute: async key => {
+          try {
+            const { data } = await request({ url: path, method, data: payload, headers: { 'Idempotency-Key': key, 'If-Match': ifMatch } }, snapshot)
+            if (!validFileView(data) || data.fileId !== file.fileId) throw new Error('文件操作回执无效，尚不能确认保存。')
+            return data
+          } catch (cause) {
+            if (cause?.status === 412 && ownsView(snapshot)) confirmationStale.value = true
+            throw cause
+          }
+        },
+        committed: data => {
+          replaceFile(data)
+          if (ownsView(snapshot)) {
+            detail.value = { ...detail.value, file: data, etag: workspaceRevisionTag(data.fileId, data.metadataRevision) }
+            actionState.value = 'ready'
+            writeNotice.value = '原操作已提交，已读取当前文件状态。'
+          }
+        }
+      })
     } catch (cause) {
       if (cause?.name !== 'AbortError' && ownsView(snapshot)) { error.value = errorMessage(cause); actionState.value = 'error' }
       return null
@@ -395,14 +429,15 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
   }
   const usageContexts = new WeakMap()
   const usage = async () => {
-    const file = detail.value?.file
+    const file = detail.value?.file ? { ...detail.value.file } : null
     if (!validFileView(file)) return null
     const snapshot = captureView()
     try {
       const { data } = await request({ url: `/personal-workspace/files/${encodeURIComponent(file.fileId)}/usage`, method: 'GET' }, snapshot)
-      if (!data || !DECIMAL(data.impactRevision) || !Array.isArray(data.taskReferences) || !Array.isArray(data.activeExecutions)) throw new Error('文件引用信息返回无效。')
+      if (!data || data.fileId !== file.fileId || !DECIMAL(data.impactRevision) || BigInt(data.impactRevision) < 1n || !data.counts || !['taskReferences', 'conversationReferences', 'activeInputGrants'].every(key => DECIMAL(data.counts[key]))) throw new Error('文件引用信息返回无效。')
       if (!ownsView(snapshot)) return null
-      usageContexts.set(toRaw(data), { ...snapshot, fileId: file.fileId })
+      usageContexts.set(toRaw(data), { ...snapshot, fileId: file.fileId, revision: data.impactRevision, ifMatch: workspaceRevisionTag(file.fileId, data.impactRevision) })
+      confirmationStale.value = false
       return data
     } catch (cause) {
       if (cause?.name !== 'AbortError' && ownsView(snapshot)) error.value = errorMessage(cause)
@@ -413,10 +448,10 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     const file = detail.value?.file
     if (!validFileView(file) || !usageView || !DECIMAL(usageView.impactRevision)) return null
     const context = usageContexts.get(toRaw(usageView))
-    if (!context || !ownsView(context) || context.fileId !== file.fileId) { error.value = '文件已切换，请重新确认引用信息。'; return null }
+    if (!context || !ownsView(context) || context.fileId !== file.fileId || context.revision !== usageView.impactRevision || confirmationStale.value) { error.value = '文件已切换，请重新确认引用信息。'; return null }
     return mutate(`/personal-workspace/files/${encodeURIComponent(file.fileId)}/trash`, {
-      impactRevision: usageView.impactRevision, acknowledgeExistingReferences: true
-    })
+      impactRevision: context.revision, acknowledgeExistingReferences: true
+    }, { ifMatch: context.ifMatch })
   }
   const restore = async () => {
     const file = detail.value?.file
@@ -535,7 +570,7 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
 
   return {
     items, nextCursor, listState, loading, actionState, error, detail, preview, lastOperation,
-    writeNotice, detailRetryFileId, retryDetail, versionItems, hasMoreVersions, versionsState, versionsError, versionsNextCursor, versionsLoaded, loadVersions, loadMoreVersions, closeDetail,
+    pendingWrites: writes.pending, retryWrite, confirmationStale, writeNotice, detailRetryFileId, retryDetail, versionItems, hasMoreVersions, versionsState, versionsError, versionsNextCursor, versionsLoaded, loadVersions, loadMoreVersions, closeDetail,
     refresh, loadMore, select, upload, appendVersion, rename, usage, trash, restore,
     download, previewVersion, selectPreviewPart, operation, revokePreview, reset, dispose
   }

@@ -84,7 +84,7 @@ describe('personal workspace task link adapter', () => {
     const adapter = usePersonalWorkspaceTaskLinks({ api, taskId: ref('task_a'), identityEpoch: ref('owner-a') })
     assert.equal(await adapter.attach({ fileId: 'file_b', version: '1', role: 'INPUT' }), null)
     assert.deepEqual(calls, ['POST'])
-    assert.match(adapter.error.value, /不要重复提交/)
+    assert.match(adapter.error.value, /重试原操作/)
     adapter.dispose()
   })
 

@@ -44,7 +44,7 @@ describe('workspace essential repairs', () => {
       const pending = operation === 'rename' ? workspace.rename('renamed') : operation === 'restore' ? workspace.restore() : workspace[operation](uploadFile())
       await workspace.select('b')
       const state = workspace.actionState.value
-      wait.resolve(['upload', 'appendVersion'].includes(operation) ? committed() : file('a', { metadataRevision: '2' }))
+      wait.resolve(['upload', 'appendVersion'].includes(operation) ? committed('a', operation === 'appendVersion' ? '2' : '1') : file('a', { metadataRevision: '2' }))
       assert.ok(await pending)
       assert.equal(workspace.detail.value.file.fileId, 'b')
       assert.equal(workspace.detail.value.latestVersion.fileId, 'b')
@@ -128,7 +128,7 @@ describe('workspace essential repairs', () => {
     const calls = []
     const workspace = usePersonalWorkspace({ api: { execute: async options => {
       calls.push(options)
-      if (options.url.endsWith('/usage')) return { impactRevision: '1', taskReferences: [], activeExecutions: [] }
+      if (options.url.endsWith('/usage')) return { fileId: 'a', impactRevision: '1', counts: { taskReferences: '0', conversationReferences: '0', activeInputGrants: '0' } }
       if (options.method === 'POST') return file('a', { state: 'TRASHED', metadataRevision: '2' })
       return detail(options.url.endsWith('/b') ? 'b' : 'a')
     } } })

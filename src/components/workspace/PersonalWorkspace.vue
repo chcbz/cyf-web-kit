@@ -43,7 +43,7 @@
           <template v-if="workspace.detail.value.file.state === 'ACTIVE'">
             <form class="treasure-form" @submit.prevent="rename"><label><span>文件名称</span><input v-model="renameValue" maxlength="255" /></label><button type="submit" :disabled="workspace.actionState.value === 'saving'">保存名称</button></form>
             <div class="treasure-form"><label><span>上传新版本</span><input type="file" :accept="acceptTypes" @change="onVersionFile" /></label><p>旧版本及已有事项的资料引用会保留。</p><p v-if="!nextVersion" role="status">已达到文件版本上限。</p><button type="button" :disabled="!versionFile || !nextVersion || workspace.actionState.value === 'appending-version'" @click="appendVersion">上传为新版本</button></div>
-            <div class="treasure-manage-danger"><button v-if="!trashUsage" type="button" @click="prepareTrash">移入回收站</button><div v-else role="group" aria-label="回收确认"><p>确认移入回收站？仍可恢复。{{ trashReferenceCount ? `此文件有 ${trashReferenceCount} 个关联引用。` : '' }}</p><div class="treasure-actions"><button type="button" @click="trashUsage = null">取消</button><button type="button" :disabled="workspace.actionState.value === 'saving'" @click="confirmTrash">确认回收</button></div></div></div>
+            <div class="treasure-manage-danger"><button v-if="!trashUsage" type="button" @click="prepareTrash">移入回收站</button><div v-else role="group" aria-label="回收确认"><p>{{ trashConfirmationText(trashUsage) }}</p><div class="treasure-actions"><button type="button" @click="trashUsage = null">取消</button><button type="button" :disabled="workspace.actionState.value === 'saving'" @click="confirmTrash">确认回收</button></div></div></div>
           </template>
           <template v-else><p>恢复后可继续在资料列表中使用。本版不提供永久删除。</p><button class="treasure-primary" type="button" @click="restoreTreasure">恢复文件</button></template>
         </section>
@@ -192,12 +192,14 @@
         >另起一项新交付（不重试当前）</button></div><section v-if="execution.receipt.value" class="execution-status"><dl class="file-details"><div><dt>执行状态</dt><dd>{{ executionStateText(execution.receipt.value.state) }}</dd></div><div><dt>目标 Agent</dt><dd>{{ execution.selectedExecutionAgent.value?.name || execution.receipt.value.targetAgentId }}</dd></div><div><dt>执行编号</dt><dd>{{ execution.receipt.value.executionId }}</dd></div></dl><p v-if="execution.receipt.value.state === 'QUEUED'" class="workspace-note">服务端已接受请求，正在等待结果；尚未确认任何运行阶段或交付完成。</p><div class="actions"><button type="button" @click="refreshExecution">刷新进度</button><button type="button" :disabled="execution.execution.value?.state !== 'QUEUED'" @click="revokeExecutionInputs">撤销尚未开始的输入授权</button></div></section><p v-if="execution.completionNotice.value" class="execution-notice" role="status">{{ execution.completionNotice.value }}</p><p v-if="execution.error.value" class="workspace-error" role="alert">{{ execution.error.value }}</p></section>
       </section>
     </section>
+    <WorkspaceWriteRecovery :pending="workspace.pendingWrites.value" @retry="workspace.retryWrite" />
     <p v-if="workspace.writeNotice.value" class="workspace-note workspace-page-message" role="status">{{ workspace.writeNotice.value }} <template v-if="workspace.detailRetryFileId.value"><button type="button" :disabled="workspace.actionState.value === 'loading-detail'" @click="retrySavedDetail">重读详情</button></template></p>
     <p v-if="workspace.error.value" class="workspace-error workspace-page-message" role="alert">{{ workspace.error.value }}</p><p v-if="workspace.lastOperation.value" class="workspace-receipt" role="status">最近操作：{{ workspace.lastOperation.value.operationId }}（{{ workspace.lastOperation.value.state }}）</p>
   </main>
 </template>
 
 <script setup>
+import WorkspaceWriteRecovery from '@/components/personal-workspace/WorkspaceWriteRecovery.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useApiStore } from '@/stores/api'
 import { useGlobalStore } from '@/stores/global'
@@ -348,8 +350,7 @@ const trash = async () => {
   const snapshot = viewSnapshot()
   const usage = await workspace.usage()
   if (!usage || !ownsView(snapshot)) return
-  const references = (usage.taskReferences?.length || 0) + (usage.activeExecutions?.length || 0)
-  const message = references ? `该文件仍有 ${references} 个关联引用，确认移入回收站吗？` : '确认将该文件移入回收站吗？'
+  const message = trashConfirmationText(usage)
   if (!globalThis.confirm?.(message)) return
   const result = await workspace.trash(usage)
   if (result && ownsView(snapshot)) { closeDetail(); await refresh() }
@@ -387,7 +388,8 @@ const treasureTabs = [{ key: 'all', label: '全部' }, { key: 'materials', label
 // empty while the unfiltered cursor still has pages; expose continuation explicitly.
 const treasureFiles = computed(() => workspace.items.value.filter(file => treasureTab.value === 'materials' ? file.originKind === 'USER_UPLOAD' : treasureTab.value === 'results' ? file.originKind === 'AGENT_DELIVERY' : true))
 const trashUsage = ref(null)
-const trashReferenceCount = computed(() => (trashUsage.value?.taskReferences?.length || 0) + (trashUsage.value?.activeExecutions?.length || 0))
+const trashConfirmationText = usage => `确认将“${workspace.detail.value?.file.displayName || ''}”移入回收站？仍可恢复。任务引用 ${usage.counts.taskReferences} 条；议事引用 ${usage.counts.conversationReferences} 条；现存输入授权 ${usage.counts.activeInputGrants} 条。已有固定版本引用和输入授权保留，本操作不会撤销授权。`
+watch(workspace.confirmationStale, stale => { if (stale) trashUsage.value = null }, { flush: 'sync' })
 const changeTreasureTab = key => {
   treasureTab.value = key
   const next = key === 'trash' ? 'TRASHED' : 'ACTIVE'
