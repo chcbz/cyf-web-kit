@@ -89,3 +89,86 @@ describe('workspace immutable in-page write intent', () => {
     })
   }
 })
+
+
+describe('workspace retry error lifecycle', () => {
+  const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r }); return { promise, resolve } }
+  const make = () => {
+    const wait = deferred(), epoch = ref('owner-a'), calls = []
+    let attempts = 0
+    const workspace = usePersonalWorkspace({ identityEpoch: epoch, api: { execute: async options => {
+      if (options.url.endsWith('/usage')) return usage
+      if (options.method === 'GET') {
+        const id = options.url.endsWith('/b') ? 'b' : 'f'
+        return { ...detail, file: { ...file, fileId: id }, latestVersion: { ...detail.latestVersion, fileId: id } }
+      }
+      calls.push(options)
+      if (++attempts === 1) throw new TypeError('first response lost')
+      return wait.promise
+    } } })
+    return { workspace, calls, wait, epoch }
+  }
+  for (const operation of ['rename', 'trash', 'restore']) {
+    it(`${operation}: clears the old error on same-key retry and leaves success without a stale alert`, async () => {
+      const { workspace: w, calls, wait } = make()
+      try {
+        await w.select('f')
+        const input = operation === 'rename' ? 'renamed' : operation === 'trash' ? await w.usage() : undefined
+        assert.equal(await w[operation](input), null)
+        assert.match(w.error.value, /first response lost/)
+        const pending = w.retryWrite('f'); await Promise.resolve()
+        assert.equal(w.error.value, '')
+        wait.resolve({ ...file, metadataRevision: '2' }); assert.ok(await pending)
+        assert.equal(w.error.value, ''); assert.match(w.writeNotice.value, /已提交/)
+        assert.equal(calls[0].headers['Idempotency-Key'], calls[1].headers['Idempotency-Key'])
+        assert.equal(calls[0].headers['If-Match'], calls[1].headers['If-Match'])
+        assert.deepEqual(calls[0].data, calls[1].data)
+      } finally { w.dispose() }
+    })
+  }
+  it('preserves an unrelated validation error that occurs while the retry is in flight', async () => {
+    const { workspace: w, wait } = make()
+    try {
+      await w.select('f'); await w.rename('renamed')
+      const pending = w.retryWrite('f'); await Promise.resolve()
+      await w.rename(''); const laterError = w.error.value
+      wait.resolve({ ...file, metadataRevision: '2' }); await pending
+      assert.ok(laterError); assert.equal(w.error.value, laterError)
+    } finally { w.dispose() }
+  })
+  it('does not clear errors of another selected file when retrying an old target', async () => {
+    const { workspace: w, wait } = make()
+    try {
+      await w.select('f'); await w.rename('renamed'); await w.select('b'); await w.rename('')
+      const error = w.error.value, pending = w.retryWrite('f'); await Promise.resolve()
+      assert.equal(w.error.value, error)
+      wait.resolve({ ...file, metadataRevision: '2' }); await pending
+      assert.equal(w.error.value, error); assert.equal(w.detail.value.file.fileId, 'b')
+    } finally { w.dispose() }
+  })
+  it('does not clear a current error for a nonexistent retry', async () => {
+    const { workspace: w } = make()
+    try { await w.select('f'); await w.rename(''); const error = w.error.value
+      assert.equal(await w.retryWrite('missing'), null); assert.equal(w.error.value, error)
+    } finally { w.dispose() }
+  })
+  it('keeps a repeated transport failure visible and pending', async () => {
+    let count = 0
+    const w = usePersonalWorkspace({ api: { execute: async o => {
+      if (o.method === 'GET') return detail
+      throw new TypeError(`failure ${++count}`)
+    } } })
+    try { await w.select('f'); await w.rename('renamed'); await w.retryWrite('f')
+      assert.match(w.error.value, /failure 2/); assert.equal(w.pendingWrites.value[0].state, 'UNKNOWN')
+    } finally { w.dispose() }
+  })
+  it('ignores a late retry success after identity change and preserves the new identity error', async () => {
+    const { workspace: w, wait, epoch } = make()
+    try {
+      await w.select('f'); await w.rename('renamed'); const pending = w.retryWrite('f'); await Promise.resolve()
+      epoch.value = 'owner-b'; await w.rename(''); const error = w.error.value
+      wait.resolve({ ...file, metadataRevision: '2' }); await pending
+      assert.equal(w.error.value, error); assert.equal(w.detail.value, null); assert.deepEqual(w.pendingWrites.value, [])
+    } finally { w.dispose() }
+  })
+})

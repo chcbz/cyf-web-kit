@@ -396,6 +396,9 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     try {
       return await writes.run({ target: file.fileId, input: [path, method, JSON.stringify(payload), ifMatch], label: `${path.endsWith('/trash') ? '移入回收站' : path.endsWith('/restore') ? '恢复文件' : '重命名'}：${file.displayName}`,
         execute: async key => {
+          // Every attempt (including same-key retry) starts a new error lifecycle.
+          // Clear before awaiting, never erase another action's later error on success.
+          if (ownsView(snapshot)) error.value = ''
           try {
             const { data } = await request({ url: path, method, data: payload, headers: { 'Idempotency-Key': key, 'If-Match': ifMatch } }, snapshot)
             if (!validFileView(data) || data.fileId !== file.fileId) throw new Error('文件操作回执无效，尚不能确认保存。')

@@ -1,18 +1,14 @@
 import { computed, getCurrentScope, onScopeDispose, ref, unref, watch } from 'vue'
 
-// Ordinary cancellation uses a JSON integer; funded cancellation keeps its own DTO.
-export const ordinaryTaskVersion = task => {
-  const value = task?.taskVersion ?? task?.version
-  if (typeof value === 'string' && !/^(0|[1-9]\d*)$/.test(value)) return null
-  if (typeof value !== 'string' && typeof value !== 'number') return null
-  const version = Number(value)
-  return Number.isSafeInteger(version) && version >= 0 && version < Number.MAX_SAFE_INTEGER ? version : null
-}
+import { parseTaskEventVersion, compareTaskEventVersions, nextTaskEventVersion } from './taskEventVersion.js'
+
+// Requests and receipts share the canonical decimal-string Java Long contract.
+export const ordinaryTaskVersion = task => parseTaskEventVersion(task?.taskVersion)
 export const isTerminalMatter = task => ['cancelled', 'completed', 'accepted', 'archived', 'failed'].includes(task?.status)
 export const canCancelOrdinaryTask = task => Boolean(task?.id && !task.funding &&
   (task.reward == null || task.reward === 0 || task.reward === '0') &&
   ['open', 'planning', 'assigned'].includes(task.status) && task.startedAt == null && task.completedAt == null &&
-  ordinaryTaskVersion(task) !== null)
+  ordinaryTaskVersion(task) !== null && nextTaskEventVersion(ordinaryTaskVersion(task)) !== null)
 
 export const cancellationPayload = result => {
   let body = result
@@ -76,7 +72,7 @@ export const useHallOrdinaryCancellation = ({ agentApi, selectedTask, tasks, ide
       try {
         receipt = cancellationPayload(await agentApi.create(`/tasks/${encodeURIComponent(task.id)}/cancel`,
           { expectedTaskVersion: expected }, options))
-        if (receipt?.taskId !== task.id || receipt.status !== 'cancelled' || !Number.isSafeInteger(receipt.taskVersion) || receipt.taskVersion <= expected) {
+        if (receipt?.taskId !== task.id || receipt.status !== 'cancelled' || parseTaskEventVersion(receipt.taskVersion) === null || compareTaskEventVersions(receipt.taskVersion, expected) <= 0) {
           receipt = null
           throw new Error('取消回执不匹配')
         }
@@ -101,7 +97,7 @@ export const useHallOrdinaryCancellation = ({ agentApi, selectedTask, tasks, ide
     try {
       canonical = cancellationPayload(await agentApi.get(`/tasks/${encodeURIComponent(task.id)}`, undefined, options))
       if (canonical?.id !== task.id || canonical.status !== 'cancelled' || ordinaryTaskVersion(canonical) === null ||
-        ordinaryTaskVersion(canonical) < (receipt?.taskVersion ?? expected + 1)) canonical = null
+        compareTaskEventVersions(ordinaryTaskVersion(canonical), receipt?.taskVersion ?? nextTaskEventVersion(expected)) < 0) canonical = null
     } catch (error) { log.warn('ordinary cancellation readback pending:', error) }
     if (!current()) { update('unresolved'); return false }
     if (!receipt && !canonical) {
