@@ -238,10 +238,27 @@
               class="panel-close"
               type="button"
               aria-label="关闭面板"
+              :title="renderedPanel === 'agents' ? '关闭面板' : undefined"
               :disabled="voiceInteractionLocked"
               @click="closePanel"
             >
-              <var-icon :name="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? 'window-close' : 'close-circle-outline'" aria-hidden="true" />
+              <svg
+                v-if="renderedPanel === 'agents'"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                aria-hidden="true"
+                focusable="false"
+              ><path d="m6 6 12 12M18 6 6 18" /></svg>
+              <var-icon
+                v-else
+                :name="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? 'window-close' : 'close-circle-outline'"
+                aria-hidden="true"
+              />
             </button>
             <button
               v-if="navigationPresentation.showHallReturn || (renderedPanel === 'agents' && agentPanelRef?.canGoBack)"
@@ -4789,6 +4806,26 @@ button.hall-room {
 }
 
 
+.home-overview .panel-overlay.theme-workbench.is-agent-overlay .panel-title .panel-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 44px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  color: var(--hall-text-muted);
+}
+.home-overview .panel-overlay.theme-workbench.is-agent-overlay .panel-title .panel-close:hover:not(:disabled) {
+  background: var(--hall-surface-brand);
+  color: var(--hall-brand);
+}
+.home-overview .panel-overlay.theme-workbench.is-agent-overlay .panel-title .panel-close:focus-visible {
+  outline: 2px solid var(--hall-brand);
+  outline-offset: 2px;
+}
 @media (min-width: 721px) {
   .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel-body) {
     display: grid;
@@ -4815,13 +4852,19 @@ button.hall-room {
     max-height: none;
     min-height: 0;
     margin: 0;
+    border: 0;
     border-radius: 0;
     overflow: hidden;
   }
   .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel-body) { display: flex; min-height: 0; overflow: hidden; }
   .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel .detail-card) { min-height: 0; padding: 0; overflow: hidden; }
   .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel.is-agent-detail .panel-toolbar) { display: none; }
-  .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel .panel-toolbar > button) { width: auto; }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel .panel-toolbar > button) { width: 100%; }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel .status-filter) { flex-wrap: wrap; gap: 6px; overflow: visible; }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel .status-filter button) { min-height: 44px; padding: 8px 10px; }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel.is-agent-detail .agent-panel-body) { padding: 0; gap: 0; }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel.is-agent-detail .detail-card) { width: 100%; border: 0; border-radius: 0; }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay .panel-title { padding: 4px 12px; }
   .home-overview .panel-overlay.theme-workbench.is-agent-overlay .panel-title > span { display: block; }
 }
 </style>

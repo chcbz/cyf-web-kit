@@ -52,10 +52,10 @@ describe('AgentPanel prototype actions', () => {
   it('defines scoped prototype colors, spacing, wrapping and disabled/focus states', () => {
     expect(descriptor.styles[0].scoped).to.equal(true)
     const css = descriptor.styles[0].content
-    const rule = selector => css.slice(css.indexOf(selector)).split('}')[0]
+    const rule = selector => css.slice(css.lastIndexOf(selector)).split('}')[0]
     expect(rule('.agent-detail-actions {')).to.include('gap: 8px').and.include('flex-wrap: wrap')
-    expect(rule('.agent-detail-actions button {')).to.include('border: 1px solid #d6b98c').and.include('background: #fffaf0').and.include('border-radius: 7px').and.include('padding: 7px 11px')
-    expect(rule('.agent-detail-actions .point-and-deliberate {')).to.include('background: #a44330').and.include('color: #fff9ed')
+    expect(rule('.agent-detail-actions button {')).to.include('flex: 1').and.include('min-height: 44px').and.include('background: var(--hall-brand, #923f30)').and.include('padding: 10px 12px')
+    expect(rule('.agent-detail-actions:has(.point-and-deliberate) button:not(.point-and-deliberate) {')).to.include('background: var(--hall-surface-subtle, #f3f3ed)').and.include('color: var(--hall-text, #242e2b)')
     expect(rule('.agent-detail-actions button:disabled {')).to.include('opacity: 0.5')
     expect(rule('.agent-detail-actions button:focus-visible {')).to.include('outline: 2px solid')
   })
@@ -109,5 +109,50 @@ describe('AgentPanel D4 profile and mobile layers', () => {
     const template = descriptor.template.content
     expect(template.indexOf('class="agent-detail-scroll"')).to.be.lessThan(template.indexOf('class="agent-detail-actions"'))
     expect(template).to.include(':inert="!listVisible').and.include(':inert="!detailVisible')
+  })
+})
+
+
+describe('AgentPanel visual alignment follow-up', () => {
+  it('keeps one full-width primary conversation action when no task is pending', async () => {
+    const wrapper = mount(AgentPanel, { props: { ...props, hasPendingTask: false } })
+    try {
+      const buttons = wrapper.findAll('.agent-detail-actions button')
+      expect(buttons).to.have.length(1)
+      expect(buttons[0].text()).to.equal('与这位好汉密议')
+      await buttons[0].trigger('click')
+      expect(wrapper.emitted('start-conversation')[0]).to.deep.equal([agent])
+    } finally { wrapper.unmount() }
+  })
+  it('uses the existing small portrait path and renders real profile time and explanatory notes', async () => {
+    const calls = []
+    const target = { ...agent, boundToMe: true }
+    const wrapper = mount(AgentPanel, { props: { ...props, selectedAgent: target,
+      portraitStyle: (...args) => { calls.push(args); return {} },
+      profileCapabilities: { agentId: agent.agentId, observedAt: 10000, abilities: ['真实本领'], skills: { status: 'AVAILABLE', items: [] } }
+    } })
+    try {
+      expect(calls.length).to.be.greaterThan(0)
+      expect(calls.every(args => args.length === 1)).to.equal(true)
+      expect(wrapper.get('[aria-label="本领"]').text()).to.include('真实本领').and.include('不等同于已安装技能')
+      expect(wrapper.get('.profile-refresh small').text()).to.match(/^最近读取 \d{2}:\d{2}$/)
+      expect(wrapper.text()).not.to.include('正在厅中候令')
+      await wrapper.setProps({ selectedAgent: { ...target, errorMessage: '实际错误', currentTaskTitle: '实际任务' } })
+      expect(wrapper.text()).to.include('实际错误')
+      await wrapper.setProps({ selectedAgent: { ...target, currentTaskTitle: '实际任务' } })
+      expect(wrapper.text()).to.include('实际任务')
+    } finally { wrapper.unmount() }
+  })
+  it('defines unshrinking portraits, wrapped identity and flex refresh without broad parent changes', () => {
+    const css = descriptor.styles[0].content
+    const rule = selector => css.slice(css.lastIndexOf(selector)).split('}')[0]
+    expect(rule('.large-avatar {')).to.include('flex: none').and.include('width: 68px').and.include('height: 68px')
+    expect(rule('.detail-head small {')).to.include('white-space: normal').and.include('overflow-wrap: anywhere')
+    expect(rule('.profile-refresh {')).to.include('display: flex').and.include('flex-wrap: wrap').and.include('border-top:')
+    expect(rule('.profile-heading h3 {')).to.include('font-size: 14px').and.include('font-weight: 600')
+    const hall = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+    expect(hall).to.include('svg\n                v-if="renderedPanel === \'agents\'"').and.include('stroke-width="1.8"')
+    expect(hall).to.include('.is-agent-overlay :deep(.agent-panel.is-agent-detail .agent-panel-body) { padding: 0; gap: 0; }')
+    expect(hall).to.include('.is-agent-overlay :deep(.agent-panel.is-agent-detail .detail-card) { width: 100%; border: 0; border-radius: 0; }')
   })
 })

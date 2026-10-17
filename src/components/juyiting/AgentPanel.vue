@@ -57,7 +57,7 @@
             <div class="detail-head">
               <span
                 class="large-avatar portrait-avatar"
-                :style="portraitStyle(selectedAgent, { highRes: true })"
+                :style="portraitStyle(selectedAgent)"
                 :title="portraitName(selectedAgent)"
               ></span>
               <div>
@@ -82,21 +82,22 @@
                 </div>
               </template>
               <p v-else role="status">技能资料尚未读取</p>
-              <small class="profile-note">运行就绪不代表已获任务调用授权。</small>
+              <p class="profile-note">运行就绪不代表当前任务已获执行授权。</p>
             </section>
             <section class="profile-section" aria-label="本领">
-              <div class="profile-heading"><h3>本领</h3><small>{{ profile ? '最近上报记录' : '上次记录' }}</small></div>
+              <div class="profile-heading"><h3>本领</h3><small>{{ profile ? '最近读取记录' : '上次记录' }}</small></div>
               <div class="ability-tags">
                 <span v-for="ability in displayedAbilities" :key="ability">{{ ability }}</span>
                 <span v-if="!displayedAbilities.length">未录本领</span>
               </div>
+              <p class="profile-note">本领记录，不等同于已安装技能。</p>
             </section>
             <div v-if="canReadProfile" class="profile-refresh">
               <button type="button" :disabled="profileCapabilitiesLoading" @click="$emit('refresh-profile-capabilities')">{{ profileCapabilitiesLoading ? '正在刷新…' : '刷新技能与本领' }}</button>
-              <small v-if="profile">最近读取：{{ new Date(profile.observedAt).toLocaleTimeString() }}</small>
-              <p>读取最新已上报记录，不触发重新扫描或重注册。</p>
+              <small v-if="profile" role="status">最近读取 {{ new Date(profile.observedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }) }}</small>
             </div>
-            <p>{{ selectedAgent.errorMessage || selectedAgent.currentTaskTitle || '正在厅中候令，可从悬赏榜点将。' }}</p>
+            <p v-if="canReadProfile" class="profile-note">只刷新当前好汉详情；读取最新已上报记录，不触发重新扫描或重注册。</p>
+            <p v-if="selectedAgent.errorMessage || selectedAgent.currentTaskTitle" class="profile-note">{{ selectedAgent.errorMessage || selectedAgent.currentTaskTitle }}</p>
           </div>
           <div class="agent-detail-actions">
             <button
@@ -326,8 +327,9 @@ button {
 }
 
 .large-avatar {
-  width: 58px;
-  height: 58px;
+  flex: none;
+  width: 68px;
+  height: 68px;
   font-size: 22px;
 }
 
@@ -358,11 +360,13 @@ button {
   flex-direction: column;
   padding: 0;
   overflow: hidden;
+  box-sizing: border-box;
   border-radius: 8px;
   background: var(--hall-surface, #fffefa);
+  font-size: 14px;
 }
 
-/* Match the approved prototype's mmd-row / mmd-primary actions. */
+/* The dock participates in layout; it never overlays scrollable details. */
 .agent-detail-actions {
   display: flex;
   align-items: center;
@@ -370,8 +374,8 @@ button {
   gap: 8px;
   flex: none;
   margin-top: 0;
-  padding: 10px 12px;
-  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
   border-top: 1px solid var(--hall-border, #e3e5dc);
   background: var(--hall-surface, #fffefa);
   font-size: 14px;
@@ -379,18 +383,27 @@ button {
 }
 
 .agent-detail-actions button {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
   max-width: 100%;
-  padding: 7px 11px;
-  border: 1px solid #d6b98c;
+  padding: 10px 12px;
+  border: 1px solid var(--hall-brand, #923f30);
   border-radius: 7px;
-  background: #fffaf0;
-  color: #795332;
+  background: var(--hall-brand, #923f30);
+  color: var(--hall-surface, #fffefa);
+  white-space: normal;
 }
 
-.agent-detail-actions .point-and-deliberate {
-  border-color: #a44330;
-  background: #a44330;
-  color: #fff9ed;
+.agent-detail-actions:has(.point-and-deliberate) button:not(.point-and-deliberate) {
+  border-color: var(--hall-border, #e3e5dc);
+  background: var(--hall-surface-subtle, #f3f3ed);
+  color: var(--hall-text, #242e2b);
+}
+
+.agent-detail-actions button:hover:not(:disabled),
+.agent-detail-actions button:focus-visible {
+  filter: brightness(0.94);
 }
 
 .agent-detail-actions button:disabled {
@@ -399,7 +412,7 @@ button {
 }
 
 .agent-detail-actions button:focus-visible {
-  outline: 2px solid #a44330;
+  outline: 2px solid var(--hall-brand, #923f30);
   outline-offset: 2px;
 }
 
@@ -408,10 +421,16 @@ button {
   align-items: center;
   gap: 10px;
   margin-bottom: 10px;
+  overflow-wrap: anywhere;
 }
 
 .detail-head > div {
   min-width: 0;
+}
+
+.detail-head small {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .ability-tags {
@@ -433,22 +452,24 @@ button {
   flex: 1;
   min-height: 0;
   min-width: 0;
-  padding: 14px;
+  padding: 16px;
   overflow: auto;
   overscroll-behavior: contain;
   overflow-wrap: anywhere;
 }
-.profile-section { padding-block: 12px; border-top: 1px solid var(--hall-border, #e3e5dc); }
-.profile-heading, .skill-title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.profile-heading h3 { margin: 0; font-size: 15px; }
-.profile-heading small, .profile-note, .profile-refresh { color: var(--hall-text-muted, #68716b); font-size: 12px; }
-.skill-item { margin-top: 8px; padding: 10px; border: 1px solid var(--hall-border, #e3e5dc); border-radius: 7px; }
-.skill-states { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; font-size: 12px; }
-.skill-states span { padding: 2px 6px; border-radius: 5px; background: var(--hall-surface-subtle, #f3f3ed); }
-.skill-states .is-ready { color: var(--hall-positive, #36643b); background: #edf4ea; }
+.profile-section { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--hall-border, #e3e5dc); }
+.profile-heading, .skill-title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.profile-heading h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.profile-heading small, .skill-title small, .profile-note, .profile-refresh small { color: var(--hall-text-muted, #68716b); font-size: 12px; line-height: 1.6; }
+.profile-note { margin: 8px 0; overflow-wrap: anywhere; }
+.skill-item { padding: 12px; border: 1px solid var(--hall-border, #e3e5dc); border-radius: 8px; background: var(--hall-surface, #fffefa); }
+.skill-item + .skill-item { margin-top: 8px; }
+.skill-states { display: flex; gap: 6px; flex-wrap: wrap; font-size: 12px; }
+.skill-states span { padding: 3px 7px; border-radius: 4px; color: #65665e; background: #f1f0eb; }
+.skill-states .is-ready { color: #31644b; background: #eaf2e9; }
 .profile-error { color: var(--hall-danger, #a13f35); }
-.profile-refresh button { padding: 7px 10px; border: 1px solid var(--hall-border-strong, #ccd2c5); border-radius: 7px; background: var(--hall-surface, #fffefa); color: inherit; }
-.profile-refresh small { display: block; margin-top: 6px; }
+.profile-refresh { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--hall-border, #e3e5dc); }
+.profile-refresh button { min-height: 44px; padding: 8px 12px; border: 1px solid var(--hall-border-strong, #ccd2c5); border-radius: 7px; background: var(--hall-surface, #fffefa); color: var(--hall-text-muted, #68716b); font-size: 13px; }
 .profile-refresh button:disabled { opacity: 0.6; cursor: default; }
 .agent-panel button:focus-visible { outline: 2px solid var(--hall-brand, #923f30); outline-offset: 2px; }
 .detail-card > p { padding: 12px; }
@@ -458,6 +479,6 @@ button {
   .agent-list, .detail-card { flex: 1; min-height: 0; max-height: none; }
   .panel-toolbar { align-items: stretch; flex-wrap: wrap; padding: 10px 12px; }
   .status-filter { flex: 1 0 100%; }
-  .agent-detail-scroll { padding: 12px; }
+  .agent-detail-scroll { padding: 16px; }
 }
 </style>

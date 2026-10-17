@@ -3936,3 +3936,25 @@ describe('A03 real Hall low-height layout wiring', () => {
     } finally { wrapper.unmount() }
   })
 })
+
+describe('Agent roster visual close contract', () => {
+  it('renders the accessible SVG close only for the roster and preserves close navigation', async () => {
+    const helpers = await import('../src/composables/juyiting/useHallPanels.js')
+    const mocks = createActualHallMocks({ mode: Vue.ref('portrait-command'), mounts: { library: 0, archive: 0 }, counters: { panelHelpers: helpers } })
+    mocks.AgentPanel = Vue.defineComponent({ setup: (_props, { expose }) => { expose({ canGoBack: true, profileVisible: false }); return () => Vue.h('div', '详情层') } })
+    mocks.useHallPanels = helpers.useHallPanels
+    mocks.useHallHomeMode = () => ({ homeMode: Vue.ref('overview'), isOverviewHome: Vue.ref(true), setHomeMode: () => {} })
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      const state = wrapper.vm.$.setupState
+      state.openPanel('agents')
+      await flushPromises()
+      const close = wrapper.get('.panel-close')
+      expect(close.attributes('aria-label')).to.equal('关闭面板')
+      expect(close.get('svg').attributes('stroke-width')).to.equal('1.8')
+      expect(close.get('svg').attributes('width')).to.equal('20')
+      await close.trigger('click')
+      expect(state.activePanel).to.equal('')
+    } finally { wrapper.unmount() }
+  })
+})
