@@ -212,7 +212,7 @@
     />
 
     <transition name="panel" @after-leave="handlePanelAfterLeave">
-      <div v-if="activePanel" :key="panelSessionGeneration" class="panel-overlay" :class="{ 'is-full-window': panelLayout === 'full-window', 'is-low-height': isLowHeightPanel, 'is-chat-overlay': renderedPanel === 'chat', 'is-compact-chat-overlay': renderedPanel === 'chat' && isCompactChat, 'theme-workbench': isOverviewHome, 'is-workbench-panel': isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel), 'is-workbench-page': isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) }" :data-panel-generation="panelSessionGeneration" @pointerdown.self="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? null : closePanel()">
+      <div v-if="activePanel" :key="panelSessionGeneration" class="panel-overlay" :class="{ 'is-full-window': panelLayout === 'full-window', 'is-agent-overlay': renderedPanel === 'agents', 'is-low-height': isLowHeightPanel, 'is-chat-overlay': renderedPanel === 'chat', 'is-compact-chat-overlay': renderedPanel === 'chat' && isCompactChat, 'theme-workbench': isOverviewHome, 'is-workbench-panel': isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel), 'is-workbench-page': isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) }" :data-panel-generation="panelSessionGeneration" @pointerdown.self="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? null : closePanel()">
         <section
           ref="panelRef"
           class="floating-panel"
@@ -234,7 +234,7 @@
         >
           <div v-if="!navigationPresentation.isPrimarySurface || navigationPresentation.showPrimaryChildHeader" class="panel-title">
             <button
-              v-if="navigationPresentation.showHallClose"
+              v-if="navigationPresentation.showHallClose || (renderedPanel === 'agents' && agentPanelRef?.canGoBack)"
               class="panel-close"
               type="button"
               aria-label="关闭面板"
@@ -244,13 +244,13 @@
               <var-icon :name="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? 'window-close' : 'close-circle-outline'" aria-hidden="true" />
             </button>
             <button
-              v-if="navigationPresentation.showHallReturn"
+              v-if="navigationPresentation.showHallReturn || (renderedPanel === 'agents' && agentPanelRef?.canGoBack)"
               class="panel-return"
               type="button"
-              :aria-label="navigationPresentation.showRootReturn ? '返回聚义厅' : '返回上一层'"
+              :aria-label="renderedPanel === 'agents' && agentPanelRef?.canGoBack ? '返回名册' : navigationPresentation.showRootReturn ? '返回聚义厅' : '返回上一层'"
               :disabled="voiceInteractionLocked"
               @click="handleHallReturn"
-            >← 返回</button>
+            >{{ renderedPanel === 'agents' && agentPanelRef?.canGoBack ? '← 名册' : '← 返回' }}</button>
             <span :id="panelTitleId">{{ activePanelTitle }}</span>
             <button
               v-if="taskWorkspaceEnabled && renderedPanel === 'tasks' && !formalTaskRef && taskWorkspaceSubject"
@@ -263,6 +263,14 @@
           </div>
 
           <AgentPanel
+            ref="agentPanelRef"
+            :active="renderedPanel === 'agents' && activePanel === 'agents'"
+            :identity-key="hallIdentityScope + ':' + apiStore.authorizationGeneration"
+            :panel-session-key="agentPanelSessionKey"
+            :profile-capabilities="agentProfile.projection.value"
+            :profile-capabilities-loading="agentProfile.loading.value"
+            :profile-capabilities-error="agentProfile.error.value"
+            :profile-reason-text="agentProfileReasonText"
             v-if="panelFrames.includes('agents')"
             v-show="renderedPanel === 'agents'"
             :inert="renderedPanel !== 'agents' ? '' : null"
@@ -284,8 +292,9 @@
             :point-and-start-busy="pointAndStartBusy"
             :can-point-and-deliberate="canPointAndDeliberateAgent"
             :can-start-conversation="canStartAgentConversation"
+            @refresh-profile-capabilities="agentProfile.refresh"
             @set-agent-filter="setAgentFilter"
-            @select-agent="selectAgent"
+            @select-agent="handleRosterSelectAgent"
             @point-and-deliberate="handlePointAndDeliberateAgent"
             @start-conversation="handleStartAgentConversation"
             @open-catalog="openPanel('catalog')"
@@ -801,6 +810,7 @@ import { createPointAndStartIntentStore } from '@/composables/juyiting/hallPoint
 import { pointAndStartRecoveryLane } from '@/composables/juyiting/hallPointAndStartRecoveryLane'
 import { useHallBountyRequestCatalog } from '@/composables/juyiting/useHallBountyRequestCatalog'
 import { useHallTypedDeliberation } from '@/composables/juyiting/useHallTypedDeliberation'
+import { useHallAgentProfileCapabilities, agentProfileReasonText } from '@/composables/juyiting/useHallAgentProfileCapabilities'
 import { useHallSkillCapabilities } from '@/composables/juyiting/useHallSkillCapabilities'
 import { typedLong } from '@/composables/juyiting/hallTypedDeliberation'
 import { pointAndStartIntentReadLane } from '@/composables/juyiting/hallNativeBountyCapability'
@@ -949,18 +959,23 @@ const guardPanelLeave = action => {
 const overviewItemRef = ref(null)
 const taskReviewRef = ref(null)
 const hallReadRevision = ref(0)
+const agentPanelRef = ref(null)
+const agentPanelSessionKey = ref(0)
+watch(() => panelFrames.value.includes('agents'), (present, previous) => { if (present && !previous) agentPanelSessionKey.value++ }, { flush: 'sync' })
 const bountyPanelRef = ref(null)
 const panelLocations = new Map()
 const treasurePanelRef = ref(null)
 const libraryPanelRef = ref(null)
 // Retained file/reading detail also consumes a logical layer while its source is hidden.
 const panelDepth = computed(() => panelFrames.value.length
+  + Number(panelFrames.value.includes('agents') && Boolean(agentPanelRef.value?.canGoBack))
   + Number(panelFrames.value.includes('tasks') && Boolean(bountyPanelRef.value?.canGoBack))
   + Number(panelFrames.value.includes('treasure') && Boolean(treasurePanelRef.value?.canGoBack))
   + Number(panelFrames.value.includes('library') && Boolean(libraryPanelRef.value?.canGoBack)))
 const canOpenPanelDetail = computed(() => panelDepth.value < 3)
 const panelChildCanReturn = computed(() => {
   if (activeDraftEditor()) return Boolean(activeDraftEditor().canGoBack)
+  if (renderedPanel.value === 'agents') return Boolean(agentPanelRef.value?.canGoBack)
   if (renderedPanel.value === 'tasks') return Boolean(formalTaskRef.value || bountyPanelRef.value?.canGoBack)
   if (renderedPanel.value === 'treasure') return Boolean(treasurePanelRef.value?.canGoBack)
   if (renderedPanel.value === 'library') return Boolean(libraryPanelRef.value?.canGoBack)
@@ -1142,7 +1157,7 @@ const {
 } = useHallSound()
 
 const activePanelTitle = computed(() => {
-  const childTitle = activeDraftEditor()?.windowTitle || (renderedPanel.value === 'treasure' && treasurePanelRef.value?.windowTitle)
+  const childTitle = (renderedPanel.value === 'agents' && agentPanelRef.value?.windowTitle) || activeDraftEditor()?.windowTitle || (renderedPanel.value === 'treasure' && treasurePanelRef.value?.windowTitle)
   if (childTitle) return childTitle
   if (renderedPanel.value === 'draft') return '提出需求'
   if (renderedPanel.value === 'tasks' && formalTaskRef.value) return '正式成果与验收'
@@ -1400,6 +1415,11 @@ const selectAgent = (agent) => {
   taskWorkspaceBinding.selectExplicitActor(agent)
   playAgentSelect()
   return agent || null
+}
+
+const handleRosterSelectAgent = agent => {
+  if (selectedAgent.value?.agentId === agent?.agentId) return selectedAgent.value
+  return selectAgent(agent)
 }
 
 const exactHostedAgentId = value => typeof value === 'string' && value.trim() === value && value.length > 0 ? value : ''
@@ -1850,7 +1870,7 @@ const returnPanel = () => {
   if (guardPanelLeave(() => returnPanel() || closePanel())) return true
   if (renderedPanel.value === 'tasks' && formalTaskRef.value) { formalTaskRef.value = null; return true }
   if (panelChildCanReturn.value) {
-    const child = renderedPanel.value === 'tasks' ? bountyPanelRef.value
+    const child = renderedPanel.value === 'agents' ? agentPanelRef.value : renderedPanel.value === 'tasks' ? bountyPanelRef.value
       : renderedPanel.value === 'treasure' ? treasurePanelRef.value : libraryPanelRef.value
     return child.back()
   }
@@ -1869,6 +1889,7 @@ const closePanel = () => {
 }
 
 const handleHallReturn = () => {
+  if (renderedPanel.value === 'agents' && agentPanelRef.value?.canGoBack) return returnPanel()
   if (navigationPresentation.value.showRootReturn) return closePanel()
   return returnPanel()
 }
@@ -2311,6 +2332,14 @@ const {
 })
 // The directory starts an immediate context watch; initialize the assignment
 // state first so mounted private and bounty panels share the same safe fence.
+const agentProfile = useHallAgentProfileCapabilities({
+  api: agentApi,
+  getAgent: () => selectedAgent.value,
+  identityKey: () => hallIdentityScope.value ? `${hallIdentityScope.value}:${apiStore.authorizationGeneration}` : '',
+  enabled: () => renderedPanel.value === 'agents' && activePanel.value === 'agents' && Boolean(agentPanelRef.value?.profileVisible)
+})
+onUnmounted(() => agentProfile.dispose())
+
 const taskSkillDirectory = useHallSkillCapabilities({ api: agentApi, getContext: typedDeliberationContext,
   identityKey: () => `${hallIdentityScope.value}\u0000${apiStore.authorizationGeneration}\u0000${followupContextGeneration.value}`,
   enabled: () => typedDeliberationEnabled.value })
@@ -4609,18 +4638,21 @@ button.hall-room {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 12px 12px 18px;
-    overflow: auto;
+    padding: 12px;
+    overflow: hidden;
   }
   .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .agent-list) {
     order: 1;
-    flex: 0 0 auto;
-    max-height: 44vh;
+    flex: 1;
+    min-height: 0;
+    max-height: none;
     overflow: auto;
   }
   .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .detail-card) {
     order: 2;
-    flex: 0 0 auto;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar) {
@@ -4723,7 +4755,7 @@ button.hall-room {
   }
   .home-overview .panel-overlay.theme-workbench :deep(.agent-panel-body) {
     display: grid;
-    grid-template-columns: minmax(260px, .85fr) minmax(0, 1.15fr);
+    grid-template-columns: minmax(0, 43fr) minmax(0, 57fr);
     gap: 10px;
     overflow: hidden;
   }
@@ -4734,7 +4766,7 @@ button.hall-room {
   }
   .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .detail-card) {
     order: initial;
-    overflow: auto;
+    overflow: hidden;
   }
   .home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor form) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4756,4 +4788,40 @@ button.hall-room {
   }
 }
 
+
+@media (min-width: 721px) {
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel-body) {
+    display: grid;
+    grid-template-columns: minmax(0, 43fr) minmax(0, 57fr);
+    min-height: 0;
+    overflow: hidden;
+  }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel .detail-card) { overflow: hidden; }
+}
+@media (max-width: 720px) {
+  .juyi-page .panel-overlay.is-agent-overlay {
+    inset: 0;
+    width: 100%;
+    height: var(--hall-visual-height, 100dvh);
+    max-height: var(--hall-visual-height, 100dvh);
+    padding: 0;
+    align-items: stretch;
+    overflow: hidden;
+  }
+  .panel-overlay.is-agent-overlay > .floating-panel.panel-agents {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    min-height: 0;
+    margin: 0;
+    border-radius: 0;
+    overflow: hidden;
+  }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel-body) { display: flex; min-height: 0; overflow: hidden; }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel .detail-card) { min-height: 0; padding: 0; overflow: hidden; }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel.is-agent-detail .panel-toolbar) { display: none; }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel .panel-toolbar > button) { width: auto; }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay .panel-title > span { display: block; }
+}
 </style>

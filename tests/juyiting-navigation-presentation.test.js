@@ -101,11 +101,11 @@ describe('Juyi Hall navigation presentation', () => {
     expect(source).to.include('resolveHallNavigationPresentation')
     expect(source).to.include('v-show="showWorkbenchDock && (Boolean(activePanel) || !renderedPanel)"')
     expect(source).to.include("'has-workbench-dock': showWorkbenchDock && (Boolean(activePanel) || !renderedPanel)")
-    expect(source).to.include('v-if="navigationPresentation.showHallReturn"')
-    expect(source).to.include('v-if="navigationPresentation.showHallClose"')
+    expect(source).to.include('v-if="navigationPresentation.showHallReturn ||')
+    expect(source).to.include('v-if="navigationPresentation.showHallClose ||')
     expect(source).to.include('@click="handleHallReturn"')
     expect(source).to.include("navigationPresentation.showRootReturn ? '返回聚义厅' : '返回上一层'")
-    expect(source).to.include('>← 返回</button>')
+    expect(source).to.include("? '← 名册' : '← 返回'")
     expect(source).to.include('.panel-title .panel-return')
     expect(source).to.include('@click="closePanel"')
     expect(source).to.include('externalRootModalOpen: props.onboardingVisible')
@@ -141,4 +141,37 @@ describe('Juyi Hall navigation presentation', () => {
     expect(desktopChild.showHallReturn).to.equal(true)
     expect(desktopChild.showHallClose).to.equal(true)
   })
+})
+
+
+describe('Agent roster child navigation wiring (not browser geometry proof)', () => {
+  const hall = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+  it('preserves generic toggle and wraps only roster repeat selection', () => {
+    expect(hall).to.include('@select-agent="handleRosterSelectAgent"')
+    const local = hall.slice(hall.indexOf('const handleRosterSelectAgent'), hall.indexOf('const exactHostedAgentId'))
+    expect(local).to.include('return selectedAgent.value').and.include('return selectAgent(agent)')
+    expect(hall).to.include('taskWorkspaceBinding.selectExplicitActor(null)')
+  })
+  it('integrates child depth, title and guarded return without changing close', () => {
+    expect(hall).to.include("panelFrames.value.includes('agents') && Boolean(agentPanelRef.value?.canGoBack)")
+    expect(hall).to.include("renderedPanel.value === 'agents' && agentPanelRef.value?.windowTitle")
+    const back = hall.slice(hall.indexOf('const handleHallReturn'), hall.indexOf('const handlePanelKeydown'))
+    expect(back.indexOf('return returnPanel()')).to.be.lessThan(back.indexOf('showRootReturn'))
+    expect(hall).to.include("renderedPanel.value === 'agents' ? agentPanelRef.value")
+    expect(hall).to.include("navigationPresentation.showHallReturn || (renderedPanel === 'agents' && agentPanelRef?.canGoBack)").and.include("navigationPresentation.showHallClose || (renderedPanel === 'agents' && agentPanelRef?.canGoBack)")
+    expect(hall).to.include('@click="closePanel"').and.include("if (panelDisposed || voiceInteractionLocked.value) return false")
+  })
+  it('gates profile reads on actual visible detail and uses Agent-specific frame sizing', () => {
+    expect(hall).to.include('Boolean(agentPanelRef.value?.profileVisible)').and.include('agentProfile.dispose()')
+    expect(hall).to.include('.panel-overlay.is-agent-overlay').and.include('height: var(--hall-visual-height, 100dvh)')
+    expect(hall).not.to.include('max-height: 44vh')
+  })
+  it('routes same-ID roster clicks through its wrapper without changing map selection', () => {
+    const source = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+    const roster = source.slice(source.indexOf('<AgentPanel'), source.indexOf('/>', source.indexOf('<AgentPanel')))
+    expect(roster).to.include('@select-agent="handleRosterSelectAgent"')
+    expect(roster).to.include('@refresh-profile-capabilities="agentProfile.refresh"')
+    expect(source.slice(0, source.indexOf('<AgentPanel'))).to.include('@select-agent="selectAgent"')
+  })
+
 })

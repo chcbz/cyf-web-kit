@@ -1,6 +1,6 @@
 <template>
-  <div class="agent-panel">
-    <div class="panel-toolbar">
+  <div class="agent-panel" :class="{ 'is-compact-roster': isCompactRoster, 'is-agent-detail': canGoBack }">
+    <div v-show="!canGoBack" class="panel-toolbar">
       <div class="status-filter">
         <button
           v-for="item in statusFilters"
@@ -18,13 +18,20 @@
     <p v-else-if="errorMessage" class="panel-data-state is-error" role="alert">{{ errorMessage }}</p>
 
     <div class="agent-panel-body">
-      <div class="agent-list">
+      <div
+        v-show="listVisible"
+        ref="listRef"
+        class="agent-list"
+        :inert="!listVisible ? '' : null"
+        :aria-hidden="!listVisible ? 'true' : null"
+      >
         <button
           v-for="agent in filteredAgents"
           :key="agent.agentId"
           class="agent-row"
           :class="{ active: selectedAgent?.agentId === agent.agentId }"
-          @click="$emit('select-agent', agent)"
+          :data-agent-id="agent.agentId"
+          @click="openAgent(agent)"
         >
           <span
             class="mini-avatar portrait-avatar"
@@ -33,28 +40,63 @@
           ></span>
           <span>
             <strong>{{ agent.name || agent.personaName || agent.agentId }}</strong>
-            <small>{{ portraitName(agent) }} / {{ agent.currentTaskTitle || abilityText(agent) }}</small>
+            <small>{{ portraitName(agent) }} / {{ agent.currentTaskTitle || abilityText(displayAgent(agent)) }}</small>
           </span>
           <em :class="statusClass(agent.status)">{{ statusText(agent.status) }}</em>
         </button>
       </div>
 
-      <div class="detail-card">
+      <div
+        v-show="detailVisible"
+        class="detail-card"
+        :inert="!detailVisible ? '' : null"
+        :aria-hidden="!detailVisible ? 'true' : null"
+      >
         <template v-if="selectedAgent">
-          <div class="detail-head">
-            <span
-              class="large-avatar portrait-avatar"
-              :style="portraitStyle(selectedAgent, { highRes: true })"
-              :title="portraitName(selectedAgent)"
-            ></span>
-            <div>
-              <strong>{{ selectedAgent.name || selectedAgent.personaName }}</strong>
-              <small>{{ portraitName(selectedAgent) }} / {{ selectedAgent.agentId }}</small>
+          <div class="agent-detail-scroll">
+            <div class="detail-head">
+              <span
+                class="large-avatar portrait-avatar"
+                :style="portraitStyle(selectedAgent, { highRes: true })"
+                :title="portraitName(selectedAgent)"
+              ></span>
+              <div>
+                <strong ref="detailTitleRef" tabindex="-1">{{ selectedAgent.name || selectedAgent.personaName || selectedAgent.agentId }}</strong>
+                <small>{{ portraitName(selectedAgent) }} / {{ selectedAgent.agentId }}</small>
+              </div>
             </div>
-          </div>
-          <div class="ability-tags">
-            <span v-for="ability in selectedAgent.abilities || []" :key="ability">{{ ability }}</span>
-            <span v-if="!(selectedAgent.abilities || []).length">未录本领</span>
+            <section class="profile-section" aria-label="技能">
+              <div class="profile-heading"><h3>技能</h3><small v-if="profile?.skills.status === 'AVAILABLE'">已核验安装 {{ installedCount }} 项</small></div>
+              <p v-if="!canReadProfile" role="status">仅拥有者可查看技能</p>
+              <p v-else-if="profileCapabilitiesLoading" role="status">正在核对技能…</p>
+              <p v-else-if="profileCapabilitiesError" class="profile-error" role="status">{{ profileCapabilitiesError }}</p>
+              <p v-else-if="profile?.skills.status === 'UNAVAILABLE'" class="profile-error" role="status">技能读取失败，可重试</p>
+              <template v-else-if="profile?.skills.status === 'AVAILABLE'">
+                <p v-if="!profile.skills.items.length">暂无已登记技能</p>
+                <div v-for="skill in profile.skills.items" :key="JSON.stringify([skill.skillKey, skill.skillVersion])" class="skill-item">
+                  <div class="skill-title"><strong>{{ skill.title }}</strong><small>{{ skill.skillVersion }}</small></div>
+                  <div class="skill-states">
+                    <span>{{ skill.installationVerified ? '已核验安装' : '安装未核验' }}</span>
+                    <span :class="{ 'is-ready': skill.runtimeState === 'RUNTIME_READY' }">{{ skill.runtimeState === 'RUNTIME_READY' ? '运行就绪' : profileReasonText(skill.reasonCode) }}</span>
+                  </div>
+                </div>
+              </template>
+              <p v-else role="status">技能资料尚未读取</p>
+              <small class="profile-note">运行就绪不代表已获任务调用授权。</small>
+            </section>
+            <section class="profile-section" aria-label="本领">
+              <div class="profile-heading"><h3>本领</h3><small>{{ profile ? '最近上报记录' : '上次记录' }}</small></div>
+              <div class="ability-tags">
+                <span v-for="ability in displayedAbilities" :key="ability">{{ ability }}</span>
+                <span v-if="!displayedAbilities.length">未录本领</span>
+              </div>
+            </section>
+            <div v-if="canReadProfile" class="profile-refresh">
+              <button type="button" :disabled="profileCapabilitiesLoading" @click="$emit('refresh-profile-capabilities')">{{ profileCapabilitiesLoading ? '正在刷新…' : '刷新技能与本领' }}</button>
+              <small v-if="profile">最近读取：{{ new Date(profile.observedAt).toLocaleTimeString() }}</small>
+              <p>读取最新已上报记录，不触发重新扫描或重注册。</p>
+            </div>
+            <p>{{ selectedAgent.errorMessage || selectedAgent.currentTaskTitle || '正在厅中候令，可从悬赏榜点将。' }}</p>
           </div>
           <div class="agent-detail-actions">
             <button
@@ -70,7 +112,6 @@
               @click="$emit('point-and-deliberate', selectedAgent)"
             >{{ pointAndStartBusy ? '正在点将…' : '点将并议事' }}</button>
           </div>
-          <p>{{ selectedAgent.errorMessage || selectedAgent.currentTaskTitle || '正在厅中候令，可从悬赏榜点将。' }}</p>
         </template>
         <p v-else>点一位厅中好汉，查看动静、本领与所领榜文。</p>
       </div>
@@ -79,7 +120,16 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+
+const props = defineProps({
+  active: { type: Boolean, default: true },
+  identityKey: { type: String, default: '' },
+  panelSessionKey: { type: Number, default: 0 },
+  profileCapabilities: { type: Object, default: null },
+  profileCapabilitiesLoading: { type: Boolean, default: false },
+  profileCapabilitiesError: { type: String, default: '' },
+  profileReasonText: { type: Function, default: () => '暂不可用' },
   hasPendingTask: { type: Boolean, default: false },
   pointAndStartBusy: { type: Boolean, default: false },
   canPointAndDeliberate: { type: Function, default: () => false },
@@ -99,7 +149,53 @@ defineProps({
   statusText: { type: Function, required: true }
 })
 
-defineEmits(['set-agent-filter', 'select-agent', 'start-conversation', 'open-catalog', 'point-and-deliberate'])
+const emit = defineEmits(['set-agent-filter', 'select-agent', 'start-conversation', 'open-catalog', 'point-and-deliberate', 'refresh-profile-capabilities'])
+const media = typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 720px)') : null
+const isCompactRoster = ref(media?.matches || false)
+const mobileDetailOpen = ref(false)
+const listRef = ref(null)
+const detailTitleRef = ref(null)
+let listScrollTop = 0
+let focusAgentId = null
+const canGoBack = computed(() => props.active && isCompactRoster.value && mobileDetailOpen.value)
+const profileVisible = computed(() => props.active && Boolean(props.selectedAgent?.agentId) && (!isCompactRoster.value || mobileDetailOpen.value))
+const listVisible = computed(() => props.active && (!isCompactRoster.value || !mobileDetailOpen.value))
+const detailVisible = computed(() => props.active && (!isCompactRoster.value || mobileDetailOpen.value))
+const windowTitle = computed(() => canGoBack.value ? '好汉详情' : '点将册')
+const canReadProfile = computed(() => props.selectedAgent?.boundToMe === true && props.selectedAgent?.systemAgent !== true)
+const profile = computed(() => !props.profileCapabilitiesLoading && !props.profileCapabilitiesError && canReadProfile.value && props.profileCapabilities?.agentId === props.selectedAgent?.agentId ? props.profileCapabilities : null)
+const displayedAbilities = computed(() => profile.value?.abilities || props.selectedAgent?.abilities || [])
+const installedCount = computed(() => profile.value?.skills.items.filter(item => item.installationVerified).length || 0)
+const displayAgent = agent => profile.value?.agentId === agent.agentId ? { ...agent, abilities: profile.value.abilities } : agent
+const session = () => `${props.identityKey}:${props.panelSessionKey}`
+const openAgent = async agent => {
+  const origin = session()
+  listScrollTop = listRef.value?.scrollTop || 0
+  focusAgentId = agent.agentId
+  mobileDetailOpen.value = true
+  emit('select-agent', agent)
+  await nextTick()
+  if (origin === session() && canGoBack.value) detailTitleRef.value?.focus()
+}
+const back = () => {
+  if (!canGoBack.value) return false
+  const origin = session()
+  mobileDetailOpen.value = false
+  void nextTick(() => {
+    if (origin !== session() || !listVisible.value) return
+    if (listRef.value) {
+      listRef.value.scrollTop = listScrollTop
+      Array.from(listRef.value.querySelectorAll('[data-agent-id]')).find(row => row.dataset.agentId === focusAgentId)?.focus({ preventScroll: true })
+    }
+  })
+  return true
+}
+watch(() => [props.identityKey, props.panelSessionKey], () => { mobileDetailOpen.value = false; listScrollTop = 0; focusAgentId = null }, { flush: 'sync' })
+watch(() => props.selectedAgent?.agentId, id => { if (!id) mobileDetailOpen.value = false }, { flush: 'sync' })
+const updateMedia = event => { isCompactRoster.value = event.matches }
+onMounted(() => media?.addEventListener('change', updateMedia))
+onUnmounted(() => media?.removeEventListener('change', updateMedia))
+defineExpose({ canGoBack, back, windowTitle, profileVisible })
 </script>
 
 <style scoped>
@@ -160,7 +256,7 @@ button {
 
 .agent-panel-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  grid-template-columns: minmax(0, 43fr) minmax(0, 57fr);
   gap: 12px;
   flex: 1;
   min-width: 0;
@@ -258,10 +354,12 @@ button {
   min-width: 0;
   min-height: 0;
   margin: 0;
-  padding: 12px;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
   border-radius: 8px;
-  background: #f4e2c3;
+  background: var(--hall-surface, #fffefa);
 }
 
 /* Match the approved prototype's mmd-row / mmd-primary actions. */
@@ -270,7 +368,12 @@ button {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 8px;
+  flex: none;
+  margin-top: 0;
+  padding: 10px 12px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--hall-border, #e3e5dc);
+  background: var(--hall-surface, #fffefa);
   font-size: 14px;
   line-height: 1.6;
 }
@@ -326,21 +429,35 @@ button {
   font-size: 12px;
 }
 
-@media (max-width: 900px) {
-  .agent-panel-body {
-    grid-template-columns: 1fr;
-    overflow: auto;
-  }
-
-  .detail-card {
-    order: -1;
-  }
+.agent-detail-scroll {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  padding: 14px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
 }
+.profile-section { padding-block: 12px; border-top: 1px solid var(--hall-border, #e3e5dc); }
+.profile-heading, .skill-title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.profile-heading h3 { margin: 0; font-size: 15px; }
+.profile-heading small, .profile-note, .profile-refresh { color: var(--hall-text-muted, #68716b); font-size: 12px; }
+.skill-item { margin-top: 8px; padding: 10px; border: 1px solid var(--hall-border, #e3e5dc); border-radius: 7px; }
+.skill-states { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; font-size: 12px; }
+.skill-states span { padding: 2px 6px; border-radius: 5px; background: var(--hall-surface-subtle, #f3f3ed); }
+.skill-states .is-ready { color: var(--hall-positive, #36643b); background: #edf4ea; }
+.profile-error { color: var(--hall-danger, #a13f35); }
+.profile-refresh button { padding: 7px 10px; border: 1px solid var(--hall-border-strong, #ccd2c5); border-radius: 7px; background: var(--hall-surface, #fffefa); color: inherit; }
+.profile-refresh small { display: block; margin-top: 6px; }
+.profile-refresh button:disabled { opacity: 0.6; cursor: default; }
+.agent-panel button:focus-visible { outline: 2px solid var(--hall-brand, #923f30); outline-offset: 2px; }
+.detail-card > p { padding: 12px; }
 
-@media (max-width: 620px) {
-  .panel-toolbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
+@media (max-width: 720px) {
+  .agent-panel-body { display: flex; flex-direction: column; overflow: hidden; }
+  .agent-list, .detail-card { flex: 1; min-height: 0; max-height: none; }
+  .panel-toolbar { align-items: stretch; flex-wrap: wrap; padding: 10px 12px; }
+  .status-filter { flex: 1 0 100%; }
+  .agent-detail-scroll { padding: 12px; }
 }
 </style>
