@@ -11,8 +11,8 @@ import { stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 
 import { hallCapabilities as capabilityV2 } from './fixtures/hall-current-protocol.js'
 const deferred = () => { let resolve; let reject; const promise = new Promise((ok, fail) => { resolve = ok; reject = fail }); return { promise, resolve, reject } }
-const base = ({ chatApi, apiStore = { authorizationGeneration: 1, token: async () => '' }, metadata, context, onDelivery, outgoingMetadata, onFinalReply } = {}) => useHallConversation({
-  apiStore, chatApi: chatApi || {},
+const base = ({ chatApi, apiStore = { authorizationGeneration: 1, token: async () => '' }, metadata, context, onDelivery, outgoingMetadata, onFinalReply, identityScope, replyCancellationStorage } = {}) => useHallConversation({
+  apiStore, identityScope, replyCancellationStorage, chatApi: chatApi || {},
   chatContext: context || ref({ conversationScopeType: 'public', conversationScopeKey: 'public', mode: 'public', participantAgentIds: ['a'], targetAgentIds: ['a'], targetAgentId: 'a' }),
   chatMode: ref('public'), globalStore: { user: { username: 'tester' } }, log: { warn () {}, error () {} },
   openPanel () {}, outgoingMetadata: outgoingMetadata || ref(metadata || { inputRefs: [{ type: 'message', id: '9007199254740993', content: 'must never upload' }] }),
@@ -645,6 +645,47 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
       conversation.disposeHallConversation()
     })
   }
+
+  it('restores an unknown stop across remount for the exact identity/request and only reads it back', async () => {
+    const records = new Map()
+    const storage = { getItem: key => records.get(key) || null, setItem: (key, value) => records.set(key, value), removeItem: key => records.delete(key) }
+    const identityScope = ref('0\u0000client\u0000owner')
+    let posts = 0, reads = 0, requestId, done = false
+    const chatApi = {
+      get: async path => {
+        if (path === '/capabilities') return capabilityV2
+        reads += 1
+        return durableRequestView({ requestId, state: done ? 'CANCELLED' : 'RUNNING', stateVersion: '2', turns: [durableTurnView({ requestId, turnId: 'turn-a', state: done ? 'CANCELLED' : 'STREAMING', stateVersion: '2' })] })
+      },
+      create: async (_path, body, options) => {
+        requestId = body.requestId
+        options.onStream(JSON.stringify({ type: 'chat_request_replay', requestId, turnId: 'turn-a', conversationId: '9007199254740993', state: 'STREAMING', stateVersion: '2' })); options.onStreamEnd()
+      },
+      post: async () => { posts += 1; throw new TypeError('connection lost') }
+    }
+    const options = { chatApi, identityScope, replyCancellationStorage: storage }
+    const first = base(options)
+    first.setDraft('stop then reload'); await first.sendHallMessage(); await flushReadbacks()
+    await first.cancelDeliberation({ turnId: 'turn-a' })
+    expect(records.size).to.equal(1)
+    const snapshot = JSON.parse(JSON.stringify({ request: first.activeRequest.value, turns: first.activeTurns.value, id: first.conversationId.value }))
+    first.disposeHallConversation()
+    const restored = base(options)
+    restored.conversationId.value = snapshot.id; restored.activeRequest.value = snapshot.request; restored.activeTurns.value = snapshot.turns
+    expect(restored.replyCancellationState.value.unknown).to.equal(true)
+    identityScope.value = '0\u0000client\u0000other'
+    expect(restored.replyCancellationState.value).to.equal(null)
+    identityScope.value = '0\u0000client\u0000owner'
+    const readsBefore = reads
+    // Even a different supplied target must not widen a previously unknown operation.
+    expect(await restored.cancelDeliberation({ allPending: true })).to.equal(false)
+    expect(reads).to.be.greaterThan(readsBefore); expect(posts).to.equal(1)
+    done = true
+    expect(await restored.cancelDeliberation()).to.equal(true)
+    expect(posts).to.equal(1); expect(records.size).to.equal(0)
+    expect(restored.replyCancellationState.value).to.equal(null)
+    restored.disposeHallConversation()
+  })
 
   it('deduplicates concurrent cancellation and accepts a same-version terminal receipt', async () => {
     let requestId, posts = 0

@@ -106,7 +106,7 @@
         <small v-if="message.statusText" class="message-status">{{ message.statusText }}</small>
       </div>
       <slot name="bounty-results"></slot>
-      <p v-if="deliberationStatus" class="deliberation-status">{{ deliberationStatus }}</p>
+      <p v-if="deliberationStatus" class="deliberation-status" :role="deliberationStatus.startsWith('停止失败') ? 'alert' : 'status'">{{ deliberationStatus }}</p>
       <div v-if="isAwaitingReply" class="hall-message SYSTEM is-pending">
         <strong>{{ pendingAuthor }}</strong>
         <div class="message-content" v-html="renderMarkdown(pendingLabel)"></div>

@@ -1,5 +1,5 @@
 import { createChatStreamDecoder } from '../../utils/chatStreamWire.js'
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, unref, watch } from 'vue'
 import {
   appendHallEventMessage as reduceHallEventMessage,
   appendStreamPayload,
@@ -51,7 +51,9 @@ export const useHallConversation = ({
   onFinalReply,
   onDelivery,
   onRequestCatalogHint = null,
-  onTypedOutcome = null
+  onTypedOutcome = null,
+  identityScope = null,
+  replyCancellationStorage = null
 }) => {
   const messages = ref([])
   const conversationId = ref('')
@@ -85,6 +87,34 @@ export const useHallConversation = ({
   const requestReadbackJobs = new Map()
   const requestReadbackInflight = new Map()
   const cancellationJobs = reactive(new Map())
+  // This tab-scoped marker is a read-only recovery hint, never cancellation authority.
+  const cancellationStorage = () => {
+    try { return replyCancellationStorage || globalThis.window?.sessionStorage } catch { return null }
+  }
+  const cancellationKey = () => {
+    const identity = unref(identityScope)
+    const request = activeRequest.value
+    return identity && request?.requestId && request.conversationId && request.conversationGeneration && request.requestRevision
+      ? `juyiting:reply-stop:v1:${encodeURIComponent(JSON.stringify([identity, request.conversationId, request.conversationGeneration, request.requestId, request.requestRevision]))}` : ''
+  }
+  const savedCancellation = () => {
+    const key = cancellationKey()
+    if (!key) return null
+    try {
+      const target = JSON.parse(cancellationStorage()?.getItem(key) || 'null')
+      if (!target || !((typeof target.turnId === 'string' && target.turnId && Object.keys(target).length === 1) ||
+          (target.allPending === true && Object.keys(target).length === 1))) return null
+      return { inFlight: false, unknown: true, target }
+    } catch { return null }
+  }
+  const saveCancellation = (key, target) => {
+    if (!key) return
+    try {
+      if (target) cancellationStorage()?.setItem(key, JSON.stringify(target))
+      else cancellationStorage()?.removeItem(key)
+    } catch { /* Keep the current-tab in-memory recovery if browser storage is unavailable. */ }
+  }
+
   let capabilityPromise = null
   let capabilityAttempt = 0
   let authoritativeResyncPromise = null
@@ -209,7 +239,7 @@ export const useHallConversation = ({
   const durableBusy = computed(() => deliberationBusy(activeRequest.value, activeTurns.value))
   const durableCancelTarget = computed(() => cancellationTarget(activeRequest.value, activeTurns.value))
   const replyCancellationState = computed(() => {
-    const job = cancellationJobs.get(activeRequest.value?.requestId)
+    const job = cancellationJobs.get(activeRequest.value?.requestId) || savedCancellation()
     return job ? { inFlight: job.inFlight, unknown: job.unknown, target: job.target } : null
   })
   const isConversationBusy = computed(() => isAdoptingBountyBootstrap.value || hasPendingSendSession.value || isSubmitting.value || durableBusy.value || isStreaming.value || isAwaitingReply.value || isConversationLoading.value || Boolean(conversationHistoryDeletingId.value))
@@ -1917,17 +1947,18 @@ export const useHallConversation = ({
 
   const cancelDeliberation = async target => {
     const request = activeRequest.value
-    const pendingJob = cancellationJobs.get(request?.requestId)
+    const pendingJob = cancellationJobs.get(request?.requestId) || savedCancellation()
     const selectedTarget = pendingJob?.unknown ? pendingJob.target : (target && typeof target === 'object' ? target : durableCancelTarget.value)
     if (!request?.requestId || !selectedTarget) return false
     const requestId = request.requestId
     const guard = captureGuard()
     const originalConversationId = conversationId.value
     const current = () => guardCurrent(guard) && activeRequest.value?.requestId === requestId && conversationId.value === originalConversationId
-    const previous = cancellationJobs.get(requestId)
+    const previous = pendingJob
     if (previous?.inFlight) return false
     const job = reactive({ inFlight: true, unknown: previous?.unknown === true, target: selectedTarget })
     cancellationJobs.set(requestId, job)
+    const persistenceKey = cancellationKey()
     const notice = text => {
       if (!current()) return
       deliberationStatus.value = text
@@ -1968,6 +1999,7 @@ export const useHallConversation = ({
         if (!isPendingTurn(turn)) return true
         const expectedStateVersion = canonicalWireString(turn.stateVersion, { allowZero: true })
         if (!expectedStateVersion) return false
+        saveCancellation(persistenceKey, selectedTarget)
         response = await chatApi.post(`/turns/${turn.turnId}/cancel`, { expectedStateVersion }, { autoLoading: false, signal: lifecycleController.signal })
         if (!current()) return false
         const view = authoritativeTurnView(apiData(response), requestId, turn.turnId)
@@ -1993,6 +2025,7 @@ export const useHallConversation = ({
         tracker.terminal = isTerminalTurnState(view.state)
         turnStates.set(turn.turnId, tracker)
       } else if (selectedTarget.allPending === true) {
+        saveCancellation(persistenceKey, selectedTarget)
         response = await chatApi.post(`/requests/${requestId}/cancel?allPending=true`, { allPending: true }, { autoLoading: false, signal: lifecycleController.signal })
         if (!current()) return false
         if (!applyRequestView(apiData(response), requestId)) {
@@ -2015,7 +2048,9 @@ export const useHallConversation = ({
       notice('停止失败，本轮回复尚未停止；请核对后重试')
       return false
     } finally {
+      if (!current()) job.unknown = true
       job.inFlight = false
+      if (!job.unknown) saveCancellation(persistenceKey, null)
       if (!job.unknown && cancellationJobs.get(requestId) === job) cancellationJobs.delete(requestId)
     }
   }

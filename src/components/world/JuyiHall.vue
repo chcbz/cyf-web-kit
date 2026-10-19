@@ -2224,6 +2224,7 @@ const {
   stopHallReplyPolling,
   stopHallReplyStreaming
 } = useHallConversation({
+  identityScope: hallIdentityScope,
   apiStore,
   chatContext,
   chatMode,

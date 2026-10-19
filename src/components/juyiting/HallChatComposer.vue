@@ -298,6 +298,14 @@ const submit = () => {
   emit('send-message')
 }
 
+watch([stopTarget, inputLocked, () => props.contextKey], ([target, locked, context], [previous, , previousContext]) => {
+  if (previous && !target && !locked && context === previousContext) {
+    nextTick(() => {
+      if (!stopTarget.value && !inputLocked.value && props.contextKey === context) textareaRef.value?.focus()
+    })
+  }
+})
+
 watch(() => props.contextKey, () => { moreOpen.value = false })
 
 watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
