@@ -167,12 +167,12 @@ const pageHarness = ({ ordinary = { state: 'ABSENT' }, fundedRecovery = null } =
   return h
 }
 describe('actual JuyiHall default requirement entry', () => {
-  it('always delegates to the existing guarded standalone draft route', () => {
+  it('always delegates to the guarded standalone formal requirement route', () => {
     let drafts = 0
-    const entry = new Function('openPrivateDraft', `return () => {${actualDefaultRequirementEntry}}`)(() => { drafts++; return true })
+    const entry = new Function('openPanel', `return () => {${actualDefaultRequirementEntry}}`)((panel, options) => { expect(panel).to.equal('formalDraft'); expect(options).to.deep.equal({ restore: true }); drafts++; return true })
     expect(entry()).to.equal(true)
     expect(drafts).to.equal(1)
-    const blocked = new Function('openPrivateDraft', `return () => {${actualDefaultRequirementEntry}}`)(() => false)
+    const blocked = new Function('openPanel', `return () => {${actualDefaultRequirementEntry}}`)(() => false)
     expect(blocked()).to.equal(false)
     expect(actualDefaultRequirementEntry).not.to.include('multimediaDeliberationUiEnabled')
     expect(actualDefaultRequirementEntry).not.to.include("openPanel('tasks'")

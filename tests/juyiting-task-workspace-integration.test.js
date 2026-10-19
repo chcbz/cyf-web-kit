@@ -1,3 +1,4 @@
+import { useHallDeliveryReview } from '../src/composables/juyiting/useHallDeliveryReview.js'
 import { useHallAgentProfileCapabilities } from '../src/composables/juyiting/useHallAgentProfileCapabilities.js'
 import { currentBountyAssignmentRevision } from '../src/composables/juyiting/hallBountyAssignmentContext.js'
 import { useHallSkillCapabilities } from '../src/composables/juyiting/useHallSkillCapabilities.js'
@@ -63,7 +64,7 @@ const loadActualHallForIntegration = (mocks, id) => {
     .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = mocks.${name}`)
     .replace(/import\.meta\.env/g, 'mocks.env')
     .replace('export default', 'return')
-  return new Function('Vue', 'mocks', body)(Vue, { useHallAgentProfileCapabilities, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
+  return new Function('Vue', 'mocks', body)(Vue, { useHallDeliveryReview, useHallAgentProfileCapabilities, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
 }
 
 const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, workspaceState = null, counters }) => {
@@ -103,7 +104,7 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
     useHallBountyAssignmentContext: () => ({ projection: Vue.ref(null), error: Vue.ref(''), refresh: async () => false, dispose: noop }),
     useHallBountyRequestCatalog: () => ({ entries: Vue.ref([]), hint: noop, reset: noop, refresh: asyncNoop, dispose: noop }),
     useHallBountyFollowup: () => ({ state: Vue.ref({}), busy: Vue.ref(false), prepareGenerate: async () => false, prepareEdit: async () => false, confirm: async () => false, checkOriginal: async () => false, invalidate: noop, dispose: noop }),
-    useHallTypedDeliberation: () => ({ refresh: asyncNoop, readOne: asyncNoop, recover: asyncNoop, invalidate: noop, dispose: noop }), typedLong: () => '',
+    useHallTypedDeliberation: () => ({ cards: Vue.ref([]), refresh: asyncNoop, readOne: asyncNoop, recover: asyncNoop, invalidate: noop, dispose: noop }), typedLong: () => '',
     createControlledImageCapabilityObservationFence: () => ({ capture: () => ({ isCurrent: () => true }), invalidate: noop }), capabilityOffersControlledImageConsent: () => false, loadControlledImageBountyCapability: async () => null,
     useHallTaskLinkedReferenceInputs: () => ({ resolve: async () => ({ state: 'STALE', inputRefs: [] }), invalidate: noop, dispose: noop }), createPointAndStartIntentStore: () => ({ read: () => ({ state: 'ABSENT' }) }), pointAndStartRecoveryLane: () => 'NONE', providerConsentAcknowledgement: {},
     createNativeCapabilityObservationFence: () => ({ capture: () => ({ identityScope: '', authorizationGeneration: 0, isCurrent: () => true }), invalidate: noop }), loadNativeBountyCapability: async () => null, capabilityAllowsNewStart: () => false, capabilityAllowsOriginalReplay: () => false, pointAndStartIntentReadLane: () => 'ABSENT',
@@ -138,7 +139,7 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
     useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }),
     portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '',
     HallOverview: EmptyPanel, HallDraftEditor: EmptyPanel, FormalTaskDeliveryPanel: EmptyPanel,
-    HallPortraitHome, HallStage, HallVoiceHud: EmptyPanel, LibraryPanel: LibraryPanel || EmptyPanel, TaskWorkspacePanel: TaskWorkspacePanel || EmptyPanel, ArtifactTransferPanel: ArtifactTransferPanel || EmptyPanel, ArtifactOutcomePanel: EmptyPanel,
+    HallDeliveryReviewDialog: EmptyPanel, HallPortraitHome, HallStage, HallVoiceHud: EmptyPanel, LibraryPanel: LibraryPanel || EmptyPanel, TaskWorkspacePanel: TaskWorkspacePanel || EmptyPanel, ArtifactTransferPanel: ArtifactTransferPanel || EmptyPanel, ArtifactOutcomePanel: EmptyPanel,
     AgentPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel, BountyPanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard: EmptyPanel
   }
 }

@@ -132,7 +132,7 @@ describe('new product entry wiring, no quick legacy task/link writes', () => {
     expect(overview).not.to.include('HallReferenceImagePicker')
     expect(bounty).not.to.include('import HallMaterialPicker')
     expect(bounty).not.to.include('task-create-form')
-    expect(page).to.include('return openPrivateDraft()')
+    expect(page).to.include("return openPanel('formalDraft', { restore: true })")
     const setup = page.match(/\} = useHallRequirementCreate\(\{([\s\S]*?)\n\}\)/)?.[1]
     expect(setup).to.include('schemaVersion: 2')
     expect(page).not.to.include('useHallQuickMatter')

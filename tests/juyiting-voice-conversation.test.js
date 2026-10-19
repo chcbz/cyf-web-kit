@@ -1,3 +1,4 @@
+import { useHallDeliveryReview } from '../src/composables/juyiting/useHallDeliveryReview.js'
 import { useHallAgentProfileCapabilities } from '../src/composables/juyiting/useHallAgentProfileCapabilities.js'
 import { currentBountyAssignmentRevision } from '../src/composables/juyiting/hallBountyAssignmentContext.js'
 import { useHallSkillCapabilities } from '../src/composables/juyiting/useHallSkillCapabilities.js'
@@ -82,7 +83,7 @@ const loadActualJuyiHall = mocks => {
     .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = mocks.${name}`)
     .replace(/import\.meta\.env/g, 'mocks.env')
     .replace('export default', 'return')
-  return new Function('Vue', 'mocks', body)(Vue, { useHallAgentProfileCapabilities, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
+  return new Function('Vue', 'mocks', body)(Vue, { useHallDeliveryReview, useHallAgentProfileCapabilities, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
 }
 const requireSource = relativePath => {
   const { readFileSync } = globalThis.__voiceFs
@@ -329,7 +330,7 @@ const createActualHallVoiceMocks = ({
     useTaskWorkspace: () => null, createDisabledTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }),
     isTaskWorkspaceBuildEnabled: () => false, useTaskWorkspaceView: () => ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: text, error: Vue.ref(null), retry: noop }), useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop }),
     portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: agent => agent?.name || '', portraitStyle: () => ({}), roleClass: () => '',
-    HallPortraitHome: HallPortraitHomeComponent || EmptyPanel, HallStage, HallVoiceHud: HallVoiceHudComponent || EmptyPanel, LibraryPanel: EmptyPanel, AgentPanel: EmptyPanel, BountyDiscussionPanel: DiscussionPanelComponent || EmptyPanel,
+    HallDeliveryReviewDialog: EmptyPanel, HallPortraitHome: HallPortraitHomeComponent || EmptyPanel, HallStage, HallVoiceHud: HallVoiceHudComponent || EmptyPanel, LibraryPanel: EmptyPanel, AgentPanel: EmptyPanel, BountyDiscussionPanel: DiscussionPanelComponent || EmptyPanel,
     BountyPanel: EmptyPanel, TaskWorkspacePanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PersonalWorkspace: EmptyPanel, PrivateDiscussionPanel: DiscussionPanelComponent || EmptyPanel, PublicDiscussionPanel: DiscussionPanelComponent || EmptyPanel, SelectedAgentCard: SelectedAgentCardComponent || EmptyPanel
   }
 }

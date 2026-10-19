@@ -1,3 +1,4 @@
+import { useHallDeliveryReview } from '../src/composables/juyiting/useHallDeliveryReview.js'
 import { useHallAgentProfileCapabilities } from '../src/composables/juyiting/useHallAgentProfileCapabilities.js'
 import { currentBountyAssignmentRevision } from '../src/composables/juyiting/hallBountyAssignmentContext.js'
 import { useHallSkillCapabilities } from '../src/composables/juyiting/useHallSkillCapabilities.js'
@@ -2713,7 +2714,7 @@ const loadActualJuyiHall = (mocks) => {
     .replace(/import\.meta\.env/g, 'mocks.env')
     .replace(/^import\s+WorkspaceWriteRecovery\s+from\s+['"][^'"]+['"];?\s*$/gm, "var WorkspaceWriteRecovery = { template: '<section />', props: ['pending'], emits: ['retry'] }")
   .replace('export default', 'return')
-  const component = new Function('Vue', 'mocks', body)(Vue, { useHallAgentProfileCapabilities, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
+  const component = new Function('Vue', 'mocks', body)(Vue, { useHallDeliveryReview, useHallAgentProfileCapabilities, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
   const renderBody = template.code
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace('export function render', 'return function render')
@@ -2759,7 +2760,7 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
   return {
     ...panelHelpers, useFormalTaskExecutionScope, ...ordinaryCancellation,
     Dialog: async () => 'cancel', saveOutputBlob: noop, completedTextItem: async () => null, OutputPreview: EmptyPanel,
-    useOutputs: () => ({ items: Vue.ref([]), loading: Vue.ref(false), message: scalar, cacheKey: scalar, nextCursor: Vue.ref(null), refresh: asyncNoop, loadMore: asyncNoop, download: asyncNoop, preview: asyncNoop }),
+    useOutputs: () => ({ items: Vue.ref([]), loading: Vue.ref(false), message: scalar, cacheKey: scalar, nextCursor: Vue.ref(null), refresh: asyncNoop, loadMore: asyncNoop, download: asyncNoop, preview: asyncNoop, dispose: noop }),
     useHallBountyAcceptance: () => ({ scope: Vue.ref(null), error: scalar, refresh: asyncNoop, catalog: { error: scalar, entries: Vue.ref([]) } }),
     env: {}, isMultimediaDeliberationUiEnabled: () => false, capturePanelReturnTarget: panelHelpers.capturePanelReturnTarget, focusHallPanel: panelHelpers.focusHallPanel, isCurrentPanelGeneration: panelHelpers.isCurrentPanelGeneration, isSafePanelFocusTarget: panelHelpers.isSafePanelFocusTarget, resolveLiveMapPreviewActivation, resolvePanelReturnTarget: panelHelpers.resolvePanelReturnTarget, restorePanelFocus: panelHelpers.restorePanelFocus, trapPanelFocus: panelHelpers.trapPanelFocus,
     onBeforeRouteLeave: navigation?.onBeforeRouteLeave || noop, useRouter: () => navigation?.router || ({ push: asyncNoop }), confirmHallLeave: navigation?.confirmHallLeave || (() => true), hasMeaningfulHallLeaveWork: navigation?.hasMeaningfulHallLeaveWork || (() => false), useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({ token: asyncNoop }), agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {},
@@ -2787,7 +2788,7 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
     useHallBountyAssignmentContext: () => ({ projection: Vue.ref(null), error: Vue.ref(''), refresh: async () => false, dispose: noop }),
     useHallBountyRequestCatalog: () => ({ entries: Vue.ref([]), hint: noop, reset: noop, dispose: noop }),
     useHallBountyFollowup: () => ({ state: Vue.ref({}), busy: Vue.ref(false), prepareGenerate: async () => false, prepareEdit: async () => false, confirm: async () => false, checkOriginal: async () => false, invalidate: noop, dispose: noop }),
-    useHallTypedDeliberation: () => ({ refresh: asyncNoop, readOne: asyncNoop, invalidate: noop, dispose: noop }), typedLong: () => '',
+    useHallTypedDeliberation: () => ({ cards: Vue.ref([]), refresh: asyncNoop, readOne: asyncNoop, invalidate: noop, dispose: noop }), typedLong: () => '',
     createControlledImageCapabilityObservationFence: () => ({ capture: () => ({ isCurrent: () => true }), invalidate: noop }), capabilityOffersControlledImageConsent: () => false, loadControlledImageBountyCapability: async () => null,
     useHallTaskLinkedReferenceInputs: () => ({ resolve: async () => ({ state: 'STALE', inputRefs: [] }), invalidate: noop, dispose: noop }), createPointAndStartIntentStore: () => ({ read: () => ({ state: 'ABSENT' }) }), pointAndStartRecoveryLane: () => 'NONE', providerConsentAcknowledgement: {},
     createNativeCapabilityObservationFence: () => ({ capture: () => ({ identityScope: '', authorizationGeneration: 0, isCurrent: () => true }), invalidate: noop }), loadNativeBountyCapability: async () => null, capabilityAllowsNewStart: () => false, capabilityAllowsOriginalReplay: () => false, pointAndStartIntentReadLane: () => 'ABSENT',
@@ -2796,9 +2797,9 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
     useTaskWorkspace: () => null, createDisabledTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }), isTaskWorkspaceBuildEnabled: () => false, useTaskWorkspaceView: () => ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: scalar, error: Vue.ref(null), retry: noop }), useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop }),
     portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '',
     BountyAcceptancePanel: Vue.defineComponent({ name: 'BountyAcceptancePanel', props: ['taskId', 'identityKey', 'taskVersion', 'conversationId'],
-      emits: ['task-completed', 'continue-modification'], setup: (_props, { slots }) => () => Vue.h('section', { class: 'acceptance-probe' }, slots.legacy?.()) }),
+      emits: ['review-delivery', 'continue-modification'], setup: (_props, { slots }) => () => Vue.h('section', { class: 'acceptance-probe' }, slots.preview?.()) }),
     FormalTaskDeliveryPanel: Vue.defineComponent({ name: 'FormalTaskDeliveryPanel', props: ['taskId', 'identityFingerprint', 'focusDeliveryId', 'executionContext', 'selectedAgentId'], setup: () => () => Vue.h('section', { class: 'formal-delivery-probe' }) }),
-    HallPortraitHome, HallStage, HallVoiceHud: EmptyPanel, HallMinePage: EmptyPanel, LibraryPanel, AgentPanel: EmptyPanel, ArtifactOutcomePanel: EmptyPanel, ArtifactTransferPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel, BountyPanel: actualBountyPanel || EmptyPanel, TaskWorkspacePanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard: EmptyPanel
+    HallDeliveryReviewDialog: EmptyPanel, HallPortraitHome, HallStage, HallVoiceHud: EmptyPanel, HallMinePage: EmptyPanel, LibraryPanel, AgentPanel: EmptyPanel, ArtifactOutcomePanel: EmptyPanel, ArtifactTransferPanel: EmptyPanel, BountyDiscussionPanel: EmptyPanel, BountyPanel: actualBountyPanel || EmptyPanel, TaskWorkspacePanel: EmptyPanel, PersonaCatalogPanel: EmptyPanel, PrivateDiscussionPanel: EmptyPanel, PublicDiscussionPanel: EmptyPanel, SelectedAgentCard: EmptyPanel
   }
 }
 
@@ -3088,7 +3089,7 @@ describe('lightweight workbench real panel navigation', () => {
       await Vue.nextTick()
 
       expect(wrapper.find('.bounty-modal').exists()).to.equal(true)
-      expect(wrapper.find('.formal-delivery-probe').exists()).to.equal(true)
+      expect(wrapper.find('.acceptance-probe').exists()).to.equal(true)
       expect(wrapper.find('.floating-panel').attributes('role')).to.equal('region')
       expect(wrapper.find('.panel-title').exists()).to.equal(true)
       expect(wrapper.find('.panel-return').text()).to.equal('← 返回')
@@ -3096,7 +3097,7 @@ describe('lightweight workbench real panel navigation', () => {
 
       await wrapper.find('.panel-return').trigger('click')
       await Vue.nextTick()
-      expect(wrapper.find('.formal-delivery-probe').exists()).to.equal(false)
+      expect(wrapper.find('.acceptance-probe').exists()).to.equal(false)
       expect(wrapper.find('.bounty-modal').text()).to.include('保留榜文详情')
       expect(state.panelFrames).to.deep.equal(['tasks'])
     } finally { wrapper.unmount() }
@@ -3182,7 +3183,7 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
     } finally { wrapper.unmount() }
   })
 
-  it('W05 locates the existing formal delivery component using review deliveryId, never a private mark', async () => {
+  it('W05 routes a formal review hint to the shared task-scoped acceptance panel, never a private mark', async () => {
     const mode = Vue.ref('portrait-command')
     const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
     const mocks = createActualHallMocks({ mode, mounts: { library: 0, archive: 0 }, counters, actualBountyPanel: BountyPanel })
@@ -3197,24 +3198,24 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
         code: 'FORMAL_DELIVERY_SUBMITTED', deliveryId: 'delivery-exact', workItemId: 'work-a', deliveryVersion: '0', taskVersion: '9007199254740993'
       })
       await Vue.nextTick()
-      const formal = wrapper.findComponent({ name: 'FormalTaskDeliveryPanel' })
+      const formal = wrapper.findComponent({ name: 'BountyAcceptancePanel' })
       expect(formal.props('taskId')).to.equal('task-a')
-      expect(formal.props('focusDeliveryId')).to.equal('delivery-exact')
-      expect(formal.props('identityFingerprint')).to.equal('tenant-a\u0000client-a\u0000owner-a:1')
+      expect(state.taskReviewRef.deliveryId).to.equal('delivery-exact')
+      expect(formal.props('identityKey')).to.equal('1\u0000tenant-a\u0000client-a\u0000owner-a')
       expect(state.taskReviewRef.taskVersion).to.equal('9007199254740993')
       expect(wrapper.findComponent(BountyPanel).attributes('inert')).to.equal('')
       expect(state.panelDepth).to.equal(2)
       state.returnPanel()
       await Vue.nextTick()
-      expect(wrapper.find('.formal-delivery-probe').exists()).to.equal(false)
+      expect(wrapper.find('.acceptance-probe').exists()).to.equal(false)
       expect(wrapper.find('.bounty-modal').text()).to.include('待验收的正式事项')
       await wrapper.findAll('button').find(button => button.text() === '查看正式成果与验收').trigger('click')
-      expect(wrapper.findComponent({ name: 'FormalTaskDeliveryPanel' }).props('taskId')).to.equal('task-a')
+      expect(wrapper.findComponent({ name: 'BountyAcceptancePanel' }).props('taskId')).to.equal('task-a')
       expect(wrapper.find('.hall-private-mark').exists()).to.equal(false)
       state.closePanel()
       state.openPanel('tasks')
       await Vue.nextTick()
-      expect(wrapper.find('.formal-delivery-probe').exists()).to.equal(false)
+      expect(wrapper.find('.acceptance-probe').exists()).to.equal(false)
     } finally { wrapper.unmount() }
   })
 
@@ -3242,8 +3243,8 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
         const source = bounty.element
         await wrapper.get('.workbench-create-action').trigger('click')
         await Vue.nextTick()
-        expect(state.renderedPanel).to.equal('draft')
-        expect(state.panelFrames).to.deep.equal(['tasks', 'draft'])
+        expect(state.renderedPanel).to.equal('formalDraft')
+        expect(state.panelFrames).to.deep.equal(['tasks', 'formalDraft'])
         expect(wrapper.get('.panel-title').text()).to.include('提出需求')
         expect(wrapper.get('.panel-overlay').classes()).not.to.include('is-workbench-page')
         expect(wrapper.find('.requirement-page-probe').exists()).to.equal(true)
@@ -3910,8 +3911,8 @@ describe('A03 real Hall low-height layout wiring', () => {
       expect(state.stageMounted).to.equal(false)
       expect(wrapper.findComponent(mocks.HallOverview).props('enabled')).to.equal(true)
       await wrapper.find('.overview-create-probe').trigger('click')
-      expect(state.renderedPanel).to.equal('draft')
-      expect(wrapper.findComponent(mocks.HallDraftEditor).props('initialContext').targetAgentId).to.equal('agent-o04')
+      expect(state.renderedPanel).to.equal('formalDraft')
+      expect(wrapper.findComponent(mocks.HallDraftEditor).props('initialContext')).to.equal(undefined)
       const overlay = wrapper.find('.panel-overlay').element
       state.closePanel()
       await state.handlePanelAfterLeave(overlay)

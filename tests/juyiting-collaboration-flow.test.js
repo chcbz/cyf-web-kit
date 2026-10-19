@@ -235,7 +235,7 @@ describe('JuyiHall collaboration flow contract', () => {
 
   it('supports task management actions from the bounty board', () => {
     expect(hallSource).not.to.include('@create-task="createRequirementAndChooseAgent"')
-    expect(hallSource).to.include('return openPrivateDraft()')
+    expect(hallSource).to.include("return openPanel('formalDraft', { restore: true })")
     expect(hallSource).to.include('@archive-task="archiveTask"')
     expect(hallSource).to.include('@discuss-task="discussTask"')
     expect(hallSource).to.include('chatMentionAgents')

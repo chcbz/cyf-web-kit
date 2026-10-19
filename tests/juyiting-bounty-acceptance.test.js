@@ -154,14 +154,15 @@ describe('task acceptance return to original discussion', () => {
     expect(await returnToDiscussion(state)({ id: 'task-1' }, null)).to.equal(false)
     expect(selections).to.equal(0)
   })
-  it('preserves focused review and funded formal delivery lanes and wires completion to server refresh', () => {
+  it('routes focused, ordinary and funded results through the single shell review owner', () => {
     const start = hall.indexOf('<BountyAcceptancePanel'); const end = hall.indexOf('</BountyAcceptancePanel>', start)
     const integration = hall.slice(start, end)
-    expect(integration).to.include('!taskReviewRef').and.include("formalTaskRef.funding?.mode !== 'FUNDED_SINGLE_AGENT'")
-    expect(integration).to.include('<template #legacy>').and.include('<FormalTaskDeliveryPanel').and.include('@task-completed="loadTasks"')
+    expect(integration).to.include(':review-context="deliveryReview.context.value"')
+    expect(integration).to.include('@review-delivery="openDeliveryReview()"')
+    expect(integration).to.include('@preview-output="previewReviewOutput"')
+    expect(integration).not.to.include('<FormalTaskDeliveryPanel').and.not.to.include('@task-completed')
     expect(returnBody).not.to.match(/setDraft|pointAnd|sendMessage|createTask/)
-  })
-})
+  })})
 
 describe('mounted task acceptance panel', () => {
   const installed = []
@@ -176,26 +177,31 @@ describe('mounted task acceptance panel', () => {
     .replace(/^import\s+\{\s*(createApi|useHallBountyAcceptance)\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, (_, name) => `var { ${name} } = deps`)
     .replace(/^import\s+BountyExecutionOutputs\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { BountyExecutionOutputs } = deps')
     .replace('export default', 'return')
-  it('uses the original source and task version and forwards acceptance completion and modification without choosing an actor', async () => {
+  it('uses the original read-only source and task version, and emits only explicit review or discussion navigation', async () => {
     const scope = Object.freeze({ taskId: 'task-1', conversationId: '101' }); const receipt = Object.freeze({ taskId: 'task-1', operationId: 'accepted' })
     const Gallery = Vue.defineComponent({ props: { acceptance: Boolean, enabled: Boolean, taskVersion: String, conversationId: String, catalog: Array }, emits: ['task-completed', 'continue-modification'],
       setup: (_props, { emit }) => () => Vue.h('button', { onClick: () => { emit('task-completed', receipt); emit('continue-modification') } }, '操作') })
     const source = { scope: Vue.ref(scope), loading: Vue.ref(false), error: Vue.ref(''), legacy: Vue.ref(false),
       catalog: { entries: Vue.ref([{ ordinal: '1', request: request() }]), error: Vue.ref('') } }
     const Component = new Function('Vue', 'deps', script)(Vue, { createApi: () => ({}), useHallBountyAcceptance: () => source, BountyExecutionOutputs: Gallery })
-    const wrapper = mount(Component, { props: { taskId: 'task-1', identityKey: 'owner-1', taskVersion: '9' },
+    const wrapper = mount(Component, { props: { taskId: 'task-1', identityKey: 'owner-1', taskVersion: '9', reviewContext: { currentDelivery: { summary: '正式交付', items: [], allowedActions: ['ACCEPT'] }, history: [] } },
       slots: { legacy: '<div class="legacy-domain">旧成果</div>' } })
     try {
       const gallery = wrapper.findComponent(Gallery)
       expect(gallery.props()).to.include({ acceptance: true, enabled: true, taskVersion: '9', conversationId: '101' })
       await gallery.find('button').trigger('click')
-      expect(wrapper.emitted('task-completed')).to.deep.equal([[receipt]])
+      expect(wrapper.emitted('task-completed')).to.equal(undefined)
+      expect(wrapper.emitted('continue-modification')).to.equal(undefined)
+      await wrapper.findAll('button').find(button => button.text() === '继续议事').trigger('click')
       expect(wrapper.emitted('continue-modification')).to.deep.equal([[scope]])
+      await wrapper.findAll('button').find(button => button.text() === '查看成果并验收').trigger('click')
+      expect(wrapper.emitted('review-delivery')).to.have.length(1)
       source.catalog.error.value = 'failed catalogue'; await Vue.nextTick()
       expect(gallery.props('enabled')).to.equal(false)
       source.catalog.error.value = ''
       source.legacy.value = true; await Vue.nextTick()
-      expect(wrapper.findComponent(Gallery).exists()).to.equal(false); expect(wrapper.find('.legacy-domain').exists()).to.equal(true)
+      expect(wrapper.findComponent(Gallery).exists()).to.equal(false); expect(wrapper.find('.legacy-domain').exists()).to.equal(false)
+      expect(wrapper.text()).to.include('正式交付')
       source.legacy.value = false; source.loading.value = true; await Vue.nextTick()
       expect(wrapper.findComponent(Gallery).exists()).to.equal(false)
     } finally { wrapper.unmount() }

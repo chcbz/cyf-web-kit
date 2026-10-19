@@ -1178,7 +1178,7 @@ const activePanelTitle = computed(() => {
   if (childTitle) return childTitle
   if (renderedPanel.value === 'draft') return '提出需求'
   if (renderedPanel.value === 'tasks' && formalTaskRef.value) return '正式成果与验收'
-  if (renderedPanel.value === 'formalDraft') return '起草正式任务'
+  if (renderedPanel.value === 'formalDraft') return '提出需求'
   if (renderedPanel.value === 'messages') return '消息'
   if (renderedPanel.value === 'item') return overviewItemRef.value?.sourceType === 'DRAFT' ? '继续草稿' : '事项进展'
   if (renderedPanel.value === 'agents') return '点将册'

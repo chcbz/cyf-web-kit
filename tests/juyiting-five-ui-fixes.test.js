@@ -67,7 +67,7 @@ describe('five fixes real mounted output consumers', () => {
     const clock = timers(); const h = acceptanceHarness(); let wrapper
     try {
       wrapper = mount(h.Panel, { props: { taskId: 'task', identityKey: 'owner-five', taskVersion: '9', taskCompleted: true } }); await settle()
-      expect(wrapper.text()).to.include('任务已完成')
+      expect(wrapper.text()).to.include('事项已完成')
       const initial = h.counts()
       for (let i = 0; i < 3; i++) await clock.tick()
       const expected = 1
@@ -159,7 +159,8 @@ describe('five fixes poll lifecycle and projection hints', () => {
       expect(h.counts()).to.deep.equal({ catalog: 2, request: 2, typed: 2 })
       await wrapper.setProps({ taskVersion: '10' }); await settle()
       expect(h.counts().catalog).to.equal(3)
-      expect(wrapper.find('.finalize-button').exists()).to.equal(true)
+      expect(wrapper.find('.finalize-button').exists()).to.equal(false)
+      expect(wrapper.emitted('task-completed')).to.equal(undefined)
     } finally { wrapper?.unmount(); clock.restore() }
   })
   it('keeps active execution refreshing across three cycles then stops both chains at terminal snapshots', async () => {

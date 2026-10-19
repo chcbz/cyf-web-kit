@@ -97,7 +97,7 @@ describe('flow gap actual UI consumers', () => {
     const history = template.match(/<section\s+v-if="([^"]+)"\s+class="terminal-task-history"/)[1]
     const acceptance = template.match(/<BountyAcceptancePanel\s+v-else-if="([^"]+)"/)[1]
     const evaluate = (condition, status) => new Function('renderedPanel', 'formalTaskRef', 'hallIdentityScope',
-      'multimediaDeliberationUiEnabled', 'taskReviewRef', `return (${condition})`)('tasks', { id: 'a', status }, 'owner', true, null)
+      'multimediaDeliberationUiEnabled', 'taskReviewRef', `return Boolean(${condition})`)('tasks', { id: 'a', status }, 'owner', true, null)
     for (const status of ['completed', 'accepted']) {
       expect(evaluate(history, status)).to.equal(false)
       expect(evaluate(acceptance, status)).to.equal(true)

@@ -22,10 +22,12 @@
         </li></ul>
       </section>
     </details>
+    <p v-if="source.loading.value" role="status">正在读取议事成果…</p>
+    <p v-else-if="source.error.value || source.catalog.error.value" role="alert">{{ source.error.value || source.catalog.error.value }} <button type="button" @click="source.refresh">重新读取</button></p>
     <slot name="preview" />
     <button type="button" @click="$emit('continue-modification', source.scope.value)">{{ taskCompleted ? '查看议事记录' : '继续议事' }}</button>
     <BountyExecutionOutputs v-if="source.scope.value && !source.legacy.value && !source.loading.value"
-      :task-completed="taskCompleted" :enabled="enabled && !source.error.value && !source.catalog.error.value"
+      :acceptance="true" :task-completed="taskCompleted" :enabled="enabled && !source.error.value && !source.catalog.error.value"
       :request="source.catalog.entries.value.at(-1)?.request || null" :catalog="source.catalog.entries.value"
       :conversation-id="source.scope.value.conversationId" :identity-key="identityKey" :task-version="taskVersion" :task-id="taskId"
       @catalog-refresh-needed="source.refreshCatalog" />
