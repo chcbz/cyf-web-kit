@@ -11,12 +11,12 @@ import { stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 
 import { hallCapabilities as capabilityV2 } from './fixtures/hall-current-protocol.js'
 const deferred = () => { let resolve; let reject; const promise = new Promise((ok, fail) => { resolve = ok; reject = fail }); return { promise, resolve, reject } }
-const base = ({ chatApi, apiStore = { authorizationGeneration: 1, token: async () => '' }, metadata, context, onDelivery, outgoingMetadata, onFinalReply, identityScope, replyCancellationStorage } = {}) => useHallConversation({
+const base = ({ chatApi, apiStore = { authorizationGeneration: 1, token: async () => '' }, metadata, context, onDelivery, outgoingMetadata, onFinalReply, onTypedOutcome, identityScope, replyCancellationStorage } = {}) => useHallConversation({
   apiStore, identityScope, replyCancellationStorage, chatApi: chatApi || {},
   chatContext: context || ref({ conversationScopeType: 'public', conversationScopeKey: 'public', mode: 'public', participantAgentIds: ['a'], targetAgentIds: ['a'], targetAgentId: 'a' }),
   chatMode: ref('public'), globalStore: { user: { username: 'tester' } }, log: { warn () {}, error () {} },
   openPanel () {}, outgoingMetadata: outgoingMetadata || ref(metadata || { inputRefs: [{ type: 'message', id: '9007199254740993', content: 'must never upload' }] }),
-  portraitShortName: agent => agent?.name || '', selectedAgent: ref({ agentId: 'a' }), selectedTask: ref(null), showToast () {}, onDelivery, onFinalReply
+  portraitShortName: agent => agent?.name || '', selectedAgent: ref({ agentId: 'a' }), selectedTask: ref(null), showToast () {}, onDelivery, onFinalReply, onTypedOutcome
 })
 
 const durableTurnView = ({ requestId, turnId, state, stateVersion, targetAgentId = 'a', lastDeltaSeq = '0' }) => ({
@@ -817,6 +817,34 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
 })
 
 describe('Juyi Hall durable SSE recovery', () => {
+  for (const type of ['typed_question_answered', 'delivery_submission_completed']) {
+    it(`commits ${type} cursor for a non-active request without resync replay`, async () => {
+      const originalFetch = global.fetch
+      const requests = []; const hints = []; let contentLoads = 0; let conversation
+      global.fetch = async (_url, options) => {
+        requests.push(options)
+        return new Response(new ReadableStream({ start: controller => controller.enqueue(new TextEncoder().encode(
+          conversationFrame({ type, conversationId: '9007199254740993', eventSequence: '8', requestId: 'request-child', turnId: 'turn-child' }, '8', new Headers(options.headers).get('X-Request-Id')))) }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream', 'X-Request-Id': new Headers(options.headers).get('X-Request-Id') } })
+      }
+      try {
+        conversation = base({
+          apiStore: { authorizationGeneration: 1, token: async () => 'token' },
+          onTypedOutcome: event => hints.push(event.requestId),
+          chatApi: {
+            list: async (_path, _payload, options) => options.onSuccess({ items: [{ id: '9007199254740993', conversationType: 'juyiting', conversationScopeType: 'public', conversationScopeKey: 'public' }], nextCursor: null, hasMore: false }),
+            getById: async (_path, _id, options) => { contentLoads++; options.onSuccess([]) }
+          }
+        })
+        await conversation.loadHallMessages()
+        for (let index = 0; index < 12; index++) await new Promise(resolve => setImmediate(resolve))
+        expect(requests).to.have.length(1)
+        expect(contentLoads).to.equal(1)
+        expect(hints).to.deep.equal(['request-child'])
+      } finally { conversation?.disposeHallConversation(); global.fetch = originalFetch }
+    })
+  }
+
   it('reconnects after a valid resync_required from the committed cursor without a replay storm', async () => {
     const originalFetch = global.fetch
     const requests = []; let contentLoads = 0; let conversation

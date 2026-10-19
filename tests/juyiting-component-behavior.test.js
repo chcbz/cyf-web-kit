@@ -2768,7 +2768,8 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
     onBeforeRouteLeave: navigation?.onBeforeRouteLeave || noop, useRouter: () => navigation?.router || ({ push: asyncNoop }), confirmHallLeave: navigation?.confirmHallLeave || (() => true), hasMeaningfulHallLeaveWork: navigation?.hasMeaningfulHallLeaveWork || (() => false), useGlobalStore: () => ({ setTitle: noop, setShowBack: noop, setShowAppBar: noop, setShowMore: noop }), useApiStore: () => ({ token: asyncNoop }), agentApi: {}, chatApi: {}, log: { warn: noop }, juyitingGame: {},
     resolveAccountDisplayName, createHydratedIdentityScope, hasHydratedIdentity,
     isEconomyPreviewBuildEnabled: () => Boolean(economyCapability), isEconomyPreviewCapability: capability => Boolean(capability && capability.principalScopeFingerprint === economyCapability?.principalScopeFingerprint), loadEconomyPreviewCapability: async () => economyCapability,
-    roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [],
+    projectHallTask: taskPresentation.projectHallTask,
+    roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [{ value: 'open', label: '待点将', className: 'task-state-open' }],
     useHallData: ({ selectedAgent, selectedTask }) => { counters.owners.data += 1; selectedAgent.value = { agentId: 'agent-o04', name: 'sentinel-agent' }; selectedTask.value = counters.initialSelectedTask || { id: 'task-o04', title: 'sentinel-task' }; return hallData },
     useHallHomeMode: () => ({ homeMode: Vue.ref('map'), isOverviewHome: Vue.ref(false), setHomeMode: noop }),
     useHallExperienceMode: () => ({ experienceMode: mode, isMobileCoarse: Vue.ref(true), orientationHint: scalar, orientationRequestPending: Vue.ref(false), requestLandscape: asyncNoop, requestPortrait: asyncNoop }),
@@ -3189,6 +3190,8 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
       await state.openPendingTaskDetail(task)
       await Vue.nextTick()
       expect(state.panelFrames).to.deep.equal(['tasks'])
+      expect(wrapper.find('.bounty-panel').exists()).to.equal(true)
+      expect(wrapper.find('.bounty-panel').text()).to.include('待点将')
       expect(state.panelDepth).to.equal(2)
       expect(state.openPanel('agents')).to.equal(true)
       await Vue.nextTick()

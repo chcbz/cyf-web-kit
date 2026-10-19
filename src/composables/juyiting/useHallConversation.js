@@ -422,6 +422,11 @@ export const useHallConversation = ({
   }
 
   const appendHallEventMessage = (event, { deferServerResync = false } = {}) => {
+    if (event?.type === 'delivery_submission_completed' && event.conversationId === conversationId.value && typedId(event.requestId)) {
+      onTypedOutcome?.(event)
+      onRequestCatalogHint?.(event)
+      return true
+    }
     // Receipt/journal events never replace a request projection or create a successful deliverable.
     if (['execution_abandoned', 'execution_terminal', 'action_started', 'action_failed', 'target_capability_unavailable', 'cancel_requested'].includes(event?.type)) return refreshExecutionRequest(event)
     const needsReadback = needsUnversionedTurnReadback(event)
@@ -434,6 +439,7 @@ export const useHallConversation = ({
       event?.type === 'typed_question_answered' ? (event.requestId || event.replyRequestId) : ''
     if (typedRequestId && event.conversationId === conversationId.value) onTypedOutcome?.({ ...event, requestId: typedRequestId })
     if (!messageEvent) {
+      if (typedRequestId && event.conversationId === conversationId.value) return true
       if (durableHandled) syncDurablePresentation()
       return durableHandled
     }

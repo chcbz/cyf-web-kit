@@ -828,6 +828,7 @@ import BountyDiscussionPanel from '@/components/juyiting/BountyDiscussionPanel.v
 import BountyAcceptancePanel from '@/components/juyiting/BountyAcceptancePanel.vue'
 import HallDeliveryReviewDialog from '@/components/juyiting/HallDeliveryReviewDialog.vue'
 import { useHallDeliveryReview } from '@/composables/juyiting/useHallDeliveryReview.js'
+import { projectHallTask } from '@/composables/juyiting/hallTaskPresentation'
 import BountyPanel from '@/components/juyiting/BountyPanel.vue'
 import HallPortraitHome from '@/components/juyiting/HallPortraitHome.vue'
 import HallStage from '@/components/juyiting/HallStage.vue'
@@ -1195,9 +1196,8 @@ const statusText = (status = '') => {
 
 // Use the filter metadata as the single lifecycle presentation contract. `detailAllowed`
 // only controlled panel nesting; file reads still go through PersonalWorkspace's scoped API.
-const taskStatusMeta = status => taskStatusFilters.find(item => item.value === normalizeStatus(status))
-const taskStatusText = status => taskStatusMeta(status)?.label || '状态待核对'
-const taskStateClass = status => taskStatusMeta(status)?.className || 'task-state-unknown'
+const taskStatusText = task => projectHallTask({ task }).label
+const taskStateClass = task => projectHallTask({ task }).className
 
 const abilityText = (agent) => {
   const abilities = agent.abilities || []
@@ -2654,7 +2654,7 @@ watch(() => deliveryReview.operation.value.receipt, receipt => {
   void loadTasks()
 })
 watch(() => [conversationTask.value?.taskVersion, selectedTask.value?.taskVersion, formalTaskRef.value?.taskVersion,
-  typedDeliberation.cards.value.map(card => `${card.outcomeId}:${card.state}`).join('|')].join('\u0000'), () => { if (reviewTaskId.value) void deliveryReview.refresh() })
+  typedDeliberation.cards.value.map(card => `${card.outcome?.outcomeId}:${card.state}:${card.submissionProgress?.state}:${card.submissionProgress?.dispatchVersion}:${card.submissionProgress?.operationStateVersion}:${card.reviewProgress?.state}:${card.reviewProgress?.stateVersion}`).join('|')].join('\u0000'), () => { if (reviewTaskId.value) void deliveryReview.refresh() })
 
 const accountEntryDisabled = computed(() => isPanelSessionActive.value || voiceInteractionLocked.value)
 const hallLeaveHasMeaningfulWork = computed(() => hasMeaningfulHallLeaveWork({
