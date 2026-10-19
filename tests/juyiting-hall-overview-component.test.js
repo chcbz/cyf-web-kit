@@ -446,6 +446,50 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
     } finally { wrapper.unmount(); window.matchMedia = original }
   })
 
+  it('resolves an older restored input page without previewing or replacing it with latest', async () => {
+    const previewCalls = []
+    const workspace = { ...emptyWorkspace(), hasMoreVersions: Vue.ref(true), preview: Vue.ref({ kind: 'none' }),
+      items: Vue.ref([{ fileId: 'old-file', displayName: '原资料', latestVersion: '100' }]),
+      select: async fileId => {
+        workspace.detail.value = { file: { fileId, displayName: '原资料', state: 'ACTIVE' }, latestVersion: { version: '100' }, versions: [{ version: '100' }] }
+        return workspace.detail.value
+      },
+      loadMoreVersions: async () => {
+        workspace.detail.value = { ...workspace.detail.value, versions: [...workspace.detail.value.versions, { version: '1' }] }
+        workspace.hasMoreVersions.value = false
+        return true
+      },
+      previewVersion: async version => { previewCalls.push(version); workspace.preview.value = { kind: 'text', text: '原固定版本' } }
+    }
+    const original = [{ fileId: 'old-file', version: '1', displayName: '原资料' }]
+    const wrapper = mount(loadMaterialPicker(workspace, () => {}), { props: { ...props, modelValue: original }, global: { stubs: { teleport: true } } })
+    try {
+      await wrapper.get('.quick-material-summary button').trigger('click'); await settle()
+      expect(wrapper.get('.quick-material-version').text()).to.include('v1')
+      expect(previewCalls).to.deep.equal(['1'])
+      expect(original).to.deep.equal([{ fileId: 'old-file', version: '1', displayName: '原资料' }])
+      await wrapper.findAll('dialog footer button').find(button => button.text() === '取消').trigger('click')
+      expect(wrapper.emitted('update:modelValue')).to.equal(undefined)
+    } finally { wrapper.unmount() }
+  })
+
+  it('never substitutes a missing fixed version with a newer file when reopening a restored draft', async () => {
+    const previewCalls = []
+    const workspace = { ...emptyWorkspace(), items: Vue.ref([{ fileId: 'missing-old', displayName: '资料', latestVersion: '2' }]),
+      select: async fileId => {
+        workspace.detail.value = { file: { fileId, state: 'ACTIVE' }, latestVersion: { version: '2' }, versions: [{ version: '2' }] }
+        return workspace.detail.value
+      }, previewVersion: async version => previewCalls.push(version) }
+    const wrapper = mount(loadMaterialPicker(workspace, () => {}), { props: { ...props, modelValue: [{ fileId: 'missing-old', version: '1' }] }, global: { stubs: { teleport: true } } })
+    try {
+      await wrapper.get('.quick-material-summary button').trigger('click'); await settle()
+      expect(workspace.error.value).to.include('固定版本暂时无法打开')
+      expect(previewCalls).to.deep.equal([])
+      expect(wrapper.find('.quick-material-fields .primary').exists()).to.equal(false)
+      expect(wrapper.emitted('update:modelValue')).to.equal(undefined)
+    } finally { wrapper.unmount() }
+  })
+
   it('uses only one leading exit and discards unconfirmed mobile selections on cancel or identity change', async () => {
     const original = window.matchMedia
     window.matchMedia = () => ({ matches: true, addEventListener () {}, removeEventListener () {} })

@@ -10,6 +10,17 @@ let mount
 let HallDraftEditor
 let editorState
 
+const loadMaterialPicker = deps => {
+  const filename = new URL('../src/components/juyiting/HallMaterialPicker.vue', import.meta.url).pathname
+  const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
+  const code = compileScript(descriptor, { id: 'draft-shared-material-picker', inlineTemplate: true }).content
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_line, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]@\/composables\/usePersonalWorkspace['"];?\s*$/gm, 'var { usePersonalWorkspace, savePersonalWorkspaceBlob } = deps')
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"][^'"]*materialVersion\.js['"];?\s*$/gm, 'var { validMaterialVersion } = deps')
+    .replace('export default', 'return')
+  return new Function('Vue', 'deps', code)(Vue, { ...deps, validMaterialVersion })
+}
+
 const loadEditor = (deps = editorDeps()) => {
   const filename = new URL('../src/components/juyiting/HallDraftEditor.vue', import.meta.url).pathname
   const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
@@ -23,11 +34,12 @@ const loadEditor = (deps = editorDeps()) => {
     })
     .replace(/^import\s+\{[^}]+\}\s+from\s+['"]@\/composables\/usePersonalWorkspace['"];?\s*$/gm, 'var { savePersonalWorkspaceBlob, usePersonalWorkspace } = deps')
     .replace(/^import\s+\{\s*useHallDrafts\s*\}\s+from\s+['"]@\/composables\/juyiting\/useHallDrafts['"];?\s*$/gm, 'var { useHallDrafts } = deps')
+    .replace(/^import\s+HallMaterialPicker\s+from\s+['"]\.\/HallMaterialPicker\.vue['"];?\s*$/gm, 'var HallMaterialPicker = deps.HallMaterialPicker')
     .replace(/^import\s+HallPrivateMark\s+from\s+['"]\.\/HallPrivateMark\.vue['"];?\s*$/gm, 'var HallPrivateMark = { name: \'HallPrivateMark\', props: [\'sourceRef\', \'resultRef\', \'identityScope\', \'identityEpoch\'], template: \'<section class="private-mark-test-slot" />\' }')
     .replace(/^import\s+\{\s*deliveryTypeText\s*\}\s+from\s+['"]@\/utils\/executionFormats['"];?\s*$/gm, 'var { deliveryTypeText } = deps')
     .replace(/^import\s+\{\s*validMaterialVersion\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { validMaterialVersion } = deps')
     .replace('export default', 'return')
-  return new Function('Vue', 'deps', script)(Vue, { ...deps, deliveryTypeText, validMaterialVersion })
+  return new Function('Vue', 'deps', script)(Vue, { ...deps, deliveryTypeText, validMaterialVersion, HallMaterialPicker: loadMaterialPicker(deps) })
 }
 
 const editorDeps = () => {
@@ -76,7 +88,7 @@ const editorDeps = () => {
       dispose: () => {}
     }),
     usePersonalWorkspace: () => ({ closeDetail: () => {}, hasMoreVersions: Vue.ref(false), versionsState: Vue.ref('idle'), versionsError: Vue.ref(''),
-      loading: Vue.ref(false), error: Vue.ref(''), items: Vue.ref([]), listState: Vue.ref('empty'), detail: Vue.ref(null), preview: Vue.ref(null),
+      nextCursor: Vue.ref(null), preview: Vue.ref({ kind: 'none' }), loading: Vue.ref(false), error: Vue.ref(''), items: Vue.ref([]), listState: Vue.ref('empty'), detail: Vue.ref(null), preview: Vue.ref(null),
       refresh: async () => true,
       select: async fileId => { workspaceCalls.push(['select', fileId]); return { file: { fileId } } },
       previewVersion: async version => { workspaceCalls.push(['preview', version]); return true },
@@ -367,7 +379,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
       await settle()
       expect(wrapper.text()).to.include('old-agent')
       expect(wrapper.text()).to.include('application/pdf')
-      expect(wrapper.text()).to.include('old-file · v7')
+      expect(wrapper.get('.quick-material-summary').text()).to.include('old-filev7')
       expect(wrapper.find('select').exists()).to.equal(false)
       expect(wrapper.find('input[type="checkbox"]').exists()).to.equal(false)
       await wrapper.find('form').trigger('submit')
@@ -603,29 +615,37 @@ describe('JYT-UX-W02 visible draft-step regressions', () => {
     } finally { wrapper.unmount() }
   })
 
-  it('keeps material selection count and actions in a bounded footer while the long list owns scrolling', async () => {
+  it('uses the shared bounded chooser; only Done changes draft inputs', async () => {
     const deps = editorDeps()
     const workspace = deps.usePersonalWorkspace()
     deps.usePersonalWorkspace = () => workspace
-    workspace.items.value = Array.from({ length: 24 }, (_, index) => ({ fileId: `file-${index}`, displayName: `很长的资料名称 ${index} `.repeat(4), latestVersion: index + 1 }))
+    workspace.items.value = Array.from({ length: 24 }, (_, index) => ({ fileId: `file-${index}`, displayName: `很长的资料名称 ${index} `.repeat(4), latestVersion: '1' }))
     workspace.listState.value = 'ready'
-    const wrapper = mount(loadEditor(deps), { props: base })
+    workspace.select = async fileId => {
+      workspace.detail.value = { file: { ...workspace.items.value.find(file => file.fileId === fileId), state: 'ACTIVE' }, latestVersion: { version: '1' }, versions: [{ version: '1', contentMimeType: 'text/plain' }] }
+      return workspace.detail.value
+    }
+    const wrapper = mount(loadEditor(deps), { props: base, global: { stubs: { teleport: true } } })
     try {
       await settle()
-      await button(wrapper, '添加资料').trigger('click')
-      await settle()
-      expect(wrapper.find('.material-picker-flow').exists()).to.equal(true)
-      expect(wrapper.find('.material-picker-header').exists()).to.equal(true)
-      expect(wrapper.find('.material-picker-body').findAll('article')).to.have.length(24)
-      expect(wrapper.find('.material-picker-footer').text()).to.include('已选 0 份')
-      expect(wrapper.find('.material-picker-footer').text()).to.include('使用所选资料')
-      await wrapper.find('.material-picker-body input[type="checkbox"]').setValue(true)
-      expect(wrapper.find('.material-picker-footer').text()).to.include('已选 1 份')
+      await wrapper.get('.quick-material-open').trigger('click'); await settle()
+      expect(wrapper.findAll('.quick-material-files button')).to.have.length(24)
+      await wrapper.get('.quick-material-files button').trigger('click'); await settle()
+      await wrapper.get('.quick-material-fields .primary').trigger('click')
+      expect(wrapper.get('dialog footer').text()).to.include('已选 1 份资料')
+      expect(wrapper.find('.quick-material-summary').exists()).to.equal(false)
+      await button(wrapper, '取消').trigger('click'); await settle()
+      expect(wrapper.find('.quick-material-summary').exists()).to.equal(false)
+      await wrapper.get('.quick-material-open').trigger('click'); await settle()
+      await wrapper.get('.quick-material-files button').trigger('click'); await settle()
+      await wrapper.get('.quick-material-fields .primary').trigger('click')
+      await wrapper.get('.quick-material-confirm').trigger('click'); await settle()
+      expect(wrapper.get('.quick-material-summary').text()).to.include('v1')
+      await wrapper.find('form').trigger('submit'); await settle()
+      expect(editorState.created[0].inputs).to.deep.equal([{ fileId: 'file-0', version: '1' }])
       const source = readFileSync(new URL('../src/components/juyiting/HallDraftEditor.vue', import.meta.url), 'utf8')
-      expect(source).to.include('.material-picker-flow{display:grid;grid-template-rows:auto minmax(0,1fr) auto')
-      expect(source).to.include('.material-picker-body{min-height:0;overflow:auto')
-      expect(source).to.include('env(safe-area-inset-bottom)')
-      expect(source).not.to.include('.material-picker-footer{position:fixed')
+      expect(source).to.include('<HallMaterialPicker')
+      expect(source).not.to.include('material-picker-flow')
     } finally { wrapper.unmount() }
   })
 
@@ -638,17 +658,21 @@ describe('JYT-UX-W02 visible draft-step regressions', () => {
     workspace.items.value = [{ fileId: 'file-a', displayName: '资料A.pdf', latestVersion: '2' }]
     workspace.detail.value = { file: { fileId: 'result-1' }, versions: [{ version: '1', originalFilename: '旧版.pdf' }, { version: '2', originalFilename: '固定输出.pdf' }, { version: '3', originalFilename: '后来上传.pdf' }] }
     model.draft.value = { draftId: 'draft-v1', revision: '1', state: 'EDITING', editableFields: { title: '事项', instruction: '说明', targetAgentId: 'agent-a', outputMime: 'application/pdf', inputs: [{ fileId: 'file-a', version: '1' }] } }
-    const wrapper = mount(loadEditor(deps), { props: { ...base, initialContext: { title: '事项', instruction: '说明', targetAgentId: 'agent-a', outputMime: 'application/pdf', inputs: [{ fileId: 'file-a', version: '1' }] } } })
+    const resultDetail = workspace.detail.value
+    workspace.select = async fileId => {
+      workspace.detail.value = fileId === 'file-a' ? { file: { fileId, displayName: '资料A.pdf', state: 'ACTIVE' }, latestVersion: { version: '2' }, versions: [{ version: '1' }, { version: '2' }] } : resultDetail
+      return workspace.detail.value
+    }
+    const wrapper = mount(loadEditor(deps), { props: { ...base, initialContext: { title: '事项', instruction: '说明', targetAgentId: 'agent-a', outputMime: 'application/pdf', inputs: [{ fileId: 'file-a', version: '1' }] } }, global: { stubs: { teleport: true } } })
     try {
       await settle()
-      await button(wrapper, '添加资料').trigger('click')
-      await settle()
-      expect(wrapper.text()).to.include('已选固定 v1')
-      const fixed = wrapper.find('.selected-fixed-version input[type="checkbox"]')
-      await fixed.setValue(false)
-      await Vue.nextTick()
-      expect(wrapper.text()).not.to.include('已选固定 v1')
-      await button(wrapper, '取消').trigger('click')
+      await wrapper.get('.quick-material-open').trigger('click'); await settle()
+      expect(wrapper.get('.quick-material-draft').text()).to.include('v1')
+      await wrapper.get('.quick-material-draft button').trigger('click')
+      expect(wrapper.find('.quick-material-draft').exists()).to.equal(false)
+      await button(wrapper, '取消').trigger('click'); await settle()
+      expect(wrapper.get('.quick-material-summary').text()).to.include('v1')
+      expect(wrapper.get('.quick-material-summary').text()).not.to.include('v2')
       model.receipt.value = { ref: { sourceType: 'PRIVATE_CASE', sourceId: 'case-1' }, execution: { executionId: 'exec-1', state: 'OUTPUT_COMMITTED' } }
       model.caseView.value = { caseId: 'case-1', executions: [{ revisionNo: '1', execution: model.receipt.value.execution }] }
       model.executionResults.value = { executionId: 'exec-1', state: 'OUTPUT_COMMITTED', allowedActions: ['VIEW'], items: [{ outputId: 'out-1', fileId: 'result-1', fileVersion: '2', filename: '固定输出.pdf', mime: 'application/pdf', availability: 'AVAILABLE' }] }

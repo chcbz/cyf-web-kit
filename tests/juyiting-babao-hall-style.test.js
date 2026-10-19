@@ -43,10 +43,13 @@ describe('1.13.6 Babao-box modal-stack hall presentation', () => {
   it('uses one workbench selector language for new matters and linked material detail', () => {
     assert.match(overview, /<HallMaterialPicker/ )
     assert.match(overview, /import HallMaterialPicker from '\.\/HallMaterialPicker\.vue'/)
+    assert.match(materialPicker, /min-height:\s*44px/)
+    assert.match(taskMaterialLinks, /min-height:64px/)
     for (const source of [materialPicker, taskMaterialLinks]) {
-      assert.match(source, /--material-ground:#f3f3ed;--material-paper:#fffefa;--material-ink:#242e2b;--material-muted:#68716b;--material-line:#d8d8ce;--material-brand:#923f30/)
-      assert.match(source, /min-height:64px/)
-      assert.match(source, /padding:16px max\(16px,env\(safe-area-inset-right\)\)/)
+      for (const [token, value] of Object.entries({ ground: '#f3f3ed', paper: '#fffefa', ink: '#242e2b', muted: '#68716b', line: '#d8d8ce', brand: '#923f30' })) {
+        assert.match(source, new RegExp(`--material-${token}:\\s*${value}`))
+      }
+      assert.match(source, /env\(safe-area-inset-bottom\)/)
     }
   })
 

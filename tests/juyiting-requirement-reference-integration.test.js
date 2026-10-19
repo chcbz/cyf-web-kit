@@ -1,3 +1,4 @@
+import * as taskPresentation from '../src/composables/juyiting/hallTaskPresentation.js'
 import * as materialVersion from '../src/composables/juyiting/materialVersion.js'
 import * as ordinaryCancellation from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
 import { strict as assert } from 'node:assert'
@@ -75,7 +76,7 @@ function fixture (panelProps = {}) {
   const stub = Vue.defineComponent({ render: () => Vue.h('span') })
   const TaskMaterialLinks = Vue.defineComponent({ name: 'TaskMaterialLinks', render: () => Vue.h('section', { class: 'formal-material-controls' }) })
   const Panel = compileComponent('../src/components/juyiting/BountyPanel.vue', new Proxy({
-    vue: Vue, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, '@/utils/silverAmount': silver, './HallMaterialPicker.vue': Picker, '@/components/personal-workspace/TaskMaterialLinks.vue': TaskMaterialLinks
+    vue: Vue, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, '@/utils/silverAmount': silver, './HallMaterialPicker.vue': Picker, '@/components/personal-workspace/TaskMaterialLinks.vue': TaskMaterialLinks
   }, { get: (target, name) => target[name] ?? stub }))
   // The task board no longer owns a create form. Exercise the actual neutral
   // picker and atomic controller directly; do not invent a replacement UI route.
@@ -111,7 +112,8 @@ describe('shared neutral picker + v2 atomic controller integration and read-only
       await f.wrapper.findAll('.quick-material-files button')[index].trigger('click'); await flush()
       assert.equal(f.wrapper.find('.quick-material-fields select').exists(), false)
       assert.match(f.wrapper.get('.quick-material-version').text(), /已固定 v3/)
-      await f.wrapper.findAll('.quick-material-fields button').find(item => item.text() === '预览').trigger('click'); await flush()
+      assert.equal(f.wrapper.find('.quick-material-preview-toggle').exists(), false)
+      await flush()
       if (index === 0) assert.equal(f.wrapper.get('.quick-material-preview img').attributes('src'), 'blob:exact-image/png')
       if (index === 2) assert.equal(f.wrapper.get('.quick-material-preview audio').attributes('src'), 'blob:exact-audio/mpeg')
       await button(f.wrapper, '添加').trigger('click')

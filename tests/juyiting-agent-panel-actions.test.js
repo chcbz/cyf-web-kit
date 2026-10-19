@@ -151,7 +151,7 @@ describe('AgentPanel visual alignment follow-up', () => {
     expect(rule('.profile-refresh {')).to.include('display: flex').and.include('flex-wrap: wrap').and.include('border-top:')
     expect(rule('.profile-heading h3 {')).to.include('font-size: 14px').and.include('font-weight: 600')
     const hall = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
-    expect(hall).to.include('svg\n                v-if="renderedPanel === \'agents\'"').and.include('stroke-width="1.8"')
+    expect(hall).to.include('<svg width="20" height="20"').and.include('stroke-width="1.8"')
     expect(hall).to.include('.is-agent-overlay :deep(.agent-panel.is-agent-detail .agent-panel-body) { padding: 0; gap: 0; }')
     expect(hall).to.include('.is-agent-overlay :deep(.agent-panel.is-agent-detail .detail-card) { width: 100%; border: 0; border-radius: 0; }')
   })

@@ -1,5 +1,5 @@
+import { projectHallTask } from '../src/composables/juyiting/hallTaskPresentation.js'
 import { validMaterialVersion } from '../src/composables/juyiting/materialVersion.js'
-import { isTerminalMatter } from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
 import { strict as assert } from 'node:assert'
 import { readFileSync } from 'node:fs'
 import { describe, it, before, after, afterEach } from 'mocha'
@@ -212,10 +212,13 @@ describe('W06 workspace bounty material links', () => {
     const discussionGuard = bounty.match(/<section v-if="([^"]+)" class="deliberation-execution-route"/)?.[1]
     assert.ok(formalGuard, 'formal material route must remain present')
     assert.ok(discussionGuard, 'embedded discussion route must remain present')
-    const evaluate = (guard, status, embeddedHall, formalTaskExecutionScope) => Boolean(new Function(
-      'detailTask', 'embeddedHall', 'formalTaskExecutionScope', 'isTerminalMatter', `return (${guard})`
-    )({ status }, embeddedHall, formalTaskExecutionScope, isTerminalMatter))
+    const canActOnTask = task => projectHallTask({ task }).actions.some(action => ['ASSIGN', 'DISCUSS'].includes(action))
+    const evaluate = (guard, status, embeddedHall, formalTaskExecutionScope, phase) => Boolean(new Function(
+      'detailTask', 'embeddedHall', 'formalTaskExecutionScope', 'canActOnTask', `return (${guard})`
+    )({ status, ...(phase ? { phase } : {}) }, embeddedHall, formalTaskExecutionScope, canActOnTask))
     for (const status of ['open', 'planning', 'assigned']) {
+      assert.equal(evaluate(formalGuard, status, false, { taskId: 'task_a' }, 'UNKNOWN'), false)
+      assert.equal(evaluate(discussionGuard, status, true, null, 'UNKNOWN'), false)
       assert.equal(evaluate(formalGuard, status, false, { taskId: 'task_a' }), true)
       assert.equal(evaluate(formalGuard, status, false, null), false)
       assert.equal(evaluate(formalGuard, status, true, { taskId: 'task_a' }), false)
@@ -238,8 +241,8 @@ describe('W06 workspace bounty material links', () => {
     assert.match(bounty, /formalTaskExecutionScope\.taskId/)
     // Standalone formal-task PDF controls remain. Embedded matters use the
     // ordinary discussion route, without a second manual execution entry.
-    assert.match(bounty, /v-if="formalTaskExecutionScope && !embeddedHall && !isTerminalMatter\(detailTask\)"/)
-    assert.match(bounty, /v-if="embeddedHall && !isTerminalMatter\(detailTask\)" class="deliberation-execution-route"/)
+    assert.match(bounty, /v-if="formalTaskExecutionScope && !embeddedHall && canActOnTask\(detailTask\)"/)
+    assert.match(bounty, /v-if="embeddedHall && canActOnTask\(detailTask\)" class="deliberation-execution-route"/)
     assert.match(bounty, /workspace-shortcut/)
     assert.match(bounty, /open-workspace/)
     assert.match(bounty, /@click="\$emit\('discuss-task', detailTask, assignedAgentForTask\(detailTask\)\)"/)

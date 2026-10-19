@@ -175,19 +175,28 @@ const openQuickMaterialPicker = async () => {
 }
 const cancelQuickMaterialPicker = () => { materialPickerOpen.value = false; draftMaterials.value = []; resetMaterialPicker() }
 const loadMoreQuickMaterials = () => workspace.loadMore({ state: 'ACTIVE' })
-const selectQuickMaterialFile = async fileId => {
+const selectQuickMaterialFile = async (fileId, fixedVersion = null) => {
   const operationIdentity = materialIdentityKey.value, generation = ++pickerGeneration
+  const current = () => !props.disabled && generation === pickerGeneration && materialIdentityKey.value === operationIdentity && materialPickerOpen.value
   pickerFileId.value = ''; pickerVersion.value = null
-  const detail = await workspace.select(fileId)
-  if (!detail || props.disabled || generation !== pickerGeneration || materialIdentityKey.value !== operationIdentity || !materialPickerOpen.value || detail.file.state !== 'ACTIVE') return
-  const versions = Array.isArray(detail.versions)
-    ? detail.versions
-    : []
-  if (!versions.length) return
-  pickerFileId.value = detail.file.fileId
-  pickerVersion.value = versions.some(version => version.version === detail.latestVersion?.version) ? detail.latestVersion.version : versions[versions.length - 1].version
+  let detail = await workspace.select(fileId)
+  if (!detail || !current() || detail.file.state !== 'ACTIVE') return
   const existing = draftMaterials.value.find(material => material.fileId === detail.file.fileId)
-  if (existing) pickerVersion.value = existing.version
+  const preferredVersion = fixedVersion || existing?.version || detail.latestVersion?.version
+  // Restored draft inputs may refer to an older page. Never silently substitute latest.
+  while (preferredVersion && !detail.versions?.some(version => version.version === preferredVersion) && workspace.hasMoreVersions?.value) {
+    if (!await workspace.loadMoreVersions() || !current()) return
+    detail = workspace.detail.value
+    if (!detail || detail.file.fileId !== fileId || detail.file.state !== 'ACTIVE') return
+  }
+  if (!current()) return
+  const versions = Array.isArray(detail.versions) ? detail.versions : []
+  if (!versions.length || !validMaterialVersion(preferredVersion) || !versions.some(version => version.version === preferredVersion)) {
+    workspace.error.value = '这个固定版本暂时无法打开；已选资料保持原版本，请稍后重试。'
+    return
+  }
+  pickerFileId.value = detail.file.fileId
+  pickerVersion.value = preferredVersion
   if (!isMobile.value || mobilePreviewOpen.value) await previewQuickMaterial()
 }
 // Product selections carry no image-specific purpose or execution authority.
@@ -206,7 +215,7 @@ const previewSelectedMaterial = async material => {
   const identity = materialIdentityKey.value
   await openQuickMaterialPicker()
   if (identity !== materialIdentityKey.value || !materialPickerOpen.value) return
-  await selectQuickMaterialFile(material.fileId)
+  await selectQuickMaterialFile(material.fileId, material.version)
   if (identity !== materialIdentityKey.value || !materialPickerOpen.value || pickerFileId.value !== material.fileId) return
   if (!pickerDetail.value?.versions.some(version => version.version === material.version)) {
     workspace.error.value = '这个版本暂时无法打开，请稍后重试。'
@@ -261,6 +270,7 @@ onBeforeUnmount(() => { pickerGeneration += 1; mobileQuery?.removeEventListener?
 .quick-material-picker { --material-ground: #f3f3ed; --material-paper: #fffefa; --material-ink: #242e2b; --material-muted: #68716b; --material-line: #d8d8ce; --material-brand: #923f30; position: fixed; inset: 0; z-index: 1400; margin: 0; padding: 0; border: 0; width: 100%; max-width: none; height: 100%; height: 100dvh; max-height: none; box-sizing: border-box; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: var(--material-ground); color: var(--material-ink); font: 400 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; }
 .quick-material-picker::backdrop { background: #242e2b66; }
 .quick-material-picker header { display: flex; align-items: center; gap: 12px; padding: max(8px, env(safe-area-inset-top)) 16px 8px; border-bottom: 1px solid var(--material-line); background: var(--material-paper); }
+.quick-material-picker header, .quick-material-picker footer { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
 .quick-material-picker h3, .quick-material-picker p { margin: 0; }
 .quick-material-picker h3 { font-size: 18px; }
 .quick-material-picker header p { color: var(--material-muted); font-size: 13px; }
