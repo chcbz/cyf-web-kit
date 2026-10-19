@@ -5,8 +5,8 @@ import { skillResultProjection, skillResultReferences, skillResultAdvances } fro
 const hash = 'a'.repeat(64)
 const progress = { actionRequestId: 'a', state: 'RUNNING', dispatchVersion: '1', childRequestId: 'child', childRoute: 'EXECUTE', childStateVersion: '2', executionId: 'e', executionStateVersion: '9007199254740993', phase: 'RUNNING', resultSha256: null }
 const outcome = { outcomeContractVersion: 4, outcomeId: 'o', taskId: 't', assignmentRevision: '0', assistantMessageId: '9223372036854775807', finalSha256: hash, kind: 'ACTION_REQUEST', text: '读取图片\n保持正文', clarification: null, proposal: null, action: { actionRequestId: 'a', actionId: 'image.edit', instruction: '改为蓝色', sourceRefIds: [], parameters: {} }, deliverable: null, messageSource: null, deliveryRelation: null }
-const fixture = () => ({ schemaVersion: 5, route: 'CHAT', conversationId: 'c', conversationGeneration: '1', requestId: 'r', requestRevision: '1', turnId: 'turn', state: 'READY', outcome: structuredClone(outcome), inspection: null, actionProgress: { ...progress } })
-test('display five is the only public shape; historical contract remains explicit', () => {
+const fixture = () => ({ schemaVersion: 6, submissionProgress: null, route: 'CHAT', conversationId: 'c', conversationGeneration: '1', requestId: 'r', requestRevision: '1', turnId: 'turn', state: 'READY', outcome: structuredClone(outcome), inspection: null, actionProgress: { ...progress } })
+test('display six is the only public shape; historical contract remains explicit', () => {
   assert.ok(typedOutcomeProjection(fixture()))
   assert.equal(typedOutcomeProjection({ ...fixture(), schemaVersion: 4 }), null)
   const legacy = fixture(); legacy.outcome = { ...legacy.outcome, outcomeContractVersion: 1, kind: 'ANSWER', action: null }; legacy.actionProgress = null

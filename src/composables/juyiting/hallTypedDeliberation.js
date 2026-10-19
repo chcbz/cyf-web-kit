@@ -81,7 +81,7 @@ const digest = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value
 const outcomeFields = ['outcomeContractVersion', 'outcomeId', 'taskId', 'assignmentRevision', 'assistantMessageId', 'finalSha256', 'kind', 'text', 'clarification', 'proposal', 'action', 'deliverable', 'messageSource', 'deliveryRelation']
 const clarificationFields = ['pendingQuestionId', 'state', 'stateVersion', 'question', 'requiredFacts', 'replyRequestId']
 const proposalFields = ['proposalId', 'state', 'stateVersion', 'operation', 'instruction', 'sourceRefIds', 'sourceSelectors', 'parent']
-const projectionFields = ['schemaVersion', 'route', 'conversationId', 'conversationGeneration', 'requestId', 'requestRevision', 'turnId', 'state', 'outcome', 'inspection', 'actionProgress']
+const projectionFields = ['schemaVersion', 'route', 'conversationId', 'conversationGeneration', 'requestId', 'requestRevision', 'turnId', 'state', 'outcome', 'inspection', 'actionProgress', 'submissionProgress']
 const progressFields = ['actionRequestId', 'state', 'dispatchVersion', 'childRequestId', 'childRoute', 'childStateVersion', 'executionId', 'executionStateVersion', 'phase', 'resultSha256']
 const phaseStates = { READY: 'RUNNING', RUNNING: 'RUNNING', RESULT_READY: 'RUNNING', WAITING_PROVIDER: 'WAITING_PROVIDER', RESULT_UNKNOWN: 'RESULT_UNKNOWN', ARCHIVING: 'ARCHIVING', COMPLETE: 'COMPLETED', FAILED: 'FAILED', CANCELLED: 'CANCELLED' }
 const validOutcome = value => {
@@ -152,15 +152,35 @@ export const actionProgressAdvances = (before, after) => {
   if (['dispatchVersion', 'childStateVersion', 'executionStateVersion'].every(key => before[key] === after[key]) && progressFields.some(key => before[key] !== after[key])) return false
   return true
 }
+const submissionFields = ['eventId', 'operationId', 'state', 'dispatchVersion', 'operationStateVersion', 'deliveryId', 'errorCode', 'retryable']
+const submissionErrors = ['DELIVERY_SOURCE_UNAVAILABLE', 'DELIVERY_REVIEW_REQUIRED', 'DELIVERY_TASK_CHANGED', 'DELIVERY_ASSIGNMENT_CHANGED', 'DELIVERY_CONVERSATION_CHANGED', 'DELIVERY_OPERATION_CONFLICT', 'DELIVERY_SUBMISSION_REJECTED']
+const validSubmission = (p, outcome, route) => {
+  if (p === null) return true
+  if (route !== 'CHAT' || outcome?.kind !== 'ANSWER' || outcome.deliverable !== true || !exactKeys(p, submissionFields) ||
+    typeof p.eventId !== 'string' || !/^delivery-submit-[a-f0-9]{64}$/.test(p.eventId) || !typedLong(p.dispatchVersion, { allowZero: true }) || typeof p.retryable !== 'boolean') return false
+  if (p.operationId === null ? p.operationStateVersion !== null : !typedId(p.operationId) || !typedLong(p.operationStateVersion)) return false
+  if (p.state === 'COMPLETED') return p.operationId !== null && typedId(p.deliveryId) && p.errorCode === null && p.retryable === false
+  if (p.deliveryId !== null) return false
+  if (p.state === 'FAILED') return submissionErrors.includes(p.errorCode) && p.retryable === false
+  return p.state === 'PENDING' && p.errorCode === null && (!p.retryable || p.operationId !== null)
+}
+export const submissionProgressAdvances = (before, after) => {
+  if (before == null) return true
+  if (!after || before.eventId !== after.eventId || BigInt(after.dispatchVersion) < BigInt(before.dispatchVersion)) return false
+  if (before.operationId !== null && (before.operationId !== after.operationId || after.operationStateVersion === null || BigInt(after.operationStateVersion) < BigInt(before.operationStateVersion))) return false
+  if (before.deliveryId !== null && before.deliveryId !== after.deliveryId) return false
+  if (['COMPLETED', 'FAILED'].includes(before.state) && (before.state !== after.state || before.errorCode !== after.errorCode || before.retryable !== after.retryable)) return false
+  return before.dispatchVersion !== after.dispatchVersion || before.operationStateVersion !== after.operationStateVersion || submissionFields.every(key => before[key] === after[key])
+}
 export const actionOutcomeProjection = (value, context = {}, route = 'CHAT') => {
-  if (!exactKeys(value, projectionFields) || value.schemaVersion !== 5 || value.route !== route || !['CHAT', 'INSPECT'].includes(route) ||
+  if (!exactKeys(value, projectionFields) || value.schemaVersion !== 6 || value.route !== route || !['CHAT', 'INSPECT'].includes(route) ||
     !typedId(value.conversationId) || !typedLong(value.conversationGeneration) || !typedId(value.requestId) || !typedLong(value.requestRevision) || !typedId(value.turnId) || !['PENDING', 'READY'].includes(value.state)) return null
   for (const key of ['conversationId', 'conversationGeneration', 'requestId', 'requestRevision', 'turnId']) if (context[key] && value[key] !== context[key]) return null
   if (value.inspection !== null ? !validInspection(value.inspection, value.state) : route === 'INSPECT') return null
-  if (value.state === 'PENDING') return value.outcome === null && value.actionProgress === null ? freeze({ ...value, purpose: route }) : null
+  if (value.state === 'PENDING') return value.outcome === null && value.actionProgress === null && value.submissionProgress === null ? freeze({ ...value, purpose: route }) : null
   if (!validOutcome(value.outcome) || (context.taskId && value.outcome.taskId !== context.taskId) ||
     (context.assignmentRevision && value.outcome.assignmentRevision !== context.assignmentRevision) ||
-    (value.outcome.outcomeContractVersion === 4 && route !== 'CHAT') || !validProgress(value.actionProgress, value.outcome)) return null
+    (value.outcome.outcomeContractVersion === 4 && route !== 'CHAT') || (!validProgress(value.actionProgress, value.outcome) || !validSubmission(value.submissionProgress, value.outcome, route))) return null
   if (value.outcome.deliverable === true && (route !== 'CHAT' || value.outcome.messageSource.turnId !== value.turnId)) return null
   return freeze({ ...value, purpose: route })
 }

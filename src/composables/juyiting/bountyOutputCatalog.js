@@ -147,7 +147,7 @@ export async function completedTextItem (raw, request, turn, taskId) {
     conversationGeneration: request.conversationGeneration, requestId: request.requestId,
     requestRevision: request.requestRevision, turnId: turn.turnId, taskId })
   if (!value) throw new Error('文字成果来源回执不匹配。')
-  if (value.schemaVersion !== 5 || value.state !== 'READY' || value.outcome?.deliverable !== true) return null
+  if (value.schemaVersion !== 6 || value.state !== 'READY' || value.outcome?.deliverable !== true) return null
   const source = value.outcome.messageSource
   if (request.state !== 'COMPLETED' || turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state) ||
     source.messageId !== turn.finalMessageId || source.snapshotId !== turn.contextSnapshotId ||
@@ -213,7 +213,7 @@ export function completedExecutionDelivery (raw, request, turn, snapshots, taskI
     conversationGeneration: request.conversationGeneration, requestId: request.requestId,
     requestRevision: request.requestRevision, turnId: turn.turnId, taskId })
   if (!value) throw new Error('媒体交付来源回执不匹配。')
-  if (value.schemaVersion !== 5 || value.state !== 'READY' || value.outcome?.kind !== 'ACTION_REQUEST') return null
+  if (value.schemaVersion !== 6 || value.state !== 'READY' || value.outcome?.kind !== 'ACTION_REQUEST') return null
   const outcome = value.outcome; const progress = value.actionProgress
   if (!outcome.deliveryRelation && progress.childRoute !== 'EXECUTE') return null
   if (request.state !== 'COMPLETED' || turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state) ||

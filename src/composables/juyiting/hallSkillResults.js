@@ -11,7 +11,7 @@ export const skillResultReferences = (outcomes, context) => {
     if (purpose !== undefined && purpose !== wire.route) continue
     const value = typedOutcomeProjection(wire, context)
     const progress = value?.actionProgress
-    if (value?.schemaVersion !== 5 || value.outcome?.outcomeContractVersion !== 4 || value.state !== 'READY' || value.outcome?.kind !== 'ACTION_REQUEST' ||
+    if (value?.schemaVersion !== 6 || value.outcome?.outcomeContractVersion !== 4 || value.state !== 'READY' || value.outcome?.kind !== 'ACTION_REQUEST' ||
       !typedId(progress?.executionId) || !typedId(progress.childRequestId) || progress.childRoute !== 'EXECUTE') continue
     if (seen.has(progress.executionId)) continue
     seen.add(progress.executionId)

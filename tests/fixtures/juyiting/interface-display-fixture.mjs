@@ -2,7 +2,7 @@
 // This is test fixture construction, never a browser legacy-wire adapter.
 export const displayFixture = old => {
   const value = structuredClone(old), version = value.schemaVersion
-  value.schemaVersion = 5; value.route = value.route || (version === 2 ? 'INSPECT' : 'CHAT')
+  value.schemaVersion = 6; value.submissionProgress ??= null; value.route = value.route || (version === 2 ? 'INSPECT' : 'CHAT')
   delete value.contract; value.inspection ??= null; value.actionProgress ??= null
   const rename = (item, before, after) => { if (Object.hasOwn(item, before)) { item[after] = item[before] === null ? null : item[before].replace(/^sha256:/, ''); delete item[before] } }
   const o = value.outcome

@@ -1,6 +1,6 @@
 import { computed, ref, unref, watch } from 'vue'
 import { textDeliveryProjection } from './bountyOutputCatalog.js'
-import { actionProgressAdvances, discussionAccepted, discussionBody, inspectionOutcomeProjection, outcomeCardKey, typedId, typedLong, typedOutcomeProjection } from './hallTypedDeliberation.js'
+import { actionProgressAdvances, submissionProgressAdvances, discussionAccepted, discussionBody, inspectionOutcomeProjection, outcomeCardKey, typedId, typedLong, typedOutcomeProjection } from './hallTypedDeliberation.js'
 
 const unwrap = response => response
 const clone = value => JSON.parse(JSON.stringify(value))
@@ -79,8 +79,8 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     if (previous?.state === 'READY' && projection.state === 'READY' && !sameFinalBinding(previous, projection)) return false
     if (previous?.state === 'READY' && projection.state === 'READY' && projection.outcome?.kind !== 'CLARIFY' &&
       JSON.stringify(previous.outcome) !== JSON.stringify(projection.outcome)) return false
-    if (previous?.schemaVersion === 5 && previous.schemaVersion === projection.schemaVersion &&
-      !actionProgressAdvances(previous.actionProgress, projection.actionProgress)) return false
+    if (previous?.schemaVersion === 6 && previous.schemaVersion === projection.schemaVersion &&
+      (!actionProgressAdvances(previous.actionProgress, projection.actionProgress) || !submissionProgressAdvances(previous.submissionProgress, projection.submissionProgress))) return false
     const previousClarification = previous?.outcome?.kind === 'CLARIFY' ? previous.outcome.clarification : null
     const clarification = projection?.outcome?.kind === 'CLARIFY' ? projection.outcome.clarification : null
     if (previousClarification && clarification) {
@@ -174,7 +174,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     const unresolved = catalog.some(entry => !entry?.request?.turns?.some(turn => turn.route === 'INSPECT') &&
       !projections.value.some(value => value.requestId === entry?.request?.requestId && value.state === 'READY'))
     if (!deliveryParent && !pending && purpose === 'CHAT' && !unresolved && !catalog.some(entry => entry?.request?.steps?.some(step => step.kind === 'EXECUTE'))) {
-      const finals = projections.value.filter(value => value.schemaVersion === 5 && value.state === 'READY' && value.route === 'CHAT' &&
+      const finals = projections.value.filter(value => value.schemaVersion === 6 && value.state === 'READY' && value.route === 'CHAT' &&
         value.outcome?.deliverable === true && value.outcome.assignmentRevision === context.assignmentRevision)
       try {
         deliveryParent = textDeliveryProjection(finals.map(value => ({ outcomeId: value.outcome.outcomeId,
