@@ -48,10 +48,38 @@ describe('current assignment read without browser point-and-start storage', () =
       h.owner.value = 'different'; expect(h.lane.projection.value).to.equal(null)
     } finally { h.lane.dispose() }
   })
-  it('fails closed on server errors without writing or retaining an old grant', async () => {
-    let fail = false; const h = harness(async () => { if (fail) throw new Error('409'); return ((projection())) })
+
+  it('does not reset a binding when request generation or presentation metadata is filled in', async () => {
+    const h = harness(async () => projection())
     try {
-      expect(await h.lane.refresh()).to.equal(true); fail = true
+      expect(await h.lane.refresh()).to.equal(true)
+      const trusted = h.lane.projection.value
+      h.ctx.value = { ...context(), conversationGeneration: '2', requestId: 'new-request' }
+      expect(h.lane.projection.value).to.equal(trusted)
+      h.ctx.value = { ...context(), taskVersion: '9' }
+      expect(h.lane.projection.value).to.equal(null)
+    } finally { h.lane.dispose() }
+  })
+  it('retains the same authenticated projection during a refresh but fences failed reads', async () => {
+    let resolve; let initial = true
+    const h = harness(async () => { if (initial) return projection(); return new Promise(done => { resolve = done }) })
+    try {
+      expect(await h.lane.refresh()).to.equal(true)
+      const trusted = h.lane.projection.value; initial = false
+      const pending = h.lane.refresh()
+      expect(h.lane.loading.value).to.equal(true)
+      expect(h.lane.projection.value).to.equal(trusted)
+      resolve(projection()); expect(await pending).to.equal(true)
+      expect(h.lane.projection.value).to.deep.equal(trusted)
+    } finally { h.lane.dispose() }
+  })
+  it('retains only read-only data on transient errors and clears it on revoked access', async () => {
+    let failure = null; const h = harness(async () => { if (failure) throw failure; return projection() })
+    try {
+      expect(await h.lane.refresh()).to.equal(true); const trusted = h.lane.projection.value
+      failure = new Error('temporary unavailable')
+      expect(await h.lane.refresh()).to.equal(false); expect(h.lane.projection.value).to.equal(trusted)
+      failure = Object.assign(new Error('forbidden'), { status: 403 })
       expect(await h.lane.refresh()).to.equal(false); expect(h.lane.projection.value).to.equal(null)
       expect(h.lane.error.value).to.include('指派上下文')
     } finally { h.lane.dispose() }

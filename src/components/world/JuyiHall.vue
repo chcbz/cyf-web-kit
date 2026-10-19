@@ -535,7 +535,7 @@
             initial-kind="TASK_CREATE"
             :identity-scope="hallIdentityScope"
             :identity-epoch="apiStore.authorizationGeneration"
-            @open-task="openOverviewTask"
+            @open-task="openPendingTaskDetail"
             @close="returnPanel() || closePanel()"
           />
 
@@ -825,7 +825,6 @@ import { useHallTaskActions } from '@/composables/juyiting/useHallTaskActions'
 import { useHallRequirementCreate } from '@/composables/juyiting/useHallRequirementCreate'
 import { useHallPointAndStart } from '@/composables/juyiting/useHallPointAndStart'
 import { useHallBountyAssignmentContext } from '@/composables/juyiting/useHallBountyAssignmentContext'
-import { currentBountyAssignmentRevision } from '@/composables/juyiting/hallBountyAssignmentContext'
 import { createPointAndStartIntentStore } from '@/composables/juyiting/hallPointAndStartIntent'
 import { pointAndStartRecoveryLane } from '@/composables/juyiting/hallPointAndStartRecoveryLane'
 import { useHallBountyRequestCatalog } from '@/composables/juyiting/useHallBountyRequestCatalog'
@@ -1834,9 +1833,11 @@ const openOverviewTask = async (task, review = null) => {
   return true
 }
 
+const openPendingTaskDetail = task => openOverviewTask(task)
+
 // Creation owns a separate page in every layout; the task board only manages existing matters.
 const openDefaultRequirementCreate = () => {
-  return openPrivateDraft()
+  return openPanel('formalDraft', { restore: true })
 }
 const openPrivateDraft = (context = {}) => {
   if (guardPanelLeave(() => openPrivateDraft(context))) return false
@@ -2111,7 +2112,8 @@ const {
     selectedTask.value = receipt.task
     markTaskCreated(receipt.task)
     playSuccess()
-    showToast('榜文及所选资料已确认；点将后才开始办理。')
+    showToast('需求已保存为待点将事项；确认承办后才开始办理。')
+    void openPendingTaskDetail(receipt.task)
     return true
   }
 })
@@ -2253,27 +2255,24 @@ let typedDeliberation = null
 const bountyAssignmentContext = useHallBountyAssignmentContext({
   chatApi, identityScope: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
   getContext: () => ({ conversationId: conversationId.value, taskId: conversationTask.value?.id || '',
-    targetAgentId: bountyInteractionTargetId(chatContext.value), taskVersion: conversationTask.value?.taskVersion || '',
-    conversationGeneration: activeRequest.value?.conversationGeneration || '' }),
-  getContextGeneration: () => followupContextGeneration.value, enabled: () => typedDeliberationEnabled.value
+    targetAgentId: bountyInteractionTargetId(chatContext.value), taskVersion: conversationTask.value?.taskVersion || '' }),
+  enabled: () => typedDeliberationEnabled.value
 })
 const bountyRequestCatalog = useHallBountyRequestCatalog({
   chatApi, identityScope: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
   getContext: () => ({ conversationId: conversationId.value, taskId: conversationTask.value?.id || '',
-    targetAgentId: bountyInteractionTargetId(chatContext.value), assignmentRevision: typedAssignmentRevision() }),
+    targetAgentId: bountyInteractionTargetId(chatContext.value), assignmentRevision: typedAssignmentRevision(),
+    conversationGeneration: typedConversationGeneration() }),
   getContextGeneration: () => followupContextGeneration.value, enabled: () => multimediaDeliberationUiEnabled && chatMode.value === 'bounty'
 })
 notifyBountyRequestCatalog = async () => {
   if (await bountyRequestCatalog.refresh()) await typedDeliberation?.refresh?.()
 }
 const invalidateFollowupContext = () => { followupContextGeneration.value++; typedDeliberation?.invalidate?.() }
-const typedAssignmentRevision = () => currentBountyAssignmentRevision({
-  task: conversationTask.value, targetAgentId: bountyInteractionTargetId(chatContext.value),
-  conversationId: conversationId.value, state: pointAndStartState.value
-}) || bountyAssignmentContext.projection.value?.assignmentRevision || ''
-const typedConversationGeneration = () => typedLong(activeRequest.value?.conversationGeneration) ||
-  typedLong(bountyRequestCatalog.entries.value?.[0]?.request?.conversationGeneration) ||
-  bountyAssignmentContext.projection.value?.conversationGeneration || ''
+// Only the authenticated binding owns these values. A newly adopted request or
+// a catalog reset is a projection update, not a new conversation generation.
+const typedAssignmentRevision = () => bountyAssignmentContext.projection.value?.assignmentRevision || ''
+const typedConversationGeneration = () => bountyAssignmentContext.projection.value?.conversationGeneration || ''
 const typedDeliberationContext = () => ({ conversationId: conversationId.value, taskId: conversationTask.value?.id || '',
   targetAgentId: bountyInteractionTargetId(chatContext.value), assignmentRevision: typedAssignmentRevision(),
   conversationGeneration: typedConversationGeneration() })
@@ -2451,17 +2450,31 @@ watch(() => [selectedTask.value?.id, selectedTask.value?.taskVersion, selectedTa
   if (taskId && pointAndStartIntentState(taskId).state === 'PRESENT') void checkPointAndStartOriginal({ id: taskId })
 }, { flush: 'sync' })
 watch([() => apiStore.authorizationGeneration, hallIdentityScope, () => selectedAgent.value?.agentId], clearPointAndStartCapability, { flush: 'sync' })
-const followupTaskFence = computed(() => [selectedTask.value?.id, selectedTask.value?.taskVersion,
-  selectedTask.value?.requirementRevision, selectedTask.value?.revision].map(value => value == null ? '' : String(value)).join('\u0000'))
-watch([followupTaskFence, () => apiStore.authorizationGeneration, hallIdentityScope, () => conversationId.value,
-  () => activeRequest.value?.conversationGeneration, () => bountyInteractionTargetId(chatContext.value), () => chatMode.value], invalidateFollowupContext, { flush: 'sync' })
-watch([followupTaskFence, () => apiStore.authorizationGeneration, hallIdentityScope, () => conversationId.value,
-  () => activeRequest.value?.conversationGeneration, () => bountyInteractionTargetId(chatContext.value), () => chatMode.value], () => {
+const followupTaskFence = computed(() => [conversationTask.value?.id, conversationTask.value?.taskVersion,
+  conversationTask.value?.requirementRevision, conversationTask.value?.revision].map(value => value == null ? '' : String(value)).join('\u0000'))
+const refreshFollowupContext = async () => {
+  const captured = followupContextGeneration.value
+  if (!typedDeliberationEnabled.value || !conversationId.value) return false
+  if (!await bountyAssignmentContext.refresh() || captured !== followupContextGeneration.value) return false
+  if (!await bountyRequestCatalog.refresh() || captured !== followupContextGeneration.value) return false
+  return typedDeliberation?.recover?.()
+}
+const resetFollowupContext = () => {
+  invalidateFollowupContext()
   bountyRequestCatalog.reset()
-  if (chatMode.value === 'bounty' && conversationId.value) {
-    void bountyRequestCatalog.refresh()
-    void typedDeliberation?.recover?.()
-  }
+  void refreshFollowupContext()
+}
+watch([followupTaskFence, () => apiStore.authorizationGeneration, hallIdentityScope, () => conversationId.value,
+  () => bountyInteractionTargetId(chatContext.value), () => chatMode.value], resetFollowupContext, { flush: 'sync' })
+// Initial binding publication is not a switch. A later authoritative generation
+// or assignment change fences old operations without resetting the binding itself.
+watch(() => bountyAssignmentContext.projection.value, (next, previous) => {
+  if (next && previous && (next.conversationGeneration !== previous.conversationGeneration ||
+    next.assignmentRevision !== previous.assignmentRevision)) resetFollowupContext()
+}, { flush: 'sync' })
+watch(() => activeRequest.value?.conversationGeneration, generation => {
+  const trusted = bountyAssignmentContext.projection.value?.conversationGeneration
+  if (trusted && typedLong(generation) && generation !== trusted) resetFollowupContext()
 }, { flush: 'sync' })
 
 const terminalHistory = useOutputs({
@@ -2724,7 +2737,7 @@ const handleSendHallMessage = async (typedInput = {}) => {
   playSend()
   if (typedDeliberationEnabled.value) {
     const sourceSelectors = Array.isArray(typedInput?.sourceSelectors) ? typedInput.sourceSelectors : []
-    if (!typedAssignmentRevision() && conversationTask.value?.id) {
+    if ((!typedAssignmentRevision() || bountyAssignmentContext.error.value || bountyAssignmentContext.loading.value) && conversationTask.value?.id) {
       const fence = [hallIdentityScope.value, apiStore.authorizationGeneration, conversationTask.value.id,
         conversationId.value, bountyInteractionTargetId(chatContext.value), draft.value]
       const prepared = await bountyAssignmentContext.refresh()

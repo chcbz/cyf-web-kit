@@ -285,7 +285,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
   const formalReceipt = { ref: { sourceType: 'TASK', sourceId: 'task-created' }, execution: null,
     task: { taskId: 'task-created', taskVersion: '9007199254740993' }, submittedAt: 101 }
 
-  it('creates a formal draft without agent/format/material inputs and opens the exact real formal task after one POST', async () => {
+  it('saves full formal requirements and materials before one creation POST, then opens the exact pending task', async () => {
     let finishSubmit
     const canonicalTask = { id: 'task-created', title: '原正式任务', status: 'open', version: '9007199254740993' }
     const harness = await setupReader(request => {
@@ -301,7 +301,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
       expect(wrapper.text()).to.include('简述')
       expect(wrapper.text()).to.include('不收取悬赏金额，也不启动执行')
       expect(wrapper.find('select').exists()).to.equal(false)
-      expect(wrapper.find('.draft-materials').exists()).to.equal(false)
+      expect(wrapper.find('.draft-materials').exists()).to.equal(true)
       expect(wrapper.findAll('input')).to.have.length(1)
       expect(harness.workspaceRefreshes()).to.equal(0)
       await wrapper.find('input').setValue('名'.repeat(30))
@@ -313,17 +313,11 @@ describe('JYT-UX-W05 real editor source restoration', () => {
       expect(create.data.inputs).to.deep.equal([])
       expect(create.data.title).to.equal('名'.repeat(30))
       expect(create.data.instruction).to.equal('述'.repeat(200))
-      const next = button(wrapper, '下一步：确认创建')
-      expect(next.element.disabled).to.equal(false)
-      await next.trigger('click')
-      await settle()
-      const checkbox = wrapper.find('input[type="checkbox"]')
-      expect(checkbox.exists()).to.equal(true)
-      expect(checkbox.element.disabled).to.equal(false)
-      await checkbox.setValue(true)
-      const submit = button(wrapper, '确认创建正式任务')
-      await submit.trigger('click')
-      await submit.trigger('click')
+      const start = button(wrapper, '开始办事')
+      expect(start.element.disabled).to.equal(false)
+      await start.trigger('click')
+      await start.trigger('click')
+      expect(wrapper.find('input[type="checkbox"]').exists()).to.equal(false)
       expect(harness.calls.filter(call => call.url.endsWith('/submit'))).to.have.length(1)
       finishSubmit()
       await settle()
@@ -331,8 +325,6 @@ describe('JYT-UX-W05 real editor source restoration', () => {
       expect(wrapper.text()).not.to.include('尚未取得成果')
       expect(wrapper.find('button[type="submit"]').exists()).to.equal(false)
       expect(button(wrapper, '确认创建正式任务')).to.equal(undefined)
-      await button(wrapper, '打开正式事项').trigger('click')
-      await settle()
       expect(wrapper.emitted('open-task')).to.deep.equal([[canonicalTask]])
       expect(harness.calls.at(-1)).to.include({ url: '/tasks/task-created', method: 'GET' })
       expect(harness.calls.at(-1)).not.to.have.property('params')
@@ -341,7 +333,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
     } finally { wrapper.unmount() }
   })
 
-  it('preserves oversized restored formal text and saves it without truncation, but requires correction before confirmation', async () => {
+  it('preserves restored long formal requirements within actual 200/20000 field limits without truncation', async () => {
     const title = '长'.repeat(31)
     const instruction = '文'.repeat(201)
     const { component, calls } = await setupReader(request => formalSaved({ title, instruction }, { revision: request.method === 'PUT' ? '2' : '1' }))
@@ -350,9 +342,9 @@ describe('JYT-UX-W05 real editor source restoration', () => {
       await settle()
       expect(wrapper.find('input').element.value).to.equal(title)
       expect(wrapper.find('textarea').element.value).to.equal(instruction)
-      expect(wrapper.find('input').attributes('maxlength')).to.equal('30')
-      expect(wrapper.find('textarea').attributes('maxlength')).to.equal('200')
-      expect(wrapper.text()).to.include('原文仍保留')
+      expect(wrapper.find('input').attributes('maxlength')).to.equal('200')
+      expect(wrapper.find('textarea').attributes('maxlength')).to.equal('20000')
+      expect(button(wrapper, '开始办事').element.disabled).to.equal(false)
       expect(wrapper.find('input[type="checkbox"]').exists()).to.equal(false)
       await wrapper.find('form').trigger('submit')
       await settle()
@@ -382,22 +374,15 @@ describe('JYT-UX-W05 real editor source restoration', () => {
       await settle()
       expect(calls.at(-1).data).to.include({ targetAgentId: 'old-agent', outputMime: 'application/pdf' })
       expect(calls.at(-1).data.inputs).to.deep.equal(existing.inputs)
-      await button(wrapper, '明确移除原选人、格式和附件').trigger('click')
+      await button(wrapper, '明确移除原选人和格式').trigger('click')
       expect(wrapper.find('input[type="checkbox"]').exists()).to.equal(false)
       await wrapper.find('form').trigger('submit')
       await settle()
       expect(calls.at(-1).data).to.include({ targetAgentId: null, outputMime: null })
-      expect(calls.at(-1).data.inputs).to.deep.equal([])
-      await enterConfirm(wrapper)
-      await wrapper.find('input[type="checkbox"]').setValue(true)
-      await button(wrapper, '返回修改').trigger('click')
-      await Vue.nextTick()
+      expect(calls.at(-1).data.inputs).to.deep.equal(existing.inputs)
+      expect(button(wrapper, '开始办事').element.disabled).to.equal(false)
       await wrapper.find('textarea').setValue('用户后来修改的简述')
-      await enterConfirm(wrapper)
-      expect(wrapper.find('input[type="checkbox"]').element.checked).to.equal(false)
-      expect(button(wrapper, '确认创建正式任务').element.disabled).to.equal(true)
-      await wrapper.find('input[type="checkbox"]').setValue(true)
-      await button(wrapper, '确认创建正式任务').trigger('click')
+      await button(wrapper, '开始办事').trigger('click')
       await settle()
       const post = calls.find(call => call.url.endsWith('/submit'))
       expect(post.data).to.deep.equal({ expectedRevision: '4', authorizationAcknowledgement: true })
@@ -414,7 +399,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
         await settle()
         expect(wrapper.text()).to.include('此处不能改变该关联')
         expect(wrapper.find('input[type="checkbox"]').exists()).to.equal(false)
-        expect(button(wrapper, '下一步：确认创建').element.disabled).to.equal(true)
+        expect(button(wrapper, '开始办事').element.disabled).to.equal(true)
         expect(calls.map(call => call.method)).to.deep.equal(['GET'])
       } finally { wrapper.unmount() }
     }

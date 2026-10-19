@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import * as Vue from 'vue'
 import { ref } from 'vue'
+import { useHallBountyRequestCatalog } from '../src/composables/juyiting/useHallBountyRequestCatalog.js'
+import { useHallBountyAssignmentContext } from '../src/composables/juyiting/useHallBountyAssignmentContext.js'
 import { mount } from '@vue/test-utils'
 import { useHallConversation as actualHallConversation } from '../src/composables/juyiting/useHallConversation.js'
 import { currentChatStreamMock } from './fixtures/current-chat-stream-mock.js'
@@ -31,7 +33,7 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
   it('routes the one bounty composer through typed DISCUSSION only when the strict default-off flag is enabled', async () => {
     const enabled = ref(true); const draft = ref('画一只鸟'); const calls = []; const typed = { error: ref(''), submit: async body => { calls.push(['typed', body]); return true } }
     const send = async () => { calls.push(['legacy']); return true }
-    const actual = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled', 'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', 'typedAssignmentRevision', `return (${handler('handleSendHallMessage')})`)({ close: () => {} }, { cancel: () => {} }, () => {}, enabled, typed, draft, value => calls.push(['draft', value]), () => {}, send, () => '4')
+    const actual = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled', 'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', 'typedAssignmentRevision', 'bountyAssignmentContext', `return (${handler('handleSendHallMessage')})`)({ close: () => {} }, { cancel: () => {} }, () => {}, enabled, typed, draft, value => calls.push(['draft', value]), () => {}, send, () => '4', { loading: ref(false), error: ref('') })
     expect(await actual()).to.equal(true)
     expect(calls).to.deep.equal([['typed', { content: '画一只鸟', sourceSelectors: [], materialScope: 'TASK_DEFAULT' }], ['draft', '']])
     enabled.value = false
@@ -153,6 +155,77 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       expect(calls.filter(call => call === 'CONTENT:7')).to.have.length(2)
       expect(calls).to.include('HINT')
     } finally { conversation.disposeHallConversation() }
+  })
+  it('keeps the actual page follow-up fence current while adopting the first same-generation request', async () => {
+    const calls = []; const chatContext = ref({ conversationScopeType: 'bounty', conversationScopeKey: 'task:task-1', mode: 'bounty', participantAgentIds: ['agent-1'], targetAgentIds: ['agent-1'], targetAgentId: 'agent-1', taskId: 'task-1' })
+    const selectedTask = ref({ id: 'task-1' }); const selectedAgent = ref({ agentId: 'agent-1', name: '吴用' })
+    const requestView = typedRequest()
+    const conversation = useHallConversation({ apiStore: { authorizationGeneration: 1, token: async () => null }, chatContext, chatMode: ref('bounty'),
+      chatApi: { list: async (_path, _body, options) => { calls.push('LIST'); options.onSuccess({ items: [{ id: '7', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task-1' }], nextCursor: null, hasMore: false }) },
+        getById: async (_path, id, options) => { calls.push(`CONTENT:${id}`); options.onSuccess(([{ id: 'message-user-1', senderType: 'user', content: '请画一只鸟' }])) },
+        get: async path => { calls.push(`GET:${path}`); return ((requestView)) },
+        create: async () => { calls.push('POST'); throw new Error('must not post') } },
+      globalStore: { getJiacn: 'owner', user: {} }, log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}), portraitShortName: agent => agent?.name || '', selectedAgent, selectedTask, showToast: () => {} })
+    let stopFence
+    try {
+      expect(await conversation.loadHallMessages()).to.equal(true)
+      const apiStore = Vue.reactive({ authorizationGeneration: 1 })
+      const hallIdentityScope = ref('owner'); const chatMode = ref('bounty')
+      const followupContextGeneration = ref(0); const conversationTask = ref({ id: 'task-1', taskVersion: '1' })
+      const recoveries = []; const typedDeliberation = { invalidate() { recoveries.push('INVALIDATE') }, recover: async () => { recoveries.push('RECOVER'); return true } }
+      const env = { computed: Vue.computed, watch: Vue.watch, conversationTask, apiStore, hallIdentityScope,
+        conversationId: conversation.conversationId, activeRequest: conversation.activeRequest,
+        bountyInteractionTargetId: () => 'agent-1', chatContext, chatMode, followupContextGeneration,
+        typedDeliberation, typedDeliberationEnabled: ref(true), typedLong: value => typeof value === 'string' && /^[1-9][0-9]*$/.test(value) ? value : null }
+      const evaluate = text => new Function(...Object.keys(env), `return (${text})`)(...Object.values(env))
+      const binding = { schemaVersion: 1, conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', taskVersion: '1', assignmentRevision: '4', baselineGrantVersion: '1', requirementRevision: '1' }
+      env.bountyAssignmentContext = useHallBountyAssignmentContext({ chatApi: { get: async () => binding }, identityScope: hallIdentityScope,
+        authorizationGeneration: () => apiStore.authorizationGeneration, getContext: evaluate(option('useHallBountyAssignmentContext', 'getContext')), enabled: () => true })
+      expect(await env.bountyAssignmentContext.refresh()).to.equal(true)
+      env.typedAssignmentRevision = evaluate(handler('typedAssignmentRevision'))
+      env.typedConversationGeneration = evaluate(handler('typedConversationGeneration'))
+      env.bountyRequestCatalog = useHallBountyRequestCatalog({ chatApi: { get: async () => ({ schemaVersion: 1,
+        scope: { conversationId: '7', conversationGeneration: '1', taskId: 'task-1' }, after: '0', through: '0', nextAfter: null, hasMore: false, entries: [] }) },
+        identityScope: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
+        getContext: evaluate(option('useHallBountyRequestCatalog', 'getContext')),
+        getContextGeneration: () => followupContextGeneration.value, enabled: () => true })
+      env.invalidateFollowupContext = evaluate(handler('invalidateFollowupContext'))
+      env.followupTaskFence = evaluate(handler('followupTaskFence'))
+      env.refreshFollowupContext = evaluate(handler('refreshFollowupContext'))
+      env.resetFollowupContext = evaluate(handler('resetFollowupContext'))
+      const watchers = program.body.filter(node => node.type === 'ExpressionStatement' && node.expression?.callee?.name === 'watch' &&
+        script.slice(node.expression.start, node.expression.end).includes('resetFollowupContext'))
+      const stops = watchers.map(node => evaluate(script.slice(node.expression.start, node.expression.end)))
+      stopFence = () => { stops.forEach(stop => stop()); env.bountyAssignmentContext.dispose(); env.bountyRequestCatalog.dispose() }
+      const originalGeneration = followupContextGeneration.value
+      const pageAccepted = new Function('adoptTypedDiscussionReceipt', 'bountyRequestCatalog', 'showToast', `return (${option('useHallTypedDeliberation', 'onAccepted')})`)(conversation.adoptTypedDiscussionReceipt, { hint: () => calls.push('HINT') }, text => calls.push(`TOAST:${text}`))
+      expect(await pageAccepted({ receipt: typedReceipt(), context: { conversationId: '7', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4', conversationGeneration: '1' }, isCurrent: () => followupContextGeneration.value === originalGeneration })).to.equal(true)
+      expect(conversation.activeRequest.value).to.include({ requestId: 'request-typed-1', state: 'RUNNING', stateVersion: '0' })
+      expect(conversation.activeTurns.value[0]).to.include({ turnId: 'turn-typed-1', state: 'RECEIVED', stateVersion: '0' })
+      expect(conversation.messages.value.map(message => message.localId)).to.deep.equal(['message-user-1'])
+      expect(calls.filter(call => call === 'POST')).to.deep.equal([])
+      expect(calls.filter(call => call === 'GET:/requests/request-typed-1')).to.have.length(1)
+      expect(calls.filter(call => call === 'CONTENT:7')).to.have.length(2)
+      expect(env.bountyAssignmentContext.projection.value).to.deep.equal(binding)
+      expect(recoveries).to.deep.equal([])
+      expect(calls).to.include('HINT')
+      // Refreshing the same verified binding must not briefly remove context or
+      // abort the real request directory/typed consumer capture.
+      const assignment = evaluate(handler('typedAssignmentRevision'))
+      const generation = evaluate(handler('typedConversationGeneration'))
+      const sameRefresh = env.bountyAssignmentContext.refresh()
+      expect(assignment()).to.equal('4'); expect(generation()).to.equal('1')
+      expect(await sameRefresh).to.equal(true)
+      expect(recoveries).to.deep.equal([])
+      expect(await env.bountyRequestCatalog.refresh()).to.equal(true)
+      // Browsing another task is not a discussion switch.
+      selectedTask.value = { id: 'other-task', taskVersion: '99' }
+      expect(followupContextGeneration.value).to.equal(originalGeneration)
+      conversationTask.value = { id: 'task-1', taskVersion: '2' }
+      expect(followupContextGeneration.value).to.equal(originalGeneration + 1)
+      expect(recoveries[0]).to.equal('INVALIDATE')
+      expect(env.bountyAssignmentContext.projection.value).to.equal(null)
+    } finally { stopFence?.(); conversation.disposeHallConversation() }
   })
   it('adopts an already COMPLETED request and FINAL_PERSISTED turn for the same immutable receipt without another POST', async () => {
     const calls = []; const chatContext = ref({ conversationScopeType: 'bounty', conversationScopeKey: 'task:task-1', mode: 'bounty', participantAgentIds: ['agent-1'], targetAgentIds: ['agent-1'], targetAgentId: 'agent-1', taskId: 'task-1' })

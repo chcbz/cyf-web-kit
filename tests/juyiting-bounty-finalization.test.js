@@ -37,7 +37,7 @@ describe('MMD finalization immutable owner acceptance', () => {
       { expectedAssignmentRevision: '4' }, { expectedTaskVersion: 9 }, { stateVersion: '0' }, { stateVersion: '01' },
       { taskVersion: '8' }, { taskVersion: 12 }, { taskVersion: '9223372036854775808' },
       { deliveryId: null }, { deliveryState: 'SUBMITTED' }, { taskState: 'REVIEWING' }, { state: 'PENDING' },
-      { stage: 'SUBMITTED' }, { errorCode: 'FAILURE' }, { retryable: true },
+      { stage: 'READY_TO_SUBMIT' }, { errorCode: 'FAILURE' }, { retryable: true },
       { selectedOutputs: [] }, { selectedOutputs: [{ ...body().selectedOutputs[0], sha256: 'b'.repeat(64) }] },
       { selectedOutputs: [{ ...body().selectedOutputs[0], title: 'changed' }] }, { producerId: 'forged' }
     ]
@@ -45,6 +45,16 @@ describe('MMD finalization immutable owner acceptance', () => {
     const missing = completed(); delete missing.operationId
     expect(validFinalizationReceipt(missing, intent())).to.equal(false)
     expect(validFinalizationReceipt(completed(), { ...intent(), operationId: 'other-operation' })).to.equal(false)
+  })
+  it('completes submission while leaving owner acceptance outstanding, including later reviewed readback', () => {
+    for (const deliveryState of ['SUBMITTED', 'ACCEPTED', 'CHANGES_REQUESTED']) {
+      expect(validFinalizationReceipt(completed({ stage: 'SUBMITTED', deliveryState,
+        taskState: deliveryState === 'ACCEPTED' ? 'COMPLETED' : deliveryState === 'SUBMITTED' ? 'REVIEWING' : 'RUNNING' }), intent())).to.equal(true)
+    }
+    for (const patch of [{ deliveryId: null }, { deliveryState: null }, { deliveryState: 'FAILED' },
+      { errorCode: 'FAILURE' }, { retryable: true }]) {
+      expect(validFinalizationReceipt(completed({ stage: 'SUBMITTED', ...patch }), intent())).to.equal(false)
+    }
   })
   it('accepts actual nullable media receipt slots without relaxing the frozen source or request union', async () => {
     const wire = completed({ selectedOutputs: [{ ...body().selectedOutputs[0] }] })

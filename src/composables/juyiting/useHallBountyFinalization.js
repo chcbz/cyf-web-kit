@@ -70,9 +70,13 @@ export function validFinalizationReceipt (value, intent) {
     (value.errorCode != null && (typeof value.errorCode !== 'string' || !/^[A-Za-z0-9_:-]{1,100}$/.test(value.errorCode))) ||
     typeof value.retryable !== 'boolean') return false
   if (['SUBMITTED', 'ACCEPTING', 'TASK_COMPLETED'].includes(value.stage) && !ID(value.deliveryId)) return false
-  if (value.stage === 'TASK_COMPLETED' || value.state === 'COMPLETED') {
-    return value.stage === 'TASK_COMPLETED' && value.state === 'COMPLETED' && value.deliveryState === 'ACCEPTED' &&
-      value.taskState === 'COMPLETED' && ID(value.deliveryId) && !value.errorCode && !value.retryable
+  if (value.stage === 'TASK_COMPLETED') {
+    return value.state === 'COMPLETED' && value.deliveryState === 'ACCEPTED' && value.taskState === 'COMPLETED' &&
+      ID(value.deliveryId) && !value.errorCode && !value.retryable
+  }
+  if (value.state === 'COMPLETED') {
+    return value.stage === 'SUBMITTED' && ID(value.deliveryId) &&
+      ['SUBMITTED', 'ACCEPTED', 'CHANGES_REQUESTED'].includes(value.deliveryState) && !value.errorCode && !value.retryable
   }
   return value.state !== 'FAILED' || typeof value.errorCode === 'string'
 }

@@ -4,29 +4,29 @@
     <p v-else-if="sourceReadState === 'error'" class="draft-error" role="alert">原事项未能读取，不会另建事项代替，未用其他草稿代替。请重试。</p>
 
     <template v-else-if="activeView === 'draft'">
-      <div v-if="!initialRef || drafts.summaries.value.length" class="draft-recovery"><button v-if="!initialRef" type="button" :disabled="busy" @click="loadRecoverable">恢复草稿</button><button v-for="item in drafts.summaries.value" :key="item.draftId" type="button" :disabled="busy" @click="openDraft(item.draftId)">{{ item.title || '未命名草稿' }} · r{{ item.revision }}</button><button v-if="drafts.nextCursor.value" type="button" :disabled="busy" @click="drafts.loadMore">读取更多</button></div><p class="draft-intro">先说明想得到什么。资料可选；下一步再确认执行者和范围。</p>
+      <div v-if="!initialRef || drafts.summaries.value.length" class="draft-recovery"><button v-if="!initialRef" type="button" :disabled="busy" @click="loadRecoverable">恢复草稿</button><button v-for="item in drafts.summaries.value" :key="item.draftId" type="button" :disabled="busy" @click="openDraft(item.draftId)">{{ item.title || '未命名草稿' }} · r{{ item.revision }}</button><button v-if="drafts.nextCursor.value" type="button" :disabled="busy" @click="drafts.loadMore">读取更多</button></div><p class="draft-intro">先说明想得到什么。资料可选；开始办事后再确认承办Agent。</p>
       <form @submit.prevent="persist">
-        <label><span>{{ isTaskCreate ? '任务名目' : '事项名称' }}</span><input v-model="form.title" :maxlength="isTaskCreate ? 30 : null" :placeholder="isTaskCreate ? '最多30字' : '给这件事起个名字'" /></label>
-        <label><span>{{ isTaskCreate ? '简述' : '需求描述' }}</span><textarea v-model="form.instruction" :maxlength="isTaskCreate ? 200 : null" :placeholder="isTaskCreate ? '最多200字；不代替后续正式办理' : '例如：把会议纪要整理成一页简报，列出结论和待办。'"></textarea></label>
+        <label><span>{{ isTaskCreate ? '任务名目' : '事项名称' }}</span><input v-model="form.title" :maxlength="isTaskCreate ? 200 : null" :placeholder="isTaskCreate ? '给这件事起个名字，最多200字' : '给这件事起个名字'" /></label>
+        <label><span>{{ isTaskCreate ? '简述' : '需求描述' }}</span><textarea v-model="form.instruction" :maxlength="isTaskCreate ? 20000 : null" :placeholder="isTaskCreate ? '描述目标与要求；最多20000字' : '例如：把会议纪要整理成一页简报，列出结论和待办。'"></textarea></label>
         <p v-if="!isTaskCreate" class="draft-hint">交办名目最多200字，具体交代最多20000字；超出时保留原文，不会截短保存。</p><p v-if="drafts.draft.value?.state === 'EDITING'" class="draft-hint">草稿 {{ drafts.draft.value.draftId }} 已保存为 r{{ drafts.draft.value.revision }}；尚未交办。</p>
 
         <template v-if="isTaskCreate">
-          <p>此入口不收取悬赏金额，也不启动执行；只创建无悬赏、未指派的正式任务。长说明或资金悬赏请使用原张榜入口。</p>
+          <p>此入口不收取悬赏金额，也不启动执行；开始办事会保存为待点将事项，再由你确认承办Agent。</p>
           <p v-if="formalValidationError" class="draft-error" role="alert">{{ formalValidationError }}</p>
-          <section v-if="hasUnsupportedFormalFields" class="draft-note" aria-label="原有内容保留"><p>原稿包含此入口不支持的选人、格式或附件，已原样保留，尚不能确认提交。</p><p v-if="form.targetAgentId">原受托好汉：{{ form.targetAgentId }}</p><p v-if="form.outputMime">原期望格式：{{ form.outputMime }}</p><p v-for="input in form.inputs" :key="`formal:${input.fileId}:${input.version}`">原附件：{{ input.fileId }} · v{{ input.version }}</p><button type="button" :disabled="busy" @click="removeUnsupportedFormalFields">明确移除原选人、格式和附件</button></section>
+          <section v-if="hasUnsupportedFormalFields" class="draft-note" aria-label="原有内容保留"><p>原稿包含此入口不支持的选人或格式，已原样保留，尚不能确认提交。</p><p v-if="form.targetAgentId">原受托好汉：{{ form.targetAgentId }}</p><p v-if="form.outputMime">原期望格式：{{ form.outputMime }}</p><button type="button" :disabled="busy" @click="removeUnsupportedFormalFields">明确移除原选人和格式</button></section>
           <p v-if="hasUnsupportedFormalSource" class="draft-error" role="alert">原稿关联了资料来源或议事会话，此处不能改变该关联。请回原正式入口处理。</p>
         </template>
-        <template v-else>
+        <template>
           <section class="draft-strip draft-materials" aria-labelledby="hall-draft-materials-title">
             <div><h4 id="hall-draft-materials-title">参考资料 <small>可选</small></h4><div class="draft-chips"><span v-for="input in form.inputs" :key="`${input.fileId}:${input.version}`">{{ materialName(input) }} · v{{ input.version }}</span><span v-if="!form.inputs.length" class="muted">未引用资料</span></div></div>
             <button type="button" :disabled="busy" @click="openMaterials">添加资料</button>
           </section>
-          <label><span>交付格式 <small>可选；默认文本</small></span><select v-model="form.outputMime" aria-label="期望格式"><option value="">{{ defaultOutputMime ? `可选：${formatText(defaultOutputMime)}（默认）` : '正在读取服务端支持的格式' }}</option><option v-if="form.outputMime && !drafts.allowedMimeTypes.value.includes(form.outputMime)" :value="form.outputMime">保留原格式：{{ formatText(form.outputMime) }} · {{ form.outputMime }}（未确认支持）</option><option v-for="mime in drafts.allowedMimeTypes.value" :key="mime" :value="mime">{{ formatText(mime) }}</option></select></label>
-          <p v-if="formatHint" class="draft-hint" role="status">{{ formatHint }}</p>
+          <label v-if="!isTaskCreate"><span>交付格式 <small>可选；默认文本</small></span><select v-model="form.outputMime" aria-label="期望格式"><option value="">{{ defaultOutputMime ? `可选：${formatText(defaultOutputMime)}（默认）` : '正在读取服务端支持的格式' }}</option><option v-if="form.outputMime && !drafts.allowedMimeTypes.value.includes(form.outputMime)" :value="form.outputMime">保留原格式：{{ formatText(form.outputMime) }} · {{ form.outputMime }}（未确认支持）</option><option v-for="mime in drafts.allowedMimeTypes.value" :key="mime" :value="mime">{{ formatText(mime) }}</option></select></label>
+          <p v-if="!isTaskCreate && formatHint" class="draft-hint" role="status">{{ formatHint }}</p>
         </template>
         <p v-if="drafts.error.value" class="draft-error" role="alert">{{ drafts.error.value }}</p>
         <p v-if="drafts.reloadRequired.value" class="draft-error" role="alert">服务端版本已变化；本地输入未覆盖。请先恢复草稿再决定是否重填。</p>
-        <div class="draft-actions"><span v-if="needsSave" class="muted">未保存；可确认保存草稿。</span><span v-else-if="isCurrentDraftSaved" class="draft-saved">已保存到账号，尚未交办。</span><button v-if="drafts.draft.value?.state === 'EDITING'" type="button" :disabled="busy" @click="discard">放弃草稿</button><button type="submit" :disabled="busy">{{ revisionSource ? '保存修改草稿' : drafts.draft.value ? '保存修改' : '确认保存草稿' }}</button><button v-if="!isTaskAction" type="button" class="primary" :disabled="busy || !canProceed" @click="nextToConfirm">{{ isTaskCreate ? '下一步：确认创建' : '下一步：确认交办' }}</button></div>
+        <div class="draft-actions"><span v-if="needsSave" class="muted">未保存；可确认保存草稿。</span><span v-else-if="isCurrentDraftSaved" class="draft-saved">已保存到账号，尚未交办。</span><button v-if="drafts.draft.value?.state === 'EDITING'" type="button" :disabled="busy" @click="discard">放弃草稿</button><button type="submit" :disabled="busy">{{ revisionSource ? '保存修改草稿' : drafts.draft.value ? '保存修改' : '确认保存草稿' }}</button><button v-if="isTaskCreate" type="button" class="primary" :disabled="busy || formalStarting || !canProceed || Boolean(drafts.unresolvedIntent.value)" @click="startFormalTask">开始办事</button><button v-else-if="!isTaskAction" type="button" class="primary" :disabled="busy || !canProceed" @click="nextToConfirm">下一步：确认交办</button></div>
         <p v-if="isTaskAction" role="status">这是正式事项草稿；此处只保存编辑。正式张榜和返工请使用原正式入口。</p>
       </form>
     </template>
@@ -90,6 +90,7 @@ const previewVersion = ref(null)
 const revisionSource = ref(null)
 const sourceReadState = ref('idle')
 const authorizationAcknowledgement = ref(false)
+const formalStarting = ref(false)
 const savedFormSnapshot = ref('')
 const caseTabs = [{ id: 'progress', label: '进展' }, { id: 'materials', label: '资料' }, { id: 'results', label: '成果' }]
 const draftKind = computed(() => revisionSource.value ? 'REVISION' : drafts.draft.value?.kind || props.initialKind)
@@ -109,9 +110,9 @@ const formSnapshot = () => JSON.stringify({ title: form.title, instruction: form
 const isCurrentDraftSaved = computed(() => drafts.draft.value?.state === 'EDITING' && savedFormSnapshot.value === formSnapshot())
 const editableSession = computed(() => !displayedRef.value || Boolean(revisionSource.value))
 const needsSave = computed(() => editableSession.value && !isCurrentDraftSaved.value && Boolean(revisionSource.value || form.title || form.instruction || form.targetAgentId || form.outputMime || form.inputs.length || drafts.draft.value))
-const hasUnsupportedFormalFields = computed(() => Boolean(form.targetAgentId || form.outputMime || form.inputs.length))
+const hasUnsupportedFormalFields = computed(() => Boolean(form.targetAgentId || form.outputMime))
 const hasUnsupportedFormalSource = computed(() => Boolean(drafts.draft.value?.sourceSummary?.sourceRef || drafts.draft.value?.sourceSummary?.conversationId))
-const formalValidationError = computed(() => !isTaskCreate.value ? '' : !form.title.trim() ? '请填写任务名目。' : form.title.length > 30 || form.instruction.length > 200 ? '任务名目最多30字、简述最多200字；原文仍保留，请自行修改或回原张榜入口处理。' : '')
+const formalValidationError = computed(() => !isTaskCreate.value ? '' : !form.title.trim() ? '请填写任务名目。' : form.title.length > 200 || form.instruction.length > 20000 ? '任务名目最多200字、需求描述最多20000字；原文仍保留，请修改后再开始办事。' : '')
 const defaultOutputMime = computed(() => {
   if (drafts.capabilityState.value !== 'ready') return ''
   return drafts.allowedMimeTypes.value.includes('text/plain') ? 'text/plain' : drafts.allowedMimeTypes.value[0] || ''
@@ -131,6 +132,24 @@ const agentName = agent => agent?.name || agent?.personaName || agent?.agentId |
 const materialName = input => workspace.items.value.find(file => file.fileId === input.fileId)?.displayName || input.fileId
 const fill = fields => { form.title = fields?.title || ''; form.instruction = fields?.instruction || ''; form.targetAgentId = fields?.targetAgentId || ''; form.outputMime = fields?.outputMime || ''; form.inputs = Array.isArray(fields?.inputs) ? fields.inputs.map(input => ({ fileId: input.fileId, version: input.version })) : []; savedFormSnapshot.value = fields ? formSnapshot() : ''; authorizationAcknowledgement.value = false }
 const persist = async () => { if (!editableSession.value || busy.value || drafts.unresolvedIntent.value) return false; const snapshot = formSnapshot(); const payload = { ...form, outputMime: isTaskCreate.value ? form.outputMime : effectiveOutputMime.value, inputs: form.inputs.map(input => ({ ...input })) }; const saved = revisionSource.value ? await drafts.create({ kind: 'REVISION', caseId: drafts.caseView.value?.caseId || null, sourceOutputRef: revisionSource.value, ...payload }) : drafts.draft.value ? await drafts.save(payload) : await drafts.create({ kind: props.initialKind, originRef: props.initialContext?.originRef || 'juyiting', sourceRef: props.initialContext?.sourceRef || null, ...payload }); if (!saved) return false; revisionSource.value = null; if (snapshot === formSnapshot()) fill(saved.editableFields); else savedFormSnapshot.value = JSON.stringify(saved.editableFields); return isCurrentDraftSaved.value }
+// This click acknowledges creation only, never assignment, paid execution or Provider use.
+const startFormalTask = async () => {
+  if (!isTaskCreate.value || !canProceed.value || busy.value || formalStarting.value || drafts.unresolvedIntent.value) return false
+  const scope = props.identityScope
+  const epoch = props.identityEpoch
+  const current = () => scope === props.identityScope && epoch === props.identityEpoch
+  formalStarting.value = true
+  try {
+    if (!isCurrentDraftSaved.value && !await persist()) return false
+    if (!current() || !isCurrentDraftSaved.value || !canProceed.value) return false
+    const receipt = await drafts.submit({ authorizationAcknowledgement: true })
+    if (!current() || receipt?.ref?.sourceType !== 'TASK' || receipt.execution !== null || !receipt.task) return false
+    const task = await drafts.loadFormalTask()
+    if (!current() || task?.id !== receipt.ref.sourceId) return false
+    emit('open-task', task)
+    return true
+  } finally { formalStarting.value = false }
+}
 const nextToConfirm = async () => { if (!canProceed.value || busy.value) return; if (isCurrentDraftSaved.value || await persist()) view.value = 'confirm' }
 const openMaterials = () => { temporaryInputs.value = form.inputs.map(input => ({ ...input })); view.value = 'materials'; if (workspace.listState.value === 'idle') void workspace.refresh({ state: 'ACTIVE' }) }
 const temporaryHas = (fileId, version) => temporaryInputs.value.some(input => input.fileId === fileId && input.version === version)
@@ -146,7 +165,7 @@ const openDraft = async id => { const loaded = await drafts.load(id); if (loaded
 const reconcile = () => { void drafts.reconcileSubmission() }
 const discard = async () => { if (await drafts.discard()) fill({}) }
 const submit = () => { if (canConfirm.value && authorizationAcknowledgement.value) void drafts.submit({ authorizationAcknowledgement: true }) }
-const removeUnsupportedFormalFields = () => { form.targetAgentId = ''; form.outputMime = ''; form.inputs = [] }
+const removeUnsupportedFormalFields = () => { form.targetAgentId = ''; form.outputMime = '' }
 const refreshCase = () => { const ref = displayedRef.value; if (ref?.sourceType === 'PRIVATE_CASE') void drafts.loadCase(ref.sourceId); else if (ref?.sourceType === 'LEGACY_EXECUTION') void drafts.loadExecution(ref.sourceId) }
 const openResults = execution => { if (execution?.executionId) { caseTab.value = 'results'; void drafts.loadResults(execution.executionId) } }
 const previewResult = async item => { if (item?.availability !== 'AVAILABLE' || !await workspace.select(item.fileId)) return; resultPreviewItem.value = item; resultPreviewVersion.value = item.fileVersion; void workspace.previewVersion(item.fileVersion) }
