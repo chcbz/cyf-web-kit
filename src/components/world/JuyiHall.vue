@@ -1230,6 +1230,7 @@ const taskAgentMatchScore = (task, agent) => {
 }
 
 const {
+  dispose: disposeHallData,
   applySceneEvent,
   applySceneSnapshot,
   agentFilter,
@@ -1268,6 +1269,8 @@ const {
   visibleAgents
 } = useHallData({
   agentApi,
+  identityScope: hallIdentityScope,
+  authorizationGeneration: () => apiStore.authorizationGeneration,
   log,
   normalizeStatus,
   selectedAgent,
@@ -2948,6 +2951,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  disposeHallData?.()
   cancelHostedPointWait()
   document.removeEventListener?.('visibilitychange', handleDocumentVisibility)
   panelDisposed = true

@@ -308,7 +308,7 @@ const pendingAuthor = '聚义厅'
 const materialIdentityKey = computed(() => `${props.identityEpoch}\u0000${props.identityScope}`)
 const taskId = computed(() => String(props.selectedTask?.id || '').trim())
 const serverTaskCompleted = computed(() => props.discussionVariant === 'bounty' &&
-  (props.matterReadOnly || ['completed', 'cancelled', 'archived'].includes(props.selectedTask?.status)))
+  (props.matterReadOnly || ['completed', 'failed', 'cancelled', 'archived'].includes(props.selectedTask?.status)))
 const typedForMessage = message => props.typedOutcomes.filter(projection =>
   projection?.outcome?.assistantMessageId === String(message?.localId || ''))
 

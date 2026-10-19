@@ -1,3 +1,4 @@
+import { taskStatusText } from '../src/constants/juyiting.js'
 import { expect } from 'chai'
 import { describe, it } from 'mocha'
 import { readFileSync } from 'node:fs'
@@ -29,8 +30,9 @@ const loadMaterialPicker = (workspace, save) => {
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_line, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]@\/composables\/usePersonalWorkspace['"];?\s*$/gm, 'var { usePersonalWorkspace, savePersonalWorkspaceBlob } = deps')
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\.\/\.\.\/composables\/juyiting\/materialVersion\.js['"];?\s*$/gm, 'var { validMaterialVersion } = deps')
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\.\/\.\.\/constants\/juyiting\.js['"];?\s*$/gm, 'var { taskStatusText } = deps')
     .replace('export default', 'return')
-  return new Function('Vue', 'deps', code)(Vue, { validMaterialVersion, usePersonalWorkspace: () => workspace, savePersonalWorkspaceBlob: save })
+  return new Function('Vue', 'deps', code)(Vue, { taskStatusText, validMaterialVersion, usePersonalWorkspace: () => workspace, savePersonalWorkspaceBlob: save })
 }
 const load = (api, workspace = emptyWorkspace(), save = () => {}) => {
   const filename = fileURLToPath(new URL('../src/components/juyiting/HallOverview.vue', import.meta.url))
@@ -41,8 +43,9 @@ const load = (api, workspace = emptyWorkspace(), save = () => {}) => {
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]@\/composables\/usePersonalWorkspace['"];?\s*$/gm, 'var { usePersonalWorkspace, savePersonalWorkspaceBlob } = deps')
     .replace(/^import HallMaterialPicker from ['"]\.\/HallMaterialPicker\.vue['"];?\s*$/gm, 'var HallMaterialPicker = deps.HallMaterialPicker')
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\.\/\.\.\/composables\/juyiting\/materialVersion\.js['"];?\s*$/gm, 'var { validMaterialVersion } = deps')
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\.\/\.\.\/constants\/juyiting\.js['"];?\s*$/gm, 'var { taskStatusText } = deps')
     .replace('export default', 'return')
-  return new Function('Vue', 'deps', code)(Vue, { validMaterialVersion, HallMaterialPicker: loadMaterialPicker(workspace, save), canOpenHallItem, HALL_SOURCES, useHallOverview: options => useHallOverview({ ...options, api }), usePersonalWorkspace: () => workspace, savePersonalWorkspaceBlob: save })
+  return new Function('Vue', 'deps', code)(Vue, { taskStatusText, validMaterialVersion, HallMaterialPicker: loadMaterialPicker(workspace, save), canOpenHallItem, HALL_SOURCES, useHallOverview: options => useHallOverview({ ...options, api }), usePersonalWorkspace: () => workspace, savePersonalWorkspaceBlob: save })
 }
 const summary = (sourceType, sourceId, nextAction) => ({ ref: { sourceType, sourceId }, title: sourceId,
   status: { code: 'QUEUED', evidenceSource: 'PERSISTED', observedAt: 100 }, targetAgent: null, nextAction, allowedActions: [nextAction], updatedAt: 100 })
@@ -69,7 +72,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       const row = code => wrapper.findAll('.overview-item').find(item => item.text().includes(code))
       expect(row('cancelled').get('.overview-status').text()).to.equal('已取消')
       expect(row('failed').get('.overview-status').text()).to.equal('失败')
-      expect(row('blocked').get('.overview-status').text()).to.equal('受阻')
+      expect(row('blocked').get('.overview-status').text()).to.equal('进行中')
       expect(row('private-failure').get('.overview-status').text()).to.equal('执行未完成')
     } finally { wrapper.unmount() }
   })
@@ -381,17 +384,18 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
   it('routes review evidence to the exact canonical formal task and delivery without an acceptance or private mark call', async () => {
     const review = { code: 'FORMAL_DELIVERY_SUBMITTED', deliveryId: 'delivery-1', workItemId: 'work-1', deliveryVersion: '0', taskVersion: '9007199254740993' }
     const calls = []
-    const task = { id: 'task-a', status: 'assigned', title: '原正式任务' }
+    const task = { id: 'task-a', status: 'reviewing', title: '原正式任务' }
     const wrapper = mount(load({ execute: async options => {
       calls.push(options)
       if (options.url === '/tasks/task-a') return task
       const data = response()
       data.sections.needsAction.partitions.task.items[0].review = review
+      data.sections.needsAction.partitions.task.items[0].status.code = 'reviewing'
       return data
     } }), { props: { ...props, messagesOnly: true } })
     try {
       await settle()
-      expect(wrapper.text()).to.include('交付待验收')
+      expect(wrapper.text()).to.include('待验收')
       await wrapper.findAll('button').find(button => button.text() === '查看待验收交付').trigger('click')
       await settle()
       expect(wrapper.emitted('open-task')[0]).to.deep.equal([task, review])

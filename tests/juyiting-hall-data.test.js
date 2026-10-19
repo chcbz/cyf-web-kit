@@ -1,6 +1,8 @@
 import { expect } from 'chai'
 import { ref } from 'vue'
 
+import { projectHallTask } from '../src/composables/juyiting/hallTaskPresentation.js'
+
 import { useHallData } from '../src/composables/juyiting/useHallData.js'
 
 describe('useHallData bounty status counts', () => {
@@ -12,19 +14,22 @@ describe('useHallData bounty status counts', () => {
       { id: 'task-completed', status: 'completed', requiredAbilities: ['review'] }
     ]
     const calls = []
-    const countByStatus = allTasks.reduce((acc, task) => {
-      acc[task.status] = (acc[task.status] || 0) + 1
-      return acc
-    }, {})
+    const rawStatusCounts = { total: String(allTasks.length) }
+    const phaseCounts = { PENDING_ASSIGNMENT: '0', IN_PROGRESS: '0', PENDING_ACCEPTANCE: '0', COMPLETED: '0', HISTORY: '0', UNKNOWN: '0', total: String(allTasks.length) }
+    allTasks.forEach(task => {
+      rawStatusCounts[task.status] = String(BigInt(rawStatusCounts[task.status] || '0') + 1n)
+      const phase = projectHallTask({ task }).phase
+      phaseCounts[phase] = String(BigInt(phaseCounts[phase]) + 1n)
+    })
     const agentApi = {
       search: async (url, params, options) => {
         calls.push({ url, params })
         if (url === '/tasks/status-counts') {
-          options.onSuccess((countByStatus))
+          options.onSuccess({ phaseCounts, rawStatusCounts })
           return
         }
-        const data = params.status
-          ? allTasks.filter(task => task.status === params.status)
+        const data = params.phase
+          ? allTasks.filter(task => projectHallTask({ task }).phase === params.phase)
           : allTasks
         options.onSuccess({ items: data, pageNum: 1, pageSize: 100, total: "0" })
       },
@@ -42,23 +47,23 @@ describe('useHallData bounty status counts', () => {
 
     await hallData.loadTasks()
 
-    expect(hallData.taskStatusCount('assigned')).to.equal(1)
-    expect(hallData.taskStatusCount('running')).to.equal(1)
-    expect(hallData.taskStatusCount('completed')).to.equal(1)
+    expect(hallData.taskStatusCount('IN_PROGRESS')).to.equal('2')
+    expect(hallData.taskStatusCount('PENDING_ASSIGNMENT')).to.equal('1')
+    expect(hallData.taskStatusCount('COMPLETED')).to.equal('1')
 
-    await hallData.setTaskStatusFilter('assigned')
+    await hallData.setTaskStatusFilter('IN_PROGRESS')
 
-    expect(hallData.tasks.value.map(task => task.id)).to.deep.equal(['task-assigned'])
-    expect(hallData.taskStatusCount('assigned')).to.equal(1)
-    expect(hallData.taskStatusCount('running')).to.equal(1)
-    expect(hallData.taskStatusCount('completed')).to.equal(1)
+    expect(hallData.tasks.value.map(task => task.id)).to.deep.equal(['task-assigned', 'task-running'])
+    expect(hallData.taskStatusCount('IN_PROGRESS')).to.equal('2')
+    expect(hallData.taskStatusCount('PENDING_ASSIGNMENT')).to.equal('1')
+    expect(hallData.taskStatusCount('COMPLETED')).to.equal('1')
     expect(calls.map(call => call.url)).to.deep.equal([
       '/tasks/search',
       '/tasks/status-counts',
       '/tasks/search',
       '/tasks/status-counts'
     ])
-    expect(calls[2].params).to.include({ status: 'assigned' })
+    expect(calls[2].params).to.include({ phase: 'IN_PROGRESS' })
   })
 })
 
@@ -328,7 +333,7 @@ describe('useHallData deferred Juyi Hall sources', () => {
     expect(hallData.taskCountsError.value).to.equal('counts offline')
     expect(hallData.tasksLoading.value).to.equal(false)
     expect(hallData.taskCountsLoading.value).to.equal(false)
-    expect(hallData.taskStatusCount('open')).to.equal(1)
+    expect(hallData.taskStatusCount('PENDING_ASSIGNMENT')).to.equal('—')
   })
 
   it('records a failed roster independently without clearing the map source state', async () => {

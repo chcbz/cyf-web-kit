@@ -1,4 +1,5 @@
-import { computed, ref } from 'vue'
+import { computed, ref, toValue, watch } from 'vue'
+import { validateHallTaskCounts } from './hallTaskPresentation.js'
 
 import {
   canonicalSceneVersion,
@@ -13,7 +14,9 @@ export const useHallData = ({
   selectedAgent,
   selectedTask,
   taskAgentMatchScore,
-  sceneState
+  sceneState,
+  identityScope = '',
+  authorizationGeneration = 0
 }) => {
   const agents = ref([])
   const mapAgents = ref([])
@@ -24,7 +27,7 @@ export const useHallData = ({
   const taskRecommendations = ref({})
   const taskStatusCounts = ref({})
   const agentFilter = ref('all')
-  const taskStatusFilter = ref('open')
+  const taskStatusFilter = ref('PENDING_ASSIGNMENT')
   const taskAbilityFilter = ref('')
   const taskKeyword = ref('')
   // Each independently fetched source owns its state so a slow optional panel
@@ -97,13 +100,32 @@ export const useHallData = ({
     return normalizeStatus(agent.status) === 'online'
   }
 
-  const taskStatusCount = (status) => {
-    if (Object.keys(taskStatusCounts.value).length) {
-      return Number(taskStatusCounts.value[status || 'total'] || 0)
-    }
-    if (!status) return tasks.value.length
-    return tasks.value.filter(task => normalizeStatus(task.status) === status).length
-  }
+  let listEpoch = 0
+  let countsEpoch = 0
+  let recommendationEpoch = 0
+  const identityFingerprint = () => `${toValue(authorizationGeneration)}\u0000${toValue(identityScope)}`
+  const queryFingerprint = () => `${identityFingerprint()}\u0000${taskAbilityFilter.value}\u0000${taskKeyword.value}`
+  const stopFilters = watch([taskStatusFilter, taskAbilityFilter, taskKeyword], () => {
+    listEpoch += 1
+    countsEpoch += 1
+    taskStatusCounts.value = {}
+  }, { flush: 'sync' })
+  const stopIdentity = watch(identityFingerprint, () => {
+    listEpoch += 1
+    countsEpoch += 1
+    recommendationEpoch += 1
+    tasks.value = []
+    taskStatusCounts.value = {}
+    taskRecommendations.value = {}
+    selectedTask.value = null
+    tasksLoading.value = false
+    taskCountsLoading.value = false
+    tasksError.value = ''
+    taskCountsError.value = ''
+  }, { flush: 'sync' })
+  const dispose = () => { listEpoch += 1; countsEpoch += 1; recommendationEpoch += 1; stopFilters(); stopIdentity() }
+  // Absence/failure is not zero. Preserve decimal strings; never count the loaded page.
+  const taskStatusCount = phase => taskStatusCounts.value.phaseCounts?.[phase || 'total'] ?? '—'
 
   const searchTasks = async (params) => {
     let list = []
@@ -113,42 +135,49 @@ export const useHallData = ({
         list = result.items
       }
     })
+    if (!Array.isArray(list)) throw new Error('事项列表返回格式不正确')
     return list
   }
 
   const loadTaskStatusCounts = async () => {
+    const epoch = ++countsEpoch
+    const fingerprint = queryFingerprint()
+    const current = () => epoch === countsEpoch && fingerprint === queryFingerprint()
     taskCountsLoading.value = true
     taskCountsError.value = ''
-    let counts = {}
+    let counts
     try {
       await agentApi.search('/tasks/status-counts', {
         ability: taskAbilityFilter.value || undefined,
         keyword: taskKeyword.value || undefined
-      }, {
-        autoLoading: false,
-        onSuccess: (result) => {
-          counts = result
-        }
-      })
+      }, { autoLoading: false, onSuccess: result => { counts = validateHallTaskCounts(result) } })
+      if (!current()) return {}
+      if (!counts) throw new Error('事项计数尚未核对，请重试')
       taskStatusCounts.value = counts
       return counts
     } catch (error) {
+      if (!current()) return {}
       log.warn('load task status counts failed:', error)
-      taskCountsError.value = error?.message || '悬赏数目暂无法读取'
+      taskCountsError.value = error?.message || '事项计数暂无法读取'
       taskStatusCounts.value = {}
       return {}
     } finally {
-      taskCountsLoading.value = false
+      if (current()) taskCountsLoading.value = false
     }
   }
 
   const loadTaskRecommendations = async (task = selectedTask.value) => {
     if (!task?.id) return []
+    const epoch = ++recommendationEpoch
+    const identity = identityFingerprint()
+    const current = () => epoch === recommendationEpoch && identity === identityFingerprint()
     let recommendations = []
     try {
       await agentApi.create(`/tasks/${task.id}/recommend`, {}, {
         autoLoading: false,
         onSuccess: (result) => {
+          if (!current()) return
+          if (!Array.isArray(result)) throw new Error('承办推荐返回格式不正确')
           recommendations = result
           taskRecommendations.value = {
             ...taskRecommendations.value,
@@ -157,13 +186,14 @@ export const useHallData = ({
         }
       })
     } catch (error) {
+      if (!current()) return []
       log.warn('load task recommendations failed:', error)
       taskRecommendations.value = {
         ...taskRecommendations.value,
         [task.id]: []
       }
     }
-    return recommendations
+    return current() ? recommendations : []
   }
 
   const reconcileSelectedAgent = () => {
@@ -299,6 +329,9 @@ export const useHallData = ({
   }
 
   const loadTasks = async () => {
+    const epoch = ++listEpoch
+    const fingerprint = `${queryFingerprint()}\u0000${taskStatusFilter.value}`
+    const current = () => epoch === listEpoch && fingerprint === `${queryFingerprint()}\u0000${taskStatusFilter.value}`
     tasksLoading.value = true
     tasksError.value = ''
     const baseParams = {
@@ -309,26 +342,29 @@ export const useHallData = ({
     }
     const displayParams = {
       ...baseParams,
-      status: taskStatusFilter.value || undefined
+      phase: taskStatusFilter.value || undefined
     }
     const listRequest = (async () => {
       try {
         const list = await searchTasks(displayParams)
+        if (!current()) return []
         tasks.value = list
-        if (selectedTask.value && !tasks.value.some(task => task.id === selectedTask.value.id)) {
-          selectedTask.value = null
-        } else if (selectedTask.value) {
-          await loadTaskRecommendations(selectedTask.value)
-        }
+        // A task leaving the current page/filter is not deletion or revocation. Keep the
+        // active context by ID; refresh the selected projection only when actually present.
+        const selected = list.find(task => task.id === selectedTask.value?.id)
+        const version = value => typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value) ? BigInt(value) : null
+        const before = version(selectedTask.value?.taskVersion)
+        const after = version(selected?.taskVersion)
+        if (selected && (before === null || (after !== null && after >= before))) selectedTask.value = selected
         return list
       } catch (error) {
+        if (!current()) return []
         log.warn('load bounty tasks failed:', error)
         tasksError.value = error?.message || '悬赏榜暂无法读取'
         tasks.value = []
-        selectedTask.value = null
         return []
       } finally {
-        tasksLoading.value = false
+        if (current()) tasksLoading.value = false
       }
     })()
     const [, counts] = await Promise.all([listRequest, loadTaskStatusCounts()])
@@ -370,6 +406,7 @@ export const useHallData = ({
   }
 
   return {
+    dispose,
     applySceneEvent,
     applySceneSnapshot,
     agentFilter,

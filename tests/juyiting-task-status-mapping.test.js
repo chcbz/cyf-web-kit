@@ -4,24 +4,20 @@ import { taskStateClass, taskStatusFilters, taskStatusText } from '../src/consta
 
 describe('Juyi Hall formal bounty status mapping', () => {
   const expectedStatuses = [
-    ['open', '待点将', 'task-state-open'],
-    ['planning', '筹划中', 'task-state-planning'],
-    ['assigned', '待开工（已点将）', 'task-state-assigned'],
-    ['running', '办理中', 'task-state-running'],
-    ['reviewing', '待验收', 'task-state-reviewing'],
-    ['blocked', '受阻', 'task-state-blocked'],
-    ['completed', '已完成', 'task-state-done'],
-    ['failed', '失败', 'task-state-failed'],
-    ['cancelled', '已取消', 'task-state-cancelled'],
-    ['archived', '已归档', 'task-state-archived']
+    ['PENDING_ASSIGNMENT', '待点将', 'task-state-open'],
+    ['IN_PROGRESS', '进行中', 'task-state-running'],
+    ['PENDING_ACCEPTANCE', '待验收', 'task-state-reviewing'],
+    ['COMPLETED', '已完成', 'task-state-done'],
+    ['HISTORY', '历史', 'task-state-archived'],
+    ['UNKNOWN', '待核对', 'task-state-unknown']
   ]
 
-  it('defines all ten formal task statuses once for filters, labels, and styles', () => {
+  it('keeps four primary phases and secondary history/reconciliation, without losing terminal reasons', () => {
     assert.deepEqual(taskStatusFilters.map(({ value, label, className }) => [value, label, className]), expectedStatuses)
-    for (const [status, label, className] of expectedStatuses) {
-      assert.equal(taskStatusText(status.toUpperCase()), label)
-      assert.equal(taskStateClass(status), className)
-    }
+    for (const status of ['planning', 'assigned', 'running', 'blocked']) assert.equal(taskStatusText(status), '进行中')
+    for (const [status, label] of [['failed', '失败'], ['cancelled', '已取消'], ['archived', '已归档']]) assert.equal(taskStatusText(status), label)
+    assert.equal(taskStatusText('open'), '待点将')
+    assert.equal(taskStatusText('reviewing'), '待验收')
   })
 
   it('does not classify an unknown server state as open', () => {

@@ -86,7 +86,7 @@
           >
             <div class="task-head">
               <strong>{{ task.title }}</strong>
-              <span :class="taskStateClass(task.status)">{{ taskStatusText(task.status) }}</span>
+              <span :class="taskStateClass(task)">{{ taskStatusText(task) }}</span>
             </div>
             <p>{{ task.description || '榜文尚未写明缘由' }}</p>
             <div class="task-meta">
@@ -186,9 +186,9 @@
               <div v-if="!embeddedHall" class="task-detail-head">
                 <div>
                   <strong>{{ detailTask.title }}</strong>
-                  <small>{{ detailTask.id }} / {{ taskStatusText(detailTask.status) }}</small>
+                  <small>{{ detailTask.id }} / {{ taskStatusText(detailTask) }}</small>
                 </div>
-                <span :class="taskStateClass(detailTask.status)">{{ taskStatusText(detailTask.status) }}</span>
+                <span :class="taskStateClass(detailTask)">{{ taskStatusText(detailTask) }}</span>
               </div>
 
               <p v-if="!embeddedHall">{{ detailTask.description || '榜文尚未写明缘由' }}</p>
@@ -619,7 +619,7 @@ const preferredAgentName = computed(() => {
   const assigned = props.operableAgents.find(agent => agent.agentId === assignedId)
   return agentDisplayName(assigned || preferredAgents.value[0])
 })
-const simpleMatterStatus = task => ({ open: '待确认', assigned: '已受理', claimed: '已受理', queued: '已受理', running: '办理中', in_progress: '办理中', submitted: '待验收', review: '待验收', changes_requested: '待返工确认', completed: '已完成', accepted: '已完成', archived: '已归档', cancelled: '已取消', failed: '失败', blocked: '受阻' })[task?.status] || (taskAssigneeIds(task).length ? '已受理' : '状态待核对')
+const simpleMatterStatus = task => props.taskStatusText(task)
 
 const formalTaskExecutionScope = computed(() => {
   const taskId = detailTask.value?.id

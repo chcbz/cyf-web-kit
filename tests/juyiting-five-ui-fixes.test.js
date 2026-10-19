@@ -1,3 +1,4 @@
+import { taskStatusText } from '../src/constants/juyiting.js'
 import { displayFixture } from './fixtures/juyiting/interface-display-fixture.mjs'
 import * as skillResults from '../src/composables/juyiting/useHallSkillResults.js'
 import * as skillResultData from '../src/composables/juyiting/hallSkillResults.js'
@@ -80,7 +81,7 @@ describe('five fixes real mounted output consumers', () => {
 
 const panelProps = { embeddedHall: true, detailAllowed: true, identityScope: 'owner-five', authorizationGeneration: 1,
   abilityText: () => '', canAssign: () => true, formatTime: () => '', portraitName: () => '', portraitStyle: () => ({}),
-  taskAgentMatchScore: () => 0, taskStateClass: () => '', taskStatusCount: () => 0, taskStatusText: x => x }
+  taskAgentMatchScore: () => 0, taskStateClass: () => '', taskStatusCount: () => 0, taskStatusText }
 const panelTask = (overrides = {}) => ({ id: 'a', title: '原事项A', status: 'assigned', taskVersion: '2', funding: null, assignedAgentIds: ['old-agent'], ...overrides })
 const Panel = compile('BountyPanel', { '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinary, '@/utils/silverAmount': silver })
 const DialogFixture = Vue.defineComponent({ props: ['show', 'title', 'message'], emits: ['confirm', 'cancel', 'close', 'update:show'],
@@ -141,7 +142,7 @@ describe('five fixes cancellation thin confirmation layer', () => {
       expect(calls).to.deep.equal(['POST', 'GET', 'GET'])
     } finally { wrapper?.unmount(); actions.dispose() }
   })
-  for (const [status, label] of [['failed', '失败'], ['blocked', '受阻'], ['cancelled', '已取消']]) it(`distinguishes ${status} in the actual detail advice DOM`, async () => {
+  for (const [status, label] of [['failed', '失败'], ['blocked', '进行中'], ['cancelled', '已取消']]) it(`distinguishes ${status} in the actual detail advice DOM`, async () => {
     const wrapper = await openPanel(panelTask({ status }))
     try { expect(wrapper.get('.matter-advice-heading').text()).to.include(label) } finally { wrapper.unmount() }
   })

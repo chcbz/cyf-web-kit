@@ -108,7 +108,7 @@
                 type="button"
                 @click="openTask(task)"
               >
-                <span :class="taskStateClass(task.status)">{{ taskStatusText(task.status) }}</span>
+                <span :class="taskStateClass(task)">{{ taskStatusText(task) }}</span>
                 <strong>{{ task.title || '未命名榜文' }}</strong>
                 <small>{{ task.requiredAbilities?.length ? task.requiredAbilities.join(' / ') : '待议定人手' }}</small>
               </button>
@@ -176,7 +176,7 @@
         aria-label="榜文详情"
       >
         <div class="task-detail-heading">
-          <span :class="taskStateClass(selectedTask.status)">{{ taskStatusText(selectedTask.status) }}</span>
+          <span :class="taskStateClass(selectedTask)">{{ taskStatusText(selectedTask) }}</span>
           <button type="button" aria-label="返回榜文列表" @click="emit('close-task-detail')">返回</button>
         </div>
         <p class="task-detail-id">榜号 {{ selectedTask.id }}</p>

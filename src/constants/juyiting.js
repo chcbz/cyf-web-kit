@@ -1,3 +1,5 @@
+import { projectHallTask } from '../composables/juyiting/hallTaskPresentation.js'
+
 export const mapControlsConfig = [
   { key: 'up', icon: 'chevron-up', label: '上移视野', direction: 'up' },
   { key: 'left', icon: 'chevron-left', label: '左移视野', direction: 'left' },
@@ -14,26 +16,17 @@ export const statusFilters = [
   { label: '失联', value: 'error' }
 ]
 
-// This is the canonical formal-bounty lifecycle presentation. Keep labels, filter
-// values, and styles together so an unrecognised server value never falls back to open.
+// Four user-visible stages; history and reconciliation are secondary filters.
 export const taskStatusFilters = [
-  { label: '待点将', value: 'open', className: 'task-state-open' },
-  { label: '筹划中', value: 'planning', className: 'task-state-planning' },
-  { label: '待开工（已点将）', value: 'assigned', className: 'task-state-assigned' },
-  { label: '办理中', value: 'running', className: 'task-state-running' },
-  { label: '待验收', value: 'reviewing', className: 'task-state-reviewing' },
-  { label: '受阻', value: 'blocked', className: 'task-state-blocked' },
-  { label: '已完成', value: 'completed', className: 'task-state-done' },
-  { label: '失败', value: 'failed', className: 'task-state-failed' },
-  { label: '已取消', value: 'cancelled', className: 'task-state-cancelled' },
-  { label: '已归档', value: 'archived', className: 'task-state-archived' }
+  { label: '待点将', value: 'PENDING_ASSIGNMENT', className: 'task-state-open' },
+  { label: '进行中', value: 'IN_PROGRESS', className: 'task-state-running' },
+  { label: '待验收', value: 'PENDING_ACCEPTANCE', className: 'task-state-reviewing' },
+  { label: '已完成', value: 'COMPLETED', className: 'task-state-done' },
+  { label: '历史', value: 'HISTORY', className: 'task-state-archived', secondary: true },
+  { label: '待核对', value: 'UNKNOWN', className: 'task-state-unknown', secondary: true }
 ]
-
-const normalizeTaskStatus = status => String(status || '').trim().toLowerCase()
-const taskStatusMeta = status => taskStatusFilters.find(item => item.value === normalizeTaskStatus(status))
-
-export const taskStatusText = status => taskStatusMeta(status)?.label || '状态待核对'
-export const taskStateClass = status => taskStatusMeta(status)?.className || 'task-state-unknown'
+export const taskStatusText = task => projectHallTask({ task }).label
+export const taskStateClass = task => projectHallTask({ task }).className
 
 export const hallRoomPropVisuals = [
   {
