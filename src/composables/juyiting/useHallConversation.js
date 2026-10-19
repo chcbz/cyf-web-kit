@@ -20,6 +20,7 @@ import {
   validateBountyBootstrapRequest, bootstrapReadbackIsCurrent
 } from './hallBountyBootstrap.js'
 import { typedId } from './hallTypedDeliberation.js'
+import { bountyInteractionTargetId } from './useHallChatContext.js'
 import {
   cancellationTarget,
   deliberationBusy,
@@ -1706,11 +1707,14 @@ export const useHallConversation = ({
       ? { conversationId: expectedConversationId, conversationGeneration: expectedGeneration, taskId: expectedTaskId, targetAgentId: expectedTargetAgentId } : null
     const acceptedReceipt = typedContext ? typedAcceptedReceipt(receipt, typedContext) : null
     const requestId = acceptedReceipt?.requestId || ''
-    if (disposed || !acceptedReceipt || !requestId ||
-        conversationId.value !== expectedConversationId || selectedTask.value?.id !== expectedTaskId || selectedAgent.value?.agentId !== expectedTargetAgentId) return false
+    // Browsing selection is independent from the conversation subject. Bind adoption to
+    // the roster-filtered active discussion, including actual target changes during GET.
+    const discussionMatches = () => conversationId.value === expectedConversationId &&
+      chatContext.value?.taskId === expectedTaskId &&
+      bountyInteractionTargetId(chatContext.value) === expectedTargetAgentId
+    if (disposed || !acceptedReceipt || !requestId || !discussionMatches()) return false
     const guard = captureGuard()
-    const current = () => guardCurrent(guard) && isCurrent?.() && conversationId.value === expectedConversationId &&
-      selectedTask.value?.id === expectedTaskId && selectedAgent.value?.agentId === expectedTargetAgentId
+    const current = () => guardCurrent(guard) && isCurrent?.() && discussionMatches()
     try {
       const response = await chatApi.get(`/requests/${encodeURIComponent(requestId)}`, {}, {
         autoLoading: false, signal: lifecycleController.signal
