@@ -84,6 +84,7 @@ export const useHallConversation = ({
   const turnStates = new Map()
   const requestReadbackJobs = new Map()
   const requestReadbackInflight = new Map()
+  const cancellationJobs = new Map()
   let capabilityPromise = null
   let capabilityAttempt = 0
   let authoritativeResyncPromise = null
@@ -641,6 +642,7 @@ export const useHallConversation = ({
     deliberationStatus.value = ''
     activeRequest.value = null
     activeTurns.value = []
+    cancellationJobs.clear()
     turnStates.clear()
     eventCursors.clear()
     for (const job of requestReadbackJobs.values()) {
@@ -741,6 +743,7 @@ export const useHallConversation = ({
 
   const unregisterIdentityCleanup = registerIdentityCleanup(clearHallConversationIdentityState)
   const disposeHallConversation = () => {
+    cancellationJobs.clear()
     if (disposed) return
     disposed = true
     browserDocument()?.removeEventListener?.('visibilitychange', handleHallEventVisibility)
@@ -1912,22 +1915,72 @@ export const useHallConversation = ({
     const request = activeRequest.value
     const selectedTarget = target && typeof target === 'object' ? target : durableCancelTarget.value
     if (!request?.requestId || !selectedTarget) return false
+    const requestId = request.requestId
     const guard = captureGuard()
+    const originalConversationId = conversationId.value
+    const current = () => guardCurrent(guard) && activeRequest.value?.requestId === requestId && conversationId.value === originalConversationId
+    const previous = cancellationJobs.get(requestId)
+    if (previous?.inFlight) return false
+    const job = { inFlight: true, unknown: previous?.unknown === true }
+    cancellationJobs.set(requestId, job)
+    const notice = text => {
+      if (!current()) return
+      deliberationStatus.value = text
+      showToast(text)
+    }
+    const reconcile = async () => {
+      const recovered = await recoverUnknownRequest(requestId, guard)
+      if (!current()) return false
+      if (!recovered) {
+        job.unknown = true
+        notice('停止结果尚未确认，请再次核对；不会重复提交')
+        return false
+      }
+      const turns = selectedTarget.turnId
+        ? activeTurns.value.filter(turn => turn.turnId === selectedTarget.turnId)
+        : activeTurns.value
+      if (!turns.length) {
+        job.unknown = true
+        notice('停止结果尚未确认，请再次核对；不会重复提交')
+        return false
+      }
+      if (turns.every(turn => isTerminalTurnState(turn.state))) {
+        job.unknown = false
+        syncDurablePresentation()
+        showToast(turns.every(turn => turn.state === 'CANCELLED') ? '本轮回复已停止，可以继续发送消息' : '本轮回话已结束，保留已有回复，无需再次停止')
+        return true
+      }
+      // A fresh pending read cannot prove a lost cancellation write was rejected.
+      notice(job.unknown ? '停止结果尚未确认，请稍后再次核对；不会重复提交' : '回话状态已更新，尚未停止；如仍需停止，请再次点击')
+      return false
+    }
     try {
+      if (job.unknown) return await reconcile()
       let response
       if (selectedTarget.turnId) {
         const turn = activeTurns.value.find(item => item.turnId === selectedTarget.turnId)
-        if (!turn || !isPendingTurn(turn)) return true
+        if (!turn) return false
+        if (!isPendingTurn(turn)) return true
         const expectedStateVersion = canonicalWireString(turn.stateVersion, { allowZero: true })
         if (!expectedStateVersion) return false
         response = await chatApi.post(`/turns/${turn.turnId}/cancel`, { expectedStateVersion }, { autoLoading: false, signal: lifecycleController.signal })
-        abortIfStale(guard)
-        const view = authoritativeTurnView(apiData(response), request.requestId, turn.turnId)
-        if (!view) return false
-        if (BigInt(view.stateVersion) <= BigInt(expectedStateVersion)) return false
-        if (!applyDeliberationEvent(view)) return false
+        if (!current()) return false
+        const view = authoritativeTurnView(apiData(response), requestId, turn.turnId)
+        if (!view || view.conversationId !== originalConversationId ||
+            (request.conversationGeneration && view.conversationGeneration !== request.conversationGeneration)) {
+          job.unknown = true
+          notice('停止结果尚未确认，请再次核对；不会重复提交')
+          return false
+        }
+        if (BigInt(view.stateVersion) < BigInt(expectedStateVersion)) {
+          job.unknown = true
+          notice('停止结果尚未确认，请再次核对；不会重复提交')
+          return false
+        }
+        // Equal-version terminal replies are idempotent success, not stale failure.
+        if (!applyDeliberationEvent(view)) return await reconcile()
         const applied = activeTurns.value.find(item => item.turnId === turn.turnId)
-        if (applied?.stateVersion !== view.stateVersion || applied?.state !== view.state) return false
+        if (applied?.stateVersion !== view.stateVersion || applied?.state !== view.state) return await reconcile()
         activeTurns.value = activeTurns.value.map(item => item.turnId === turn.turnId ? view : item)
         const tracker = turnStates.get(turn.turnId) || { lastDeltaSeq: '0', waitingFinal: false, terminal: false }
         tracker.lastDeltaSeq = view.lastDeltaSeq
@@ -1935,16 +1988,30 @@ export const useHallConversation = ({
         tracker.terminal = isTerminalTurnState(view.state)
         turnStates.set(turn.turnId, tracker)
       } else if (selectedTarget.allPending === true) {
-        response = await chatApi.post(`/requests/${request.requestId}/cancel?allPending=true`, { allPending: true }, { autoLoading: false, signal: lifecycleController.signal })
-        abortIfStale(guard)
-        if (!applyRequestView(apiData(response), request.requestId)) return false
+        response = await chatApi.post(`/requests/${requestId}/cancel?allPending=true`, { allPending: true }, { autoLoading: false, signal: lifecycleController.signal })
+        if (!current()) return false
+        if (!applyRequestView(apiData(response), requestId)) {
+          job.unknown = true
+          notice('停止结果尚未确认，请再次核对；不会重复提交')
+          return false
+        }
       } else return false
       syncDurablePresentation()
-      if (deliberationBusy(activeRequest.value, activeTurns.value)) deliberationStatus.value = '取消请求已提交'
+      if (deliberationBusy(activeRequest.value, activeTurns.value) || hasPendingSendSession.value) return await reconcile()
+      showToast(activeTurns.value.every(turn => turn.state === 'CANCELLED') ? '本轮回复已停止，可以继续发送消息' : '本轮回话已结束，保留已有回复')
       return true
     } catch (error) {
-      if (error?.name !== 'AbortError' && guardCurrent(guard)) log.warn('取消聚义厅回话失败', error)
+      if (error?.name === 'AbortError' || !current()) return false
+      log.warn('取消聚义厅回话失败', error)
+      const status = error?.status ?? error?.response?.status
+      if (status === 409 || error?.code === 'CHAT_REQUEST_CONFLICT') return await reconcile()
+      job.unknown = !status || status >= 500
+      if (job.unknown) return await reconcile()
+      notice('停止失败，本轮回复尚未停止；请核对后重试')
       return false
+    } finally {
+      job.inFlight = false
+      if (!job.unknown && cancellationJobs.get(requestId) === job) cancellationJobs.delete(requestId)
     }
   }
 

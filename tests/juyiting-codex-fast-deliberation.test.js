@@ -599,13 +599,83 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     conversation.disposeHallConversation()
   })
 
+  for (const mode of ['conflict', 'unknown', 'completed']) {
+    it(`reconciles ${mode} cancellation without an automatic second POST`, async () => {
+      let requestId, posts = 0, queried = 0, cancelled = false
+      const bodies = []
+      const conversation = base({ chatApi: {
+        get: async path => {
+          if (path === '/capabilities') return capabilityV2
+          queried += 1
+          const done = mode === 'completed' && posts > 0
+          return durableRequestView({ requestId, state: cancelled ? 'CANCELLED' : done ? 'COMPLETED' : 'RUNNING', stateVersion: '2',
+            turns: [durableTurnView({ requestId, turnId: 'turn-a', state: cancelled ? 'CANCELLED' : done ? 'PUBLISHED' : 'STREAMING', stateVersion: '2' })] })
+        },
+        create: async (_path, body, options) => {
+          requestId = body.requestId
+          options.onStream(JSON.stringify({ type: 'chat_request_replay', requestId, turnId: 'turn-a',
+            conversationId: '9007199254740993', state: 'QUEUED', stateVersion: '0' }))
+          options.onStreamEnd()
+        },
+        post: async (_path, body) => {
+          posts += 1; bodies.push(body)
+          if (posts === 1) throw mode === 'unknown' ? new TypeError('connection lost') : Object.assign(new Error('conflict'), { status: 409, code: 'CHAT_REQUEST_CONFLICT' })
+          cancelled = true
+          return durableTurnView({ requestId, turnId: 'turn-a', state: 'CANCELLED', stateVersion: '3' })
+        }
+      } })
+      conversation.setDraft('cancel test'); await conversation.sendHallMessage(); await flushReadbacks()
+      expect(await conversation.cancelDeliberation({ turnId: 'turn-a' })).to.equal(mode === 'completed')
+      expect(posts).to.equal(1); expect(queried).to.be.greaterThan(0)
+      if (mode === 'conflict') {
+        expect(conversation.activeTurns.value[0].stateVersion).to.equal('2')
+        expect(conversation.deliberationStatus.value).to.include('尚未停止')
+        await conversation.cancelDeliberation({ turnId: 'turn-a' })
+        expect(posts).to.equal(2); expect(bodies[1].expectedStateVersion).to.equal('2')
+      } else if (mode === 'unknown') {
+        expect(conversation.deliberationStatus.value).to.include('尚未确认')
+        await conversation.cancelDeliberation({ turnId: 'turn-a' }); expect(posts).to.equal(1)
+        cancelled = true
+        expect(await conversation.cancelDeliberation({ turnId: 'turn-a' })).to.equal(true)
+        expect(posts).to.equal(1)
+      } else {
+        expect(conversation.activeTurns.value[0].state).to.equal('PUBLISHED')
+        expect(conversation.isAwaitingReply.value).to.equal(false)
+      }
+      conversation.disposeHallConversation()
+    })
+  }
+
+  it('deduplicates concurrent cancellation and accepts a same-version terminal receipt', async () => {
+    let requestId, posts = 0
+    const pending = deferred()
+    const conversation = base({ chatApi: {
+      get: async path => path === '/capabilities' ? capabilityV2 : durableRequestView({ requestId, state: posts ? 'CANCELLED' : 'RUNNING', stateVersion: '3',
+        turns: [durableTurnView({ requestId, turnId: 'turn-a', state: posts ? 'CANCELLED' : 'STREAMING', stateVersion: '3' })] }),
+      create: async (_path, body, options) => {
+        requestId = body.requestId
+        options.onStream(JSON.stringify({ type: 'chat_request_replay', requestId, turnId: 'turn-a',
+          conversationId: '9007199254740993', state: 'STREAMING', stateVersion: '3' })); options.onStreamEnd()
+      },
+      post: async () => { posts += 1; return pending.promise }
+    } })
+    conversation.setDraft('cancel test'); await conversation.sendHallMessage(); await flushReadbacks()
+    const first = conversation.cancelDeliberation({ turnId: 'turn-a' })
+    expect(await conversation.cancelDeliberation({ turnId: 'turn-a' })).to.equal(false)
+    expect(posts).to.equal(1)
+    pending.resolve(durableTurnView({ requestId, turnId: 'turn-a', state: 'CANCELLED', stateVersion: '3' }))
+    expect(await first).to.equal(true)
+    expect(posts).to.equal(1)
+    conversation.disposeHallConversation()
+  })
+
   it('cancels an exact durable turn with a canonical state version and is terminal-idempotent', async () => {
     const posts = []
     let requestId
     const conversation = base({ chatApi: {
       get: async path => {
         if (path === '/capabilities') return ((capabilityV2))
-        return ((durableRequestView({ requestId, state: 'RUNNING', stateVersion: '0', turns: [durableTurnView({ requestId, turnId: 'turn-a', state: 'QUEUED', stateVersion: '0' })] })))
+        return ((durableRequestView({ requestId, state: posts.length ? 'CANCELLED' : 'RUNNING', stateVersion: posts.length ? '1' : '0', turns: [durableTurnView({ requestId, turnId: 'turn-a', state: posts.length ? 'CANCELLED' : 'QUEUED', stateVersion: posts.length ? '1' : '0' })] })))
       },
       create: async (_path, body, options) => {
         requestId = body.requestId
