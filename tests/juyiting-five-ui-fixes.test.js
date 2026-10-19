@@ -1,3 +1,4 @@
+import * as typedDeliberation from '../src/composables/juyiting/hallTypedDeliberation.js'
 import * as taskPresentation from '../src/composables/juyiting/hallTaskPresentation.js'
 import { taskStatusText } from '../src/constants/juyiting.js'
 import { displayFixture } from './fixtures/juyiting/interface-display-fixture.mjs'
@@ -26,7 +27,7 @@ const Empty = Vue.defineComponent({ render: () => Vue.h('span') })
 const compile = (name, imports) => {
   const filename = new URL(`../src/components/juyiting/${name}.vue`, import.meta.url)
   const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename: filename.pathname })
-  const modules = new Proxy({ vue: Vue, '../../composables/juyiting/useHallSkillResults.js': skillResults, '../../composables/juyiting/hallSkillResults.js': skillResultData, ...imports }, { get: (obj, path) => obj[path] || Empty })
+  const modules = new Proxy({ vue: Vue, '../../composables/juyiting/hallTypedDeliberation.js': typedDeliberation, '../../composables/juyiting/useHallSkillResults.js': skillResults, '../../composables/juyiting/hallSkillResults.js': skillResultData, ...imports }, { get: (obj, path) => obj[path] || Empty })
   const code = compileScript(descriptor, { id: `five-${name}`, inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_, names, path) => `const { ${names.replace(/\s+as\s+/g, ': ')} } = imports[${JSON.stringify(path)}]`)
     .replace(/^import\s+(\w+)\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_, name, path) => `const ${name} = imports[${JSON.stringify(path)}]`)
