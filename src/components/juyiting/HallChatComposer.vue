@@ -59,6 +59,28 @@
             ><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m8 12 7-7a3 3 0 0 1 4 4l-9 9a5 5 0 0 1-7-7l9-9M7 14l8-8" /></svg></button>
             <div ref="voiceActionRef" class="composer-inline-voice"></div>
             <button
+              v-if="stopTarget"
+              class="composer-send composer-stop"
+              type="button"
+              :disabled="replyCancellationState?.inFlight || actionsDisabled || voice?.voiceInteractionLocked"
+              :title="stopLabel"
+              :aria-label="stopLabel"
+              :aria-busy="Boolean(replyCancellationState?.inFlight)"
+              @click="$emit('cancel-deliberation', stopTarget)"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                aria-hidden="true"
+                focusable="false"
+              ><rect x="6" y="6" width="12" height="12" rx="1.5" /></svg>
+            </button>
+            <button
+              v-else
               class="composer-send"
               type="submit"
               :disabled="!canSend"
@@ -70,6 +92,7 @@
             </button>
           </div>
         </div>
+        <p v-if="replyCancellationState?.inFlight || replyCancellationState?.unknown" class="composer-stop-status" role="status">{{ replyCancellationState.inFlight ? stopLabel : '停止结果尚未确认，请核对；不会重复提交。' }}</p>
         <p v-if="typedPendingQuestion" class="typed-pending-question">正在回答：{{ typedPendingQuestion.question }}</p>
 
       </div>
@@ -122,6 +145,8 @@ import HallVoiceControls from './HallVoiceControls.vue'
 
 const props = defineProps({
   agents: { type: Array, default: () => [] },
+  durableCancelTarget: { type: Object, default: null },
+  replyCancellationState: { type: Object, default: null },
   discussionVariant: { type: String, default: 'public' },
   draft: { type: String, default: '' },
   hasTypedAttachments: { type: Boolean, default: false },
@@ -140,6 +165,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits([
+  'cancel-deliberation',
   'clear-target',
   'mention-agent',
   'send-message',
@@ -177,11 +203,15 @@ onBeforeUnmount(() => {
 })
 const isFocused = ref(false)
 
+const stopTarget = computed(() => props.replyCancellationState?.target || props.durableCancelTarget)
+const stopLabel = computed(() => props.replyCancellationState?.inFlight
+  ? (props.replyCancellationState.unknown ? '正在核对停止结果' : '正在停止本轮回复')
+  : props.replyCancellationState?.unknown ? '核对停止结果' : '停止本轮回复')
 const draftText = computed(() => String(props.draft || ''))
 const draftLength = computed(() => draftText.value.length)
 const hasDraft = computed(() => Boolean(draftText.value.trim()))
 const inputLocked = computed(() => props.interactionLocked || props.isStreaming || props.isAwaitingReply || Boolean(props.voice?.voiceInteractionLocked))
-const canSend = computed(() => (hasDraft.value || (props.discussionVariant === 'bounty' && props.hasTypedAttachments)) && !inputLocked.value)
+const canSend = computed(() => (hasDraft.value || (props.discussionVariant === 'bounty' && props.hasTypedAttachments)) && !inputLocked.value && !stopTarget.value)
 const composerClass = computed(() => ({
   'is-streaming': props.isStreaming,
   'has-draft': hasDraft.value
@@ -466,9 +496,20 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
 }
 
 .composer-send {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
   background: #7f4a22;
   color: #fff8e8;
 }
+
+.composer-stop {
+  background: #eee8df;
+  color: #3f2815;
+}
+
+.composer-stop:hover:not(:disabled) { background: #e4dbcf; }
+.composer-stop-status { margin: 0; color: #765f40; font-size: 12px; line-height: 1.5; }
 
 .composer-materials {
   display: contents;

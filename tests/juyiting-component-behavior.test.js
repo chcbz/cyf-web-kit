@@ -158,7 +158,7 @@ const loadSfc = (relativePath, runtimeAgentApi = { post: async () => { throw new
     .replace(/^import\s+BountyTypedOutcomeCard\s+from\s+['"]\.\/BountyTypedOutcomeCard\.vue['"];?\s*$/gm, 'var BountyTypedOutcomeCard = { template: \'<section class="bounty-typed-outcome-card-stub" />\', props: [\'projection\'], emits: [\'reply\', \'confirm-proposal\'] }')
     .replace(/^import\s+HallVoiceControls\s+from\s+['"].\/HallVoiceControls\.vue['"];?\s*$/gm, 'var HallVoiceControls = { template: \'<div class="hall-voice-controls-stub"></div>\', props: [\'voice\'] }')
     .replace(/^import\s+HallAccountEntry\s+from\s+['"]\.\/HallAccountEntry\.vue['"];?\s*$/gm, 'var HallAccountEntry = { name: \'HallAccountEntry\', template: \'<button class="hall-account-entry-stub" type="button"></button>\', props: [\'avatar\', \'compact\', \'displayName\', \'disabled\'], emits: [\'open-profile\'] }')
-    .replace(/^import\s+\{\s*marked\s*\}\s+from\s+['"]marked['"];?\s*$/gm, 'var marked = { setOptions: () => {}, parse: value => value }')
+    .replace(/^import\s+\{\s*marked\s*\}\s+from\s+['"]marked['"];?\s*$/gm, 'var marked = Object.assign(value => value, { setOptions: () => {}, parse: value => value })')
     .replace(/^import\s+DOMPurify\s+from\s+['"]dompurify['"];?\s*$/gm, 'var DOMPurify = { sanitize: value => value }')
     .replace(/^import\s+WorkspaceWriteRecovery\s+from\s+['"][^'"]+['"];?\s*$/gm, "var WorkspaceWriteRecovery = { template: '<section />', props: ['pending'], emits: ['retry'] }")
   .replace('export default', 'return')
@@ -2048,7 +2048,7 @@ describe('JuyiHall component behavior', () => {
         mentionLabel: agent => agent.name, senderText: message => message.sender
       }
     })
-    await durable.find('[aria-label="取消待处理回话"]').trigger('click')
+    await durable.find('[aria-label="停止本轮回复"]').trigger('click')
     expect(durable.emitted('cancel-deliberation')?.[0]?.[0]).to.deep.equal({ allPending: true })
     expect(durable.find('[aria-label="停止旧版回话等待"]').exists()).to.equal(false)
 
@@ -2057,10 +2057,43 @@ describe('JuyiHall component behavior', () => {
       props: { agents: [], draft: '', messages: [], mentionLabel: agent => agent.name, senderText: message => message.sender }
     })
     expect(idle.find('[aria-label="停止旧版回话等待"]').exists()).to.equal(false)
-    expect(idle.find('[aria-label="取消待处理回话"]').exists()).to.equal(false)
+    expect(idle.find('[aria-label="停止本轮回复"]').exists()).to.equal(false)
     idle.unmount()
     durable.unmount()
   })
+
+  for (const discussionVariant of ['public', 'private', 'bounty']) {
+    it(`keeps ${discussionVariant} stop/reconcile in the send position without submitting the draft`, async () => {
+      const target = { turnId: 'turn-wuyong' }
+      const wrapper = mount(ChatPanel, { global: { stubs }, props: {
+        discussionVariant, draft: '保留这段草稿', messages: [],
+        durableCancelTarget: target, isAwaitingReply: true,
+        mentionLabel: agent => agent.name, senderText: message => message.sender
+      } })
+      try {
+        expect(wrapper.find('.toolbar-actions [aria-label="停止本轮回复"]').exists()).to.equal(false)
+        expect(wrapper.findAll('.composer-send')).to.have.length(1)
+        expect(wrapper.get('.composer-stop').attributes('type')).to.equal('button')
+        expect(wrapper.get('.composer-stop svg').attributes('width')).to.equal('20')
+        await wrapper.get('.composer-stop').trigger('click')
+        expect(wrapper.emitted('cancel-deliberation')[0][0]).to.deep.equal(target)
+        expect(wrapper.emitted('send-message')).to.equal(undefined)
+        await wrapper.setProps({ replyCancellationState: { inFlight: true, unknown: false, target } })
+        expect(wrapper.get('.composer-stop').element.disabled).to.equal(true)
+        expect(wrapper.get('[role="status"]').text()).to.equal('正在停止本轮回复')
+        await wrapper.setProps({ durableCancelTarget: null, replyCancellationState: { inFlight: false, unknown: true, target } })
+        await wrapper.get('[aria-label="核对停止结果"]').trigger('click')
+        expect(wrapper.emitted('cancel-deliberation')[1][0]).to.deep.equal(target)
+        await wrapper.get('form').trigger('submit')
+        expect(wrapper.emitted('send-message')).to.equal(undefined)
+        await wrapper.setProps({ replyCancellationState: null, isAwaitingReply: false })
+        expect(wrapper.find('.composer-stop').exists()).to.equal(false)
+        expect(wrapper.get('textarea').element.value).to.equal('保留这段草稿')
+        await wrapper.get('form').trigger('submit')
+        expect(wrapper.emitted('send-message')).to.have.length(1)
+      } finally { wrapper.unmount() }
+    })
+  }
 
   it('opens workspace from the material picker without sending or changing the draft', async () => {
     const wrapper = mount(ChatPanel, {

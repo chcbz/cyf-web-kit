@@ -1,5 +1,5 @@
 import { createChatStreamDecoder } from '../../utils/chatStreamWire.js'
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import {
   appendHallEventMessage as reduceHallEventMessage,
   appendStreamPayload,
@@ -84,7 +84,7 @@ export const useHallConversation = ({
   const turnStates = new Map()
   const requestReadbackJobs = new Map()
   const requestReadbackInflight = new Map()
-  const cancellationJobs = new Map()
+  const cancellationJobs = reactive(new Map())
   let capabilityPromise = null
   let capabilityAttempt = 0
   let authoritativeResyncPromise = null
@@ -208,6 +208,10 @@ export const useHallConversation = ({
 
   const durableBusy = computed(() => deliberationBusy(activeRequest.value, activeTurns.value))
   const durableCancelTarget = computed(() => cancellationTarget(activeRequest.value, activeTurns.value))
+  const replyCancellationState = computed(() => {
+    const job = cancellationJobs.get(activeRequest.value?.requestId)
+    return job ? { inFlight: job.inFlight, unknown: job.unknown, target: job.target } : null
+  })
   const isConversationBusy = computed(() => isAdoptingBountyBootstrap.value || hasPendingSendSession.value || isSubmitting.value || durableBusy.value || isStreaming.value || isAwaitingReply.value || isConversationLoading.value || Boolean(conversationHistoryDeletingId.value))
 
   const pendingAgentName = computed(() => {
@@ -1913,7 +1917,8 @@ export const useHallConversation = ({
 
   const cancelDeliberation = async target => {
     const request = activeRequest.value
-    const selectedTarget = target && typeof target === 'object' ? target : durableCancelTarget.value
+    const pendingJob = cancellationJobs.get(request?.requestId)
+    const selectedTarget = pendingJob?.unknown ? pendingJob.target : (target && typeof target === 'object' ? target : durableCancelTarget.value)
     if (!request?.requestId || !selectedTarget) return false
     const requestId = request.requestId
     const guard = captureGuard()
@@ -1921,7 +1926,7 @@ export const useHallConversation = ({
     const current = () => guardCurrent(guard) && activeRequest.value?.requestId === requestId && conversationId.value === originalConversationId
     const previous = cancellationJobs.get(requestId)
     if (previous?.inFlight) return false
-    const job = { inFlight: true, unknown: previous?.unknown === true }
+    const job = reactive({ inFlight: true, unknown: previous?.unknown === true, target: selectedTarget })
     cancellationJobs.set(requestId, job)
     const notice = text => {
       if (!current()) return
@@ -2055,6 +2060,7 @@ export const useHallConversation = ({
     cancelHallReplyTurn,
     cancelDeliberation,
     durableCancelTarget,
+    replyCancellationState,
     activeRequest,
     activeTurns,
     capabilityState,

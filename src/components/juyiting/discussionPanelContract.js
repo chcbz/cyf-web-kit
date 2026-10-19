@@ -11,6 +11,7 @@ export const discussionPanelProps = {
   conversationBusy: { type: Boolean, default: false },
   deliberationStatus: { type: String, default: '' },
   durableCancelTarget: { type: Object, default: null },
+  replyCancellationState: { type: Object, default: null },
   conversationId: { type: String, default: '' },
   identityEpoch: { type: [Number, String], default: 0 },
   draft: { type: String, default: '' },

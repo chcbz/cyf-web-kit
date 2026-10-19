@@ -38,14 +38,7 @@
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14" /></svg>
         </button>
-        <button
-          v-if="durableCancelTarget"
-          class="icon-button"
-          type="button"
-          title="取消待处理回话"
-          aria-label="取消待处理回话"
-          @click="$emit('cancel-deliberation', durableCancelTarget)"
-        ><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" /></svg></button>
+
 
 
       </div>
@@ -125,6 +118,8 @@
 
     <HallChatComposer
       :agents="agents"
+      :durable-cancel-target="durableCancelTarget"
+      :reply-cancellation-state="replyCancellationState"
       :discussion-variant="discussionVariant"
       :draft="draft"
       :has-typed-attachments="typedEnabled && discussionVariant === 'bounty' && typedSourceSelectors.length > 0"
@@ -139,6 +134,7 @@
       :typed-pending-question="typedPendingQuestion"
       :context-key="`${materialIdentityKey}\u0000${taskId}\u0000${conversationId}`"
       :voice="voice"
+      @cancel-deliberation="$emit('cancel-deliberation', $event)"
       @clear-target="$emit('clear-target', $event)"
       @mention-agent="$emit('mention-agent', $event)"
       @send-message="$emit('send-message', typedEnabled && discussionVariant === 'bounty' ? { sourceSelectors: typedSourceSelectors, materialScope: typedMaterialScope } : undefined)"
@@ -258,6 +254,7 @@ const props = defineProps({
   conversationBusy: { type: Boolean, default: false },
   deliberationStatus: { type: String, default: '' },
   durableCancelTarget: { type: Object, default: null },
+  replyCancellationState: { type: Object, default: null },
   conversationId: { type: String, default: '' },
   discussionVariant: { type: String, default: 'public' },
   draft: { type: String, default: '' },

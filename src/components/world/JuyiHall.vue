@@ -616,6 +616,7 @@
             :conversation-busy="isConversationBusy"
             :deliberation-status="deliberationStatus"
             :durable-cancel-target="durableCancelTarget"
+            :reply-cancellation-state="replyCancellationState"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -676,6 +677,7 @@
             :conversation-busy="isConversationBusy"
             :deliberation-status="deliberationStatus"
             :durable-cancel-target="durableCancelTarget"
+            :reply-cancellation-state="replyCancellationState"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -728,6 +730,7 @@
             :conversation-busy="isConversationBusy"
             :deliberation-status="deliberationStatus"
             :durable-cancel-target="durableCancelTarget"
+            :reply-cancellation-state="replyCancellationState"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -2183,6 +2186,7 @@ const {
   cancelHallReplyTurn,
   cancelDeliberation,
   durableCancelTarget,
+  replyCancellationState,
   chatConnectionStatus,
   deliberationStatus,
   conversationHistory,
