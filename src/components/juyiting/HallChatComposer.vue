@@ -1,7 +1,7 @@
 <template>
   <div ref="composerRef" class="hall-chat-composer chat-composer" :class="composerClass">
     <form class="composer-submit" @submit.prevent="submit">
-      <div class="composer-context" :class="`is-${discussionVariant}`">
+      <div v-if="!hideFixedContext" class="composer-context" :class="`is-${discussionVariant}`">
         <span class="composer-context-label">{{ contextLabel }}</span>
         <div v-if="targetChips.length" class="composer-targets" aria-label="传话对象">
           <button
@@ -145,6 +145,7 @@ import HallVoiceControls from './HallVoiceControls.vue'
 
 const props = defineProps({
   agents: { type: Array, default: () => [] },
+  compact: { type: Boolean, default: false },
   durableCancelTarget: { type: Object, default: null },
   replyCancellationState: { type: Object, default: null },
   discussionVariant: { type: String, default: 'public' },
@@ -214,7 +215,8 @@ const inputLocked = computed(() => props.interactionLocked || props.isStreaming 
 const canSend = computed(() => (hasDraft.value || (props.discussionVariant === 'bounty' && props.hasTypedAttachments)) && !inputLocked.value && !stopTarget.value)
 const composerClass = computed(() => ({
   'is-streaming': props.isStreaming,
-  'has-draft': hasDraft.value
+  'has-draft': hasDraft.value,
+  'is-compact': props.compact
 }))
 const voiceHasDetail = computed(() => Boolean(props.voice?.supported) && props.voice?.state !== 'idle')
 
@@ -246,6 +248,10 @@ const targetChips = computed(() => {
   return targets.map(agent => ({ id: agent.agentId, label: props.mentionLabel(agent), locked }))
 })
 
+// The bounty header already names its single fixed target. Public and multi-target
+// controls are functional, and must not disappear as a visual simplification.
+const hideFixedContext = computed(() => props.compact && props.discussionVariant === 'bounty' && targetChips.value.length === 1)
+
 const contextLabel = computed(() => {
   if (props.discussionVariant === 'bounty') return props.targetText || '榜文议事'
   if (props.discussionVariant === 'private') return props.targetText || '当前好汉'
@@ -261,6 +267,10 @@ const hintText = computed(() => {
 const resizeTextarea = () => {
   const el = textareaRef.value
   if (!el) return
+  if (props.compact) {
+    el.style.height = '44px'
+    return
+  }
   el.style.height = 'auto'
   el.style.height = `${Math.min(el.scrollHeight, 132)}px`
 }
@@ -308,7 +318,7 @@ watch([stopTarget, inputLocked, () => props.contextKey], ([target, locked, conte
 
 watch(() => props.contextKey, () => { moreOpen.value = false })
 
-watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
+watch([() => props.draft, () => props.compact], () => nextTick(resizeTextarea), { immediate: true })
 </script>
 
 <style scoped>
@@ -453,9 +463,9 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
   justify-content: center;
   box-sizing: border-box;
   flex: 0 0 auto;
-  width: 38px;
-  height: 38px;
-  min-height: 38px;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -628,5 +638,25 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
     left: 10px;
     max-height: 150px;
   }
+}
+/* Only formal discussions opt into fixed-height editing; text scrolls inside the
+   input rather than consuming the message viewport. Voice review stays reachable. */
+.is-compact .composer-textarea {
+  height: 44px;
+  min-height: 44px;
+  max-height: 44px;
+}
+.is-compact .composer-input-area {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+.is-compact .composer-textarea { flex: 1 1 0; width: 0; }
+.is-compact .composer-actions { flex: 0 0 auto; gap: 0; }
+.is-compact .composer-inline-voice { margin-left: 0; }
+@media (max-width: 360px) {
+  .is-compact .composer-input-area { flex-wrap: wrap; }
+  .is-compact .composer-textarea { flex-basis: 100%; width: 100%; }
+  .is-compact .composer-actions { margin-left: auto; }
 }
 </style>

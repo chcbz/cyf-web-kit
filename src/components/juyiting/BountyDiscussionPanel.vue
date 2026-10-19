@@ -39,6 +39,17 @@
       @voice-apply="$emit('voice-apply', $event)"
       @typed-reply="$emit('typed-reply', $event)"
     >
+      <template #matter-actions>
+        <button
+          v-if="reviewContext?.currentDelivery?.allowedActions.includes('ACCEPT')"
+          type="button"
+          class="matter-action"
+          aria-label="查看并验收"
+          title="查看并验收"
+          :disabled="reviewBusy || conversationBusy || voice?.voiceInteractionLocked"
+          @click="$emit('review-delivery')"
+        ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5h10M9 12h10M9 19h10M3 5l1 1 2-2M3 12l1 1 2-2M3 19l1 1 2-2" /></svg></button>
+      </template>
       <template #bounty-results>
         <BountyExecutionOutputs
           :enabled="deliberationV2Enabled"
@@ -51,7 +62,6 @@
           :conversation-id="conversationId"
           :identity-key="`${identityEpoch}\u0000${identityScope}`"
           :task-version="selectedTask?.taskVersion ?? selectedTask?.version"
-          @task-completed="$emit('task-completed', $event)"
         />
       </template>
     </ChatPanel>
@@ -70,6 +80,8 @@ import { bountyDeliberationPresentation } from '../../composables/juyiting/hallM
 
 const props = defineProps({
   ...discussionPanelProps,
+  reviewContext: { type: Object, default: null },
+  reviewBusy: { type: Boolean, default: false },
   activeRequest: { type: Object, default: null },
   requestCatalog: { type: Array, default: () => [] },
   activeTurns: { type: Array, default: () => [] },
@@ -85,7 +97,7 @@ const props = defineProps({
   identityScope: { type: String, default: '' },
 })
 
-defineEmits([...discussionPanelEmits, 'execution-settled', 'task-completed', 'typed-reply', 'typed-resume', 'skill-directory-refresh'])
+defineEmits([...discussionPanelEmits, 'execution-settled', 'review-delivery', 'typed-reply', 'typed-resume', 'skill-directory-refresh'])
 
 const v2Presentation = computed(() => bountyDeliberationPresentation({
   enabled: props.deliberationV2Enabled,
@@ -103,7 +115,7 @@ const bountySubtitle = computed(() => {
 
 const chatProps = computed(() => {
   const {
-    activeRequest, requestCatalog, activeTurns, capabilityState, deliberationV2Enabled,
+    reviewContext, reviewBusy, activeRequest, requestCatalog, activeTurns, capabilityState, deliberationV2Enabled,
     typedRecoveryAvailable, typedInspectionStatus, ...chat
   } = props
   return chat

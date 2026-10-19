@@ -39,8 +39,7 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14" /></svg>
         </button>
 
-
-
+        <slot name="matter-actions"></slot>
       </div>
     </div>
 
@@ -117,6 +116,8 @@
     </div>
 
     <HallChatComposer
+      v-if="!serverTaskCompleted"
+      :compact="discussionVariant === 'bounty'"
       :agents="agents"
       :durable-cancel-target="durableCancelTarget"
       :reply-cancellation-state="replyCancellationState"
@@ -257,6 +258,7 @@ const props = defineProps({
   replyCancellationState: { type: Object, default: null },
   conversationId: { type: String, default: '' },
   discussionVariant: { type: String, default: 'public' },
+  matterReadOnly: { type: Boolean, default: false },
   draft: { type: String, default: '' },
   emptyText: { type: String, default: '厅中暂无话头，可先传一句。' },
   eventStreamRecovering: { type: Boolean, default: false },
@@ -305,7 +307,8 @@ const materialPickerOpen = ref(false)
 const pendingAuthor = '聚义厅'
 const materialIdentityKey = computed(() => `${props.identityEpoch}\u0000${props.identityScope}`)
 const taskId = computed(() => String(props.selectedTask?.id || '').trim())
-const serverTaskCompleted = computed(() => props.discussionVariant === 'bounty' && props.selectedTask?.status === 'completed')
+const serverTaskCompleted = computed(() => props.discussionVariant === 'bounty' &&
+  (props.matterReadOnly || ['completed', 'cancelled', 'archived'].includes(props.selectedTask?.status)))
 const typedForMessage = message => props.typedOutcomes.filter(projection =>
   projection?.outcome?.assistantMessageId === String(message?.localId || ''))
 
@@ -407,6 +410,11 @@ watch(() => `${materialIdentityKey.value}\u0000${taskId.value}\u0000${props.conv
   typedSelectedSourceIds.value = new Set()
   typedMaterialScope.value = 'TASK_DEFAULT'
 }, { flush: 'sync' })
+watch(serverTaskCompleted, (terminal, previous) => {
+  if (!terminal) return
+  materialPickerOpen.value = false
+  if (!previous) props.voice?.cancel?.()
+}, { flush: 'sync', immediate: true })
 onBeforeUnmount(() => {
   workspace.dispose()
   conversationMaterialLinks.dispose()
@@ -486,13 +494,16 @@ button:disabled {
   min-width: 0;
 }
 
-.icon-button {
+.icon-button,
+.toolbar-actions :deep(.matter-action) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 0;
   flex: 0 0 auto;
   border-radius: 8px;
@@ -501,17 +512,20 @@ button:disabled {
   white-space: nowrap;
 }
 
-.icon-button svg {
+.icon-button svg,
+.toolbar-actions :deep(.matter-action svg) {
   width: 20px;
   height: 20px;
   flex: 0 0 auto;
 }
 
-.icon-button:hover:not(:disabled) {
+.icon-button:hover:not(:disabled),
+.toolbar-actions :deep(.matter-action:hover:not(:disabled)) {
   background: #f2e8d8;
 }
 
-.icon-button:focus-visible {
+.icon-button:focus-visible,
+.toolbar-actions :deep(.matter-action:focus-visible) {
   outline: 2px solid #7f4a22;
   outline-offset: 2px;
 }

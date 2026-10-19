@@ -324,6 +324,12 @@
             <button type="button" :disabled="leaveState === 'saving'" @click="discardPanelChangesAndLeave">放弃未保存修改并继续</button>
           </section>
 
+    <section v-if="deliveryReview.operation.value.intent && reviewTaskId" class="hall-review-recovery" role="status" aria-label="原验收操作">
+      <p>{{ deliveryReview.operation.value.message }}</p>
+      <button type="button" :disabled="deliveryReview.operation.value.busy" @click="deliveryReview.checkOriginal">查询原验收</button>
+      <button v-if="deliveryReview.operation.value.state === 'UNKNOWN' || deliveryReview.operation.value.state === 'PROCESSING'" type="button" :disabled="deliveryReview.operation.value.busy" @click="deliveryReview.resumeOriginal">继续原验收</button>
+      <button v-if="deliveryReview.operation.value.receipt && ['COMMITTED', 'REJECTED'].includes(deliveryReview.operation.value.state)" type="button" :disabled="deliveryReview.operation.value.busy" @click="deliveryReview.settleOriginal">重新核对并结束原操作</button>
+    </section>
           <BountyPanel
             v-if="panelFrames.includes('tasks')"
             v-show="renderedPanel === 'tasks' && !formalTaskRef"
@@ -381,6 +387,7 @@
             @check-requirement-create="checkRequirementCreate"
             @resume-requirement-create="resumeRequirementCreate"
             @open-formal-results="openFormalResults"
+            @review-delivery="openDeliveryReview"
             @resume-funded-create="resumeFundedCreate"
             @check-point-and-start="checkPointAndStartOriginal"
             @resume-point-and-start="resumePointAndStartOriginal"
@@ -430,40 +437,21 @@
             </article>
           </section>
           <BountyAcceptancePanel
-            v-else-if="renderedPanel === 'tasks' && formalTaskRef && hallIdentityScope && multimediaDeliberationUiEnabled && !taskReviewRef && formalTaskRef.funding?.mode !== 'FUNDED_SINGLE_AGENT'"
+            v-else-if="renderedPanel === 'tasks' && formalTaskRef && hallIdentityScope"
             :key="formalTaskRef.id"
             :task-id="formalTaskRef.id"
             :identity-key="`${apiStore.authorizationGeneration}\u0000${hallIdentityScope}`"
             :task-version="formalTaskRef.taskVersion ?? formalTaskRef.version"
             :task-completed="formalTaskRef.status === 'completed'"
             :conversation-id="chatMode === 'bounty' && conversationTask?.id === formalTaskRef.id ? conversationId : ''"
+            :review-context="deliveryReview.context.value" :review-loading="deliveryReview.loading.value"
+            :review-busy="deliveryReview.operation.value.busy" :review-error="deliveryReview.error.value"
+            @review-delivery="openDeliveryReview()" @refresh-review="deliveryReview.refresh"
+            @preview-output="previewReviewOutput"
             @continue-modification="continueBountyModification(formalTaskRef, $event)"
-            @task-completed="loadTasks"
           >
-            <template #legacy>
-              <FormalTaskDeliveryPanel
-                :key="formalTaskRef.id"
-                :task-id="formalTaskRef.id"
-                :identity-fingerprint="`${hallIdentityScope}:${apiStore.authorizationGeneration}`"
-                :focus-delivery-id="''"
-                :execution-context="formalTaskExecutionContext"
-                :selected-agent-id="selectedAgent?.agentId || ''"
-                @discuss-task="discussTask(formalTaskRef)"
-                @rework-created="hallReadRevision += 1"
-              />
-            </template>
+            <template #preview><OutputPreview v-if="reviewPreviewItem" :item="reviewPreviewItem" :load="reviewOutputs.preview" :context-key="reviewOutputs.cacheKey.value" /></template>
           </BountyAcceptancePanel>
-          <FormalTaskDeliveryPanel
-            v-else-if="renderedPanel === 'tasks' && formalTaskRef && hallIdentityScope"
-            :key="formalTaskRef.id"
-            :task-id="formalTaskRef.id"
-            :identity-fingerprint="`${hallIdentityScope}:${apiStore.authorizationGeneration}`"
-            :focus-delivery-id="taskReviewRef?.taskId === formalTaskRef.id ? taskReviewRef.deliveryId : ''"
-            :execution-context="formalTaskExecutionContext"
-            :selected-agent-id="selectedAgent?.agentId || ''"
-            @discuss-task="discussTask(formalTaskRef)"
-            @rework-created="hallReadRevision += 1"
-          />
 
           <template v-if="taskWorkspaceEnabled && renderedPanel === 'workspace' && taskWorkspaceSubject">
             <TaskWorkspacePanel
@@ -651,6 +639,9 @@
             :active-turns="activeTurns"
             :capability-state="capabilityState"
             :deliberation-v2-enabled="multimediaDeliberationUiEnabled"
+            :review-context="deliveryReview.context.value"
+            :review-busy="deliveryReview.operation.value.busy || deliveryReview.loading.value"
+            @review-delivery="openDeliveryReview()"
             :typed-outcomes="typedDeliberation.cards.value"
             :conversation-generation="typedConversationGeneration()"
             :typed-pending-question="typedDeliberation.selectedPending.value"
@@ -704,7 +695,6 @@
             @retry-conversation="retryHallConversation"
             @select-conversation="selectHallConversation"
             @send-message="handleSendHallMessage"
-            @task-completed="loadTasks"
           />
 
           <PrivateDiscussionPanel
@@ -780,6 +770,13 @@
       </div>
     </transition>
 
+    <HallDeliveryReviewDialog
+      :open="deliveryReview.dialogOpen.value" :context="deliveryReview.frozenContext.value"
+      :frozen-batch="deliveryReview.frozenContext.value?.currentDelivery || null"
+      :pending="deliveryReview.operation.value.busy" :error="deliveryReview.error.value || (deliveryReview.operation.value.intent ? deliveryReview.operation.value.message : reviewPreviewError)"
+      @confirm="confirmDeliveryReview" @back="deliveryReview.close" @preview="previewReviewOutput"
+    ><template #preview><OutputPreview v-if="reviewPreviewItem" :item="reviewPreviewItem" :load="reviewOutputs.preview" :context-key="reviewOutputs.cacheKey.value" /></template></HallDeliveryReviewDialog>
+
     <transition name="toast">
       <div v-if="toast" class="toast" role="status" aria-live="polite">{{ toast }}</div>
     </transition>
@@ -797,7 +794,6 @@ import { isTerminalMatter } from '@/composables/juyiting/useHallOrdinaryCancella
 import HallOverview from '@/components/juyiting/HallOverview.vue'
 import HallMinePage from '@/components/juyiting/HallMinePage.vue'
 import HallDraftEditor from '@/components/juyiting/HallDraftEditor.vue'
-import FormalTaskDeliveryPanel from '@/components/deliveries/FormalTaskDeliveryPanel.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { useGlobalStore } from '@/stores/global'
@@ -846,6 +842,8 @@ import { portraitName, portraitRole, portraitShortName, portraitStyle, roleClass
 import AgentPanel from '@/components/juyiting/AgentPanel.vue'
 import BountyDiscussionPanel from '@/components/juyiting/BountyDiscussionPanel.vue'
 import BountyAcceptancePanel from '@/components/juyiting/BountyAcceptancePanel.vue'
+import HallDeliveryReviewDialog from '@/components/juyiting/HallDeliveryReviewDialog.vue'
+import { useHallDeliveryReview } from '@/composables/juyiting/useHallDeliveryReview.js'
 import BountyPanel from '@/components/juyiting/BountyPanel.vue'
 import HallPortraitHome from '@/components/juyiting/HallPortraitHome.vue'
 import HallStage from '@/components/juyiting/HallStage.vue'
@@ -2617,6 +2615,48 @@ hallVoice = useHallVoiceConversation({
   showToast
 })
 const voiceInteractionLocked = computed(() => hallVoice.voiceInteractionLocked)
+// Task-level review ownership is independent of the currently browsed message/output.
+const reviewTaskId = computed(() => renderedPanel.value === 'chat' && chatMode.value === 'bounty'
+  ? conversationTask.value?.id || '' : renderedPanel.value === 'tasks' ? formalTaskRef.value?.id || selectedTask.value?.id || '' : '')
+const deliveryReview = useHallDeliveryReview({ api: agentApi, taskId: reviewTaskId,
+  identityScope: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
+  enabled: () => multimediaDeliberationUiEnabled })
+const reviewPreviewItem = ref(null); const reviewPreviewError = ref('')
+const reviewOutputs = useOutputs({ source: () => reviewTaskId.value && (deliveryReview.dialogOpen.value || formalTaskRef.value)
+  ? { type: 'task', id: reviewTaskId.value } : null,
+  identityFingerprint: () => `${apiStore.authorizationGeneration}\u0000${hallIdentityScope.value}`, pageSize: 100 })
+const reviewInteractionLocked = () => Boolean(hallVoice?.voiceInteractionLocked || (chatMode.value === 'bounty' && conversationTask.value?.id === reviewTaskId.value && isConversationBusy.value))
+const openDeliveryReview = async task => {
+  if (reviewInteractionLocked()) return
+  if (task?.id) selectedTask.value = task
+  reviewPreviewItem.value = null; reviewPreviewError.value = ''
+  await deliveryReview.openConfirmation()
+}
+const confirmDeliveryReview = async () => {
+  if (reviewInteractionLocked()) return
+  await deliveryReview.confirmAcceptance()
+}
+const previewReviewOutput = async item => {
+  const id = reviewTaskId.value; const identity = hallIdentityScope.value; const auth = apiStore.authorizationGeneration
+  reviewPreviewError.value = ''; reviewPreviewItem.value = null
+  if (!reviewOutputs.items.value.length) await reviewOutputs.refresh()
+  if (id !== reviewTaskId.value || identity !== hallIdentityScope.value || auth !== apiStore.authorizationGeneration) return
+  const exact = reviewOutputs.items.value.find(output => output.artifactId === item.artifactId && String(output.artifactVersion) === item.artifactVersion && output.sha256 === item.contentHash)
+  if (!exact || !exact.canPreview) { reviewPreviewError.value = '此固定成果暂不可预览，请重新核对；不会换用其他版本。'; return }
+  reviewPreviewItem.value = exact
+}
+watch(() => [reviewTaskId.value, apiStore.authorizationGeneration, hallIdentityScope.value], () => { reviewPreviewItem.value = null; reviewPreviewError.value = '' }, { flush: 'sync' })
+let lastReviewCompletion = ''
+watch(() => deliveryReview.operation.value.receipt, receipt => {
+  if (!receipt || receipt.taskId !== reviewTaskId.value || receipt.state !== 'COMMITTED' || receipt.decision !== 'ACCEPT' || receipt.taskState !== 'COMPLETED') return
+  const key = `${apiStore.authorizationGeneration}\u0000${hallIdentityScope.value}\u0000${receipt.operationId}`
+  if (key === lastReviewCompletion) return
+  lastReviewCompletion = key
+  void loadTasks()
+})
+watch(() => [conversationTask.value?.taskVersion, selectedTask.value?.taskVersion, formalTaskRef.value?.taskVersion,
+  typedDeliberation.cards.value.map(card => `${card.outcomeId}:${card.state}`).join('|')].join('\u0000'), () => { if (reviewTaskId.value) void deliveryReview.refresh() })
+
 const accountEntryDisabled = computed(() => isPanelSessionActive.value || voiceInteractionLocked.value)
 const hallLeaveHasMeaningfulWork = computed(() => hasMeaningfulHallLeaveWork({
   draft: draft.value,
@@ -2922,6 +2962,7 @@ onUnmounted(() => {
   renderedPanel.value = ''
   taskWorkspaceBinding.dispose()
   voiceReplyCorrelation.close('unmount')
+  reviewOutputs.dispose()
   hallVoice?.dispose()
   clearPointAndStartCapability()
   disposeRequirementCreate()
@@ -4346,7 +4387,7 @@ button.hall-room {
   gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--work-line); scrollbar-width: none;
 }
 .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs button) {
-  flex: 0 0 auto; min-height: 38px; background: var(--hall-surface-subtle); color: var(--work-muted); border: 1px solid var(--work-line);
+  flex: 0 0 auto; min-height: 44px; background: var(--hall-surface-subtle); color: var(--work-muted); border: 1px solid var(--work-line);
 }
 .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs::-webkit-scrollbar) { display: none; }
 .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs button.active) { background: var(--hall-surface-brand); color: var(--work-brand); border-color: #e3d8d0; }
@@ -4741,8 +4782,8 @@ button.hall-room {
     overflow: visible;
   }
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions .icon-button) {
-    min-width: 38px;
-    height: 38px;
+    min-width: 44px;
+    height: 44px;
   }
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions .material-reference-entry),
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions .workspace-entry) {

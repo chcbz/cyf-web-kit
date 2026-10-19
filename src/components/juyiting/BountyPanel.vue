@@ -61,11 +61,13 @@
       <p v-if="countsLoading" class="task-data-state" role="status">榜文数目统计中…</p>
       <p v-else-if="countsErrorMessage" class="task-data-state is-error" role="alert">{{ countsErrorMessage }}</p>
 
-      <div class="task-status-tabs">
+      <div class="task-status-tabs" aria-label="事项状态" @focusin="revealStatusFilter">
         <button
           v-for="item in taskStatusFilters"
           :key="item.value"
           :class="{ active: taskStatusFilter === item.value }"
+          type="button"
+          :aria-pressed="taskStatusFilter === item.value"
           @click="$emit('set-status-filter', item.value)"
         >
           {{ item.label }}
@@ -171,6 +173,7 @@
                 <div v-if="detailTask.status === 'open' && preferredAgents.length" class="matter-agent-actions">
                   <button v-for="agent in preferredAgents" :key="agent.agentId" type="button" :disabled="!canAssign(detailTask, agent)" @click="$emit('assign-task', detailTask, agent)">交给{{ agentDisplayName(agent) }}</button>
                 </div>
+                <button v-else-if="detailTask.status === 'reviewing'" type="button" class="matter-primary-action" @click="$emit('review-delivery', detailTask)">查看成果并验收</button>
                 <button v-else-if="!isTerminalMatter(detailTask) && assignedAgentForTask(detailTask)" type="button" class="matter-primary-action" @click="$emit('discuss-task', detailTask, assignedAgentForTask(detailTask))">与{{ agentDisplayName(assignedAgentForTask(detailTask)) }}进入事项议事</button>
                 <button
                   v-if="detailTask.status === 'completed'"
@@ -424,6 +427,17 @@ import TeamRecommendationPanel from './TeamRecommendationPanel.vue'
 import TaskMaterialLinks from '@/components/personal-workspace/TaskMaterialLinks.vue'
 import { formatSilverMicro, isCanonicalMicroAmount } from '@/utils/silverAmount'
 
+// Native horizontal scrolling also follows keyboard focus without scrolling the page.
+const revealStatusFilter = event => {
+  const button = event.target?.closest?.('button')
+  const row = event.currentTarget
+  if (!button || !row) return
+  const target = button.getBoundingClientRect()
+  const viewport = row.getBoundingClientRect()
+  if (target.left < viewport.left) row.scrollLeft += target.left - viewport.left
+  else if (target.right > viewport.right) row.scrollLeft += target.right - viewport.right
+}
+
 const props = defineProps({
   embeddedHall: { type: Boolean, default: false },
   detailAllowed: { type: Boolean, default: true },
@@ -480,6 +494,7 @@ const emit = defineEmits([
   'check-requirement-create',
   'resume-requirement-create',
   'open-formal-results',
+  'review-delivery',
   'mark-changed',
   'resume-funded-create',
   'check-point-and-start',
@@ -868,6 +883,9 @@ button:disabled {
 
 .task-status-tabs {
   display: flex;
+  flex-wrap: nowrap;
+  min-width: 0;
+  overscroll-behavior-x: contain;
   flex: 0 0 auto;
   gap: 8px;
   padding: 0 12px 12px;
@@ -876,15 +894,18 @@ button:disabled {
 
 .task-status-tabs button {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 6px;
-  min-height: 34px;
+  min-height: 44px;
   padding: 0 10px;
   border-radius: 8px;
   background: #efe0c6;
   color: #4a3423;
   white-space: nowrap;
 }
+
+.task-status-tabs button:focus-visible { outline: 2px solid var(--hall-brand, #8d2d22); outline-offset: -2px; }
 
 .task-status-tabs button.active {
   background: #7c1f1b;
