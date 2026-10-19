@@ -453,3 +453,19 @@ describe('Hall roster request wire types', () => {
     expect(calls).to.deep.equal([{ url: '/roster', data: { pageNum: 1, pageSize: 100 } }])
   })
 })
+
+
+describe('Hall assignment uses the same authoritative projection as the task view', () => {
+  it('never assigns a raw-open task with UNKNOWN or contradictory server phase', () => {
+    const hall = useHallData({ agentApi: {}, log: { warn: () => {} },
+      selectedAgent: ref(null), selectedTask: ref(null), normalizeStatus: value => value,
+      taskAgentMatchScore: () => 0 })
+    const agent = { agentId: 'wuyong', status: 'online', canOperate: true }
+    try {
+      for (const phase of ['UNKNOWN', 'IN_PROGRESS', 'PENDING_ACCEPTANCE', 'unsupported']) {
+        expect(hall.canAssign({ id: 'a', status: 'open', phase }, agent), phase).to.equal(false)
+      }
+      expect(hall.canAssign({ id: 'a', status: 'open', phase: 'PENDING_ASSIGNMENT' }, agent)).to.equal(true)
+    } finally { hall.dispose() }
+  })
+})

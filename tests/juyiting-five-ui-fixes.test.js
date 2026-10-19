@@ -1,3 +1,4 @@
+import * as taskPresentation from '../src/composables/juyiting/hallTaskPresentation.js'
 import { taskStatusText } from '../src/constants/juyiting.js'
 import { displayFixture } from './fixtures/juyiting/interface-display-fixture.mjs'
 import * as skillResults from '../src/composables/juyiting/useHallSkillResults.js'
@@ -83,7 +84,7 @@ const panelProps = { embeddedHall: true, detailAllowed: true, identityScope: 'ow
   abilityText: () => '', canAssign: () => true, formatTime: () => '', portraitName: () => '', portraitStyle: () => ({}),
   taskAgentMatchScore: () => 0, taskStateClass: () => '', taskStatusCount: () => 0, taskStatusText }
 const panelTask = (overrides = {}) => ({ id: 'a', title: '原事项A', status: 'assigned', taskVersion: '2', funding: null, assignedAgentIds: ['old-agent'], ...overrides })
-const Panel = compile('BountyPanel', { '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinary, '@/utils/silverAmount': silver })
+const Panel = compile('BountyPanel', { '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinary, '@/utils/silverAmount': silver })
 const DialogFixture = Vue.defineComponent({ props: ['show', 'title', 'message'], emits: ['confirm', 'cancel', 'close', 'update:show'],
   template: `<aside v-if="show" class="confirmation-fixture" role="dialog"><h3>{{title}}</h3><p>{{message}}</p><button class="confirm" @click="$emit('update:show', false); $emit('confirm')">确认取消事项</button><button class="dismiss" @click="$emit('update:show', false); $emit('cancel')">保留事项</button></aside>` })
 const openPanel = async (task = panelTask(), extra = {}) => {

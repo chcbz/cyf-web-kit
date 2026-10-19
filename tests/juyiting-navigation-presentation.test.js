@@ -77,13 +77,13 @@ describe('Juyi Hall navigation presentation', () => {
       expect(mobileDraft.returnOwner, renderedPanel).to.equal('self')
       expect(mobileDraft.showHallReturn, renderedPanel).to.equal(false)
       expect(mobileDraft.showHallClose, renderedPanel).to.equal(false)
-      expect(desktop({ renderedPanel, draftCanGoBack: true }).showHallClose, renderedPanel).to.equal(true)
+      expect(desktop({ renderedPanel, draftCanGoBack: true }).showHallClose, renderedPanel).to.equal(false)
     }
 
     const library = portrait({ renderedPanel: 'library', libraryCanGoBack: true })
     expect(library.returnOwner).to.equal('self')
     expect(library.showHallClose).to.equal(false)
-    expect(desktop({ renderedPanel: 'library', libraryCanGoBack: true }).showHallClose).to.equal(true)
+    expect(desktop({ renderedPanel: 'library', libraryCanGoBack: true }).showHallClose).to.equal(false)
 
     const portraitDetail = portrait({ portraitTaskDetailOpen: true })
     expect(portraitDetail.returnOwner).to.equal('self')
@@ -93,7 +93,7 @@ describe('Juyi Hall navigation presentation', () => {
     expect(workspace.returnOwner).to.equal('hall')
     expect(workspace.showHallReturn).to.equal(true)
     expect(workspace.showHallClose).to.equal(false)
-    expect(desktop({ renderedPanel: 'workspace', panelReturnPanel: 'tasks' }).showHallClose).to.equal(true)
+    expect(desktop({ renderedPanel: 'workspace', panelReturnPanel: 'tasks' }).showHallClose).to.equal(false)
   })
 
   it('wires resolver-owned dock and Hall chrome without bypassing existing navigation actions', () => {
@@ -102,7 +102,7 @@ describe('Juyi Hall navigation presentation', () => {
     expect(source).to.include('v-show="showWorkbenchDock && (Boolean(activePanel) || !renderedPanel)"')
     expect(source).to.include("'has-workbench-dock': showWorkbenchDock && (Boolean(activePanel) || !renderedPanel)")
     expect(source).to.include('v-if="navigationPresentation.showHallReturn ||')
-    expect(source).to.include('v-if="navigationPresentation.showHallClose ||')
+    expect(source).to.include('v-if="navigationPresentation.showHallClose &&')
     expect(source).to.include('@click="handleHallReturn"')
     expect(source).to.include("navigationPresentation.showRootReturn ? '返回聚义厅' : '返回上一层'")
     expect(source).to.include("? '← 名册' : '← 返回'")
@@ -123,7 +123,7 @@ describe('Juyi Hall navigation presentation', () => {
     expect(source).not.to.match(/\.home-map[^\{]*\{[^}]*--hall-canvas/)
   })
 
-  it('makes mobile return and close mutually exclusive while retaining desktop nested close', () => {
+  it('makes return and close mutually exclusive for both mobile and desktop details', () => {
     const mobileChild = portrait({ renderedPanel: 'treasure', treasureCanGoBack: true })
     expect(mobileChild.showHallReturn).to.equal(true)
     expect(mobileChild.showHallClose).to.equal(false)
@@ -139,7 +139,7 @@ describe('Juyi Hall navigation presentation', () => {
       treasureCanGoBack: true
     })
     expect(desktopChild.showHallReturn).to.equal(true)
-    expect(desktopChild.showHallClose).to.equal(true)
+    expect(desktopChild.showHallClose).to.equal(false)
   })
 })
 
@@ -158,7 +158,7 @@ describe('Agent roster child navigation wiring (not browser geometry proof)', ()
     const back = hall.slice(hall.indexOf('const handleHallReturn'), hall.indexOf('const handlePanelKeydown'))
     expect(back.indexOf('return returnPanel()')).to.be.lessThan(back.indexOf('showRootReturn'))
     expect(hall).to.include("renderedPanel.value === 'agents' ? agentPanelRef.value")
-    expect(hall).to.include("navigationPresentation.showHallReturn || (renderedPanel === 'agents' && agentPanelRef?.canGoBack)").and.include("navigationPresentation.showHallClose || (renderedPanel === 'agents' && agentPanelRef?.canGoBack)")
+    expect(hall).to.include("navigationPresentation.showHallReturn || (renderedPanel === 'agents' && agentPanelRef?.canGoBack)").and.include("navigationPresentation.showHallClose && !(renderedPanel === 'agents' && agentPanelRef?.canGoBack)")
     expect(hall).to.include('@click="closePanel"').and.include("if (panelDisposed || voiceInteractionLocked.value) return false")
   })
   it('gates profile reads on actual visible detail and uses Agent-specific frame sizing', () => {

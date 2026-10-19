@@ -40,8 +40,7 @@ describe('Juyi Hall hosted point flow', () => {
   it('cancels the unbounded roster readback on identity change and unmount, while CTA recruitment hides local setup', () => {
     expect(hall).to.include(`cancelHostedPointWait()
   cancelPanelChatLoad()`)
-    expect(hall).to.include(`onUnmounted(() => {
-  cancelHostedPointWait()`)
+    expect(hall).to.match(/onUnmounted\(\(\) => \{\s+disposeHallData\?\.\(\)\s+cancelHostedPointWait\(\)/)
     expect(hall).to.include('There is deliberately no total wait deadline')
     expect(catalog).to.include('hostedPointFlow: { type: Boolean, default: false }')
     expect(catalog).to.include('v-if="!hostedPointFlow"')

@@ -52,6 +52,8 @@ describe('JYT-UX-W01 unified Hall shell', () => {
     expect(classifyPanelLayout({ isMobileCoarse: true, experienceMode: 'portrait-command' })).to.equal('full-window')
     expect(classifyPanelLayout({ isMobileCoarse: false, viewportHeight: 390 })).to.equal('full-window')
     expect(classifyPanelLayout({ isMobileCoarse: false, viewportHeight: 900 })).to.equal('center-modal')
+    expect(classifyPanelLayout({ isMobileCoarse: false, viewportHeight: 900, renderedPanel: 'chat' })).to.equal('full-window')
+    expect(classifyPanelLayout({ isMobileCoarse: true, viewportHeight: 844, renderedPanel: 'chat' })).to.equal('full-window')
   })
 
   it('keeps orientation requests event/owner settled, not timer-cancelled', () => {

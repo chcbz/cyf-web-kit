@@ -23,6 +23,7 @@ const emptyWorkspace = () => ({
   refresh: async () => true, loadMore: async () => false, select: async () => null, dispose: () => {}
 })
 const loadMaterialPicker = (workspace, save) => {
+  workspace.previewVersion ||= async () => null
   workspace.closeDetail = () => { workspace.detail.value = null; workspace.revokePreview?.() }
   const filename = fileURLToPath(new URL('../src/components/juyiting/HallMaterialPicker.vue', import.meta.url))
   const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
@@ -282,7 +283,8 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
         await wrapper.findAll('.quick-material-files button')[index].trigger('click'); await settle()
         expect(wrapper.find('.quick-material-fields select').exists()).to.equal(false)
         expect(wrapper.get('.quick-material-version').text()).to.include('已固定 v2')
-        await wrapper.findAll('.quick-material-fields button').find(button => button.text() === '预览').trigger('click'); await settle()
+        expect(wrapper.find('.quick-material-preview-toggle').exists()).to.equal(false)
+        // Desktop previews the pinned version without a redundant toggle.
         const preview = wrapper.get('.quick-material-preview')
         if (index === 0) expect(preview.get('img').attributes('src')).to.equal('blob:image/png')
         else if (index === 2) {
@@ -402,6 +404,64 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       expect(calls.map(call => call.method)).to.deep.equal(['GET', 'GET'])
       expect(calls.some(call => call.url.endsWith('/mark'))).to.equal(false)
     } finally { wrapper.unmount() }
+  })
+
+  it('keeps the mobile preview toggle reachable, returns to the list without losing staged files, and commits only on Done', async () => {
+    const original = window.matchMedia
+    let resized
+    window.matchMedia = () => ({ matches: true, addEventListener: (_name, listener) => { resized = listener }, removeEventListener () {} })
+    const preview = Vue.ref({ kind: 'none' })
+    const workspace = { ...emptyWorkspace(), preview,
+      items: Vue.ref([{ fileId: 'image-a', displayName: '很长的参考图片名称'.repeat(8), latestVersion: '2' }]),
+      select: async fileId => {
+        workspace.detail.value = { file: { fileId, displayName: '参考图片', state: 'ACTIVE' }, latestVersion: { version: '2' }, versions: [{ version: '2', contentMimeType: 'image/png' }] }
+        return workspace.detail.value
+      },
+      previewVersion: async () => { preview.value = { kind: 'image', url: 'blob:preview' } },
+      revokePreview: () => { preview.value = { kind: 'none' } }
+    }
+    const wrapper = mount(loadMaterialPicker(workspace, () => {}), { props: { ...props, modelValue: [] }, global: { stubs: { teleport: true } } })
+    try {
+      await wrapper.get('.quick-material-open').trigger('click'); await settle()
+      await wrapper.get('.quick-material-files button').trigger('click'); await settle()
+      expect(preview.value.kind).to.equal('none')
+      await wrapper.get('.quick-material-fields .primary').trigger('click')
+      expect(wrapper.emitted('update:modelValue')).to.equal(undefined)
+      const toggle = wrapper.get('.quick-material-preview-toggle')
+      await toggle.trigger('click'); await settle()
+      expect(wrapper.get('.quick-material-preview-toggle').text(), wrapper.get('dialog').html()).to.equal('收起预览')
+      expect(wrapper.get('.quick-material-preview-toggle').attributes('aria-expanded')).to.equal('true')
+      expect(wrapper.get('.quick-material-preview img').attributes('src')).to.equal('blob:preview')
+      await wrapper.get('.quick-material-picker header button').trigger('click'); await settle()
+      expect(wrapper.find('.quick-material-picker').exists()).to.equal(true)
+      expect(wrapper.get('.quick-material-preview-toggle').attributes('aria-expanded')).to.equal('false')
+      expect(wrapper.findAll('.quick-material-draft li')).to.have.length(1)
+      resized({ matches: false }); await settle()
+      expect(wrapper.find('.quick-material-preview-toggle').exists()).to.equal(false)
+      expect(wrapper.get('.quick-material-preview img').attributes('src')).to.equal('blob:preview')
+      resized({ matches: true }); await settle()
+      expect(wrapper.findAll('.quick-material-draft li')).to.have.length(1)
+      await wrapper.get('.quick-material-confirm').trigger('click')
+      expect(wrapper.emitted('update:modelValue')[0][0]).to.deep.equal([{ fileId: 'image-a', version: '2', displayName: '参考图片', contentMimeType: 'image/png' }])
+    } finally { wrapper.unmount(); window.matchMedia = original }
+  })
+
+  it('uses only one leading exit and discards unconfirmed mobile selections on cancel or identity change', async () => {
+    const original = window.matchMedia
+    window.matchMedia = () => ({ matches: true, addEventListener () {}, removeEventListener () {} })
+    const wrapper = mount(loadMaterialPicker(emptyWorkspace(), () => {}), { props: { ...props, modelValue: [] }, global: { stubs: { teleport: true } } })
+    try {
+      await wrapper.get('.quick-material-open').trigger('click'); await settle()
+      expect(wrapper.get('dialog').attributes('aria-labelledby')).to.equal('hall-material-picker-title')
+      expect(wrapper.findAll('dialog header button')).to.have.length(1)
+      await wrapper.get('dialog header button').trigger('click'); await settle()
+      expect(wrapper.find('dialog').exists()).to.equal(false)
+      expect(wrapper.emitted('update:modelValue')).to.equal(undefined)
+      await wrapper.get('.quick-material-open').trigger('click'); await settle()
+      await wrapper.setProps({ identityEpoch: 2 })
+      expect(wrapper.find('dialog').exists()).to.equal(false)
+      expect(wrapper.emitted('update:modelValue').at(-1)[0]).to.deep.equal([])
+    } finally { wrapper.unmount(); window.matchMedia = original }
   })
 
 })

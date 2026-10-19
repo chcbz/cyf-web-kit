@@ -170,19 +170,20 @@
                   <div><dt>资料</dt><dd>可选；没有资料也可以点将议事</dd></div>
                 </dl>
                 <p class="matter-fee-note">点将后自动建立悬赏议事，将需求和资料交给所选 Agent；由 Agent 判断直接答复、查阅资料或澄清。执行遵循已有授权，不因点将自动扩大付费权限。</p>
-                <div v-if="detailTask.status === 'open' && preferredAgents.length" class="matter-agent-actions">
+                <div v-if="hasTaskAction(detailTask, 'ASSIGN') && preferredAgents.length" class="matter-agent-actions">
                   <button v-for="agent in preferredAgents" :key="agent.agentId" type="button" :disabled="!canAssign(detailTask, agent)" @click="$emit('assign-task', detailTask, agent)">交给{{ agentDisplayName(agent) }}</button>
                 </div>
-                <button v-else-if="detailTask.status === 'reviewing'" type="button" class="matter-primary-action" @click="$emit('review-delivery', detailTask)">查看成果并验收</button>
-                <button v-else-if="!isTerminalMatter(detailTask) && assignedAgentForTask(detailTask)" type="button" class="matter-primary-action" @click="$emit('discuss-task', detailTask, assignedAgentForTask(detailTask))">与{{ agentDisplayName(assignedAgentForTask(detailTask)) }}进入事项议事</button>
+                <button v-else-if="taskPresentation(detailTask).phase === 'PENDING_ACCEPTANCE' && hasTaskAction(detailTask, 'DISCUSS')" type="button" class="matter-primary-action" @click="$emit('review-delivery', detailTask)">查看成果并验收</button>
+                <button v-else-if="hasTaskAction(detailTask, 'DISCUSS') && assignedAgentForTask(detailTask)" type="button" class="matter-primary-action" @click="$emit('discuss-task', detailTask, assignedAgentForTask(detailTask))">与{{ agentDisplayName(assignedAgentForTask(detailTask)) }}进入事项议事</button>
                 <button
-                  v-if="detailTask.status === 'completed'"
+                  v-if="detailTask.status === 'completed' && taskPresentation(detailTask).phase === 'COMPLETED'"
                   type="button"
                   class="matter-archive-action"
                   @click="$emit('archive-task', detailTask)"
                 >收入案卷</button>
                 <p v-else-if="detailTask.status === 'archived'" class="matter-archive-note">已收入案卷，可在“办事 → 案卷”中查看。</p>
               </section>
+              <p v-if="taskPresentation(detailTask).readOnly && !isTerminalMatter(detailTask)" role="status">{{ taskPresentation(detailTask).reason }}；暂仅可查看，刷新核对后再操作。</p>
               <div v-if="!embeddedHall" class="task-detail-head">
                 <div>
                   <strong>{{ detailTask.title }}</strong>
@@ -200,7 +201,7 @@
                 <button type="button" @click="$emit('open-workspace')">打开百宝箱</button>
               </section>
               <TaskMaterialLinks
-                v-if="formalTaskExecutionScope && !embeddedHall && !isTerminalMatter(detailTask)"
+                v-if="formalTaskExecutionScope && !embeddedHall && canActOnTask(detailTask)"
                 :key="formalTaskExecutionScope.taskId"
                 :task-id="formalTaskExecutionScope.taskId"
                 :conversation-id="formalTaskExecutionScope.conversationId"
@@ -214,12 +215,12 @@
                 @formal-execution-created="$emit('formal-execution-created', $event)"
                 @formal-execution-recovered="$emit('formal-execution-recovered', $event)"
               />
-              <section v-if="embeddedHall && !isTerminalMatter(detailTask)" class="deliberation-execution-route" role="status">
+              <section v-if="embeddedHall && canActOnTask(detailTask)" class="deliberation-execution-route" role="status">
                 <strong>在议事中协作交付</strong>
                 <p>点将后自动进入悬赏议事。你可以继续补充文字和资料，与 Agent 反复沟通，在事项详情核对本次成果并确认验收，保存可选。</p>
               </section>
               <section
-                v-if="canCancelOrdinaryTask(detailTask) || cancellationUnresolved"
+                v-if="(canActOnTask(detailTask) && canCancelOrdinaryTask(detailTask)) || cancellationUnresolved"
                 class="ordinary-cancellation"
                 aria-label="普通事项取消"
               >
@@ -249,21 +250,21 @@
               </section>
 
               <TeamRecommendationPanel
-                v-if="!embeddedHall && !isTerminalMatter(detailTask)"
+                v-if="!embeddedHall && canActOnTask(detailTask)"
                 :task="detailTask"
                 :authorization-generation="authorizationGeneration"
               />
 
               <p v-if="detailTask.status === 'cancelled'" role="status">事项已取消；历史指派与成果保留，不再继续办理。</p>
-              <button v-if="!embeddedHall || detailTask.status !== 'open'" type="button" class="matter-results-action" @click="$emit('open-formal-results', detailTask)">{{ isTerminalMatter(detailTask) ? '查看历史成果' : '查看正式成果与验收' }}</button>
-              <WorkItemPlanPanel v-if="!embeddedHall && !isTerminalMatter(detailTask)" :task="detailTask" :enabled="workItemPlanEnabled" :authorization-generation="authorizationGeneration" />
+              <button v-if="!embeddedHall || detailTask.status !== 'open'" type="button" class="matter-results-action" @click="$emit('open-formal-results', detailTask)">{{ taskPresentation(detailTask).readOnly ? '查看历史成果' : '查看正式成果与验收' }}</button>
+              <WorkItemPlanPanel v-if="!embeddedHall && canActOnTask(detailTask)" :task="detailTask" :enabled="workItemPlanEnabled" :authorization-generation="authorizationGeneration" />
 
               <div v-if="!embeddedHall" class="ability-tags">
                 <span v-for="ability in detailTask.requiredAbilities || []" :key="ability">{{ ability }}</span>
                 <span v-if="!(detailTask.requiredAbilities || []).length">不拘本领</span>
               </div>
 
-              <div v-if="!embeddedHall && !isTerminalMatter(detailTask)" class="task-operation-grid">
+              <div v-if="!embeddedHall && canActOnTask(detailTask)" class="task-operation-grid">
                 <button
                   :aria-label="agentDisplayName(selectedAgent) ? `点当前好汉 ${agentDisplayName(selectedAgent)} 领令` : '先择好汉再点将'"
                   :disabled="isFundedTask(detailTask) || !canAssign(detailTask, selectedAgent)"
@@ -297,7 +298,7 @@
                   class="auto-assign-task"
                   type="button"
                   aria-label="宋江代为点将"
-                  :disabled="isFundedTask(detailTask) || detailTask.status !== 'open' || !recommendedAgents.length"
+                  :disabled="isFundedTask(detailTask) || !hasTaskAction(detailTask, 'ASSIGN') || !recommendedAgents.length"
                   title="宋江代为点将"
                   @click="$emit('auto-assign-task', detailTask)"
                 >
@@ -308,7 +309,7 @@
                   class="discuss-task-button"
                   type="button"
                   aria-label="进入议事"
-                  :disabled="!taskAssigneeIds(detailTask).length"
+                  :disabled="!hasTaskAction(detailTask, 'DISCUSS') || !taskAssigneeIds(detailTask).length"
                   :title="!taskAssigneeIds(detailTask).length ? unassignedDiscussHint : '进入该悬赏的既有议事入口'"
                   @click="$emit('discuss-task', detailTask, assignedAgentForTask(detailTask))"
                 >
@@ -331,7 +332,7 @@
               </p>
             </div>
 
-            <div v-if="!embeddedHall" class="modal-agent-scroll">
+            <div v-if="!embeddedHall && canActOnTask(detailTask)" class="modal-agent-scroll">
               <div class="section-label">可点好汉</div>
               <div
                 v-for="agent in recommendedAgents"
@@ -396,7 +397,7 @@
                 </div>
               </div>
             </div>
-            <section v-if="detailTask.status === 'open' && !assignableRecommendedAgents.length" class="no-agent-recruitment" role="status">
+            <section v-if="hasTaskAction(detailTask, 'ASSIGN') && !assignableRecommendedAgents.length" class="no-agent-recruitment" role="status">
               <p>暂未寻得可领令的好汉。</p>
               <button type="button" @click="$emit('recruit-agent', detailTask)">去招贤令</button>
             </section>
@@ -419,6 +420,7 @@
 </template>
 
 <script setup>
+import { projectHallTask } from '../../composables/juyiting/hallTaskPresentation.js'
 import { canCancelOrdinaryTask, ordinaryTaskVersion, isTerminalMatter } from '../../composables/juyiting/useHallOrdinaryCancellation.js'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import BountyActionIcon from './BountyActionIcon.vue'
@@ -620,6 +622,9 @@ const preferredAgentName = computed(() => {
   return agentDisplayName(assigned || preferredAgents.value[0])
 })
 const simpleMatterStatus = task => props.taskStatusText(task)
+const taskPresentation = task => projectHallTask({ task })
+const hasTaskAction = (task, action) => taskPresentation(task).actions.includes(action)
+const canActOnTask = task => hasTaskAction(task, 'ASSIGN') || hasTaskAction(task, 'DISCUSS')
 
 const formalTaskExecutionScope = computed(() => {
   const taskId = detailTask.value?.id
@@ -651,7 +656,7 @@ const fundedClaimBlocked = (task, agent) => {
   return !props.canAssign(task, agent)
 }
 const formatMoney = value => formatSilverMicro(typeof value === 'string' && isCanonicalMicroAmount(value) ? value : '0')
-const canCancelFunding = task => isFundedTask(task) && task.status === 'open' && typeof (task.version ?? task.taskVersion) === 'string'
+const canCancelFunding = task => isFundedTask(task) && hasTaskAction(task, 'ASSIGN') && typeof (task.version ?? task.taskVersion) === 'string'
 const selectedAssignees = computed(() => {
   const selected = new Set(selectedAssigneeIds.value)
   return props.recommendedAgents.filter(agent =>

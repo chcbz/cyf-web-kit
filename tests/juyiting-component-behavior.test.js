@@ -1,3 +1,4 @@
+import * as taskPresentation from '../src/composables/juyiting/hallTaskPresentation.js'
 import { useHallDeliveryReview } from '../src/composables/juyiting/useHallDeliveryReview.js'
 import { useHallAgentProfileCapabilities } from '../src/composables/juyiting/useHallAgentProfileCapabilities.js'
 import { currentBountyAssignmentRevision } from '../src/composables/juyiting/hallBountyAssignmentContext.js'
@@ -124,6 +125,7 @@ const loadSfc = (relativePath, runtimeAgentApi = { post: async () => { throw new
   }).content
 
   const scriptBody = script
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\.\/\.\.\/composables\/juyiting\/hallTaskPresentation\.js['"];?\s*$/gm, (_line, names) => `var { ${names} } = arguments[8]`)
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\.\/\.\.\/composables\/juyiting\/useHallOrdinaryCancellation\.js['"];?\s*$/gm, (_line, names) => `var { ${names} } = ordinaryCancellation`)
     .replace(/^import\s+\{\s*agentApi\s*\}\s+from\s+['"]\.\.\/\.\.\/composables\/useHttp\.js['"];?\s*$/gm, 'var agentApi = runtimeAgentApi')
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
@@ -167,7 +169,7 @@ const loadSfc = (relativePath, runtimeAgentApi = { post: async () => { throw new
   const unresolvedImports = scriptBody.match(/^import\s.+$/gm)
   if (unresolvedImports?.length) throw new SyntaxError(`Unsupported SFC imports in ${relativePath}: ${unresolvedImports.join(', ')}`)
 
-  return new Function('Vue', 'HallChatComposer', 'juyitingGame', 'classifyViewportResize', 'silverAmount', 'chatPanelDependencies', 'ordinaryCancellation', 'runtimeAgentApi', scriptBody)(Vue, HallChatComposer, hallGameMock, classifyViewportResizeMock, silverAmount, chatPanelDependencies, ordinaryCancellation, runtimeAgentApi)
+  return new Function('Vue', 'HallChatComposer', 'juyitingGame', 'classifyViewportResize', 'silverAmount', 'chatPanelDependencies', 'ordinaryCancellation', 'runtimeAgentApi', scriptBody)(Vue, HallChatComposer, hallGameMock, classifyViewportResizeMock, silverAmount, chatPanelDependencies, ordinaryCancellation, runtimeAgentApi, taskPresentation)
 }
 
 const stubs = {
@@ -3838,7 +3840,8 @@ describe('W04 shared-source save-before-leave wiring', () => {
       state.openPrivateDraft(context)
       await Vue.nextTick()
       complete = 'defer'
-      await wrapper.find('.panel-close').trigger('click')
+      expect(wrapper.find('.panel-close').exists()).to.equal(false)
+      await wrapper.find('.panel-return').trigger('click')
       expect(calls).to.equal(3)
       epoch.authorizationGeneration = 2
       await Vue.nextTick()
@@ -3972,10 +3975,13 @@ describe('A03 real Hall low-height layout wiring', () => {
 })
 
 describe('Agent roster visual close contract', () => {
-  it('renders the accessible SVG close only for the roster and preserves close navigation', async () => {
+  it('uses one return for roster details and the canonical accessible SVG close only at a root', async () => {
     const helpers = await import('../src/composables/juyiting/useHallPanels.js')
-    const mocks = createActualHallMocks({ mode: Vue.ref('portrait-command'), mounts: { library: 0, archive: 0 }, counters: { panelHelpers: helpers } })
-    mocks.AgentPanel = Vue.defineComponent({ setup: (_props, { expose }) => { expose({ canGoBack: true, profileVisible: false }); return () => Vue.h('div', '详情层') } })
+    const mocks = createActualHallMocks({ mode: Vue.ref('landscape-map'), mounts: { library: 0, archive: 0 }, counters: { panelHelpers: helpers } })
+    const oldExperience = mocks.useHallExperienceMode
+    mocks.useHallExperienceMode = () => ({ ...oldExperience(), isMobileCoarse: Vue.ref(false) })
+    const canGoBack = Vue.ref(true)
+    mocks.AgentPanel = Vue.defineComponent({ setup: (_props, { expose }) => { expose({ canGoBack, profileVisible: false, back: () => { canGoBack.value = false; return true } }); return () => Vue.h('div', '详情层') } })
     mocks.useHallPanels = helpers.useHallPanels
     mocks.useHallHomeMode = () => ({ homeMode: Vue.ref('overview'), isOverviewHome: Vue.ref(true), setHomeMode: () => {} })
     const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
@@ -3983,6 +3989,10 @@ describe('Agent roster visual close contract', () => {
       const state = wrapper.vm.$.setupState
       state.openPanel('agents')
       await flushPromises()
+      expect(wrapper.find('.panel-close').exists()).to.equal(false)
+      await wrapper.get('.panel-return').trigger('click')
+      await Vue.nextTick()
+      expect(state.activePanel).to.equal('agents')
       const close = wrapper.get('.panel-close')
       expect(close.attributes('aria-label')).to.equal('关闭面板')
       expect(close.get('svg').attributes('stroke-width')).to.equal('1.8')

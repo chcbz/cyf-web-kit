@@ -1,5 +1,5 @@
 import { computed, ref, toValue, watch } from 'vue'
-import { validateHallTaskCounts } from './hallTaskPresentation.js'
+import { projectHallTask, validateHallTaskCounts } from './hallTaskPresentation.js'
 
 import {
   canonicalSceneVersion,
@@ -94,7 +94,7 @@ export const useHallData = ({
 
   const canAssign = (task, agent) => {
     if (!task || typeof agent?.agentId !== 'string' || !agent.agentId.trim()) return false
-    if (normalizeStatus(task.status) !== 'open') return false
+    if (!projectHallTask({ task }).actions.includes('ASSIGN')) return false
     if (agent.eligible === false) return false
     if (agent.canOperate === false || agent.systemAgent) return false
     return normalizeStatus(agent.status) === 'online'

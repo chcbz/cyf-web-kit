@@ -234,7 +234,7 @@
         >
           <div v-if="!navigationPresentation.isPrimarySurface || navigationPresentation.showPrimaryChildHeader" class="panel-title">
             <button
-              v-if="navigationPresentation.showHallClose || (renderedPanel === 'agents' && agentPanelRef?.canGoBack)"
+              v-if="navigationPresentation.showHallClose && !(renderedPanel === 'agents' && agentPanelRef?.canGoBack)"
               class="panel-close"
               type="button"
               aria-label="关闭面板"
@@ -242,23 +242,7 @@
               :disabled="voiceInteractionLocked"
               @click="closePanel"
             >
-              <svg
-                v-if="renderedPanel === 'agents'"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                aria-hidden="true"
-                focusable="false"
-              ><path d="m6 6 12 12M18 6 6 18" /></svg>
-              <var-icon
-                v-else
-                :name="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? 'window-close' : 'close-circle-outline'"
-                aria-hidden="true"
-              />
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" /></svg>
             </button>
             <button
               v-if="navigationPresentation.showHallReturn || (renderedPanel === 'agents' && agentPanelRef?.canGoBack)"
@@ -1051,7 +1035,7 @@ const hallViewportStyle = computed(() => {
 // This follows the live visual viewport, including a keyboard-only shrink.
 const isCompactChat = computed(() => resolvedHallViewportHeight.value > 0 && resolvedHallViewportHeight.value <= 320)
 const isLowHeightPanel = computed(() => resolvedHallViewportHeight.value > 0 && resolvedHallViewportHeight.value <= 500)
-const { panelLayout } = useHallPanels({ experienceMode, isMobileCoarse, viewportHeight: resolvedHallViewportHeight })
+const { panelLayout } = useHallPanels({ experienceMode, isMobileCoarse, viewportHeight: resolvedHallViewportHeight, renderedPanel })
 const navigationPresentation = computed(() => resolveHallNavigationPresentation({
   isMobileCoarse: isMobileCoarse.value,
   experienceMode: experienceMode.value,
@@ -3642,7 +3626,23 @@ button.hall-room {
   bottom: auto;
   height: min(100%, var(--hall-visual-height, 100%));
   max-height: 100%;
+  padding: 0;
 }
+.panel-overlay.is-chat-overlay > .floating-panel {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+}
+.panel-overlay.is-chat-overlay :deep(.discussion-panel) { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+.panel-overlay.is-chat-overlay :deep(.chat-panel) { flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+.panel-overlay.is-chat-overlay :deep(.hall-messages) { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+
 
 /* A handling session is one active, near-full work window. Landscape does
  * not degrade it into a right-side half drawer. */
@@ -3660,6 +3660,9 @@ button.hall-room {
   max-height: 100%;
   border-radius: 10px;
 }
+
+.panel-overlay.is-full-window.is-chat-overlay { padding: 0; }
+.panel-overlay.is-full-window.is-chat-overlay > .floating-panel.layout-full-window { width: 100%; max-width: none; border-radius: 0; }
 
 .panel-overlay.is-compact-chat-overlay .panel-title {
   padding: 6px 10px;

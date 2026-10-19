@@ -1,3 +1,4 @@
+import * as taskPresentation from '../src/composables/juyiting/hallTaskPresentation.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { parse, compileScript, compileTemplate } from '@vue/compiler-sfc'
@@ -5,6 +6,7 @@ import { mount } from '@vue/test-utils'
 import * as Vue from 'vue'
 import * as silver from '../src/utils/silverAmount.js'
 import * as cancellation from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
+import { taskStatusText, taskStateClass } from '../src/constants/juyiting.js'
 
 const read = name => readFileSync(new URL(`../src/components/${name}.vue`, import.meta.url), 'utf8')
 const hall = read('world/JuyiHall')
@@ -12,7 +14,7 @@ const Empty = Vue.defineComponent({ render: () => Vue.h('span') })
 const compile = name => {
   const { descriptor } = parse(read(name))
   const imports = new Proxy({ vue: Vue, '@/utils/silverAmount': silver,
-    '../../composables/juyiting/useHallOrdinaryCancellation.js': cancellation }, { get: (target, key) => target[key] || Empty })
+    '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': cancellation }, { get: (target, key) => target[key] || Empty })
   const code = compileScript(descriptor, { id: 'flow-ui-test', inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_, names, path) => `const { ${names.replace(/\s+as\s+/g, ': ')} } = imports[${JSON.stringify(path)}]`)
     .replace(/^import\s+(\w+)\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_, name, path) => `const ${name} = imports[${JSON.stringify(path)}]`)
@@ -23,7 +25,7 @@ const Panel = compile('juyiting/BountyPanel')
 const Catalog = compile('juyiting/PersonaCatalogPanel')
 const baseProps = { embeddedHall: true, detailAllowed: true, identityScope: 'owner-a',
   abilityText: () => '', canAssign: () => true, formatTime: () => '', portraitName: () => '', portraitStyle: () => ({}),
-  taskAgentMatchScore: () => 0, taskStateClass: () => '', taskStatusCount: () => 0, taskStatusText: value => value,
+  taskAgentMatchScore: () => 0, taskStateClass, taskStatusCount: () => '0', taskStatusText,
   operableAgents: [{ agentId: 'old-agent', name: '林冲', canOperate: true, status: 'online' }] }
 
 describe('flow gap actual UI consumers', () => {
@@ -45,6 +47,23 @@ describe('flow gap actual UI consumers', () => {
       expect(task.assignedAgentIds).to.deep.equal(assignedAgentIds)
     } finally { wrapper.unmount() }
   })
+  for (const embeddedHall of [true, false]) for (const status of ['open', 'assigned', 'reviewing', 'completed']) {
+    it(`keeps authoritative UNKNOWN read-only for ${status} (embedded=${embeddedHall})`, async () => {
+      const task = { id: 'unknown', title: '待核对事项', status, phase: 'UNKNOWN', taskVersion: '3', assignedAgentIds: ['old-agent'] }
+      const wrapper = mount(Panel, { props: { ...baseProps, embeddedHall, tasks: [task], selectedTask: task,
+        recommendedAgents: baseProps.operableAgents } })
+      try {
+        wrapper.vm.openTask(task); await Vue.nextTick()
+        for (const selector of ['.matter-agent-actions', '.matter-primary-action', '.matter-archive-action', '.ordinary-cancellation', '.task-operation-grid', '.modal-agent-scroll', '.deliberation-execution-route']) expect(wrapper.find(selector).exists(), selector).to.equal(false)
+        const results = wrapper.find('.matter-results-action')
+        if (results.exists()) {
+          await results.trigger('click')
+          expect(wrapper.emitted('open-formal-results')[0][0].id).to.equal('unknown')
+        }
+        for (const event of ['assign-task', 'discuss-task', 'review-delivery', 'archive-task', 'cancel-task']) expect(wrapper.emitted(event), event).to.equal(undefined)
+      } finally { wrapper.unmount() }
+    })
+  }
   it('confirms assigned pre-start cancellation with the original version; busy prevents another click', async () => {
     const task = { id: 'a', title: '普通事项', status: 'assigned', taskVersion: '2', funding: null, assignedAgentIds: ['old-agent'] }
     const wrapper = mount(Panel, { props: { ...baseProps, tasks: [task], selectedTask: task } })
