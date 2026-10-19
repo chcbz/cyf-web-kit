@@ -2,9 +2,9 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { computed } from 'vue'
-import { actionOutcomeProjection, submissionProgressAdvances } from '../src/composables/juyiting/hallTypedDeliberation.js'
+import { actionOutcomeProjection, submissionProgressAdvances, revisionProgressHint } from '../src/composables/juyiting/hallTypedDeliberation.js'
 import { displayFixture } from './fixtures/juyiting/interface-display-fixture.mjs'
-const progress = () => ({ eventId: `delivery-submit-${'a'.repeat(64)}`, operationId: null, state: 'PENDING', dispatchVersion: '1', operationStateVersion: null, deliveryId: null, errorCode: null, retryable: false })
+const progress = () => ({ eventId: `delivery-submit-${'a'.repeat(48)}`, operationId: null, state: 'PENDING', dispatchVersion: '1', operationStateVersion: null, deliveryId: null, errorCode: null, retryable: false })
 const fixture = () => displayFixture({ schemaVersion: 4, route: 'CHAT', conversationId: '7', conversationGeneration: '1', requestId: 'request', requestRevision: '1', turnId: 'turn', state: 'READY',
   outcome: { outcomeContractVersion: 4, outcomeId: 'outcome', taskId: 'task', assignmentRevision: '1', assistantMessageId: '101', finalDigest: `sha256:${'b'.repeat(64)}`, kind: 'ANSWER', text: '原始成果', deliverable: true,
     messageSource: { turnId: 'turn', messageId: '101', snapshotId: 'snapshot', finalDigest: `sha256:${'b'.repeat(64)}` } }, submissionProgress: progress() })
@@ -43,7 +43,7 @@ describe('read-only original-discussion submission progress', () => {
     const { descriptor } = parse(source); const script = compileScript(descriptor, { id: 'submission-card' }).content
     const props = { projection: fixture() }; props.projection.submissionProgress = { ...progress(), state: 'FAILED', errorCode: 'DELIVERY_REVIEW_REQUIRED' }
     const setup = script.replace(/^import .*\n/gm, '').replace('export default', 'return')
-    const component = Function('computed', setup)(computed)
+    const component = Function('computed', 'revisionProgressHint', setup)(computed, revisionProgressHint)
     const bindings = component.setup(props, { expose() {}, emit() {} })
     assert.match(bindings.submissionHint.value, /未替换原批次/)
     assert.match(descriptor.template.content, /typed-submission-note.*role="status"/)

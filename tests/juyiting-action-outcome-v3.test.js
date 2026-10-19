@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import * as Vue from 'vue'
 import { mount } from '@vue/test-utils'
 import { compileScript, parse } from '@vue/compiler-sfc'
-import { typedOutcomeProjection, inspectionOutcomeProjection } from '../src/composables/juyiting/hallTypedDeliberation.js'
+import { typedOutcomeProjection, inspectionOutcomeProjection, revisionProgressHint } from '../src/composables/juyiting/hallTypedDeliberation.js'
 import { useHallTypedDeliberation } from '../src/composables/juyiting/useHallTypedDeliberation.js'
 
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/juyiting/action-final-projection-v3.json', import.meta.url)))
@@ -17,8 +17,9 @@ const card = () => {
   const descriptor = parse(source).descriptor
   const code = compileScript(descriptor, { id: 'action-outcome-card', inlineTemplate: true }).content
     .replace(/import\s*\{([^}]+)\}\s*from\s*["']vue["'];?/g, (_, bindings) => `const {${bindings.replace(/\s+as\s+/g, ':')}} = Vue`)
+    .replace(/^import .*revisionProgressHint.*\n/gm, '')
     .replace('export default', 'return')
-  return new Function('Vue', code)(Vue)
+  return new Function('Vue', 'revisionProgressHint', code)(Vue, revisionProgressHint)
 }
 
 describe('ordinary v3 Agent outcome projection', () => {

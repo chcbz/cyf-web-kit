@@ -2,13 +2,13 @@
 // This is test fixture construction, never a browser legacy-wire adapter.
 export const displayFixture = old => {
   const value = structuredClone(old), version = value.schemaVersion
-  value.schemaVersion = 6; value.submissionProgress ??= null; value.route = value.route || (version === 2 ? 'INSPECT' : 'CHAT')
+  value.schemaVersion = 6; value.submissionProgress ??= null; value.reviewProgress ??= null; value.route = value.route || (version === 2 ? 'INSPECT' : 'CHAT')
   delete value.contract; value.inspection ??= null; value.actionProgress ??= null
   const rename = (item, before, after) => { if (Object.hasOwn(item, before)) { item[after] = item[before] === null ? null : item[before].replace(/^sha256:/, ''); delete item[before] } }
   const o = value.outcome
   if (o) {
     o.outcomeContractVersion ??= version
-    for (const key of ['clarification', 'proposal', 'action', 'deliverable', 'messageSource', 'deliveryRelation']) o[key] ??= null
+    for (const key of ['clarification', 'proposal', 'action', 'deliverable', 'messageSource', 'deliveryRelation', 'revision']) o[key] ??= null
     rename(o, 'finalDigest', 'finalSha256')
     if (o.messageSource) rename(o.messageSource, 'finalDigest', 'finalSha256')
     if (o.action) o.action.parameters ??= null
@@ -35,7 +35,7 @@ export const displayFixture = old => {
 export const displayFixtures = value => {
   if (Array.isArray(value)) return value.map(displayFixtures)
   if (!value || typeof value !== 'object') return value
-  if ([1, 2, 3, 4].includes(value.schemaVersion) && Object.hasOwn(value, 'outcome') && value.requestId && value.conversationId) return displayFixture(value)
+  if ([1, 2, 3, 4, 5].includes(value.schemaVersion) && Object.hasOwn(value, 'outcome') && value.requestId && value.conversationId) return displayFixture(value)
   return Object.fromEntries(Object.entries(value).map(([key, child]) => {
     const renamed = ({ finalDigest: 'finalSha256', parentFinalDigest: 'parentFinalSha256', targetFinalDigest: 'targetFinalSha256' })[key]
     return [renamed || key, renamed && typeof child === 'string' ? child.replace(/^sha256:/, '') : displayFixtures(child)]

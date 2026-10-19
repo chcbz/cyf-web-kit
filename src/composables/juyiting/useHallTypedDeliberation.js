@@ -1,6 +1,6 @@
 import { computed, ref, unref, watch } from 'vue'
 import { textDeliveryProjection } from './bountyOutputCatalog.js'
-import { actionProgressAdvances, submissionProgressAdvances, discussionAccepted, discussionBody, inspectionOutcomeProjection, outcomeCardKey, typedId, typedLong, typedOutcomeProjection } from './hallTypedDeliberation.js'
+import { actionProgressAdvances, submissionProgressAdvances, reviewProgressAdvances, discussionAccepted, discussionBody, inspectionOutcomeProjection, outcomeCardKey, typedId, typedLong, typedOutcomeProjection } from './hallTypedDeliberation.js'
 
 const unwrap = response => response
 const clone = value => JSON.parse(JSON.stringify(value))
@@ -80,7 +80,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     if (previous?.state === 'READY' && projection.state === 'READY' && projection.outcome?.kind !== 'CLARIFY' &&
       JSON.stringify(previous.outcome) !== JSON.stringify(projection.outcome)) return false
     if (previous?.schemaVersion === 6 && previous.schemaVersion === projection.schemaVersion &&
-      (!actionProgressAdvances(previous.actionProgress, projection.actionProgress) || !submissionProgressAdvances(previous.submissionProgress, projection.submissionProgress))) return false
+      (!actionProgressAdvances(previous.actionProgress, projection.actionProgress) || !submissionProgressAdvances(previous.submissionProgress, projection.submissionProgress) || !reviewProgressAdvances(previous.reviewProgress, projection.reviewProgress))) return false
     const previousClarification = previous?.outcome?.kind === 'CLARIFY' ? previous.outcome.clarification : null
     const clarification = projection?.outcome?.kind === 'CLARIFY' ? projection.outcome.clarification : null
     if (previousClarification && clarification) {
@@ -96,8 +96,9 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       (clarification.state === 'ANSWERED' || selected.expectedPendingQuestionStateVersion !== clarification.stateVersion)) selectedPending.value = null
     return true
   }
-  const readOne = async (requestId, captured = capture(), requestedPurpose = '') => {
-    if (!typedId(requestId) || !current(captured)) return null
+  const readOne = async (requestId, captured = capture(), requestedPurpose = '', visited = new Set()) => {
+    if (!typedId(requestId) || !current(captured) || visited.has(requestId)) return null
+    visited.add(requestId)
     const record = readRecords(storage, captured.scope, captured.context).find(item => item.receipt?.requestId === requestId)
     const purpose = requestedPurpose || recordPurpose(record)
     try {
@@ -107,7 +108,10 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
         ? inspectionOutcomeProjection(raw, { conversationId: captured.context.conversationId, conversationGeneration: captured.context.conversationGeneration, taskId: captured.context.taskId, requestId })
         : typedOutcomeProjection(raw, { conversationId: captured.context.conversationId, conversationGeneration: captured.context.conversationGeneration, taskId: captured.context.taskId, requestId })
       if (!projection) return null
-      return apply(projection, captured) ? projection : null
+      if (!apply(projection, captured)) return null
+      const child = projection.reviewProgress?.state === 'COMMITTED' ? projection.reviewProgress.childRequestId : null
+      if (child && child !== requestId) await readOne(child, captured, 'CHAT', visited)
+      return projection
     } catch (cause) {
       // 404 means this catalog request is ordinary durable CHAT; it is not a typed UI failure.
       if (current(captured) && cause?.status && cause.status !== 404) error.value = '暂时无法读取答复，请刷新状态。'
@@ -123,6 +127,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       !typedLong(captured.context.assignmentRevision, { allowZero: true })) return Promise.resolve(false)
     error.value = ''
     const read = async () => {
+      const visited = new Set()
       const catalogEntries = getCatalogEntries?.() || []
       const catalogInspectionIds = catalogEntries.filter(entry => entry?.request?.turns?.some(turn => turn?.route === 'INSPECT'))
         .map(entry => entry.request.requestId).filter(typedId)
@@ -131,8 +136,8 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       const storedInspectionIds = readRecords(storage, captured.scope, captured.context).filter(record => recordPurpose(record) === 'INSPECT')
         .map(record => record.receipt?.requestId).filter(typedId)
       const inspectionRequestIds = [...new Set([...catalogInspectionIds, ...storedInspectionIds])]
-      await Promise.all([...new Set(catalogChatIds)].map(requestId => readOne(requestId, captured, 'CHAT'))
-        .concat(inspectionRequestIds.map(requestId => readOne(requestId, captured, 'INSPECT'))))
+      await Promise.all([...new Set(catalogChatIds)].map(requestId => readOne(requestId, captured, 'CHAT', visited))
+        .concat(inspectionRequestIds.map(requestId => readOne(requestId, captured, 'INSPECT', visited))))
       return current(captured)
     }
     const flight = read().finally(() => {

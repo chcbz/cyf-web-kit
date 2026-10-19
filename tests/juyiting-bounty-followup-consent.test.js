@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import * as Vue from 'vue'
 import { mount } from '@vue/test-utils'
 import { compileScript, parse } from '@vue/compiler-sfc'
+import { revisionProgressHint } from '../src/composables/juyiting/hallTypedDeliberation.js'
 const root = new URL('../src/components/juyiting/', import.meta.url)
 const compile = (name, extra = '') => {
   const filename = fileURLToPath(new URL(name, root))
@@ -12,8 +13,9 @@ const compile = (name, extra = '') => {
   const script = compileScript(descriptor, { id: 'ordinary-request-ui', inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
     .replace(/^import HallVoiceControls[^\n]+/m, 'var HallVoiceControls = { template: "<span />" }')
+    .replace(/^import .*revisionProgressHint.*\n/gm, '')
     .replace('export default', 'return')
-  return new Function('Vue', extra + script)(Vue)
+  return new Function('Vue', 'revisionProgressHint', extra + script)(Vue, revisionProgressHint)
 }
 describe('ordinary-user discussion controls', () => {
   const previous = new Map()

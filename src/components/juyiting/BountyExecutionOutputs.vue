@@ -61,6 +61,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { createApi } from '../../composables/useHttp.js'
 import { exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, currentOutputDelivery, completedTextItem, completedExecutionDelivery, outputRequestPending } from '../../composables/juyiting/bountyOutputCatalog.js'
+import { revisionProgressPending } from '../../composables/juyiting/hallTypedDeliberation.js'
 import { useHallSkillResults } from '../../composables/juyiting/useHallSkillResults.js'
 import { skillResultDataText } from '../../composables/juyiting/hallSkillResults.js'
 
@@ -146,7 +147,7 @@ const list = async () => {
         const delivery = completedExecutionDelivery(response, request, turn, snapshots, props.taskId)
         if (delivery) deliveries.push(delivery)
         // Validated typed projections may precede a child appearing in the index.
-        if (outcome.state === 'PENDING' || ['QUEUED', 'RUNNING'].includes(outcome.actionProgress?.state)) actionPending = true
+        if (revisionProgressPending(outcome) || outcome.state === 'PENDING' || ['QUEUED', 'RUNNING'].includes(outcome.actionProgress?.state)) actionPending = true
       }
     }
     for (const step of scopedSteps.value) {
