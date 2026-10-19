@@ -1,3 +1,4 @@
+import { hallTaskPhases, projectHallTask } from './hallTaskPresentation.js'
 import { computed, getCurrentInstance, onBeforeUnmount, ref, unref, watch } from 'vue'
 import { agentApi as defaultApi } from '../useHttp.js'
 import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
@@ -32,7 +33,8 @@ const validItem = (item, source) => item && sourceTypes[source].includes(item.re
   timestamp(item.status.observedAt) && (item.targetAgent === null || id(item.targetAgent?.agentId)) &&
   item.nextAction === actions[item.ref.sourceType] && Array.isArray(item.allowedActions) && item.allowedActions.every(text) && timestamp(item.updatedAt) &&
   (item.personalMark == null || (source === 'private' && validMark(item.personalMark))) &&
-  (item.review == null || (source === 'task' && validReview(item.review)))
+  (source !== 'task' || (hallTaskPhases.includes(item.phase) && projectHallTask({ task: { id: item.ref.sourceId, status: item.status.code, phase: item.phase } }).phase === item.phase)) &&
+  (item.review == null || (source === 'task' && validReview(item.review) && item.phase === 'PENDING_ACCEPTANCE'))
 
 const readPartition = (value, source, sourceStatus, asOf) => {
   if (!value || !statuses.includes(value.status) || value.count !== null || !Array.isArray(value.items) ||

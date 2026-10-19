@@ -49,7 +49,7 @@ const load = (api, workspace = emptyWorkspace(), save = () => {}) => {
   return new Function('Vue', 'deps', code)(Vue, { taskStatusText, validMaterialVersion, HallMaterialPicker: loadMaterialPicker(workspace, save), canOpenHallItem, HALL_SOURCES, useHallOverview: options => useHallOverview({ ...options, api }), usePersonalWorkspace: () => workspace, savePersonalWorkspaceBlob: save })
 }
 const summary = (sourceType, sourceId, nextAction) => ({ ref: { sourceType, sourceId }, title: sourceId,
-  status: { code: 'QUEUED', evidenceSource: 'PERSISTED', observedAt: 100 }, targetAgent: null, nextAction, allowedActions: [nextAction], updatedAt: 100 })
+  phase: sourceType === 'TASK' ? 'UNKNOWN' : null, status: { code: sourceType === 'TASK' ? 'open' : 'QUEUED', evidenceSource: 'PERSISTED', observedAt: 100 }, targetAgent: null, nextAction, allowedActions: [nextAction], updatedAt: 100 })
 const response = () => {
   const partitions = {
     private: { items: [summary('PRIVATE_CASE', 'case-a', 'OPEN_CASE'), summary('LEGACY_EXECUTION', 'exec-a', 'OPEN_EXECUTION')], status: 'partial', nextCursor: null, hasMore: false, count: null, errorCode: 'VIEWED_RESULT_NOT_TRACKED' },
@@ -65,7 +65,7 @@ const props = { enabled: true, identityScope: 'tenant\u0000client\u0000owner-a',
 describe('JYT-UX-W05 mounted overview and message projection', () => {
   it('renders cancelled/failed/blocked formal statuses accurately without reinterpreting private execution failures', async () => {
     const data = response()
-    data.sections.recent.partitions.task.items = ['cancelled', 'failed', 'blocked'].map(code => ({ ...summary('TASK', code, 'OPEN_TASK'), status: { code, evidenceSource: 'PERSISTED', observedAt: 100 } }))
+    data.sections.recent.partitions.task.items = ['cancelled', 'failed', 'blocked'].map(code => ({ ...summary('TASK', code, 'OPEN_TASK'), phase: code === 'blocked' ? 'IN_PROGRESS' : 'HISTORY', status: { code, evidenceSource: 'PERSISTED', observedAt: 100 } }))
     data.sections.recent.partitions.private.items = [{ ...summary('PRIVATE_CASE', 'private-failure', 'OPEN_CASE'), status: { code: 'FAILED', evidenceSource: 'PERSISTED', observedAt: 100 } }]
     const wrapper = mount(load({ execute: async () => data }), { props })
     try {
@@ -75,6 +75,19 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       expect(row('failed').get('.overview-status').text()).to.equal('失败')
       expect(row('blocked').get('.overview-status').text()).to.equal('进行中')
       expect(row('private-failure').get('.overview-status').text()).to.equal('执行未完成')
+    } finally { wrapper.unmount() }
+  })
+
+  it('uses explicit UNKNOWN instead of raw reviewing and never labels an unverified summary as acceptable', async () => {
+    const data = response()
+    data.sections.recent.partitions.task.items = [{ ...summary('TASK', 'stale-batch', 'OPEN_TASK'), phase: 'UNKNOWN', status: { code: 'reviewing', evidenceSource: 'AGENT_TASK_META', observedAt: 100 } }]
+    const wrapper = mount(load({ execute: async () => data }), { props })
+    try {
+      await settle()
+      const row = wrapper.findAll('.overview-item').find(item => item.text().includes('stale-batch'))
+      expect(row.get('.overview-status').text()).to.equal('状态待核对')
+      expect(row.get('button').text()).to.equal('核对事项')
+      expect(row.text()).not.to.include('查看待验收交付')
     } finally { wrapper.unmount() }
   })
 
@@ -392,6 +405,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       if (options.url === '/tasks/task-a') return task
       const data = response()
       data.sections.needsAction.partitions.task.items[0].review = review
+      data.sections.needsAction.partitions.task.items[0].phase = 'PENDING_ACCEPTANCE'
       data.sections.needsAction.partitions.task.items[0].status.code = 'reviewing'
       return data
     } }), { props: { ...props, messagesOnly: true } })

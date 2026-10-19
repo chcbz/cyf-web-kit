@@ -5,7 +5,7 @@ import { canOpenHallItem, HALL_SOURCES, useHallOverview } from '../src/composabl
 import { stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 
 const item = (sourceType = 'PRIVATE_CASE', sourceId = 'case-a') => ({
-  ref: { sourceType, sourceId }, title: '我的事项', status: { code: 'QUEUED', evidenceSource: 'PERSONAL_WORKSPACE_EXECUTION', observedAt: 100 },
+  ref: { sourceType, sourceId }, title: '我的事项', phase: sourceType === 'TASK' ? 'PENDING_ASSIGNMENT' : null, status: { code: sourceType === 'TASK' ? 'open' : 'QUEUED', evidenceSource: 'PERSONAL_WORKSPACE_EXECUTION', observedAt: 100 },
   targetAgent: { agentId: 'agent-a' }, nextAction: { PRIVATE_CASE: 'OPEN_CASE', LEGACY_EXECUTION: 'OPEN_EXECUTION', TASK: 'OPEN_TASK', DRAFT: 'EDIT_DRAFT' }[sourceType],
   allowedActions: [{ PRIVATE_CASE: 'OPEN_CASE', LEGACY_EXECUTION: 'OPEN_EXECUTION', TASK: 'OPEN_TASK', DRAFT: 'EDIT_DRAFT' }[sourceType]], updatedAt: 99
 })
@@ -168,12 +168,28 @@ describe('JYT-UX-W05 independent Hall read model', () => {
     }
   })
 
+  it('rejects missing, unknown, and contradictory formal phase without discarding other sources', async () => {
+    for (const phase of [undefined, 'NEW_STATE', 'PENDING_ACCEPTANCE']) {
+      const data = overview()
+      data.sections.recent.partitions.task.items[0].phase = phase
+      const { model } = harness(async () => data)
+      try {
+        await model.refresh()
+        expect(model.sections.value.recent.partitions.task.status).to.equal('error')
+        expect(model.sections.value.recent.partitions.task.items).to.have.length(0)
+        expect(model.sections.value.recent.partitions.private.items).to.have.length(1)
+      } finally { model.dispose() }
+    }
+  })
+
   it('preserves compatible private mark and formal review evidence without conflating action types', async () => {
     const response = overview()
     const personalMark = { revision: '0', archived: false, viewedResultRef: null }
     const review = { code: 'FORMAL_DELIVERY_SUBMITTED', deliveryId: 'delivery-1', workItemId: 'work-1', deliveryVersion: '0', taskVersion: '9007199254740993' }
     response.sections.recent.partitions.private.items[0].personalMark = personalMark
     response.sections.recent.partitions.task.items[0].review = review
+    response.sections.recent.partitions.task.items[0].phase = 'PENDING_ACCEPTANCE'
+    response.sections.recent.partitions.task.items[0].status.code = 'reviewing'
     const { model } = harness(async () => response)
     try {
       await model.refresh()
