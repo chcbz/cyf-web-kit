@@ -1530,8 +1530,11 @@ const openPanel = (panel, options = {}) => {
   if (panelDisposed || voiceInteractionLocked.value || !panelWhitelist.has(panel)) return false
   if (panel !== activePanel.value && guardPanelLeave(() => openPanel(panel, options))) return false
   const openingFromClosed = !activePanel.value
-  const existingIndex = panelFrames.value.indexOf(panel)
-  if (!options.root && !openingFromClosed && panel !== activePanel.value && existingIndex < 0 && panelDepth.value >= 3) {
+  const replaceAgentSelection = options.consumeAgentSelection === true && panel === 'chat' && activePanel.value === 'agents'
+  const frames = replaceAgentSelection ? panelFrames.value.slice(0, -1) : panelFrames.value
+  const depth = panelDepth.value - (replaceAgentSelection ? 1 + Number(Boolean(agentPanelRef.value?.canGoBack)) : 0)
+  const existingIndex = frames.indexOf(panel)
+  if (!options.root && !openingFromClosed && panel !== activePanel.value && existingIndex < 0 && depth >= 3) {
     showToast('请先返回上一层，再打开新的办理入口')
     return false
   }
@@ -1543,8 +1546,9 @@ const openPanel = (panel, options = {}) => {
     panelLocations.clear()
     if (!openingFromClosed && isOverviewHome.value) captureWorkbenchReturnTarget(panel)
   }
+  if (replaceAgentSelection) panelLocations.delete('agents')
   panelFrames.value = openingFromClosed || options.root ? [panel]
-    : existingIndex >= 0 ? panelFrames.value.slice(0, existingIndex + 1) : [...panelFrames.value, panel]
+    : existingIndex >= 0 ? frames.slice(0, existingIndex + 1) : [...frames, panel]
   panelReturnPanel.value = panelFrames.value.at(-2) || ''
   if (openingFromClosed) {
     formalTaskRef.value = null
@@ -1803,13 +1807,13 @@ const handleQuickRequest = async (request, settle = () => {}) => {
     return false
   }
   hallReadRevision.value += 1
-  openPanel('agents')
+  // onCommitted already opens the saved task and its recommendations.
   return true
 }
 
-const openOverviewTask = async (task, review = null) => {
-  if (guardPanelLeave(() => openOverviewTask(task, review))) return false
-  if (!task?.id || !openPanel('tasks', { restore: true })) return false
+const openOverviewTask = async (task, review = null, options = {}) => {
+  if (guardPanelLeave(() => openOverviewTask(task, review, options))) return false
+  if (!task?.id || !openPanel('tasks', { ...options, restore: true })) return false
   taskReviewRef.value = review ? { ...review, taskId: task.id } : null
   selectedTask.value = task
   await nextTick()
@@ -1818,7 +1822,7 @@ const openOverviewTask = async (task, review = null) => {
   return true
 }
 
-const openPendingTaskDetail = task => openOverviewTask(task)
+const openPendingTaskDetail = task => openOverviewTask(task, null, { root: true })
 
 // Creation owns a separate page in every layout; the task board only manages existing matters.
 const openDefaultRequirementCreate = () => {
@@ -2285,6 +2289,7 @@ typedDeliberation = useHallTypedDeliberation({
 // admission is marked below, so its own reactive write cannot cancel adoption.
 const pointAndStartContextGeneration = ref(0)
 let admittedPointAndStartTaskFingerprint = null
+let admittedPointAndStartActorReset = null
 const pointAndStartTaskFingerprint = task => [task?.id, task?.taskVersion, task?.requirementRevision, task?.revision]
   .map(value => value == null ? '' : String(value)).join('\u0000')
 const preserveAdmittedPointAndStartContext = task => { admittedPointAndStartTaskFingerprint = pointAndStartTaskFingerprint(task) }
@@ -2307,8 +2312,11 @@ const attachAdmittedPointAndStart = async ({ task, targetAgentId, reference, isC
   preserveAdmittedPointAndStartContext(task)
   hallReadRevision.value += 1
   selectedTask.value = task
-  if (!openPanel('chat')) return false
-  enterBountyDiscussion(task)
+  if (!openPanel('chat', { consumeAgentSelection: true })) return false
+  // Bounty context clears the directory selection synchronously; this is not
+  // a user target change and must not invalidate its own admitted bootstrap.
+  admittedPointAndStartActorReset = selectedAgent.value?.agentId || null
+  try { enterBountyDiscussion(task) } finally { admittedPointAndStartActorReset = null }
   await nextTick()
   if (!isCurrent?.() || panelDisposed || selectedTask.value?.id !== task.id) return false
   return adoptBountyBootstrap(reference)
@@ -2434,7 +2442,11 @@ watch(() => [selectedTask.value?.id, selectedTask.value?.taskVersion, selectedTa
   clearPointAndStartCapability()
   if (taskId && pointAndStartIntentState(taskId).state === 'PRESENT') void checkPointAndStartOriginal({ id: taskId })
 }, { flush: 'sync' })
-watch([() => apiStore.authorizationGeneration, hallIdentityScope, () => selectedAgent.value?.agentId], clearPointAndStartCapability, { flush: 'sync' })
+watch([() => apiStore.authorizationGeneration, hallIdentityScope], clearPointAndStartCapability, { flush: 'sync' })
+watch(() => selectedAgent.value?.agentId, (target, previous) => {
+  if (!target && previous && admittedPointAndStartActorReset === previous) return
+  clearPointAndStartCapability()
+}, { flush: 'sync' })
 const followupTaskFence = computed(() => [conversationTask.value?.id, conversationTask.value?.taskVersion,
   conversationTask.value?.requirementRevision, conversationTask.value?.revision].map(value => value == null ? '' : String(value)).join('\u0000'))
 const refreshFollowupContext = async () => {

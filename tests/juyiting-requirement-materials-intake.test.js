@@ -151,7 +151,7 @@ describe('new product entry wiring, no quick legacy task/link writes', () => {
     expect(h.calls).to.have.length(1)
     expect(h.calls[0].path).to.equal('/tasks/creation-operations/v2')
     expect(h.calls[0].body).to.deep.equal(requirementMaterialsBody({ title: text, description: text, attachments: attachments() }))
-    expect(opens).to.deep.equal([]); expect(panels).to.deep.equal([['agents']]); expect(deps.hallReadRevision.value).to.equal(1)
+    expect(opens).to.deep.equal([]); expect(panels).to.deep.equal([]); expect(deps.hallReadRevision.value).to.equal(1)
     h.dispose()
   })
   it('does not acknowledge or refresh a commit that returns after owner identity changes', async () => {

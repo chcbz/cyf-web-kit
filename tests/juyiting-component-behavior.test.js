@@ -4,7 +4,7 @@ import { useHallAgentProfileCapabilities } from '../src/composables/juyiting/use
 import { currentBountyAssignmentRevision } from '../src/composables/juyiting/hallBountyAssignmentContext.js'
 import { useHallSkillCapabilities } from '../src/composables/juyiting/useHallSkillCapabilities.js'
 import * as ordinaryCancellation from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
-import { bountyInteractionTargetId } from '../src/composables/juyiting/useHallChatContext.js'
+import { bountyInteractionTargetId, useHallChatContext } from '../src/composables/juyiting/useHallChatContext.js'
 import { expect } from 'chai'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { hasMeaningfulHallLeaveWork } from '../src/composables/juyiting/hallAccountNavigation.js'
@@ -2790,7 +2790,7 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
     useHallBountyAssignmentContext: () => ({ projection: Vue.ref(null), error: Vue.ref(''), refresh: async () => false, dispose: noop }),
     useHallBountyRequestCatalog: () => ({ entries: Vue.ref([]), hint: noop, reset: noop, dispose: noop }),
     useHallBountyFollowup: () => ({ state: Vue.ref({}), busy: Vue.ref(false), prepareGenerate: async () => false, prepareEdit: async () => false, confirm: async () => false, checkOriginal: async () => false, invalidate: noop, dispose: noop }),
-    useHallTypedDeliberation: () => ({ cards: Vue.ref([]), refresh: asyncNoop, readOne: asyncNoop, invalidate: noop, dispose: noop }), typedLong: () => '',
+    useHallTypedDeliberation: () => ({ cards: Vue.ref([]), selectedPending: Vue.ref(null), recoveryAvailable: Vue.ref(false), inspectionStatus: Vue.ref(''), refresh: asyncNoop, readOne: asyncNoop, invalidate: noop, dispose: noop }), typedLong: () => '',
     createControlledImageCapabilityObservationFence: () => ({ capture: () => ({ isCurrent: () => true }), invalidate: noop }), capabilityOffersControlledImageConsent: () => false, loadControlledImageBountyCapability: async () => null,
     useHallTaskLinkedReferenceInputs: () => ({ resolve: async () => ({ state: 'STALE', inputRefs: [] }), invalidate: noop, dispose: noop }), createPointAndStartIntentStore: () => ({ read: () => ({ state: 'ABSENT' }) }), pointAndStartRecoveryLane: () => 'NONE', providerConsentAcknowledgement: {},
     createNativeCapabilityObservationFence: () => ({ capture: () => ({ identityScope: '', authorizationGeneration: 0, isCurrent: () => true }), invalidate: noop }), loadNativeBountyCapability: async () => null, capabilityAllowsNewStart: () => false, capabilityAllowsOriginalReplay: () => false, pointAndStartIntentReadLane: () => 'ABSENT',
@@ -3147,6 +3147,64 @@ describe('lightweight workbench real panel navigation', () => {
 })
 
 describe('O04 actual-mounted JuyiHall panel identity', () => {
+  it('adopts admitted bootstrap across the real bounty context actor reset but fences later target edits', async () => {
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const mocks = createActualHallMocks({ mode: Vue.ref('portrait-command'), mounts: { library: 0, archive: 0 }, counters })
+    mocks.useHallChatContext = useHallChatContext
+    const originalConversation = mocks.useHallConversation
+    const adopted = []
+    mocks.useHallConversation = (...args) => ({ ...originalConversation(...args), adoptBountyBootstrap: async reference => { adopted.push(reference); return true } })
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      const state = wrapper.vm.$.setupState
+      const task = { id: 'task-o04', title: 'original', taskVersion: '1', requirementRevision: '1', status: 'assigned', assignedAgentId: 'agent-o04' }
+      const reference = { taskId: task.id, targetAgentId: 'agent-o04' }
+      const generation = state.pointAndStartContextGeneration
+      const isCurrent = () => state.pointAndStartContextGeneration === generation
+      expect(await state.attachAdmittedPointAndStart({ task, targetAgentId: 'agent-o04', reference, isCurrent })).to.equal(true)
+      expect(adopted).to.deep.equal([reference])
+      expect(state.selectedAgent).to.equal(null)
+      expect(isCurrent()).to.equal(true)
+      state.selectedAgent = { agentId: 'different-agent' }
+      expect(isCurrent()).to.equal(false)
+      expect(await state.attachAdmittedPointAndStart({ task, targetAgentId: 'agent-o04', reference, isCurrent })).to.equal(false)
+      expect(adopted).to.have.length(1)
+    } finally { wrapper.unmount() }
+  })
+
+  for (const modeName of ['landscape-map', 'portrait-command']) it(`consumes admitted agent selection and returns to saved task in ${modeName}`, async () => {
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const mocks = createActualHallMocks({ mode: Vue.ref(modeName), mounts: { library: 0, archive: 0 }, counters, actualBountyPanel: BountyPanel })
+    mocks.AgentPanel = Vue.defineComponent({ setup: (_props, { expose }) => {
+      expose({ canGoBack: Vue.ref(true) })
+      return () => Vue.h('section', 'agent detail')
+    } })
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      const state = wrapper.vm.$.setupState
+      const task = { id: 'task-navigation', title: '保存后的原事项', status: 'open' }
+      state.openPanel('formalDraft')
+      await state.openPendingTaskDetail(task)
+      await Vue.nextTick()
+      expect(state.panelFrames).to.deep.equal(['tasks'])
+      expect(state.panelDepth).to.equal(2)
+      expect(state.openPanel('agents')).to.equal(true)
+      await Vue.nextTick()
+      expect(state.openPanel('chat')).to.equal(false)
+      expect(state.openPanel('chat', { consumeAgentSelection: true })).to.equal(true)
+      await Vue.nextTick()
+      expect(state.panelFrames).to.deep.equal(['tasks', 'chat'])
+      expect(state.panelDepth).to.equal(3)
+      expect(state.openPanel('library')).to.equal(false)
+      state.returnPanel()
+      await Vue.nextTick()
+      expect(state.panelFrames).to.deep.equal(['tasks'])
+      expect(wrapper.find('.bounty-modal').text()).to.include('保存后的原事项')
+    } finally { wrapper.unmount() }
+  })
+
   it('restores landscape immersion, removes portrait map controls, and preserves open panels when rotating', async () => {
     const mode = Vue.ref('portrait-command')
     const home = Vue.ref('map')
