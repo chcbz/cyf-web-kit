@@ -59,7 +59,8 @@ describe('W05 real formal-review component boundary', () => {
       expect(wrapper.find('.formal-artifacts').text()).to.include('交付报告').and.include('固定版本 v2')
       expect(wrapper.find('.formal-technical').attributes()).not.to.have.property('open')
       expect(wrapper.find('.formal-technical').text()).to.include('artifact-1').and.include('a'.repeat(64))
-      expect(wrapper.find('form.formal-decision').exists()).to.equal(true)
+      expect(wrapper.findAll('form')).to.have.length(0)
+      expect(wrapper.findAll('textarea')).to.have.length(0)
       await wrapper.setProps({ focusDeliveryId: 'no-longer-readable' })
       expect(wrapper.find('.is-requested-delivery').exists()).to.equal(false)
       expect(wrapper.find('[role="status"]').text()).to.include('尚未在当前列表核对到')
@@ -75,7 +76,7 @@ describe('W05 real formal-review component boundary', () => {
     } finally { wrapper.unmount() }
   })
 
-  it('keeps long delivery content, previews, and acceptance controls in one bounded scroll region', async () => {
+  it('keeps long delivery content, previews, without independent decision controls in one bounded scroll region', async () => {
     const exactOutput = {
       artifactId: 'artifact-1', artifactVersion: '2', sha256: 'a'.repeat(64), state: 'AVAILABLE',
       title: 'result.pdf', mimeType: 'application/pdf', byteLength: 128, canPreview: true, canDownload: true
@@ -95,10 +96,10 @@ describe('W05 real formal-review component boundary', () => {
     try {
       await flushPromises()
       expect(wrapper.find('.formal-delivery-list').classes()).to.include('formal-delivery-list')
-      expect(wrapper.findAll('.formal-delivery-card')).to.have.length(8)
+      expect(wrapper.findAll('.formal-delivery-card'), wrapper.text()).to.have.length(8)
       expect(wrapper.findAll('.formal-delivery-summary')[0].text()).to.have.length.greaterThan(1000)
       expect(wrapper.findAll('.formal-inline-preview')).to.have.length(8)
-      expect(wrapper.findAll('form.formal-decision')).to.have.length(8)
+      expect(wrapper.findAll('form')).to.have.length(0)
       expect(listSource).to.match(/min-height:\s*0;[\s\S]*?overflow-y:\s*auto;[\s\S]*?overflow-x:\s*hidden/)
       expect(listSource).to.match(/overscroll-behavior:\s*contain/)
       expect(listSource).to.include('var(--formal-brand, #923f30)')
@@ -123,16 +124,15 @@ describe('W05 real formal-review component boundary', () => {
       const preview = wrapper.find('button[aria-label="预览第 2 版交付报告"]')
       const download = wrapper.find('button[aria-label="下载第 2 版交付报告"]')
       expect(preview.exists()).to.equal(true)
-      expect(download.exists()).to.equal(true)
+      expect(download.exists()).to.equal(false)
       expect(preview.attributes('aria-pressed')).to.equal('false')
       await wrapper.setProps({ previewOutputKey: `artifact-1:2:${'a'.repeat(64)}` })
       expect(wrapper.find('.formal-inline-preview .preview-slot').text()).to.equal('固定版本预览')
       expect(preview.attributes('aria-pressed')).to.equal('true')
       expect(preview.text()).to.equal('收起预览')
       await preview.trigger('click')
-      await download.trigger('click')
       expect(wrapper.emitted('preview-output')?.[0]?.[0]).to.deep.equal(exactOutput)
-      expect(wrapper.emitted('download-output')?.[0]?.[0]).to.deep.equal(exactOutput)
+      expect(wrapper.emitted('download-output')).to.equal(undefined)
       await wrapper.setProps({ readOutputs: [{ ...exactOutput, sha256: 'b'.repeat(64) }] })
       expect(wrapper.find('.formal-artifact-actions').exists()).to.equal(false)
     } finally { wrapper.unmount() }
@@ -157,94 +157,41 @@ const FormalTaskDeliveryPanel = new Function('Vue', 'deps', panelScript)(Vue, {
   saveOutputBlob: () => {}
 })
 
-describe('BF19 production formal rework boundary', () => {
-  it('provides a bounded panel shell around the single formal-delivery scroll region', () => {
-    expect(panelSource).to.include('class="formal-task-delivery-panel"')
-    expect(panelSource).to.match(/grid-template-rows:\s*auto minmax\(0, ?1fr\) auto;[\s\S]*?flex:\s*1 1 auto;[\s\S]*?min-height:\s*0;[\s\S]*?overflow:\s*hidden/)
-  })
+describe('formal historical panel convergence', () => {
   before(() => { for (const name of ['Element', 'HTMLElement', 'SVGElement', 'Node']) globalThis[name] ||= globalThis.window[name] })
-  const scope = { taskId: 'task-1', conversationId: 'conversation-1', targetAgentId: 'agent-1', conversationConfirmed: true }
-  const output = (state, version) => ({
-    outputId: 'output-1', executionId: 'execution-1', fileId: 'file-1', fileVersion: 3,
-    contentHash: 'a'.repeat(64), contentMimeType: 'application/pdf', byteLength: 128, committedAt: 1,
-    state: 'AVAILABLE', publicationState: 'PUBLISHED', taskId: 'task-1', artifactId: 'artifact-1', artifactVersion: 2,
-    formalDeliveryId: 'delivery-1', formalDeliveryRevision: 2, formalDeliveryState: state,
-    formalDecisionVersion: version, formalReviewedAt: version ? 2 : null
-  })
-  const taskOutput = () => ({
-    artifactId: 'artifact-1', taskId: 'task-1', workItemId: 'work-1', producerAgentId: 'agent-1',
-    artifactType: 'document', title: 'result.pdf', contentHash: 'a'.repeat(64), contentByteLength: 128,
-    contentMimeType: 'application/pdf', artifactVersion: 2, visibility: 'task_members', createdAt: 1
-  })
-  it('refreshes exact outputs after decision, sends version 0 not revision 2, and creates rework once', async () => {
-    let current = { ...delivery }
-    const decisions = []; const reworks = []; const reads = []
+  it('uses the exact task artifact reader and delegates discussion without retaining any decision/rework/download form', async () => {
+    const reads = []; let writes = 0
     const wrapper = mount(FormalTaskDeliveryPanel, { props: {
-      taskId: 'task-1', identityFingerprint: 'owner:client:1', executionContext: scope, selectedAgentId: 'agent-1',
-      deliveryAdapter: {
-        list: async () => [{ ...current }],
-        decide: async request => { decisions.push(request); current = { ...delivery, state: 'changes_requested', deliveryVersion: 1, reviewedAt: 2, reviewReason: request.reviewReason } },
-        createRework: async request => { reworks.push(request); return { executionId: 'rework-1' } }
-      },
-      outputAdapter: { list: async request => {
-        reads.push(request)
-        return { items: request.sourceType === 'task' ? [taskOutput()] : [output(current.state, current.deliveryVersion)] }
-      } }
+      taskId: 'task-1', identityFingerprint: 'owner:client:1',
+      deliveryAdapter: { list: async () => [delivery], decide: async () => { writes++ }, createRework: async () => { writes++ } },
+      outputAdapter: { list: async request => { reads.push(request); return { items: [] } } }
     } })
     try {
       await flushPromises()
-      await wrapper.find('textarea').setValue('补充应急方案')
-      await wrapper.find('form.formal-decision').trigger('submit', { submitter: { value: 'changes_requested' } })
-      await flushPromises()
-      expect(decisions).to.have.length(1)
-      expect(decisions[0].expectedDeliveryVersion).to.equal(0)
-      expect(wrapper.find('form.formal-rework').exists()).to.equal(true)
-      await wrapper.find('form.formal-rework textarea').setValue('按验收意见新增一页')
-      await wrapper.find('form.formal-rework').trigger('submit')
-      await flushPromises()
-      expect(reworks).to.have.length(1)
-      expect(reworks[0]).to.include({ conversationId: 'conversation-1', targetAgentId: 'agent-1' })
-      expect(reworks[0].delivery.deliveryVersion).to.equal(1)
-      expect(reworks[0].source.fileRef).to.deep.equal({ fileId: 'file-1', fileVersion: '3' })
-      expect(wrapper.find('form.formal-rework').exists()).to.equal(false)
-      expect(wrapper.emitted('rework-created')).to.have.length(1)
-      expect(reads.some(r => r.sourceType === 'task' && r.sourceId === 'task-1')).to.equal(true)
-      expect(reads.some(r => r.sourceType === 'conversation' && r.sourceId === 'conversation-1')).to.equal(true)
+      expect(wrapper.findAll('form')).to.have.length(0)
+      expect(wrapper.findAll('textarea')).to.have.length(0)
+      expect(wrapper.find('.formal-task-delivery-intro').text()).to.include('统一使用事项')
+      await wrapper.find('.formal-task-delivery-intro button').trigger('click')
+      expect(wrapper.emitted('discuss-task')).to.have.length(1)
+      expect(wrapper.emitted('rework-created')).to.equal(undefined)
+      expect(writes).to.equal(0)
+      expect(reads.length).to.be.greaterThan(0)
+      for (const request of reads) expect(request).to.include({ sourceType: 'task', sourceId: 'task-1' })
+      expect(panelSource).not.to.include('useHallDeliveryReview') // shell is the single review owner
+      expect(panelSource).not.to.include('saveOutputBlob')
     } finally { wrapper.unmount() }
   })
-  it('does not borrow foreign task, unconfirmed conversation, or nonselected agent; invalidates stale reads', async () => {
-    let resolveRead; let signal; const writes = []
-    const wrapper = mount(FormalTaskDeliveryPanel, { props: {
-      taskId: 'task-1', identityFingerprint: 'owner:client:1', executionContext: { ...scope, taskId: 'foreign' }, selectedAgentId: 'agent-1',
-      deliveryAdapter: { list: async () => [{ ...delivery, state: 'changes_requested', deliveryVersion: 1, reviewedAt: 2, reviewReason: 'revise' }], createRework: async r => writes.push(r) },
-      outputAdapter: { list: request => request.sourceType === 'task'
-        ? Promise.resolve({ items: [] })
-        : (signal = request.signal, new Promise(resolve => { resolveRead = resolve })) }
-    } })
+  it('preserves one bounded list scroll area and clears preview synchronously on identity/task changes', async () => {
+    const wrapper = mount(FormalTaskDeliveryPanel, { props: { taskId: 'task-1', identityFingerprint: 'owner-a',
+      deliveryAdapter: { list: async () => [delivery] }, outputAdapter: { list: async () => ({ items: [] }) } } })
     try {
       await flushPromises()
-      expect(resolveRead).to.equal(undefined)
-      await wrapper.setProps({ executionContext: { ...scope, conversationConfirmed: false } })
-      await flushPromises(); expect(resolveRead).to.equal(undefined)
-      await wrapper.setProps({ executionContext: scope, selectedAgentId: 'other-agent' })
-      await flushPromises(); expect(resolveRead).to.equal(undefined)
-      await wrapper.setProps({ selectedAgentId: 'agent-1' }); await flushPromises()
-      expect(signal.aborted).to.equal(false)
-      await wrapper.setProps({ identityFingerprint: '', selectedAgentId: '' }); await flushPromises()
-      expect(signal.aborted).to.equal(true)
-      resolveRead({ items: [output('changes_requested', 1)] }); await flushPromises()
-      expect(wrapper.find('form.formal-rework').exists()).to.equal(false)
-      expect(writes).to.have.length(0)
+      wrapper.findComponent(FormalDeliveryList).vm.$emit('preview-output', { artifactId: 'artifact-1', artifactVersion: '2', sha256: 'a'.repeat(64) })
+      await Vue.nextTick()
+      expect(wrapper.findComponent(FormalDeliveryList).props('previewOutputKey')).to.include('artifact-1:2:')
+      await wrapper.setProps({ identityFingerprint: 'owner-b' }); await flushPromises()
+      expect(wrapper.findComponent(FormalDeliveryList).props('previewOutputKey')).to.equal('')
+      expect(panelSource).to.match(/grid-template-rows:\s*auto minmax\(0, ?1fr\) auto;[\s\S]*?min-height:\s*0;[\s\S]*?overflow:\s*hidden/)
     } finally { wrapper.unmount() }
-  })
-  it('refuses mismatched decision versions and unrelated/private outputs', async () => {
-    for (const changes of [{ formalDecisionVersion: 2 }, { formalDeliveryId: 'other-delivery' }, { taskId: 'other-task' }, { taskId: null }]) {
-      const wrapper = mount(FormalTaskDeliveryPanel, { props: {
-        taskId: 'task-1', identityFingerprint: 'owner:client:1', executionContext: scope, selectedAgentId: 'agent-1',
-        deliveryAdapter: { list: async () => [{ ...delivery, state: 'changes_requested', deliveryVersion: 1, reviewedAt: 2, reviewReason: 'revise' }] },
-        outputAdapter: { list: async () => ({ items: [{ ...output('changes_requested', 1), ...changes }] }) }
-      } })
-      try { await flushPromises(); expect(wrapper.find('form.formal-rework').exists()).to.equal(false) } finally { wrapper.unmount() }
-    }
   })
 })

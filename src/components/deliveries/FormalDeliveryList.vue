@@ -1,8 +1,8 @@
 <template>
   <section class="formal-delivery-list" aria-label="正式交付">
     <header>
-      <strong>正式交付</strong>
-      <button type="button" :disabled="deliveries.loading.value || Boolean(deliveries.busyDeliveryId.value)" @click="deliveries.refresh">刷新</button>
+      <strong>正式交付记录</strong>
+      <button type="button" :disabled="deliveries.loading.value" @click="deliveries.refresh">刷新</button>
     </header>
     <p v-if="deliveries.state.value === 'loading'" class="formal-delivery-state" role="status">正式交付读取中…</p>
     <p v-else-if="deliveries.state.value === 'empty'" class="formal-delivery-state">暂无正式交付批次。</p>
@@ -12,7 +12,7 @@
       class="formal-delivery-state"
       :class="{ 'is-error': ['conflict', 'unknown', 'error'].includes(deliveries.state.value) }"
       role="status"
-    >{{ deliveries.message.value }} <button v-if="deliveries.refreshRequired.value || deliveries.state.value === 'conflict' || deliveries.state.value === 'unknown'" type="button" @click="deliveries.refresh">刷新确认</button></p>
+    >{{ deliveries.message.value }} <button v-if="deliveries.state.value === 'conflict' || deliveries.state.value === 'unknown'" type="button" @click="deliveries.refresh">刷新确认</button></p>
 
     <p v-if="focusDeliveryId && !deliveries.loading.value && !deliveries.items.value.some(item => item.deliveryId === focusDeliveryId)" role="status">提示中的交付尚未在当前列表核对到，请刷新正式交付；不会用消息摘要代替验收依据。</p>
     <article
@@ -44,12 +44,6 @@
                 :aria-pressed="isPreviewing(delivery, artifact)"
                 @click="$emit('preview-output', readableArtifact(delivery, artifact))"
               >{{ isPreviewing(delivery, artifact) ? '收起预览' : '预览' }}</button>
-              <button
-                type="button"
-                :disabled="!readableArtifact(delivery, artifact).canDownload"
-                :aria-label="`下载第 ${delivery.revision} 版${artifact.purpose || '正式成果'}`"
-                @click="$emit('download-output', readableArtifact(delivery, artifact))"
-              >下载</button>
             </div>
             <div v-if="isPreviewing(delivery, artifact)" class="formal-inline-preview">
               <slot name="preview" :output="readableArtifact(delivery, artifact)" />
@@ -68,48 +62,12 @@
         <p v-if="delivery.reviewedAt">{{ formatTime(delivery.reviewedAt) }}</p>
         <p>{{ delivery.reviewReason || '未填写验收意见。' }}</p>
       </section>
-      <form v-if="delivery.state === 'submitted'" class="formal-decision" @submit.prevent="submitDecision(delivery, $event)">
-        <h4>验收此正式交付</h4>
-        <p>验收通过不会记录说明；要求修改时必须填写说明。</p>
-        <label>要求修改说明（要求修改时必填）<textarea v-model="reviewReasons[delivery.deliveryId]" maxlength="4000" :disabled="isBusy(delivery) || deliveries.refreshRequired.value"></textarea></label>
-        <div>
-          <button
-            type="submit"
-            name="decision"
-            value="accepted"
-            :disabled="isBusy(delivery) || deliveries.refreshRequired.value"
-          >{{ isBusy(delivery) ? '提交中…' : '验收通过' }}</button>
-          <button
-            type="submit"
-            name="decision"
-            value="changes_requested"
-            :disabled="isBusy(delivery) || deliveries.refreshRequired.value"
-          >要求修改</button>
-        </div>
-      </form>
-      <form v-else-if="delivery.state === 'changes_requested' && reworkSource(delivery) && !reworkCreated[delivery.deliveryId]" class="formal-rework" @submit.prevent="submitRework(delivery)">
-        <h4>按指定版本返工</h4>
-        <p>源成果 {{ reworkSource(delivery).outputId }} / 工作空间文件 {{ reworkSource(delivery).fileRef.fileId }} · v{{ reworkSource(delivery).fileRef.fileVersion }}。系统只发送这一固定版本。</p>
-        <label>返工说明<textarea
-          v-model="reworkInstructions[delivery.deliveryId]"
-          maxlength="4000"
-          :disabled="isReworkBusy(delivery) || deliveries.refreshRequired.value"
-          placeholder="例如：按验收意见缩短第 3 页，并增加总结页。"
-        ></textarea></label>
-        <p>交付格式：{{ reworkSource(delivery).mimeType }}</p>
-        <button type="submit" :disabled="isReworkBusy(delivery) || deliveries.refreshRequired.value || !reworkInstructions[delivery.deliveryId]?.trim()">{{ isReworkBusy(delivery) ? '创建返工中…' : '明确交给 Agent 返工' }}</button>
-      </form>
-      <p v-else-if="reworkCreated[delivery.deliveryId]" role="status">返工执行已创建，等待 Agent 交付新的正式成果；不会自动重复创建。</p>
-      <section v-else-if="delivery.state === 'changes_requested'" class="formal-rework formal-rework-hint">
-        <h4>要求修改已记录</h4>
-        <p>请进入该悬赏的议事，选择负责 Agent 后基于指定成果版本明确创建返工；不会自动重新调用模型。</p>
-      </section>
     </article>
   </section>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, reactive, watch } from 'vue'
+import { computed, onBeforeUnmount, watch } from 'vue'
 import { useFormalDeliveries } from '../../composables/useFormalDeliveries.js'
 
 const props = defineProps({
@@ -117,27 +75,13 @@ const props = defineProps({
   taskId: { type: [String, Number], default: '' },
   identityFingerprint: { type: [String, Object, Function], default: '' },
   adapter: { type: Object, default: undefined },
-  conversationId: { type: String, default: '' },
-  targetAgentId: { type: String, default: '' },
-  outputs: { type: Array, default: () => [] },
   readOutputs: { type: Array, default: () => [] },
   previewOutputKey: { type: String, default: '' }
 })
-const emit = defineEmits(['rework-created', 'refreshed', 'preview-output', 'download-output'])
+const emit = defineEmits(['refreshed', 'preview-output'])
 const deliveries = useFormalDeliveries({ taskId: () => String(props.taskId || ''), identityFingerprint: () => props.identityFingerprint, adapter: props.adapter })
-const reviewReasons = reactive({})
-const reworkInstructions = reactive({})
-const reworkCreated = reactive({})
 watch(() => deliveries.items.value, () => emit('refreshed'))
-watch(() => `${props.taskId}:${props.identityFingerprint}:${props.conversationId}:${props.targetAgentId}`, () => {
-  for (const values of [reviewReasons, reworkInstructions, reworkCreated]) {
-    for (const key of Object.keys(values)) delete values[key]
-  }
-})
-const safeOutputs = computed(() => Array.isArray(props.outputs) ? props.outputs : [])
 const safeReadOutputs = computed(() => Array.isArray(props.readOutputs) ? props.readOutputs : [])
-const isBusy = delivery => deliveries.busyDeliveryId.value === delivery.deliveryId
-const isReworkBusy = delivery => deliveries.reworkBusyDeliveryId.value === delivery.deliveryId
 const readableArtifact = (delivery, artifact) => safeReadOutputs.value.find(output => output &&
   output.artifactId === artifact.artifactId && String(output.artifactVersion) === String(artifact.artifactVersion) &&
   output.sha256 === artifact.contentHash && output.state === 'AVAILABLE') || null
@@ -151,27 +95,8 @@ const previewMimeTypes = new Set([
 ])
 const canPreview = output => Boolean(output?.canPreview && previewMimeTypes.has(output.mimeType) &&
   (output.mimeType.includes('officedocument') || (Number.isSafeInteger(output.byteLength) && output.byteLength <= 1024 * 1024)))
-const reworkSource = delivery => props.conversationId && props.targetAgentId && safeOutputs.value.find(output => output && output.formalDeliveryId === delivery.deliveryId && output.formalDecisionVersion === delivery.deliveryVersion && output.formalDeliveryState === 'changes_requested' && output.outputId && output.fileRef?.fileId && output.fileRef?.fileVersion && output.mimeType) || null
 const formatTime = value => { const time = typeof value === 'number' ? value : Date.parse(value); return Number.isFinite(time) ? new Date(time).toLocaleString('zh-CN', { hour12: false }) : '时间不可用' }
 const stateText = state => ({ submitted: '待验收', accepted: '已验收', changes_requested: '要求修改' })[state] || state
-const submitDecision = (delivery, event) => {
-  const decision = event.submitter?.value
-  if (!['accepted', 'changes_requested'].includes(decision)) return
-  void deliveries.decide({ delivery, decision, reviewReason: String(reviewReasons[delivery.deliveryId] || '').trim() })
-}
-const submitRework = async delivery => {
-  const source = reworkSource(delivery)
-  if (!source) return
-  const result = await deliveries.createRework({
-    delivery, source, conversationId: props.conversationId, targetAgentId: props.targetAgentId,
-    instruction: String(reworkInstructions[delivery.deliveryId] || '').trim(), outputContentMimeType: source.mimeType
-  })
-  if (result) {
-    reworkCreated[delivery.deliveryId] = result.executionId
-    reworkInstructions[delivery.deliveryId] = ''
-    emit('rework-created', result)
-  }
-}
 onBeforeUnmount(() => deliveries.dispose())
 </script>
 
@@ -195,7 +120,7 @@ onBeforeUnmount(() => deliveries.dispose())
 .formal-delivery-list header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .formal-delivery-list header strong { font-size: 16px; }
 .formal-delivery-list button {
-  min-height: 38px;
+  min-height: 44px;
   border: 1px solid var(--formal-line, #d8d8ce);
   border-radius: 8px;
   padding: 6px 10px;
@@ -204,9 +129,9 @@ onBeforeUnmount(() => deliveries.dispose())
   font: inherit;
   cursor: pointer;
 }
-.formal-delivery-list header button,.formal-decision button:first-child,.formal-rework>button { border-color: var(--formal-brand, #923f30); background: var(--formal-brand, #923f30); color: var(--formal-paper, #fffefa); }
+.formal-delivery-list header button { border-color: var(--formal-brand, #923f30); background: var(--formal-brand, #923f30); color: var(--formal-paper, #fffefa); }
 .formal-delivery-list button[disabled] { cursor: not-allowed; opacity: .55; }
-.formal-delivery-list button:focus-visible,.formal-delivery-list textarea:focus-visible { outline: 3px solid color-mix(in srgb, var(--formal-brand, #923f30) 52%, transparent); outline-offset: 2px; }
+.formal-delivery-list button:focus-visible { outline: 3px solid color-mix(in srgb, var(--formal-brand, #923f30) 52%, transparent); outline-offset: 2px; }
 .formal-delivery-state { margin: 0; padding: 10px 12px; border: 1px solid #ead8aa; border-radius: 8px; background: #fbf4df; color: #765d2d; line-height: 1.5; }
 .formal-delivery-state.is-error { border-color: #e9beb5; background: #fae7e1; color: #7a3026; }
 .formal-delivery-card { display: grid; gap: 9px; min-width: 0; padding: 14px; border: 1px solid var(--formal-line, #d8d8ce); border-radius: 10px; background: var(--formal-paper, #fffefa); box-shadow: 0 1px 2px rgba(36, 46, 43, .04); }
@@ -214,7 +139,7 @@ onBeforeUnmount(() => deliveries.dispose())
 .formal-delivery-head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .formal-delivery-head span,.formal-delivery-card>p { color: var(--formal-muted, #68716b); font-size: 12px; overflow-wrap: anywhere; }
 .formal-delivery-summary { color: var(--formal-ink, #242e2b)!important; font-size: 14px!important; line-height: 1.55; }
-.formal-artifacts,.formal-review,.formal-decision,.formal-rework { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--formal-line, #d8d8ce); }
+.formal-artifacts,.formal-review { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--formal-line, #d8d8ce); }
 .formal-artifacts ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .formal-artifacts li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; min-width: 0; padding: 10px; border: 1px solid var(--formal-line, #d8d8ce); border-radius: 8px; background: var(--formal-brand-surface, #f6eee8); font-size: 12px; overflow-wrap: anywhere; }
 .formal-artifact-copy { display: grid; gap: 3px; min-width: 0; }
@@ -224,11 +149,6 @@ onBeforeUnmount(() => deliveries.dispose())
 .formal-inline-preview { grid-column: 1/-1; min-width: 0; }
 .formal-inline-preview :deep(.output-preview) { max-height: 320px; margin-top: 0; border-color: var(--formal-line, #d8d8ce); background: var(--formal-paper, #fffefa); }
 .formal-review { font-size: 13px; }
-.formal-decision label,.formal-rework label { display: grid; gap: 5px; font-size: 13px; }
-.formal-decision textarea,.formal-rework textarea { min-height: 64px; padding: 8px 10px; border: 1px solid var(--formal-line, #d8d8ce); border-radius: 8px; background: var(--formal-paper, #fffefa); color: var(--formal-ink, #242e2b); font: inherit; resize: vertical; }
-.formal-decision>div { display: flex; gap: 8px; flex-wrap: wrap; }
-.formal-decision button:last-child { border-color: #9c4a3f; background: #9c4a3f; color: #fff; }
-.formal-rework-hint { color: #765d2d; font-size: 13px; }
 .formal-technical { color: var(--formal-muted, #68716b); font-size: 11px; }
 .formal-technical summary { cursor: pointer; }
 .formal-technical ul { margin: 6px 0 0; padding-left: 18px; overflow-wrap: anywhere; }
@@ -238,10 +158,8 @@ onBeforeUnmount(() => deliveries.dispose())
 }
 @media (max-width: 420px) {
   .formal-artifacts li { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
-  .formal-artifact-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .formal-artifact-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
   .formal-artifact-actions button { width: 100%; min-height: 44px; }
   .formal-inline-preview { grid-column: 1; }
-  .formal-decision>div,.formal-rework>button { width: 100%; }
-  .formal-decision>div button { flex: 1 1 0; }
 }
 </style>
