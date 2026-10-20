@@ -129,8 +129,12 @@ describe('explicit whole-batch review contract and immutable recovery', () => {
     try {
       await ready(s.client); await s.client.openConfirmation(); await s.client.confirmAcceptance()
       expect(await s.client.settleOriginal()).to.equal(false); expect(s.storage.map.size).to.equal(1)
+      expect(s.client.recoveryNeeded.value).to.equal(true)
       c.taskVersion = '8'; c.taskState = 'COMPLETED'; c.currentDelivery.state = 'ACCEPTED'; c.currentDelivery.deliveryVersion = '1'
       c.currentDelivery.allowedActions = ['VIEW']; c.currentDelivery.batchSha256 = await batchDigest(c.taskId, c.currentDelivery)
+      await s.client.refresh()
+      expect(s.client.recoveryNeeded.value).to.equal(false)
+      expect(s.storage.map.size).to.equal(1) // Hide controls without discarding the original recovery identity.
       expect(await s.client.settleOriginal()).to.equal(true); expect(s.storage.map.size).to.equal(0)
       expect(s.client.operation.value.receipt.state).to.equal('COMMITTED'); expect(s.client.canReview.value).not.to.equal(true)
     } finally { s.client.dispose() }

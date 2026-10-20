@@ -1,8 +1,8 @@
 <template>
   <section class="bounty-discussion-panel discussion-panel">
-    <BountyDeliberationStatus :presentation="v2Presentation" />
+    <BountyDeliberationStatus v-if="!taskCompleted" :presentation="v2Presentation" />
     <BountyExecutionTermination
-      :enabled="deliberationV2Enabled"
+      :enabled="deliberationV2Enabled && !taskCompleted"
       :requests="requestCatalog.length ? requestCatalog.map(entry => entry.request) : activeRequest ? [activeRequest] : []"
       :conversation-id="conversationId"
       :identity-key="`${identityEpoch}\u0000${identityScope}`"
@@ -10,7 +10,7 @@
     />
     <p v-if="typedInspectionStatus" class="typed-inspection-status" role="status">{{ typedInspectionStatus }}</p>
     <button
-      v-if="typedRecoveryAvailable"
+      v-if="typedRecoveryAvailable && !taskCompleted"
       type="button"
       class="typed-recovery"
       @click="$emit('typed-resume')"
@@ -41,7 +41,7 @@
     >
       <template #matter-actions>
         <button
-          v-if="reviewContext?.currentDelivery?.allowedActions.includes('ACCEPT')"
+          v-if="!taskCompleted && reviewContext?.currentDelivery?.allowedActions.includes('ACCEPT')"
           type="button"
           class="matter-action"
           aria-label="查看并验收"
@@ -121,7 +121,7 @@ const chatProps = computed(() => {
     reviewContext, reviewBusy, activeRequest, requestCatalog, activeTurns, capabilityState, deliberationV2Enabled,
     typedRecoveryAvailable, typedInspectionStatus, ...chat
   } = props
-  return { ...chat, matterReadOnly: chat.matterReadOnly || taskCompleted.value }
+  return { ...chat, matterReadOnly: chat.matterReadOnly || taskCompleted.value, connectionStatus: taskCompleted.value ? '事项已完成' : chat.connectionStatus }
 })
 </script>
 

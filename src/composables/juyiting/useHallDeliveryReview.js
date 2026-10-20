@@ -123,5 +123,15 @@ export function useHallDeliveryReview ({ api = createApi('/agent'), taskId, iden
   if (getCurrentInstance()) onBeforeUnmount(dispose)
   const canReview = computed(() => context.value?.currentDelivery?.allowedActions.includes('ACCEPT') && !loading.value && !error.value &&
     !operation.value.intent && operation.value.state !== 'recovery_error')
-  return { context, loading, error, dialogOpen, frozenContext, operation, canReview, refresh, openConfirmation, confirmAcceptance, checkOriginal, resumeOriginal, settleOriginal, close, dispose }
+  // Hide recovery controls only after the same operation's authoritative batch is confirmed.
+  // Keep the durable intent for safe reload/readback; UNKNOWN never becomes success here.
+  const recoveryNeeded = computed(() => {
+    const op = operation.value; const next = context.value; const receipt = op.receipt
+    if (!op.intent) return op.state === 'recovery_error'
+    return !(op.state === 'COMMITTED' && receipt?.state === 'COMMITTED' && next?.taskId === op.intent.taskId &&
+      next.taskState === 'COMPLETED' && BigInt(next.taskVersion) >= BigInt(receipt.taskVersion) &&
+      next.currentDelivery?.deliveryId === receipt.deliveryId && next.currentDelivery?.state === 'ACCEPTED' &&
+      BigInt(next.currentDelivery.deliveryVersion) >= BigInt(receipt.deliveryVersion))
+  })
+  return { recoveryNeeded, context, loading, error, dialogOpen, frozenContext, operation, canReview, refresh, openConfirmation, confirmAcceptance, checkOriginal, resumeOriginal, settleOriginal, close, dispose }
 }

@@ -6,8 +6,8 @@
     <small v-if="reviewHint" class="typed-submission-note" role="status">{{ reviewHint }}</small>
     <template v-if="outcome.kind === 'CLARIFY'">
       <p class="typed-question">{{ outcome.clarification.question }}</p>
-      <button v-if="outcome.clarification.state === 'OPEN'" type="button" @click="$emit('reply', projection)">回答此问</button>
-      <small v-else class="typed-state">已收到补充</small>
+      <button v-if="outcome.clarification.state === 'OPEN' && !readOnly" type="button" @click="$emit('reply', projection)">回答此问</button>
+      <small v-else class="typed-state">{{ outcome.clarification.state === 'OPEN' ? '事项已结束，保留历史问题' : '已收到补充' }}</small>
     </template>
     <template v-else-if="outcome.kind === 'EXECUTION_PROPOSAL'">
       <small>如需调整，请在会话中继续说明。</small>
@@ -18,7 +18,7 @@
 <script setup>
 import { computed } from 'vue'
 import { revisionProgressHint } from '../../composables/juyiting/hallTypedDeliberation.js'
-const props = defineProps({ projection: { type: Object, required: true } })
+const props = defineProps({ projection: { type: Object, required: true }, readOnly: { type: Boolean, default: false } })
 defineEmits(['reply'])
 const outcome = computed(() => props.projection.outcome)
 const inspection = computed(() => props.projection?.purpose === 'INSPECT')

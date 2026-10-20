@@ -308,9 +308,9 @@
             <button type="button" :disabled="leaveState === 'saving'" @click="discardPanelChangesAndLeave">放弃未保存修改并继续</button>
           </section>
 
-    <section v-if="deliveryReview.operation.value.intent && reviewTaskId" class="hall-review-recovery" role="status" aria-label="原验收操作">
+    <section v-if="deliveryReview.recoveryNeeded.value && reviewTaskId" class="hall-review-recovery" role="status" aria-label="原验收操作">
       <p>{{ deliveryReview.operation.value.message }}</p>
-      <button type="button" :disabled="deliveryReview.operation.value.busy" @click="deliveryReview.checkOriginal">查询原验收</button>
+      <button v-if="deliveryReview.operation.value.intent" type="button" :disabled="deliveryReview.operation.value.busy" @click="deliveryReview.checkOriginal">查询原验收</button>
       <button v-if="deliveryReview.operation.value.state === 'UNKNOWN' || deliveryReview.operation.value.state === 'PROCESSING'" type="button" :disabled="deliveryReview.operation.value.busy" @click="deliveryReview.resumeOriginal">继续原验收</button>
       <button v-if="deliveryReview.operation.value.receipt && ['COMMITTED', 'REJECTED'].includes(deliveryReview.operation.value.state)" type="button" :disabled="deliveryReview.operation.value.busy" @click="deliveryReview.settleOriginal">重新核对并结束原操作</button>
     </section>
