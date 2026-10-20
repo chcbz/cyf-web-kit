@@ -73,7 +73,7 @@ describe('persisted exact point-and-start source contract', () => {
     expect(original.agent).to.deep.equal({ agentId: 'agent-1' })
   })
 
-  for (const status of ['assigned', 'submitted', 'completed']) {
+  for (const status of ['assigned', 'reviewing', 'completed']) {
     it(`passive ${status} snapshot check validates exact source without navigating or writing`, async () => {
       const h = harness({ api: { get: async path => path.endsWith('/point-and-deliberate/request')
         ? projection() : { ...canonical(), status } } })

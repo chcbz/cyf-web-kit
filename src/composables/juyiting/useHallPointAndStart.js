@@ -62,7 +62,7 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
     if (!current(captured, epoch, contextEpoch)) return null
     if (task?.id !== intent.taskId || !pointAndStartLong(task.taskVersion, true) ||
       BigInt(task.taskVersion) < BigInt(projection.taskVersion) || task.assignedAgentId !== pointAndStartTarget(intent) ||
-      !['assigned', 'running', 'submitted', 'completed'].includes(task.status)) throw new Error('点将已确认，当前榜文快照尚未核对；未补发首轮')
+      !['assigned', 'running', 'reviewing', 'completed'].includes(task.status)) throw new Error('点将已确认，当前榜文快照尚未核对；未补发首轮')
     // A newer task snapshot may reflect reassignment; recheck the original action
     // before attaching, instead of treating taskVersion as assignmentRevision.
     if (task.taskVersion !== projection.taskVersion) {

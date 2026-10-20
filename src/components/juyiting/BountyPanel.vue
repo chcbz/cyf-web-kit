@@ -636,7 +636,7 @@ const pointAndStartRecoveryTitle = computed(() => ({
 const pointAndStartRecoveryHint = computed(() => ({
   UNKNOWN: '请刷新状态查看进度。',
   PREPARING: '准备完成后即可继续交流。',
-  ADMITTED: '正在进入会话。',
+  ADMITTED: '需求已发送，可从事项操作进入原议事。',
   ATTACHED: '可在会话中查看答复或继续修改。',
   HISTORICAL: '本次指派已结束，可查看历史记录。',
   FAILED: '请刷新状态查看详情。'
