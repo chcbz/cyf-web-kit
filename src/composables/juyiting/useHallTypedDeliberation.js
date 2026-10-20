@@ -52,6 +52,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   getCatalogEntries, storage = null, enabled = () => false, onAccepted = null }) => {
   const scope = computed(() => unref(typeof actorScopeKey === 'function' ? actorScopeKey() : actorScopeKey))
   const projections = ref([]); const selectedPending = ref(null); const error = ref(''); const busy = ref(false); const storageRevision = ref(0)
+  const failedReads = new Set()
   let generation = 0; let disposed = false; let queued = false; let refreshFlight = null
   const capture = () => Object.freeze({ generation, scope: scope.value,
     authorization: unref(typeof authorizationGeneration === 'function' ? authorizationGeneration() : authorizationGeneration),
@@ -107,14 +108,21 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       const projection = purpose === 'INSPECT'
         ? inspectionOutcomeProjection(raw, { conversationId: captured.context.conversationId, conversationGeneration: captured.context.conversationGeneration, taskId: captured.context.taskId, requestId })
         : typedOutcomeProjection(raw, { conversationId: captured.context.conversationId, conversationGeneration: captured.context.conversationGeneration, taskId: captured.context.taskId, requestId })
-      if (!projection) return null
-      if (!apply(projection, captured)) return null
+      if (!projection || !apply(projection, captured)) {
+        failedReads.add(requestId)
+        error.value = '答复状态尚未核对，请重试。'
+        return null
+      }
+      failedReads.delete(requestId)
       const child = projection.reviewProgress?.state === 'COMMITTED' ? projection.reviewProgress.childRequestId : null
       if (child && child !== requestId) await readOne(child, captured, 'CHAT', visited)
       return projection
     } catch (cause) {
       // 404 means this catalog request is ordinary durable CHAT; it is not a typed UI failure.
-      if (current(captured) && cause?.status && cause.status !== 404) error.value = '暂时无法读取答复，请刷新状态。'
+      if (current(captured)) {
+        if (cause?.status === 404) failedReads.delete(requestId)
+        else { failedReads.add(requestId); error.value = '暂时无法读取答复，请刷新状态。' }
+      }
       return null
     }
   }
@@ -138,7 +146,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       const inspectionRequestIds = [...new Set([...catalogInspectionIds, ...storedInspectionIds])]
       await Promise.all([...new Set(catalogChatIds)].map(requestId => readOne(requestId, captured, 'CHAT', visited))
         .concat(inspectionRequestIds.map(requestId => readOne(requestId, captured, 'INSPECT', visited))))
-      return current(captured)
+      return current(captured) && failedReads.size === 0
     }
     const flight = read().finally(() => {
       if (refreshFlight !== flight) return
@@ -229,7 +237,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     const captured = capture(); if (!current(captured)) return false
     const records = readRecords(storage, captured.scope, captured.context).filter(record => sameContext(record.context, captured.context))
     await Promise.all(records.filter(record => typedId(record.receipt?.requestId)).map(record => readOne(record.receipt.requestId, captured, recordPurpose(record))))
-    return current(captured)
+    return current(captured) && failedReads.size === 0
   }
   const resumeUnknown = async (key = '') => {
     if (busy.value || !enabled?.()) return false
@@ -249,7 +257,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     return readRecords(storage, scope.value, getContext?.() || {}).some(record => recordPurpose(record) === 'INSPECT' && record.status === 'ACCEPTED' && !ready.has(record.receipt?.requestId))
       ? '等待查阅资料…' : ''
   })
-  const invalidate = () => { generation++; busy.value = false; projections.value = []; selectedPending.value = null; error.value = '' }
+  const invalidate = () => { generation++; failedReads.clear(); busy.value = false; projections.value = []; selectedPending.value = null; error.value = '' }
   const stopScope = watch(scope, invalidate, { flush: 'sync' })
   const stopCatalog = typeof getCatalogEntries === 'function' ? watch(getCatalogEntries, () => { void refresh(); void recover() }, { deep: true }) : () => {}
   const recoveryAvailable = computed(() => { storageRevision.value; return readRecords(storage, scope.value, getContext?.() || {}).some(record => record.status === 'UNKNOWN') })

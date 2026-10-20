@@ -14,10 +14,10 @@ const receipt = { schemaVersion: 3, intent: 'DISCUSSION', requestId: 'request-18
 const context = { taskId: '474', conversationId: '101', conversationGeneration: '1', assignmentRevision: '1', targetAgentId: 'wuyong' }
 
 describe('SSE interrupted typed round terminal recovery', () => {
-  let originalFetch; let originalTimer; let originalClear; let hall; let streams; let timers; let reads; let contentReads; let catalogHints; let currentView; let readOverride; let contentOverride; let chatContext; let apiStore
+  let originalFetch; let originalTimer; let originalClear; let hall; let streams; let timers; let reads; let contentReads; let catalogHints; let currentView; let readOverride; let contentOverride; let chatContext; let apiStore; let catalogResult
   beforeEach(async () => {
     originalFetch = global.fetch; originalTimer = window.setTimeout; originalClear = window.clearTimeout
-    streams = []; timers = new Map(); reads = 0; contentReads = 0; catalogHints = []; currentView = view(); readOverride = null; contentOverride = null
+    catalogResult = true; streams = []; timers = new Map(); reads = 0; contentReads = 0; catalogHints = []; currentView = view(); readOverride = null; contentOverride = null
     let timerId = 0
     window.setTimeout = callback => { const id = ++timerId; timers.set(id, callback); return id }
     window.clearTimeout = id => timers.delete(id)
@@ -30,7 +30,7 @@ describe('SSE interrupted typed round terminal recovery', () => {
     apiStore = { authorizationGeneration: 1, token: async () => 'fixture-token' }
     hall = useHallConversation({ apiStore, chatContext, chatMode: ref('bounty'), selectedTask: ref({ id: '474' }), selectedAgent: ref(null), outgoingMetadata: ref({}),
       globalStore: { getJiacn: 'owner', user: {} }, log: { warn() {}, error() {} }, openPanel() {}, portraitShortName: () => '', showToast() {},
-      onRequestCatalogHint: event => catalogHints.push(event),
+      onRequestCatalogHint: event => { catalogHints.push(event); return catalogResult },
       chatApi: {
         list: async () => ({ items: [{ id: '101', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:474' }] }),
         get: async path => {
@@ -138,4 +138,30 @@ describe('SSE interrupted typed round terminal recovery', () => {
     expect(catalogHints).to.have.length(0)
     expect(streams).to.have.length(1)
   })
+  it('retries failed projection reads on the existing timer while keeping the healthy SSE', async () => {
+    catalogResult = false
+    hall.refreshExecutionRequest({ conversationId: '101', requestId: 'request-186' })
+    await flush(); expect(timers.size).to.equal(1)
+    catalogResult = true
+    const before = reads
+    await reconnect()
+    expect(streams).to.have.length(1)
+    expect(reads).to.equal(before)
+    expect(timers.size).to.equal(0)
+    expect(catalogHints).to.have.length(2)
+  })
+  it('retains failed reads across repeated retry without a second timer or send', async () => {
+    catalogResult = false
+    hall.refreshExecutionRequest({ conversationId: '101', requestId: 'request-186' })
+    await flush(); await reconnect()
+    expect(timers.size).to.equal(1); expect(streams).to.have.length(1)
+    catalogResult = true; await reconnect(); expect(timers.size).to.equal(0)
+  })
+  it('drops projection recovery on actual identity change', async () => {
+    catalogResult = false
+    hall.refreshExecutionRequest({ conversationId: '101', requestId: 'request-186' }); await flush()
+    chatContext.value = { ...chatContext.value, taskId: '475', conversationScopeKey: 'task:475' }
+    await flush(); expect(timers.size).to.equal(0)
+  })
+
 })

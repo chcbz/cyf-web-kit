@@ -1,4 +1,5 @@
 import { computed, ref } from 'vue'
+import { typedLong } from './hallTypedDeliberation.js'
 
 export const taskAssigneeIds = (task) => {
   if (!task) return []
@@ -134,6 +135,28 @@ export const useHallChatContext = ({
     taskDiscussionAgentIds.value = taskAssigneeIds(selectedTask.value)
   }
 
+  let taskRead = null
+  const refreshConversationTask = ({ agentApi, isCurrent = () => true }) => {
+    const subject = conversationSubject.value
+    const task = subject.task
+    if (!task?.id || !isCurrent()) return Promise.resolve(false)
+    if (taskRead?.subject === subject && taskRead.isCurrent()) return taskRead.promise
+    const flight = { subject, isCurrent }; taskRead = flight
+    flight.promise = (async () => {
+      try {
+        const snapshot = await agentApi.get(`/tasks/${encodeURIComponent(task.id)}`, undefined, { autoLoading: false, needAuth: true })
+        if (conversationSubject.value !== subject || !isCurrent()) return false
+        if (snapshot?.id !== task.id || !typedLong(snapshot.taskVersion) || !snapshot.status ||
+          (typedLong(subject.task.taskVersion) && BigInt(snapshot.taskVersion) < BigInt(subject.task.taskVersion))) return false
+        subject.task = { ...snapshot }
+        if (chatMode.value === 'bounty') taskDiscussionAgentIds.value = taskAssigneeIds(snapshot)
+        if (selectedTask.value?.id === task.id) selectedTask.value = { ...snapshot }
+        return true
+      } catch { return false } finally { if (taskRead === flight) taskRead = null }
+    })()
+    return flight.promise
+  }
+
   const enterPrivateConversation = (agent = selectedAgent.value, { task = null } = {}) => {
     if (!agent?.agentId || !mentionSourceAgentIds.value.has(agent.agentId)) return false
     selectedAgent.value = agent
@@ -165,6 +188,7 @@ export const useHallChatContext = ({
     chatContext,
     conversationAgent,
     conversationTask,
+    refreshConversationTask,
     chatMentionAgentIds,
     chatMentionAgents,
     chatMode,

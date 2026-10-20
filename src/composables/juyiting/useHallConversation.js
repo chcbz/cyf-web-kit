@@ -427,9 +427,38 @@ export const useHallConversation = ({
     return !canonicalWireString(event.stateVersion ?? event.agentDelivery?.stateVersion, { allowZero: true })
   }
 
+  let projectionsDirty = false
+  let projectionFlight = null
+  let projectionRevision = 0
+  const refreshHallProjections = event => {
+    if (!onRequestCatalogHint || disposed || !conversationId.value) return Promise.resolve(true)
+    projectionsDirty = true
+    projectionRevision++
+    const guard = captureGuard(); const id = conversationId.value
+    if (projectionFlight && projectionFlight.id === id && guardCurrent(projectionFlight.guard)) return projectionFlight.promise
+    const flight = { guard, id }; projectionFlight = flight
+    flight.promise = (async () => {
+      // Coalesce live hints in one read; new hints while awaiting need another read.
+      let revision
+      let success = false
+      do {
+        revision = projectionRevision
+        try { success = await onRequestCatalogHint(event) !== false } catch { success = false }
+        if (!guardCurrent(guard) || conversationId.value !== id) return false
+      } while (success && revision !== projectionRevision)
+      projectionsDirty = !success
+      if (!success) {
+        hallEventReconnectFailures++
+        scheduleHallEventReconnect(lifecycleGeneration)
+      }
+      return success
+    })().finally(() => { if (projectionFlight === flight) projectionFlight = null })
+    return flight.promise
+  }
+
   const refreshExecutionRequest = event => {
     if (disposed || event?.conversationId !== conversationId.value || !typedId(event?.requestId)) return false
-    onRequestCatalogHint?.(event)
+    void refreshHallProjections(event)
     if (event.requestId === activeRequest.value?.requestId) scheduleAuthoritativeRequestReadback(event.requestId, { immediate: true })
     return true
   }
@@ -437,7 +466,7 @@ export const useHallConversation = ({
   const appendHallEventMessage = (event, { deferServerResync = false } = {}) => {
     if (event?.type === 'delivery_submission_completed' && event.conversationId === conversationId.value && typedId(event.requestId)) {
       onTypedOutcome?.(event)
-      onRequestCatalogHint?.(event)
+      void refreshHallProjections(event)
       return true
     }
     // Receipt/journal events never replace a request projection or create a successful deliverable.
@@ -451,10 +480,13 @@ export const useHallConversation = ({
     const messageEvent = event?.type === 'agent_message_delta' || event?.type === 'agent_message' || event?.type === 'resync_required' || ['part.processing', 'part.ready', 'part.failed'].includes(event?.type)
     // Keep the active-request reducer closed. A non-active media event can only ask the
     // independent read-only catalog to re-read its owner-scoped index.
-    if (['part.ready', 'agent_message', 'resync_required'].includes(event?.type) && event.requestId && event.conversationId === conversationId.value) onRequestCatalogHint?.(event)
+    if (['part.ready', 'agent_message', 'resync_required'].includes(event?.type) && event.requestId && event.conversationId === conversationId.value) void refreshHallProjections(event)
     const typedRequestId = event?.type === 'agent_message' && event?.typedOutcome ? event.requestId :
       event?.type === 'typed_question_answered' ? (event.requestId || event.replyRequestId) : ''
-    if (typedRequestId && event.conversationId === conversationId.value) onTypedOutcome?.({ ...event, requestId: typedRequestId })
+    if (typedRequestId && event.conversationId === conversationId.value) {
+      onTypedOutcome?.({ ...event, requestId: typedRequestId })
+      void refreshHallProjections(event)
+    }
     if (!messageEvent) {
       if (typedRequestId && event.conversationId === conversationId.value) return true
       if (durableHandled) syncDurablePresentation()
@@ -569,7 +601,9 @@ export const useHallConversation = ({
       try {
         // A broken SSE transport can miss the final event after durable admission.
         // Reuse the existing retry slot and single-flight read; never resend or poll in parallel.
-        if (requestId && await recoverUnknownRequest(requestId, guard) && current()) {
+        let projectionsRead = false
+        const recoverTransport = !hallEventController
+        if (recoverTransport && requestId && await recoverUnknownRequest(requestId, guard) && current()) {
           const missingFinal = activeTurns.value.some(turn => turn.finalMessageId &&
             !messages.value.some(message => exactMessageId(message) === turn.finalMessageId && !message.streaming))
           // Keep partial output while the turn is pending. Only missing durable finals
@@ -578,14 +612,18 @@ export const useHallConversation = ({
             const loaded = await loadHallConversationContent(id, { identity: guard, adoptionCurrent: current, resumeEvents: false })
             if (!loaded && current()) deliberationStatus.value = '回话已结束，正文加载待重试'
           }
-          if (current()) onRequestCatalogHint?.({ type: 'resync_required', conversationId: id, requestId })
+          if (current()) { projectionsRead = true; await refreshHallProjections({ type: 'resync_required', conversationId: id, requestId }) }
         }
+        if (!projectionsRead && projectionsDirty && current()) await refreshHallProjections({ type: 'resync_required', conversationId: id, requestId })
       } catch (error) {
         if (guardCurrent(guard) && error?.name !== 'AbortError') log.warn('核对断流原回话失败', error)
       } finally {
         if (hallEventReconnectTimer === timer) {
           hallEventReconnectTimer = null
-          if (guardCurrent(guard) && !hallEventTerminal && isPageVisible()) startHallEventStream()
+          if (guardCurrent(guard) && !hallEventTerminal && isPageVisible()) {
+            if (!hallEventController) void startHallEventStream()
+            if (projectionsDirty) scheduleHallEventReconnect(generation)
+          }
         }
       }
     }, delay)
@@ -710,11 +748,13 @@ export const useHallConversation = ({
       return
     }
     startHallEventStream()
+    if (projectionsDirty) scheduleHallEventReconnect(lifecycleGeneration)
   }
 
   const handleHallEventFocus = () => {
     if (!isPageVisible() || hallEventReconnectTimer != null) return
     startHallEventStream()
+    if (projectionsDirty) scheduleHallEventReconnect(lifecycleGeneration)
   }
 
   const resetDurableState = () => {
@@ -750,6 +790,9 @@ export const useHallConversation = ({
     lifecycleGeneration += 1
     recoveringReplyTurn = null
     lifecycleController.abort(new DOMException('Hall identity lifecycle reset', 'AbortError'))
+    projectionsDirty = false
+    projectionFlight = null
+    projectionRevision++
     resetDurableState()
     if (!disposed) lifecycleController = new AbortController()
   }
@@ -2183,6 +2226,7 @@ export const useHallConversation = ({
   return {
     adoptBountyBootstrap,
     refreshExecutionRequest,
+    refreshHallProjections,
     adoptTypedDiscussionReceipt,
     isAdoptingBountyBootstrap,
     cancelHallReplyTurn,

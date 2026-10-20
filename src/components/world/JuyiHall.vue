@@ -1279,6 +1279,7 @@ const {
   chatContext,
   conversationAgent,
   conversationTask,
+  refreshConversationTask,
   chatMentionAgentIds,
   chatMentionAgents,
   chatMode,
@@ -2203,8 +2204,9 @@ const {
   newHallConversation,
   pendingAgentName,
   replyEventSequence,
-  retryHallConversation,
+  retryHallConversation: reloadHallConversation,
   refreshExecutionRequest,
+  refreshHallProjections,
   sendHallMessage,
   senderText,
   selectHallConversation,
@@ -2255,7 +2257,8 @@ const bountyRequestCatalog = useHallBountyRequestCatalog({
   getContextGeneration: () => followupContextGeneration.value, enabled: () => multimediaDeliberationUiEnabled && chatMode.value === 'bounty'
 })
 notifyBountyRequestCatalog = async () => {
-  if (await bountyRequestCatalog.refresh()) await typedDeliberation?.refresh?.()
+  if (!typedDeliberationEnabled.value) return true
+  return refreshFollowupContext()
 }
 const invalidateFollowupContext = () => { followupContextGeneration.value++; typedDeliberation?.invalidate?.() }
 // Only the authenticated binding owns these values. A newly adopted request or
@@ -2449,17 +2452,32 @@ watch(() => selectedAgent.value?.agentId, (target, previous) => {
 }, { flush: 'sync' })
 const followupTaskFence = computed(() => [conversationTask.value?.id, conversationTask.value?.taskVersion,
   conversationTask.value?.requirementRevision, conversationTask.value?.revision].map(value => value == null ? '' : String(value)).join('\u0000'))
+const refreshCurrentConversationTask = () => {
+  const fence = [hallIdentityScope.value, apiStore.authorizationGeneration, conversationId.value, conversationTask.value?.id, chatMode.value]
+  return refreshConversationTask({ agentApi, isCurrent: () => {
+    const now = [hallIdentityScope.value, apiStore.authorizationGeneration, conversationId.value, conversationTask.value?.id, chatMode.value]
+    return fence.every((value, index) => value === now[index])
+  } })
+}
+const retryHallConversation = async () => {
+  if (chatMode.value === 'bounty' && !await refreshCurrentConversationTask()) {
+    showToast('事项状态未能核对，请重试；草稿已保留。')
+    return false
+  }
+  return reloadHallConversation()
+}
 const refreshFollowupContext = async () => {
-  const captured = followupContextGeneration.value
   if (!typedDeliberationEnabled.value || !conversationId.value) return false
+  if (!await refreshCurrentConversationTask()) return false
+  const captured = followupContextGeneration.value
   if (!await bountyAssignmentContext.refresh() || captured !== followupContextGeneration.value) return false
   if (!await bountyRequestCatalog.refresh() || captured !== followupContextGeneration.value) return false
-  return typedDeliberation?.recover?.()
+  return await typedDeliberation.refresh() && await typedDeliberation.recover()
 }
 const resetFollowupContext = () => {
   invalidateFollowupContext()
   bountyRequestCatalog.reset()
-  void refreshFollowupContext()
+  void refreshHallProjections({ type: 'resync_required', conversationId: conversationId.value })
 }
 watch([followupTaskFence, () => apiStore.authorizationGeneration, hallIdentityScope, () => conversationId.value,
   () => bountyInteractionTargetId(chatContext.value), () => chatMode.value], resetFollowupContext, { flush: 'sync' })
@@ -2635,16 +2653,25 @@ const confirmDeliveryReview = async () => {
   if (reviewInteractionLocked()) return
   await deliveryReview.confirmAcceptance()
 }
+let reviewPreviewGeneration = 0
 const previewReviewOutput = async item => {
+  const generation = ++reviewPreviewGeneration
   const id = reviewTaskId.value; const identity = hallIdentityScope.value; const auth = apiStore.authorizationGeneration
   reviewPreviewError.value = ''; reviewPreviewItem.value = null
-  if (!reviewOutputs.items.value.length) await reviewOutputs.refresh()
-  if (id !== reviewTaskId.value || identity !== hallIdentityScope.value || auth !== apiStore.authorizationGeneration) return
-  const exact = reviewOutputs.items.value.find(output => output.artifactId === item.artifactId && String(output.artifactVersion) === item.artifactVersion && output.sha256 === item.contentHash)
+  const current = () => generation === reviewPreviewGeneration && id === reviewTaskId.value && identity === hallIdentityScope.value && auth === apiStore.authorizationGeneration
+  const findExact = () => reviewOutputs.items.value.find(output => output.artifactId === item.artifactId && String(output.artifactVersion) === item.artifactVersion && output.sha256 === item.contentHash)
+  if (!findExact()) {
+    try { await reviewOutputs.refresh() } catch {
+      if (current()) reviewPreviewError.value = '成果读取失败，请重试；不会换用其他版本。'
+      return
+    }
+  }
+  if (!current()) return
+  const exact = findExact()
   if (!exact || !exact.canPreview) { reviewPreviewError.value = '此固定成果暂不可预览，请重新核对；不会换用其他版本。'; return }
   reviewPreviewItem.value = exact
 }
-watch(() => [reviewTaskId.value, apiStore.authorizationGeneration, hallIdentityScope.value], () => { reviewPreviewItem.value = null; reviewPreviewError.value = '' }, { flush: 'sync' })
+watch(() => [reviewTaskId.value, apiStore.authorizationGeneration, hallIdentityScope.value], () => { reviewPreviewGeneration++; reviewPreviewItem.value = null; reviewPreviewError.value = '' }, { flush: 'sync' })
 let lastReviewCompletion = ''
 watch(() => deliveryReview.operation.value.receipt, receipt => {
   if (!receipt || receipt.taskId !== reviewTaskId.value || receipt.state !== 'COMMITTED' || receipt.decision !== 'ACCEPT' || receipt.taskState !== 'COMPLETED') return
@@ -2776,10 +2803,10 @@ const handleSendHallMessage = async (typedInput = {}) => {
   playSend()
   if (typedDeliberationEnabled.value) {
     const sourceSelectors = Array.isArray(typedInput?.sourceSelectors) ? typedInput.sourceSelectors : []
-    if ((!typedAssignmentRevision() || bountyAssignmentContext.error.value || bountyAssignmentContext.loading.value) && conversationTask.value?.id) {
+    if (conversationTask.value?.id) {
       const fence = [hallIdentityScope.value, apiStore.authorizationGeneration, conversationTask.value.id,
         conversationId.value, bountyInteractionTargetId(chatContext.value), draft.value]
-      const prepared = await bountyAssignmentContext.refresh()
+      const prepared = await refreshCurrentConversationTask() && await bountyAssignmentContext.refresh()
       const current = [hallIdentityScope.value, apiStore.authorizationGeneration, conversationTask.value?.id,
         conversationId.value, bountyInteractionTargetId(chatContext.value), draft.value]
       if (fence.some((value, index) => value !== current[index])) return false

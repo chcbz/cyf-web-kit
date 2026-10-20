@@ -18,6 +18,20 @@ const restoreCrypto = () => {
 describe('typed natural discussion interaction adapter', () => {
   beforeEach(() => { Object.defineProperty(globalThis, 'crypto', { configurable: true, writable: true, value: { randomUUID: () => '00000000-0000-4000-8000-000000000001' } }) })
   afterEach(restoreCrypto)
+  it('reports failed authoritative GETs until recovered, but ordinary CHAT 404 is not a failure', async () => {
+    let status = 503
+    const lane = useHallTypedDeliberation({ chatApi: { get: async () => { if (status) throw Object.assign(new Error('offline'), { status }); return clarify('request-1') } },
+      actorScopeKey: ref('owner'), authorizationGeneration: ref(1), enabled: () => true,
+      getContext: () => ({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }),
+      getCatalogEntries: () => [{ request: { requestId: 'request-1', turns: [{ route: 'CHAT' }] } }] })
+    try {
+      expect(await lane.refresh()).to.equal(false)
+      status = 0; expect(await lane.refresh()).to.equal(true)
+      expect(lane.projections.value).to.have.length(1)
+      status = 404; expect(await lane.refresh()).to.equal(true)
+      status = undefined; expect(await lane.refresh()).to.equal(true)
+    } finally { lane.dispose() }
+  })
   it('new discussion does not manufacture a legacy catalog preparation round', async () => {
     for (const prepared of [false, true]) {
       const calls = []
@@ -230,7 +244,7 @@ describe('typed inspection interaction adapter', () => {
   })
   it('discovers INSPECT from the existing request catalog and does not force that request through CHAT', async () => {
     const calls = []; const context = ref({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' })
-    const pending = { schemaVersion: 6, submissionProgress: null, reviewProgress: null, route: 'INSPECT', conversationId: '7', conversationGeneration: '1', requestId: 'request-catalog-inspect', requestRevision: '1', turnId: 'turn-catalog-inspect', state: 'PENDING', outcome: null, inspection: { authorizationId: 'inspection-1', manifestSha256: `${'a'.repeat(64)}`, sourceRefIds: ['source-1'], inputSummary: null } }
+    const pending = { schemaVersion: 6, submissionProgress: null, reviewProgress: null, route: 'INSPECT', actionProgress: null, conversationId: '7', conversationGeneration: '1', requestId: 'request-catalog-inspect', requestRevision: '1', turnId: 'turn-catalog-inspect', state: 'PENDING', outcome: null, inspection: { authorizationId: 'inspection-1', manifestSha256: `${'a'.repeat(64)}`, sourceRefIds: ['source-1'], inputSummary: null } }
     const lane = useHallTypedDeliberation({ chatApi: { get: async path => { calls.push(path); return pending } }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context.value, getContextGeneration: () => 1,
       getCatalogEntries: () => [{ request: { requestId: 'request-catalog-inspect', turns: [{ route: 'INSPECT' }] } }], storage: store(), enabled: () => true })
     expect(await lane.refresh()).to.equal(true)

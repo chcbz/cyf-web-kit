@@ -40,7 +40,7 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
   it('routes the one bounty composer through typed DISCUSSION only when the strict default-off flag is enabled', async () => {
     const enabled = ref(true); const draft = ref('画一只鸟'); const calls = []; const typed = { error: ref(''), submit: async body => { calls.push(['typed', body]); return true } }
     const send = async () => { calls.push(['legacy']); return true }
-    const actual = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled', 'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', 'typedAssignmentRevision', 'bountyAssignmentContext', `return (${handler('handleSendHallMessage')})`)({ close: () => {} }, { cancel: () => {} }, () => {}, enabled, typed, draft, value => calls.push(['draft', value]), () => {}, send, () => '4', { loading: ref(false), error: ref('') })
+    const actual = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled', 'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', 'typedAssignmentRevision', 'bountyAssignmentContext', 'refreshCurrentConversationTask', 'conversationTask', `return (${handler('handleSendHallMessage')})`)({ close: () => {} }, { cancel: () => {} }, () => {}, enabled, typed, draft, value => calls.push(['draft', value]), () => {}, send, () => '4', { loading: ref(false), error: ref('') }, async () => true, ref(null))
     expect(await actual()).to.equal(true)
     expect(calls).to.deep.equal([['typed', { content: '画一只鸟', sourceSelectors: [], materialScope: 'TASK_DEFAULT' }], ['draft', '']])
     enabled.value = false
@@ -57,14 +57,14 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       const actual = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled',
         'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', 'typedAssignmentRevision',
         'conversationTask', 'hallIdentityScope', 'apiStore', 'conversationId', 'bountyInteractionTargetId',
-        'chatContext', 'bountyAssignmentContext', `return (${handler('handleSendHallMessage')})`)(
+        'chatContext', 'bountyAssignmentContext', 'refreshCurrentConversationTask', `return (${handler('handleSendHallMessage')})`)(
         { close() {} }, { cancel() {} }, () => {}, ref(true),
         { error: ref(''), submit: async () => { calls.push('POST'); return true } }, draft,
         () => {}, () => {}, () => { throw new Error('legacy lane forbidden') }, () => revision,
         task, identity, { authorizationGeneration: 1 }, ref('7'), () => 'agent-a', ref({}),
-        { error: ref(''), refresh: async () => { calls.push('GET-context'); revision = '1'; if (switchIdentity) identity.value = 'owner-b'; return true } })
+        { error: ref(''), refresh: async () => { calls.push('GET-context'); revision = '1'; if (switchIdentity) identity.value = 'owner-b'; return true } }, async () => { calls.push('GET-task'); return true })
       expect(await actual()).to.equal(!switchIdentity)
-      expect(calls).to.deep.equal(switchIdentity ? ['GET-context'] : ['GET-context', 'POST'])
+      expect(calls).to.deep.equal(switchIdentity ? ['GET-task', 'GET-context'] : ['GET-task', 'GET-context', 'POST'])
     }
   })
   it('does not send or clear the draft when authoritative assignment recovery fails', async () => {
@@ -72,12 +72,12 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
     const actual = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled',
       'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', 'typedAssignmentRevision',
       'conversationTask', 'hallIdentityScope', 'apiStore', 'conversationId', 'bountyInteractionTargetId',
-      'chatContext', 'bountyAssignmentContext', `return (${handler('handleSendHallMessage')})`)(
+      'chatContext', 'bountyAssignmentContext', 'refreshCurrentConversationTask', `return (${handler('handleSendHallMessage')})`)(
       { close() {} }, { cancel() {} }, () => {}, ref(true),
       { error: ref(''), submit: async () => calls.push('POST') }, draft,
       () => calls.push('clear'), text => calls.push(text), () => calls.push('legacy'), () => '',
       ref({ id: '450' }), ref('owner'), { authorizationGeneration: 1 }, ref('7'), () => 'wuyong', ref({}),
-      { error: ref('指派核对失败'), refresh: async () => false })
+      { error: ref('指派核对失败'), refresh: async () => false }, async () => true)
     expect(await actual()).to.equal(false); expect(calls).to.deep.equal(['指派核对失败'])
     expect(draft.value).to.equal('识别这张图片')
   })
@@ -341,5 +341,48 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
     const callback = new Function('typedDeliberation', `return (${option('useHallConversation', 'onTypedOutcome')})`)({ readOne: value => calls.push(value) })
     callback({ requestId: 'request-1' }); callback({})
     expect(calls).to.deep.equal(['request-1'])
+  })
+})
+
+
+describe('actual JuyiHall exact acceptance preview', () => {
+  const item = { artifactId: 'artifact-new', artifactVersion: '2', contentHash: 'b'.repeat(64) }
+  const output = { artifactId: item.artifactId, artifactVersion: '2', sha256: item.contentHash, canPreview: true }
+  const setup = refresh => {
+    const task = ref('474'); const identity = ref('owner'); const api = { authorizationGeneration: 1 }
+    const preview = ref(null); const error = ref(''); const items = ref([{ ...output, artifactVersion: '1' }])
+    const run = new Function('reviewTaskId', 'hallIdentityScope', 'apiStore', 'reviewPreviewError', 'reviewPreviewItem', 'reviewOutputs',
+      `let reviewPreviewGeneration = 0; return (${handler('previewReviewOutput')})`)(task, identity, api, error, preview,
+      { items, refresh: () => refresh(items, task, identity, api) })
+    return { run, task, identity, api, preview, error, items }
+  }
+  it('refreshes a nonempty stale cache exactly once and opens only the exact version/hash', async () => {
+    let reads = 0
+    const view = setup(items => { reads++; items.value = [output]; return true })
+    await view.run(item); expect(reads).to.equal(1); expect(view.preview.value).to.deep.equal(output)
+    await view.run(item); expect(reads).to.equal(1)
+  })
+  for (const change of ['task', 'identity', 'authorization', 'hash', 'failure']) {
+    it(`does not preview stale or unauthorized output after ${change}`, async () => {
+      const view = setup((items, task, identity, api) => {
+        items.value = [output]
+        if (change === 'task') task.value = '475'
+        if (change === 'identity') identity.value = 'other'
+        if (change === 'authorization') api.authorizationGeneration++
+        if (change === 'hash') items.value = [{ ...output, sha256: 'c'.repeat(64) }]
+        if (change === 'failure') throw new Error('offline')
+      })
+      await view.run(item); expect(view.preview.value).to.equal(null)
+      if (['hash', 'failure'].includes(change)) expect(view.error.value).not.to.equal('')
+    })
+  }
+  it('does not let the previous preview click replace the current one', async () => {
+    let finish
+    const view = setup(items => new Promise(resolve => { finish = () => { items.value = [output]; resolve(true) } }))
+    const first = view.run(item)
+    view.items.value = [{ ...output, artifactId: 'other' }]
+    await view.run({ ...item, artifactId: 'other' })
+    finish(); await first
+    expect(view.preview.value.artifactId).to.equal('other')
   })
 })

@@ -136,4 +136,31 @@ describe('useHallChatContext', () => {
     expect(context.chatContext.value.targetAgentIds).to.deep.equal(['linchong'])
   })
 
+  it('refreshes the canonical conversation task once without changing explicit targets', async () => {
+    const selectedTask = ref({ id: '474', taskVersion: '3', assignedAgentId: 'wuyong' })
+    const context = useHallChatContext({ agents: ref(agents), selectedTask, selectedAgent: ref(null), portraitShortName })
+    context.enterBountyDiscussion(); context.setMentionAgent(agents[0])
+    let resolve; let reads = 0
+    const options = { agentApi: { get: () => { reads++; return new Promise(done => { resolve = done }) } }, isCurrent: () => true }
+    const first = context.refreshConversationTask(options); const joined = context.refreshConversationTask(options)
+    resolve({ id: '474', taskVersion: '7', status: 'review', assignedAgentId: 'wuyong' })
+    expect(await first).to.equal(true); expect(await joined).to.equal(true); expect(reads).to.equal(1)
+    expect(context.conversationTask.value.taskVersion).to.equal('7')
+    expect(context.chatContext.value.targetAgentIds).to.deep.equal(['wuyong'])
+  })
+  for (const change of ['identity', 'subject', 'older', 'foreign', 'failure']) {
+    it(`rejects delayed or invalid canonical snapshot: ${change}`, async () => {
+      const selectedTask = ref({ id: '474', taskVersion: '7', assignedAgentId: 'wuyong' })
+      const context = useHallChatContext({ agents: ref(agents), selectedTask, selectedAgent: ref(null), portraitShortName })
+      context.enterBountyDiscussion()
+      let resolve; let valid = true
+      const read = context.refreshConversationTask({ agentApi: { get: () => new Promise(done => { resolve = done }) }, isCurrent: () => valid })
+      if (change === 'identity') valid = false
+      if (change === 'subject') context.enterBountyDiscussion({ id: '475', taskVersion: '1', assignedAgentId: 'wuyong' })
+      resolve(change === 'failure' ? null : { id: change === 'foreign' ? '475' : '474', taskVersion: change === 'older' ? '3' : '8', status: 'review' })
+      expect(await read).to.equal(false)
+      expect(context.conversationTask.value.taskVersion).to.equal(change === 'subject' ? '1' : '7')
+    })
+  }
+
 })
