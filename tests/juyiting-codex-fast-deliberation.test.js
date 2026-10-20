@@ -740,7 +740,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     await Promise.resolve()
     expect(conversation.durableCancelTarget.value).to.deep.equal({ turnId: 'turn-a' })
     expect(await conversation.cancelDeliberation({ turnId: 'turn-a' })).to.equal(true)
-    expect(posts).to.deep.equal([{ path: '/turns/turn-a/cancel', body: { expectedStateVersion: '0' } }])
+    expect(posts).to.deep.equal([{ path: '/turns/turn-a/cancel', body: { expectedStateVersion: '0', expectedLastDeltaSeq: '0' } }])
     expect(conversation.deliberationStatus.value).to.equal('CHAT · 已取消')
     expect(await conversation.cancelDeliberation({ turnId: 'turn-a' })).to.equal(true)
     expect(posts).to.have.length(1)
