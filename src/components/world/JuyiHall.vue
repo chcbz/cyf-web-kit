@@ -2444,7 +2444,8 @@ watch(() => [selectedTask.value?.id, selectedTask.value?.taskVersion, selectedTa
   admittedPointAndStartTaskFingerprint = null
   if (admittedProjection) return
   clearPointAndStartCapability()
-  if (taskId && pointAndStartIntentState(taskId).state === 'PRESENT') void checkPointAndStartOriginal({ id: taskId })
+  // A selected snapshot refresh is not an explicit request to enter discussion.
+  if (taskId && pointAndStartIntentState(taskId).state === 'PRESENT') void checkPointAndStart(taskId, { attach: false })
 }, { flush: 'sync' })
 watch([() => apiStore.authorizationGeneration, hallIdentityScope], clearPointAndStartCapability, { flush: 'sync' })
 watch(() => selectedAgent.value?.agentId, (target, previous) => {

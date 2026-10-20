@@ -73,6 +73,21 @@ describe('persisted exact point-and-start source contract', () => {
     expect(original.agent).to.deep.equal({ agentId: 'agent-1' })
   })
 
+  for (const status of ['assigned', 'submitted', 'completed']) {
+    it(`passive ${status} snapshot check validates exact source without navigating or writing`, async () => {
+      const h = harness({ api: { get: async path => path.endsWith('/point-and-deliberate/request')
+        ? projection() : { ...canonical(), status } } })
+      h.seed()
+      expect(await h.flow.checkOriginal('task-1', { attach: false })).to.equal(true)
+      expect(h.flow.state.value.projection.taskId).to.equal('task-1')
+      expect(h.admitted).to.have.length(0)
+      expect(h.calls.filter(c => c[0] === 'post')).to.have.length(0)
+      // The same persisted request can still be entered by an explicit action.
+      expect(await h.flow.checkOriginal('task-1')).to.equal(true)
+      expect(h.admitted).to.have.length(1)
+    })
+  }
+
   it('preserves exact fixed-version optional reference with metadata/hash projected by server', async () => {
     const input = { fileId: 'image-1', version: '2', purpose: 'REFERENCE' }
     const facts = { ...input, contentMimeType: 'image/png', byteLength: '12', contentHash: 'b'.repeat(64) }
