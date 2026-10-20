@@ -179,7 +179,7 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       const apiStore = Vue.reactive({ authorizationGeneration: 1 })
       const hallIdentityScope = ref('owner'); const chatMode = ref('bounty')
       const followupContextGeneration = ref(0); const conversationTask = ref({ id: 'task-1', taskVersion: '1' })
-      const recoveries = []; const typedDeliberation = { invalidate() { recoveries.push('INVALIDATE') }, recover: async () => { recoveries.push('RECOVER'); return true } }
+      const recoveries = []; const typedDeliberation = { refresh: async () => true, invalidate() { recoveries.push('INVALIDATE') }, recover: async () => { recoveries.push('RECOVER'); return true } }
       const env = { computed: Vue.computed, watch: Vue.watch, conversationTask, apiStore, hallIdentityScope,
         conversationId: conversation.conversationId, activeRequest: conversation.activeRequest,
         bountyInteractionTargetId: () => 'agent-1', chatContext, chatMode, followupContextGeneration,
@@ -198,7 +198,9 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
         getContextGeneration: () => followupContextGeneration.value, enabled: () => true })
       env.invalidateFollowupContext = evaluate(handler('invalidateFollowupContext'))
       env.followupTaskFence = evaluate(handler('followupTaskFence'))
+      env.refreshCurrentConversationTask = async () => true
       env.refreshFollowupContext = evaluate(handler('refreshFollowupContext'))
+      env.refreshHallProjections = () => env.refreshFollowupContext()
       env.resetFollowupContext = evaluate(handler('resetFollowupContext'))
       const watchers = program.body.filter(node => node.type === 'ExpressionStatement' && node.expression?.callee?.name === 'watch' &&
         script.slice(node.expression.start, node.expression.end).includes('resetFollowupContext'))
