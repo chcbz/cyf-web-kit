@@ -53,7 +53,7 @@
       <template #bounty-results>
         <BountyExecutionOutputs
           :enabled="deliberationV2Enabled"
-          :task-completed="selectedTask?.status === 'completed'"
+          :task-completed="taskCompleted"
           :request="activeRequest"
           :catalog="requestCatalog"
           :typed-outcomes="typedOutcomes"
@@ -113,12 +113,15 @@ const bountySubtitle = computed(() => {
   return `${taskName}${countText}`
 })
 
+const taskCompleted = computed(() => props.selectedTask?.status === 'completed' ||
+  Boolean(props.selectedTask?.id && props.reviewContext?.taskId === props.selectedTask.id && props.reviewContext.taskState === 'COMPLETED'))
+
 const chatProps = computed(() => {
   const {
     reviewContext, reviewBusy, activeRequest, requestCatalog, activeTurns, capabilityState, deliberationV2Enabled,
     typedRecoveryAvailable, typedInspectionStatus, ...chat
   } = props
-  return chat
+  return { ...chat, matterReadOnly: chat.matterReadOnly || taskCompleted.value }
 })
 </script>
 
