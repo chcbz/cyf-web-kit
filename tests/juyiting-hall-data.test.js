@@ -469,3 +469,57 @@ describe('Hall assignment uses the same authoritative projection as the task vie
     } finally { hall.dispose() }
   })
 })
+
+describe('selected matter leaving the filtered page after acceptance', () => {
+  const counts = { PENDING_ASSIGNMENT: '0', IN_PROGRESS: '0', PENDING_ACCEPTANCE: '0', COMPLETED: '1', HISTORY: '0', UNKNOWN: '0', total: '1' }
+  const fixture = get => {
+    const selectedTask = ref({ id: 'accepted-task', status: 'reviewing', taskVersion: '3' })
+    const identity = ref('owner-a')
+    const calls = []
+    const hall = useHallData({ selectedTask, selectedAgent: ref(null), identityScope: identity,
+      agentApi: { get: async (...args) => { calls.push(args); return get(...args) }, search: async (path, _params, options) => {
+        options.onSuccess(path === '/tasks/status-counts' ? { phaseCounts: counts, rawStatusCounts: { completed: '1', total: '1' } } : { items: [], pageNum: 1, pageSize: 30, total: '0' })
+      } }, log: { warn: () => {} }, normalizeStatus: value => value, taskAgentMatchScore: () => 0 })
+    return { hall, selectedTask, identity, calls }
+  }
+  it('refreshes the original selected ID once although the completed task is outside the current filter', async () => {
+    const f = fixture(async () => ({ id: 'accepted-task', status: 'completed', taskVersion: '4' }))
+    try {
+      await f.hall.loadTasks({ refreshTaskId: 'accepted-task', minimumTaskVersion: '4' })
+      expect(f.selectedTask.value.status).to.equal('completed')
+      expect(f.hall.tasks.value).to.deep.equal([])
+      expect(f.calls.map(call => call[0])).to.deep.equal(['/tasks/accepted-task'])
+      expect(f.hall.tasksError.value).to.equal('')
+    } finally { f.hall.dispose() }
+  })
+  it('does not replace a different selected matter with a late exact read', async () => {
+    let finish
+    const f = fixture(() => new Promise(resolve => { finish = resolve }))
+    try {
+      const pending = f.hall.loadTasks()
+      while (!finish) await Promise.resolve()
+      f.selectedTask.value = { id: 'other', status: 'open', taskVersion: '1' }
+      finish({ id: 'accepted-task', status: 'completed', taskVersion: '4' }); await pending
+      expect(f.selectedTask.value.id).to.equal('other')
+    } finally { f.hall.dispose() }
+  })
+  it('rejects a stale root version and preserves the original matter with a visible read error', async () => {
+    const f = fixture(async () => ({ id: 'accepted-task', status: 'reviewing', taskVersion: '3' }))
+    try {
+      await f.hall.loadTasks({ refreshTaskId: 'accepted-task', minimumTaskVersion: '4' })
+      expect(f.selectedTask.value.taskVersion).to.equal('3')
+      expect(f.hall.tasksError.value).to.include('版本尚未核对')
+    } finally { f.hall.dispose() }
+  })
+  it('ignores an old-account read after identity changes', async () => {
+    let finish
+    const f = fixture(() => new Promise(resolve => { finish = resolve }))
+    try {
+      const pending = f.hall.loadTasks()
+      while (!finish) await Promise.resolve()
+      f.identity.value = 'owner-b'; await Promise.resolve()
+      finish({ id: 'accepted-task', status: 'completed', taskVersion: '4' }); await pending
+      expect(f.selectedTask.value?.id).not.to.equal('accepted-task')
+    } finally { f.hall.dispose() }
+  })
+})

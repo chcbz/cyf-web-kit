@@ -328,7 +328,7 @@ export const useHallData = ({
     deriveRosterProjections()
   }
 
-  const loadTasks = async () => {
+  const loadTasks = async (options = {}) => {
     const epoch = ++listEpoch
     const fingerprint = `${queryFingerprint()}\u0000${taskStatusFilter.value}`
     const current = () => epoch === listEpoch && fingerprint === `${queryFingerprint()}\u0000${taskStatusFilter.value}`
@@ -344,6 +344,7 @@ export const useHallData = ({
       ...baseParams,
       phase: taskStatusFilter.value || undefined
     }
+    const selectedId = selectedTask.value?.id
     const listRequest = (async () => {
       try {
         const list = await searchTasks(displayParams)
@@ -351,11 +352,30 @@ export const useHallData = ({
         tasks.value = list
         // A task leaving the current page/filter is not deletion or revocation. Keep the
         // active context by ID; refresh the selected projection only when actually present.
-        const selected = list.find(task => task.id === selectedTask.value?.id)
+        if (selectedTask.value?.id !== selectedId) return list
+        const selected = list.find(task => task.id === selectedId)
         const version = value => typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value) ? BigInt(value) : null
         const before = version(selectedTask.value?.taskVersion)
         const after = version(selected?.taskVersion)
-        if (selected && (before === null || (after !== null && after >= before))) selectedTask.value = selected
+        const minimum = options?.refreshTaskId === selectedId ? version(options.minimumTaskVersion) : null
+        if (selected && (before === null || (after !== null && after >= before)) && (minimum === null || (after !== null && after >= minimum))) selectedTask.value = selected
+        else if (selectedId && selectedTask.value?.id === selectedId) {
+          // Acceptance can move the active matter out of this filter/page. Read
+          // that exact ID once; a missing list row is not a current detail snapshot.
+          try {
+            const snapshot = await agentApi.get(`/tasks/${encodeURIComponent(selectedId)}`, undefined, { autoLoading: false, needAuth: true })
+            if (!current() || selectedTask.value?.id !== selectedId) return list
+            const nextVersion = version(snapshot?.taskVersion)
+            const currentVersion = version(selectedTask.value?.taskVersion)
+            if (snapshot?.id !== selectedId || nextVersion === null ||
+              (currentVersion !== null && nextVersion < currentVersion) || (minimum !== null && nextVersion < minimum)) {
+              throw new Error('事项详情版本尚未核对，请重查。')
+            }
+            selectedTask.value = snapshot
+          } catch (error) {
+            if (current() && selectedTask.value?.id === selectedId) tasksError.value = error?.message || '事项详情暂无法核对，请重查。'
+          }
+        }
         return list
       } catch (error) {
         if (!current()) return []

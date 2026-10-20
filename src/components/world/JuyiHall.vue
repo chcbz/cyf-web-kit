@@ -2679,7 +2679,8 @@ watch(() => deliveryReview.operation.value.receipt, receipt => {
   const key = `${apiStore.authorizationGeneration}\u0000${hallIdentityScope.value}\u0000${receipt.operationId}`
   if (key === lastReviewCompletion) return
   lastReviewCompletion = key
-  void loadTasks()
+  hallReadRevision.value += 1
+  void loadTasks({ refreshTaskId: receipt.taskId, minimumTaskVersion: receipt.taskVersion })
 })
 watch(() => [conversationTask.value?.taskVersion, selectedTask.value?.taskVersion, formalTaskRef.value?.taskVersion,
   typedDeliberation.cards.value.map(card => `${card.outcome?.outcomeId}:${card.state}:${card.submissionProgress?.state}:${card.submissionProgress?.dispatchVersion}:${card.submissionProgress?.operationStateVersion}:${card.reviewProgress?.state}:${card.reviewProgress?.stateVersion}`).join('|')].join('\u0000'), () => { if (reviewTaskId.value) void deliveryReview.refresh() })
