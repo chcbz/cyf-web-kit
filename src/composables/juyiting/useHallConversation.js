@@ -436,6 +436,10 @@ export const useHallConversation = ({
     }
     // Receipt/journal events never replace a request projection or create a successful deliverable.
     if (['execution_abandoned', 'execution_terminal', 'action_started', 'action_failed', 'target_capability_unavailable', 'cancel_requested'].includes(event?.type)) return refreshExecutionRequest(event)
+    // Historical replay may contain deltas from an earlier cancelled request.
+    // Only the active request owns live bubbles; persisted historical finals still render.
+    if (event?.type === 'agent_message_delta' && activeRequest.value?.requestId &&
+        event.requestId && event.requestId !== activeRequest.value.requestId) return true
     const needsReadback = needsUnversionedTurnReadback(event)
     const durableHandled = applyDeliberationEvent(event)
     const messageEvent = event?.type === 'agent_message_delta' || event?.type === 'agent_message' || event?.type === 'resync_required' || ['part.processing', 'part.ready', 'part.failed'].includes(event?.type)

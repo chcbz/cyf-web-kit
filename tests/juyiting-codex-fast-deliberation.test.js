@@ -751,6 +751,30 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     conversation.disposeHallConversation()
   })
 
+  it('does not resurrect a historical request delta after the current request is cancelled', async () => {
+    let requestId
+    const conversation = base({ chatApi: {
+      get: async path => path === '/capabilities' ? capabilityV2 : durableRequestView({ requestId,
+        state: 'CANCELLED', turns: [durableTurnView({ requestId, turnId: 'turn-a', state: 'CANCELLED' })] }),
+      create: async (_path, body, options) => {
+        requestId = body.requestId
+        options.onStream(JSON.stringify({ agentDelivery: { agentId: 'a', accepted: true, state: 'QUEUED' },
+          conversationId: '9007199254740993', requestId, turnId: 'turn-a' }))
+        conversation.activeRequest.value = { ...conversation.activeRequest.value, requestId, state: 'CANCELLED' }
+        conversation.activeTurns.value = [durableTurnView({ requestId, turnId: 'turn-a', state: 'CANCELLED' })]
+        options.onStream(JSON.stringify({ type: 'agent_message_delta', conversationId: '9007199254740993',
+          requestId: 'historical-request', turnId: 'historical-turn', deltaSeq: '1', content: 'old partial', agentId: 'a' }))
+        options.onStreamEnd()
+      }
+    } })
+    try {
+      conversation.setDraft('recover stopped reply'); await conversation.sendHallMessage(); await flushReadbacks()
+      expect(conversation.messages.value.some(message => message.content === 'old partial')).to.equal(false)
+      expect(conversation.messages.value.some(message => message.streaming)).to.equal(false)
+      expect(conversation.activeRequest.value.requestId).to.equal(requestId)
+    } finally { conversation.disposeHallConversation() }
+  })
+
   it('derives group busy from every child and treats FINAL_PERSISTED/PUBLISHED as terminal', () => {
     let state = { request: { requestId: 'req' }, turns: [] }
     state = reduceDeliberationEvent(state, { requestId: 'req', turnId: 't1', state: 'QUEUED' })
