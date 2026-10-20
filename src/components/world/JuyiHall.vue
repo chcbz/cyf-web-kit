@@ -1844,7 +1844,7 @@ const openFormalResults = task => {
 }
 // Return only to the scoped existing discussion; never point, create, or send on navigation.
 const continueBountyModification = async (task, source) => {
-  if (!task?.id || isTerminalMatter(task) || (source && source.taskId !== task.id) || !openPanel('chat')) return false
+  if (!task?.id || (isTerminalMatter(task) && String(task.status).toLowerCase() !== 'completed') || (source && source.taskId !== task.id) || !openPanel('chat')) return false
   const identity = `${apiStore.authorizationGeneration}\u0000${hallIdentityScope.value}`
   const sameDiscussion = chatMode.value === 'bounty' && conversationTask.value?.id === task.id
   if (sameDiscussion && conversationId.value && (!source?.conversationId || conversationId.value === source.conversationId)) return true

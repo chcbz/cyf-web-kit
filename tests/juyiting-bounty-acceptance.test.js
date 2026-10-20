@@ -123,6 +123,12 @@ describe('task acceptance return to original discussion', () => {
     expect(await returnToDiscussion(state)({ id: 'task-1', status: 'cancelled' }, null)).to.equal(false)
     expect(opens).to.equal(0)
   })
+  it('allows completed task history navigation without resuming or creating a discussion', async () => {
+    const state = deps()
+    state.loadHallConversationHistory = () => { throw new Error('already in the exact original') }
+    expect(await returnToDiscussion(state)({ id: 'task-1', status: 'completed' }, { taskId: 'task-1', conversationId: '101' })).to.equal(true)
+    expect(await returnToDiscussion(state)({ id: 'task-1', status: 'completed' }, { taskId: 'foreign', conversationId: '101' })).to.equal(false)
+  })
   it('returns to an already active original without resets, draft changes, polling restarts or new sends', async () => {
     const state = deps(); state.isConversationBusy.value = true
     state.loadHallConversationHistory = () => { throw new Error('must preserve active discussion') }

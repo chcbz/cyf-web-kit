@@ -10,7 +10,14 @@ import { useHallBountyAssignmentContext } from '../src/composables/juyiting/useH
 import { mount } from '@vue/test-utils'
 import { useHallConversation as actualHallConversation } from '../src/composables/juyiting/useHallConversation.js'
 import { currentChatStreamMock } from './fixtures/current-chat-stream-mock.js'
-const useHallConversation = options => actualHallConversation({ ...options, chatApi: currentChatStreamMock(options.chatApi) })
+// These receipt-adoption fixtures start with an empty existing conversation. The
+// mandatory restoration read must return its real empty catalog, not a RequestView.
+const useHallConversation = options => actualHallConversation({ ...options, chatApi: currentChatStreamMock({ ...options.chatApi,
+  get: async (path, ...args) => /^\/conversations\/[^/]+\/requests$/.test(path)
+    ? { schemaVersion: 1, scope: { conversationId: path.split('/')[2], conversationGeneration: '1', taskId: options.chatContext.value.taskId },
+      after: '0', through: '0', nextAfter: null, hasMore: false, entries: [] }
+    : options.chatApi.get(path, ...args)
+}) })
 import { compileScript } from '@vue/compiler-sfc'
 const require = createRequire(import.meta.url)
 const { parse } = require('@vue/compiler-sfc')
