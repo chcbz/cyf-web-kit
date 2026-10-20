@@ -370,6 +370,13 @@ export const useHallConversation = ({
 
   const syncDurablePresentation = () => {
     if (!activeRequest.value?.requestId) return
+    for (const message of messages.value) {
+      if (!message.streaming || !message.turnId) continue
+      const turn = activeTurns.value.find(item => item.turnId === message.turnId)
+      if (!turn || !['CANCELLED', 'FAILED'].includes(turn.state)) continue
+      message.streaming = false
+      message.statusText = turn.state === 'CANCELLED' ? '已停止（未完成）' : '回复失败（未完成）'
+    }
     const busy = hasPendingSendSession.value || deliberationBusy(activeRequest.value, activeTurns.value)
     isAwaitingReply.value = busy
     isStreaming.value = activeTurns.value.some(turn => ['STREAMING', 'GENERATING'].includes(String(turn.state || '').toUpperCase()))
