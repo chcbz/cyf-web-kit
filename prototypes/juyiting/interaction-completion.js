@@ -454,7 +454,7 @@ function confirmMatterAgent(){
 function syncProductionNavigation(){
  const primary=['home','tasks','workspace','mine'];
  const fallback={create:'tasks',detail:'home',chat:'detail',private:'agents',public:'map',agents:'home',file:'workspace',reader:'library',results:'detail',library:'mine',messages:'home',catalog:'agents',map:'home',help:'mine',account:'mine'};
- const target=page==='chat'?'detail':(state.returnPages?.[page]||fallback[page]||'home');
+ const target=page==='detail'?'tasks':page==='chat'?'detail':(state.returnPages?.[page]||fallback[page]||'home');
  const crumb=$('.workbench-breadcrumb strong');if(crumb)crumb.textContent=labels[page];
  if(primary.includes(page))return;
  const modal=['agents','catalog','library','reader','messages','help','account','private','public','chat','create'].includes(page);

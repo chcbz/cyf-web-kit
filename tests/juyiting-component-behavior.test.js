@@ -3424,6 +3424,45 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
     } finally { wrapper.unmount() }
   })
 
+  for (const layout of ['portrait-command', 'landscape-map']) {
+    it(`loads the task list when returning from a direct home detail (${layout})`, async () => {
+      const mode = Vue.ref(layout)
+      const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+      const mocks = createActualHallMocks({ mode, mounts: { library: 0, archive: 0 }, counters, actualBountyPanel: BountyPanel })
+      const originalData = mocks.useHallData
+      const task = { id: 'pending-return', title: '返回后应展示的事项', status: 'open', requiredAbilities: [] }
+      let data
+      mocks.useHallData = bindings => {
+        data = originalData(bindings)
+        data.tasks = Vue.ref([])
+        data.taskKeyword = Vue.ref('返回')
+        data.taskStatusFilter = Vue.ref('pending_assignment')
+        data.loadTasks = async () => { counters.loads.tasks += 1; data.tasks.value = [task] }
+        return data
+      }
+      const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+      try {
+        await flushPromises()
+        const state = wrapper.vm.$.setupState
+        await state.openPendingTaskDetail(task)
+        await flushPromises()
+        expect(counters.loads.tasks).to.equal(0)
+        expect(wrapper.find('.bounty-modal').text()).to.include(task.title)
+        await wrapper.get('.bounty-back-button').trigger('click')
+        await flushPromises()
+        expect(wrapper.find('.bounty-modal').exists()).to.equal(false)
+        expect(counters.loads.tasks).to.equal(1)
+        expect(data.tasks.value.map(row => row.id)).to.deep.equal([task.id])
+        expect(wrapper.get('.task-card').text()).to.include(task.title)
+        expect(data.taskKeyword.value).to.equal('返回')
+        expect(data.taskStatusFilter.value).to.equal('pending_assignment')
+        expect(state.selectedTask).to.equal(null)
+        await state.selectTask(null)
+        expect(counters.loads.tasks).to.equal(1)
+      } finally { wrapper.unmount() }
+    })
+  }
+
   it('W05 restores exact overview refs and canonical tasks without reloading filtered task lists', async () => {
     const mode = Vue.ref('portrait-command')
     const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }

@@ -1403,10 +1403,15 @@ const {
 })
 
 const selectTask = async (task) => {
+  const returningToList = !task && Boolean(selectedTask.value) && activePanel.value === 'tasks'
   selectedTask.value = task
   if (task) {
     await loadTaskRecommendations(task)
     markRecommendedAgents(recommendedAgents.value)
+  } else if (returningToList) {
+    // Overview opens an exact detail without loading the underlying list.
+    // On back, query the existing filters rather than exposing an uninitialized list.
+    await loadTasks()
   }
   playTap()
 }
