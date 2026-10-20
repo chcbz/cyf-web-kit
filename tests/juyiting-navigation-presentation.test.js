@@ -44,7 +44,7 @@ describe('Juyi Hall navigation presentation', () => {
   })
 
 
-  it('uses one portrait return for non-primary roots while retaining desktop close', () => {
+  it('uses one return for workbench non-primary roots on mobile and desktop', () => {
     for (const renderedPanel of ['agents', 'catalog', 'messages', 'chat', 'draft']) {
       const mobileRoot = portrait({ renderedPanel })
       expect(mobileRoot.returnOwner, renderedPanel).to.equal('none')
@@ -55,9 +55,9 @@ describe('Juyi Hall navigation presentation', () => {
 
       const desktopRoot = desktop({ renderedPanel })
       expect(desktopRoot.returnOwner, renderedPanel).to.equal('none')
-      expect(desktopRoot.showRootReturn, renderedPanel).to.equal(false)
-      expect(desktopRoot.showHallReturn, renderedPanel).to.equal(false)
-      expect(desktopRoot.showHallClose, renderedPanel).to.equal(true)
+      expect(desktopRoot.showRootReturn, renderedPanel).to.equal(true)
+      expect(desktopRoot.showHallReturn, renderedPanel).to.equal(true)
+      expect(desktopRoot.showHallClose, renderedPanel).to.equal(false)
       expect(desktopRoot.showWorkbenchDock, renderedPanel).to.equal(false)
     }
     for (const present of [portrait, desktop]) {

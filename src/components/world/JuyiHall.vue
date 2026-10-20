@@ -466,6 +466,7 @@
             @open="openPanel($event, { root: true })"
             @map="openWorkbenchMap"
             @profile="openProfile"
+            @help="emit('open-onboarding', $event)"
           />
 
           <HallOverview

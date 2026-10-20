@@ -1,0 +1,252 @@
+{
+  "purpose": "current UI baseline, not a new design",
+  "capturedOn": "2026-10-04",
+  "site": "https://kit.chaoyoufan.cn/juyiting",
+  "verifiedPublicEntry": "index-DkgwOF9D.js",
+  "sourceBinding": "served asset names and deployed CSS sha256; no claim that latest develop is deployed",
+  "pages": [
+    "home",
+    "tasks",
+    "create",
+    "agents",
+    "detail",
+    "chat",
+    "workspace",
+    "mine",
+    "materials",
+    "reference"
+  ],
+  "records": [
+    {
+      "kind": "deployed-css",
+      "file": "index-BrkR_YMh.css",
+      "sha256": "8bd1b998017cfde2a257c1a28926e05a99cfe8bc63cf1cc18200a28a9ea1a76a"
+    },
+    {
+      "kind": "deployed-css",
+      "file": "SideMenu-BH98P0VF.css",
+      "sha256": "bbc10f0db72b01d298696442ac30a728327c950ed27796c2d00f239809de450d"
+    },
+    {
+      "kind": "deployed-css",
+      "file": "JuyiHallEntry-sScRnLId.css",
+      "sha256": "1ee11fa0c13ba811a39d2b4ba8309ed09eb7e688109ec4e0d9b485e3fb2f28f0"
+    },
+    {
+      "kind": "live-dom-snapshot",
+      "page": "home",
+      "viewport": "desktop",
+      "width": 1440,
+      "height": 1000,
+      "observedAt": "2026-10-04T03:02:44.340Z",
+      "source": "authenticated read-only browser",
+      "data": "account, task titles, file names, IDs, avatar and result image replaced with examples"
+    },
+    {
+      "kind": "live-dom-snapshot",
+      "page": "tasks",
+      "viewport": "desktop",
+      "width": 1440,
+      "height": 1000,
+      "observedAt": "2026-10-04T03:03:32.808Z",
+      "source": "authenticated read-only browser",
+      "data": "account, task titles, file names, IDs, avatar and result image replaced with examples"
+    },
+    {
+      "kind": "live-dom-snapshot",
+      "page": "create",
+      "viewport": "desktop",
+      "width": 1440,
+      "height": 1000,
+      "observedAt": "2026-10-04T03:03:20.109Z",
+      "source": "authenticated read-only browser",
+      "data": "account, task titles, file names, IDs, avatar and result image replaced with examples"
+    },
+    {
+      "kind": "live-dom-snapshot",
+      "page": "agents",
+      "viewport": "desktop",
+      "width": 1440,
+      "height": 1000,
+      "observedAt": "2026-10-04T03:03:44.314Z",
+      "source": "authenticated read-only browser",
+      "data": "account, task titles, file names, IDs, avatar and result image replaced with examples"
+    },
+    {
+      "kind": "live-dom-snapshot",
+      "page": "detail",
+      "viewport": "desktop",
+      "width": 1440,
+      "height": 1000,
+      "observedAt": "2026-10-04T03:02:44.109Z",
+      "source": "authenticated read-only browser",
+      "data": "account, task titles, file names, IDs, avatar and result image replaced with examples"
+    },
+    {
+      "kind": "live-dom-snapshot",
+      "page": "chat",
+      "viewport": "desktop",
+      "width": 1440,
+      "height": 1000,
+      "observedAt": "2026-10-04T03:05:31.888Z",
+      "source": "authenticated read-only browser",
+      "data": "account, task titles, file names, IDs, avatar and result image replaced with examples"
+    },
+    {
+      "kind": "live-dom-snapshot",
+      "page": "workspace",
+      "viewport": "desktop",
+      "width": 1440,
+      "height": 1000,
+      "observedAt": "2026-10-04T03:04:13.025Z",
+      "source": "authenticated read-only browser",
+      "data": "account, task titles, file names, IDs, avatar and result image replaced with examples"
+    },
+    {
+      "kind": "live-dom-snapshot",
+      "page": "mine",
+      "viewport": "desktop",
+      "width": 1440,
+      "height": 1000,
+      "observedAt": "2026-10-04T03:04:32.949Z",
+      "source": "authenticated read-only browser",
+      "data": "account, task titles, file names, IDs, avatar and result image replaced with examples"
+    },
+    {
+      "kind": "live-dom-snapshot",
+      "page": "materials",
+      "viewport": "desktop",
+      "width": 1440,
+      "height": 1000,
+      "observedAt": "2026-10-04T03:02:54.539Z",
+      "source": "authenticated read-only browser",
+      "data": "account, task titles, file names, IDs, avatar and result image replaced with examples"
+    },
+    {
+      "kind": "live-dom-snapshot",
+      "page": "reference",
+      "viewport": "desktop",
+      "width": 1440,
+      "height": 1000,
+      "observedAt": "2026-10-04T03:07:53.952Z",
+      "source": "authenticated read-only browser",
+      "data": "account, task titles, file names, IDs, avatar and result image replaced with examples"
+    },
+    {
+      "kind": "live-dom-snapshot",
+      "page": "home",
+      "viewport": "mobile",
+      "width": 390,
+      "height": 844,
+      "observedAt": "2026-10-04T03:05:58.826Z",
+      "source": "authenticated read-only browser",
+      "data": "account, task titles, file names, IDs, avatar and result image replaced with examples"
+    },
+    {
+      "kind": "live-dom-snapshot",
+      "page": "tasks",
+      "viewport": "mobile",
+      "width": 390,
+      "height": 844,
+      "observedAt": "2026-10-04T03:06:27.150Z",
+      "source": "authenticated read-only browser",
+      "data": "account, task titles, file names, IDs, avatar and result image replaced with examples"
+    },
+    {
+      "kind": "live-dom-snapshot",
+      "page": "create",
+      "viewport": "mobile",
+      "width": 390,
+      "height": 844,
+      "observedAt": "2026-10-04T03:06:26.902Z",
+      "source": "authenticated read-only browser",
+      "data": "account, task titles, file names, IDs, avatar and result image replaced with examples"
+    },
+    {
+      "kind": "live-dom-snapshot",
+      "page": "agents",
+      "viewport": "mobile",
+      "width": 390,
+      "height": 844,
+      "observedAt": "2026-10-04T03:06:38.855Z",
+      "source": "authenticated read-only browser",
+      "data": "account, task titles, file names, IDs, avatar and result image replaced with examples"
+    },
+    {
+      "kind": "live-dom-snapshot",
+      "page": "detail",
+      "viewport": "mobile",
+      "width": 390,
+      "height": 844,
+      "observedAt": "2026-10-04T03:07:18.749Z",
+      "source": "authenticated read-only browser",
+      "data": "account, task titles, file names, IDs, avatar and result image replaced with examples"
+    },
+    {
+      "kind": "live-dom-snapshot",
+      "page": "chat",
+      "viewport": "mobile",
+      "width": 390,
+      "height": 844,
+      "observedAt": "2026-10-04T03:05:47.133Z",
+      "source": "authenticated read-only browser",
+      "data": "account, task titles, file names, IDs, avatar and result image replaced with examples"
+    },
+    {
+      "kind": "live-dom-snapshot",
+      "page": "workspace",
+      "viewport": "mobile",
+      "width": 390,
+      "height": 844,
+      "observedAt": "2026-10-04T03:06:51.566Z",
+      "source": "authenticated read-only browser",
+      "data": "account, task titles, file names, IDs, avatar and result image replaced with examples"
+    },
+    {
+      "kind": "live-dom-snapshot",
+      "page": "mine",
+      "viewport": "mobile",
+      "width": 390,
+      "height": 844,
+      "observedAt": "2026-10-04T03:07:06.046Z",
+      "source": "authenticated read-only browser",
+      "data": "account, task titles, file names, IDs, avatar and result image replaced with examples"
+    },
+    {
+      "kind": "live-dom-snapshot",
+      "page": "materials",
+      "viewport": "mobile",
+      "width": 390,
+      "height": 844,
+      "observedAt": "2026-10-04T03:06:13.002Z",
+      "source": "authenticated read-only browser",
+      "data": "account, task titles, file names, IDs, avatar and result image replaced with examples"
+    },
+    {
+      "kind": "live-dom-snapshot",
+      "page": "reference",
+      "viewport": "mobile",
+      "width": 390,
+      "height": 844,
+      "observedAt": "2026-10-04T03:07:40.156Z",
+      "source": "authenticated read-only browser",
+      "data": "account, task titles, file names, IDs, avatar and result image replaced with examples"
+    }
+  ],
+  "localAssets": [
+    "/static/iconfont-_fvu1Lff.svg",
+    "/static/liangshan-hall-physical-bg-v1-ZLsp6lX5.png",
+    "/juyiting-portraits/thumbs/gongsunsheng.webp",
+    "/juyiting-portraits/thumbs/husanniang.webp",
+    "/juyiting-portraits/thumbs/likui.webp",
+    "/juyiting-portraits/thumbs/linchong.webp",
+    "/juyiting-portraits/thumbs/wuyong.webp",
+    "/juyiting-portraits/water-margin-atlas-001.png"
+  ],
+  "runtimePolicy": "offline navigation only; CSP connect-src none; no authentication, task creation, Agent or Provider calls",
+  "limits": [
+    "No map gameplay, personal account editing, real file bytes or live generation",
+    "Existing labels and controls intentionally retained, including old reference-image entry",
+    "Readonly browsing attempted task recommendation POST; browser policy blocked it, not a product failure"
+  ]
+}

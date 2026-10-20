@@ -15,7 +15,6 @@
       class="typed-recovery"
       @click="$emit('typed-resume')"
     >刷新处理状态</button>
-    <TaskSkillCapabilities v-if="typedEnabled" :projection="skillDirectory" :error="skillDirectoryError" :loading="skillDirectoryLoading" @refresh="$emit('skill-directory-refresh')" />
     <ChatPanel
       @update:draft="$emit('update:draft', $event)"
       discussion-variant="bounty"
@@ -39,6 +38,9 @@
       @voice-apply="$emit('voice-apply', $event)"
       @typed-reply="$emit('typed-reply', $event)"
     >
+      <template #after-toolbar>
+        <TaskSkillCapabilities v-if="typedEnabled" :projection="skillDirectory" :error="skillDirectoryError" :loading="skillDirectoryLoading" @refresh="$emit('skill-directory-refresh')" />
+      </template>
       <template #matter-actions>
         <button
           v-if="!taskCompleted && reviewContext?.currentDelivery?.allowedActions.includes('ACCEPT')"

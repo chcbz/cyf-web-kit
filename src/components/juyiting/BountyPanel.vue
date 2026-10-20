@@ -63,7 +63,7 @@
 
       <div class="task-status-tabs" aria-label="事项状态" @focusin="revealStatusFilter">
         <button
-          v-for="item in taskStatusFilters"
+          v-for="item in primaryStatusFilters"
           :key="item.value"
           :class="{ active: taskStatusFilter === item.value }"
           type="button"
@@ -73,8 +73,25 @@
           {{ item.label }}
           <small>{{ taskStatusCount(item.value) }}</small>
         </button>
+        <button
+          type="button"
+          :class="{ active: secondaryStatusActive }"
+          :aria-pressed="secondaryStatusActive"
+          :aria-expanded="secondaryStatusActive"
+          @click="openSecondaryStatus"
+        >异常/历史</button>
       </div>
 
+      <div v-if="secondaryStatusActive" class="task-secondary-filters" aria-label="异常与历史分类">
+        <span>异常/历史</span>
+        <button
+          v-for="item in secondaryStatusFilters"
+          :key="item.value"
+          type="button"
+          :aria-pressed="taskStatusFilter === item.value"
+          @click="$emit('set-status-filter', item.value)"
+        >{{ item.label }} <small>{{ taskStatusCount(item.value) }}</small></button>
+      </div>
       <div class="task-panel-body">
         <div class="task-list">
           <article
@@ -161,20 +178,56 @@
               >继续原点将</button>
             </section>
             <div class="modal-task-info">
-              <section v-if="embeddedHall" class="matter-advice-card" aria-label="办理建议">
-                <div class="matter-advice-heading"><span>办理建议</span><strong>{{ simpleMatterStatus(detailTask) }}</strong></div>
-                <p class="matter-request">{{ detailTask.description || detailTask.title }}</p>
+              <section v-if="embeddedHall" class="matter-advice-card" aria-label="事项进展">
+                <div class="matter-advice-heading"><span>事项进展</span><strong>{{ simpleMatterStatus(detailTask) }}</strong></div>
+                <h3>{{ detailTask.title }}</h3>
+                <p class="matter-request">{{ detailTask.description }}</p>
                 <dl>
-                  <div><dt>预计成果</dt><dd>在议事中协作完成文本、图片、音频或文件，按实际交付验收</dd></div>
-                  <div><dt>建议承办</dt><dd>{{ preferredAgentName || '吴用或林冲' }}</dd></div>
-                  <div><dt>资料</dt><dd>可选；没有资料也可以点将议事</dd></div>
+                  <div><dt>{{ hasTaskAction(detailTask, 'ASSIGN') ? '推荐承办' : '承办好汉' }}</dt><dd>{{ matterAgent ? agentDisplayName(matterAgent) : (detailTask.assignedAgentName || (taskAssigneeIds(detailTask).length ? '承办信息待核对' : '尚未确认')) }}</dd></div>
+                  <div><dt>资料</dt><dd>{{ Array.isArray(detailTask.attachments) ? `${detailTask.attachments.length} 份` : '可在原议事中查看或补充' }}</dd></div>
                 </dl>
-                <p class="matter-fee-note">点将后自动建立悬赏议事，将需求和资料交给所选 Agent；由 Agent 判断直接答复、查阅资料或澄清。执行遵循已有授权，不因点将自动扩大付费权限。</p>
-                <div v-if="hasTaskAction(detailTask, 'ASSIGN') && preferredAgents.length" class="matter-agent-actions">
-                  <button v-for="agent in preferredAgents" :key="agent.agentId" type="button" :disabled="!canAssign(detailTask, agent)" @click="$emit('assign-task', detailTask, agent)">交给{{ agentDisplayName(agent) }}</button>
-                </div>
-                <button v-else-if="taskPresentation(detailTask).phase === 'PENDING_ACCEPTANCE' && hasTaskAction(detailTask, 'DISCUSS')" type="button" class="matter-primary-action" @click="$emit('review-delivery', detailTask)">查看成果并验收</button>
-                <button v-else-if="hasTaskAction(detailTask, 'DISCUSS') && assignedAgentForTask(detailTask)" type="button" class="matter-primary-action" @click="$emit('discuss-task', detailTask, assignedAgentForTask(detailTask))">与{{ agentDisplayName(assignedAgentForTask(detailTask)) }}进入事项议事</button>
+                <template v-if="hasTaskAction(detailTask, 'ASSIGN')">
+                  <p class="matter-fee-note">按当前可承办候选推荐；选择不会执行，确认后进入同一议事。已有授权与费用规则保持不变。</p>
+                  <button
+                    type="button"
+                    class="matter-agent-toggle"
+                    :aria-expanded="showMatterCandidates"
+                    :disabled="pointAndStartBusy || Boolean(pointAndStartForDetail)"
+                    @click="showMatterCandidates = !showMatterCandidates"
+                  >另选承办Agent</button>
+                  <div v-if="showMatterCandidates" class="matter-candidates" aria-label="承办候选">
+                    <button
+                      v-for="agent in matterCandidates"
+                      :key="agent.agentId"
+                      type="button"
+                      :aria-pressed="matterAgent?.agentId === agent.agentId"
+                      :disabled="pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, agent)"
+                      @click="matterCandidateId = agent.agentId"
+                    >{{ agentDisplayName(agent) }}</button>
+                    <p v-if="!matterCandidates.length" role="status">暂无可承办候选，请刷新名册后核对。</p>
+                  </div>
+                  <button
+                    type="button"
+                    class="matter-primary-action"
+                    :disabled="!matterAgent || pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, matterAgent)"
+                    @click="confirmMatterAgent"
+                  >确认承办，进入议事</button>
+                </template>
+                <template v-else>
+                  <p class="matter-fee-note">补充要求、查看结果和提出修改，都在原议事中继续。</p>
+                  <button
+                    v-if="taskPresentation(detailTask).phase === 'PENDING_ACCEPTANCE' && hasTaskAction(detailTask, 'DISCUSS')"
+                    type="button"
+                    class="matter-primary-action"
+                    @click="$emit('review-delivery', detailTask)"
+                  >查看成果并验收</button>
+                  <button
+                    v-if="hasTaskAction(detailTask, 'DISCUSS') && assignedAgentForTask(detailTask)"
+                    type="button"
+                    :class="taskPresentation(detailTask).phase === 'PENDING_ACCEPTANCE' ? 'matter-secondary-action' : 'matter-primary-action'"
+                    @click="$emit('discuss-task', detailTask, assignedAgentForTask(detailTask))"
+                  >继续议事</button>
+                </template>
                 <button
                   v-if="detailTask.status === 'completed' && taskPresentation(detailTask).phase === 'COMPLETED'"
                   type="button"
@@ -215,10 +268,7 @@
                 @formal-execution-created="$emit('formal-execution-created', $event)"
                 @formal-execution-recovered="$emit('formal-execution-recovered', $event)"
               />
-              <section v-if="embeddedHall && canActOnTask(detailTask)" class="deliberation-execution-route" role="status">
-                <strong>在议事中协作交付</strong>
-                <p>点将后自动进入悬赏议事。你可以继续补充文字和资料，与 Agent 反复沟通，在事项详情核对本次成果并确认验收，保存可选。</p>
-              </section>
+
               <section
                 v-if="(canActOnTask(detailTask) && canCancelOrdinaryTask(detailTask)) || cancellationUnresolved"
                 class="ordinary-cancellation"
@@ -256,7 +306,11 @@
               />
 
               <p v-if="detailTask.status === 'cancelled'" role="status">事项已取消；历史指派与成果保留，不再继续办理。</p>
-              <button v-if="!embeddedHall || detailTask.status !== 'open'" type="button" class="matter-results-action" @click="$emit('open-formal-results', detailTask)">{{ taskPresentation(detailTask).readOnly ? '查看历史成果' : '查看正式成果与验收' }}</button>
+              <section v-if="!embeddedHall || detailTask.status !== 'open'" class="matter-resources" aria-label="资料与成果">
+                <h4 v-if="embeddedHall">资料与成果</h4>
+                <p v-if="embeddedHall">参考资料在原议事中查看；正式成果以已提交批次为准。</p>
+                <button type="button" class="matter-results-action" @click="$emit('open-formal-results', detailTask)">{{ taskPresentation(detailTask).readOnly ? '查看历史成果' : '查看正式成果与验收' }}</button>
+              </section>
               <WorkItemPlanPanel v-if="!embeddedHall && canActOnTask(detailTask)" :task="detailTask" :enabled="workItemPlanEnabled" :authorization-generation="authorizationGeneration" />
 
               <div v-if="!embeddedHall" class="ability-tags">
@@ -601,26 +655,27 @@ const assignedAgentForTask = task => {
   return props.operableAgents.find(agent => agent.agentId === assignedIds[0]) || null
 }
 const assignableRecommendedAgents = computed(() => props.recommendedAgents.filter(agent => props.canAssign(detailTask.value, agent)))
-const selectedOperableAgent = computed(() => {
-  const agentId = props.selectedAgent?.agentId
-  if (!agentId) return null
-  const agent = props.operableAgents.find(item => item.agentId === agentId)
-  if (!agent || agent.canOperate !== true || agent.systemAgent === true) return null
-  return `${agent.status || ''}`.trim().toLowerCase() === 'online' ? agent : null
-})
-const preferredAgents = computed(() => {
-  const legacyFallback = props.recommendedAgents.filter(agent =>
-    ['吴用', '林冲'].some(name => `${agent.name || ''}${agent.displayName || ''}${agent.personaName || ''}`.includes(name)))
+const matterCandidateId = ref('')
+const showMatterCandidates = ref(false)
+const matterCandidates = computed(() => {
   const seen = new Set()
-  return [selectedOperableAgent.value, ...assignableRecommendedAgents.value, ...legacyFallback]
-    .filter(agent => agent?.agentId && !seen.has(agent.agentId) && seen.add(agent.agentId))
-    .slice(0, 2)
+  return [...assignableRecommendedAgents.value, ...props.operableAgents]
+    .filter(agent => agent?.agentId && props.canAssign(detailTask.value, agent) && !seen.has(agent.agentId) && seen.add(agent.agentId))
 })
-const preferredAgentName = computed(() => {
-  const assignedId = taskAssigneeIds(detailTask.value)[0]
-  const assigned = props.operableAgents.find(agent => agent.agentId === assignedId)
-  return agentDisplayName(assigned || preferredAgents.value[0])
+const matterAgent = computed(() => {
+  if (!hasTaskAction(detailTask.value, 'ASSIGN')) return assignedAgentForTask(detailTask.value)
+  return matterCandidateId.value ? matterCandidates.value.find(agent => agent.agentId === matterCandidateId.value) || null : matterCandidates.value[0] || null
 })
+watch(() => [props.identityScope, props.authorizationGeneration, detailTask.value?.id, detailTask.value?.taskVersion], () => { matterCandidateId.value = ''; showMatterCandidates.value = false }, { flush: 'sync' })
+const confirmMatterAgent = () => {
+  const agent = matterAgent.value
+  if (!agent || props.pointAndStartBusy || pointAndStartForDetail.value || !hasTaskAction(detailTask.value, 'ASSIGN') || !props.canAssign(detailTask.value, agent)) return
+  emit('assign-task', detailTask.value, agent)
+}
+const primaryStatusFilters = computed(() => props.taskStatusFilters.filter(item => !['HISTORY', 'UNKNOWN'].includes(item.value)))
+const secondaryStatusFilters = computed(() => props.taskStatusFilters.filter(item => ['HISTORY', 'UNKNOWN'].includes(item.value)))
+const secondaryStatusActive = computed(() => ['HISTORY', 'UNKNOWN'].includes(props.taskStatusFilter))
+const openSecondaryStatus = () => { if (!secondaryStatusActive.value) emit('set-status-filter', Number(props.taskStatusCount('UNKNOWN')) > 0 ? 'UNKNOWN' : 'HISTORY') }
 const simpleMatterStatus = task => props.taskStatusText(task)
 const taskPresentation = task => projectHallTask({ task })
 const hasTaskAction = (task, action) => taskPresentation(task).actions.includes(action)
@@ -1567,8 +1622,12 @@ button:disabled {
 .point-and-start-recovery { margin: 12px 0; padding: 12px; border: 1px solid #d6bb7f; border-radius: 8px; background: #fff9e9; color: #624a20; }
 .point-and-start-recovery p { margin: 6px 0; }
 .point-and-start-recovery button + button { margin-left: 8px; }
+.matter-candidates,.task-secondary-filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}.matter-candidates button,.task-secondary-filters button,.matter-agent-toggle,.matter-secondary-action{min-height:44px;padding:8px 12px;border:1px solid var(--hall-border,#e3e5dc);border-radius:8px;background:var(--hall-surface,#fffefa);color:var(--hall-text,#242e2b)}.matter-candidates button[aria-pressed="true"],.task-secondary-filters button[aria-pressed="true"]{border-color:var(--hall-brand,#923f30);color:var(--hall-brand,#923f30)}.matter-agent-toggle{margin-bottom:10px}.matter-secondary-action{width:100%;margin-top:8px}.matter-advice-card h3{margin:12px 0;overflow-wrap:anywhere}
+.matter-resources h4{margin:12px 0 6px}.matter-resources p{color:var(--hall-text-muted,#68716b);font-size:13px;line-height:1.5}
 </style>
 
 <style scoped>
 .bounty-modal-overlay.is-embedded-page{position:static;display:block;width:100%;height:auto;min-height:100%;padding:0;background:#f5f4f0;overflow:visible}.bounty-modal-overlay.is-embedded-page .bounty-modal{width:100%;max-width:none;min-height:100%;max-height:none;border:0;border-radius:0;box-shadow:none;background:#f5f4f0}.bounty-modal-overlay.is-embedded-page .bounty-modal-header{position:sticky;top:0;z-index:3;min-height:48px;padding:6px 16px;border-bottom:1px solid #e3e5dc;background:#fffefa}.bounty-modal-overlay.is-embedded-page .bounty-modal-header h3{font-size:17px;font-weight:500}.bounty-back-button{min-height:44px;padding:0 4px 0 0;border:0!important;background:transparent!important;color:#923f30!important;font:500 14px/1 inherit;cursor:pointer;white-space:nowrap}.bounty-modal-overlay.is-embedded-page .bounty-modal-header h3{flex:1;margin:0;color:#242e2b;text-align:left}.bounty-modal-overlay.is-embedded-page .bounty-modal-body{padding:0 0 96px}.bounty-modal-overlay.is-embedded-page .modal-task-info{padding:16px 16px 0}.matter-advice-card{display:grid;gap:12px;padding:16px;border:1px solid #eadfd4;border-radius:12px;background:#fffefa}.matter-advice-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.matter-advice-heading span{color:#923f30;font-size:13px;font-weight:600}.matter-advice-heading strong{padding:4px 8px;border-radius:999px;background:#f9efde;color:#87551c;font-size:12px}.matter-request{margin:0!important;padding-bottom:12px;border-bottom:1px solid #ece5dd;font-size:16px!important;line-height:1.75!important;color:#242e2b!important}.matter-advice-card dl{display:grid;gap:9px;margin:0}.matter-advice-card dl div{display:grid;grid-template-columns:70px minmax(0,1fr);gap:8px}.matter-advice-card dt{color:#68716b;font-size:12px}.matter-advice-card dd{margin:0;font-size:13px}.matter-fee-note{margin:0!important;padding:11px 12px;border-left:3px solid #c7a092;border-radius:8px;background:#f6eee8;color:#65473f!important;font-size:13px!important;line-height:1.65!important}.matter-agent-actions{display:flex;gap:8px;flex-wrap:wrap}.matter-primary-action,.matter-results-action{width:100%;min-height:46px;border-radius:8px!important;background:#923f30!important;color:#fffefa!important;border-color:#923f30!important}.matter-archive-action{width:100%;min-height:44px;border:1px solid #923f30!important;border-radius:8px!important;background:#fffefa!important;color:#923f30!important;font-weight:600}.matter-archive-note{margin:0!important;padding:10px;border-radius:8px;background:#eef5ec;color:#36643b!important;font-size:13px!important}.matter-agent-actions button{min-height:44px;padding:8px 14px;background:#923f30!important;color:#fffefa!important;border-color:#923f30!important}@media(max-width:620px){.bounty-modal-overlay.is-embedded-page .bounty-modal-body{display:block}.bounty-modal-overlay.is-embedded-page .modal-task-info{padding:12px 12px 0}.bounty-modal-overlay.is-embedded-page .modal-agent-scroll{margin-top:14px;max-height:none}.matter-advice-card dl div{grid-template-columns:64px minmax(0,1fr)}}
+.matter-candidates,.task-secondary-filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}.matter-candidates button,.task-secondary-filters button,.matter-agent-toggle,.matter-secondary-action{min-height:44px;padding:8px 12px;border:1px solid var(--hall-border,#e3e5dc);border-radius:8px;background:var(--hall-surface,#fffefa);color:var(--hall-text,#242e2b)}.matter-candidates button[aria-pressed="true"],.task-secondary-filters button[aria-pressed="true"]{border-color:var(--hall-brand,#923f30);color:var(--hall-brand,#923f30)}.matter-agent-toggle{margin-bottom:10px}.matter-secondary-action{width:100%;margin-top:8px}.matter-advice-card h3{margin:12px 0;overflow-wrap:anywhere}
+.matter-resources h4{margin:12px 0 6px}.matter-resources p{color:var(--hall-text-muted,#68716b);font-size:13px;line-height:1.5}
 </style>

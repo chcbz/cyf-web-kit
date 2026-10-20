@@ -229,7 +229,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
           expect(wrapper.find('input[type="checkbox"]').exists()).to.equal(false)
           expect(wrapper.text()).not.to.include('我已确认本次私人交办')
         }
-        expect(wrapper.find('button[type="submit"]').text()).to.equal('保存修改')
+        expect(wrapper.find('button[type="submit"]').text()).to.equal(kind === 'TASK_CREATE' ? '保存草稿' : '保存修改')
         expect(calls.map(call => call.method)).to.deep.equal(['GET'])
       } finally { wrapper.unmount() }
     }
@@ -297,6 +297,46 @@ describe('JYT-UX-W05 real editor source restoration', () => {
   const formalReceipt = { ref: { sourceType: 'TASK', sourceId: 'task-created' }, execution: null,
     task: { taskId: 'task-created', taskVersion: '9007199254740993' }, submittedAt: 101 }
 
+  it('renders real material controls and derives a title without truncating the requirement', async () => {
+    const harness = await setupReader(request => {
+      if (request.url === '/hall/drafts') return formalSaved({ ...request.data, targetAgentId: null, outputMime: null })
+      throw new Error(`unexpected ${request.url}`)
+    })
+    const wrapper = mount(harness.component, { props: { ...base, initialKind: 'TASK_CREATE' } })
+    try {
+      await settle()
+      expect(button(wrapper, '开始办事').element.disabled).to.equal(true)
+      expect(wrapper.text()).not.to.include('请填写任务名目')
+      expect(wrapper.get('.quick-material-open').element.closest('template')).to.equal(null)
+      const instruction = '需求内容'.repeat(40)
+      await wrapper.get('textarea').setValue(instruction)
+      await wrapper.get('form').trigger('submit'); await settle()
+      const created = harness.calls.find(call => call.url === '/hall/drafts')
+      expect(created.data.title).to.equal(instruction.slice(0, 36))
+      expect(created.data.instruction).to.equal(instruction)
+      expect(button(wrapper, '开始办事').element.disabled).to.equal(false)
+      expect(wrapper.text()).to.include('已保存到账号')
+    } finally { wrapper.unmount() }
+  })
+
+  it('saves a materials-only requirement with a stable fallback title', async () => {
+    const harness = await setupReader(request => {
+      if (request.url === '/hall/drafts') return formalSaved({ ...request.data, targetAgentId: null, outputMime: null })
+      throw new Error(`unexpected ${request.url}`)
+    })
+    const wrapper = mount(harness.component, { props: { ...base, initialKind: 'TASK_CREATE', initialContext: { inputs: [{ fileId: 'file-source', version: '2' }] } } })
+    try {
+      await settle()
+      expect(button(wrapper, '开始办事').element.disabled).to.equal(false)
+      await wrapper.get('form').trigger('submit'); await settle()
+      const created = harness.calls.find(call => call.url === '/hall/drafts')
+      expect(created.data.title).to.equal('资料处理')
+      expect(created.data.instruction).to.equal('')
+      expect(created.data.inputs).to.deep.equal([{ fileId: 'file-source', version: '2' }])
+      expect(wrapper.text()).to.include('已保存到账号')
+    } finally { wrapper.unmount() }
+  })
+
   it('saves full formal requirements and materials before one creation POST, then opens the exact pending task', async () => {
     let finishSubmit
     const canonicalTask = { id: 'task-created', title: '原正式任务', status: 'open', version: '9007199254740993' }
@@ -309,8 +349,8 @@ describe('JYT-UX-W05 real editor source restoration', () => {
     const wrapper = mount(harness.component, { props: { ...base, initialKind: 'TASK_CREATE', selectedAgent: { agentId: 'do-not-assign' } } })
     try {
       await settle()
-      expect(wrapper.text()).to.include('任务名目')
-      expect(wrapper.text()).to.include('简述')
+      expect(wrapper.text()).to.include('事项名称（可选）')
+      expect(wrapper.text()).to.include('需求描述')
       expect(wrapper.text()).to.include('不收取悬赏金额，也不启动执行')
       expect(wrapper.find('select').exists()).to.equal(false)
       expect(wrapper.find('.draft-materials').exists()).to.equal(true)

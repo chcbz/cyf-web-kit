@@ -289,3 +289,18 @@ describe('five fixes poll lifecycle and projection hints', () => {
     finally { source.dispose(); clock.restore() }
   })
 })
+
+// UI parity: help reuses the existing parent-owned onboarding and focus target.
+describe('mine help entry', () => {
+  it('emits the existing help action with its trigger and keeps other entries intact', async () => {
+    const Mine = compile('HallMinePage', {})
+    const wrapper = mount(Mine)
+    try {
+      const trigger = wrapper.get('.mine-help button')
+      await trigger.trigger('click')
+      expect(wrapper.emitted('help')).to.have.length(1)
+      expect(wrapper.emitted('help')[0][0]).to.equal(trigger.element)
+      expect(wrapper.findAll('.mine-grid button')).to.have.length(5)
+    } finally { wrapper.unmount() }
+  })
+})

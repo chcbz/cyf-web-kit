@@ -1621,6 +1621,36 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.text()).to.include('Inspect the camp')
   })
 
+  it('UI parity selects an explicit candidate without assigning until confirmation and keeps secondary phases reachable', async () => {
+    const task = { id: 'parity-task', title: '需求', status: 'open', taskVersion: '1', requiredAbilities: [] }
+    const agents = ['吴用', '林冲'].map((name, i) => ({ agentId: `agent-${i}`, name, status: 'online', canOperate: true }))
+    const wrapper = mount(BountyPanel, { global: { stubs }, props: {
+      embeddedHall: true, tasks: [task], selectedTask: task, recommendedAgents: agents, operableAgents: agents,
+      abilityText: () => '', canAssign: (task, agent) => Boolean(task && agent), formatTime: v => v,
+      portraitName: a => a.name, portraitStyle: () => ({}), taskAgentMatchScore: () => 90,
+      taskStateClass: () => '', taskStatusText: () => '待点将', taskStatusCount: () => 1,
+      taskStatusFilters: [{ label: '待点将', value: 'PENDING_ASSIGNMENT' }, { label: '历史', value: 'HISTORY' }, { label: '待核对', value: 'UNKNOWN' }]
+    } })
+    try {
+      expect(wrapper.findAll('.task-status-tabs button')).to.have.length(2)
+      await wrapper.findAll('.task-status-tabs button').at(-1).trigger('click')
+      expect(wrapper.emitted('set-status-filter')).to.deep.equal([['UNKNOWN']])
+      await wrapper.setProps({ taskStatusFilter: 'UNKNOWN' })
+      expect(wrapper.findAll('.task-secondary-filters button')).to.have.length(2)
+      await wrapper.find('.task-card').trigger('click')
+      expect(wrapper.text()).to.include('事项进展')
+      await wrapper.get('.matter-agent-toggle').trigger('click')
+      await wrapper.findAll('.matter-candidates button')[1].trigger('click')
+      expect(wrapper.emitted('assign-task')).to.equal(undefined)
+      await wrapper.get('.matter-primary-action').trigger('click')
+      expect(wrapper.emitted('assign-task')).to.deep.equal([[task, agents[1]]])
+      await wrapper.setProps({ pointAndStartBusy: true })
+      expect(wrapper.get('.matter-primary-action').element.disabled).to.equal(true)
+      await wrapper.setProps({ pointAndStartBusy: false }); wrapper.vm.openTask({ ...task, id: 'second' }); await Vue.nextTick()
+      expect(wrapper.find('.matter-candidates').exists()).to.equal(false)
+    } finally { wrapper.unmount() }
+  })
+
   it('emits explicit recommendation actions from BountyPanel', async () => {
     const selectedTask = {
       id: 'task-1',
@@ -1870,12 +1900,14 @@ describe('JuyiHall component behavior', () => {
 
     await wrapper.find('.task-card').trigger('click')
 
-    const buttons = wrapper.findAll('.matter-agent-actions button')
-    expect(buttons.map(button => button.text())).to.deep.equal(['交给公孙胜', '交给吴用'])
+    await wrapper.get('.matter-agent-toggle').trigger('click')
+    const buttons = wrapper.findAll('.matter-candidates button')
+    expect(buttons.map(button => button.text())).to.deep.equal(['公孙胜', '吴用'])
     expect(wrapper.emitted('assign-task')).to.equal(undefined)
 
     await buttons[0].trigger('click')
-
+    expect(wrapper.emitted('assign-task')).to.equal(undefined)
+    await wrapper.get('.matter-primary-action').trigger('click')
     expect(wrapper.emitted('assign-task')[0]).to.deep.equal([selectedTask, hostedAgent])
   })
 

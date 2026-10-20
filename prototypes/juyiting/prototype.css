@@ -1,0 +1,47 @@
+/* Only changed feature surfaces; the application shell and layout use deployed CSS. */
+.mmd {color:#563d2b;font-size:14px;line-height:1.6;min-width:0;overflow-wrap:anywhere}
+.mmd button,.mmd-link {font:inherit;cursor:pointer;border:1px solid #d6b98c;background:#fffaf0;color:#795332;border-radius:7px;padding:7px 11px;max-width:100%}
+.mmd button:disabled {opacity:.5;cursor:default}
+.mmd .mmd-primary {background:#a44330;color:#fff9ed;border-color:#a44330}
+.mmd p {margin:8px 0}.mmd h3,.mmd h4 {margin:0 0 10px}
+.mmd-row {display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mmd-muted {color:#876c56;font-size:12px}
+.mmd-attachments {display:grid;gap:6px;margin:10px 0}
+.mmd-chip {display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:7px 9px;background:#f7edda;border-radius:7px;min-width:0}
+.mmd-chip>span {flex:1;min-width:80px}.mmd-chip button {padding:3px 8px}
+.mmd-results {display:grid;gap:12px;margin-top:10px}
+.mmd-result {padding:12px;border:1px solid #ddc7a5;background:#fffaf1;border-radius:9px;min-width:0}
+.mmd-result>strong {display:block}.mmd-result img {display:block;width:100%;max-width:350px;height:auto;border-radius:6px;margin:8px 0;cursor:zoom-in}
+.mmd-result audio,.mmd audio {display:block;width:100%;max-width:350px;margin:10px 0}
+.mmd-result pre,.mmd-preview pre {white-space:pre-wrap;word-break:break-word;font:inherit}
+.mmd-result .mmd-row {margin-top:8px}
+.mmd-pending {padding:12px;color:#876c56}
+.mmd-agent-detail {padding:14px}.mmd-agent-detail p {margin:10px 0}
+.agent-row[aria-pressed=true] {outline:2px solid #a44330;outline-offset:-2px}
+.mmd-dialog {width:min(650px,calc(100vw - 24px));max-height:calc(100dvh - 36px);padding:20px;border:1px solid #d6b98c;border-radius:12px;background:#fff8e9;color:#563d2b;box-sizing:border-box;overflow:auto;z-index:10000}
+.mmd-dialog::backdrop {background:rgba(36,23,14,.48)}
+.mmd-dialog header {display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+.mmd-dialog header h3 {margin:0}.mmd-dialog footer {display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:16px}
+.mmd-file-option {display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:12px 0;border-bottom:1px solid #e7d6b9}
+.mmd-file-option label {display:block;cursor:pointer;overflow-wrap:anywhere}.mmd-file-option input {width:18px;height:18px;accent-color:#a44330}
+.mmd-preview img {display:block;max-width:100%;max-height:60vh;margin:auto}
+.mmd-quote {margin:8px 0;padding:6px 9px;border-left:3px solid #a44330;background:#f7edda}
+.mmd-composer-extra {padding:4px 0}.mmd-composer-extra .mmd-attachments:empty {display:none}
+.chat-panel .composer-execute {display:none!important}
+.chat-panel .composer-actions .composer-send {width:auto;min-width:46px;white-space:nowrap;padding:8px 12px}
+.chat-panel .composer-meta {justify-content:space-between}
+.chat-panel .hall-messages {scroll-behavior:auto}
+.chat-panel .mmd-composer-extra .mmd-link {font-size:12px;padding:4px 9px}
+.mmd-accept {margin-top:15px;padding:14px;background:#fff8e9;border:1px solid #ddc7a5;border-radius:8px}
+.mmd-workspace-back {margin-bottom:10px}
+@media(max-width:600px){.mmd-dialog{padding:14px}.mmd-row button{min-height:36px}.mmd-file-option{gap:8px}.mmd-result{padding:10px}.chat-panel .toolbar-actions{gap:4px;flex-wrap:wrap}.chat-panel .context-summary small{overflow-wrap:anywhere}.mmd-agent-detail{padding:10px}}
+/* Feedback revision: one composer, a single additional-actions menu. */
+.chat-panel .composer-body {display:flex;flex-direction:column;gap:6px;padding:10px;border:1px solid #d6c6b3;border-radius:12px;background:#fffdf8;min-width:0}
+.chat-panel .composer-input-area {display:block;min-width:0;width:100%}
+.chat-panel .composer-textarea {display:block;width:100%;min-height:52px;max-height:130px;border:0;border-radius:0;background:transparent;box-shadow:none;padding:4px;resize:vertical;line-height:1.5;font-size:15px}
+.chat-panel .composer-actions {display:flex;justify-content:space-between;align-items:center;width:100%;gap:8px;min-width:0}
+.chat-panel .composer-more {display:grid;place-items:center;width:34px;height:34px;padding:0;border:1px solid #d6b98c;border-radius:50%;background:#fffaf0;color:#795332;font-size:22px;cursor:pointer}
+.chat-panel .mmd-composer-extra {padding:0;width:100%}.chat-panel .mmd-composer-extra .mmd-attachments {margin:0}
+.mmd-more-menu {display:grid;gap:8px}.mmd-more-menu button {text-align:left}
+@media(max-width:600px){.chat-panel .composer-textarea{font-size:16px}.chat-panel .composer-body{padding:9px}}
+.mmd-voice-transcript textarea {display:block;width:100%;margin-top:8px;padding:10px;border:1px solid #d6c6b3;border-radius:7px;font:inherit;resize:vertical}

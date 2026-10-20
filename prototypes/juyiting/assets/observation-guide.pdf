@@ -1,0 +1,54 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R 6 0 R 8 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 420 595] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 205 >>
+stream
+BT /F1 18 Tf 30 540 Td (Observation Guide - Page 1) Tj /F1 10 Tf 0 -40 Td (Observe from a safe distance. Record the time and location.) Tj 0 -30 Td (Offline prototype fixture. No production content.) Tj ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 420 595] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 207 >>
+stream
+BT /F1 18 Tf 30 540 Td (Observation Guide - Page 2) Tj /F1 10 Tf 0 -40 Td (Prepare a notebook, water and a simple observation checklist.) Tj 0 -30 Td (Offline prototype fixture. No production content.) Tj ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 420 595] /Resources << /Font << /F1 3 0 R >> >> /Contents 9 0 R >>
+endobj
+9 0 obj
+<< /Length 209 >>
+stream
+BT /F1 18 Tf 30 540 Td (Observation Guide - Page 3) Tj /F1 10 Tf 0 -40 Td (Summarize observations. Review the full batch before accepting.) Tj 0 -30 Td (Offline prototype fixture. No production content.) Tj ET
+endstream
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000127 00000 n 
+0000000197 00000 n 
+0000000323 00000 n 
+0000000579 00000 n 
+0000000705 00000 n 
+0000000963 00000 n 
+0000001089 00000 n 
+trailer
+<< /Size 10 /Root 1 0 R >>
+startxref
+1349
+%%EOF

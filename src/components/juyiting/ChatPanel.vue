@@ -46,6 +46,7 @@
 
 
 
+    <slot name="after-toolbar"></slot>
     <HallConversationHistory
       v-if="historyOpen"
       :conversations="conversationHistory"

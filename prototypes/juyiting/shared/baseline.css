@@ -1,0 +1,3 @@
+/* Product layout, fonts, icons and colors come from the captured deployed CSS.
+   Only prototype feedback and dynamic viewport dimensions are supplied here. */
+#prototype-feedback{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);max-width:calc(100vw - 24px);padding:10px 16px;border-radius:8px;background:#302b26;color:#fff;font-size:13px;z-index:2147483647;pointer-events:none}

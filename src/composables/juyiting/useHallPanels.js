@@ -176,10 +176,10 @@ export const resolveHallNavigationPresentation = ({
   const showWorkbenchDock = Boolean(
     isOverviewHome && isPrimarySurface && !hasChildDetail && !hasFrameParent && !isKeyboardActive && !externalRootModalOpen
   )
-  // Portrait root dialogs use the same single leading return treatment as
-  // nested pages. The action closes the root panel because there is no frame
-  // parent, while desktop/landscape roots retain the explicit close control.
-  const showRootReturn = Boolean(isPortraitMobile && !isPrimarySurface && !hasChildDetail)
+  // Workbench and portrait root dialogs share the leading return treatment.
+  // With no frame parent, returning closes the root panel. Independent
+  // desktop dialogs outside the workbench retain their close control.
+  const showRootReturn = Boolean((isPortraitMobile || isOverviewHome) && renderedPanel && !isPrimarySurface && !hasChildDetail)
   const showHallReturn = Boolean(returnOwner === 'hall' || showRootReturn)
   const showHallClose = Boolean(!isPrimarySurface && !showRootReturn && !hasChildDetail)
   const showPrimaryChildHeader = Boolean(isPrimarySurface && showHallReturn)

@@ -347,7 +347,7 @@ watch([() => props.draft, () => props.compact], () => nextTick(resizeTextarea), 
 
 .composer-context-label {
   flex: 0 0 auto;
-  color: #765f40;
+  color: var(--hall-text-muted,#68716b);
   font-size: 12px;
   font-weight: 700;
 }
@@ -378,9 +378,9 @@ watch([() => props.draft, () => props.compact], () => nextTick(resizeTextarea), 
   flex: 0 0 auto;
   gap: 4px;
   padding: 0 8px;
-  border: 1px solid #d7c3a2;
+  border: 1px solid var(--hall-border,#e3e5dc);
   border-radius: 999px;
-  background: #fffdf6;
+  background: var(--hall-surface,#fffefa);
   color: #5b432a;
   font-size: 12px;
   white-space: nowrap;
@@ -394,7 +394,7 @@ watch([() => props.draft, () => props.compact], () => nextTick(resizeTextarea), 
 .composer-target-chip.is-locked {
   border-color: rgba(116, 75, 35, 0.12);
   background: #efe0c6;
-  color: #765f40;
+  color: var(--hall-text-muted,#68716b);
 }
 
 .composer-target-remove {
@@ -411,14 +411,14 @@ watch([() => props.draft, () => props.compact], () => nextTick(resizeTextarea), 
 .composer-input-area {
   min-width: 0;
   padding: 6px;
-  border: 1px solid #d7c3a2;
+  border: 1px solid var(--hall-border,#e3e5dc);
   border-radius: 12px;
-  background: #fffdf6;
+  background: var(--hall-surface,#fffefa);
 }
 
 .composer-input-area:focus-within {
-  border-color: #7f4a22;
-  box-shadow: 0 0 0 2px rgba(127, 74, 34, 0.12);
+  border-color: var(--hall-brand,#923f30);
+  box-shadow: 0 0 0 2px var(--hall-focus-ring,#923f3052);
 }
 
 .composer-textarea {
@@ -432,7 +432,7 @@ watch([() => props.draft, () => props.compact], () => nextTick(resizeTextarea), 
   padding: 8px 6px;
   border: 0;
   background: transparent;
-  color: #3f2815;
+  color: var(--hall-text,#242e2b);
   font: inherit;
   line-height: 1.45;
   outline: none;
@@ -470,7 +470,7 @@ watch([() => props.draft, () => props.compact], () => nextTick(resizeTextarea), 
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: #765f40;
+  color: var(--hall-text-muted,#68716b);
   font: inherit;
   cursor: pointer;
 }
@@ -523,11 +523,11 @@ watch([() => props.draft, () => props.compact], () => nextTick(resizeTextarea), 
 
 .composer-stop {
   background: #eee8df;
-  color: #3f2815;
+  color: var(--hall-text,#242e2b);
 }
 
 .composer-stop:hover:not(:disabled) { background: #e4dbcf; }
-.composer-stop-status { margin: 0; color: #765f40; font-size: 12px; line-height: 1.5; }
+.composer-stop-status { margin: 0; color: var(--hall-text-muted,#68716b); font-size: 12px; line-height: 1.5; }
 
 .composer-materials {
   display: contents;
@@ -551,9 +551,9 @@ watch([() => props.draft, () => props.compact], () => nextTick(resizeTextarea), 
   max-height: min(50vh, 320px);
   overflow-y: auto;
   padding: 10px;
-  border: 1px solid #d7c3a2;
+  border: 1px solid var(--hall-border,#e3e5dc);
   border-radius: 10px;
-  background: #fffdf6;
+  background: var(--hall-surface,#fffefa);
   box-shadow: 0 10px 24px rgba(54, 35, 18, 0.18);
 }
 
@@ -577,7 +577,7 @@ watch([() => props.draft, () => props.compact], () => nextTick(resizeTextarea), 
   padding: 8px;
   border: 1px solid rgba(116, 75, 35, 0.16);
   border-radius: 8px;
-  background: #fffdf6;
+  background: var(--hall-surface,#fffefa);
   box-shadow: 0 14px 34px rgba(54, 35, 18, 0.18);
 }
 
@@ -592,7 +592,7 @@ watch([() => props.draft, () => props.compact], () => nextTick(resizeTextarea), 
   border: 0;
   border-radius: 7px;
   background: #f5ead6;
-  color: #3f2815;
+  color: var(--hall-text,#242e2b);
   cursor: pointer;
   font: inherit;
   text-align: left;
@@ -648,15 +648,20 @@ watch([() => props.draft, () => props.compact], () => nextTick(resizeTextarea), 
 }
 .is-compact .composer-input-area {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: 4px;
 }
-.is-compact .composer-textarea { flex: 1 1 0; width: 0; }
-.is-compact .composer-actions { flex: 0 0 auto; gap: 0; }
+.is-compact .composer-textarea { flex: 1 0 100%; width: 100%; box-sizing: border-box; }
+.is-compact .composer-actions { flex: 0 0 auto; gap: 0; margin-left: auto; }
 .is-compact .composer-inline-voice { margin-left: 0; }
 @media (max-width: 360px) {
   .is-compact .composer-input-area { flex-wrap: wrap; }
   .is-compact .composer-textarea { flex-basis: 100%; width: 100%; }
   .is-compact .composer-actions { margin-left: auto; }
 }
+/* Shared workbench palette; no changes to voice/target/stop semantics. */
+.discussion-surface .composer-textarea { color: var(--hall-text,#242e2b); background:var(--hall-surface,#fffefa); border-color:var(--hall-border,#e3e5dc); }
+.composer-more,.composer-add-materials,.composer-stop { color:var(--hall-text,#242e2b); }
+.composer-send:not(.composer-stop){background:var(--hall-brand,#923f30);color:var(--hall-surface,#fffefa)}
 </style>

@@ -427,7 +427,7 @@ const restoreTreasure = async () => {
 }
 const canGoBack = computed(() => embedded ? treasureView.value !== 'list' : activeModal.value === 'detail')
 const logicalDepth = computed(() => !embedded || treasureView.value === 'list' ? 1 : treasureView.value === 'manage' ? 3 : 2)
-const windowTitle = computed(() => !embedded ? '' : ({ list: '百宝箱', upload: '上传资料', preview: '文件预览', manage: '文件管理' })[treasureView.value])
+const windowTitle = computed(() => !embedded ? '' : ({ list: '百宝箱', upload: '上传资料', preview: '资料详情', manage: '文件管理' })[treasureView.value])
 const back = () => {
   if (!canGoBack.value) return false
   if (embedded && treasureView.value === 'manage') { treasureView.value = 'preview'; trashUsage.value = null; return true }
