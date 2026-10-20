@@ -50,6 +50,40 @@ describe('TMX edit operations', () => {
     assert.equal(applyTmxEditOps(first, operations), first)
   })
 
+  it('refreshes parsed offsets after edits and keeps calls isolated after errors', () => {
+    const source = '<map><objectgroup name="regions"><object id="1" x="1"><properties><property name="stableId" value="seat"/></properties></object></objectgroup></map>'
+    const operations = [
+      { op: 'set-map-property', name: 'description', value: 'a much longer value & <escaped>' },
+      { op: 'upsert-object-by-stable-id', group: 'regions', object: {
+        stableId: 'seat', x: 12345, y: 20, properties: { label: 'new label', capacity: 6 },
+      } },
+    ] as const
+    const edited = applyTmxEditOps(source, operations)
+    assert.match(edited, /x="12345"/)
+    assert.match(edited, /name="label" value="new label"/)
+    assert.match(edited, /a much longer value &amp; &lt;escaped&gt;/)
+    assert.equal(applyTmxEditOps(edited, operations), edited)
+    assert.throws(() => applyTmxEditOps('<map><broken></map>', []), /Invalid TMX XML/)
+    assert.equal(applyTmxEditOps(source, []), source)
+    assert.equal(applyTmxEditOps(source, operations), edited)
+  })
+
+  it('does not share parsed documents with a reentrant edit call', () => {
+    const source = '<map><properties><property name="outer" value="before"/></properties></map>'
+    let inner = ''
+    const operation = {
+      get op(): 'set-map-property' {
+        inner = applyTmxEditOps('<map></map>', [{ op: 'set-map-property', name: 'inner', value: 2 }])
+        return 'set-map-property'
+      },
+      name: 'outer', value: 'after',
+    }
+    const edited = applyTmxEditOps(source, [operation])
+    assert.match(edited, /name="outer" value="after"/)
+    assert.doesNotMatch(edited, /name="inner"/)
+    assert.match(inner, /name="inner" type="int" value="2"/)
+  })
+
   it('upserts by stable ID while keeping business IDs separate', () => {
     const source = '<map width="1" height="1" tilewidth="16" tileheight="16"><objectgroup name="regions"></objectgroup></map>\n'
     const operations = [

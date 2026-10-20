@@ -87,3 +87,13 @@ browser identity and full tests. Local bootstrap tests are diagnostic only;
 cache size/speed and the <=5 minute release target still require exact-source
 Flow evidence. Timing evidence is maintained by the root task
 `FRONTEND-RELEASE-5M-20261009`, not inferred from this change.
+
+## TMX editor parse reuse (2026-10-20)
+
+TMX edit operations retain their release-profile tests. The editor reuses only
+its most recently parsed, byte-identical XML within one `applyTmxEditOps` call.
+Any changed document is reparsed so element offsets stay fresh; exceptions and
+reentrant calls cannot share cached state. Byte-identical replacements return
+the original string. No parsed document or test result is cached across calls.
+No TMX/runtime regressions, authoring checks, or profile selectors are removed.
+Flow timing, rather than local host timings, determines release speed gains.
