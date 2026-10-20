@@ -270,7 +270,7 @@ describe('mounted Bounty read/manage surface and original recovery', () => {
     open.vm.openTask({ id: 'existing-task', title: '画一只鸟', status: 'open' })
     await nextTick()
     expect(open.find('.formal-task-execution').exists()).to.equal(false)
-    expect(open.text()).to.include('在议事中协作交付')
+    expect(open.text()).to.include('确认承办，进入议事')
     expect(open.text()).not.to.include('一份可预览、下载和验收的正式 PDF')
 
     const bridgeIntent = { taskId: 'existing-task', body: { agentId: 'agent-image', requirementRevision: '1', requestedOperations: ['GENERATE_IMAGE'], initialOperation: 'GENERATE_IMAGE', inputRefs: [] }, controlledImageBridge: { schemaVersion: 1, wrapper: { schemaVersion: 1, assignment: {}, providerConsent: {} }, receipt: { schemaVersion: 1 } } }
@@ -284,8 +284,8 @@ describe('mounted Bounty read/manage surface and original recovery', () => {
     controlled.vm.openTask({ id: 'existing-task', title: '画一只鸟', status: 'assigned' })
     await nextTick()
     expect(controlled.find('.formal-task-execution').exists()).to.equal(false)
-    expect(controlled.find('.deliberation-execution-route').text()).to.include('反复沟通')
-    expect(controlled.text()).to.include('文本、图片、音频或文件')
+    expect(controlled.find('.matter-advice-card').text()).to.include('补充要求、查看结果和提出修改，都在原议事中继续')
+    expect(controlled.find('.matter-resources').exists()).to.equal(true)
 
     const failed = panel({ embeddedHall: true, formalTaskExecutionContext,
       pointAndStartState: { status: 'UNKNOWN', error: 'Controlled image bridge request unavailable', intent: bridgeIntent } })
@@ -297,7 +297,7 @@ describe('mounted Bounty read/manage surface and original recovery', () => {
     ordinary.vm.openTask({ id: 'existing-task', title: '既有正式任务', status: 'assigned' })
     await nextTick()
     expect(ordinary.find('.formal-task-execution').exists()).to.equal(false)
-    expect(ordinary.find('.deliberation-execution-route').exists()).to.equal(true)
+    expect(ordinary.find('.matter-advice-card').exists()).to.equal(true)
   })
 
   it('shows immutable unknown original refs and emits explicit check/resume instead of resubmitting current draft', async () => {

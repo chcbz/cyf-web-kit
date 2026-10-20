@@ -27,13 +27,14 @@ describe('Juyi Hall hosted point flow', () => {
     expect(hall).to.include("Assignment remains the user's explicit button click.")
   })
 
-  it('puts the newly selected hosted agent first without silently assigning it', () => {
-    expect(bounty).to.include('const selectedOperableAgent = computed(() => {')
-    expect(bounty).to.include('agent.canOperate !== true || agent.systemAgent === true')
-    expect(bounty).to.include('trim().toLowerCase() === \'online\'')
-    expect(bounty).to.include('[selectedOperableAgent.value, ...assignableRecommendedAgents.value, ...legacyFallback]')
+  it('uses eligible candidates and requires explicit confirmation rather than candidate-click assignment', () => {
+    expect(bounty).to.include('const matterCandidates = computed(() => {')
+    expect(bounty).to.include('props.canAssign(detailTask.value, agent)')
+    expect(bounty).to.include('[...assignableRecommendedAgents.value, ...props.operableAgents]')
     expect(bounty).to.include('!seen.has(agent.agentId) && seen.add(agent.agentId)')
-    expect(bounty).to.include('@click="$emit(\'assign-task\', detailTask, agent)"')
+    expect(bounty).to.include('@click="matterCandidateId = agent.agentId"')
+    expect(bounty).to.include('@click="confirmMatterAgent"')
+    expect(bounty).to.include("emit('assign-task', detailTask.value, agent)")
     expect(bounty).not.to.include("props.recommendedAgents.filter(agent => ['吴用', '林冲']")
   })
 

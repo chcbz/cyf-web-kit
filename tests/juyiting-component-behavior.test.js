@@ -4068,7 +4068,7 @@ describe('A03 real Hall low-height layout wiring', () => {
 })
 
 describe('Agent roster visual close contract', () => {
-  it('uses one return for roster details and the canonical accessible SVG close only at a root', async () => {
+  it('uses one return for roster details and the workbench root without a duplicate close', async () => {
     const helpers = await import('../src/composables/juyiting/useHallPanels.js')
     const mocks = createActualHallMocks({ mode: Vue.ref('landscape-map'), mounts: { library: 0, archive: 0 }, counters: { panelHelpers: helpers } })
     const oldExperience = mocks.useHallExperienceMode
@@ -4086,11 +4086,9 @@ describe('Agent roster visual close contract', () => {
       await wrapper.get('.panel-return').trigger('click')
       await Vue.nextTick()
       expect(state.activePanel).to.equal('agents')
-      const close = wrapper.get('.panel-close')
-      expect(close.attributes('aria-label')).to.equal('关闭面板')
-      expect(close.get('svg').attributes('stroke-width')).to.equal('1.8')
-      expect(close.get('svg').attributes('width')).to.equal('20')
-      await close.trigger('click')
+      expect(wrapper.find('.panel-close').exists()).to.equal(false)
+      const rootReturn = wrapper.get('.panel-return')
+      await rootReturn.trigger('click')
       expect(state.activePanel).to.equal('')
     } finally { wrapper.unmount() }
   })

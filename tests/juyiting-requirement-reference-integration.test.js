@@ -140,7 +140,7 @@ describe('shared neutral picker + v2 atomic controller integration and read-only
     await f.wrapper.setProps({ embeddedHall: true }); await flush()
     assert.equal(f.wrapper.find('.formal-material-controls').exists(), false)
     assert.equal(f.wrapper.find('.workspace-shortcut').exists(), false)
-    assert.match(f.wrapper.get('.deliberation-execution-route').text(), /保存可选/)
+    assert.match(f.wrapper.get('.matter-advice-card').text(), /补充要求、查看结果和提出修改，都在原议事中继续/)
     assert.equal(f.calls.filter(call => call.method === 'POST').length, 0)
   })
   it('submits no-material requirement without reading workspace or creating grants/executions', async () => {
