@@ -560,12 +560,36 @@ export const useHallConversation = ({
     const exponent = Math.max(0, hallEventReconnectFailures - 1)
     const base = Math.min(HALL_EVENT_RETRY_CAP_MS, HALL_EVENT_RETRY_BASE_MS * (2 ** exponent))
     const delay = Math.min(HALL_EVENT_RETRY_CAP_MS, base + Math.floor(base * boundedJitter()))
-    hallEventReconnectTimer = window.setTimeout(() => {
-      hallEventReconnectTimer = null
-      if (disposed || generation !== lifecycleGeneration || hallEventTerminal || !isPageVisible()) return
-      hallEventConversationId = ''
-      startHallEventStream()
+    const timer = window.setTimeout(async () => {
+      if (hallEventReconnectTimer !== timer || disposed || generation !== lifecycleGeneration || hallEventTerminal || !isPageVisible()) return
+      const guard = captureGuard()
+      const id = conversationId.value
+      const requestId = activeRequest.value?.requestId
+      const current = () => guardCurrent(guard) && conversationId.value === id && activeRequest.value?.requestId === requestId
+      try {
+        // A broken SSE transport can miss the final event after durable admission.
+        // Reuse the existing retry slot and single-flight read; never resend or poll in parallel.
+        if (requestId && await recoverUnknownRequest(requestId, guard) && current()) {
+          const missingFinal = activeTurns.value.some(turn => turn.finalMessageId &&
+            !messages.value.some(message => exactMessageId(message) === turn.finalMessageId && !message.streaming))
+          // Keep partial output while the turn is pending. Only missing durable finals
+          // require a history read; repeated reconnects must not reload an already rendered final.
+          if (!durableBusy.value && missingFinal) {
+            const loaded = await loadHallConversationContent(id, { identity: guard, adoptionCurrent: current, resumeEvents: false })
+            if (!loaded && current()) deliberationStatus.value = '回话已结束，正文加载待重试'
+          }
+          if (current()) onRequestCatalogHint?.({ type: 'resync_required', conversationId: id, requestId })
+        }
+      } catch (error) {
+        if (guardCurrent(guard) && error?.name !== 'AbortError') log.warn('核对断流原回话失败', error)
+      } finally {
+        if (hallEventReconnectTimer === timer) {
+          hallEventReconnectTimer = null
+          if (guardCurrent(guard) && !hallEventTerminal && isPageVisible()) startHallEventStream()
+        }
+      }
     }, delay)
+    hallEventReconnectTimer = timer
   }
 
   const failHallEventStream = (generation, error) => {
@@ -920,7 +944,7 @@ export const useHallConversation = ({
           if (activeRequest.value?.requestId) syncDurablePresentation()
           if (isSelectedLoad) conversationLoadError.value = ''
           loaded = true
-          startHallEventStream()
+          if (guard.resumeEvents !== false) startHallEventStream()
         },
         onError: failContentLoad
       })
@@ -1858,13 +1882,23 @@ export const useHallConversation = ({
   const recoverUnknownRequest = async (requestId, guard = captureGuard()) => {
     const existing = requestReadbackInflight.get(requestId)
     if (existing) return existing
+    const expected = activeRequest.value
+    const sameBinding = value => value && expected && ['requestId', 'requestRevision', 'conversationId', 'conversationGeneration']
+      .every(key => expected[key] == null || value[key] === expected[key])
     const promise = (async () => {
       try {
         abortIfStale(guard)
         const response = await chatApi.get(`/requests/${encodeURIComponent(requestId)}`, {}, { autoLoading: false, signal: lifecycleController.signal })
         abortIfStale(guard)
-        if (activeRequest.value?.requestId !== requestId) return false
+        if (activeRequest.value?.requestId !== requestId || !sameBinding(activeRequest.value)) return false
         let requestView = apiData(response)
+        if (!sameBinding(requestView)) return false
+        // The aggregate version and each turn belong to this exact request generation.
+        const currentVersion = canonicalWireString(activeRequest.value.stateVersion, { allowZero: true })
+        const nextVersion = canonicalWireString(requestView?.stateVersion, { allowZero: true })
+        if (currentVersion && (!nextVersion || BigInt(nextVersion) < BigInt(currentVersion))) return false
+        if (!deliberationBusy(activeRequest.value, activeTurns.value) && deliberationBusy(requestView, requestView.turns)) return false
+        if (!Array.isArray(requestView.turns) || requestView.turns.some(turn => !sameBinding(turn))) return false
         if (adoptedBootstrap?.initialRequestId === requestId) {
           if (!bountyBootstrapContextMatches(chatContext?.value, selectedTask?.value, selectedAgent?.value, adoptedBootstrap)) return false
           requestView = validateBountyBootstrapRequest(requestView, adoptedBootstrap)
