@@ -76,6 +76,9 @@ export const reduceDeliberationEvent = ({ request, turns }, event) => {
     assignString(patch, 'sandbox', event.sandbox, delivery?.sandbox)
     const stateVersion = canonicalWireString(event.stateVersion ?? delivery?.stateVersion, { allowZero: true })
     if (stateVersion) patch.stateVersion = stateVersion
+    const lastDeltaSeq = canonicalWireString(event.lastDeltaSeq ?? delivery?.lastDeltaSeq ??
+      (event.type === 'agent_message_delta' ? event.deltaSeq : undefined), { allowZero: true })
+    if (stateVersion && lastDeltaSeq) patch.lastDeltaSeq = lastDeltaSeq
   }
   const sourceTurns = turns || []
   const nextTurns = patch ? upsertTurn(sourceTurns, patch) : sourceTurns

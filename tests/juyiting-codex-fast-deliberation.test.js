@@ -781,6 +781,22 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     expect(state.turns[0]).to.include({ state: 'FINAL_PERSISTED', stateVersion: '11', route: 'CHAT' })
   })
 
+  it('keeps streamed state version and delta checkpoint atomic for cancellation', () => {
+    let state = { request: { requestId: 'req' }, turns: [{ turnId: 'turn', state: 'QUEUED', stateVersion: '0', lastDeltaSeq: '0' }] }
+    state = reduceDeliberationEvent(state, { type: 'agent_message_delta', requestId: 'req', turnId: 'turn', stateVersion: '587', deltaSeq: '586' })
+    expect(state.turns[0]).to.include({ state: 'STREAMING', stateVersion: '587', lastDeltaSeq: '586' })
+    const before = structuredClone(state)
+    for (const patch of [{ stateVersion: '586', deltaSeq: '585' }, { stateVersion: '587', deltaSeq: '0' }]) {
+      state = reduceDeliberationEvent(state, { type: 'agent_message_delta', requestId: 'req', turnId: 'turn', ...patch })
+      expect(state).to.deep.equal(before)
+    }
+    state = reduceDeliberationEvent(state, { requestId: 'req', turnId: 'turn', state: 'CANCELLED', stateVersion: '590', lastDeltaSeq: '588' })
+    expect(state.turns[0]).to.include({ state: 'CANCELLED', stateVersion: '590', lastDeltaSeq: '588' })
+    const stopped = structuredClone(state)
+    state = reduceDeliberationEvent(state, { type: 'agent_message_delta', requestId: 'req', turnId: 'turn', stateVersion: '591', deltaSeq: '589' })
+    expect(state).to.deep.equal(stopped)
+  })
+
   it('merges replay final into an existing persisted message and removes its placeholder', () => {
     const state = { conversationId: '9007199254740993', messages: [{ localId: 'message-final', sender: 'AGENT', content: 'persisted', streaming: false }], isAwaitingReply: true, isStreaming: true, turnStates: new Map(), manageTurnBusy: true }
     appendHallEventMessage(state, { type: 'agent_message_delta', conversationId: state.conversationId, turnId: 'turn-a', deltaSeq: '1', agentId: 'a', content: 'partial' })
