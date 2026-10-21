@@ -46,11 +46,23 @@ describe('1.13.6 Babao-box modal-stack hall presentation', () => {
     assert.match(materialPicker, /min-height:\s*44px/)
     assert.match(taskMaterialLinks, /min-height:64px/)
     for (const source of [materialPicker, taskMaterialLinks]) {
-      for (const [token, value] of Object.entries({ ground: '#f3f3ed', paper: '#fffefa', ink: '#242e2b', muted: '#68716b', line: '#d8d8ce', brand: '#923f30' })) {
+      for (const [token, value] of Object.entries({ ground: source === materialPicker ? '#f5f4f0' : '#f3f3ed', paper: '#fffefa', ink: '#242e2b', muted: '#68716b', line: '#d8d8ce', brand: '#923f30' })) {
         assert.match(source, new RegExp(`--material-${token}:\\s*${value}`))
       }
       assert.match(source, /env\(safe-area-inset-bottom\)/)
     }
+  })
+
+  it('matches the prototype chooser geometry without making selected-file preview reopen the chooser', () => {
+    assert.match(materialPicker, /width: min\(980px, calc\(100vw - 48px\)\)/)
+    assert.match(materialPicker, /height: min\(760px, calc\(100dvh - 48px\)\)/)
+    assert.match(materialPicker, /@media \(max-width: 720px\)/)
+    assert.match(materialPicker, /quick-material-added/)
+    assert.match(materialPicker, /quick-material-chevron/)
+    assert.match(materialPicker, /\.quick-material-version-actions \.primary \{ margin-left: auto; min-width: 64px;/)
+    const standalone = materialPicker.split('const previewSelectedMaterial =')[1].split('const downloadSelectedMaterial')[0]
+    assert.doesNotMatch(standalone, /openQuickMaterialPicker|workspace.refresh/)
+    assert.match(standalone, /selectQuickMaterialFile\(material.fileId, material.version\)/)
   })
 
   it('keeps a gutter above recruitment cards and applies the workbench archive-search shell', () => {
