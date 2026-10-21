@@ -1,3 +1,5 @@
+import { assignedTaskTarget } from '../src/composables/juyiting/hallAssigneeCandidates.js'
+import { projectHallTask } from '../src/composables/juyiting/hallTaskPresentation.js'
 import { expect } from 'chai'
 import { readFileSync } from 'fs'
 import { customRef, nextTick, ref } from 'vue'
@@ -265,8 +267,8 @@ describe('C07A task workspace wiring', () => {
 })
 
 describe('discussion entry drafts', () => {
-  const agent = { agentId: 'agent-draft', name: '吴用' }
-  const task = { id: 'task-draft', title: '议事测试', assignedAgentIds: [agent.agentId] }
+  const agent = { agentId: 'agent-draft', displayName: '吴用', providerDisplayName: null, isMine: false, availability: 'online' }
+  const task = { id: 'task-draft', title: '议事测试', status: 'assigned', assignedAgentIds: [agent.agentId], assignedTarget: agent }
   const entries = [
     ['briefSelectedTask', 'const discussTask', [task]],
     ['briefSelectedTask', 'const discussTask', [task, agent]],
@@ -282,7 +284,7 @@ describe('discussion entry drafts', () => {
         const contexts = []
         const bindings = []
         const mocks = {
-          draft, setDraft: value => { draft.value = value },
+          projectHallTask, assignedTaskTarget, draft, setDraft: value => { draft.value = value },
           selectedTask: ref(null), selectedAgent: ref(null),
           isTerminalMatter: () => false,
           canStartAgentConversation: () => true,

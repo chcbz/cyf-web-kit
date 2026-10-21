@@ -362,11 +362,12 @@ describe('useHallData deferred Juyi Hall sources', () => {
   })
 })
 
-describe('useHallData E01 candidate compatibility', () => {
-  it('preserves authoritative candidate details, denies explicitly excluded candidates, and accepts legacy recommendations', async () => {
+describe('useHallData advisory recommendations', () => {
+  it('preserves recommendation diagnostics but uses candidate eligibility even for low-score recommendations without management DTO leakage', async () => {
     const selectedTask = ref({ id: 'task-e01', status: 'open', requiredAbilities: ['planning'] })
     const hallData = useHallData({
       agentApi: {
+        get: async () => ({ items: ['agent-excluded', 'agent-legacy'].map(agentId => ({ agentId, displayName: agentId, providerDisplayName: null, isMine: false, availability: 'offline' })), nextAfterAgentId: null }),
         create: async (_url, _body, options) => options.onSuccess(([{
           score: 74,
           eligible: false,
@@ -387,6 +388,7 @@ describe('useHallData E01 candidate compatibility', () => {
       taskAgentMatchScore: () => 0
     })
 
+    await hallData.loadAssigneeCandidates()
     await hallData.loadTaskRecommendations()
 
     const [excluded, legacy] = hallData.recommendedAgents.value
@@ -400,9 +402,10 @@ describe('useHallData E01 candidate compatibility', () => {
     expect(excluded.scoreParts).to.deep.equal({
       ability: 0, availability: 20, success: 11, load: 15, context: 8, riskPenalty: 0
     })
-    expect(hallData.canAssign(selectedTask.value, excluded)).to.equal(false)
+    expect(hallData.canAssign(selectedTask.value, excluded)).to.equal(true)
     expect(legacy.eligible).to.equal(undefined)
     expect(hallData.canAssign(selectedTask.value, legacy)).to.equal(true)
+    expect(legacy).not.to.have.property('canOperate')
   })
 })
 
@@ -456,10 +459,12 @@ describe('Hall roster request wire types', () => {
 
 
 describe('Hall assignment uses the same authoritative projection as the task view', () => {
-  it('never assigns a raw-open task with UNKNOWN or contradictory server phase', () => {
-    const hall = useHallData({ agentApi: {}, log: { warn: () => {} },
-      selectedAgent: ref(null), selectedTask: ref(null), normalizeStatus: value => value,
+  it('never assigns a raw-open task with UNKNOWN or contradictory server phase', async () => {
+    const selectedTask = ref({ id: 'a', status: 'open', phase: 'PENDING_ASSIGNMENT' })
+    const hall = useHallData({ agentApi: { get: async () => ({ items: [{ agentId: 'wuyong', displayName: '吴用', providerDisplayName: null, isMine: true, availability: 'offline' }], nextAfterAgentId: null }) }, log: { warn: () => {} },
+      selectedAgent: ref(null), selectedTask, normalizeStatus: value => value,
       taskAgentMatchScore: () => 0 })
+    await hall.loadAssigneeCandidates()
     const agent = { agentId: 'wuyong', status: 'online', canOperate: true }
     try {
       for (const phase of ['UNKNOWN', 'IN_PROGRESS', 'PENDING_ACCEPTANCE', 'unsupported']) {
@@ -494,7 +499,7 @@ describe('selected matter leaving the filtered page after acceptance', () => {
   })
   it('does not replace a different selected matter with a late exact read', async () => {
     let finish
-    const f = fixture(() => new Promise(resolve => { finish = resolve }))
+    const f = fixture(path => path.endsWith('/assignee-candidates') ? Promise.resolve({ items: [], nextAfterAgentId: null }) : new Promise(resolve => { finish = resolve }))
     try {
       const pending = f.hall.loadTasks()
       while (!finish) await Promise.resolve()
@@ -513,7 +518,7 @@ describe('selected matter leaving the filtered page after acceptance', () => {
   })
   it('ignores an old-account read after identity changes', async () => {
     let finish
-    const f = fixture(() => new Promise(resolve => { finish = resolve }))
+    const f = fixture(path => path.endsWith('/assignee-candidates') ? Promise.resolve({ items: [], nextAfterAgentId: null }) : new Promise(resolve => { finish = resolve }))
     try {
       const pending = f.hall.loadTasks()
       while (!finish) await Promise.resolve()
@@ -521,5 +526,25 @@ describe('selected matter leaving the filtered page after acceptance', () => {
       finish({ id: 'accepted-task', status: 'completed', taskVersion: '4' }); await pending
       expect(f.selectedTask.value?.id).not.to.equal('accepted-task')
     } finally { f.hall.dispose() }
+  })
+})
+
+
+describe('D3.1 assigned list rows versus authoritative detail', () => {
+  it('does not replace assignedTarget with a thin search row on refresh', async () => {
+    const row = { id: 'task', status: 'assigned', taskVersion: '2', assignedAgentId: 'external' }
+    const assignedTarget = { agentId: 'external', displayName: '承办', providerDisplayName: null, isMine: false, availability: 'offline' }
+    const selectedTask = ref({ ...row, assignedTarget })
+    const reads = []
+    const hall = useHallData({ selectedTask, selectedAgent: ref(null), log: { warn() {} }, normalizeStatus: value => value,
+      agentApi: {
+        get: async path => { reads.push(path); return { ...row, assignedTarget } },
+        search: async (path, _params, options) => options.onSuccess(path.endsWith('/status-counts') ? null : { items: [row] })
+      } })
+    try {
+      await hall.loadTasks()
+      expect(reads).to.deep.equal(['/tasks/task'])
+      expect(selectedTask.value.assignedTarget).to.deep.equal(assignedTarget)
+    } finally { hall.dispose() }
   })
 })

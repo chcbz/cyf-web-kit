@@ -1,3 +1,4 @@
+import * as assigneeCandidates from '../src/composables/juyiting/hallAssigneeCandidates.js'
 import * as taskPresentation from '../src/composables/juyiting/hallTaskPresentation.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
@@ -15,7 +16,7 @@ const compile = name => {
   const { descriptor } = parse(read(name))
   const imports = new Proxy({ vue: Vue, '@/utils/silverAmount': silver,
     './HallTaskResources.vue': Vue.defineComponent({ name: 'HallTaskResources', props: ['resultCount'], render: () => Vue.h('section') }),
-    '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': cancellation }, { get: (target, key) => target[key] || Empty })
+    '@/composables/juyiting/hallAssigneeCandidates.js': assigneeCandidates, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': cancellation }, { get: (target, key) => target[key] || Empty })
   const code = compileScript(descriptor, { id: 'flow-ui-test', inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_, names, path) => `const { ${names.replace(/\s+as\s+/g, ': ')} } = imports[${JSON.stringify(path)}]`)
     .replace(/^import\s+(\w+)\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_, name, path) => `const ${name} = imports[${JSON.stringify(path)}]`)
@@ -31,7 +32,7 @@ const baseProps = { embeddedHall: true, detailAllowed: true, identityScope: 'own
 
 describe('flow gap actual UI consumers', () => {
   it('pending acceptance has exactly one review CTA and a readonly resource card on the shared PC/mobile detail', async () => {
-    const task = { id: 'a', title: '待验收', status: 'reviewing', taskVersion: '3', assignedAgentIds: ['old-agent'] }
+    const task = { id: 'a', title: '待验收', status: 'reviewing', taskVersion: '3', assignedAgentIds: ['old-agent'], assignedTarget: { agentId: 'old-agent', displayName: '林冲', providerDisplayName: null, isMine: true, availability: 'online' } }
     const wrapper = mount(Panel, { props: { ...baseProps, tasks: [task], selectedTask: task } })
     try {
       wrapper.vm.openTask(task); await Vue.nextTick()

@@ -1,4 +1,6 @@
 import { computed, ref, toValue, watch } from 'vue'
+import { assigneePage, assignedTaskTarget } from './hallAssigneeCandidates.js'
+import { pointAndStartLong } from './hallPointAndStartIntent.js'
 import { projectHallTask, validateHallTaskCounts } from './hallTaskPresentation.js'
 
 import {
@@ -65,41 +67,51 @@ export const useHallData = ({
     if (!selectedTask.value) return []
     const serverRecommendations = taskRecommendations.value[selectedTask.value.id] || []
     if (serverRecommendations.length) {
-      return serverRecommendations
-        .map(recommendation => ({
-          ...(recommendation.agent || {}),
+      return serverRecommendations.flatMap(recommendation => {
+        // Ordinary recommendations contribute ranking only. Never copy a full
+        // management/runtime DTO into the cross-user candidate projection.
+        const candidate = selectedTask.value.funding?.mode === 'FUNDED_SINGLE_AGENT'
+          ? recommendation.agent
+          : assigneeCandidates.value.find(item => item.agentId === recommendation.agent?.agentId)
+        if (!candidate) return []
+        return [{ ...candidate,
           recommendationScore: recommendation.score,
           recommendationReason: recommendation.reason,
-          // E01 returns one authoritative eligibility verdict and weighted parts.
-          // Preserve both unchanged; absent eligibility remains compatible with legacy responses.
           eligible: recommendation.eligible,
-          exclusionReasons: Array.isArray(recommendation.exclusionReasons)
-            ? recommendation.exclusionReasons
-            : [],
-          scoreParts: recommendation.scoreParts && typeof recommendation.scoreParts === 'object'
-            && !Array.isArray(recommendation.scoreParts)
-            ? recommendation.scoreParts
-            : null,
-          matchedAbilities: recommendation.matchedAbilities || [],
-          capability: recommendation.capability || null
-        }))
+          exclusionReasons: Array.isArray(recommendation.exclusionReasons) ? recommendation.exclusionReasons : [],
+          scoreParts: recommendation.scoreParts && typeof recommendation.scoreParts === 'object' && !Array.isArray(recommendation.scoreParts)
+            ? recommendation.scoreParts : null,
+          matchedAbilities: recommendation.matchedAbilities || []
+        }]
+      })
     }
-    return agents.value
+
+    if (selectedTask.value.funding?.mode === 'FUNDED_SINGLE_AGENT') return agents.value
       .filter(agent => agent.canOperate !== false && normalizeStatus(agent.status) === 'online')
       .map(agent => ({ agent, score: taskAgentMatchScore(selectedTask.value, agent) }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5)
-      .map(item => item.agent)
+      .sort((a, b) => b.score - a.score).slice(0, 5).map(item => item.agent)
+    return []
   })
 
+  const assigneeCandidates = ref([])
+  const candidatesLoading = ref(false)
+  const candidatesError = ref('')
+  const candidatesNextAfterAgentId = ref(null)
+  const candidatesTaskId = ref(null)
+  let candidatesEpoch = 0
+  let candidatesController = null
   const canAssign = (task, agent) => {
     if (!task || typeof agent?.agentId !== 'string' || !agent.agentId.trim()) return false
     if (!projectHallTask({ task }).actions.includes('ASSIGN')) return false
-    if (agent.eligible === false) return false
-    if (agent.canOperate === false || agent.systemAgent) return false
-    return normalizeStatus(agent.status) === 'online'
+    // External eligibility belongs only to ordinary point-and-deliberate.
+    if (task.funding?.mode === 'FUNDED_SINGLE_AGENT') return agent.canOperate !== false &&
+      !agent.systemAgent && normalizeStatus(agent.status) === 'online' && agent.eligible !== false
+    return candidatesTaskId.value === task.id && !candidatesError.value &&
+      assigneeCandidates.value.some(item => item.agentId === agent.agentId)
   }
 
+  let detailEpoch = 0
+  let detailController = null
   let listEpoch = 0
   let countsEpoch = 0
   let recommendationEpoch = 0
@@ -123,9 +135,74 @@ export const useHallData = ({
     tasksError.value = ''
     taskCountsError.value = ''
   }, { flush: 'sync' })
-  const dispose = () => { listEpoch += 1; countsEpoch += 1; recommendationEpoch += 1; stopFilters(); stopIdentity() }
+  const dispose = () => { listEpoch += 1; countsEpoch += 1; recommendationEpoch += 1; stopFilters(); stopIdentity(); stopCandidates(); stopDetailScope(); detailEpoch++; detailController?.abort(); candidatesEpoch++; candidatesController?.abort() }
   // Absence/failure is not zero. Preserve decimal strings; never count the loaded page.
   const taskStatusCount = phase => taskStatusCounts.value.phaseCounts?.[phase || 'total'] ?? '—'
+
+  const stopDetailScope = watch(() => JSON.stringify([identityFingerprint(), selectedTask.value?.id]), () => {
+    detailEpoch++; detailController?.abort(); detailController = null
+  }, { flush: 'sync' })
+  const loadTaskDetail = async (task = selectedTask.value) => {
+    if (!task?.id || selectedTask.value?.id !== task.id) return false
+    detailController?.abort()
+    const epoch = ++detailEpoch, identity = identityFingerprint(), own = new AbortController()
+    detailController = own
+    const current = () => epoch === detailEpoch && identity === identityFingerprint() && selectedTask.value?.id === task.id && !own.signal.aborted
+    tasksError.value = ''
+    try {
+      const snapshot = await agentApi.get(`/tasks/${encodeURIComponent(task.id)}`, undefined, { autoLoading: false, needAuth: true, signal: own.signal })
+      if (!current()) return false
+      if (snapshot?.id !== task.id || !pointAndStartLong(snapshot.taskVersion, true) ||
+        (pointAndStartLong(selectedTask.value?.taskVersion, true) && BigInt(snapshot.taskVersion) < BigInt(selectedTask.value.taskVersion))) {
+        throw new Error('事项详情版本尚未核对，请重查')
+      }
+      selectedTask.value = snapshot
+      return true
+    } catch (cause) {
+      if (current()) tasksError.value = cause?.message || '事项详情暂不可用，请重查'
+      return false
+    } finally { if (current()) detailController = null }
+  }
+
+  const resetCandidates = () => {
+    candidatesEpoch++; candidatesController?.abort(); candidatesController = null
+    assigneeCandidates.value = []; candidatesNextAfterAgentId.value = null
+    candidatesTaskId.value = null; candidatesLoading.value = false; candidatesError.value = ''
+  }
+  const loadAssigneeCandidates = async ({ more = false } = {}) => {
+    const task = selectedTask.value
+    if (!task?.id || !projectHallTask({ task }).actions.includes('ASSIGN') || task.funding?.mode === 'FUNDED_SINGLE_AGENT') return false
+    if (more && (candidatesLoading.value || !candidatesNextAfterAgentId.value)) return false
+    if (!more) resetCandidates()
+    const epoch = ++candidatesEpoch, identity = identityFingerprint(), taskId = task.id
+    const after = more ? candidatesNextAfterAgentId.value : null
+    const own = new AbortController(); candidatesController = own
+    const current = () => epoch === candidatesEpoch && identity === identityFingerprint() && selectedTask.value?.id === taskId && !own.signal.aborted
+    candidatesLoading.value = true; candidatesError.value = ''
+    try {
+      const raw = await agentApi.get(`/tasks/${encodeURIComponent(taskId)}/assignee-candidates`, {
+        pageSize: 50, ...(after ? { afterAgentId: after } : {})
+      }, { autoLoading: false, needAuth: true, signal: own.signal })
+      if (!current()) return false
+      const page = assigneePage(raw, after)
+      if (!page) throw new Error('承办候选返回未核对，请刷新')
+      const previous = more ? assigneeCandidates.value : []
+      if (page.items.some(item => previous.some(old => old.agentId === item.agentId))) throw new Error('候选分页已变化，请刷新')
+      assigneeCandidates.value = [...previous, ...page.items]
+      candidatesTaskId.value = taskId; candidatesNextAfterAgentId.value = page.nextAfterAgentId
+      return true
+    } catch (cause) {
+      if (current()) candidatesError.value = cause?.message || '承办候选暂不可用，请刷新'
+      return false
+    } finally { if (current()) { candidatesLoading.value = false; candidatesController = null } }
+  }
+  // Task identity/auth/action, not roster filters or object identity, owns this GET.
+  // Task version refreshes do not reset a user's selected candidate mid-operation.
+  const stopCandidates = watch(() => JSON.stringify([identityFingerprint(), selectedTask.value?.id,
+    projectHallTask({ task: selectedTask.value }).actions.includes('ASSIGN'), selectedTask.value?.funding?.mode]), () => {
+    resetCandidates()
+    void loadAssigneeCandidates()
+  }, { immediate: true, flush: 'sync' })
 
   const searchTasks = async (params) => {
     let list = []
@@ -358,7 +435,9 @@ export const useHallData = ({
         const before = version(selectedTask.value?.taskVersion)
         const after = version(selected?.taskVersion)
         const minimum = options?.refreshTaskId === selectedId ? version(options.minimumTaskVersion) : null
-        if (selected && (before === null || (after !== null && after >= before)) && (minimum === null || (after !== null && after >= minimum))) selectedTask.value = selected
+        const needsAssignedDetail = selected?.funding?.mode !== 'FUNDED_SINGLE_AGENT' &&
+          (selected?.assignedAgentId || selected?.assignedAgentIds?.length === 1) && !assignedTaskTarget(selected)
+        if (selected && !needsAssignedDetail && (before === null || (after !== null && after >= before)) && (minimum === null || (after !== null && after >= minimum))) selectedTask.value = selected
         else if (selectedId && selectedTask.value?.id === selectedId) {
           // Acceptance can move the active matter out of this filter/page. Read
           // that exact ID once; a missing list row is not a current detail snapshot.
@@ -435,6 +514,11 @@ export const useHallData = ({
     backendSceneVersion,
     bindPersona,
     canAssign,
+    assigneeCandidates,
+    candidatesLoading,
+    candidatesError,
+    candidatesNextAfterAgentId,
+    loadAssigneeCandidates,
     catalogError,
     catalogLoading,
     filteredAgents,
@@ -444,6 +528,7 @@ export const useHallData = ({
     loadOperableRosterAgents,
     loadPersonaCatalog,
     loadRosterAgents,
+    loadTaskDetail,
     loadTaskRecommendations,
     loadTasks,
     mapAgents,

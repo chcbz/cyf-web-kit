@@ -65,6 +65,36 @@
                 <small>{{ portraitName(selectedAgent) }} / {{ selectedAgent.agentId }}</small>
               </div>
             </div>
+            <div v-if="canManagePolicy" class="external-policy" aria-label="接外单设置">
+              <div class="external-policy-row">
+                <span>允许其他用户委派任务</span>
+                <button
+                  v-if="externalPolicy"
+                  type="button"
+                  role="switch"
+                  :aria-checked="externalPolicy.enabled"
+                  aria-describedby="external-policy-hint"
+                  :disabled="!externalPolicyCanWrite"
+                  @click="$emit('set-external-policy', !externalPolicy.enabled)"
+                >
+                  {{ externalPolicy.enabled ? '已开启' : '已关闭' }}
+                </button>
+                <span v-else role="status">{{ externalPolicyBusy ? '正在核对…' : '设置不可用' }}</span>
+              </div>
+              <p id="external-policy-hint" class="profile-note">面向同平台所有用户；关闭不影响已接任务，不要求当前在线。</p>
+              <p v-if="externalPolicyError" class="profile-error" role="alert">{{ externalPolicyError }}</p>
+              <p v-if="externalPolicyStatus === 'UNKNOWN'" role="status">原修改结果未知，暂不能另开修改。</p>
+              <div v-if="externalPolicyStatus === 'UNKNOWN'" class="external-policy-recovery">
+                <button type="button" :disabled="externalPolicyBusy" @click="$emit('check-external-policy')">查询原操作</button>
+                <button type="button" :disabled="externalPolicyBusy" @click="$emit('resume-external-policy')">以原键继续</button>
+              </div>
+              <button
+                v-else-if="externalPolicyStatus === 'UNAVAILABLE'"
+                type="button"
+                :disabled="externalPolicyBusy"
+                @click="$emit('refresh-external-policy')"
+              >重查设置</button>
+            </div>
             <section class="profile-section" aria-label="技能">
               <div class="profile-heading"><h3>技能</h3><small v-if="profile?.skills.status === 'AVAILABLE'">已核验安装 {{ installedCount }} 项</small></div>
               <p v-if="!canReadProfile" role="status">仅拥有者可查看技能</p>
@@ -127,6 +157,11 @@ const props = defineProps({
   active: { type: Boolean, default: true },
   identityKey: { type: String, default: '' },
   panelSessionKey: { type: Number, default: 0 },
+  externalPolicy: { type: Object, default: null },
+  externalPolicyStatus: { type: String, default: 'IDLE' },
+  externalPolicyBusy: { type: Boolean, default: false },
+  externalPolicyCanWrite: { type: Boolean, default: false },
+  externalPolicyError: { type: String, default: '' },
   profileCapabilities: { type: Object, default: null },
   profileCapabilitiesLoading: { type: Boolean, default: false },
   profileCapabilitiesError: { type: String, default: '' },
@@ -150,7 +185,7 @@ const props = defineProps({
   statusText: { type: Function, required: true }
 })
 
-const emit = defineEmits(['set-agent-filter', 'select-agent', 'start-conversation', 'open-catalog', 'point-and-deliberate', 'refresh-profile-capabilities'])
+const emit = defineEmits(['set-agent-filter', 'select-agent', 'start-conversation', 'open-catalog', 'point-and-deliberate', 'refresh-profile-capabilities', 'set-external-policy', 'check-external-policy', 'resume-external-policy', 'refresh-external-policy'])
 const media = typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 720px)') : null
 const isCompactRoster = ref(media?.matches || false)
 const mobileDetailOpen = ref(false)
@@ -163,6 +198,7 @@ const profileVisible = computed(() => props.active && Boolean(props.selectedAgen
 const listVisible = computed(() => props.active && (!isCompactRoster.value || !mobileDetailOpen.value))
 const detailVisible = computed(() => props.active && (!isCompactRoster.value || mobileDetailOpen.value))
 const windowTitle = computed(() => canGoBack.value ? '好汉详情' : '点将册')
+const canManagePolicy = computed(() => props.selectedAgent?.boundToMe === true && props.selectedAgent?.canOperate === true && !props.selectedAgent?.systemAgent)
 const canReadProfile = computed(() => props.selectedAgent?.boundToMe === true && props.selectedAgent?.systemAgent !== true)
 const profile = computed(() => !props.profileCapabilitiesLoading && !props.profileCapabilitiesError && canReadProfile.value && props.profileCapabilities?.agentId === props.selectedAgent?.agentId ? props.profileCapabilities : null)
 const displayedAbilities = computed(() => profile.value?.abilities || props.selectedAgent?.abilities || [])
@@ -481,4 +517,10 @@ button {
   .status-filter { flex: 1 0 100%; }
   .agent-detail-scroll { padding: 16px; }
 }
+.external-policy { margin: 0; padding: 8px 0; min-width: 0; }
+.external-policy-row, .external-policy-recovery { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.external-policy button { font: inherit; min-height: 44px; padding: 8px 12px; border: 1px solid var(--hall-border-strong, #ccd2c5); border-radius: 7px; background: var(--hall-surface, #fffefa); color: var(--hall-text, #242e2b); }
+.external-policy button[aria-checked="true"] { background: var(--hall-brand, #923f30); color: white; }
+.external-policy button:disabled { opacity: .6; cursor: default; }
+.external-policy button:focus-visible { outline: 2px solid var(--hall-focus-ring, #923f3052); outline-offset: 2px; }
 </style>

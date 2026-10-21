@@ -7,7 +7,7 @@ import { createPointAndStartIntentStore, pointAndStartBody, pointAndDeliberateBo
 const copy = value => JSON.parse(JSON.stringify(value))
 const storage = () => {
   const values = new Map()
-  return { values, getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) }
+  return { values, getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) }
 }
 const req = () => ({ taskId: 'task-1', taskVersion: '6', requirementRevision: '3', title: '画一只鸟',
   description: null, contentSha256: 'a'.repeat(64), source: 'CREATE' })
@@ -58,6 +58,18 @@ const pause = () => new Promise(resolve => setImmediate(resolve))
 
 describe('persisted exact point-and-start source contract', () => {
   afterEach(() => instances.splice(0).forEach(flow => flow.dispose()))
+
+  it('first 409 releases a definitively rejected candidate but timeout/replay 409 preserves the original', async () => {
+    const rejected = () => { throw Object.assign(new Error('target closed'), { status: 409 }) }
+    const h = harness({ api: { create: rejected } })
+    expect(await h.flow.start(args())).to.equal(false)
+    expect(createPointAndStartIntentStore({ storage: h.memory, scope: h.scope.value, taskId: 'task-1' }).read().state).to.equal('ABSENT')
+    expect(h.flow.state.value.status).to.equal('REJECTED')
+    const retry = harness({ api: { get: async () => { throw Object.assign(new Error('not found'), { status: 404, code: 'ASSIGNMENT_OPERATION_UNAVAILABLE' }) }, create: rejected } })
+    retry.seed()
+    expect(await retry.flow.resumeOriginal('task-1')).to.equal(false)
+    expect(createPointAndStartIntentStore({ storage: retry.memory, scope: retry.scope.value, taskId: 'task-1' }).read().state).to.equal('PRESENT')
+  })
 
   it('persists/readbacks original body before one POST, then reads exact action/task and adopts without resend', async () => {
     const { flow, calls, admitted } = harness()

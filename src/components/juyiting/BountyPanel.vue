@@ -183,11 +183,13 @@
                 <h3>{{ detailTask.title }}</h3>
                 <p class="matter-request">{{ detailTask.description }}</p>
                 <dl>
-                  <div><dt>{{ hasTaskAction(detailTask, 'ASSIGN') ? '推荐承办' : '承办好汉' }}</dt><dd>{{ matterAgent ? agentDisplayName(matterAgent) : (detailTask.assignedAgentName || (taskAssigneeIds(detailTask).length ? '承办信息待核对' : '尚未确认')) }}</dd></div>
+                  <div><dt>{{ hasTaskAction(detailTask, 'ASSIGN') ? '承办候选' : '承办好汉' }}</dt><dd>{{ matterAgent ? agentDisplayName(matterAgent) : (detailTask.assignedAgentName || (taskAssigneeIds(detailTask).length ? '承办信息待核对' : '尚未确认')) }}</dd></div>
+                  <div v-if="matterAgent"><dt>所属用户 / 运行</dt><dd>{{ assigneeProviderText(matterAgent) }} · {{ assigneeAvailabilityText(matterAgent) }}</dd></div>
                   <div><dt>资料 / 成果</dt><dd>{{ matterResourceSummary?.taskId === String(detailTask.id) ? `${matterResourceSummary.materials} 份资料 · ${matterResultCount ?? matterResourceSummary.outputs} 份${matterResultCount == null ? '成果引用' : '成果'}` : '见下方资料与成果' }}</dd></div>
                 </dl>
                 <template v-if="hasTaskAction(detailTask, 'ASSIGN')">
-                  <p class="matter-fee-note">按当前可承办候选推荐；选择不会执行，确认后进入同一议事。已有授权与费用规则保持不变。</p>
+                  <p v-if="matterAgent?.recommendationReason" class="matter-fee-note">推荐参考：{{ matterAgent.recommendationReason }}</p>
+                  <p class="matter-fee-note">确认后将任务内容和所列资料发送给该Agent开始办理；资料由该Agent运行环境及所使用的模型服务处理。离线或忙碌可委派，提交成功不代表模型已运行。</p>
                   <button
                     type="button"
                     class="matter-agent-toggle"
@@ -203,9 +205,23 @@
                       :aria-pressed="matterAgent?.agentId === agent.agentId"
                       :disabled="pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, agent)"
                       @click="matterCandidateId = agent.agentId"
-                    >{{ agentDisplayName(agent) }}</button>
-                    <p v-if="!matterCandidates.length" role="status">暂无可承办候选，请刷新名册后核对。</p>
+                    ><span>{{ agentDisplayName(agent) }}</span><small>{{ assigneeProviderText(agent) }} · {{ assigneeAvailabilityText(agent) }}</small><small v-if="agent.recommendationReason">{{ agent.recommendationReason }}</small></button>
+                    <p v-if="!matterCandidates.length && !candidatesLoading && !candidatesError" role="status">暂无可承办候选。</p>
+                    <button
+                      v-if="candidatesNextAfterAgentId"
+                      type="button"
+                      :disabled="candidatesLoading"
+                      @click="$emit('more-candidates')"
+                    >加载更多候选</button>
                   </div>
+                  <p v-if="candidatesLoading" role="status">正在读取承办候选…</p>
+                  <p v-if="candidatesError" role="alert">{{ candidatesError }}</p>
+                  <button
+                    type="button"
+                    class="matter-agent-toggle"
+                    :disabled="candidatesLoading || pointAndStartBusy || Boolean(pointAndStartForDetail)"
+                    @click="$emit('refresh-candidates')"
+                  >刷新候选</button>
                   <button
                     type="button"
                     class="matter-primary-action"
@@ -475,6 +491,7 @@
 </template>
 
 <script setup>
+import { assignedTaskTarget, assigneeProviderText, assigneeAvailabilityText } from '@/composables/juyiting/hallAssigneeCandidates.js'
 import { projectHallTask } from '../../composables/juyiting/hallTaskPresentation.js'
 import { canCancelOrdinaryTask, ordinaryTaskVersion, isTerminalMatter } from '../../composables/juyiting/useHallOrdinaryCancellation.js'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
@@ -508,6 +525,10 @@ const props = defineProps({
   countsErrorMessage: { type: String, default: '' },
   selectedTask: { type: Object, default: null },
   selectedAgent: { type: Object, default: null },
+  assigneeCandidates: { type: Array, default: () => [] },
+  candidatesLoading: { type: Boolean, default: false },
+  candidatesError: { type: String, default: '' },
+  candidatesNextAfterAgentId: { type: String, default: null },
   operableAgents: { type: Array, default: () => [] },
   recommendedAgents: { type: Array, default: () => [] },
   taskAbilityOptions: { type: Array, default: () => [] },
@@ -542,6 +563,8 @@ const props = defineProps({
 
 const emit = defineEmits([
   'assign-task',
+  'refresh-candidates',
+  'more-candidates',
   'archive-task',
   'auto-assign-task',
   'brief-selected-task',
@@ -663,16 +686,16 @@ const pointAndStartInputSummary = computed(() => {
 // The parent is the only authority for task-scoped discussion/workspace facts.  A
 // detail may never borrow the context of whichever task was previously selected.
 const assignedAgentForTask = task => {
-  const assignedIds = [...new Set(taskAssigneeIds(task).filter(Boolean))]
-  if (assignedIds.length !== 1) return null
-  return props.operableAgents.find(agent => agent.agentId === assignedIds[0]) || null
+  if (task?.funding?.mode !== 'FUNDED_SINGLE_AGENT') return assignedTaskTarget(task)
+  const ids = taskAssigneeIds(task)
+  return ids.length === 1 ? props.operableAgents.find(agent => agent.agentId === ids[0]) || null : null
 }
 const assignableRecommendedAgents = computed(() => props.recommendedAgents.filter(agent => props.canAssign(detailTask.value, agent)))
 const matterCandidateId = ref('')
 const showMatterCandidates = ref(false)
 const matterCandidates = computed(() => {
   const seen = new Set()
-  return [...assignableRecommendedAgents.value, ...props.operableAgents]
+  return [...assignableRecommendedAgents.value, ...props.assigneeCandidates]
     .filter(agent => agent?.agentId && props.canAssign(detailTask.value, agent) && !seen.has(agent.agentId) && seen.add(agent.agentId))
 })
 const matterAgent = computed(() => {
@@ -731,7 +754,7 @@ const selectedAssignees = computed(() => {
     selected.has(agent.agentId) && props.canAssign(detailTask.value, agent))
 })
 
-const agentDisplayName = (agent) => agent?.name || agent?.personaName || agent?.agentId || ''
+const agentDisplayName = (agent) => agent?.displayName || agent?.name || agent?.personaName || agent?.agentId || ''
 const recommendationReason = (agent) => agent?.recommendationReason || ''
 const recommendationExclusionReasons = (agent) => Array.isArray(agent?.exclusionReasons)
   ? agent.exclusionReasons.filter(reason => typeof reason === 'string' && reason)
@@ -1637,10 +1660,14 @@ button:disabled {
 .point-and-start-recovery button + button { margin-left: 8px; }
 .matter-candidates,.task-secondary-filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}.matter-candidates button,.task-secondary-filters button,.matter-agent-toggle,.matter-secondary-action{min-height:44px;padding:8px 12px;border:1px solid var(--hall-border,#e3e5dc);border-radius:8px;background:var(--hall-surface,#fffefa);color:var(--hall-text,#242e2b)}.matter-candidates button[aria-pressed="true"],.task-secondary-filters button[aria-pressed="true"]{border-color:var(--hall-brand,#923f30);color:var(--hall-brand,#923f30)}.matter-agent-toggle{margin-bottom:10px}.matter-secondary-action{width:100%;margin-top:8px}.matter-advice-card h3{margin:12px 0;overflow-wrap:anywhere}
 .matter-resources h4{margin:12px 0 6px}.matter-resources p{color:var(--hall-text-muted,#68716b);font-size:13px;line-height:1.5}
+.matter-candidates button { min-width: 0; max-width: 100%; text-align: left; overflow-wrap: anywhere; }
+.matter-candidates button small { display: block; font-size: 12px; color: var(--hall-text-muted, #68716b); }
 </style>
 
 <style scoped>
 .bounty-modal-overlay.is-embedded-page{position:static;display:block;width:100%;height:auto;min-height:100%;padding:0;background:#f5f4f0;overflow:visible}.bounty-modal-overlay.is-embedded-page .bounty-modal{width:100%;max-width:none;min-height:100%;max-height:none;border:0;border-radius:0;box-shadow:none;background:#f5f4f0}.bounty-modal-overlay.is-embedded-page .bounty-modal-header{position:sticky;top:0;z-index:3;min-height:48px;padding:6px 16px;border-bottom:1px solid #e3e5dc;background:#fffefa}.bounty-modal-overlay.is-embedded-page .bounty-modal-header h3{font-size:17px;font-weight:500}.bounty-back-button{min-height:44px;padding:0 4px 0 0;border:0!important;background:transparent!important;color:#923f30!important;font:500 14px/1 inherit;cursor:pointer;white-space:nowrap}.bounty-modal-overlay.is-embedded-page .bounty-modal-header h3{flex:1;margin:0;color:#242e2b;text-align:left}.bounty-modal-overlay.is-embedded-page .bounty-modal-body{padding:0 0 96px}.bounty-modal-overlay.is-embedded-page .modal-task-info{padding:16px 16px 0}.matter-advice-card{display:grid;gap:12px;padding:16px;border:1px solid #eadfd4;border-radius:12px;background:#fffefa}.matter-advice-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.matter-advice-heading span{color:#923f30;font-size:13px;font-weight:600}.matter-advice-heading strong{padding:4px 8px;border-radius:999px;background:#f9efde;color:#87551c;font-size:12px}.matter-request{margin:0!important;padding-bottom:12px;border-bottom:1px solid #ece5dd;font-size:16px!important;line-height:1.75!important;color:#242e2b!important}.matter-advice-card dl{display:grid;gap:9px;margin:0}.matter-advice-card dl div{display:grid;grid-template-columns:70px minmax(0,1fr);gap:8px}.matter-advice-card dt{color:#68716b;font-size:12px}.matter-advice-card dd{margin:0;font-size:13px}.matter-fee-note{margin:0!important;padding:11px 12px;border-left:3px solid #c7a092;border-radius:8px;background:#f6eee8;color:#65473f!important;font-size:13px!important;line-height:1.65!important}.matter-agent-actions{display:flex;gap:8px;flex-wrap:wrap}.matter-primary-action,.matter-results-action{width:100%;min-height:46px;border-radius:8px!important;background:#923f30!important;color:#fffefa!important;border-color:#923f30!important}.matter-archive-action{width:100%;min-height:44px;border:1px solid #923f30!important;border-radius:8px!important;background:#fffefa!important;color:#923f30!important;font-weight:600}.matter-archive-note{margin:0!important;padding:10px;border-radius:8px;background:#eef5ec;color:#36643b!important;font-size:13px!important}.matter-agent-actions button{min-height:44px;padding:8px 14px;background:#923f30!important;color:#fffefa!important;border-color:#923f30!important}@media(max-width:620px){.bounty-modal-overlay.is-embedded-page .bounty-modal-body{display:block}.bounty-modal-overlay.is-embedded-page .modal-task-info{padding:12px 12px 0}.bounty-modal-overlay.is-embedded-page .modal-agent-scroll{margin-top:14px;max-height:none}.matter-advice-card dl div{grid-template-columns:64px minmax(0,1fr)}}
 .matter-candidates,.task-secondary-filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}.matter-candidates button,.task-secondary-filters button,.matter-agent-toggle,.matter-secondary-action{min-height:44px;padding:8px 12px;border:1px solid var(--hall-border,#e3e5dc);border-radius:8px;background:var(--hall-surface,#fffefa);color:var(--hall-text,#242e2b)}.matter-candidates button[aria-pressed="true"],.task-secondary-filters button[aria-pressed="true"]{border-color:var(--hall-brand,#923f30);color:var(--hall-brand,#923f30)}.matter-agent-toggle{margin-bottom:10px}.matter-secondary-action{width:100%;margin-top:8px}.matter-advice-card h3{margin:12px 0;overflow-wrap:anywhere}
 .matter-resources h4{margin:12px 0 6px}.matter-resources p{color:var(--hall-text-muted,#68716b);font-size:13px;line-height:1.5}
+.matter-candidates button { min-width: 0; max-width: 100%; text-align: left; overflow-wrap: anywhere; }
+.matter-candidates button small { display: block; font-size: 12px; color: var(--hall-text-muted, #68716b); }
 </style>

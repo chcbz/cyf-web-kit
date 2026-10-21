@@ -154,7 +154,12 @@ export const createPointAndStartIntentStore = ({ storage, scope, taskId }) => {
       return validIntent(record) && record.taskId === taskId ? { state: 'PRESENT', record: clone(record) } : { state: 'CORRUPT' }
     } catch { return { state: 'UNAVAILABLE' } }
   }
-  return { read, write: record => {
+  return { read, forgetRejected: record => {
+    const saved = read()
+    if (saved.state !== 'PRESENT' || saved.record.key !== record.key || !equal(saved.record.body, record.body) ||
+      saved.record.postAcknowledged || saved.record.projection) return false
+    try { storage.removeItem(name); return read().state === 'ABSENT' } catch { return false }
+  }, write: record => {
     const old = read()
     if (record?.schemaVersion !== 2 || !validIntent(record) || record.taskId !== taskId || !['ABSENT', 'PRESENT'].includes(old.state)) return { state: 'UNAVAILABLE' }
     if (old.state === 'PRESENT' && (old.record.schemaVersion !== record.schemaVersion || old.record.key !== record.key || !equal(old.record.body, record.body) ||

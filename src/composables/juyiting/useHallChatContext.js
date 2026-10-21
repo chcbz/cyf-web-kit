@@ -1,4 +1,5 @@
 import { computed, ref } from 'vue'
+import { assignedTaskTarget } from './hallAssigneeCandidates.js'
 import { typedLong } from './hallTypedDeliberation.js'
 
 export const taskAssigneeIds = (task) => {
@@ -8,7 +9,7 @@ export const taskAssigneeIds = (task) => {
 }
 
 // Bounty participants are separate from the private conversation subject.
-// Only the current, roster-filtered single target may enter a per-Agent interaction.
+// Ordinary task targets come from the authorized task grant projection, not the owner roster.
 export const bountyInteractionTargetId = (context) => {
   if (context?.mode !== 'bounty' || context.conversationScopeType !== 'bounty' ||
     typeof context.taskId !== 'string' || !context.taskId ||
@@ -46,7 +47,10 @@ export const useHallChatContext = ({
   const selectedAgentMentionable = computed(() => Boolean(conversationAgent.value))
   const allowedMentionIds = (agentIds = []) => agentIds.filter(agentId => mentionSourceAgentIds.value.has(agentId))
 
+  const taskTarget = computed(() => assignedTaskTarget(conversationTask.value))
+  const ordinaryTask = computed(() => conversationTask.value?.funding?.mode !== 'FUNDED_SINGLE_AGENT' && taskAssigneeIds(conversationTask.value).length <= 1)
   const chatMentionAgents = computed(() => {
+    if (chatMode.value === 'bounty' && ordinaryTask.value) return taskTarget.value ? [taskTarget.value] : []
     if (!taskDiscussionAgentIds.value.length) return mentionSourceAgents.value
     const allowed = new Set(taskDiscussionAgentIds.value)
     return mentionSourceAgents.value.filter(agent => allowed.has(agent.agentId))
@@ -65,12 +69,11 @@ export const useHallChatContext = ({
     const task = conversationTask.value
     const agentId = conversationSubject.value.agentId
     if (chatMode.value === 'bounty' && task) {
-      const participantAgentIds = allowedMentionIds(taskDiscussionAgentIds.value.length
-        ? taskDiscussionAgentIds.value
-        : taskAssigneeIds(task))
-      const targetAgentIds = allowedMentionIds(chatMentionAgentIds.value.length
-        ? chatMentionAgentIds.value
-        : participantAgentIds)
+      const participantAgentIds = ordinaryTask.value
+        ? (taskTarget.value ? [taskTarget.value.agentId] : [])
+        : allowedMentionIds(taskDiscussionAgentIds.value.length ? taskDiscussionAgentIds.value : taskAssigneeIds(task))
+      const targetAgentIds = ordinaryTask.value ? participantAgentIds : allowedMentionIds(chatMentionAgentIds.value.length
+        ? chatMentionAgentIds.value : participantAgentIds)
       return {
         conversationScopeType: 'bounty',
         conversationScopeKey: `task:${task.id}`,

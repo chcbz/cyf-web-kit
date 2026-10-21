@@ -1,3 +1,5 @@
+import * as assigneeCandidates from '../src/composables/juyiting/hallAssigneeCandidates.js'
+import { useExternalServicePolicy } from '../src/composables/juyiting/useExternalServicePolicy.js'
 import * as taskPresentation from '../src/composables/juyiting/hallTaskPresentation.js'
 import { useHallDeliveryReview } from '../src/composables/juyiting/useHallDeliveryReview.js'
 import { useHallAgentProfileCapabilities } from '../src/composables/juyiting/useHallAgentProfileCapabilities.js'
@@ -125,6 +127,7 @@ const loadSfc = (relativePath, runtimeAgentApi = { post: async () => { throw new
   }).content
 
   const scriptBody = script
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]@\/composables\/juyiting\/hallAssigneeCandidates\.js['"];?\s*$/gm, (_line, names) => `var { ${names} } = arguments[9]`)
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\.\/\.\.\/composables\/juyiting\/hallTaskPresentation\.js['"];?\s*$/gm, (_line, names) => `var { ${names} } = arguments[8]`)
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\.\/\.\.\/composables\/juyiting\/useHallOrdinaryCancellation\.js['"];?\s*$/gm, (_line, names) => `var { ${names} } = ordinaryCancellation`)
     .replace(/^import\s+\{\s*agentApi\s*\}\s+from\s+['"]\.\.\/\.\.\/composables\/useHttp\.js['"];?\s*$/gm, 'var agentApi = runtimeAgentApi')
@@ -170,7 +173,7 @@ const loadSfc = (relativePath, runtimeAgentApi = { post: async () => { throw new
   const unresolvedImports = scriptBody.match(/^import\s.+$/gm)
   if (unresolvedImports?.length) throw new SyntaxError(`Unsupported SFC imports in ${relativePath}: ${unresolvedImports.join(', ')}`)
 
-  return new Function('Vue', 'HallChatComposer', 'juyitingGame', 'classifyViewportResize', 'silverAmount', 'chatPanelDependencies', 'ordinaryCancellation', 'runtimeAgentApi', scriptBody)(Vue, HallChatComposer, hallGameMock, classifyViewportResizeMock, silverAmount, chatPanelDependencies, ordinaryCancellation, runtimeAgentApi, taskPresentation)
+  return new Function('Vue', 'HallChatComposer', 'juyitingGame', 'classifyViewportResize', 'silverAmount', 'chatPanelDependencies', 'ordinaryCancellation', 'runtimeAgentApi', scriptBody)(Vue, HallChatComposer, hallGameMock, classifyViewportResizeMock, silverAmount, chatPanelDependencies, ordinaryCancellation, runtimeAgentApi, taskPresentation, assigneeCandidates)
 }
 
 const stubs = {
@@ -1903,7 +1906,7 @@ describe('JuyiHall component behavior', () => {
 
     await wrapper.get('.matter-agent-toggle').trigger('click')
     const buttons = wrapper.findAll('.matter-candidates button')
-    expect(buttons.map(button => button.text())).to.deep.equal(['公孙胜', '吴用'])
+    expect(buttons.map(button => button.get('span').text())).to.deep.equal(['公孙胜', '吴用'])
     expect(wrapper.emitted('assign-task')).to.equal(undefined)
 
     await buttons[0].trigger('click')
@@ -2749,7 +2752,7 @@ const loadActualJuyiHall = (mocks) => {
     .replace(/import\.meta\.env/g, 'mocks.env')
     .replace(/^import\s+WorkspaceWriteRecovery\s+from\s+['"][^'"]+['"];?\s*$/gm, "var WorkspaceWriteRecovery = { template: '<section />', props: ['pending'], emits: ['retry'] }")
   .replace('export default', 'return')
-  const component = new Function('Vue', 'mocks', body)(Vue, { useHallDeliveryReview, useHallAgentProfileCapabilities, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
+  const component = new Function('Vue', 'mocks', body)(Vue, { useHallDeliveryReview, useHallAgentProfileCapabilities, useExternalServicePolicy, ...assigneeCandidates, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
   const renderBody = template.code
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace('export function render', 'return function render')
@@ -2786,7 +2789,7 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
   }
   const hallData = {
     applySceneEvent: noop, applySceneSnapshot: noop, agentFilter: scalar, agents: value, bindPersona: asyncNoop, canAssign: () => true,
-    catalogError: scalar, catalogLoading: Vue.ref(false), filteredAgents: value, hiddenAgentCount: Vue.ref(0), loadAgents: async () => { counters.loads.agents += 1 }, loadPersonaCatalog: asyncNoop, loadRosterAgents: asyncNoop, loadTasks: async () => { counters.loads.tasks += 1 }, loadTaskRecommendations: asyncNoop,
+    catalogError: scalar, catalogLoading: Vue.ref(false), filteredAgents: value, hiddenAgentCount: Vue.ref(0), loadAgents: async () => { counters.loads.agents += 1 }, loadPersonaCatalog: asyncNoop, loadRosterAgents: asyncNoop, loadTasks: async () => { counters.loads.tasks += 1 }, loadTaskDetail: asyncNoop, loadTaskRecommendations: asyncNoop,
     operableRosterAgents: Vue.ref([{ agentId: 'agent-o04', name: '显式 roster 好汉' }]),
     mapAgents: value, mapError: scalar, personaCatalog: value, recommendedAgents: value, rosterError: scalar, rosterLoading: Vue.ref(false), setAgentFilter: asyncNoop, setTaskStatusFilter: asyncNoop,
     taskAbilityFilter: scalar, taskAbilityOptions: value, taskCountsError: scalar, taskCountsLoading: Vue.ref(false), taskKeyword: scalar, tasks: value, tasksError: scalar, tasksLoading: Vue.ref(false), taskStatusCount: () => 0, taskStatusFilter: scalar, unbindPersona: asyncNoop, visibleAgents: value
@@ -3184,7 +3187,27 @@ describe('lightweight workbench real panel navigation', () => {
 })
 
 describe('O04 actual-mounted JuyiHall panel identity', () => {
-  it('adopts admitted bootstrap across the real bounty context actor reset but fences later target edits', async () => {
+  it('continues an external task via actual page handler without owner roster authority, retaining private-chat guard', async () => {
+    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+    const mocks = createActualHallMocks({ mode: Vue.ref('portrait-command'), mounts: { library: 0, archive: 0 }, counters })
+    mocks.useHallChatContext = useHallChatContext
+    const wrapper = mount(loadActualJuyiHall(mocks), { attachTo: document.body, global: { stubs } })
+    try {
+      await flushPromises()
+      const state = wrapper.vm.$.setupState
+      const target = { agentId: 'other-owner-agent', displayName: '他人承办', providerDisplayName: null, isMine: false, availability: 'offline' }
+      const task = { id: 'external-task', taskVersion: '1', status: 'assigned', assignedAgentId: target.agentId, assignedTarget: target }
+      expect(state.canStartAgentConversation(target)).to.equal(false)
+      expect(state.handleStartAgentConversation(target)).to.equal(false)
+      expect(state.discussTask(task, { ...target, agentId: 'forged' })).to.equal(false)
+      expect(state.discussTask(task, target)).to.equal(true)
+      expect(state.chatContext.targetAgentIds).to.deep.equal([target.agentId])
+      expect(state.discussTask({ ...task, status: 'cancelled' }, target)).to.equal(false)
+      expect(state.canStartAgentConversation(target)).to.equal(false)
+    } finally { wrapper.unmount() }
+  })
+
+  it('adopts external assignedTarget absent from the owner roster across real watchers but fences later target edits', async () => {
     const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
     const mocks = createActualHallMocks({ mode: Vue.ref('portrait-command'), mounts: { library: 0, archive: 0 }, counters })
     mocks.useHallChatContext = useHallChatContext
@@ -3195,17 +3218,18 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
     try {
       await flushPromises()
       const state = wrapper.vm.$.setupState
-      const task = { id: 'task-o04', title: 'original', taskVersion: '1', requirementRevision: '1', status: 'assigned', assignedAgentId: 'agent-o04' }
-      const reference = { taskId: task.id, targetAgentId: 'agent-o04' }
+      const task = { id: 'task-o04', title: 'original', taskVersion: '1', requirementRevision: '1', status: 'assigned', assignedAgentId: 'external-agent',
+        assignedTarget: { agentId: 'external-agent', displayName: '他人承办', providerDisplayName: null, isMine: false, availability: 'offline' } }
+      const reference = { taskId: task.id, targetAgentId: 'external-agent' }
       const generation = state.pointAndStartContextGeneration
       const isCurrent = () => state.pointAndStartContextGeneration === generation
-      expect(await state.attachAdmittedPointAndStart({ task, targetAgentId: 'agent-o04', reference, isCurrent })).to.equal(true)
+      expect(await state.attachAdmittedPointAndStart({ task, targetAgentId: 'external-agent', reference, isCurrent })).to.equal(true)
       expect(adopted).to.deep.equal([reference])
       expect(state.selectedAgent).to.equal(null)
       expect(isCurrent()).to.equal(true)
       state.selectedAgent = { agentId: 'different-agent' }
       expect(isCurrent()).to.equal(false)
-      expect(await state.attachAdmittedPointAndStart({ task, targetAgentId: 'agent-o04', reference, isCurrent })).to.equal(false)
+      expect(await state.attachAdmittedPointAndStart({ task, targetAgentId: 'external-agent', reference, isCurrent })).to.equal(false)
       expect(adopted).to.have.length(1)
     } finally { wrapper.unmount() }
   })

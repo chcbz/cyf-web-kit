@@ -1,3 +1,4 @@
+import * as assigneeCandidates from '../src/composables/juyiting/hallAssigneeCandidates.js'
 import * as taskPresentation from '../src/composables/juyiting/hallTaskPresentation.js'
 import * as ordinaryCancellation from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
 /* global before */
@@ -16,12 +17,13 @@ const compile = async () => {
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_m, names, path) => `const { ${names.split(',').map(x => x.trim().replace(/\s+as\s+/, ': ')).join(', ')} } = imports[${JSON.stringify(path)}]`)
     .replace(/^import\s+([^\s]+)\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_m, name, path) => `const ${name} = imports[${JSON.stringify(path)}]`)
     .replace('export default', 'return')
-  return new Function('imports', code)({ vue: Vue, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, './BountyActionIcon.vue': stub, './WorkItemPlanPanel.vue': stub,
+  return new Function('imports', code)({ vue: Vue, '@/composables/juyiting/hallAssigneeCandidates.js': assigneeCandidates, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, './BountyActionIcon.vue': stub, './WorkItemPlanPanel.vue': stub,
     './TeamRecommendationPanel.vue': stub, './HallDraftEditor.vue': stub, './HallMaterialPicker.vue': stub,
     '@/components/personal-workspace/TaskMaterialLinks.vue': stub, '@/utils/silverAmount': silver })
 }
 const task = (id, taskVersion = '6', requirementRevision = '3') => ({ id, title: id, description: '', status: 'open', taskVersion, requirementRevision })
 const props = () => ({ embeddedHall: true, tasks: [], selectedTask: task('task-a'), selectedAgent: { agentId: 'agent-a' },
+  assigneeCandidates: [{ agentId: 'agent-a', displayName: '吴用', providerDisplayName: null, isMine: true, availability: 'offline' }],
   operableAgents: [{ agentId: 'agent-a', name: '吴用', canOperate: true, status: 'online' }], recommendedAgents: [],
   taskAbilityOptions: [], taskStatusFilters: [], abilityText: () => '', canAssign: () => true,
   formatTime: () => '', portraitName: () => '', portraitStyle: () => ({}), taskAgentMatchScore: () => 0,
@@ -35,7 +37,7 @@ describe('unified generic point detail replaces drawing-specific confirmation', 
       expect(wrapper.find('.controlled-image-consent').exists()).to.equal(false)
       expect(wrapper.find('input[type="checkbox"]').exists()).to.equal(false)
       expect(wrapper.text()).not.to.include('受控图像外部账户确认')
-      expect(wrapper.text()).to.include('已有授权与费用规则保持不变')
+      expect(wrapper.text()).to.include('资料由该Agent运行环境及所使用的模型服务处理')
       const button = wrapper.findAll('button').find(item => item.text() === '确认承办，进入议事')
       expect(Boolean(button)).to.equal(true); await button.trigger('click')
       expect(wrapper.emitted('assign-task')[0][1].agentId).to.equal('agent-a')

@@ -30,7 +30,7 @@ describe('Juyi Hall hosted point flow', () => {
   it('uses eligible candidates and requires explicit confirmation rather than candidate-click assignment', () => {
     expect(bounty).to.include('const matterCandidates = computed(() => {')
     expect(bounty).to.include('props.canAssign(detailTask.value, agent)')
-    expect(bounty).to.include('[...assignableRecommendedAgents.value, ...props.operableAgents]')
+    expect(bounty).to.include('[...assignableRecommendedAgents.value, ...props.assigneeCandidates]')
     expect(bounty).to.include('!seen.has(agent.agentId) && seen.add(agent.agentId)')
     expect(bounty).to.include('@click="matterCandidateId = agent.agentId"')
     expect(bounty).to.include('@click="confirmMatterAgent"')

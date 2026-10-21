@@ -172,7 +172,8 @@ const pageHarness = ({ original = { state: 'ABSENT' }, started = true, status = 
     pointAndStartState: { value: { status } }, observePointAndStart: id => calls.push(['observe', id]),
     explainPointAndStartState: () => '核对原点将', taskWorkspaceBinding: { clearExplicitActor: () => {} },
     runAssignTask: async (task, target) => { calls.push(['other-workflow', task, target]); return true },
-    tasks: { value: [] }, markTaskAssigned: () => {}
+    tasks: { value: [] }, markTaskAssigned: () => {}, loadAssigneeCandidates: async () => {},
+    operableRosterAgents: { value: [{ agentId: 'explicit-agent', status: 'online' }, { agentId: 'second', status: 'online' }] }, normalizeStatus: value => value
   }
   return { calls, assign: new Function(...Object.keys(deps), `return async (task, agent) => {${actualAssign}}`)(...Object.values(deps)) }
 }

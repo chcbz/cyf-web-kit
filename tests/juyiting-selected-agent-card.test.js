@@ -1,3 +1,5 @@
+import { assignedTaskTarget } from '../src/composables/juyiting/hallAssigneeCandidates.js'
+import { useExternalServicePolicy } from '../src/composables/juyiting/useExternalServicePolicy.js'
 import { useHallDeliveryReview } from '../src/composables/juyiting/useHallDeliveryReview.js'
 import { useHallAgentProfileCapabilities } from '../src/composables/juyiting/useHallAgentProfileCapabilities.js'
 import { currentBountyAssignmentRevision } from '../src/composables/juyiting/hallBountyAssignmentContext.js'
@@ -73,7 +75,7 @@ const loadActualJuyiHall = mocks => {
     .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = mocks.${name}`)
     .replace(/import\.meta\.env/g, 'mocks.env')
     .replace('export default', 'return')
-  return new Function('Vue', 'mocks', body)(Vue, { useHallDeliveryReview, useHallAgentProfileCapabilities, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
+  return new Function('Vue', 'mocks', body)(Vue, { useHallDeliveryReview, useHallAgentProfileCapabilities, useExternalServicePolicy, assignedTaskTarget, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
 }
 
 const createHallMocks = ({ SelectedAgentCard, counters }) => {
@@ -87,7 +89,7 @@ const createHallMocks = ({ SelectedAgentCard, counters }) => {
   const EmptyPanel = Vue.defineComponent({ setup: () => () => Vue.h('section') })
   const hallData = {
     applySceneEvent: noop, applySceneSnapshot: noop, agentFilter: text, agents: Vue.ref([selected]), bindPersona: asyncNoop, canAssign: () => true,
-    filteredAgents: Vue.ref([selected]), hiddenAgentCount: Vue.ref(0), loadAgents: asyncNoop, loadTasks: asyncNoop, loadTaskRecommendations: asyncNoop,
+    filteredAgents: Vue.ref([selected]), hiddenAgentCount: Vue.ref(0), loadAgents: asyncNoop, loadTasks: asyncNoop, loadTaskDetail: asyncNoop, loadTaskRecommendations: asyncNoop,
     mapAgents: Vue.ref([selected]), operableRosterAgents: Vue.ref([selected]), personaCatalog: list, recommendedAgents: list, setAgentFilter: asyncNoop, setTaskStatusFilter: asyncNoop,
     taskAbilityFilter: text, taskAbilityOptions: list, taskKeyword: text, tasks: list, taskStatusCount: Vue.ref({}), taskStatusFilter: text,
     unbindPersona: asyncNoop, visibleAgents: Vue.ref([selected])

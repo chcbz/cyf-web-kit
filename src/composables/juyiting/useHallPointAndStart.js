@@ -160,7 +160,14 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
       if (!exactPointAndStartId(key)) throw new Error('原点将键无效；未发送点将')
       const intent = persist(captured, { schemaVersion: 2, taskId, key, body, postAcknowledged: false })
       state.value = { status: 'SENDING', intent, projection: null, error: null }
-      return send(intent, captured, epoch, contextEpoch)
+      try { return await send(intent, captured, epoch, contextEpoch) } catch (error) {
+        // Only the first POST's definitive rejection can release a new intent.
+        // A timed-out original or recovery retry remains pinned to its old key.
+        if (error?.status === 409 && current(captured, epoch, contextEpoch) &&
+          !state.value.intent?.postAcknowledged && !state.value.projection &&
+          store(captured, taskId).forgetRejected(intent)) state.value = initialState()
+        throw error
+      }
     })
   }
   // This method is ONLY for an explicit user recovery action. Refresh/mount uses

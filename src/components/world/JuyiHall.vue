@@ -268,6 +268,11 @@
             :active="renderedPanel === 'agents' && activePanel === 'agents'"
             :identity-key="hallIdentityScope + ':' + apiStore.authorizationGeneration"
             :panel-session-key="agentPanelSessionKey"
+            :external-policy="externalPolicy.policy.value"
+            :external-policy-status="externalPolicy.status.value"
+            :external-policy-busy="externalPolicy.busy.value"
+            :external-policy-can-write="externalPolicy.canWrite.value"
+            :external-policy-error="externalPolicy.error.value"
             :profile-capabilities="agentProfile.projection.value"
             :profile-capabilities-loading="agentProfile.loading.value"
             :profile-capabilities-error="agentProfile.error.value"
@@ -293,6 +298,10 @@
             :point-and-start-busy="pointAndStartBusy"
             :can-point-and-deliberate="canPointAndDeliberateAgent"
             :can-start-conversation="canStartAgentConversation"
+            @set-external-policy="externalPolicy.setEnabled"
+            @refresh-external-policy="externalPolicy.refresh"
+            @check-external-policy="externalPolicy.checkOriginal"
+            @resume-external-policy="externalPolicy.resumeOriginal"
             @refresh-profile-capabilities="agentProfile.refresh"
             @set-agent-filter="setAgentFilter"
             @select-agent="handleRosterSelectAgent"
@@ -346,6 +355,10 @@
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
             :recommended-agents="recommendedAgents"
+            :assignee-candidates="assigneeCandidates"
+            :candidates-loading="candidatesLoading"
+            :candidates-error="candidatesError"
+            :candidates-next-after-agent-id="candidatesNextAfterAgentId"
             :selected-agent="selectedAgent"
             :operable-agents="operableRosterAgents"
             :selected-task="selectedTask"
@@ -361,6 +374,8 @@
             :error-message="tasksError"
             :counts-loading="taskCountsLoading"
             :counts-error-message="taskCountsError"
+            @refresh-candidates="loadAssigneeCandidates()"
+            @more-candidates="loadAssigneeCandidates({ more: true })"
             @mark-changed="hallReadRevision += 1"
             @confirm-funded-quote="settleFundedQuote(true)"
             @cancel-funded-quote="settleFundedQuote(false)"
@@ -791,6 +806,8 @@ import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { useGlobalStore } from '@/stores/global'
 import { useApiStore } from '@/stores/api'
 import { agentApi, chatApi } from '@/composables/useHttp'
+import { assignedTaskTarget } from '@/composables/juyiting/hallAssigneeCandidates.js'
+import { useExternalServicePolicy } from '@/composables/juyiting/useExternalServicePolicy.js'
 import { useHallChatContext, bountyInteractionTargetId } from '@/composables/juyiting/useHallChatContext'
 import { useHallBackendSceneState } from '@/composables/juyiting/useHallBackendSceneState'
 import { useHallCommandQueue } from '@/composables/juyiting/useHallCommandQueue'
@@ -1231,6 +1248,11 @@ const {
   agents,
   bindPersona,
   canAssign,
+  assigneeCandidates,
+  candidatesLoading,
+  candidatesError,
+  candidatesNextAfterAgentId,
+  loadAssigneeCandidates,
   catalogError,
   catalogLoading,
   filteredAgents,
@@ -1239,6 +1261,7 @@ const {
   loadPersonaCatalog,
   loadRosterAgents,
   loadTasks,
+  loadTaskDetail,
   loadTaskRecommendations,
   mapAgents,
   mapError,
@@ -1415,7 +1438,14 @@ const selectTask = async (task) => {
   const returningToList = !task && Boolean(selectedTask.value) && activePanel.value === 'tasks'
   selectedTask.value = task
   if (task) {
-    await loadTaskRecommendations(task)
+    const identity = hallIdentityScope.value, generation = apiStore.authorizationGeneration
+    // Search rows need not contain grant-backed assignedTarget. Read the exact
+    // detail instead of looking the executor up in the owner's roster.
+    if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT' && (task.assignedAgentId || task.assignedAgentIds?.length === 1) && !assignedTaskTarget(task)) {
+      await loadTaskDetail(task)
+    }
+    if (identity !== hallIdentityScope.value || generation !== apiStore.authorizationGeneration || selectedTask.value?.id !== task.id) return false
+    await loadTaskRecommendations(selectedTask.value)
     markRecommendedAgents(recommendedAgents.value)
   } else if (returningToList) {
     // Overview opens an exact detail without loading the underlying list.
@@ -1789,9 +1819,12 @@ const handlePortraitTaskBoard = () => {
 
 const handlePortraitTaskDiscussion = task => {
   if (voiceInteractionLocked.value || !task?.id) return false
-  closePortraitTaskDetail()
-  discussTask(task)
-  return true
+  const target = task.funding?.mode === 'FUNDED_SINGLE_AGENT'
+    ? operableRosterAgents.value.find(agent => agent.agentId === task.assignedAgentId)
+    : assignedTaskTarget(task)
+  const entered = discussTask(task, target)
+  if (entered) closePortraitTaskDetail()
+  return entered
 }
 
 watch(experienceMode, mode => {
@@ -2013,11 +2046,16 @@ const briefSelectedTask = (task = selectedTask.value, agent = selectedAgent.valu
 
 const discussTask = (task, explicitAgent) => {
   if (isTerminalMatter(task)) return false
-  const assignedIds = [...new Set((Array.isArray(task?.assignedAgentIds) ? task.assignedAgentIds : [task?.assignedAgentId]).filter(Boolean))]
-  const actorAgentId = typeof explicitAgent?.agentId === 'string' ? explicitAgent.agentId : ''
-  const actor = assignedIds.length === 1 && assignedIds[0] === actorAgentId
-    ? operableRosterAgents.value.find(agent => agent.agentId === actorAgentId) || null
-    : null
+  let actor
+  if (task?.funding?.mode === 'FUNDED_SINGLE_AGENT') {
+    const ids = [...new Set((Array.isArray(task.assignedAgentIds) ? task.assignedAgentIds : [task.assignedAgentId]).filter(Boolean))]
+    actor = ids.length === 1 && ids[0] === explicitAgent?.agentId
+      ? operableRosterAgents.value.find(agent => agent.agentId === ids[0]) : null
+  } else {
+    if (!projectHallTask({ task }).actions.includes('DISCUSS')) return false
+    const target = assignedTaskTarget(task)
+    actor = target?.agentId === explicitAgent?.agentId ? target : null
+  }
   if (!task?.id || !actor || !openPanel('chat')) return false
   enterBountyDiscussion(task)
   // Clicking the task-scoped button is the user's explicit actor selection. Keep
@@ -2338,8 +2376,8 @@ const attachAdmittedPointAndStart = async ({ task, targetAgentId, reference, isC
   if (!isCurrent?.() || panelDisposed || task?.id !== reference?.taskId || targetAgentId !== reference?.targetAgentId) return false
   // Admission receives only the canonical TaskDTO. Never synthesize assignment
   // fields from a grant receipt or choose a different roster target.
-  const target = operableRosterAgents.value.find(agent => agent?.agentId === targetAgentId)
-  if (!target) return false
+  const target = assignedTaskTarget(task)
+  if (target?.agentId !== targetAgentId) return false
   tasks.value = tasks.value.map(item => item?.id === task.id ? task : item)
   preserveAdmittedPointAndStartContext(task)
   hallReadRevision.value += 1
@@ -2367,10 +2405,7 @@ const {
   actorScopeKey: hallIdentityScope,
   storage: pointAndStartStorage,
   getContextGeneration: () => pointAndStartContextGeneration.value,
-  canAssign: (task, agent) => {
-    const current = operableRosterAgents.value.find(item => item?.agentId === agent?.agentId)
-    return Boolean(current && canAssign(task, current))
-  },
+  canAssign,
   onAssignmentConfirmed: ({ isCurrent }) => {
     if (isCurrent?.() && !panelDisposed) hallReadRevision.value += 1
   },
@@ -2384,7 +2419,15 @@ const agentProfile = useHallAgentProfileCapabilities({
   identityKey: () => hallIdentityScope.value ? `${hallIdentityScope.value}:${apiStore.authorizationGeneration}` : '',
   enabled: () => renderedPanel.value === 'agents' && activePanel.value === 'agents' && Boolean(agentPanelRef.value?.profileVisible)
 })
-onUnmounted(() => agentProfile.dispose())
+const externalPolicy = useExternalServicePolicy({
+  api: agentApi,
+  getAgent: () => selectedAgent.value,
+  identityScope: () => hallIdentityScope.value,
+  authorizationGeneration: () => apiStore.authorizationGeneration,
+  enabled: () => renderedPanel.value === 'agents' && activePanel.value === 'agents' && Boolean(agentPanelRef.value?.profileVisible),
+  storage: pointAndStartStorage
+})
+onUnmounted(() => { agentProfile.dispose(); externalPolicy.dispose() })
 
 const taskSkillDirectory = useHallSkillCapabilities({ api: agentApi, getContext: typedDeliberationContext,
   identityKey: () => `${hallIdentityScope.value}\u0000${apiStore.authorizationGeneration}\u0000${followupContextGeneration.value}`,
@@ -2396,7 +2439,8 @@ const explainPointAndStartState = () => ({
   PREPARING: '正在准备会话。',
   ADMITTED: '需求已发送，正在进入会话。',
   HISTORICAL: '本次指派已结束，可查看历史记录。',
-  FAILED: '点将未完成，请刷新状态查看详情。'
+  FAILED: '点将未完成，请刷新状态查看详情。',
+  REJECTED: '委派未受理，候选已重新核对；请确认目标和事项状态。'
 }[pointAndStartState.value.status] || '正在确认点将结果。')
 const checkPointAndStartOriginal = async (task) => {
   if (!task?.id) return false
@@ -2452,11 +2496,12 @@ const assignTask = async (task, agent) => {
   const oneOrdinaryTarget = task.funding?.mode !== 'FUNDED_SINGLE_AGENT' && targetAgents.length === 1
   if (oneOrdinaryTarget) {
     const started = await startPointAndStart({ task, agent: targetAgents[0] })
-    if (!started) showToast(explainPointAndStartState())
+    if (!started) { showToast(explainPointAndStartState()); void loadAssigneeCandidates() }
     if (pointAndStartState.value.status === 'PREPARING') observePointAndStart(task.id)
     return started
   }
 
+  if (targetAgents.some(target => !operableRosterAgents.value.some(owned => owned.agentId === target.agentId && normalizeStatus(owned.status) === 'online'))) return false
   taskWorkspaceBinding.clearExplicitActor()
   const assignmentSucceeded = await runAssignTask(task, agent)
   if (!assignmentSucceeded) return false
