@@ -503,6 +503,8 @@
             v-if="panelFrames.includes('formalDraft')"
             v-show="renderedPanel === 'formalDraft'"
             ref="formalDraftRef"
+            :key="formalDraftGeneration"
+            :initial-context="formalDraftContext"
             :inert="renderedPanel !== 'formalDraft' ? '' : null"
             :aria-hidden="renderedPanel !== 'formalDraft' ? 'true' : null"
             initial-kind="TASK_CREATE"
@@ -536,7 +538,7 @@
             :aria-hidden="renderedPanel !== 'treasure' ? 'true' : null"
             :detail-allowed="true"
             embedded
-            @start-draft="openPrivateDraft"
+            @start-draft="openReferencedRequirement"
           />
 
           <PersonaCatalogPanel
@@ -747,7 +749,7 @@
             embedded
             :active="renderedPanel === 'library'"
             :virtual-landscape="isVirtualLandscape"
-            @start-draft="openPrivateDraft"
+            @start-draft="openReferencedRequirement"
             @cite-library="citeLibraryItem"
             @search-library="searchLibrary"
           />
@@ -916,6 +918,8 @@ const panelFrames = ref([])
 const privateDraftRef = ref(null)
 const itemDraftRef = ref(null)
 const formalDraftRef = ref(null)
+const formalDraftContext = ref(null)
+const formalDraftGeneration = ref(0)
 const draftContext = ref(null)
 const privateDraftGeneration = ref(0)
 const formalTaskRef = ref(null)
@@ -1803,10 +1807,10 @@ const openOverviewItem = ref => {
 }
 
 const handleQuickRequest = async (request, settle = () => {}) => {
-  if (typeof request?.request !== 'string' || !request.request.trim()) return false
+  if (typeof request?.request !== 'string' || (!request.request.trim() && !request.materials?.length)) return false
   const identity = hallIdentityScope.value
   const epoch = apiStore.authorizationGeneration
-  const created = await createTask({ title: request.request, description: request.request, attachments: request.materials ?? [] })
+  const created = await createTask({ title: [...request.request.trim()].slice(0, 36).join('') || '资料处理', description: request.request, attachments: request.materials ?? [] })
   if (identity !== hallIdentityScope.value || epoch !== apiStore.authorizationGeneration) return false
   settle(created === true)
   if (!created) {
@@ -1834,6 +1838,18 @@ const openPendingTaskDetail = task => openOverviewTask(task, null, { root: true 
 // Creation owns a separate page in every layout; the task board only manages existing matters.
 const openDefaultRequirementCreate = () => {
   return openPanel('formalDraft', { restore: true })
+}
+const openReferencedRequirement = (context = {}) => {
+  if (guardPanelLeave(() => openReferencedRequirement(context))) return false
+  if (!openPanel('formalDraft', { restore: true })) return false
+  // Source provenance is readable text/origin, not private-execution source authority.
+  formalDraftContext.value = {
+    originRef: context.originRef || 'juyiting',
+    instruction: context.instruction || '',
+    inputs: (context.inputs || []).map(({ fileId, version }) => ({ fileId, version }))
+  }
+  formalDraftGeneration.value += 1
+  return true
 }
 const openPrivateDraft = (context = {}) => {
   if (guardPanelLeave(() => openPrivateDraft(context))) return false
@@ -1963,6 +1979,7 @@ watch([() => apiStore.authorizationGeneration, hallIdentityScope], () => {
   panelLocations.clear()
   cancelPanelLeave()
   draftContext.value = null
+  formalDraftContext.value = null
   formalTaskRef.value = null
   overviewItemRef.value = null
   taskReviewRef.value = null
@@ -2742,6 +2759,7 @@ const {
   librarySourceType,
   searchLibrary: runSearchLibrary
 } = useHallLibrary({
+  openRequirement: openReferencedRequirement,
   chatApi,
   draft,
   log,
@@ -2759,8 +2777,7 @@ const searchLibrary = async () => {
 }
 
 const citeLibraryItem = (item) => {
-  runCiteLibraryItem(item)
-  markLibraryCitation(item)
+  if (runCiteLibraryItem(item)) markLibraryCitation(item)
 }
 
 const startDialogueBubbles = () => {

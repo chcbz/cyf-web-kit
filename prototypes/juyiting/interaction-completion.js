@@ -226,7 +226,26 @@ function beginAcceptance(){
 }
 function operationDialog(){const op=state.operation;if(!op)return;finalDraft=[...op.outputs];dialog('验收进度',`<p role="status">${op.stage==='pending'?'正在核对原验收操作…':op.stage==='failed'?'验收未完成。原操作和成果已保留。':'验收状态未知。不重新提交验收。'}</p><small>原操作 ${esc(op.id)} · 冻结 ${op.outputs.length} 项成果</small><div class="mmd-attachments">${deliveryList()}</div>`,button('返回详情','complete-operation-detail')+button('查询原操作状态','complete-operation-status'));}
 function resolveOperation(){const op=state.operation;if(!op||state.task?.complete)return;if(state.simulation.accept==='ok'){op.stage='completed';state.final=[...op.outputs];state.task.complete=true;persist();const d=$('dialog[open]');if(d?.getAttribute('aria-label')==='验收进度'){d.close();if(page==='chat')renderChat();else go('detail');feedback('示例验收完成。');}else render();return;}op.stage=state.simulation.accept==='failed'?'failed':'unknown';if(page==='detail')renderDetail();if(page==='results')renderFormalResults();persist();const d=$('dialog[open]');if(d?.getAttribute('aria-label')==='验收进度'){d.close();operationDialog();}}
-async function addLocalFiles(selected){const ids=[];try{for(const f of selected){const id='local-'+(++serial),type=f.type.startsWith('image/')?'image':f.type.startsWith('audio/')?'audio':/text|json/.test(f.type)||/\.(txt|md|csv)$/i.test(f.name)?'text':'document';const a={id,name:f.name,type,note:'本机附件 · 不上传'};a.text=type==='text'?await f.text():type==='document'?'此格式仅演示选取与下载，未支持内容解析；不是已实现格式能力。':'';a.url=await new Promise((r,j)=>{const reader=new FileReader();reader.onload=()=>r(reader.result);reader.onerror=j;reader.readAsDataURL(f);});state.localFiles.push(a);ids.push(id);}const selectedIds=[...new Set([...picker.ids,...ids])],context=picker.context;$('dialog[open]')?.close();persist();openMaterials(context,selectedIds);}catch{feedback('本机示例文件未读取成功，已确认资料不变。');}}
+async function addLocalFiles(selected){
+ const files=[...selected],d=$('.material-picker-dialog'),current=picker;
+ if(!files.length||!d||current.uploading)return;
+ const input=$('[data-local-files]',d),status=$('[data-picker-upload-status]',d);
+ current.uploading=true;input.disabled=true;current.uploadStatus='正在读取资料…';status.hidden=false;status.textContent=current.uploadStatus;
+ try{
+  const added=[];
+  for(const f of files){
+   const type=f.type.startsWith('image/')?'image':f.type.startsWith('audio/')?'audio':/text|json/.test(f.type)||/\.(txt|md|csv)$/i.test(f.name)?'text':'document';
+   const text=type==='text'?await f.text():type==='document'?'此格式暂不支持内嵌预览。':'';
+   const url=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error('read'));r.onabort=()=>reject(new Error('abort'));r.readAsDataURL(f);});
+   added.push({id:'local-'+(++serial),name:f.name,type,text,url,version:1,note:'本机资料 · 上传离线演示'});
+  }
+  if(!d.isConnected||picker!==current)return;
+  state.localFiles.push(...added);current.ids=[...new Set([...current.ids,...added.map(a=>a.id)])];
+  current.selected=added[0].id;current.preview=false;current.previewDismissed=false;
+  current.uploadStatus='';persist();
+ }catch{current.uploadStatus='读取失败，原有选择保留，请重试。';}
+ finally{current.uploading=false;input.disabled=false;input.value='';if(d.isConnected&&picker===current)renderMaterialPicker();}
+}
 function renderFileDetail(){
  const root=$('.baseline-page'),a=asset(state.fileId||'ref-brief');if(!root||!a)return;const meta=state.fileMeta[a.id]||{};
  const selected=meta.demoVersion||String(meta.versions?.length?meta.versions.length+1:1),versionAsset=asset(meta.versions?.find(v=>String(v.version)===selected)?.id)||a,versions=meta.demoHistory?(meta.demoHistoryLoaded?Array.from({length:102},(_,i)=>String(102-i)):Array.from({length:100},(_,i)=>String(102-i))):meta.versions?[...meta.versions.map(v=>String(v.version)).reverse(),'1']:['1'];

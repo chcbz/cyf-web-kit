@@ -41,7 +41,7 @@
 
         <p id="hall-onboarding-description" class="intro">{{ currentStep.description }}</p>
         <p class="sr-only" aria-live="polite" aria-atomic="true">{{ currentStep.title }}。{{ currentStep.description }}</p>
-        <p v-if="!targetRect" class="target-note" role="status">{{ targetNote }}</p>
+        <p v-if="!targetRect && (currentStep.target || currentStep.hotspotId)" class="target-note" role="status">{{ targetNote }}</p>
         <p class="step-progress">第 {{ stepIndex + 1 }} 步，共 {{ steps.length }} 步</p>
         <p v-if="templateLabel" class="template-note">访客体验参考：{{ templateLabel }}</p>
 
@@ -76,113 +76,13 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'later', 'skip', 'complete'])
 
-const TOUR_STEPS = Object.freeze({
-  'portrait-command': Object.freeze([
-    {
-      target: '[data-tour="portrait-preview"]',
-      title: '先看厅中只读实景',
-      description: '这里用来浏览厅中动态。实景窗口本身不接收点击，请从下方点将册选择协作好汉。'
-    },
-    {
-      target: '[data-tour="portrait-landscape"]',
-      title: '横屏看全景',
-      description: '需要查看完整地图和厅中场所时，点这里切换横屏全景；横屏界面会使用另一套对应引导。'
-    },
-    {
-      target: '[data-tour="portrait-action-agents"]',
-      title: '点将册：挑选协作好汉',
-      description: '在点将册查看好汉状态和能力，选定合适的人手。'
-    },
-    {
-      target: '[data-tour="portrait-action-tasks"]',
-      title: '悬赏榜：处理待办任务',
-      description: '在悬赏榜查看、创建和指派榜文。'
-    },
-    {
-      target: '[data-tour="portrait-action-discussion"]',
-      title: '厅前议事：发起协作',
-      description: '围绕当前好汉和榜文发起讨论。'
-    },
-    {
-      target: '[data-tour="portrait-action-catalog"]',
-      title: '招贤令：补充可用人手',
-      description: '需要新的协作对象时，从招贤令查看可用选项。'
-    },
-    {
-      target: '[data-tour="portrait-action-library"]',
-      title: '案卷阁：复用已有资料',
-      description: '在案卷阁沉淀和检索可复用的协作成果。'
-    },
-    {
-      target: '[data-tour="portrait-action-treasure"]',
-      title: '百宝箱：集中管理资料与交付',
-      description: '文件、版本和交付件统一在百宝箱管理，不再占用榜文和议事详情。'
-    },
-    {
-      target: '[data-tour="portrait-todos"]',
-      title: '从待办榜文进入任务',
-      description: '待办榜文集中显示尚待处理的事；点开一条可查看详情，再决定是否进入悬赏榜或议事。'
-    },
-    {
-      target: '[data-tour="portrait-context"]',
-      title: '确认当前协作上下文',
-      description: '这里汇总当前好汉和榜文；发起厅前议事前，先确认对象是否正确。'
-    }
-  ]),
-  'landscape-map': Object.freeze([
-    {
-      target: '[data-tour="landscape-map"]',
-      title: '地图是厅中动态的入口',
-      description: '拖动地图浏览各处，用加减号缩放、0 键复位；点地图中的场所可直接打开对应功能。'
-    },
-    {
-      hotspotId: 'main-seat',
-      title: '忠义堂公议：进入厅前议事',
-      description: '点击忠义堂公议，围绕当前上下文发起协作讨论。'
-    },
-    {
-      hotspotId: 'agent-roster',
-      title: '点将册：挑选协作好汉',
-      description: '点击点将册查看好汉状态、能力与详情。'
-    },
-    {
-      hotspotId: 'bounty-board',
-      title: '悬赏榜：处理待办任务',
-      description: '点击悬赏榜查看、创建和指派榜文。'
-    },
-    {
-      hotspotId: 'roster-book',
-      title: '招贤令：补充可用人手',
-      description: '点击招贤令查看可用的协作对象。'
-    },
-    {
-      hotspotId: 'library-shelf',
-      title: '案卷阁：复用已有资料',
-      description: '点击案卷阁查找和沉淀可复用资料。'
-    },
-    {
-      target: '[data-tour="landscape-babao-box"]',
-      title: '百宝箱：集中管理资料与交付',
-      description: '打开百宝箱可管理文件、版本和交付件；引导只介绍位置，不会替你执行操作。'
-    },
-    {
-      target: '[data-tour="landscape-sound"]',
-      title: '控制厅中声响',
-      description: '用声响按钮开启或歇下提示音，当前状态会直接显示在按钮上。'
-    },
-    {
-      target: '[data-tour="landscape-onboarding"]',
-      title: '随时重看引导',
-      description: '以后需要复习地图和工具位置时，可从这里重新打开引导。'
-    },
-    {
-      target: '[data-tour="landscape-orientation"]',
-      optional: true,
-      title: '手机可切回竖屏视图',
-      description: '手机全景模式会显示视图切换按钮；桌面端没有此按钮时可直接继续。'
-    }
-  ])
-})
+const REQUIREMENT_STEPS = Object.freeze([
+  { title: '描述需求', description: '在办事首页写下想办成的事，也可以添加资料。开始办事后需求会保存为待点将事项。' },
+  { title: '确认承办Agent', description: '系统推荐承办好汉，你可以确认或另选。确认承办后才开始办理，不在首页提前选人。' },
+  { title: '在议事中协作与验收', description: '澄清、查看结果和提出修改都在同一议事中完成。成果提交后，通过验收入口查看并确认验收。' },
+  { title: '找回事项与资料', description: '从事项页继续办理或查看已完成成果；从资料页管理和复用固定版本资料。' }
+])
+const TOUR_STEPS = Object.freeze({ 'portrait-command': REQUIREMENT_STEPS, 'landscape-map': REQUIREMENT_STEPS })
 
 const dialogRef = ref(null)
 const overlayRef = ref(null)
@@ -409,7 +309,7 @@ const syncGeometry = () => {
     if (focusedHotspotKey === key) rect = hotspotClientRect(step.hotspotId, page)
     updateObservedTarget(page?.querySelector?.('.hall-board .melon-layer canvas') || null)
   } else {
-    const target = page?.querySelector?.(step?.target)
+    const target = step?.target ? page?.querySelector?.(step.target) : null
     updateObservedTarget(target || null)
     rect = rectFromEdges(target?.getBoundingClientRect?.())
     const canFitInViewport = rect && rect.height <= viewportSize.value.height - 24

@@ -1510,6 +1510,33 @@ describe('useHallConversation history remediation', () => {
     conversation.disposeHallConversation()
   })
 
+  it('isolates text drafts across an existing thread, an unsent new thread, and another saved thread', async () => {
+    const conversation = createConversation({ chatApi: {
+      list: async (_path, _payload, options) => options.onSuccess({ items: [scopedConversation('1001'), scopedConversation('1002')], nextCursor: null, hasMore: false }),
+      getById: async (_path, _id, options) => options.onSuccess([])
+    } })
+    try {
+      await conversation.loadHallConversationHistory()
+      await conversation.selectHallConversation('1001')
+      conversation.setDraft('话头A的未发送文字')
+      conversation.newHallConversation()
+      expect(conversation.draft.value).to.equal('')
+      conversation.setDraft('新话头B的文字')
+      await conversation.loadHallConversationHistory()
+      await conversation.selectHallConversation('1001')
+      expect(conversation.draft.value).to.equal('话头A的未发送文字')
+      await conversation.selectHallConversation('1002')
+      expect(conversation.draft.value).to.equal('')
+      conversation.setDraft('话头C的未发送文字')
+      await conversation.selectHallConversation('1001')
+      expect(conversation.draft.value).to.equal('话头A的未发送文字')
+      await conversation.selectHallConversation('1002')
+      expect(conversation.draft.value).to.equal('话头C的未发送文字')
+      conversation.newHallConversation()
+      expect(conversation.draft.value).to.equal('新话头B的文字')
+    } finally { conversation.disposeHallConversation() }
+  })
+
   it('clears the history spinner and fences a late history page when starting a new conversation', async () => {
     const request = deferred()
     const conversation = createConversation({ chatApi: { list: async () => request.promise } })

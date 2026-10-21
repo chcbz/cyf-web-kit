@@ -3,22 +3,28 @@
     <p v-if="error" role="alert">{{ error }}</p>
     <template v-if="previewUrl && mediaKind === 'image'">
       <button type="button" class="image-button" aria-label="放大查看图片" @click="expanded = true"><img :src="previewUrl" :alt="part.filename || '会话图片'" /></button>
-      <div v-if="expanded" class="image-overlay" role="dialog" aria-modal="true" aria-label="放大查看会话图片" @click.self="expanded = false" @keydown.esc="expanded = false">
-        <button type="button" aria-label="关闭图片预览" @click="expanded = false">关闭</button>
-        <img :src="previewUrl" :alt="part.filename || '会话图片'" />
-      </div>
+
     </template>
-    <template v-else-if="mediaKind === 'image'"><span>{{ loading ? '正在读取图片…' : '图片暂不可预览，可尝试下载。' }}</span></template>
+    <template v-else-if="mediaKind === 'image'"><span>{{ loading ? '正在读取图片…' : '图片暂不可预览，请打开预览后重试。' }}</span></template>
     <template v-if="mediaKind === 'audio'">
       <audio v-if="previewUrl" :src="previewUrl" controls preload="none" aria-label="会话音频" />
       <button v-else type="button" :disabled="loading" @click="loadPreview">{{ loading ? '正在读取音频…' : '播放音频' }}</button>
     </template>
-    <span v-if="mediaKind === 'file'">暂不支持在线预览，可下载查看。</span>
-    <button type="button" :disabled="loading" @click="download">下载</button>
+    <button type="button" :disabled="loading" @click="expanded = true">预览</button>
+    <Teleport to="body">
+      <dialog v-if="expanded" ref="previewDialog" class="image-overlay" aria-label="会话资料预览" @cancel.prevent="expanded = false" @click="closeOnBackdrop">
+        <header><strong>{{ part.filename || '资料预览' }}</strong><button type="button" class="media-preview-close" aria-label="关闭预览" title="关闭预览" @click="expanded = false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button></header>
+        <img v-if="previewUrl && mediaKind === 'image'" :src="previewUrl" :alt="part.filename || '会话图片'" />
+        <audio v-else-if="previewUrl && mediaKind === 'audio'" :src="previewUrl" controls preload="none" aria-label="音频预览" />
+        <p v-else>{{ loading ? '正在读取…' : '暂不支持在线预览，可下载原文件查看。' }}</p>
+        <p v-if="error" role="alert">{{ error }}</p>
+        <footer><button v-if="!previewUrl && mediaKind !== 'file'" type="button" :disabled="loading" @click="loadPreview">重试预览</button><button type="button" class="media-preview-download" :disabled="loading" @click="download">下载文件</button></footer>
+      </dialog>
+    </Teleport>
   </div>
 </template>
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { createApi } from '../../composables/useHttp.js'
 import { conversationAssetContentPath, safeMediaKind } from '../../composables/juyiting/hallMessageParts.js'
 import { saveOutputBlob } from '../../utils/outputDownload.js'
@@ -33,6 +39,22 @@ const previewUrl = ref('')
 const loading = ref(false)
 const error = ref('')
 const expanded = ref(false)
+const previewDialog = ref(null)
+let previewReturnFocus = null
+const closeOnBackdrop = event => { if (event.target === previewDialog.value) expanded.value = false }
+watch(expanded, async opened => {
+  if (opened) {
+    previewReturnFocus = document.activeElement
+    await nextTick()
+    if (!expanded.value) return
+    previewDialog.value?.showModal?.()
+    previewDialog.value?.querySelector('button')?.focus()
+    void loadPreview()
+  } else {
+    await nextTick()
+    if (previewReturnFocus?.isConnected) previewReturnFocus.focus()
+  }
+})
 const mediaKind = computed(() => safeMediaKind(props.part))
 let controller = null
 let requestGeneration = 0
@@ -102,7 +124,18 @@ onBeforeUnmount(discard)
 .media-asset p { color: #a14132; margin: 0; }
 .image-button { display: block; max-width: 100%; padding: 0; background: transparent; cursor: zoom-in; }
 .image-button img { display: block; max-width: min(100%, 280px); max-height: 230px; object-fit: contain; }
-.image-overlay { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 18px; background: rgba(9, 19, 19, 0.88); }
-.image-overlay img { max-width: 95vw; max-height: 83vh; object-fit: contain; }
+.image-overlay { position:fixed; inset:0; z-index:1400; box-sizing:border-box; width:min(960px,calc(100vw - 32px)); max-width:calc(100vw - 32px); max-height:calc(100dvh - 32px); margin:auto; border:1px solid #d8d8ce; border-radius:12px; padding:16px; background:#fffefa; color:#242e2b; }
+.image-overlay[open] { display:flex; flex-direction:column; align-items:center; gap:12px; }
+.image-overlay::backdrop { background:#242e2baa; }
+.image-overlay header { display:flex; width:100%; align-items:center; justify-content:space-between; gap:12px; }
+.image-overlay header strong { overflow-wrap:anywhere; min-width:0; }
+.image-overlay .media-preview-close { display:inline-flex; align-items:center; justify-content:center; flex:none; width:40px; height:40px; padding:0; border:0; border-radius:7px; background:transparent; color:#68716b; cursor:pointer; }
+.media-preview-close svg { width:20px; height:20px; }
+.image-overlay img { width:100%; max-height:65dvh; min-height:0; object-fit:contain; }
+.image-overlay audio { max-width:100%; }
+.image-overlay footer { display:flex; justify-content:flex-end; width:100%; gap:8px; }
+.image-overlay footer button { min-height:40px; padding:6px 14px; border:1px solid #d8d8ce; border-radius:7px; background:#fffefa; color:#242e2b; cursor:pointer; }
+.image-overlay footer .media-preview-download { background:#923f30; color:#fffefa; border-color:#923f30; }
+.image-overlay button:focus-visible { outline:2px solid #923f30; outline-offset:2px; }
 .media-asset audio { max-width: 100%; }
 </style>

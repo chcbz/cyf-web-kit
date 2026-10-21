@@ -59,7 +59,7 @@
       <p v-if="loading" class="task-data-state" role="status">悬赏榜读取中…</p>
       <p v-else-if="errorMessage" class="task-data-state is-error" role="alert">{{ errorMessage }}</p>
       <p v-if="countsLoading" class="task-data-state" role="status">榜文数目统计中…</p>
-      <p v-else-if="countsErrorMessage" class="task-data-state is-error" role="alert">{{ countsErrorMessage }}</p>
+      <p v-else-if="countsErrorMessage && countsErrorMessage !== errorMessage" class="task-data-state is-error" role="alert">{{ countsErrorMessage }}</p>
 
       <div class="task-status-tabs" aria-label="事项状态" @focusin="revealStatusFilter">
         <button
@@ -117,7 +117,7 @@
               <span v-if="!(task.requiredAbilities || []).length">不拘本领</span>
             </div>
           </article>
-          <div v-if="!tasks.length" class="empty-list">榜上暂无悬赏，可换个筛法或重查一遍。</div>
+          <div v-if="!loading && !errorMessage && !tasks.length" class="empty-list">{{ taskKeyword || taskAbilityFilter || (taskStatusFilter && taskStatusFilter !== 'all') ? '没有符合当前筛选条件的事项，请调整筛选后重查。' : '还没有事项，先提出一个需求吧。' }}</div>
         </div>
       </div>
 

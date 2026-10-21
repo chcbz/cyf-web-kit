@@ -40,7 +40,7 @@ import { revisionOf } from '../../composables/juyiting/hallMessageParts.js'
 
 const props = defineProps({ parts: { type: Array, default: () => [] }, conversationId: { type: String, default: '' }, identityKey: { type: String, default: '' }, identityScope: { type: String, default: '' } })
 const archives = useHallConversationArchive({ conversationId: () => props.conversationId, identityEpoch: () => props.identityKey, identityScope: () => props.identityScope })
-const canSaveToWorkspace = part => part?.state === 'ready' && typeof part?.assetId === 'string' && part.assetId.length > 0 && Boolean(revisionOf(part?.revision))
+const canSaveToWorkspace = part => part?.kind === 'text' && part?.state === 'ready' && typeof part?.assetId === 'string' && part.assetId.length > 0 && Boolean(revisionOf(part?.revision))
 const archiveStatus = part => archives.statusFor(part)
 const saveToWorkspace = part => { void archives.save(part) }
 const refreshArchiveStatus = part => { void archives.check(part) }

@@ -707,9 +707,10 @@ describe('JYT-UX-W02 visible draft-step regressions', () => {
     try {
       await settle()
       await wrapper.get('.quick-material-open').trigger('click'); await settle()
+      await wrapper.get('.quick-material-count').trigger('click')
       expect(wrapper.get('.quick-material-draft').text()).to.include('v1')
       await wrapper.get('.quick-material-draft button').trigger('click')
-      expect(wrapper.find('.quick-material-draft').exists()).to.equal(false)
+      expect(wrapper.get('.quick-material-count').text()).to.include('已选 0')
       await button(wrapper, '取消').trigger('click'); await settle()
       expect(wrapper.get('.quick-material-summary').text()).to.include('v1')
       expect(wrapper.get('.quick-material-summary').text()).not.to.include('v2')

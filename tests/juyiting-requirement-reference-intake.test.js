@@ -157,7 +157,7 @@ describe('exact requirement/reference create contract', () => {
 const page = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 const actualCreate = page.match(/const createTask = async \(payload, acknowledge = \(\) => \{\}\) => \{([\s\S]*?)\n\}\nconst resumeFundedCreate/)?.[1]
 if (!actualCreate) throw new Error('Actual JuyiHall create closure missing')
-const actualDefaultRequirementEntry = page.match(/const openDefaultRequirementCreate = \(\) => \{([\s\S]*?)\n\}\nconst openPrivateDraft/)?.[1]
+const actualDefaultRequirementEntry = page.match(/const openDefaultRequirementCreate = \(\) => \{([\s\S]*?)\n\}\nconst openReferencedRequirement/)?.[1]
 if (!actualDefaultRequirementEntry) throw new Error('Actual JuyiHall default requirement entry missing')
 const pageHarness = ({ ordinary = { state: 'ABSENT' }, fundedRecovery = null } = {}) => {
   const h = { ordinary: [], funded: [], toasts: [], acknowledgements: [] }
@@ -253,6 +253,17 @@ describe('mounted Bounty read/manage surface and original recovery', () => {
     }
   })
   const panel = (props = {}) => { const wrapper = mount(Panel, { props: { ...panelProps(), ...props } }); wrappers.push(wrapper); return wrapper }
+  it('separates loading, request failure, empty lists and filter misses', async () => {
+    const wrapper = panel({ tasks: [], loading: true })
+    expect(wrapper.find('.empty-list').exists()).to.equal(false)
+    await wrapper.setProps({ loading: false, errorMessage: 'Failed to fetch', countsErrorMessage: 'Failed to fetch' })
+    expect(wrapper.find('.empty-list').exists()).to.equal(false)
+    expect(wrapper.findAll('.task-data-state.is-error')).to.have.length(1)
+    await wrapper.setProps({ errorMessage: '', countsErrorMessage: '', taskKeyword: '无匹配关键词' })
+    expect(wrapper.get('.empty-list').text()).to.include('没有符合当前筛选条件')
+    await wrapper.setProps({ taskKeyword: '', taskStatusFilter: '' })
+    expect(wrapper.get('.empty-list').text()).to.include('还没有事项')
+  })
   for (const embeddedHall of [true, false]) it(`does not expose creation in the task board (embedded=${embeddedHall})`, async () => {
     const wrapper = panel({ embeddedHall })
     expect(wrapper.vm.openCreateRequirement).to.equal(undefined)

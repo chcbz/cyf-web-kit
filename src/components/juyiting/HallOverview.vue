@@ -25,7 +25,7 @@
             :enabled="enabled"
             :disabled="quickPending"
           >
-            <button class="primary" type="submit" :disabled="quickPending || !quickRequest.trim()"><var-icon name="send" aria-hidden="true" />{{ quickPending ? '正在建立事项…' : '开始办事' }}</button>
+            <button class="primary" type="submit" :disabled="quickPending || (!quickRequest.trim() && !selectedMaterials.length)"><var-icon name="send" aria-hidden="true" />{{ quickPending ? '正在建立事项…' : '开始办事' }}</button>
           </HallMaterialPicker>
           <p v-if="quickMessage" class="quick-request-error" role="status">{{ quickMessage }}</p>
         </div>
@@ -88,13 +88,29 @@ const quickRequest = ref('')
 const selectedMaterials = ref([])
 const quickRequestGeneration = ref(0)
 const onQuickRequestInput = () => { quickRequestGeneration.value++ }
-watch(quickRequest, onQuickRequestInput, { flush: 'sync' })
+let homeDraftKey = ''
+const draftStorage = () => { try { return window.sessionStorage } catch { return null } }
+watch(() => [props.identityScope, props.identityEpoch], ([scope], previous) => {
+  const storage = draftStorage()
+  // A real identity transition clears the prior actor's local unsent text.
+  try { if (previous && homeDraftKey) storage?.removeItem(homeDraftKey) } catch { /* storage may be unavailable */ }
+  homeDraftKey = scope ? `cyf:hall:home-draft:${encodeURIComponent(scope)}` : ''
+  let saved = ''
+  try { if (homeDraftKey) saved = storage?.getItem(homeDraftKey) || '' } catch { /* keep form usable */ }
+  quickRequest.value = saved
+  selectedMaterials.value = []
+}, { immediate: true, flush: 'sync' })
+watch(quickRequest, value => {
+  onQuickRequestInput()
+  if (!homeDraftKey) return
+  try { if (value) draftStorage()?.setItem(homeDraftKey, value); else draftStorage()?.removeItem(homeDraftKey) } catch { /* no submission side effect */ }
+}, { flush: 'sync' })
 watch(selectedMaterials, onQuickRequestInput, { deep: true, flush: 'sync' })
 const submitQuickRequest = () => {
   const value = quickRequest.value
   const generation = quickRequestGeneration.value
   const materials = selectedMaterials.value.map(({ fileId, version }) => ({ fileId, version }))
-  if (value.trim() && !props.quickPending) emit('quick-request', { request: value, materials }, succeeded => {
+  if ((value.trim() || materials.length) && !props.quickPending) emit('quick-request', { request: value, materials }, succeeded => {
     if (succeeded !== true || generation !== quickRequestGeneration.value) return
     if (quickRequest.value === value) quickRequest.value = ''
     if (JSON.stringify(selectedMaterials.value.map(({ fileId, version }) => ({ fileId, version }))) === JSON.stringify(materials)) selectedMaterials.value = []
@@ -156,7 +172,7 @@ const refresh = async () => {
   if (archiveView.value && !props.messagesOnly) await refreshArchive()
 }
 watch([() => props.enabled, () => props.identityScope, () => props.identityEpoch, () => props.refreshKey], refresh, { immediate: true })
-watch(() => [props.identityScope, props.identityEpoch], () => { quickRequest.value = ''; selectedMaterials.value = [] }, { flush: 'sync' })
+
 </script>
 
 <style scoped src="./hall-view-tabs.css"></style>

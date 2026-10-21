@@ -47,11 +47,13 @@ test('onboarding template labels are whitelist-only and never echo arbitrary pro
   assert.doesNotMatch(modal, /\?\.eyebrow \|\| props\.template/)
 })
 
-test('target-based onboarding keeps separate portrait and landscape anchors', () => {
+test('four-step requirement onboarding keeps both layout modes and safe geometry', () => {
   const modal = readFileSync(new URL('../src/components/juyiting/HallOnboarding.vue', import.meta.url), 'utf8')
   const portrait = readFileSync(new URL('../src/components/juyiting/HallPortraitHome.vue', import.meta.url), 'utf8')
   const stage = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
 
+  assert.equal((modal.match(/title: '/g) || []).length, 4)
+  assert.match(modal, /成果提交后/)
   assert.match(modal, /'portrait-command'/)
   assert.match(modal, /'landscape-map'/)
   assert.match(modal, /onboarding-spotlight/)
@@ -66,10 +68,6 @@ test('target-based onboarding keeps separate portrait and landscape anchors', ()
   assert.match(portrait, /:data-tour="`portrait-action-\$\{action\.key\}`"/)
   assert.match(stage, /data-tour="landscape-map"/)
   assert.match(stage, /data-tour="landscape-tools"/)
-  assert.match(modal, /hotspotId: 'agent-roster'/)
-  assert.match(modal, /hotspotId: 'bounty-board'/)
-  assert.match(modal, /hotspotId: 'roster-book'/)
-  assert.match(modal, /hotspotId: 'library-shelf'/)
   assert.doesNotMatch(modal, /juyitingGame\?\._hallScene|_hitProvider/)
 })
 
@@ -116,7 +114,7 @@ test('landscape guide hotspot ids are an exact subset of the shipped TMX hotspot
   const shippedIds = new Set([...hotspotGroup.matchAll(/<object[^>]+name="([^"]+)"/g)].map(match => match[1]))
   const guidedIds = [...modal.matchAll(/hotspotId: '([^']+)'/g)].map(match => match[1])
 
-  assert.deepEqual(guidedIds, ['main-seat', 'agent-roster', 'bounty-board', 'roster-book', 'library-shelf'])
+  assert.deepEqual(guidedIds, []) // Requirement guide does not navigate map hotspots.
   for (const hotspotId of guidedIds) assert.equal(shippedIds.has(hotspotId), true, `${hotspotId} must exist in hall.tmx hotspots`)
 })
 
@@ -272,7 +270,7 @@ test('the wrapper preserves PKCE return query/hash, syncs after a cleanup reject
   const entry = readFileSync(new URL('../src/components/world/JuyiHallEntry.vue', import.meta.url), 'utf8')
   const guestDemo = readFileSync(new URL('../src/components/public/GuestDemo.vue', import.meta.url), 'utf8')
 
-  assert.match(entry, /<JuyiHall\s+@open-onboarding="reopen"\s*\/>/)
+  assert.match(entry, /<JuyiHall\s+:onboarding-visible="onboardingState.visible"\s+@open-onboarding="reopen"\s*\/>/)
   assert.match(entry, /consumeGuestDemoTemplateQuery\(route\.query, guestDemoTemplates\)/)
   assert.match(entry, /try \{[\s\S]*await router\.replace\(\{ path: route\.path, query: handoff\.query, hash: route\.hash \}\)[\s\S]*\} catch \{[\s\S]*\} finally \{[\s\S]*syncOnboarding\(\)/)
   assert.ok(entry.indexOf('await router.replace') < entry.indexOf('finally {'))

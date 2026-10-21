@@ -70,6 +70,19 @@ export const useHallConversation = ({
   const selectedHallConversationId = ref('')
   const draft = ref('')
   const scopeDrafts = new Map()
+  const threadDrafts = new Map()
+  const threadDraftKey = id => `${chatContext?.value?.conversationScopeType || ''}\u0000${chatContext?.value?.conversationScopeKey || ''}\u0000${id || ''}`
+  const saveThreadDraft = () => { threadDrafts.set(threadDraftKey(conversationId.value), { text: draft.value, metadata: { ...(outgoingMetadata?.value || {}) } }) }
+  const restoreThreadDraft = id => {
+    const saved = threadDrafts.get(threadDraftKey(id))
+    setDraft(saved?.text || '')
+    if (outgoingMetadata) outgoingMetadata.value = { ...(saved?.metadata || {}) }
+  }
+  const stopDraftAdoptionWatch = watch(conversationId, (nextId, previousId) => {
+    // A server-created thread adopts the current unsent draft; do not resurrect
+    // that new-thread slot later. Explicit history navigation sets selection first.
+    if (!previousId && nextId && selectedHallConversationId.value !== nextId) threadDrafts.delete(threadDraftKey(''))
+  }, { flush: 'sync' })
   const isStreaming = ref(false)
   const isAwaitingReply = ref(false)
   const isSubmitting = ref(false)
@@ -820,6 +833,7 @@ export const useHallConversation = ({
     stopHallConversationSync()
     conversationId.value = ''
     scopeDrafts.clear()
+    threadDrafts.clear()
     setDraft('')
     if (outgoingMetadata) outgoingMetadata.value = {}
     messages.value = []
@@ -832,6 +846,7 @@ export const useHallConversation = ({
     () => `${chatContext?.value?.conversationScopeType || ''}\u0000${chatContext?.value?.conversationScopeKey || ''}`,
     (nextScope, previousScope) => {
       if (!previousScope || nextScope === previousScope || disposed) return
+      threadDrafts.set(`${previousScope}\u0000${conversationId.value || ''}`, { text: draft.value, metadata: { ...(outgoingMetadata?.value || {}) } })
       scopeDrafts.set(previousScope, { text: draft.value, metadata: { ...(outgoingMetadata?.value || {}) } })
       const restored = scopeDrafts.get(nextScope)
       setDraft(restored?.text || '')
@@ -875,6 +890,7 @@ export const useHallConversation = ({
     browserDocument()?.removeEventListener?.('visibilitychange', handleHallEventVisibility)
     browserWindow()?.removeEventListener?.('focus', handleHallEventFocus)
     stopScopeWatch()
+    stopDraftAdoptionWatch()
     clearHallConversationIdentityState()
     unregisterIdentityCleanup()
   }
@@ -1046,8 +1062,8 @@ export const useHallConversation = ({
           hallConversation.conversationScopeKey !== expectedScope.key) return false
       const id = exactRuntimeId(hallConversation.id)
       if (!id) return false
-      conversationId.value = id
       selectedHallConversationId.value = id
+      conversationId.value = id
       return loadHallConversationContent(id, { loadGeneration, scope: expectedScope })
     } catch (error) {
       if (error?.name !== 'AbortError' && isCurrentLoad()) log.warn('加载聚义厅会话失败', error)
@@ -1199,6 +1215,8 @@ export const useHallConversation = ({
     const exactId = exactRuntimeId(id)
     if (!expectedScope || !exactId || !conversationHistory.value.some(item => item.id === exactId)) return false
 
+    saveThreadDraft()
+    restoreThreadDraft(exactId)
     const loadGeneration = invalidateConversationLoads()
     pendingHallConversationLoad = null
     loadedConversationScopeSignature = ''
@@ -1207,8 +1225,8 @@ export const useHallConversation = ({
     stopHallReplyStreaming()
     stopHallReplyPolling()
     stopHallConversationSync()
-    conversationId.value = exactId
     selectedHallConversationId.value = exactId
+    conversationId.value = exactId
     messages.value = []
     isStreaming.value = false
     isAwaitingReply.value = false
@@ -1264,6 +1282,8 @@ export const useHallConversation = ({
   }
 
   const newHallConversation = ({ notify = true } = {}) => {
+    saveThreadDraft()
+    restoreThreadDraft(null)
     const currentScopeSignature = scopeSignature(scopeSnapshot())
     if (currentScopeSignature) suppressedRestoreScopes.add(currentScopeSignature)
     invalidateConversationLoads()

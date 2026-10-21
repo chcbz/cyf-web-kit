@@ -692,3 +692,26 @@ body[data-ui-revision] .chat-panel .composer-actions .composer-send.reply-stop-c
 .chat-panel .reply-control-status{margin:4px 0 0;font-size:12px;line-height:1.5;color:#66533d;overflow-wrap:anywhere}
 
 .task-secondary-filters{display:flex;align-items:center;gap:8px;padding:8px 0}.task-secondary-filters button{min-height:44px}.task-secondary-filters button[aria-pressed="true"]{border-color:#923f30;color:#923f30}
+
+/* Compact picker controls share the existing neutral/brick palette. */
+body[data-ui-revision] .material-picker-dialog .material-upload-button{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:auto;min-width:0;height:36px;min-height:36px;box-sizing:border-box;margin:0;padding:0 12px;border:1px solid #d8d8ce;border-radius:7px;color:#494e47;background:#f5f4f0;font-size:13px;font-weight:400;line-height:1;white-space:nowrap;cursor:pointer;overflow:hidden}
+.material-upload-button input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.material-upload-button:hover{background:#eeede6!important}
+.material-upload-button:focus-within{outline:2px solid #923f30;outline-offset:2px}
+.material-upload-button:has(input:disabled){opacity:.6;cursor:wait}
+body[data-ui-revision] .material-picker-dialog button:not(.material-file):not(.material-footer-actions button){min-height:36px;font-size:13px;line-height:1.4;padding:6px 12px;border-radius:7px}
+body[data-ui-revision] .material-picker-dialog .material-back{min-width:0;padding:6px 4px}
+.material-version{gap:8px;padding:8px 20px 12px}
+.material-version [data-action=picker-stage]{min-width:64px}
+body[data-ui-revision] .material-picker-dialog .material-selection-summary button{border-color:transparent;background:transparent;color:#68716b;padding-left:0;padding-right:0}
+.material-selection-summary small{padding-left:0}
+@media(max-width:720px){
+   body[data-ui-revision] .material-picker-dialog .material-upload-button{height:40px;min-height:40px}
+ body[data-ui-revision] .material-picker-dialog button:not(.material-file):not(.material-footer-actions button){min-height:40px}
+ .material-version{padding:6px 16px 8px}
+}
+
+.material-selection-tools{display:flex;align-items:center;gap:12px;min-width:0}
+.material-selection-tools>[data-action="picker-toggle-selected"]{white-space:nowrap}
+.material-selection-summary [data-picker-upload-status]{font-size:11px;line-height:1.4;overflow-wrap:anywhere}
+@media(max-width:720px){.material-selection-summary{flex-direction:column;align-items:stretch;gap:2px}.material-selection-tools{gap:12px}}
