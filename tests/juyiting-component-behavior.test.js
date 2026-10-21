@@ -4047,7 +4047,7 @@ describe('A03 real Hall low-height layout wiring', () => {
       expect(wrapper.findComponent(mocks.HallOverview).props('enabled')).to.equal(true)
       await wrapper.find('.overview-create-probe').trigger('click')
       expect(state.renderedPanel).to.equal('formalDraft')
-      expect(wrapper.findComponent(mocks.HallDraftEditor).props('initialContext')).to.equal(undefined)
+      expect(wrapper.findComponent(mocks.HallDraftEditor).props('initialContext')).to.equal(null)
       const overlay = wrapper.find('.panel-overlay').element
       state.closePanel()
       await state.handlePanelAfterLeave(overlay)

@@ -2777,7 +2777,7 @@ describe('archive reader contract behavior', () => {
       await wrapper.findAll('button').find(button => button.text() === '引用当前段落起草交办').trigger('click')
       await settle()
       expect(hall.panelDepth).to.equal(3)
-      expect(hall.panelFrames).to.deep.equal(['library', 'draft'])
+      expect(hall.panelFrames).to.deep.equal(['library', 'formalDraft'])
       expect(wrapper.findAll('[role="dialog"]')).to.have.length(1)
       const citation = wrapper.findComponent(DraftProbe).props('initialContext')
       expect(citation.originRef).to.equal('juyiting:archive')

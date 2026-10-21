@@ -255,7 +255,7 @@ describe('JYT-MMD-W2 conversation archive operations', () => {
     const archive = { statusFor: () => ({ state: 'pending', message: '', busy: false, operationId: 'operation-1' }),
       save: () => { calls.push('save'); return Promise.resolve(null) },
       check: () => { calls.push('check'); return Promise.resolve(null) } }
-    const wrapper = mount(loadParts(archive), { props: { conversationId: 'conversation-1', identityKey: 'owner-a', parts: [part()] } })
+    const wrapper = mount(loadParts(archive), { props: { conversationId: 'conversation-1', identityKey: 'owner-a', parts: [part({ kind: 'text', text: '保存文本' })] } })
     try {
       expect(wrapper.get('.part-save-button').text()).to.equal('继续原保存')
       expect(wrapper.get('.part-archive-refresh').text()).to.equal('查询保存状态')
@@ -268,10 +268,10 @@ describe('JYT-MMD-W2 conversation archive operations', () => {
   it('renders save only for ready persisted assets and leaves existing media controls intact', async () => {
     const saves = []
     const archive = { statusFor: () => ({ state: 'idle', message: '', busy: false, operationId: '' }), save: item => { saves.push(item); return Promise.resolve(null) }, retry: () => Promise.resolve(null) }
-    const wrapper = mount(loadParts(archive), { props: { conversationId: 'conversation-1', identityKey: 'owner-a', parts: [part({ kind: 'text', text: '可保存文本' }), part({ partId: 'missing-asset', assetId: '' }), part({ partId: 'processing', state: 'processing' })] } })
+    const wrapper = mount(loadParts(archive), { props: { conversationId: 'conversation-1', identityKey: 'owner-a', parts: [part({ kind: 'text', text: '可保存文本' }), part({ partId: 'ready-image' }), part({ partId: 'ready-audio', kind: 'audio' }), part({ partId: 'ready-file', kind: 'file' }), part({ partId: 'missing-asset', assetId: '' }), part({ partId: 'processing', state: 'processing' })] } })
     try {
       expect(wrapper.findAll('.part-save-button')).to.have.length(1)
-      expect(wrapper.findAll('.media-stub')).to.have.length(1)
+      expect(wrapper.findAll('.media-stub')).to.have.length(4)
       await wrapper.get('.part-save-button').trigger('click')
       expect(saves).to.deep.equal([part({ kind: 'text', text: '可保存文本' })])
     } finally { wrapper.unmount() }

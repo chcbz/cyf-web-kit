@@ -155,18 +155,15 @@ describe('HallOnboarding mounted geometry', () => {
     return { left, top, right: left + width, bottom: top + 280 }
   }
 
-  it('scrolls a partially clipped portrait target once, then renders a finite card fully inside the viewport', async () => {
+  it('keeps the four-step guide centered without scrolling or spotlighting a clipped map target', async () => {
     const fixture = await mountFixture({
       targetRect: { left: 24, top: 720, right: 366, bottom: 900, width: 342, height: 180 }
     })
     await runFrame()
-    await runFrame()
 
     const spotlight = document.querySelector('.onboarding-spotlight')
-    expect(spotlight).to.not.equal(null)
-    for (const property of ['left', 'top', 'width', 'height']) {
-      expect(Number.isFinite(Number.parseFloat(spotlight.style[property]))).to.equal(true)
-    }
+    expect(spotlight).to.equal(null)
+    expect(document.querySelector('.step-progress').textContent).to.include('4')
     const card = dialogVisualRect()
     expect(card.left).to.be.at.least(12)
     expect(card.top).to.be.at.least(12)
@@ -175,13 +172,13 @@ describe('HallOnboarding mounted geometry', () => {
     fixture.wrapper.unmount()
   })
 
-  it('keeps a missing target card centered with navigation and explanatory fallback content', async () => {
+  it('keeps an anchorless guide centered with navigation and no missing-target warning', async () => {
     const fixture = await mountFixture()
     fixture.target.remove()
     await runFrame()
 
     expect(document.querySelector('.onboarding-spotlight')).to.equal(null)
-    expect(document.querySelector('.target-note')?.textContent).to.include('暂未显示')
+    expect(document.querySelector('.target-note')).to.equal(null)
     const card = dialogVisualRect()
     expect(card.left).to.equal(15)
     expect(card.top).to.equal(282)
@@ -201,11 +198,11 @@ describe('HallOnboarding mounted geometry', () => {
 
     expect(document.querySelector('.eyebrow')?.textContent).to.include('横屏全景')
     expect(document.querySelector('.step-progress')?.textContent).to.include('第 1 步')
-    expect(document.querySelector('#hall-onboarding-title')?.textContent).to.equal('地图是厅中动态的入口')
+    expect(document.querySelector('#hall-onboarding-title')?.textContent).to.equal('描述需求')
     fixture.wrapper.unmount()
   })
 
-  it('focuses a shipped hotspot before measuring it and keeps virtual-landscape text aligned with the rotated hall', async () => {
+  it('does not focus map hotspots and keeps virtual-landscape guide text aligned with the rotated hall', async () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 844 })
     const calls = []
@@ -220,9 +217,9 @@ describe('HallOnboarding mounted geometry', () => {
     await Vue.nextTick()
     await runFrame()
 
-    expect(calls).to.deep.equal(['main-seat'])
+    expect(calls).to.deep.equal([])
     expect(document.querySelector('.onboarding-dialog').style.transform).to.include('rotate(90deg)')
-    expect(document.querySelector('.onboarding-spotlight')).to.not.equal(null)
+    expect(document.querySelector('.onboarding-spotlight')).to.equal(null)
     const card = dialogVisualRect()
     expect(card.left).to.be.at.least(12)
     expect(card.top).to.be.at.least(12)
