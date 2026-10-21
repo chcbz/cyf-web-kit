@@ -322,6 +322,8 @@
             v-model:task-keyword="taskKeyword"
             embedded-hall
             :detail-allowed="canOpenPanelDetail"
+            :resources-active="renderedPanel === 'tasks' && !formalTaskRef"
+            :resource-review-context="deliveryReview.context.value"
             :inert="renderedPanel !== 'tasks' || formalTaskRef ? '' : null"
             :aria-hidden="renderedPanel !== 'tasks' || formalTaskRef ? 'true' : null"
             :ability-text="abilityText"

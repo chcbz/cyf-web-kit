@@ -184,7 +184,7 @@
                 <p class="matter-request">{{ detailTask.description }}</p>
                 <dl>
                   <div><dt>{{ hasTaskAction(detailTask, 'ASSIGN') ? '推荐承办' : '承办好汉' }}</dt><dd>{{ matterAgent ? agentDisplayName(matterAgent) : (detailTask.assignedAgentName || (taskAssigneeIds(detailTask).length ? '承办信息待核对' : '尚未确认')) }}</dd></div>
-                  <div><dt>资料</dt><dd>{{ Array.isArray(detailTask.attachments) ? `${detailTask.attachments.length} 份` : '可在原议事中查看或补充' }}</dd></div>
+                  <div><dt>资料 / 成果</dt><dd>{{ matterResourceSummary?.taskId === String(detailTask.id) ? `${matterResourceSummary.materials} 份资料 · ${matterResultCount ?? matterResourceSummary.outputs} 份${matterResultCount == null ? '成果引用' : '成果'}` : '见下方资料与成果' }}</dd></div>
                 </dl>
                 <template v-if="hasTaskAction(detailTask, 'ASSIGN')">
                   <p class="matter-fee-note">按当前可承办候选推荐；选择不会执行，确认后进入同一议事。已有授权与费用规则保持不变。</p>
@@ -306,10 +306,11 @@
               />
 
               <p v-if="detailTask.status === 'cancelled'" role="status">事项已取消；历史指派与成果保留，不再继续办理。</p>
-              <section v-if="!embeddedHall || detailTask.status !== 'open'" class="matter-resources" aria-label="资料与成果">
-                <h4 v-if="embeddedHall">资料与成果</h4>
-                <p v-if="embeddedHall">参考资料在原议事中查看；正式成果以已提交批次为准。</p>
-                <button type="button" class="matter-results-action" @click="$emit('open-formal-results', detailTask)">{{ taskPresentation(detailTask).readOnly ? '查看历史成果' : '查看正式成果与验收' }}</button>
+              <HallTaskResources v-if="embeddedHall && resourcesActive" :key="`${identityScope}:${authorizationGeneration}:${detailTask.id}`"
+                :task-id="String(detailTask.id)" :identity-scope="identityScope" :identity-epoch="authorizationGeneration" :result-count="matterResultCount"
+                @summary="matterResourceSummary = $event" />
+              <section v-if="!embeddedHall || taskPresentation(detailTask).readOnly || taskPresentation(detailTask).phase === 'COMPLETED'" class="matter-resources" aria-label="资料与成果">
+                <button type="button" class="matter-results-action" @click="$emit('open-formal-results', detailTask)">{{ embeddedHall || taskPresentation(detailTask).readOnly ? '查看历史成果' : '查看正式成果与验收' }}</button>
               </section>
               <WorkItemPlanPanel v-if="!embeddedHall && canActOnTask(detailTask)" :task="detailTask" :enabled="workItemPlanEnabled" :authorization-generation="authorizationGeneration" />
 
@@ -478,6 +479,7 @@ import { projectHallTask } from '../../composables/juyiting/hallTaskPresentation
 import { canCancelOrdinaryTask, ordinaryTaskVersion, isTerminalMatter } from '../../composables/juyiting/useHallOrdinaryCancellation.js'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import BountyActionIcon from './BountyActionIcon.vue'
+import HallTaskResources from './HallTaskResources.vue'
 import WorkItemPlanPanel from './WorkItemPlanPanel.vue'
 import TeamRecommendationPanel from './TeamRecommendationPanel.vue'
 import TaskMaterialLinks from '@/components/personal-workspace/TaskMaterialLinks.vue'
@@ -496,6 +498,8 @@ const revealStatusFilter = event => {
 
 const props = defineProps({
   embeddedHall: { type: Boolean, default: false },
+  resourcesActive: { type: Boolean, default: true },
+  resourceReviewContext: { type: Object, default: null },
   detailAllowed: { type: Boolean, default: true },
   tasks: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
@@ -581,6 +585,15 @@ watch(() => [props.identityScope, props.authorizationGeneration], () => {
   selectedAssigneeIds.value = []
 }, { flush: 'sync' })
 const detailTask = computed(() => modalTask.value)
+// Display only the already-validated context for this exact task revision; never grant acceptance here.
+const matterResultCount = computed(() => {
+  const task = detailTask.value, context = props.resourceReviewContext
+  if (!task || context?.taskId !== String(task.id) || context.taskState !== String(task.status).toUpperCase() ||
+      (task.taskVersion != null && String(task.taskVersion) !== context.taskVersion)) return null
+  return context.currentDelivery?.items?.filter(item => item.displayRole === 'RESULT').length ?? 0
+})
+const matterResourceSummary = ref(null)
+watch(() => [detailTask.value?.id, props.identityScope, props.authorizationGeneration], () => { matterResourceSummary.value = null }, { flush: 'sync' })
 const showCancellationDialog = ref(false)
 const cancellationCandidate = ref(null)
 const cancellationSubmitting = ref(false)

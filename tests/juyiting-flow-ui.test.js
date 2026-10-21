@@ -14,6 +14,7 @@ const Empty = Vue.defineComponent({ render: () => Vue.h('span') })
 const compile = name => {
   const { descriptor } = parse(read(name))
   const imports = new Proxy({ vue: Vue, '@/utils/silverAmount': silver,
+    './HallTaskResources.vue': Vue.defineComponent({ name: 'HallTaskResources', props: ['resultCount'], render: () => Vue.h('section') }),
     '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': cancellation }, { get: (target, key) => target[key] || Empty })
   const code = compileScript(descriptor, { id: 'flow-ui-test', inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_, names, path) => `const { ${names.replace(/\s+as\s+/g, ': ')} } = imports[${JSON.stringify(path)}]`)
@@ -29,6 +30,27 @@ const baseProps = { embeddedHall: true, detailAllowed: true, identityScope: 'own
   operableAgents: [{ agentId: 'old-agent', name: '林冲', canOperate: true, status: 'online' }] }
 
 describe('flow gap actual UI consumers', () => {
+  it('pending acceptance has exactly one review CTA and a readonly resource card on the shared PC/mobile detail', async () => {
+    const task = { id: 'a', title: '待验收', status: 'reviewing', taskVersion: '3', assignedAgentIds: ['old-agent'] }
+    const wrapper = mount(Panel, { props: { ...baseProps, tasks: [task], selectedTask: task } })
+    try {
+      wrapper.vm.openTask(task); await Vue.nextTick()
+      const buttons = wrapper.findAll('button').filter(b => /成果.*验收/.test(b.text()))
+      expect(buttons).to.have.length(1)
+      expect(buttons[0].text()).to.equal('查看成果并验收')
+      expect(wrapper.find('.matter-results-action').exists()).to.equal(false)
+      await buttons[0].trigger('click')
+      expect(wrapper.emitted('review-delivery')[0][0].id).to.equal('a')
+      expect(wrapper.emitted('open-formal-results')).to.equal(undefined)
+      const context = { taskId: 'a', taskVersion: '3', taskState: 'REVIEWING', currentDelivery: { items: [{ displayRole: 'RESULT' }, { displayRole: 'MANIFEST' }] } }
+      await wrapper.setProps({ resourceReviewContext: context })
+      expect(wrapper.findComponent({ name: 'HallTaskResources' }).props('resultCount')).to.equal(1)
+      await wrapper.setProps({ resourceReviewContext: { ...context, taskVersion: '2' } })
+      expect(wrapper.findComponent({ name: 'HallTaskResources' }).props('resultCount')).to.equal(null)
+      await wrapper.setProps({ resourcesActive: false })
+      expect(wrapper.findAll('button').some(b => b.text() === '继续议事')).to.equal(true)
+    } finally { wrapper.unmount() }
+  })
   for (const assignedAgentIds of [[], ['old-agent']]) it(`renders cancelled with ${assignedAgentIds.length} historical assignee(s) without executable CTA; retains history entry`, async () => {
     const task = { id: 'a', title: '普通事项', status: 'cancelled', taskVersion: '3', assignedAgentIds }
     const wrapper = mount(Panel, { props: { ...baseProps, tasks: [task], selectedTask: task } })

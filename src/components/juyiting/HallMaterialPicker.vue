@@ -1,6 +1,6 @@
 <template>
-  <section class="hall-material-picker" aria-label="需求资料">
-    <div class="quick-request-actions">
+  <section class="hall-material-picker" :aria-label="readOnly ? '关联资料' : '需求资料'">
+    <div v-if="!readOnly" class="quick-request-actions">
       <button
         type="button"
         class="quick-material-open"
@@ -16,6 +16,7 @@
         <button
           type="button"
           :disabled="disabled"
+          v-if="!readOnly"
           :aria-label="`移除 ${material.displayName} v${material.version}`"
           @click="removeSelectedMaterial(material)"
         >移除</button>
@@ -128,6 +129,7 @@ import { usePersonalWorkspace, savePersonalWorkspaceBlob } from '@/composables/u
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
+  readOnly: { type: Boolean, default: false },
   identityScope: { type: String, default: '' },
   identityEpoch: { type: [Number, String], default: 0 },
   enabled: { type: Boolean, default: true },
@@ -253,7 +255,7 @@ const pickerDetail = computed(() => {
 const materialKey = material => `${material.fileId}:${material.version}`
 const resetMaterialPicker = () => { selectionExpanded.value = false; uploadMessage.value = ''; mobilePreviewOpen.value = false; pickerGeneration += 1; pickerFileId.value = ''; pickerVersion.value = null; workspace.closeDetail() }
 const openQuickMaterialPicker = async () => {
-  if (!props.enabled || !props.identityScope || props.disabled) return
+  if (props.readOnly || !props.enabled || !props.identityScope || props.disabled) return
   pickerReturnFocus = typeof document !== 'undefined' ? document.activeElement : null
   closeSelectedPreview()
   uploadedFiles.value = []
@@ -346,7 +348,7 @@ const confirmQuickMaterials = () => {
   draftMaterials.value = []
   resetMaterialPicker()
 }
-const removeSelectedMaterial = material => { selectedMaterials.value = selectedMaterials.value.filter(item => materialKey(item) !== materialKey(material)) }
+const removeSelectedMaterial = material => { if (props.readOnly) return; selectedMaterials.value = selectedMaterials.value.filter(item => materialKey(item) !== materialKey(material)) }
 
 watch(materialIdentityKey, () => {
   selectedMaterials.value = []
