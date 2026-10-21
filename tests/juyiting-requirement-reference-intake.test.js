@@ -235,7 +235,7 @@ describe('mounted Bounty read/manage surface and original recovery', () => {
     const filename = fileURLToPath(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url))
     const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
     const silver = await import('../src/utils/silverAmount.js')
-    const imports = new Proxy({ vue: Vue, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, '@/utils/silverAmount': silver, '@/components/personal-workspace/TaskMaterialLinks.vue': TaskMaterialLinks }, {
+    const imports = new Proxy({ './HallTaskResources.vue': Vue.defineComponent({ name: 'HallTaskResources', props: ['taskId'], render: () => Vue.h('section', { class: 'hall-task-resources' }) }), vue: Vue, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, '@/utils/silverAmount': silver, '@/components/personal-workspace/TaskMaterialLinks.vue': TaskMaterialLinks }, {
       get: (target, name) => target[name] ?? Vue.defineComponent({ render: () => Vue.h('span') })
     })
     const code = compileScript(descriptor, { id: 'mounted-reference-intake', inlineTemplate: true }).content
@@ -296,7 +296,8 @@ describe('mounted Bounty read/manage surface and original recovery', () => {
     await nextTick()
     expect(controlled.find('.formal-task-execution').exists()).to.equal(false)
     expect(controlled.find('.matter-advice-card').text()).to.include('补充要求、查看结果和提出修改，都在原议事中继续')
-    expect(controlled.find('.matter-resources').exists()).to.equal(true)
+    expect(controlled.findComponent({ name: 'HallTaskResources' }).props('taskId')).to.equal('existing-task')
+    expect(controlled.find('.matter-results-action').exists()).to.equal(false)
 
     const failed = panel({ embeddedHall: true, formalTaskExecutionContext,
       pointAndStartState: { status: 'UNKNOWN', error: 'Controlled image bridge request unavailable', intent: bridgeIntent } })
