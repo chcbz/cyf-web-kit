@@ -232,12 +232,13 @@ export function completedExecutionDelivery (raw, request, turn, snapshots, taskI
   const children = snapshots.filter(child => child.requestId === progress.childRequestId)
   if (children.length !== 1) return Object.freeze(node) // Late catalog page: keep polling, no guessed child.
   const child = children[0]; const steps = child.steps || []
-  if (child.state !== (value.outcome.outcomeContractVersion === 4 ? 'RESULT_COMMITTED' : 'OUTPUT_COMMITTED') || child.requestRevision !== '1' || child.stateVersion !== progress.childStateVersion ||
+  if (child.state !== ([4, 5].includes(value.outcome.outcomeContractVersion) ? 'RESULT_COMMITTED' : 'OUTPUT_COMMITTED') || child.requestRevision !== '1' || child.stateVersion !== progress.childStateVersion ||
     child.conversationId !== request.conversationId || child.conversationGeneration !== request.conversationGeneration ||
-    steps.length !== 1 || steps[0].kind !== 'EXECUTE' || steps[0].state !== (value.outcome.outcomeContractVersion === 4 ? 'RESULT_COMMITTED' : 'OUTPUT_COMMITTED') ||
-    steps[0].executionState !== (value.outcome.outcomeContractVersion === 4 ? 'RESULT_COMMITTED' : 'OUTPUT_COMMITTED') || steps[0].taskId !== taskId ||
+    steps.length !== 1 || steps[0].kind !== 'EXECUTE' || steps[0].state !== ([4, 5].includes(value.outcome.outcomeContractVersion) ? 'RESULT_COMMITTED' : 'OUTPUT_COMMITTED') ||
+    steps[0].executionState !== ([4, 5].includes(value.outcome.outcomeContractVersion) ? 'RESULT_COMMITTED' : 'OUTPUT_COMMITTED') || steps[0].taskId !== taskId ||
     steps[0].assignmentRevision !== outcome.assignmentRevision || steps[0].targetAgentId !== turn.targetAgentId ||
-    !exactOutputId(steps[0].stepId) || !exactOutputId(steps[0].executionId)) throw new Error('媒体交付执行来源不一致。')
+    !exactOutputId(steps[0].stepId) || !exactOutputId(steps[0].executionId) ||
+    ([4, 5].includes(outcome.outcomeContractVersion) && steps[0].executionId !== progress.executionId)) throw new Error('媒体交付执行来源不一致。')
   return Object.freeze({ ...node, stepId: steps[0].stepId })
 }
 

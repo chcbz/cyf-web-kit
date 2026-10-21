@@ -95,12 +95,16 @@ const validOutcome = value => {
   } else if (value.messageSource !== null) return false
   const r = value.deliveryRelation
   if (r !== null) {
-    if ((value.deliverable !== true && value.kind !== 'ACTION_REQUEST') || !exactKeys(r, ['mode', 'parentOutcomeId', 'parentFinalSha256', 'targetOutcomeId', 'targetFinalSha256']) ||
-      !['APPEND', 'REPLACE', 'RESET'].includes(r.mode) || !typedId(r.parentOutcomeId) || !digest(r.parentFinalSha256) || r.parentOutcomeId === value.outcomeId) return false
+    if ((value.deliverable !== true && !['ACTION_REQUEST', 'SUBMISSION_REQUEST'].includes(value.kind)) || !exactKeys(r, ['mode', 'parentOutcomeId', 'parentFinalSha256', 'targetOutcomeId', 'targetFinalSha256']) ||
+      !['APPEND', 'REPLACE', 'RESET', 'SUBMIT'].includes(r.mode) || !typedId(r.parentOutcomeId) || !digest(r.parentFinalSha256) || r.parentOutcomeId === value.outcomeId) return false
     if (r.targetOutcomeId === null ? r.targetFinalSha256 !== null :
       (r.mode !== 'REPLACE' || !typedId(r.targetOutcomeId) || !digest(r.targetFinalSha256) || r.targetOutcomeId === value.outcomeId)) return false
     if (value.kind === 'ACTION_REQUEST' && (!['APPEND', 'RESET'].includes(r.mode) || r.targetOutcomeId !== null)) return false
   }
+  if (r?.mode === 'SUBMIT' && value.kind !== 'SUBMISSION_REQUEST') return false
+  if (value.kind === 'SUBMISSION_REQUEST') return value.outcomeContractVersion === 5 && value.deliverable === false &&
+    value.clarification === null && value.proposal === null && value.action === null && value.revision === null &&
+    r?.mode === 'SUBMIT' && r.targetOutcomeId === null
   const revision = value.revision
   if (value.kind === 'REVISION_REQUEST') return value.outcomeContractVersion === 5 && value.deliverable === false &&
     value.deliveryRelation === null && value.clarification === null && value.proposal === null && value.action === null &&
@@ -164,7 +168,7 @@ const submissionFields = ['eventId', 'operationId', 'state', 'dispatchVersion', 
 const submissionErrors = ['DELIVERY_SOURCE_UNAVAILABLE', 'DELIVERY_REVIEW_REQUIRED', 'DELIVERY_TASK_CHANGED', 'DELIVERY_ASSIGNMENT_CHANGED', 'DELIVERY_CONVERSATION_CHANGED', 'DELIVERY_OPERATION_CONFLICT', 'DELIVERY_SUBMISSION_REJECTED']
 const validSubmission = (p, outcome, route) => {
   if (p === null) return true
-  if (route !== 'CHAT' || outcome?.kind !== 'ANSWER' || outcome.deliverable !== true || !exactKeys(p, submissionFields) ||
+  if (route !== 'CHAT' || !((outcome?.kind === 'ANSWER' && outcome.deliverable === true) || (outcome?.kind === 'SUBMISSION_REQUEST' && outcome.deliverable === false)) || !exactKeys(p, submissionFields) ||
     typeof p.eventId !== 'string' || !/^delivery-submit-[a-f0-9]{48}$/.test(p.eventId) || !typedLong(p.dispatchVersion, { allowZero: true }) || typeof p.retryable !== 'boolean') return false
   if (p.operationId === null ? p.operationStateVersion !== null : !typedId(p.operationId) || !typedLong(p.operationStateVersion)) return false
   if (p.state === 'COMPLETED') return p.operationId !== null && typedId(p.deliveryId) && p.errorCode === null && p.retryable === false

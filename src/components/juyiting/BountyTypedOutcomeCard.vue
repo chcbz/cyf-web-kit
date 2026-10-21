@@ -2,7 +2,7 @@
   <article class="typed-outcome-card" :class="`typed-${outcome.kind.toLowerCase()}`">
     <header><strong>{{ heading }}</strong><small>{{ inspection ? '资料答复' : 'Agent 答复' }}</small></header>
     <p class="typed-outcome-text">{{ body }}</p>
-    <small v-if="submission?.state === 'FAILED'" class="typed-submission-note" role="status">{{ submissionHint }}</small>
+    <small v-if="submission?.state === 'FAILED' || outcome.kind === 'SUBMISSION_REQUEST'" class="typed-submission-note" role="status">{{ submissionHint }}</small>
     <small v-if="reviewHint" class="typed-submission-note" role="status">{{ reviewHint }}</small>
     <template v-if="outcome.kind === 'CLARIFY'">
       <p class="typed-question">{{ outcome.clarification.question }}</p>
@@ -25,12 +25,14 @@ const inspection = computed(() => props.projection?.purpose === 'INSPECT')
 const progress = computed(() => props.projection.actionProgress)
 const submission = computed(() => props.projection.submissionProgress)
 const reviewHint = computed(() => revisionProgressHint(props.projection.reviewProgress))
-const submissionHint = computed(() => submission.value?.errorCode === 'DELIVERY_REVIEW_REQUIRED'
+const submissionHint = computed(() => outcome.value?.kind === 'SUBMISSION_REQUEST' && submission.value?.state !== 'FAILED'
+  ? submission.value?.state === 'COMPLETED' ? '成果已提交，请查看并验收。' : '正在核对提交结果，请勿重复提交。'
+  : submission.value?.errorCode === 'DELIVERY_REVIEW_REQUIRED'
   ? '已有成果待验收，本轮答复未替换原批次。需要修改可在原议事继续说明。'
   : '成果提交未完成，原答复和文件已保留；可在原议事继续说明。')
 const heading = computed(() => outcome.value?.kind === 'ACTION_REQUEST'
   ? ({ QUEUED: '等待处理', RUNNING: '正在处理', WAITING_PROVIDER: '等待工具结果', RESULT_UNKNOWN: '结果待核实', ARCHIVING: '已生成，登记中', COMPLETED: '本轮完成', FAILED: '未完成', CANCELLED: '已取消' })[progress.value?.state]
-  : ({ REVISION_REQUEST: '修改要求', ANSWER: '议事答复', CLARIFY: '需要补充', EXECUTION_PROPOSAL: 'Agent 建议' })[outcome.value?.kind] || '议事结果')
+  : ({ SUBMISSION_REQUEST: '提交已有成果', REVISION_REQUEST: '修改要求', ANSWER: '议事答复', CLARIFY: '需要补充', EXECUTION_PROPOSAL: 'Agent 建议' })[outcome.value?.kind] || '议事结果')
 const body = computed(() => outcome.value?.kind === 'ACTION_REQUEST'
   ? ({ COMPLETED: '请查看会话中的答复或文件。', FAILED: '这次未完成，可以继续补充需求。', CANCELLED: '本次处理已取消。' })[progress.value?.state] || outcome.value.text
   : outcome.value?.text)

@@ -39,6 +39,18 @@
       @typed-reply="$emit('typed-reply', $event)"
     >
       <template #after-toolbar>
+        <label v-if="typedEnabled && !taskCompleted && deliveryChoices.length > 1" class="media-basis-choice">
+          <span>本轮成果</span>
+          <select
+            :value="selectedDeliveryId"
+            aria-label="本轮成果"
+            :disabled="conversationBusy"
+            @change="$emit('choose-delivery', $event.target.value)"
+          >
+            <option value="">请选择要继续议事的成果</option>
+            <option v-for="choice in deliveryChoices" :key="choice.outcomeId" :value="choice.outcomeId">{{ choice.label }}</option>
+          </select>
+        </label>
         <TaskSkillCapabilities v-if="typedEnabled" :projection="skillDirectory" :error="skillDirectoryError" :loading="skillDirectoryLoading" @refresh="$emit('skill-directory-refresh')" />
       </template>
       <template #matter-actions>
@@ -82,6 +94,8 @@ import { bountyDeliberationPresentation } from '../../composables/juyiting/hallM
 
 const props = defineProps({
   ...discussionPanelProps,
+  deliveryChoices: { type: Array, default: () => [] },
+  selectedDeliveryId: { type: String, default: '' },
   reviewContext: { type: Object, default: null },
   reviewBusy: { type: Boolean, default: false },
   activeRequest: { type: Object, default: null },
@@ -99,7 +113,7 @@ const props = defineProps({
   identityScope: { type: String, default: '' },
 })
 
-defineEmits([...discussionPanelEmits, 'execution-settled', 'review-delivery', 'typed-reply', 'typed-resume', 'skill-directory-refresh'])
+defineEmits([...discussionPanelEmits, 'execution-settled', 'review-delivery', 'typed-reply', 'typed-resume', 'skill-directory-refresh', 'choose-delivery'])
 
 const v2Presentation = computed(() => bountyDeliberationPresentation({
   enabled: props.deliberationV2Enabled,
@@ -120,7 +134,7 @@ const taskCompleted = computed(() => props.selectedTask?.status === 'completed' 
 
 const chatProps = computed(() => {
   const {
-    reviewContext, reviewBusy, activeRequest, requestCatalog, activeTurns, capabilityState, deliberationV2Enabled,
+    deliveryChoices: _deliveryChoices, selectedDeliveryId: _selectedDeliveryId, reviewContext, reviewBusy, activeRequest, requestCatalog, activeTurns, capabilityState, deliberationV2Enabled,
     typedRecoveryAvailable, typedInspectionStatus, ...chat
   } = props
   return { ...chat, matterReadOnly: chat.matterReadOnly || taskCompleted.value, connectionStatus: taskCompleted.value ? '事项已完成' : chat.connectionStatus }
@@ -143,4 +157,10 @@ const chatProps = computed(() => {
 
 <style scoped>
 .typed-inspection-status{margin:8px 0;padding:8px 10px;border-left:3px solid #6f8c81;background:#f3f8f4;color:#3f6254;font-size:12px;line-height:1.5}
+</style>
+
+<style scoped>
+.media-basis-choice{display:flex;align-items:center;gap:8px;padding:6px 12px;font-size:12px;color:var(--hall-text-muted,#68716b)}
+.media-basis-choice span{flex:none}
+.media-basis-choice select{min-width:0;max-width:100%;flex:1;border:1px solid var(--hall-border,#e3e5dc);border-radius:6px;padding:5px 8px;background:var(--hall-surface,#fffefa);color:var(--hall-text,#242e2b);font:inherit}
 </style>

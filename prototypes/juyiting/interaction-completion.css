@@ -715,3 +715,6 @@ body[data-ui-revision] .material-picker-dialog .material-selection-summary butto
 .material-selection-tools>[data-action="picker-toggle-selected"]{white-space:nowrap}
 .material-selection-summary [data-picker-upload-status]{font-size:11px;line-height:1.4;overflow-wrap:anywhere}
 @media(max-width:720px){.material-selection-summary{flex-direction:column;align-items:stretch;gap:2px}.material-selection-tools{gap:12px}}
+.media-basis-choice{display:flex;align-items:center;gap:8px;padding:6px 12px;font-size:12px;color:var(--hall-text-muted,#68716b)}
+.media-basis-choice select{min-width:0;max-width:100%;flex:1;border:1px solid var(--hall-border,#e3e5dc);border-radius:6px;padding:5px 8px;background:var(--hall-surface,#fffefa);color:var(--hall-text,#242e2b);font:inherit}
+.media-basis-choice span{flex:none}

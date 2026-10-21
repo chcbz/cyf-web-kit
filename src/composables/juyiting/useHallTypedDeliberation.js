@@ -1,4 +1,5 @@
 import { computed, ref, unref, watch } from 'vue'
+import { mediaDeliveryChoices } from './hallMediaDeliveryBasis.js'
 import { textDeliveryProjection } from './bountyOutputCatalog.js'
 import { actionProgressAdvances, submissionProgressAdvances, reviewProgressAdvances, discussionAccepted, discussionBody, inspectionOutcomeProjection, outcomeCardKey, typedId, typedLong, typedOutcomeProjection } from './hallTypedDeliberation.js'
 
@@ -52,6 +53,22 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   getCatalogEntries, storage = null, enabled = () => false, onAccepted = null }) => {
   const scope = computed(() => unref(typeof actorScopeKey === 'function' ? actorScopeKey() : actorScopeKey))
   const projections = ref([]); const selectedPending = ref(null); const error = ref(''); const busy = ref(false); const storageRevision = ref(0)
+  const selectedDelivery = ref(null)
+  const deliveryChoices = computed(() => {
+    try { return mediaDeliveryChoices(projections.value, getCatalogEntries?.() || [], getContext?.() || {}) }
+    catch { return [] }
+  })
+  const chooseDelivery = outcomeId => {
+    const choice = deliveryChoices.value.find(item => item.outcomeId === outcomeId)
+    selectedDelivery.value = choice ? { ...choice, context: { ...(getContext?.() || {}) }, scope: scope.value,
+      authorization: unref(typeof authorizationGeneration === 'function' ? authorizationGeneration() : authorizationGeneration) } : null
+  }
+  const selectedDeliveryId = computed(() => {
+    const selected = selectedDelivery.value
+    return selected && selected.scope === scope.value && sameContext(selected.context, getContext?.() || {}) &&
+      selected.authorization === unref(typeof authorizationGeneration === 'function' ? authorizationGeneration() : authorizationGeneration) &&
+      deliveryChoices.value.some(item => item.outcomeId === selected.outcomeId && item.finalSha256 === selected.finalSha256) ? selected.outcomeId : ''
+  })
   const failedReads = new Set()
   let generation = 0; let disposed = false; let queued = false; let refreshFlight = null
   const capture = () => Object.freeze({ generation, scope: scope.value,
@@ -139,7 +156,8 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       const catalogEntries = getCatalogEntries?.() || []
       const catalogInspectionIds = catalogEntries.filter(entry => entry?.request?.turns?.some(turn => turn?.route === 'INSPECT'))
         .map(entry => entry.request.requestId).filter(typedId)
-      const catalogChatIds = catalogEntries.filter(entry => !entry?.request?.turns?.some(turn => turn?.route === 'INSPECT'))
+      const catalogChatIds = catalogEntries.filter(entry => !entry?.request?.turns?.some(turn => turn?.route === 'INSPECT') &&
+        !(entry?.request?.steps?.some(step => step.kind === 'EXECUTE') && !entry?.request?.turns?.some(turn => turn.route === 'CHAT')))
         .map(entry => entry?.request?.requestId).filter(typedId)
       const storedInspectionIds = readRecords(storage, captured.scope, captured.context).filter(record => recordPurpose(record) === 'INSPECT')
         .map(record => record.receipt?.requestId).filter(typedId)
@@ -185,7 +203,18 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     let deliveryParent = null
     const catalog = clone(getCatalogEntries?.() || [])
     const unresolved = catalog.some(entry => !entry?.request?.turns?.some(turn => turn.route === 'INSPECT') &&
+      !(entry?.request?.steps?.some(step => step.kind === 'EXECUTE') && !entry?.request?.turns?.some(turn => turn.route === 'CHAT')) &&
       !projections.value.some(value => value.requestId === entry?.request?.requestId && value.state === 'READY'))
+    if (!pending && purpose === 'CHAT') {
+      try {
+        const choices = mediaDeliveryChoices(projections.value, catalog, context)
+        if (choices.length) {
+          if (unresolved || failedReads.size) { error.value = '成果上下文尚未完整读取，请刷新后重试。'; return false }
+          deliveryParent = choices.length === 1 ? choices[0] : choices.find(item => item.outcomeId === selectedDeliveryId.value)
+          if (!deliveryParent) { error.value = '存在多份独立成果，请先选择本轮成果。'; return false }
+        }
+      } catch (cause) { error.value = cause.message; return false }
+    }
     if (!deliveryParent && !pending && purpose === 'CHAT' && !unresolved && !catalog.some(entry => entry?.request?.steps?.some(step => step.kind === 'EXECUTE'))) {
       const finals = projections.value.filter(value => value.schemaVersion === 6 && value.state === 'READY' && value.route === 'CHAT' &&
         value.outcome?.deliverable === true && value.outcome.assignmentRevision === context.assignmentRevision)
@@ -257,10 +286,10 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     return readRecords(storage, scope.value, getContext?.() || {}).some(record => recordPurpose(record) === 'INSPECT' && record.status === 'ACCEPTED' && !ready.has(record.receipt?.requestId))
       ? '等待查阅资料…' : ''
   })
-  const invalidate = () => { generation++; failedReads.clear(); busy.value = false; projections.value = []; selectedPending.value = null; error.value = '' }
+  const invalidate = () => { generation++; failedReads.clear(); busy.value = false; projections.value = []; selectedPending.value = null; selectedDelivery.value = null; error.value = '' }
   const stopScope = watch(scope, invalidate, { flush: 'sync' })
   const stopCatalog = typeof getCatalogEntries === 'function' ? watch(getCatalogEntries, () => { void refresh(); void recover() }, { deep: true }) : () => {}
   const recoveryAvailable = computed(() => { storageRevision.value; return readRecords(storage, scope.value, getContext?.() || {}).some(record => record.status === 'UNKNOWN') })
-  return { projections, cards, selectedPending, error, busy, recoveryAvailable, inspectionStatus, refresh, readOne, submit, recover, resumeUnknown, choosePending, confirmProposal,
+  return { deliveryChoices, selectedDeliveryId, chooseDelivery, projections, cards, selectedPending, error, busy, recoveryAvailable, inspectionStatus, refresh, readOne, submit, recover, resumeUnknown, choosePending, confirmProposal,
     invalidate, dispose: () => { disposed = true; invalidate(); stopScope(); stopCatalog() } }
 }

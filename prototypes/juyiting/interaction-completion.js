@@ -765,3 +765,19 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-reply-cont
 
 function settleReplyControl(ctx){if(ctx.replyStop)ctx.replyStop={stage:'finished',text:'本轮已完成，无需停止。',writes:ctx.replyStop.writes};}
 document.addEventListener('input',e=>{if(e.target.matches('.composer-textarea')&&conversation().pending)queueMicrotask(()=>renderReplyControl($('.chat-panel'),conversation()));});
+
+// Exact media basis choice: context only, never submission/acceptance.
+const renderBeforeMediaBasis = renderChat;
+renderChat = function(){
+ renderBeforeMediaBasis();
+ if(page!=='chat'||new URLSearchParams(location.search).get('scenario')!=='media-basis')return;
+ const form=$('.composer-submit');if(!form)return;
+ const label=document.createElement('label');label.className='media-basis-choice';
+ label.innerHTML='<span>本轮成果</span><select aria-label="本轮成果"><option value="">请选择要继续议事的成果</option><option value="batch-a">消息 101 · 第一版修改后的图片</option><option value="batch-b">消息 103 · 第二版修改后的图片</option></select>';
+ label.querySelector('select').value=state.mediaBasisChoice||'';
+ label.querySelector('select').addEventListener('change',e=>{state.mediaBasisChoice=e.target.value;});
+ form.before(label);
+};
+document.addEventListener('submit',e=>{
+ if(e.target.matches('.composer-submit')&&page==='chat'&&new URLSearchParams(location.search).get('scenario')==='media-basis'&&!state.mediaBasisChoice){e.preventDefault();e.stopImmediatePropagation();feedback('存在多份独立成果，请先选择本轮成果。');}
+},true);
