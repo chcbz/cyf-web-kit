@@ -209,7 +209,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       expect(wrapper.find('.quick-reference-open').exists()).to.equal(false)
       expect(wrapper.text()).not.to.include('资料用途')
       expect(wrapper.get('.quick-material-picker h3').text()).to.equal('选择资料')
-      expect(wrapper.get('.quick-material-picker header p').text()).to.equal('从工作空间选择图片、文档或音频。')
+      expect(wrapper.get('.quick-material-picker header p').text()).to.equal('从工作空间选择或上传资料，完成后带入。')
       expect(wrapper.get('.quick-material-confirm').text()).to.equal('完成（0）')
       expect(wrapper.text()).not.to.include('受控请求')
       expect(wrapper.emitted('open-workspace')).to.equal(undefined)
@@ -217,7 +217,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       await settle()
       expect(wrapper.findAll('.quick-material-fields select')).to.have.length(0)
       expect(wrapper.get('.quick-material-version').text()).to.include('已固定 v2')
-      await wrapper.get('.quick-material-fields .primary').trigger('click')
+      await wrapper.get('.quick-material-version-actions .primary').trigger('click')
       await wrapper.get('.quick-material-confirm').trigger('click')
       expect(wrapper.get('.quick-material-summary').text()).not.to.include('image/png')
       expect(wrapper.get('.quick-material-summary').text()).not.to.include('固定')
@@ -229,7 +229,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       await wrapper.findAll('.quick-material-files button')[1].trigger('click')
       await settle()
       expect(wrapper.get('.quick-material-version').text()).to.include('已固定 v3')
-      await wrapper.get('.quick-material-fields .primary').trigger('click')
+      await wrapper.get('.quick-material-version-actions .primary').trigger('click')
       await wrapper.get('.quick-material-footer-actions button:first-child').trigger('click')
       expect(wrapper.get('.quick-material-summary').text()).to.include('v2')
       expect(wrapper.get('.quick-material-summary').text()).not.to.include('另一份底稿')
@@ -264,7 +264,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       await settle()
       expect(wrapper.findAll('.quick-material-fields select')).to.have.length(0)
       expect(wrapper.get('.quick-material-version').text()).to.include('已固定 v3')
-      await wrapper.get('.quick-material-fields .primary').trigger('click')
+      await wrapper.get('.quick-material-version-actions .primary').trigger('click')
       await wrapper.get('.quick-material-confirm').trigger('click')
       expect(wrapper.get('.quick-material-summary').text()).to.include('执行说明')
       expect(wrapper.get('.quick-material-summary').text()).not.to.include('application/pdf')
@@ -306,7 +306,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
           expect(preview.get('audio').attributes('preload')).to.equal('none')
         } else expect(preview.get('pre').text()).to.equal('safe preview')
         expect(wrapper.find('.quick-material-download').exists()).to.equal(false)
-        await wrapper.get('.quick-material-fields .primary').trigger('click')
+        await wrapper.get('.quick-material-version-actions .primary').trigger('click')
       }
       await wrapper.get('.quick-material-count').trigger('click')
       expect(wrapper.findAll('.quick-material-draft li')).to.have.length(4)
@@ -321,9 +321,11 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       expect(revoked).to.include('blob:audio/mpeg')
       await wrapper.findAll('.quick-material-summary li')[2].findAll('button').find(button => button.text() === '预览').trigger('click'); await settle()
       expect(wrapper.get('.quick-material-preview audio').attributes('src')).to.equal('blob:audio/mpeg')
-      expect(wrapper.get('.quick-material-version').text()).to.include('已固定 v2')
-      expect(wrapper.find('.quick-material-fields select').exists()).to.equal(false)
-      await wrapper.get('.quick-material-footer-actions button:first-child').trigger('click')
+      expect(wrapper.find('.quick-material-picker').exists()).to.equal(false)
+      await wrapper.get('.quick-material-download').trigger('click'); await settle()
+      expect(saves).to.have.length(1)
+      expect(saves[0].filename).to.equal('song.mp3')
+      await wrapper.get('.quick-material-close').trigger('click')
       await wrapper.findAll('.quick-material-summary li button').find(button => button.text() === '移除').trigger('click')
       expect(wrapper.findAll('.quick-material-summary li')).to.have.length(3)
       expect(calls.every(call => call.method === 'GET')).to.equal(true)
@@ -441,7 +443,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       await wrapper.get('.quick-material-open').trigger('click'); await settle()
       await wrapper.get('.quick-material-files button').trigger('click'); await settle()
       expect(preview.value.kind).to.equal('none')
-      await wrapper.get('.quick-material-fields .primary').trigger('click')
+      await wrapper.get('.quick-material-version-actions .primary').trigger('click')
       expect(wrapper.emitted('update:modelValue')).to.equal(undefined)
       const toggle = wrapper.get('.quick-material-preview-toggle')
       await toggle.trigger('click'); await settle()
@@ -482,10 +484,11 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
     const wrapper = mount(loadMaterialPicker(workspace, () => {}), { props: { ...props, modelValue: original }, global: { stubs: { teleport: true } } })
     try {
       await wrapper.get('.quick-material-summary button').trigger('click'); await settle()
-      expect(wrapper.get('.quick-material-version').text()).to.include('v1')
+      expect(wrapper.find('.quick-material-picker').exists()).to.equal(false)
+      expect(wrapper.get('.quick-material-standalone pre').text()).to.equal('原固定版本')
       expect(previewCalls).to.deep.equal(['1'])
       expect(original).to.deep.equal([{ fileId: 'old-file', version: '1', displayName: '原资料' }])
-      await wrapper.findAll('dialog footer button').find(button => button.text() === '取消').trigger('click')
+      await wrapper.get('.quick-material-close').trigger('click')
       expect(wrapper.emitted('update:modelValue')).to.equal(undefined)
     } finally { wrapper.unmount() }
   })
@@ -502,7 +505,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       await wrapper.get('.quick-material-summary button').trigger('click'); await settle()
       expect(workspace.error.value).to.include('固定版本暂时无法打开')
       expect(previewCalls).to.deep.equal([])
-      expect(wrapper.find('.quick-material-fields .primary').exists()).to.equal(false)
+      expect(wrapper.find('.quick-material-version-actions .primary').exists()).to.equal(false)
       expect(wrapper.emitted('update:modelValue')).to.equal(undefined)
     } finally { wrapper.unmount() }
   })
@@ -555,6 +558,8 @@ describe('page parity fixes: home draft and picker uploads', () => {
       await settle(); await wrapper.get('.quick-material-open').trigger('click')
       await selectFiles(wrapper, ['a.txt', 'b.txt'])
       expect(wrapper.get('.quick-material-count').text()).to.include('已选 2')
+      expect(wrapper.findAll('.quick-material-files button')).to.have.length(2)
+      expect(wrapper.findAll('.quick-material-added')).to.have.length(2)
       expect(wrapper.get('.quick-material-selection-row').text()).to.include('上传资料')
       expect(wrapper.find('.quick-material-download').exists()).to.equal(false)
       expect(wrapper.find('.quick-material-upload-status').exists()).to.equal(false)
@@ -591,6 +596,84 @@ describe('page parity fixes: home draft and picker uploads', () => {
       expect(wrapper.get('input[type=file]').element.disabled).to.equal(true)
       await wrapper.findAll('button').find(b => b.text() === '核对原上传').trigger('click'); await settle()
       expect(retries).to.equal(1); expect(wrapper.get('.quick-material-count').text()).to.include('已选 2')
+    } finally { wrapper.unmount() }
+  })
+})
+
+describe('material picker screenshot feedback: directory, preview and layout contracts', () => {
+  it('refreshes the real workspace directory once after a successful batch and deduplicates committed receipt rows', async () => {
+    const rows = [], calls = []
+    const version = file => ({ fileId: file.fileId, version: '1', originalFilename: file.displayName, contentMimeType: 'text/plain', byteLength: '5' })
+    const workspace = usePersonalWorkspace({ identityEpoch: Vue.ref('owner-upload'), api: { execute: async options => {
+      calls.push(options)
+      if (options.url === '/personal-workspace/files' && options.method === 'POST') {
+        const name = options.data.get('file').name
+        const file = { fileId: `pws_${rows.length}`, displayName: name, mediaFamily: 'TEXT', state: 'ACTIVE', metadataRevision: '1', latestVersion: '1' }
+        rows.unshift(file)
+        return { operation: { operationId: `upload-${rows.length}`, state: 'COMMITTED' }, file, version: version(file) }
+      }
+      if (options.url === '/personal-workspace/files') return { items: [...rows], nextCursor: null, hasMore: false }
+      if (options.url.endsWith('/preview')) return { state: 'READY', parts: [{ partId: 'text', contentMimeType: 'text/plain' }], partial: false }
+      if (options.url.includes('/preview/parts/')) return new Blob(['hello'], { type: 'text/plain' })
+      const file = rows.find(row => options.url.endsWith(row.fileId))
+      return { file, latestVersion: version(file), versions: [version(file)] }
+    } } })
+    const wrapper = mount(loadMaterialPicker(workspace), { props: { identityScope: 'owner-upload' }, global: { stubs: { teleport: true } } })
+    try {
+      await wrapper.get('.quick-material-open').trigger('click'); await settle()
+      const input = wrapper.get('input[type=file]')
+      const files = ['first.txt', 'second.txt'].map(name => { const file = new Blob(['hello'], { type: 'text/plain' }); Object.defineProperty(file, 'name', { value: name }); return file })
+      Object.defineProperty(input.element, 'files', { configurable: true, value: files })
+      await input.trigger('change'); await settle()
+      expect(calls.filter(call => call.url === '/personal-workspace/files' && call.method === 'GET')).to.have.length(2)
+      expect(calls.filter(call => call.method === 'POST')).to.have.length(2)
+      expect(workspace.items.value).to.have.length(2)
+      expect(wrapper.findAll('.quick-material-files button')).to.have.length(2)
+      expect(wrapper.findAll('.quick-material-added')).to.have.length(2)
+      expect(wrapper.get('.quick-material-files .selected').text()).to.include('second.txt')
+      expect(wrapper.get('.quick-material-version-actions .primary').element.disabled).to.equal(true)
+      const children = [...wrapper.get('.quick-material-detail-pane').element.children]
+      expect(children.indexOf(wrapper.get('.quick-material-version-actions').element)).to.be.greaterThan(children.indexOf(wrapper.get('.quick-material-preview').element))
+    } finally { wrapper.unmount(); workspace.dispose() }
+  })
+
+  it('retains committed rows and selections when the post-upload directory refresh fails', async () => {
+    let refreshes = 0
+    const workspace = { ...emptyWorkspace(), pendingWrites: Vue.ref([]), refresh: async () => { refreshes++; if (refreshes > 1) { workspace.error.value = '目录暂不可用'; workspace.listState.value = 'error'; return false } return true },
+      upload: async () => ({ operation: { state: 'COMMITTED' }, file: { fileId: 'new-file', displayName: 'new.txt' }, version: { fileId: 'new-file', version: '1' } }) }
+    const wrapper = mount(loadMaterialPicker(workspace), { props: { identityScope: 'owner-upload' }, global: { stubs: { teleport: true } } })
+    try {
+      await wrapper.get('.quick-material-open').trigger('click')
+      const input = wrapper.get('input[type=file]')
+      Object.defineProperty(input.element, 'files', { value: [new File(['hello'], 'new.txt', { type: 'text/plain' })] })
+      await input.trigger('change'); await settle()
+      expect(refreshes).to.equal(2)
+      expect(wrapper.get('.quick-material-files button').text()).to.include('new.txt')
+      expect(wrapper.get('.quick-material-count').text()).to.include('已选 1')
+    } finally { wrapper.unmount() }
+  })
+
+  it('opens a read-only standalone fixed-version preview without refreshing the chooser or altering selections, and closes on identity change', async () => {
+    let refreshes = 0
+    const workspace = { ...emptyWorkspace(), preview: Vue.ref({ kind: 'none' }), refresh: async () => { refreshes++; return true }, select: async fileId => {
+      workspace.detail.value = { file: { fileId, displayName: 'fixed.txt', state: 'ACTIVE' }, latestVersion: { version: '2' }, versions: [{ version: '1' }, { version: '2' }] }; return workspace.detail.value
+    }, previewVersion: async v => { expect(v).to.equal('1'); workspace.preview.value = { kind: 'text', text: '固定版本原文' } }, revokePreview: () => { workspace.preview.value = { kind: 'none' } } }
+    const materials = [{ fileId: 'fixed', version: '1', displayName: 'fixed.txt' }]
+    const wrapper = mount(loadMaterialPicker(workspace), { props: { identityScope: 'owner-a', modelValue: materials }, global: { stubs: { teleport: true } } })
+    try {
+      await wrapper.get('.quick-material-summary button').trigger('click'); await settle()
+      expect(refreshes).to.equal(0)
+      expect(wrapper.find('.quick-material-picker').exists()).to.equal(false)
+      expect(wrapper.get('.quick-material-standalone pre').text()).to.equal('固定版本原文')
+      expect(wrapper.get('.quick-material-close').attributes('aria-label')).to.equal('关闭预览')
+      expect(wrapper.emitted('update:modelValue')).to.equal(undefined)
+      await wrapper.get('.quick-material-standalone').trigger('cancel'); await settle()
+      expect(wrapper.find('.quick-material-standalone').exists()).to.equal(false)
+      expect(wrapper.emitted('update:modelValue')).to.equal(undefined)
+      await wrapper.get('.quick-material-summary button').trigger('click'); await settle()
+      await wrapper.setProps({ identityScope: 'owner-b' }); await settle()
+      expect(wrapper.find('.quick-material-standalone').exists()).to.equal(false)
+      expect(workspace.preview.value.kind).to.equal('none')
     } finally { wrapper.unmount() }
   })
 })
