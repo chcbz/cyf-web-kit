@@ -416,7 +416,9 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
     try {
       await settle()
       expect(wrapper.text()).to.include('待验收')
-      await wrapper.findAll('button').find(button => button.text() === '查看待验收交付').trigger('click')
+      const row = wrapper.findAll('.overview-item').find(item => item.text().includes('task-a'))
+      expect(row.get('button').text()).to.equal('查看进展')
+      await row.get('button').trigger('click')
       await settle()
       expect(wrapper.emitted('open-task')[0]).to.deep.equal([task, review])
       expect(calls.map(call => call.method)).to.deep.equal(['GET', 'GET'])

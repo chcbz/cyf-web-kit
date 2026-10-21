@@ -145,7 +145,7 @@ const agentLabel = item => {
   const agent = props.agents.find(agent => agent.agentId === item.targetAgent?.agentId)
   return agent?.name || agent?.displayName || agent?.personaName || (item.targetAgent ? '已指定好汉' : '待安排')
 }
-const nextLabel = item => item.ref.sourceType === 'TASK' && item.phase === 'UNKNOWN' ? '核对事项' : item.review ? '查看待验收交付' : item.ref.sourceType === 'DRAFT' ? '继续填写' : item.status.code === 'OUTPUT_COMMITTED' ? '查看成果' : ['FAILED','UNKNOWN','failed'].includes(item.status.code) ? '处理异常' : '查看进展'
+const nextLabel = item => item.ref.sourceType === 'TASK' && item.phase === 'UNKNOWN' ? '核对事项' : item.ref.sourceType === 'TASK' ? '查看进展' : item.review ? '查看待验收交付' : item.ref.sourceType === 'DRAFT' ? '继续填写' : item.status.code === 'OUTPUT_COMMITTED' ? '查看成果' : ['FAILED','UNKNOWN','failed'].includes(item.status.code) ? '处理异常' : '查看进展'
 const formatTime = value => new Date(value).toLocaleString('zh-CN')
 const sourceError = code => ({
   VIEWED_RESULT_NOT_TRACKED: '成果查看记录尚未纳入，已查看的成果仍可能列在这里。',

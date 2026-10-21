@@ -3097,7 +3097,7 @@ describe('lightweight workbench real panel navigation', () => {
     } finally { wrapper.unmount() }
   })
 
-  it('shows a Hall-owned return for formal delivery over an already-open primary task detail', async () => {
+  it('shows a Hall-owned return for explicit historical delivery over an already-open primary task detail', async () => {
     const home = Vue.ref('overview')
     const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
     const mocks = createActualHallMocks({
@@ -3125,6 +3125,9 @@ describe('lightweight workbench real panel navigation', () => {
       await Vue.nextTick()
 
       expect(wrapper.find('.bounty-modal').exists()).to.equal(true)
+      expect(wrapper.find('.acceptance-probe').exists()).to.equal(false)
+      state.openFormalResults(task)
+      await Vue.nextTick()
       expect(wrapper.find('.acceptance-probe').exists()).to.equal(true)
       expect(wrapper.find('.floating-panel').attributes('role')).to.equal('region')
       expect(wrapper.find('.panel-title').exists()).to.equal(true)
@@ -3279,7 +3282,7 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
     } finally { wrapper.unmount() }
   })
 
-  it('W05 routes a formal review hint to the shared task-scoped acceptance panel, never a private mark', async () => {
+  it('W05 routes a formal review hint to task detail and keeps explicit history separate, never a private mark', async () => {
     const mode = Vue.ref('portrait-command')
     const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
     const mocks = createActualHallMocks({ mode, mounts: { library: 0, archive: 0 }, counters, actualBountyPanel: BountyPanel })
@@ -3294,16 +3297,11 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
         code: 'FORMAL_DELIVERY_SUBMITTED', deliveryId: 'delivery-exact', workItemId: 'work-a', deliveryVersion: '0', taskVersion: '9007199254740993'
       })
       await Vue.nextTick()
-      const formal = wrapper.findComponent({ name: 'BountyAcceptancePanel' })
-      expect(formal.props('taskId')).to.equal('task-a')
+      expect(wrapper.findComponent({ name: 'BountyAcceptancePanel' }).exists()).to.equal(false)
+      expect(state.formalTaskRef).to.equal(null)
       expect(state.taskReviewRef.deliveryId).to.equal('delivery-exact')
-      expect(formal.props('identityKey')).to.equal('1\u0000tenant-a\u0000client-a\u0000owner-a')
       expect(state.taskReviewRef.taskVersion).to.equal('9007199254740993')
-      expect(wrapper.findComponent(BountyPanel).attributes('inert')).to.equal('')
-      expect(state.panelDepth).to.equal(2)
-      state.returnPanel()
-      await Vue.nextTick()
-      expect(wrapper.find('.acceptance-probe').exists()).to.equal(false)
+      expect(wrapper.findComponent(BountyPanel).attributes('inert')).to.equal(undefined)
       expect(wrapper.find('.bounty-modal').text()).to.include('待验收的正式事项')
       // The duplicate acceptance CTA is gone; read-only history keeps its original route.
       await state.openOverviewTask({ id: 'task-a', title: '已完成事项', status: 'completed' })

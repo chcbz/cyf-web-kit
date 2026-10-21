@@ -1831,7 +1831,8 @@ const openOverviewTask = async (task, review = null, options = {}) => {
   selectedTask.value = task
   await nextTick()
   bountyPanelRef.value?.openTask(task)
-  formalTaskRef.value = review ? task : null
+  // Overview review hints are metadata, not a separate destination or acceptance authority.
+  formalTaskRef.value = null
   return true
 }
 
