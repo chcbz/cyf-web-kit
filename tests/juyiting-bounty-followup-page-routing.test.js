@@ -42,7 +42,7 @@ describe('real bounty entry binds per-Agent interactions independently of privat
       { agentId: 'agent-other', boundToMe: true, canOperate: true }])
     const selectedAgent = ref({ agentId: 'agent-other' }); const selectedTask = ref(null)
     const hall = useHallChatContext({ agents, selectedAgent, selectedTask, portraitShortName: a => a.agentId })
-    hall.enterBountyDiscussion({ id: '417', assignedAgentIds: ['agent-417'] })
+    hall.enterBountyDiscussion({ id: '417', assignedAgentIds: ['agent-417'], assignedTarget: { agentId: 'agent-417', displayName: 'Agent 417', providerDisplayName: null, isMine: true, availability: 'online' } })
     return { hall, agents, selectedAgent, selectedTask }
   }
   const actualContext = hall => new Function('conversationId', 'conversationTask', 'conversationAgent',
@@ -91,14 +91,13 @@ describe('real bounty entry binds per-Agent interactions independently of privat
     expect(actualContext(hall)().targetAgentId).to.equal('agent-other')
   })
 
-  it('drops a revoked or unbound roster target instead of falling back to browser selection', () => {
+  it('uses the frozen task target independently of owner roster and drops a missing task authorization', () => {
     const { hall, agents, selectedAgent } = contextHarness()
     selectedAgent.value = { agentId: 'agent-other' }
     agents.value[0].canOperate = false
-    expect(actualContext(hall)().targetAgentId).to.equal('')
-    agents.value[0].canOperate = true
-    expect(actualContext(hall)().targetAgentId).to.equal('agent-417')
     agents.value[0].boundToMe = false
+    expect(actualContext(hall)().targetAgentId).to.equal('agent-417')
+    hall.enterBountyDiscussion({ id: '417', assignedAgentIds: ['agent-417'] })
     expect(actualContext(hall)().targetAgentId).to.equal('')
   })
 

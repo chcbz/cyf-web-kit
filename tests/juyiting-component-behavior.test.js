@@ -1812,7 +1812,8 @@ describe('JuyiHall component behavior', () => {
       title: 'Inspect the camp',
       status: 'assigned',
       description: 'Inspect every outpost',
-      assignedAgentIds: ['agent-wuyong']
+      assignedAgentIds: ['agent-wuyong'],
+      assignedTarget: { agentId: 'agent-wuyong', displayName: 'Wu Yong', providerDisplayName: null, isMine: true, availability: 'online' }
     }
     const agents = [
       { agentId: 'agent-wuyong', name: 'Wu Yong', status: 'online', abilities: ['planning'] },
@@ -1851,7 +1852,7 @@ describe('JuyiHall component behavior', () => {
 
     expect(wrapper.emitted('create-task')).to.equal(undefined)
     expect(wrapper.emitted('assign-task')[0]).to.deep.equal([selectedTask, agents])
-    expect(wrapper.emitted('discuss-task')[0]).to.deep.equal([selectedTask, agents[0]])
+    expect(wrapper.emitted('discuss-task')[0]).to.deep.equal([selectedTask, selectedTask.assignedTarget])
     expect(wrapper.emitted('archive-task')[0]).to.deep.equal([selectedTask])
   })
 

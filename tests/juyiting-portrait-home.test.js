@@ -194,7 +194,8 @@ describe('HallPortraitHome', () => {
     expect(boardHandler).to.include('closePortraitTaskDetail()')
     expect(boardHandler).to.include("openPanel('tasks')")
     expect(discussionHandler).to.include('closePortraitTaskDetail()')
-    expect(discussionHandler).to.include('discussTask(task)')
+    expect(discussionHandler).to.include('assignedTaskTarget(task)')
+    expect(discussionHandler).to.include('discussTask(task, target)')
     expect(hallSource).to.include("if (mode !== 'portrait-command') closePortraitTaskDetail()")
   })
 

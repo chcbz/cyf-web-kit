@@ -40,12 +40,12 @@ const createHarness = (response, { canAssign = () => true } = {}) => {
   return { actions, apiCalls, calls, selectedAgent, selectedTask, toasts, tasks }
 }
 
-const createHallData = (selectedAgent) => useHallData({
-  agentApi: {},
+const createHallData = (selectedAgent, options = {}) => useHallData({
+  agentApi: options.agentApi || {},
   log: { warn: () => {} },
   normalizeStatus: (status = '') => status.toLowerCase(),
   selectedAgent,
-  selectedTask: ref(null),
+  selectedTask: options.selectedTask || ref(null),
   taskAgentMatchScore: () => 0
 })
 
@@ -92,10 +92,12 @@ describe('useHallTaskActions', () => {
     expect(wrapper).not.to.include('selectedAgent.value')
   })
 
-  it('requires an explicit agent id in the real canAssign composable even when selectedAgent is populated', () => {
+  it('requires an explicit server-eligible agent id even when selectedAgent is populated', async () => {
     const selectedAgent = ref({ agentId: 'hidden-agent', status: 'online' })
-    const { canAssign } = createHallData(selectedAgent)
     const task = { id: 'task-a', status: 'open' }
+    const { canAssign, loadAssigneeCandidates } = createHallData(selectedAgent, { selectedTask: ref(task), agentApi: { get: async () => ({ items: [{ agentId: 'explicit-agent', displayName: 'Explicit', providerDisplayName: null, isMine: true, availability: 'online' }], nextAfterAgentId: null }) } })
+    expect(canAssign(task, { agentId: 'explicit-agent' })).to.equal(false)
+    expect(await loadAssigneeCandidates()).to.equal(true)
 
     expect(canAssign(task)).to.equal(false)
     expect(canAssign(task, undefined)).to.equal(false)
