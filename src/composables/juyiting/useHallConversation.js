@@ -493,7 +493,12 @@ export const useHallConversation = ({
     const messageEvent = event?.type === 'agent_message_delta' || event?.type === 'agent_message' || event?.type === 'resync_required' || ['part.processing', 'part.ready', 'part.failed'].includes(event?.type)
     // Keep the active-request reducer closed. A non-active media event can only ask the
     // independent read-only catalog to re-read its owner-scoped index.
-    if (['part.ready', 'agent_message', 'resync_required'].includes(event?.type) && event.requestId && event.conversationId === conversationId.value) void refreshHallProjections(event)
+    if (['part.ready', 'agent_message', 'resync_required'].includes(event?.type) && event.requestId && event.conversationId === conversationId.value) {
+      // Media completion has no CHAT turn checkpoint. A restored EXECUTE must re-read
+      // its exact request; refreshing the independent result catalog cannot clear busy.
+      if (activeRequest.value?.steps?.some(step => step.kind === 'EXECUTE')) refreshExecutionRequest(event)
+      else void refreshHallProjections(event)
+    }
     const typedRequestId = event?.type === 'agent_message' && event?.typedOutcome ? event.requestId :
       event?.type === 'typed_question_answered' ? (event.requestId || event.replyRequestId) : ''
     if (typedRequestId && event.conversationId === conversationId.value) {
@@ -1234,9 +1239,13 @@ export const useHallConversation = ({
     return loadHallConversationContent(exactId, { loadGeneration, scope: expectedScope, selection: true })
   }
 
-  const retryHallConversation = () => {
+  const retryHallConversation = async () => {
     resetHallEventRecovery()
     if (conversationLoadError.value && selectedHallConversationId.value) return selectHallConversation(selectedHallConversationId.value)
+    const guard = captureGuard()
+    const requestId = activeRequest.value?.requestId
+    if (requestId) await recoverUnknownRequest(requestId, guard)
+    if (!guardCurrent(guard) || activeRequest.value?.requestId !== requestId) return false
     return loadHallMessages({ force: true })
   }
 

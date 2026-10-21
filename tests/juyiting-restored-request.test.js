@@ -98,3 +98,77 @@ describe('exact-conversation current round restoration', () => {
     expect(hall.activeRequest.value).to.equal(null)
   })
 })
+
+describe('restored EXECUTE request terminal readback', () => {
+  afterEach(() => instances.splice(0).forEach(hall => hall.disposeHallConversation()))
+  const execute = (state = 'RUNNING', version = '0') => ({ ordinal: '185', request: {
+    requestId: 'execute-185', requestRevision: '1', conversationId: '101', conversationGeneration: '1', userMessageId: '185',
+    state, stateVersion: version, turns: [], steps: [{ stepId: 'step-185', stepNumber: '1', taskId: '474', assignmentRevision: '1',
+      targetAgentId: 'wuyong', kind: 'EXECUTE', state, stateVersion: version, executionIntentId: 'intent-185', executionId: 'execution-185', executionState: state }]
+  } })
+  const tick = () => new Promise(resolve => setImmediate(resolve))
+
+  for (const historical of [false, true]) it(`media-final event reads only its active execution (historical=${historical})`, async () => {
+    let controller; let transport; const originalFetch = global.fetch
+    const { hall, calls, apiStore } = setup(async path => path === '/requests/execute-185'
+      ? execute('RESULT_COMMITTED', '1').request : page([execute()]))
+    apiStore.token = async () => 'test-token'
+    global.fetch = async (_url, options) => {
+      transport = new Headers(options.headers).get('X-Request-Id')
+      return new Response(new ReadableStream({ start(c) { controller = c } }), { headers: { 'Content-Type': 'text/event-stream', 'X-Request-Id': transport } })
+    }
+    try {
+      expect(await hall.loadHallMessages()).to.equal(true); await tick()
+      expect(hall.isConversationBusy.value).to.equal(true)
+      // ChatBountyAssetProjector success event has requestId but no CHAT turnId/stateVersion.
+      controller.enqueue(new TextEncoder().encode(conversationFrame({ type: 'agent_message', conversationId: '101', requestId: historical ? 'older-execute' : 'execute-185',
+        messageId: '900', senderType: 'agent', senderName: '好汉', content: '已生成成果；可预览或下载。', parts: [] }, '1', transport)))
+      await tick(); await tick()
+      expect(calls.filter(c => c.path === '/requests/execute-185')).to.have.length(historical ? 0 : 1)
+      expect(hall.activeRequest.value.state).to.equal(historical ? 'RUNNING' : 'RESULT_COMMITTED')
+      expect(hall.isConversationBusy.value).to.equal(historical)
+      expect(calls.some(c => c.body)).to.equal(false)
+    } finally { hall.disposeHallConversation(); global.fetch = originalFetch }
+  })
+
+  it('manual retry rechecks the exact restored request without resending execution', async () => {
+    const { hall, calls } = setup(async path => path === '/requests/execute-185'
+      ? execute('RESULT_COMMITTED', '1').request : page([execute()]))
+    await hall.loadHallMessages()
+    expect(hall.isConversationBusy.value).to.equal(true)
+    await hall.retryHallConversation()
+    expect(calls.filter(c => c.path === '/requests/execute-185')).to.have.length(1)
+    expect(hall.activeRequest.value.state).to.equal('RESULT_COMMITTED')
+    expect(hall.isConversationBusy.value).to.equal(false)
+    expect(calls.some(c => c.body)).to.equal(false)
+  })
+  for (const failure of ['wrong-generation', 'old-version', 'network']) it(`does not clear busy for ${failure} readback`, async () => {
+    const { hall, calls } = setup(async path => {
+      if (path !== '/requests/execute-185') return page([execute('RUNNING', '2')])
+      if (failure === 'network') throw new Error('synthetic network loss')
+      const value = execute('RESULT_COMMITTED', failure === 'old-version' ? '1' : '3').request
+      if (failure === 'wrong-generation') value.conversationGeneration = '2'
+      return value
+    })
+    await hall.loadHallMessages()
+    await hall.retryHallConversation()
+    expect(hall.activeRequest.value.state).to.equal('RUNNING')
+    expect(hall.isConversationBusy.value).to.equal(true)
+    expect(calls.some(c => c.body)).to.equal(false)
+  })
+
+  it('drops late manual recovery after task switch and does not reload history for the new task', async () => {
+    let finish
+    const { hall, calls, context } = setup(async path => path === '/requests/execute-185'
+      ? new Promise(resolve => { finish = resolve }) : page([execute()]))
+    await hall.loadHallMessages()
+    const before = calls.filter(c => c.path === '/conversation/content').length
+    const retry = hall.retryHallConversation(); await tick()
+    context.value = { ...context.value, taskId: '999', conversationScopeKey: 'task:999' }
+    finish(execute('RESULT_COMMITTED', '1').request)
+    expect(await retry).to.equal(false)
+    expect(calls.filter(c => c.path === '/conversation/content')).to.have.length(before)
+    expect(hall.activeRequest.value?.state).not.to.equal('RESULT_COMMITTED')
+  })
+
+})
