@@ -420,13 +420,15 @@ export function useOutputs ({ source, taskId = null, identityFingerprint, adapte
 }
 
 export const outputPreviewKind = item => {
-  if (!item || item.byteLength == null) return 'none'
+  if (!item || !exactByteLength(item.byteLength)) return 'none'
   // Office previews come from the server's bounded, text-only extractor rather than
   // downloading the original archive into the browser.
   if (documentPreviewMimeTypes.has(item.mimeType)) return 'text'
+  // Raster images use the existing content contract and decoder dimension checks,
+  // not the small-text/PDF preview threshold. Generated PNGs commonly exceed 1 MiB.
+  if (imageMimeTypes.has(item.mimeType)) return 'image'
   if (item.byteLength > 1024 * 1024) return 'none'
   if (textMimeTypes.has(item.mimeType)) return 'text'
-  if (imageMimeTypes.has(item.mimeType)) return 'image'
   if (pdfMimeTypes.has(item.mimeType)) return 'pdf'
   return 'none'
 }
