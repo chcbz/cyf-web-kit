@@ -153,6 +153,7 @@ function renderChat(){
  const extra=document.createElement('div');extra.className='mmd mmd-composer-extra';extra.innerHTML=`${ctx.quote?`<div class="mmd-quote">引用：${esc(asset(ctx.quote)?.name)} ${button('取消引用','unquote')}</div>`:''}${files(ctx.chatFiles,'chat')}`;if(ctx.quote||ctx.chatFiles.length)body.before(extra);
  const more=document.createElement('button');more.type='button';more.className='composer-more';more.dataset.action='composer-more';more.textContent='＋';more.ariaLabel='添加资料、语音输入与设置';more.title='添加资料、语音输入与设置';more.disabled=!!(ctx.task?.complete||ctx.task?.cancelled);$('.composer-actions').prepend(more);
  syncCurrentComposer(panel);
+ renderMediaBasis();
  if(ctx===state&&unifiedTask()){
   input.disabled=ctx.pending||!!(ctx.task.complete||ctx.task.cancelled);input.placeholder=ctx.task.cancelled?'事项已取消，仅查看议事记录':ctx.task.complete?'事项已完成，仅查看议事记录':ctx.task.phase==='待你补充'?'在这里补充要求或添加资料…':'可直接提问或提出修改；满意后点击验收。';send.disabled=ctx.pending||!!ctx.error||!!(ctx.task.complete||ctx.task.cancelled)||(!ctx.chatDraft.trim()&&!ctx.chatFiles.length);
   const heading=$('.context-summary strong',panel);if(heading)heading.textContent='议事';
