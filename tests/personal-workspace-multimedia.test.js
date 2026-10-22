@@ -59,12 +59,33 @@ describe('workspace general multimedia compatibility (no Provider)', () => {
       assert.equal(await workspace.previewVersion('1'), null)
       assert.match(workspace.error.value, /类型无效/)
       assert.deepEqual(created, [])
-      for (const [filename, type] of [['evil.svg', 'image/svg+xml'], ['evil.html', 'text/html'], ['evil.js', 'text/javascript'], ['video.mp4', 'video/mp4'], ['video.webm', 'video/webm'], ['renamed.mp3', 'text/html']]) {
-        const file = new Blob(['bad'], { type }); Object.defineProperty(file, 'name', { value: filename })
-        assert.equal(await workspace.upload(file), null)
-      }
       assert.equal(calls.some(call => call.method === 'POST'), false)
     } finally { workspace.dispose() }
+  })
+
+  it('stores arbitrary formats without granting active-content preview capability', async () => {
+    for (const [filename, type, expected] of [
+      ['page.html', 'text/html', 'text/html'], ['icon.svg', 'image/svg+xml', 'image/svg+xml'],
+      ['archive.zip', 'application/zip', 'application/zip'], ['video.mp4', 'video/mp4', 'video/mp4'],
+      ['renamed.mp3', 'text/html', 'text/html'], ['README', '', 'application/octet-stream'],
+      ['data.custom', '', 'application/octet-stream'], ['data.custom', 'application/x-custom', 'application/x-custom']
+    ]) {
+      const calls = []; const objects = []; const value = detail(filename, expected)
+      const workspace = usePersonalWorkspace({ urlApi: { createObjectURL: blob => { objects.push(blob); return 'blob:unexpected' } }, api: { execute: async options => {
+        calls.push(options)
+        if (options.method === 'POST') return { operation: { operationId: 'op-a', state: 'COMMITTED' }, file: value.file, version: value.latestVersion }
+        if (options.url.endsWith('/preview')) return { state: 'UNSUPPORTED', reason: 'No preview renderer' }
+        return value
+      } } })
+      try {
+        const file = new File(['opaque'], filename, { type })
+        assert.ok(await workspace.upload(file), filename)
+        assert.equal(calls[0].data.get('file').type, expected)
+        await workspace.previewVersion('1')
+        assert.equal(workspace.preview.value.kind, 'unsupported')
+        assert.deepEqual(objects, [])
+      } finally { workspace.dispose() }
+    }
   })
 
   it('late old-file preview cannot overwrite or revoke a new audio preview', async () => {
