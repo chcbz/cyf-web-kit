@@ -634,6 +634,10 @@
           />
 
           <BountyDiscussionPanel
+            ref="bountyDiscussionRef"
+            @outputs-change="selectedOutputCandidates = $event"
+            @accept-output="openSelectedOutputReview($event)"
+            @preview-ready="selectedOutputPreview = $event"
             v-if="panelFrames.includes('chat') && chatMode === 'bounty'"
             v-show="renderedPanel === 'chat'"
             :inert="renderedPanel !== 'chat' ? '' : null"
@@ -644,8 +648,8 @@
             :capability-state="capabilityState"
             :deliberation-v2-enabled="multimediaDeliberationUiEnabled"
             :review-context="deliveryReview.context.value"
-            :review-busy="deliveryReview.operation.value.busy || deliveryReview.loading.value"
-            @review-delivery="openDeliveryReview()"
+            :review-busy="deliveryReview.operation.value.busy || deliveryReview.loading.value || selectedOutputReview.busy.value"
+            @review-delivery="openSelectedOutputReview()"
             :typed-outcomes="typedDeliberation.cards.value"
             :delivery-choices="typedDeliberation.deliveryChoices.value"
             :selected-delivery-id="typedDeliberation.selectedDeliveryId.value"
@@ -777,12 +781,25 @@
       </div>
     </transition>
 
+    <section v-if="selectedOutputReview.locked.value && deliveryReview.context.value?.taskState !== 'COMPLETED' && chatMode === 'bounty' && renderedPanel === 'chat'" class="hall-review-recovery" role="status">
+      <p>{{ selectedOutputReview.message.value }}</p><button type="button" :disabled="selectedOutputReview.busy.value" @click="openSelectedOutputReview()">查看原提交并验收</button>
+    </section>
     <HallDeliveryReviewDialog
-      :open="deliveryReview.dialogOpen.value" :context="deliveryReview.frozenContext.value"
+      :open="selectedOutputReview.open.value || deliveryReview.dialogOpen.value" :context="deliveryReview.frozenContext.value"
+      :selection-mode="selectedOutputReview.open.value" :choices="selectedOutputReview.choices.value.map(item => ({ ...item, key: selectionKey(item) }))"
+      :selected-keys="selectedOutputReview.selected.value.map(selectionKey)" :selection-locked="selectedOutputReview.locked.value"
+      @toggle="selectedOutputReview.toggle" @preview-selection="previewSelectedOutput"
       :frozen-batch="deliveryReview.frozenContext.value?.currentDelivery || null"
-      :pending="deliveryReview.operation.value.busy" :error="deliveryReview.error.value || (deliveryReview.operation.value.intent ? deliveryReview.operation.value.message : reviewPreviewError)"
-      @confirm="confirmDeliveryReview" @back="deliveryReview.close" @preview="previewReviewOutput"
-    ><template #preview><OutputPreview v-if="reviewPreviewItem" :item="reviewPreviewItem" :load="reviewOutputs.preview" :context-key="reviewOutputs.cacheKey.value" /></template></HallDeliveryReviewDialog>
+      :pending="deliveryReview.operation.value.busy || selectedOutputReview.busy.value" :error="selectedOutputReview.open.value ? selectedOutputReview.message.value : deliveryReview.error.value || (deliveryReview.operation.value.intent ? deliveryReview.operation.value.message : reviewPreviewError)"
+      @confirm="selectedOutputReview.open.value ? selectedOutputReview.confirm() : confirmDeliveryReview()" @back="selectedOutputReview.open.value ? selectedOutputReview.close() : deliveryReview.close()" @preview="previewReviewOutput"
+    ><template #selection-preview>
+      <div v-if="selectedOutputPreview" class="selected-output-preview">
+        <p v-if="selectedOutputPreview.error" role="alert">{{ selectedOutputPreview.error }}</p>
+        <img v-else-if="selectedOutputPreview.url && selectedOutputPreview.item.contentMimeType.startsWith('image/')" :src="selectedOutputPreview.url" alt="所选版本成果预览" />
+        <audio v-else-if="selectedOutputPreview.url && selectedOutputPreview.item.contentMimeType.startsWith('audio/')" :src="selectedOutputPreview.url" controls />
+        <pre v-else-if="selectedOutputPreview.text">{{ selectedOutputPreview.text }}</pre><p v-else>此格式暂不支持内嵌预览。</p>
+      </div>
+    </template><template #preview><OutputPreview v-if="reviewPreviewItem" :item="reviewPreviewItem" :load="reviewOutputs.preview" :context-key="reviewOutputs.cacheKey.value" /></template></HallDeliveryReviewDialog>
 
     <transition name="toast">
       <div v-if="toast" class="toast" role="status" aria-live="polite">{{ toast }}</div>
@@ -852,6 +869,8 @@ import AgentPanel from '@/components/juyiting/AgentPanel.vue'
 import BountyDiscussionPanel from '@/components/juyiting/BountyDiscussionPanel.vue'
 import BountyAcceptancePanel from '@/components/juyiting/BountyAcceptancePanel.vue'
 import HallDeliveryReviewDialog from '@/components/juyiting/HallDeliveryReviewDialog.vue'
+import { useHallSelectedOutputReview } from '@/composables/juyiting/useHallSelectedOutputReview.js'
+import { selectionKey } from '@/composables/juyiting/hallSelectedOutputs.js'
 import { useHallDeliveryReview } from '@/composables/juyiting/useHallDeliveryReview.js'
 import { projectHallTask } from '@/composables/juyiting/hallTaskPresentation'
 import BountyPanel from '@/components/juyiting/BountyPanel.vue'
@@ -2713,6 +2732,18 @@ const reviewTaskId = computed(() => renderedPanel.value === 'chat' && chatMode.v
 const deliveryReview = useHallDeliveryReview({ api: agentApi, taskId: reviewTaskId,
   identityScope: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
   enabled: () => multimediaDeliberationUiEnabled })
+const selectedOutputCandidates = ref([]); const selectedOutputPreview = ref(null); const bountyDiscussionRef = ref(null)
+const selectedOutputReview = useHallSelectedOutputReview({ api: agentApi, review: deliveryReview, taskId: reviewTaskId,
+  conversationId, identityKey: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration, candidates: selectedOutputCandidates })
+const openSelectedOutputReview = async item => {
+  if (reviewInteractionLocked()) return
+  selectedOutputPreview.value = null
+  await selectedOutputReview.show(item)
+}
+const previewSelectedOutput = item => { selectedOutputPreview.value = null; return bountyDiscussionRef.value?.previewSelected(item) }
+watch(() => [reviewTaskId.value, conversationId.value, apiStore.authorizationGeneration, hallIdentityScope.value], () => {
+  selectedOutputCandidates.value = []; selectedOutputPreview.value = null
+}, { flush: 'sync' })
 const reviewPreviewItem = ref(null); const reviewPreviewError = ref('')
 const reviewOutputs = useOutputs({ source: () => reviewTaskId.value && (deliveryReview.dialogOpen.value || formalTaskRef.value)
   ? { type: 'task', id: reviewTaskId.value } : null,
@@ -5048,4 +5079,8 @@ button.hall-room {
   .home-overview .panel-overlay.theme-workbench.is-agent-overlay .panel-title { padding: 4px 12px; }
   .home-overview .panel-overlay.theme-workbench.is-agent-overlay .panel-title > span { display: block; }
 }
+</style>
+
+<style scoped>
+.selected-output-preview img{display:block;max-width:100%;max-height:280px;object-fit:contain}.selected-output-preview pre{white-space:pre-wrap;overflow-wrap:anywhere}.selected-output-preview audio{max-width:100%}
 </style>

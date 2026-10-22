@@ -1,3 +1,4 @@
+import { batchMatchesSelection } from './hallSelectedOutputs.js'
 import { computed, getCurrentInstance, onBeforeUnmount, ref, unref, watch } from 'vue'
 import { createApi } from '../useHttp.js'
 import { batchDigest, freezeReviewIntent, freezeReviewValue, reviewId, validateContext, validateReceipt, validReviewIntent } from './hallDeliveryReviewIntent.js'
@@ -80,10 +81,13 @@ export function useHallDeliveryReview ({ api = createApi('/agent'), taskId, iden
   }
   const checkOriginal = () => requestOriginal('GET')
   const resumeOriginal = () => requestOriginal('POST')
-  const openConfirmation = async () => {
+  const openConfirmation = async expected => {
     if (operation.value.busy || operation.value.intent || operation.value.state === 'recovery_error') { if (operation.value.intent) await checkOriginal(); return false }
     const version = epoch; const next = await refresh()
     if (version !== epoch || !next?.currentDelivery?.allowedActions.includes('ACCEPT')) return false
+    if (expected && ((expected.assignmentRevision != null && next.assignmentRevision !== expected.assignmentRevision) || next.currentDelivery.deliveryId !== expected.deliveryId || !batchMatchesSelection(next.currentDelivery, expected.selectedOutputs))) {
+      error.value = '当前交付与选定成果不一致，未提交验收。'; return false
+    }
     frozenContext.value = next; dialogOpen.value = true; return true
   }
   const confirmAcceptance = async () => {

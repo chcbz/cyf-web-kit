@@ -2,9 +2,21 @@
   <dialog ref="dialog" class="hall-review-dialog" aria-labelledby="hall-review-title" tabindex="-1" @keydown.tab="trapFocus" @cancel.prevent="back" @close="restoreFocus">
     <header>
       <button type="button" class="review-back" :disabled="pending" @click="back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m14 5-7 7 7 7" /></svg> 返回</button>
-      <h2 id="hall-review-title">查看成果并验收</h2>
+      <h2 id="hall-review-title">{{ selectionMode ? '选择成果并验收' : '查看成果并验收' }}</h2>
     </header>
-    <section v-if="frozenBatch" class="review-content">
+    <section v-if="selectionMode" class="review-content">
+      <p>请选择需要验收的成果（已选 {{ selectedKeys.length }} 项）。可使用历史版本，不要求选最新稿。</p>
+      <p v-if="!choices.length" role="status">暂无可验收成果，请关闭后重新读取成果。</p>
+      <ul><li v-for="(item, index) in choices" :key="item.key">
+        <label><input type="checkbox" :checked="selectedKeys.includes(item.key)" :disabled="pending || selectionLocked" @change="$emit('toggle', item.key)" />
+          <strong>{{ item.title || item.outputId || '文字成果' }}</strong><small>成果 {{ index + 1 }}</small></label>
+        <button type="button" :disabled="pending" @click="$emit('preview-selection', item)">预览</button>
+      </li></ul>
+      <slot name="selection-preview" />
+      <p class="review-help">仅验收所选成果，不重新生成。确认后事项完成；关闭窗口不提交、不验收。</p>
+      <p v-if="error" class="review-error" role="status">{{ error }}</p>
+    </section>
+    <section v-else-if="frozenBatch" class="review-content">
       <p>{{ frozenBatch.summary }}</p>
       <p>本次验收包含 {{ resultCount }} 项成果，将确认整个提交批次。</p>
       <ul>
@@ -19,15 +31,17 @@
       <p v-if="error" class="review-error" role="alert">{{ error }}</p>
     </section>
     <footer>
-      <button type="button" class="review-confirm" :disabled="pending || !frozenBatch || !!error" @click="$emit('confirm')">{{ pending ? '正在提交…' : '确认验收' }}</button>
+      <button type="button" class="review-confirm" :disabled="pending || (selectionMode ? !selectedKeys.length : !frozenBatch || !!error)" @click="$emit('confirm')">{{ pending ? '正在提交…' : '确认验收' }}</button>
     </footer>
   </dialog>
 </template>
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 const props = defineProps({ open: { type: Boolean, default: false }, context: { type: Object, default: null },
+  selectionMode: { type: Boolean, default: false }, choices: { type: Array, default: () => [] },
+  selectedKeys: { type: Array, default: () => [] }, selectionLocked: { type: Boolean, default: false },
   frozenBatch: { type: Object, default: null }, pending: { type: Boolean, default: false }, error: { type: String, default: '' } })
-const emit = defineEmits(['confirm', 'preview', 'back'])
+const emit = defineEmits(['confirm', 'preview', 'back', 'toggle', 'preview-selection'])
 const dialog = ref(null)
 const resultCount = computed(() => props.frozenBatch?.items.filter(item => item.displayRole === 'RESULT').length || 0)
 let previousFocus = null
@@ -82,4 +96,8 @@ small, .review-help { color: var(--hall-text-muted, #68716b); font-size: 13px; }
 li p { flex-basis: 100%; }
 .review-error { color: var(--hall-danger, #a13f35); }
 @media (max-width: 600px) { .hall-review-dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); } .review-confirm { width: 100%; } }
+</style>
+
+<style scoped>
+li label{display:flex;align-items:center;gap:8px;flex:1;min-width:0;overflow-wrap:anywhere}li input{width:20px;height:20px;accent-color:var(--hall-brand,#923f30);flex-shrink:0}
 </style>

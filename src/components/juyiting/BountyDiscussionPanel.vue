@@ -55,17 +55,22 @@
       </template>
       <template #matter-actions>
         <button
-          v-if="!taskCompleted && reviewContext?.currentDelivery?.allowedActions.includes('ACCEPT')"
+          v-if="!taskCompleted && deliberationV2Enabled"
           type="button"
           class="matter-action"
-          aria-label="查看并验收"
-          title="查看并验收"
+          aria-label="统一验收"
+          title="验收"
           :disabled="reviewBusy || conversationBusy || voice?.voiceInteractionLocked"
           @click="$emit('review-delivery')"
         ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5h10M9 12h10M9 19h10M3 5l1 1 2-2M3 12l1 1 2-2M3 19l1 1 2-2" /></svg></button>
       </template>
       <template #bounty-results>
         <BountyExecutionOutputs
+          ref="outputGallery"
+          :review-busy="reviewBusy || conversationBusy"
+          @outputs-change="$emit('outputs-change', $event)"
+          @accept-output="$emit('accept-output', $event)"
+          @preview-ready="$emit('preview-ready', $event)"
           :enabled="deliberationV2Enabled"
           :task-completed="taskCompleted"
           :request="activeRequest"
@@ -83,7 +88,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import ChatPanel from './ChatPanel.vue'
 import TaskSkillCapabilities from './TaskSkillCapabilities.vue'
 import { discussionPanelProps, discussionPanelEmits } from './discussionPanelContract.js'
@@ -113,7 +118,10 @@ const props = defineProps({
   identityScope: { type: String, default: '' },
 })
 
-defineEmits([...discussionPanelEmits, 'execution-settled', 'review-delivery', 'typed-reply', 'typed-resume', 'skill-directory-refresh', 'choose-delivery'])
+defineEmits([...discussionPanelEmits, 'execution-settled', 'review-delivery', 'typed-reply', 'typed-resume', 'skill-directory-refresh', 'choose-delivery', 'outputs-change', 'accept-output', 'preview-ready'])
+
+const outputGallery = ref(null)
+defineExpose({ previewSelected: item => outputGallery.value?.previewSelected(item) })
 
 const v2Presentation = computed(() => bountyDeliberationPresentation({
   enabled: props.deliberationV2Enabled,

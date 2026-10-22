@@ -40,6 +40,7 @@
         ></audio>
         <span v-else>此格式请下载查看。</span>
       </template>
+      <button v-if="!effectiveTaskCompleted" type="button" class="hall-output-action primary" :disabled="reviewBusy || loading" @click="$emit('accept-output', item)">验收此版</button>
       <small v-if="item.replaces">改稿关联：{{ item.replaces.outputId }}（原稿仍保留）</small>
       <small v-if="!effectiveTaskCompleted">需要调整？直接在会话中告诉 Agent。</small>
     </div>
@@ -65,9 +66,10 @@ import { revisionProgressPending } from '../../composables/juyiting/hallTypedDel
 import { useHallSkillResults } from '../../composables/juyiting/useHallSkillResults.js'
 import { skillResultDataText } from '../../composables/juyiting/hallSkillResults.js'
 
-const emit = defineEmits(['catalog-refresh-needed'])
+const emit = defineEmits(['catalog-refresh-needed', 'outputs-change', 'accept-output', 'preview-ready'])
 const props = defineProps({
   acceptance: { type: Boolean, default: false },
+  reviewBusy: { type: Boolean, default: false },
   taskCompleted: { type: Boolean, default: false },
   enabled: { type: Boolean, default: false }, request: { type: Object, default: null },
   conversationId: { type: String, default: '' }, identityKey: { type: String, default: '' },
@@ -106,6 +108,7 @@ const deliveryProjection = computed(() => {
 })
 const displayItems = computed(() => deliveryProjection.value.items)
 const deliveryMessage = computed(() => deliveryProjection.value.message)
+watch(allItems, value => emit('outputs-change', value), { immediate: true })
 let abort = null; let timer = null; let epoch = 0; let refreshQueued = false
 const inFlight = new Set()
 const validRootRequest = () => props.enabled && catalogRequests.value.length > 0 && catalogRequests.value.every(request => exactOutputId(request?.requestId) && request.conversationId === props.conversationId)
@@ -216,7 +219,17 @@ watch(effectiveTaskCompleted, completed => {
   if (timer != null) clearTimeout(timer); timer = null
   if (!completed && validRootRequest()) refresh()
 })
-onBeforeUnmount(() => { cleanup(); skillResults.dispose() })
+const previewSelected = async item => {
+  const current = allItems.value.find(value => outputItemKey(value) === outputItemKey(item) && value.sha256 === item.sha256)
+  if (!current) return
+  const generation = epoch
+  if (!current.messageSource) await loadPreview(current)
+  if (generation !== epoch) return
+  const key = outputItemKey(current)
+  emit('preview-ready', { item: current, url: previewUrls.value[key] || '', text: current.text || textPreviews.value[key] || '', error: itemErrors.value[key] || '' })
+}
+defineExpose({ previewSelected })
+onBeforeUnmount(() => { cleanup(); skillResults.dispose(); emit('outputs-change', []) })
 </script>
 <style scoped>
 .bounty-output-gallery { display: grid; gap: 8px; padding: 10px; background: #f7fbf7; }

@@ -47,6 +47,20 @@ describe('shared delivery review modal interaction', () => {
       expect(wrapper.emitted('back')).to.have.length(1)
     } finally { wrapper.unmount() }
   })
+  it('selection mode lists historical versions, starts unselected and emits no writes before confirmation', async () => {
+    const choices = [{ key: 'old', title: '第1稿' }, { key: 'new', title: '第2稿' }]
+    const wrapper = mount(Dialog, { props: { open: true, selectionMode: true, choices, selectedKeys: [] }, attachTo: document.body })
+    try {
+      await flushPromises(); expect(wrapper.findAll('input')).to.have.length(2)
+      expect(wrapper.get('.review-confirm').element.disabled).to.equal(true)
+      await wrapper.findAll('input')[0].setValue(true); expect(wrapper.emitted('toggle')[0]).to.deep.equal(['old'])
+      expect(wrapper.emitted('confirm')).to.equal(undefined)
+      await wrapper.setProps({ selectedKeys: ['old'] }); expect(wrapper.get('.review-confirm').element.disabled).to.equal(false)
+      await wrapper.get('.review-confirm').trigger('click'); expect(wrapper.emitted('confirm')).to.have.length(1)
+      await wrapper.setProps({ selectionLocked: true }); expect(wrapper.findAll('input').every(input => input.element.disabled)).to.equal(true)
+      expect(wrapper.text()).not.to.include('下载')
+    } finally { wrapper.unmount() }
+  })
   it('traps forward and reverse Tab and restores the opening control when closed', async () => {
     const trigger = document.createElement('button'); document.body.append(trigger); trigger.focus()
     const wrapper = mount(Dialog, { props: { open: true, frozenBatch: batch }, attachTo: document.body })

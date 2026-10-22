@@ -87,7 +87,7 @@ const statusCode = error => error?.status ?? error?.response?.status
 
 /** One immutable selected-set acceptance intent. No Provider call or automatic write on recovery. */
 export function useHallBountyFinalization ({ api = createApi('/agent'), conversationId = null, identityKey = null, taskId = null,
-  storage = browserStorage(), idempotencyKeyFactory = uuid } = {}) {
+  storage = browserStorage(), idempotencyKeyFactory = uuid, authorizationGeneration = 0 } = {}) {
   const status = ref({ state: 'idle', busy: false, message: '', intent: null, receipt: null })
   const conversation = computed(() => valueOf(conversationId))
   const identity = computed(() => valueOf(identityKey))
@@ -223,7 +223,7 @@ export function useHallBountyFinalization ({ api = createApi('/agent'), conversa
     }
     return run(post)
   }
-  const stop = watch([scopeKey, task], reset, { immediate: true, flush: 'sync' })
+  const stop = watch([scopeKey, task, () => valueOf(authorizationGeneration)], reset, { immediate: true, flush: 'sync' })
   const dispose = () => {
     if (disposed) return
     disposed = true; stop(); generation++; for (const controller of controllers) controller.abort(); controllers.clear()
