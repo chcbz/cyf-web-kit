@@ -183,3 +183,26 @@ describe('1.13.1 workspace Excel preview parts', () => {
     workspace.dispose()
   })
 })
+
+describe('common image material uploads', () => {
+  for (const [extension, mime] of [['jpg','image/jpeg'],['jpeg','image/jpeg'],['png','image/png'],['webp','image/webp'],['gif','image/gif'],['bmp','image/bmp'],['tif','image/tiff'],['tiff','image/tiff'],['heic','image/heic'],['heif','image/heif'],['avif','image/avif']]) {
+    it(`accepts ${extension} without changing the original material`, async () => {
+      const calls = []
+      const file = fileView({ mediaFamily: 'IMAGE', displayName: `original.${extension}` })
+      const version = versionView({ originalFilename: `original.${extension}`, contentMimeType: mime })
+      const api = { execute: async options => {
+        calls.push(options)
+        if (options.method === 'POST') return reply(options, { file, version })
+        return reply(options, { file, latestVersion: version, versions: [version], relations: [], derivation: [] }, { etag: '"pws_file:1"' })
+      } }
+      const workspace = usePersonalWorkspace({ api, identityEpoch: ref('image-test-owner') })
+      try {
+        await workspace.upload(browserFile(`original.${extension}`, mime), '测试图片')
+        assert.equal(calls[0].method, 'POST')
+        const uploaded = calls[0].data.get('file')
+        assert.equal(uploaded.type, mime)
+        assert.equal(await uploaded.text(), 'hello')
+      } finally { workspace.dispose() }
+    })
+  }
+})

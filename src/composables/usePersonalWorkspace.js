@@ -6,6 +6,7 @@ import { registerIdentityCleanup } from '../utils/identityLifecycle.js'
 
 export const PERSONAL_WORKSPACE_MIME_TYPES = Object.freeze([
   'image/png', 'image/jpeg', 'image/webp', 'image/gif',
+  'image/bmp', 'image/tiff', 'image/heic', 'image/heif', 'image/avif',
   'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/mp4', 'audio/webm',
   'text/plain', 'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -15,7 +16,8 @@ export const PERSONAL_WORKSPACE_MIME_TYPES = Object.freeze([
 
 const ALLOWED_MIME_TYPES = new Set(PERSONAL_WORKSPACE_MIME_TYPES)
 const EXTENSION_MIME = Object.freeze({
-  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif',
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', jpe: 'image/jpeg', jfif: 'image/jpeg', webp: 'image/webp', gif: 'image/gif',
+  bmp: 'image/bmp', tif: 'image/tiff', tiff: 'image/tiff', heic: 'image/heic', heif: 'image/heif', avif: 'image/avif',
   mp3: 'audio/mpeg', ogg: 'audio/ogg', oga: 'audio/ogg', wav: 'audio/wav',
   m4a: 'audio/mp4', mp4: 'audio/mp4', webm: 'audio/webm', txt: 'text/plain', pdf: 'application/pdf',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -30,7 +32,10 @@ const TEXT = (value, maximum) => typeof value === 'string' && value.length > 0 &
 const abortError = message => new DOMException(message, 'AbortError')
 const valueOf = value => typeof value === 'function' ? value() : unref(value)
 
-const normalizeMime = value => typeof value === 'string' ? value.split(';', 1)[0].trim().toLowerCase() : ''
+const normalizeMime = value => {
+  const mime = typeof value === 'string' ? value.split(';', 1)[0].trim().toLowerCase() : ''
+  return ({ 'image/jpg': 'image/jpeg', 'image/pjpeg': 'image/jpeg', 'image/x-png': 'image/png', 'image/x-ms-bmp': 'image/bmp', 'image/x-tiff': 'image/tiff' })[mime] || mime
+}
 const extensionFor = filename => {
   const match = typeof filename === 'string' ? /\.([^.]+)$/.exec(filename.trim()) : null
   return match ? match[1].toLowerCase() : ''
@@ -41,7 +46,10 @@ const inferredMime = file => {
   // An explicit video/active-content type must not be relabelled as audio by its extension.
   return !declared || declared === 'application/octet-stream' ? EXTENSION_MIME[extensionFor(file?.name)] || '' : ''
 }
-const fileNameMatchesMime = (name, mime) => EXTENSION_MIME[extensionFor(name)] === mime
+const fileNameMatchesMime = (name, mime) => {
+  const expected = EXTENSION_MIME[extensionFor(name)]
+  return expected === mime || (['image/heic', 'image/heif'].includes(expected) && ['image/heic', 'image/heif'].includes(mime))
+}
 
 const safeDownloadFilename = value => {
   const cleaned = String(value || 'workspace-file').replace(/[\\/:*?"<>|\p{Cc}]/gu, '_').replace(/^\.+/, '').trim()
