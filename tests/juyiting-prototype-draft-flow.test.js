@@ -17,6 +17,7 @@ const loadMaterialPicker = deps => {
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_line, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]@\/composables\/usePersonalWorkspace['"];?\s*$/gm, 'var { usePersonalWorkspace, savePersonalWorkspaceBlob } = deps')
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"][^'"]*materialVersion\.js['"];?\s*$/gm, 'var { validMaterialVersion } = deps')
+    .replace(/^import\s+PdfDocumentPreview\s+from\s+['"][^'"]+['"];?\s*$/gm, "var PdfDocumentPreview = { name: 'PdfDocumentPreview', template: '<section class=\"pdf-preview-test-slot\" />', props: ['blob'] }")
     .replace('export default', 'return')
   return new Function('Vue', 'deps', code)(Vue, { ...deps, validMaterialVersion })
 }
@@ -32,6 +33,7 @@ const load = () => {
     .replace(/^import\s+HallPrivateMark\s+from\s+['"]\.\/HallPrivateMark\.vue['"];?\s*$/gm, "var HallPrivateMark = { name: 'HallPrivateMark', template: '<i />' }")
     .replace(/^import\s+\{\s*deliveryTypeText\s*\}\s+from\s+['"]@\/utils\/executionFormats['"];?\s*$/gm, 'var { deliveryTypeText } = deps')
     .replace(/^import\s+\{\s*validMaterialVersion\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { validMaterialVersion } = deps')
+    .replace(/^import\s+PdfDocumentPreview\s+from\s+['"][^'"]+['"];?\s*$/gm, "var PdfDocumentPreview = { name: 'PdfDocumentPreview', template: '<section class=\"pdf-preview-test-slot\" />', props: ['blob'] }")
     .replace('export default', 'return')
   const dependencies = deps()
   return new Function('Vue', 'deps', script)(Vue, { ...dependencies, deliveryTypeText, validMaterialVersion, HallMaterialPicker: loadMaterialPicker(dependencies) })
