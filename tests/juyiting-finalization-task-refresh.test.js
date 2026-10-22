@@ -26,16 +26,21 @@ describe('submission does not complete the root; explicit review owns completion
     const Component = new Function('Vue', 'deps', script)(Vue, { ...discussionContract, bountyDeliberationPresentation, ChatPanel: Chat,
       BountyExecutionOutputs: Gallery, TaskSkillCapabilities: noRender, BountyDeliberationStatus: noRender, BountyExecutionTermination: noRender })
     const task = { id: 'task-1', status: 'reviewing', taskVersion: '7' }
-    const wrapper = mount(Component, { props: { selectedTask: task, reviewContext: { currentDelivery: { allowedActions: ['VIEW', 'ACCEPT'] } }, mentionLabel: () => '', senderText: () => '' } })
+    const wrapper = mount(Component, { props: { deliberationV2Enabled: true, selectedTask: task, reviewContext: { currentDelivery: { allowedActions: ['VIEW', 'ACCEPT'] } }, mentionLabel: () => '', senderText: () => '' } })
     try {
       await wrapper.get('.old-submission').trigger('click'); expect(wrapper.emitted('task-completed')).to.equal(undefined)
-      expect(wrapper.findAll('[aria-label="查看并验收"]')).to.have.length(1)
-      expect(wrapper.get('.messages').find('[aria-label="查看并验收"]').exists()).to.equal(false)
-      await wrapper.get('[aria-label="查看并验收"]').trigger('click'); expect(wrapper.emitted('review-delivery')).to.deep.equal([[]])
+      expect(wrapper.findAll('[aria-label="统一验收"]')).to.have.length(1)
+      expect(wrapper.get('.messages').find('[aria-label="统一验收"]').exists()).to.equal(false)
+      await wrapper.get('[aria-label="统一验收"]').trigger('click'); expect(wrapper.emitted('review-delivery')).to.deep.equal([[]])
       expect(task.status).to.equal('reviewing'); await wrapper.setProps({ voice: { voiceInteractionLocked: true } })
-      expect(wrapper.get('[aria-label="查看并验收"]').attributes('disabled')).to.equal('')
+      expect(wrapper.get('[aria-label="统一验收"]').attributes('disabled')).to.equal('')
       await wrapper.setProps({ reviewContext: { currentDelivery: { allowedActions: ['VIEW'] } } })
-      expect(wrapper.find('[aria-label="查看并验收"]').exists()).to.equal(false)
+      expect(wrapper.find('[aria-label="统一验收"]').exists()).to.equal(true)
+      await wrapper.setProps({ reviewContext: null, voice: null })
+      expect(wrapper.find('[aria-label="统一验收"]').exists()).to.equal(true)
+      expect(wrapper.find('[aria-label="统一验收"] svg').exists()).to.equal(true)
+      await wrapper.setProps({ selectedTask: { ...task, status: 'completed' } })
+      expect(wrapper.find('[aria-label="统一验收"]').exists()).to.equal(false)
     } finally { wrapper.unmount() }
   })
   it('the actual page guards root refresh by a scoped COMMITTED ACCEPT, not a gallery/submission receipt', () => {
