@@ -71,6 +71,7 @@
     "dompurify": "^3.2.6",
     "marked": "^16.0.0",
     "melonjs": "^15.7.0",
+    "pdfjs-dist": "6.4.299",
     "pinia": "^2.1.7",
     "qrcode": "^1.5.4",
     "saxes": "^6.0.0",

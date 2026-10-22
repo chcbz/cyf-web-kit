@@ -117,3 +117,21 @@ describe('workspace general multimedia compatibility (no Provider)', () => {
     } finally { workspace.dispose() }
   })
 })
+
+describe('workspace original PDF preview', () => {
+  it('keeps PDF bytes as a Blob, never requests page-text, and clears them on identity switch', async () => {
+    const epoch = ref('owner-a'), calls = [], pdf = new Blob(['%PDF-original'], { type: 'application/pdf' })
+    const workspace = usePersonalWorkspace({ identityEpoch: epoch, urlApi: { createObjectURL: () => { throw new Error('PDF must not create image URL') } }, api: { execute: async options => {
+      calls.push(options.url)
+      if (options.url.endsWith('/preview')) return { state: 'READY', parts: [{ partId: 'content', contentMimeType: 'application/pdf' }], partial: false }
+      if (options.url.endsWith('/parts/content')) return pdf
+      return detail('file.pdf', 'application/pdf')
+    } } })
+    try {
+      await workspace.select('file-a'); const preview = await workspace.previewVersion('1')
+      assert.equal(preview.kind, 'pdf'); assert.equal(await preview.blob.text(), '%PDF-original')
+      assert.equal(calls.some(url => url.includes('page-')), false)
+      epoch.value = 'owner-b'; assert.equal(workspace.preview.value.kind, 'none')
+    } finally { workspace.dispose() }
+  })
+})

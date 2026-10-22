@@ -17,11 +17,12 @@ describe('Formal raster image preview size policy', () => {
       assert.equal(policy({ mimeType: 'image/png', byteLength }), 'none')
     }
   })
-  it('keeps small text and PDF limits and structured Office preview unchanged', () => {
-    for (const mimeType of ['text/plain', 'application/pdf']) {
+  it('keeps the small text limit, allows original PDF, and retains Office previews', () => {
+    for (const mimeType of ['text/plain']) {
       assert.notEqual(policy({ mimeType, byteLength: 1024 * 1024 }), 'none')
       assert.equal(policy({ mimeType, byteLength: 1024 * 1024 + 1 }), 'none')
     }
+    assert.equal(policy({ mimeType: 'application/pdf', byteLength: 1429926 }), 'pdf')
     assert.equal(policy({ mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', byteLength: 1429926 }), 'text')
   })
   it('does not enable SVG or unknown formats as raster images', () => {

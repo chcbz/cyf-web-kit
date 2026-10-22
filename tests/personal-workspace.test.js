@@ -83,11 +83,11 @@ describe('personal workspace browser adapter', () => {
     workspace.dispose()
   })
 
-  it('keeps the old single content text preview for PDF compatibility', async () => {
+  it('keeps partial Office text previews', async () => {
     const api = { execute: async options => {
       if (options.url.endsWith('/preview')) return ({ state: 'READY', parts: [{ partId: 'content', contentMimeType: 'text/plain' }], partial: true, reason: '文本已截断' })
       if (options.url.endsWith('/preview/parts/content')) return (new Blob(['第一页标题'], { type: 'text/plain' }))
-      return reply(options, { file: fileView({ mediaFamily: 'PDF' }), latestVersion: versionView({ contentMimeType: 'application/pdf', originalFilename: 'legacy.pdf' }), versions: [versionView({ contentMimeType: 'application/pdf', originalFilename: 'legacy.pdf' })], relations: [], derivation: [] }, { etag: '"pws_file:1"' })
+      return reply(options, { file: fileView({ mediaFamily: 'DOCUMENT' }), latestVersion: versionView({ contentMimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', originalFilename: 'legacy.pdf' }), versions: [versionView({ contentMimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', originalFilename: 'legacy.pdf' })], relations: [], derivation: [] }, { etag: '"pws_file:1"' })
     } }
     const workspace = usePersonalWorkspace({ api, identityEpoch: ref('owner-a') })
     await workspace.select('pws_file')
@@ -96,26 +96,6 @@ describe('personal workspace browser adapter', () => {
     assert.equal(workspace.preview.value.kind, 'text')
     assert.equal(workspace.preview.value.text, '第一页标题')
     assert.match(workspace.preview.value.message, /截断/)
-    workspace.dispose()
-  })
-})
-
-describe('1.13.1 workspace PDF preview parts', () => {
-  it('navigates server-declared PAGED_TEXT pages without treating a PNG fixture as a PDF contract', async () => {
-    const api = { execute: async options => {
-      if (options.url.endsWith('/preview')) return ({ state: 'READY', parts: [{ partId: 'page-1', contentMimeType: 'text/plain' }, { partId: 'page-2', contentMimeType: 'text/plain' }, { partId: 'content', contentMimeType: 'text/plain' }], partial: false })
-      if (options.url.endsWith('/preview/parts/page-1')) return (new Blob(['第一页'], { type: 'text/plain' }))
-      if (options.url.endsWith('/preview/parts/page-2')) return (new Blob(['第二页'], { type: 'text/plain' }))
-      return reply(options, { file: fileView({ mediaFamily: 'PDF' }), latestVersion: versionView({ contentMimeType: 'application/pdf', originalFilename: 'pages.pdf' }), versions: [versionView({ contentMimeType: 'application/pdf', originalFilename: 'pages.pdf' })], relations: [], derivation: [] }, { etag: '"pws_file:1"' })
-    } }
-    const workspace = usePersonalWorkspace({ api, identityEpoch: ref('owner-a') })
-    await workspace.select('pws_file')
-    await workspace.previewVersion('1')
-    assert.equal(workspace.preview.value.kind, 'parts')
-    assert.equal(workspace.preview.value.parts.length, 2)
-    assert.equal(workspace.preview.value.parts[0].text, '第一页')
-    workspace.selectPreviewPart(1)
-    assert.equal(workspace.preview.value.parts[1].text, '第二页')
     workspace.dispose()
   })
 })

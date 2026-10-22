@@ -66,7 +66,7 @@ const errorMessage = error => {
   return error?.message || '工作空间请求未完成，请刷新确认。'
 }
 const previewPartMimeTypes = new Set(PERSONAL_WORKSPACE_MIME_TYPES.filter(mime =>
-  mime === 'text/plain' || mime.startsWith('image/') || mime.startsWith('audio/')))
+  mime === 'text/plain' || mime === 'application/pdf' || mime.startsWith('image/') || mime.startsWith('audio/')))
 const validPreviewPart = part => part && typeof part === 'object' && !Array.isArray(part) &&
   Object.keys(part).every(key => ['partId', 'contentMimeType'].includes(key)) && ID(part.partId) && previewPartMimeTypes.has(normalizeMime(part.contentMimeType))
 const validPreviewView = value => {
@@ -515,13 +515,22 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
         actionState.value = 'ready'
         return preview.value
       }
+      const source = detail.value?.versions?.find(item => String(item.version) === String(version))
+      if (source?.contentMimeType === 'application/pdf' &&
+          (data.parts.length !== 1 || data.parts[0].partId !== 'content' || data.parts[0].contentMimeType !== 'application/pdf')) {
+        throw new Error('PDF 原文件预览类型无效，请下载原文件查看。')
+      }
       const rendered = []
       for (const part of displayPreviewParts(data)) {
         const content = await readBlob(file.fileId, version, `preview/parts/${encodeURIComponent(part.partId)}`)
         requireCurrent()
         const mime = normalizeMime(part.contentMimeType)
         if (normalizeMime(content.blob.type) !== mime) throw new Error('预览分片类型无效，请下载原文件查看。')
-        if (mime === 'text/plain') {
+        if (mime === 'application/pdf') {
+          // Keep authenticated original bytes local; never request server text extraction.
+          rendered.push({ partId: part.partId, contentMimeType: mime, kind: 'pdf', blob: content.blob, text: '', url: '' })
+        }
+        else if (mime === 'text/plain') {
           const text = await content.blob.text()
           requireCurrent()
           rendered.push({ partId: part.partId, contentMimeType: mime, kind: 'text', text, url: '' })
@@ -536,9 +545,11 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
       const note = data.partial ? (data.reason || '预览内容不完整；请下载原文件查看。') : ''
       if (rendered.length === 1) {
         const first = rendered[0]
-        preview.value = first.kind === 'text'
-          ? { kind: 'text', text: first.text, message: note, parts: rendered, selectedIndex: 0 }
-          : { kind: first.kind, url: first.url, message: note, parts: rendered, selectedIndex: 0 }
+        preview.value = first.kind === 'pdf'
+          ? { kind: 'pdf', blob: first.blob, message: note, parts: rendered, selectedIndex: 0 }
+          : first.kind === 'text'
+            ? { kind: 'text', text: first.text, message: note, parts: rendered, selectedIndex: 0 }
+            : { kind: first.kind, url: first.url, message: note, parts: rendered, selectedIndex: 0 }
       } else preview.value = { kind: 'parts', parts: rendered, selectedIndex: 0, message: note }
       actionState.value = 'ready'
       return preview.value

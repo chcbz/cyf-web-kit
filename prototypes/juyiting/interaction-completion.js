@@ -694,7 +694,7 @@ function renderTaskSkills(panel){
 }
 function pdfPreview(a){
  const n=state.pdfPages?.[a.id]||1;
- return `<div class="pdf-document" data-pdf-id="${esc(a.id)}"><article class="pdf-text-page" aria-label="PDF第${n}页"><h4>Observation Guide — Page ${n}</h4><p>${esc(a.parts[n-1])}</p><small>Offline prototype fixture. No production content.</small></article><div class="pdf-pagination" role="group" aria-label="PDF分页">${button('上一页','complete-pdf-page',`data-id="${esc(a.id)}" data-page="${n-1}" ${n===1?'disabled':''}`)}<span role="status">第 ${n} / ${a.pages} 页</span>${button('下一页','complete-pdf-page',`data-id="${esc(a.id)}" data-page="${n+1}" ${n===a.pages?'disabled':''}`)}</div><small>PDF分页 · 离线文本分片示例；可下载原PDF，不模拟任意PDF解析。</small></div>`;
+ return `<div class="pdf-document" data-pdf-id="${esc(a.id)}"><article class="pdf-text-page" aria-label="PDF第${n}页"><h4>Observation Guide — Page ${n}</h4><p>${esc(a.parts[n-1])}</p><small>Offline prototype fixture. No production content.</small></article><div class="pdf-pagination" role="group" aria-label="PDF分页">${button('上一页','complete-pdf-page',`data-id="${esc(a.id)}" data-page="${n-1}" ${n===1?'disabled':''}`)}<span role="status">第 ${n} / ${a.pages} 页</span>${button('下一页','complete-pdf-page',`data-id="${esc(a.id)}" data-page="${n+1}" ${n===a.pages?'disabled':''}`)}</div><small>PDF分页 · 浏览器本地查看目标；正文读取交给Agent的PDF技能。此处为离线页面示例，不代表真实解析。</small></div>`;
 }
 async function saveFileVersion(buttonElement){
  const input=$('[data-file-new-version]'),f=input?.files?.[0],fileId=state.fileId||'ref-brief';if(!f)return;
