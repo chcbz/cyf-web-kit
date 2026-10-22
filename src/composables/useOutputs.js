@@ -9,8 +9,7 @@ const imageMimeTypes = new Set(['image/png', 'image/jpeg'])
 const pdfMimeTypes = new Set(['application/pdf'])
 const documentPreviewMimeTypes = new Set([
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 ])
 const TEXT_PREVIEW_MIME = 'text/plain'
 const previewPartMimeTypes = new Set([TEXT_PREVIEW_MIME, 'image/png', 'application/pdf'])
@@ -79,7 +78,7 @@ const conversationDeliverable = value => {
 // Task deliverable metadata may include a known representation label; private workspace
 // PreviewView intentionally omits it. Both forms carry only server-authorized part IDs
 // and MIME types, and the label never infers a part URL.
-const PREVIEW_REPRESENTATIONS = new Set(['EXTRACTED_TEXT', 'PAGED_IMAGE', 'SHEET_TEXT', 'ORIGINAL_PDF'])
+const PREVIEW_REPRESENTATIONS = new Set(['EXTRACTED_TEXT', 'SHEET_TEXT', 'ORIGINAL_PDF'])
 const validPreviewView = value => {
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
     !Object.keys(value).every(key => ['state', 'representation', 'parts', 'partial', 'reason'].includes(key)) ||
@@ -92,8 +91,8 @@ const validPreviewView = value => {
     new Set(value.parts.map(part => part.partId)).size !== value.parts.length) return false
   return true
 }
-// PPT/XLSX rich previews append the legacy content/text fallback after named
-// slide/page/sheet parts. Never turn that fallback into another navigation item.
+// XLSX rich previews append the legacy content/text fallback after named
+// sheet parts. Never turn that fallback into another navigation item.
 const displayPreviewParts = preview => preview.parts.some(part => part.partId !== 'content')
   ? preview.parts.filter(part => part.partId !== 'content')
   : preview.parts

@@ -27,3 +27,5 @@ assert.match(source, /if \(item\.byteLength > 1024 \* 1024\) return 'none'/)
 assert.doesNotMatch(source, /storageUri/)
 
 console.log('Output multi-part preview static contract passed')
+
+assert.doesNotMatch(source, /presentationml\.presentation|PAGED_IMAGE/)

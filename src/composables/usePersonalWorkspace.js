@@ -10,8 +10,7 @@ export const PERSONAL_WORKSPACE_MIME_TYPES = Object.freeze([
   'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/mp4', 'audio/webm',
   'text/plain', 'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 ])
 
 // Upload accepts any syntactically valid MIME; the preview list is not an upload gate.
@@ -498,6 +497,12 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
   const previewVersion = async (version = detail.value?.latestVersion?.version) => {
     const file = detail.value?.file
     if (!validFileView(file) || !VERSION(version)) { revokePreview(); error.value = '文件版本无效。'; preview.value = { kind: 'error', message: error.value }; return null }
+    const selectedVersion = detail.value?.versions?.find(item => String(item.version) === String(version))
+    if (['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/vnd.ms-powerpoint'].includes(selectedVersion?.contentMimeType)) {
+      revokePreview(); actionState.value = 'ready'; error.value = ''
+      preview.value = { kind: 'unsupported', message: 'PPT 文件不支持在线预览，请下载原文件查看。' }
+      return preview.value
+    }
     const snapshot = { generation, epoch: currentEpoch.value }
     revokePreview(); actionState.value = 'loading-preview'; error.value = ''
     const previewRequest = previewGeneration

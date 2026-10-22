@@ -25,6 +25,11 @@ describe('Formal raster image preview size policy', () => {
     assert.equal(policy({ mimeType: 'application/pdf', byteLength: 1429926 }), 'pdf')
     assert.equal(policy({ mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', byteLength: 1429926 }), 'text')
   })
+  it('does not preview PowerPoint files even when server metadata advertises preview', () => {
+    for (const mimeType of ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/vnd.ms-powerpoint']) {
+      assert.equal(policy({ mimeType, byteLength: 1024, canPreview: true }), 'none')
+    }
+  })
   it('does not enable SVG or unknown formats as raster images', () => {
     for (const mimeType of ['image/svg+xml', 'application/octet-stream']) assert.equal(policy({ mimeType, byteLength: 1429926 }), 'none')
   })

@@ -101,36 +101,31 @@ describe('personal workspace browser adapter', () => {
 })
 
 describe('1.13.1 workspace multi-part previews', () => {
-  it('navigates declared PPT page parts', async () => {
+  it('keeps PPT downloadable without requesting preview metadata or slide images', async () => {
     const calls = []
+    const version = versionView({ contentMimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', originalFilename: 'deck.pptx' })
     const api = { execute: async options => {
-      calls.push(options)
-      if (options.url.endsWith('/preview')) return ({ state: 'READY', parts: [{ partId: 'slide-1', contentMimeType: 'image/png' }, { partId: 'slide-2', contentMimeType: 'image/png' }, { partId: 'content', contentMimeType: 'text/plain' }], partial: false })
-      if (options.url.endsWith('/preview/parts/slide-1') || options.url.endsWith('/preview/parts/slide-2')) return (new Blob(['png'], { type: 'image/png' }))
-      return reply(options, { file: fileView({ mediaFamily: 'PRESENTATION' }), latestVersion: versionView({ contentMimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', originalFilename: 'deck.pptx' }), versions: [versionView({ contentMimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', originalFilename: 'deck.pptx' })], relations: [], derivation: [] }, { etag: '"pws_file:1"' })
+      calls.push(options.url)
+      if (options.url.endsWith('/content')) return new Blob(['original pptx'], { type: version.contentMimeType })
+      return reply(options, { file: fileView({ mediaFamily: 'PRESENTATION' }), latestVersion: version, versions: [version], relations: [], derivation: [] }, { etag: '"pws_file:1"' })
     } }
-    const workspace = usePersonalWorkspace({ api, identityEpoch: ref('owner-a'), urlApi: { createObjectURL: (_, index = calls.length) => `blob:page-${index}`, revokeObjectURL: () => {} } })
+    const workspace = usePersonalWorkspace({ api, identityEpoch: ref('owner-a') })
     await workspace.select('pws_file')
     await workspace.previewVersion('1')
-    assert.equal(workspace.preview.value.kind, 'parts')
-    assert.equal(workspace.preview.value.parts.length, 2)
-    assert.equal(workspace.selectPreviewPart(1), true)
-    assert.equal(workspace.preview.value.selectedIndex, 1)
-    assert.equal(calls.find(call => call.url.endsWith('/preview'))?.params?.view, 'parts')
-    assert.deepEqual(calls.filter(call => call.url.includes('/preview/parts/')).map(call => call.url), [
-      '/personal-workspace/files/pws_file/versions/1/preview/parts/slide-1',
-      '/personal-workspace/files/pws_file/versions/1/preview/parts/slide-2'
-    ])
+    assert.equal(workspace.preview.value.kind, 'unsupported')
+    assert.match(workspace.preview.value.message, /下载原文件/)
+    assert.equal(calls.some(url => url.includes('/preview')), false)
+    await workspace.download('1')
+    assert.ok(calls.some(url => url.endsWith('/content')))
     workspace.dispose()
   })
-
   it('revokes URLs created before a later preview part fails', async () => {
     const revoked = []
     const api = { execute: async options => {
       if (options.url.endsWith('/preview')) return ({ state: 'READY', parts: [{ partId: 'page-1', contentMimeType: 'image/png' }, { partId: 'page-2', contentMimeType: 'image/png' }, { partId: 'content', contentMimeType: 'text/plain' }], partial: false })
       if (options.url.endsWith('/preview/parts/page-1')) return (new Blob(['png'], { type: 'image/png' }))
       if (options.url.endsWith('/preview/parts/page-2')) throw new Error('second part failed')
-      return reply(options, { file: fileView({ mediaFamily: 'PRESENTATION' }), latestVersion: versionView({ contentMimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', originalFilename: 'deck.pptx' }), versions: [versionView({ contentMimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', originalFilename: 'deck.pptx' })], relations: [], derivation: [] }, { etag: '"pws_file:1"' })
+      return reply(options, { file: fileView({ mediaFamily: 'IMAGE' }), latestVersion: versionView({ contentMimeType: 'image/png', originalFilename: 'image.png' }), versions: [versionView({ contentMimeType: 'image/png', originalFilename: 'image.png' })], relations: [], derivation: [] }, { etag: '"pws_file:1"' })
     } }
     const workspace = usePersonalWorkspace({ api, identityEpoch: ref('owner-a'), urlApi: { createObjectURL: () => 'blob:page-1', revokeObjectURL: url => revoked.push(url) } })
     await workspace.select('pws_file')
