@@ -643,7 +643,7 @@
             :inert="renderedPanel !== 'chat' ? '' : null"
             :aria-hidden="renderedPanel !== 'chat' ? 'true' : null"
             :active-request="activeRequest"
-            :request-catalog="bountyRequestCatalog.entries"
+            :request-catalog="bountyRequestCatalog.entries.value"
             :active-turns="activeTurns"
             :capability-state="capabilityState"
             :deliberation-v2-enabled="multimediaDeliberationUiEnabled"

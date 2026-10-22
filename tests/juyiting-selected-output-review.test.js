@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { expect } from 'chai'
 import { ref } from 'vue'
 import { flushPromises } from '@vue/test-utils'
@@ -81,5 +82,12 @@ describe('selected existing outputs unified acceptance', () => {
     const b = { items: [{ displayRole: 'RESULT', contentHash: text.sha256, source: { kind: 'COMPLETED_MESSAGE', requestId: text.requestId, messageSource } }] }
     expect(batchMatchesSelection(b, [selectedOutput(text)])).to.equal(true)
     expect(batchMatchesSelection(b, [{ ...selectedOutput(text), messageSource: { ...messageSource, messageId: '2' } }])).to.equal(false)
+  })
+})
+
+describe('production shell historical catalog binding', () => {
+  it('passes the complete catalog array rather than a nested ref object', () => {
+    const source = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+    expect(source).to.include(':request-catalog="bountyRequestCatalog.entries.value"')
   })
 })
