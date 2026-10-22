@@ -5079,8 +5079,5 @@ button.hall-room {
   .home-overview .panel-overlay.theme-workbench.is-agent-overlay .panel-title { padding: 4px 12px; }
   .home-overview .panel-overlay.theme-workbench.is-agent-overlay .panel-title > span { display: block; }
 }
-</style>
-
-<style scoped>
 .selected-output-preview img{display:block;max-width:100%;max-height:280px;object-fit:contain}.selected-output-preview pre{white-space:pre-wrap;overflow-wrap:anywhere}.selected-output-preview audio{max-width:100%}
 </style>

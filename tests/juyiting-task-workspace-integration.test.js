@@ -1,3 +1,5 @@
+import { useHallSelectedOutputReview } from '../src/composables/juyiting/useHallSelectedOutputReview.js'
+import { selectionKey } from '../src/composables/juyiting/hallSelectedOutputs.js'
 import { assignedTaskTarget } from '../src/composables/juyiting/hallAssigneeCandidates.js'
 import { useExternalServicePolicy } from '../src/composables/juyiting/useExternalServicePolicy.js'
 import { useHallDeliveryReview } from '../src/composables/juyiting/useHallDeliveryReview.js'
@@ -66,7 +68,7 @@ const loadActualHallForIntegration = (mocks, id) => {
     .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = mocks.${name}`)
     .replace(/import\.meta\.env/g, 'mocks.env')
     .replace('export default', 'return')
-  return new Function('Vue', 'mocks', body)(Vue, { useHallDeliveryReview, useHallAgentProfileCapabilities, useExternalServicePolicy, assignedTaskTarget, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
+  return new Function('Vue', 'mocks', body)(Vue, { useHallSelectedOutputReview, selectionKey, useHallDeliveryReview, useHallAgentProfileCapabilities, useExternalServicePolicy, assignedTaskTarget, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
 }
 
 const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, workspaceState = null, counters }) => {
