@@ -9,8 +9,11 @@ import { spawnSync } from 'node:child_process'
 
 export const PINS = Object.freeze({
   node: {
-    urls: ['https://nodejs.org/dist/v20.20.2/node-v20.20.2-linux-x64.tar.xz'],
-    sha256: 'df770b2a6f130ed8627c9782c988fda9669fa23898329a61a871e32f965e007d',
+    urls: [
+      'https://mirrors.aliyun.com/nodejs-release/v24.22.1/node-v24.22.1-linux-x64.tar.xz',
+      'https://nodejs.org/dist/v24.22.1/node-v24.22.1-linux-x64.tar.xz',
+    ],
+    sha256: '6c172a9ab6718f7b801fb5a7bd486af2ee5e32758086a04b84fcce2aa77095e6',
   },
   chrome: {
     urls: [
@@ -189,10 +192,10 @@ export async function prepareRuntime({ repo, env, log = console.log }) {
   // its system Python 3.6 can still run the existing renderer unchanged.
   await extractApprovedWebp(archives.webp, webp)
   if (await hashFile(webp) !== WEBP_LIBRARY_SHA256) throw new Error('extracted WebP SHA-256 mismatch')
-  const node = join(work, 'node-v20.20.2-linux-x64', 'bin', 'node')
+  const node = join(work, 'node-v24.22.1-linux-x64', 'bin', 'node')
   const childEnv = { ...env, PATH: `${dirname(node)}:${env.PATH || '/usr/bin:/bin'}`, E13_WEBP_LIBRARY: webp }
   const version = runChecked(node, ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], env: childEnv })
-  if (version !== 'v20.20.2') throw new Error(`unexpected pinned Node version: ${version}`)
+  if (version !== 'v24.22.1') throw new Error(`unexpected pinned Node version: ${version}`)
   const wrapper = CHROME_LAUNCHER_PATH
   await mkdir(dirname(wrapper), { recursive: true })
   await writeFile(wrapper, chromeWrapperSource(binary), { mode: 0o755 })

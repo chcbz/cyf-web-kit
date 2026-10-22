@@ -23,7 +23,7 @@ Preparation runs only for `CI=1/true/yes`, a nonempty `PIPELINE_ID`, or explicit
 `CYF_CI_BOOTSTRAP=1`. The supported CI worker is Alinux3 Linux x64 with root.
 
 CI installs signed distribution dependencies, SHA-verifies the pinned Node
-20.20.2 / Chrome 133.0.6943.141 / WebP 1.2 RPM downloads, and extracts into a
+24.22.1 / Chrome 133.0.6943.141 / WebP 1.2 RPM downloads, and extracts into a
 fresh directory under the worker temporary directory (outside the Flow cache).
 Only pinned archives and signed DNF data stay in `.cache/cyf-test-runtime`.
 Restored legacy `run-XXXXXX` directories are removed only on this job's isolated
