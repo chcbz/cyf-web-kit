@@ -14,7 +14,8 @@ export const PERSONAL_WORKSPACE_MIME_TYPES = Object.freeze([
   'application/vnd.openxmlformats-officedocument.presentationml.presentation'
 ])
 
-const ALLOWED_MIME_TYPES = new Set(PERSONAL_WORKSPACE_MIME_TYPES)
+// Upload accepts any syntactically valid MIME; the preview list is not an upload gate.
+const validMime = value => typeof value === 'string' && /^[a-z0-9][a-z0-9!#$&^_.+-]{0,63}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,63}$/.test(value)
 const EXTENSION_MIME = Object.freeze({
   png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', jpe: 'image/jpeg', jfif: 'image/jpeg', webp: 'image/webp', gif: 'image/gif',
   bmp: 'image/bmp', tif: 'image/tiff', tiff: 'image/tiff', heic: 'image/heic', heif: 'image/heif', avif: 'image/avif',
@@ -42,13 +43,8 @@ const extensionFor = filename => {
 }
 const inferredMime = file => {
   const declared = normalizeMime(file?.type)
-  if (ALLOWED_MIME_TYPES.has(declared)) return declared
-  // An explicit video/active-content type must not be relabelled as audio by its extension.
-  return !declared || declared === 'application/octet-stream' ? EXTENSION_MIME[extensionFor(file?.name)] || '' : ''
-}
-const fileNameMatchesMime = (name, mime) => {
-  const expected = EXTENSION_MIME[extensionFor(name)]
-  return expected === mime || (['image/heic', 'image/heif'].includes(expected) && ['image/heic', 'image/heif'].includes(mime))
+  if (declared && declared !== 'application/octet-stream') return declared
+  return EXTENSION_MIME[extensionFor(file?.name)] || 'application/octet-stream'
 }
 
 const safeDownloadFilename = value => {
@@ -58,7 +54,7 @@ const safeDownloadFilename = value => {
 const errorMessage = error => {
   if (error?.name === 'AbortError') return ''
   if ([401, 403, 404].includes(error?.status)) return '当前身份或文件已不可访问，请刷新后重试。'
-  if (error?.code === 'FILE_TYPE_UNSUPPORTED' || error?.status === 415) return '此格式暂不支持，请选择工作空间支持的图片、音频、文本或办公文档。'
+  if (error?.code === 'FILE_TYPE_UNSUPPORTED' || error?.status === 415) return '文件可保存，但当前操作暂不支持此格式。'
   if (error?.code === 'METADATA_CHANGED' || error?.status === 412) return '文件或关联情况已变化，请查看更新后的信息再确认。'
   if (error?.code === 'FILE_VERSION_CONFLICT' || error?.status === 409) return '文件版本已变化，请刷新后明确选择要追加的版本。'
   if (error?.code === 'OPERATION_PROCESSING' || error?.status === 202) return '上一次操作仍在处理中，请点击“重试原操作”核对结果，不要重复新建。'
@@ -87,7 +83,7 @@ const validFileView = value => value && typeof value === 'object' && ID(value.fi
   (value.originKind == null || ['USER_UPLOAD', 'AGENT_DELIVERY'].includes(value.originKind)) &&
   ['ACTIVE', 'TRASHED'].includes(value.state) && VERSION(value.latestVersion) && DECIMAL(value.metadataRevision) && BigInt(value.metadataRevision) >= 1n
 const validVersion = value => value && typeof value === 'object' && ID(value.fileId) && VERSION(value.version) &&
-  TEXT(value.originalFilename, 255) && ALLOWED_MIME_TYPES.has(normalizeMime(value.contentMimeType)) &&
+  TEXT(value.originalFilename, 255) && validMime(normalizeMime(value.contentMimeType)) &&
   DECIMAL(value.byteLength)
 
 /**
@@ -322,7 +318,8 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
   const normalizedFile = candidate => {
     if (!validFile(candidate)) throw new Error('请选择一个有效文件。')
     const mime = inferredMime(candidate)
-    if (!mime || !fileNameMatchesMime(candidate.name, mime)) throw new Error('文件扩展名或格式不受支持。')
+    if (!validMime(mime)) throw new Error('文件类型信息无效。')
+    if (/[\\/]/.test(candidate.name) || ['.', '..'].includes(candidate.name)) throw new Error('文件名无效。')
     if (typeof File === 'function' && normalizeMime(candidate.type) !== mime) {
       return { file: new File([candidate], candidate.name, { type: mime, lastModified: candidate.lastModified || Date.now() }), mime }
     }
