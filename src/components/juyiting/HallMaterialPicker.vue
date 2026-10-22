@@ -111,7 +111,7 @@
                   <button type="button" :disabled="materialPreview.selectedIndex >= materialPreview.parts.length - 1" @click="workspace.selectPreviewPart(materialPreview.selectedIndex + 1)">下一页</button>
                 </div>
                 <PdfDocumentPreview v-if="materialPreviewPart?.kind === 'pdf'" :blob="materialPreviewPart.blob" />
-                <img v-else-if="materialPreviewPart?.kind === 'image'" :src="materialPreviewPart.url" alt="资料预览" />
+            <img v-else-if="materialPreviewPart?.kind === 'image'" :src="materialPreviewPart.url" alt="资料预览" />
                 <audio v-else-if="materialPreviewPart?.kind === 'audio'" :src="materialPreviewPart.url" controls preload="none" aria-label="音频预览"></audio>
                 <pre v-else-if="materialPreviewPart?.kind === 'text'" v-text="materialPreviewPart.text"></pre>
                 <p v-if="materialPreview.message" role="status">{{ materialPreview.message }}</p>
