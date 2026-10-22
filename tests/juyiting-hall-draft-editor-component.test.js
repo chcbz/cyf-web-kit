@@ -17,6 +17,7 @@ const loadMaterialPicker = deps => {
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_line, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]@\/composables\/usePersonalWorkspace['"];?\s*$/gm, 'var { usePersonalWorkspace, savePersonalWorkspaceBlob } = deps')
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"][^'"]*materialVersion\.js['"];?\s*$/gm, 'var { validMaterialVersion } = deps')
+    .replace(/^import\s+PdfDocumentPreview\s+from\s+['"][^'"]+['"];?\s*$/gm, "var PdfDocumentPreview = { name: 'PdfDocumentPreview', template: '<section class=\"pdf-preview-test-slot\" />', props: ['blob'] }")
     .replace('export default', 'return')
   return new Function('Vue', 'deps', code)(Vue, { ...deps, validMaterialVersion })
 }
@@ -38,6 +39,7 @@ const loadEditor = (deps = editorDeps()) => {
     .replace(/^import\s+HallPrivateMark\s+from\s+['"]\.\/HallPrivateMark\.vue['"];?\s*$/gm, 'var HallPrivateMark = { name: \'HallPrivateMark\', props: [\'sourceRef\', \'resultRef\', \'identityScope\', \'identityEpoch\'], template: \'<section class="private-mark-test-slot" />\' }')
     .replace(/^import\s+\{\s*deliveryTypeText\s*\}\s+from\s+['"]@\/utils\/executionFormats['"];?\s*$/gm, 'var { deliveryTypeText } = deps')
     .replace(/^import\s+\{\s*validMaterialVersion\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { validMaterialVersion } = deps')
+    .replace(/^import\s+PdfDocumentPreview\s+from\s+['"][^'"]+['"];?\s*$/gm, "var PdfDocumentPreview = { name: 'PdfDocumentPreview', template: '<section class=\"pdf-preview-test-slot\" />', props: ['blob'] }")
     .replace('export default', 'return')
   return new Function('Vue', 'deps', script)(Vue, { ...deps, deliveryTypeText, validMaterialVersion, HallMaterialPicker: loadMaterialPicker(deps) })
 }
@@ -60,6 +62,7 @@ const editorDeps = () => {
   const created = []
   const loadedResults = []
   const workspaceCalls = []
+  const preview = Vue.ref(null)
   editorState = { draft, receipt, caseView, executionResults, resultsState, resultsError, created, loadedResults, workspaceCalls }
   return {
     useHallDrafts: () => ({
@@ -88,10 +91,10 @@ const editorDeps = () => {
       dispose: () => {}
     }),
     usePersonalWorkspace: () => ({ closeDetail: () => {}, hasMoreVersions: Vue.ref(false), versionsState: Vue.ref('idle'), versionsError: Vue.ref(''),
-      nextCursor: Vue.ref(null), preview: Vue.ref({ kind: 'none' }), loading: Vue.ref(false), error: Vue.ref(''), items: Vue.ref([]), listState: Vue.ref('empty'), detail: Vue.ref(null), preview: Vue.ref(null),
+      nextCursor: Vue.ref(null), loading: Vue.ref(false), error: Vue.ref(''), items: Vue.ref([]), listState: Vue.ref('empty'), detail: Vue.ref(null), preview,
       refresh: async () => true,
       select: async fileId => { workspaceCalls.push(['select', fileId]); return { file: { fileId } } },
-      previewVersion: async version => { workspaceCalls.push(['preview', version]); return true },
+      previewVersion: async version => { workspaceCalls.push(['preview', version]); preview.value = { kind: 'pdf', blob: new Blob(['%PDF-fixture'], { type: 'application/pdf' }) }; return true },
       download: async version => { workspaceCalls.push(['download', version]); return { blob: {}, filename: '结案.pdf' } },
       dispose: () => {}
     }),
@@ -154,6 +157,8 @@ describe('JYT-UX-W03 HallDraftEditor boundary', () => {
     expect(wrapper.findComponent({ name: 'HallPrivateMark' }).props('resultRef')).to.equal(null)
     expect(wrapper.findAll('.hall-result-item').at(1).findAll('button')).to.have.length(0)
     await button(wrapper, '预览').trigger('click')
+    await Vue.nextTick()
+    expect(wrapper.findComponent({ name: 'PdfDocumentPreview' }).props('blob').type).to.equal('application/pdf')
     await button(wrapper, '下载').trigger('click')
     expect(editorState.workspaceCalls).to.deep.equal([
       ['select', 'file-1'], ['preview', '2'], ['select', 'file-1'], ['download', '2'], ['save', '结案.pdf']

@@ -63,7 +63,8 @@
                   <span>第 {{ materialPreview.selectedIndex + 1 }} / {{ materialPreview.parts.length }} 页</span>
                   <button type="button" :disabled="materialPreview.selectedIndex >= materialPreview.parts.length - 1" @click="workspace.selectPreviewPart(materialPreview.selectedIndex + 1)">下一页</button>
                 </div>
-                <img v-if="materialPreviewPart?.kind === 'image'" :src="materialPreviewPart.url" alt="资料预览" />
+                <PdfDocumentPreview v-if="materialPreviewPart?.kind === 'pdf'" :blob="materialPreviewPart.blob" />
+                <img v-else-if="materialPreviewPart?.kind === 'image'" :src="materialPreviewPart.url" alt="资料预览" />
                 <audio v-else-if="materialPreviewPart?.kind === 'audio'" :src="materialPreviewPart.url" controls preload="none" aria-label="音频预览"></audio>
                 <pre v-else-if="materialPreviewPart?.kind === 'text'" v-text="materialPreviewPart.text"></pre>
                 <p v-if="materialPreview.message" role="status">{{ materialPreview.message }}</p>
@@ -109,7 +110,8 @@
                   <span>第 {{ materialPreview.selectedIndex + 1 }} / {{ materialPreview.parts.length }} 页</span>
                   <button type="button" :disabled="materialPreview.selectedIndex >= materialPreview.parts.length - 1" @click="workspace.selectPreviewPart(materialPreview.selectedIndex + 1)">下一页</button>
                 </div>
-                <img v-if="materialPreviewPart?.kind === 'image'" :src="materialPreviewPart.url" alt="资料预览" />
+                <PdfDocumentPreview v-if="materialPreviewPart?.kind === 'pdf'" :blob="materialPreviewPart.blob" />
+                <img v-else-if="materialPreviewPart?.kind === 'image'" :src="materialPreviewPart.url" alt="资料预览" />
                 <audio v-else-if="materialPreviewPart?.kind === 'audio'" :src="materialPreviewPart.url" controls preload="none" aria-label="音频预览"></audio>
                 <pre v-else-if="materialPreviewPart?.kind === 'text'" v-text="materialPreviewPart.text"></pre>
                 <p v-if="materialPreview.message" role="status">{{ materialPreview.message }}</p>
@@ -123,6 +125,7 @@
 </template>
 
 <script setup>
+import PdfDocumentPreview from '../workspace/PdfDocumentPreview.vue'
 import { validMaterialVersion } from '../../composables/juyiting/materialVersion.js'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { usePersonalWorkspace, savePersonalWorkspaceBlob } from '@/composables/usePersonalWorkspace'

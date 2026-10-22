@@ -22,7 +22,7 @@ script = script
   .replace(/^import\s+\{\s*deliveryTypeText\s*\}\s+from\s+['"]@\/utils\/executionFormats['"];?\s*$/gm, 'var { deliveryTypeText } = deps')
   .replace(/^import\s+\{\s*workspaceByteText,\s*validMaterialVersion\s*\}\s+from\s+['"]@\/utils\/personalWorkspaceProtocol['"];?\s*$/gm, 'var { workspaceByteText, validMaterialVersion } = deps')
   .replace(/^import\s+WorkspaceWriteRecovery\s+from\s+['"][^'"]+['"];?\s*$/gm, "var WorkspaceWriteRecovery = { template: '<section />', props: ['pending'], emits: ['retry'] }")
-  .replace(/^import\s+PdfDocumentPreview\s+from\s+['"][^'"]+['"];?\s*$/gm, "var PdfDocumentPreview = { template: '<section />', props: ['blob'] }")
+  .replace(/^import\s+PdfDocumentPreview\s+from\s+['"][^'"]+['"];?\s*$/gm, "var PdfDocumentPreview = { name: 'PdfDocumentPreview', template: '<section />', props: ['blob'] }")
   .replace('export default', 'return')
 
 const workspaceMock = () => {
@@ -86,6 +86,13 @@ describe('personal workspace execution receipt presentation', () => {
         await Vue.nextTick()
         assert.equal(wrapper.get('audio').attributes('src'), 'blob:audio-part')
         assert.match(wrapper.text(), /分片预览不完整/)
+        const pdf = new Blob(['%PDF-fixture'], { type: 'application/pdf' })
+        workspace.preview.value = { kind: 'pdf', blob: pdf, message: '', parts: [], selectedIndex: 0 }
+        await Vue.nextTick()
+        assert.equal(wrapper.findComponent({ name: 'PdfDocumentPreview' }).props('blob'), pdf)
+        workspace.preview.value = { kind: 'none' }
+        await Vue.nextTick()
+        assert.equal(wrapper.findComponent({ name: 'PdfDocumentPreview' }).exists(), false)
       } finally { wrapper.unmount() }
     })
   }

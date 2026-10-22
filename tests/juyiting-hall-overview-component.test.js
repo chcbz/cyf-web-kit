@@ -32,6 +32,7 @@ const loadMaterialPicker = (workspace, save) => {
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]@\/composables\/usePersonalWorkspace['"];?\s*$/gm, 'var { usePersonalWorkspace, savePersonalWorkspaceBlob } = deps')
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\.\/\.\.\/composables\/juyiting\/materialVersion\.js['"];?\s*$/gm, 'var { validMaterialVersion } = deps')
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\.\/\.\.\/constants\/juyiting\.js['"];?\s*$/gm, 'var { taskStatusText } = deps')
+    .replace(/^import\s+PdfDocumentPreview\s+from\s+['"][^'"]+['"];?\s*$/gm, "var PdfDocumentPreview = { name: 'PdfDocumentPreview', template: '<section class=\"pdf-preview-test-slot\" />', props: ['blob'] }")
     .replace('export default', 'return')
   return new Function('Vue', 'deps', code)(Vue, { taskStatusText, validMaterialVersion, usePersonalWorkspace: () => workspace, savePersonalWorkspaceBlob: save })
 }
@@ -45,6 +46,7 @@ const load = (api, workspace = emptyWorkspace(), save = () => {}) => {
     .replace(/^import HallMaterialPicker from ['"]\.\/HallMaterialPicker\.vue['"];?\s*$/gm, 'var HallMaterialPicker = deps.HallMaterialPicker')
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\.\/\.\.\/composables\/juyiting\/materialVersion\.js['"];?\s*$/gm, 'var { validMaterialVersion } = deps')
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\.\/\.\.\/constants\/juyiting\.js['"];?\s*$/gm, 'var { taskStatusText } = deps')
+    .replace(/^import\s+PdfDocumentPreview\s+from\s+['"][^'"]+['"];?\s*$/gm, "var PdfDocumentPreview = { name: 'PdfDocumentPreview', template: '<section class=\"pdf-preview-test-slot\" />', props: ['blob'] }")
     .replace('export default', 'return')
   return new Function('Vue', 'deps', code)(Vue, { taskStatusText, validMaterialVersion, HallMaterialPicker: loadMaterialPicker(workspace, save), canOpenHallItem, HALL_SOURCES, useHallOverview: options => useHallOverview({ ...options, api }), usePersonalWorkspace: () => workspace, savePersonalWorkspaceBlob: save })
 }
@@ -283,7 +285,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       calls.push(options)
       if (options.url === '/personal-workspace/files') return { items: files, nextCursor: null, hasMore: false }
       const index = Number(/files\/file-(\d+)/.exec(options.url)[1])
-      const mime = index === 1 ? 'text/plain' : types[index][1]
+      const mime = types[index][1]
       if (options.url.endsWith('/preview')) return { state: 'READY', parts: [{ partId: 'content', contentMimeType: mime }], partial: false }
       if (options.url.includes('/preview/parts/')) return new Blob(['safe preview'], { type: mime })
       if (options.url.endsWith('/content')) return new Blob(['original bytes'], { type: types[index][1] })
@@ -301,7 +303,10 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
         // Desktop previews the pinned version without a redundant toggle.
         const preview = wrapper.get('.quick-material-preview')
         if (index === 0) expect(preview.get('img').attributes('src')).to.equal('blob:image/png')
-        else if (index === 2) {
+        else if (index === 1) {
+          expect(preview.find('.pdf-preview-test-slot').exists()).to.equal(true)
+          expect(wrapper.findComponent({ name: 'PdfDocumentPreview' }).props('blob').type).to.equal('application/pdf')
+        } else if (index === 2) {
           expect(preview.get('audio').attributes('src')).to.equal('blob:audio/mpeg')
           expect(preview.get('audio').attributes('preload')).to.equal('none')
         } else expect(preview.get('pre').text()).to.equal('safe preview')
@@ -319,6 +324,10 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       expect(calls.filter(call => call.url === '/personal-workspace/files')[0].params).to.deep.equal({ state: 'ACTIVE' })
       expect(calls.filter(call => call.url.endsWith('/preview')).every(call => call.url.includes('/versions/2/'))).to.equal(true)
       expect(revoked).to.include('blob:audio/mpeg')
+      await wrapper.findAll('.quick-material-summary li')[1].findAll('button').find(button => button.text() === '预览').trigger('click'); await settle()
+      expect(wrapper.findComponent({ name: 'PdfDocumentPreview' }).props('blob').type).to.equal('application/pdf')
+      await wrapper.get('.quick-material-close').trigger('click')
+      expect(wrapper.findComponent({ name: 'PdfDocumentPreview' }).exists()).to.equal(false)
       await wrapper.findAll('.quick-material-summary li')[2].findAll('button').find(button => button.text() === '预览').trigger('click'); await settle()
       expect(wrapper.get('.quick-material-preview audio').attributes('src')).to.equal('blob:audio/mpeg')
       expect(wrapper.find('.quick-material-picker').exists()).to.equal(false)
