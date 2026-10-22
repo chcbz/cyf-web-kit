@@ -1,5 +1,5 @@
 <template>
-  <section v-if="enabled && (acceptance || scopedSteps.length || skillResults.results.value.length || skillResults.error.value)" class="bounty-output-gallery" aria-label="悬赏议事成果">
+  <section v-if="enabled && (acceptance || allItems.length || scopedSteps.length || skillResults.results.value.length || skillResults.error.value)" class="bounty-output-gallery" aria-label="悬赏议事成果">
     <header class="output-gallery-heading">
       <strong>议事成果</strong>
       <button
@@ -138,7 +138,7 @@ const list = async () => {
     if (generation !== epoch || controller.signal.aborted) return
     requestSnapshots.value = snapshots
     const catalog = []; const deliveries = []; let actionPending = false
-    if (props.acceptance && props.taskId) for (const request of snapshots) {
+    if (props.taskId) for (const request of snapshots) {
       for (const turn of request.turns || []) {
         if (turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state)) continue
         const response = await api.get(`/conversations/${encodeURIComponent(props.conversationId)}/requests/${encodeURIComponent(request.requestId)}/typed-outcome`, {},

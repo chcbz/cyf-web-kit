@@ -300,7 +300,7 @@ describe('bounty output gallery live owner scope', () => {
     } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
   })
 
-  it('renders an explicit real text final read-only without tools or saving, including remount', async () => {
+  it('renders persisted text in the discussion default mode and emits its exact acceptance source, including remount', async () => {
     const raw = displayFixtures(JSON.parse(readFileSync(new URL('./fixtures/juyiting/completed-message-delivery-v3.json', import.meta.url), 'utf8')))
     const request = { requestId: raw.requestId, requestRevision: raw.requestRevision, conversationId: raw.conversationId,
       conversationGeneration: raw.conversationGeneration, state: 'COMPLETED', stateVersion: '1', steps: [], turns: [{
@@ -323,7 +323,7 @@ describe('bounty output gallery live owner scope', () => {
     })
     globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : oldTimeout(fn, delay, ...args)
     globalThis.clearTimeout = id => { if (id !== 999) oldClear(id) }
-    const props = { enabled: true, acceptance: true, taskId: 'task', taskVersion: '9', conversationId: raw.conversationId,
+    const props = { enabled: true, taskId: 'task', taskVersion: '9', conversationId: raw.conversationId,
       identityKey: 'owner-text-page', request, catalog: [{ ordinal: '1', request }] }
     let wrapper
     try {
@@ -333,6 +333,11 @@ describe('bounty output gallery live owner scope', () => {
       }
       expect(wrapper.findAll('.bounty-output')).to.have.length(1)
       expect(wrapper.find('.bounty-output-text').text()).to.equal(raw.outcome.text)
+      const accept = wrapper.findAll('button').find(button => button.text() === '验收此版')
+      expect(accept).not.to.equal(undefined)
+      await accept.trigger('click')
+      expect(wrapper.emitted('accept-output')[0][0].messageSource).to.deep.equal(raw.outcome.messageSource)
+      expect(wrapper.emitted('outputs-change').at(-1)[0]).to.have.length(1)
       expect(wrapper.findAll('input[type="checkbox"]')).to.have.length(0)
       expect(calls).to.have.length(0)
       expect(reads.some(path => path.endsWith('/outputs'))).to.equal(false)
