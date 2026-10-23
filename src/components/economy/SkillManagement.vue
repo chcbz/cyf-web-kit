@@ -111,7 +111,7 @@
               <template v-if="mode === 'detail'">
                 <dl class="skill-detail-grid">
                   <dt>输入</dt><dd>{{ details(row)?.inputMimeTypes.join('、') || '未声明输入类型' }}</dd>
-                  <dt>权限范围</dt><dd>{{ details(row)?.requiredPermissions.join('；') || '无所需权限' }}</dd>
+                  <dt>权限范围</dt><dd>{{ details(row)?.requiredPermissions.map(formatSkillPermission).join('；') || '无所需权限' }}</dd>
                   <dt>运行依赖</dt><dd>{{ details(row)?.requirements.join('；') || '无额外依赖声明' }}</dd>
                   <dt>运行状态</dt><dd>{{ runtimeLabels[row.runtime.state] }}<template v-if="row.runtime.reasonCode"> · {{ reasonLabels[row.runtime.reasonCode] }}</template></dd>
                   <dt>新调用</dt><dd>{{ row.admissionEnabled ? '已开放，仍需逐任务授权' : '未开放' }}<template v-if="change(row)?.status === 'SUCCEEDED' && !change(row).runtimeSynced"> · Runtime策略待同步</template></dd>
@@ -142,7 +142,7 @@
                       :disabled="blocked(row)"
                       @change="togglePermission(row, permission, $event.target.checked)"
                     />
-                    <span>{{ permission }}</span>
+                    <span>{{ formatSkillPermission(permission) }}</span>
                   </label>
                   <p v-if="!row.candidate?.requiredPermissions.length">此版本未请求额外权限。</p>
                 </section>
@@ -264,7 +264,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, proxyRefs, ref, watch } from 'vue'
 import { formatSkillMoney, useSkillMarket } from '@/composables/useSkillMarket.js'
-import { SKILL_CHANGE_LABELS, SKILL_REASON_LABELS, SKILL_RUNTIME_LABELS, skillChangeTerminal } from '@/utils/skillManagementContract.js'
+import { formatSkillPermission, SKILL_CHANGE_LABELS, SKILL_REASON_LABELS, SKILL_RUNTIME_LABELS, skillChangeTerminal } from '@/utils/skillManagementContract.js'
 const props = defineProps({ show: Boolean, embedded: Boolean, targetAgent: { type: Object, default: null }, actorScopeKey: { type: String, default: '' }, identityKey: { type: String, default: '' }, enabled: { type: Boolean, default: true }, agentApi: { type: Object, default: null } })
 const emit = defineEmits(['update:show', 'changed'])
 const market = proxyRefs(useSkillMarket({ agentApi: props.agentApi || undefined, enabled: () => props.enabled, actorScopeKey: () => props.actorScopeKey, identityKey: () => props.identityKey, targetAgent: () => props.targetAgent, onChanged: change => emit('changed', change) }))

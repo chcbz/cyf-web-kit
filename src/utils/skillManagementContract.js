@@ -28,6 +28,9 @@ const permissions = unique(v => text(v) && v.length > 0)
 const money = shape({ amountMinor: skillRevision, currency: one(['SILVER']) })
 const action = one(['INSTALL', 'UPGRADE', 'ENABLE', 'DISABLE'])
 const allowedAction = one(['VIEW', 'INSTALL', 'UPGRADE', 'ENABLE', 'DISABLE', 'RETRY', 'RECONCILE'])
+// Display labels only: approval, digest and wire data retain the original permission keys.
+const permissionLabels = Object.freeze({ READ_AUTHORIZED_INPUT: '读取本次授权的输入', WRITE_TASK_RESULT: '生成结果并写回当前任务' })
+export const formatSkillPermission = permission => Object.hasOwn(permissionLabels, permission) ? permissionLabels[permission] : permission
 export const SKILL_CHANGE_LABELS = Object.freeze({ ACCEPTED: '已接纳', WAITING_AGENT: '等待连接', PREPARING: '下载与校验', PREPARED: '准备完成', ACTIVATING: '安全切换', VERIFYING: '已应用，待运行核验', SUCCEEDED: '完成', FAILED_RETRYABLE: '准备失败，可重试', FAILED_FINAL: '操作已终结', RECOVERY_REQUIRED: '结果待核对' })
 export const SKILL_RUNTIME_LABELS = Object.freeze({ UNKNOWN: '运行状态未知', OFFLINE: '离线', VERIFYING: '待运行核验', READY: '运行就绪', DEPENDENCY_MISSING: '缺少运行依赖', PROVIDER_UNBOUND: '服务尚未绑定', VERSION_MISMATCH: '版本不一致', NOT_EXECUTABLE: '说明型技能，不提供执行动作' })
 export const SKILL_REASON_LABELS = Object.freeze({ AGENT_OFFLINE: 'Agent当前离线', RUNTIME_MAPPING_REQUIRED: '需先完成Runtime绑定', PUBLICATION_UNAVAILABLE: '批准版本暂不可用', UPGRADE_POLICY_UNSET: '平台尚未配置升级政策', UPGRADE_NOT_ALLOWED: '当前权益不允许升级', PERMISSION_REQUIRED: '需明确批准权限', SKILL_CHANGE_PENDING: '请先处理原操作', DEPENDENCY_MISSING: '缺少运行依赖', PROVIDER_UNBOUND: '服务尚未绑定', VERSION_MISMATCH: '版本不一致', NOT_EXECUTABLE: '说明型技能', RECEIPT_UNKNOWN: '原回执尚未确认', PREPARATION_FAILED: '准备未通过', PACKAGE_DIGEST_MISMATCH: '包摘要校验未通过', ARCHIVE_INVALID: '包归档无效', DOWNLOAD_FORBIDDEN: '下载未获授权', IDENTITY_CHANGED: '身份已变化', ENTITLEMENT_TERMINATED: '权益已终结', POLICY_NOT_SYNCED: '运行策略待同步', CATALOG_UNCONFIRMED: '能力目录待确认', STATE_UNAVAILABLE: '状态暂不可读取', INTEGRITY_UNPROVEN: '安装证据待核对', STATE_CHANGED: '状态已变化' })
