@@ -410,6 +410,7 @@ const contentRef = ref(null)
 const noteText = ref('')
 const questionText = ref('')
 const editingNote = ref(null)
+const bookDrafts = new Map()
 const actionMessage = ref('')
 const NEW_NOTE_TARGET = Symbol('new-note-target')
 const noteBytes = computed(() => utf8ByteLength(noteText.value))
@@ -484,17 +485,11 @@ const enterReading = async (book, event) => {
     ? event.currentTarget
     : document.activeElement
   await closeProgressPromise
-  if (reader.catalog?.workId !== book.workId) {
-    noteText.value = ''
-    questionText.value = ''
-    editingNote.value = null
-    actionMessage.value = ''
-  }
   const opened = await runAction(
     () => reader.openBook(book.workId),
     '典籍暂无法读取，请稍后重试。'
   )
-  if ((!opened && !reader.chapter) || (embedded && (!detailAllowed || !active))) return
+  if (!opened || reader.catalog?.workId !== book.workId || (embedded && (!detailAllowed || !active))) return
   catalogOpen.value = false
   notesOpen.value = false
   readingOpen.value = true
@@ -777,11 +772,24 @@ const back = () => {
   return true
 }
 defineExpose({ back })
+// Drafts belong to an immutable edition, never to whichever book is currently visible.
+watch(() => reader.catalog?.activeEdition?.editionId, (nextEdition, previousEdition) => {
+  if (previousEdition) bookDrafts.set(previousEdition, {
+    noteText: noteText.value, questionText: questionText.value, editingNote: editingNote.value
+  })
+  const draft = nextEdition ? bookDrafts.get(nextEdition) : null
+  noteText.value = draft?.noteText || ''
+  questionText.value = draft?.questionText || ''
+  editingNote.value = draft?.editingNote || null
+  editorRevision += 1
+}, { flush: 'sync' })
 watch(readingOpen, value => emit('navigation-state', value), { immediate: true })
 onUpdated(() => { if (active) focusRequestedLocation() })
 
 onMounted(() => {
   unregisterEditorIdentityCleanup = registerIdentityCleanup(() => {
+    bookDrafts.clear()
+    questionText.value = ''
     noteText.value = ''
     editingNote.value = null
     editorRevision += 1

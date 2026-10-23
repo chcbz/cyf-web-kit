@@ -2895,6 +2895,11 @@ describe('archive multi-book data-driven shelf', () => {
       }
       return get(path, params, options)
     }
+    const put = api.put
+    api.put = async (path, body, options) => {
+      const result = await put(path, body, options)
+      return path.startsWith('/me/progress/') ? { ...result, editionId: decodeURIComponent(path.split('/').at(-1)) } : result
+    }
     return api
   }
 
@@ -2927,6 +2932,25 @@ describe('archive multi-book data-driven shelf', () => {
       expect(empty.findAll('.archive-book-card')).to.have.length(0)
       expect(empty.text()).to.include('暂无')
     } finally { empty.unmount() }
+  })
+
+  it('keeps unsaved private drafts attached to their original edition across book switches', async () => {
+    const wrapper = mountArchiveReader(multiApi(), { initialView: 'catalog' })
+    try {
+      await waitFor(() => wrapper.findAll('.archive-book-open').length === 2)
+      await wrapper.findAll('.archive-book-open')[0].trigger('click')
+      await waitFor(() => wrapper.find('textarea').exists())
+      await wrapper.get('textarea').setValue('第一本书的未保存手札')
+      await wrapper.get('.reader-exit').trigger('click')
+      await wrapper.findAll('.archive-book-open')[1].trigger('click')
+      await waitFor(() => wrapper.readerState.chapter.value?.editionId === secondEdition)
+      expect(wrapper.get('textarea').element.value).to.equal('')
+      await wrapper.get('textarea').setValue('第二本书的未保存手札')
+      await wrapper.get('.reader-exit').trigger('click')
+      await wrapper.findAll('.archive-book-open')[0].trigger('click')
+      await waitFor(() => wrapper.readerState.chapter.value?.editionId === editionId)
+      expect(wrapper.get('textarea').element.value).to.equal('第一本书的未保存手札')
+    } finally { wrapper.unmount() }
   })
 
   it('ignores late private notes from the previously selected book', async () => {
