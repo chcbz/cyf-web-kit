@@ -479,14 +479,14 @@ const retryCatalog = () => runAction(
   '典籍重试失败。'
 )
 
-const enterReading = async (book, event) => {
+const enterReading = async (book, event, editionId = null) => {
   if (embedded && !detailAllowed) return
   returnFocusElement = typeof event?.currentTarget?.focus === 'function'
     ? event.currentTarget
     : document.activeElement
   await closeProgressPromise
   const opened = await runAction(
-    () => reader.openBook(book.workId),
+    () => reader.openBook(book.workId, editionId),
     '典籍暂无法读取，请稍后重试。'
   )
   if (!opened || reader.catalog?.workId !== book.workId || (embedded && (!detailAllowed || !active))) return
@@ -771,7 +771,8 @@ const back = () => {
   else void closeReading()
   return true
 }
-defineExpose({ back })
+const openPublishedEdition = job => enterReading(job, null, job.editionId)
+defineExpose({ back, openPublishedEdition })
 // Drafts belong to an immutable edition, never to whichever book is currently visible.
 watch(() => reader.catalog?.activeEdition?.editionId, (nextEdition, previousEdition) => {
   if (previousEdition) bookDrafts.set(previousEdition, {

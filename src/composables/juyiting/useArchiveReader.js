@@ -197,21 +197,23 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     return shelf.items
   }
 
-  const loadCatalog = (workId, signal) => {
-    if (catalogLoadPromise && catalogLoadWorkId === workId) return catalogLoadPromise
+  const loadCatalog = (workId, signal, editionId = null) => {
+    const catalogKey = `${workId}:${editionId || 'active'}`
+    if (catalogLoadPromise && catalogLoadWorkId === catalogKey) return catalogLoadPromise
     const requestIdentity = identityGeneration
     if (!isCurrentIdentity(requestIdentity) || signal?.aborted) return Promise.resolve(null)
-    const request = api.get('/catalog', { workId }, { autoLoading: false, signal }).then((result) => {
+    const path = editionId ? `/works/${encodeURIComponent(workId)}/editions/${encodeURIComponent(editionId)}/catalog` : '/catalog'
+    const request = api.get(path, editionId ? undefined : { workId }, { autoLoading: false, signal }).then((result) => {
       if (!isCurrentIdentity(requestIdentity) || signal?.aborted) return null
       const nextCatalog = unwrap(result)
-      if (nextCatalog?.workId !== workId || !nextCatalog?.activeEdition?.editionId) throw new Error('案卷阁目录响应不完整')
+      if (nextCatalog?.workId !== workId || !nextCatalog?.activeEdition?.editionId || (editionId && nextCatalog.activeEdition.editionId !== editionId)) throw new Error('案卷阁目录响应不完整')
       catalog.value = nextCatalog
       return nextCatalog
     })
     const pending = request.finally(() => {
       if (catalogLoadPromise === pending) catalogLoadPromise = null
     })
-    catalogLoadWorkId = workId
+    catalogLoadWorkId = catalogKey
     catalogLoadPromise = pending
     return pending
   }
@@ -1341,7 +1343,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     return promise
   }
 
-  const initialize = async ({ openChapter = true, reuseCatalog = false, workId = null } = {}) => {
+  const initialize = async ({ openChapter = true, reuseCatalog = false, workId = null, editionId = null } = {}) => {
     if (disposed) return null
     const generation = ++initializeGeneration
     if (catalog.value) initializeController?.abort()
@@ -1357,7 +1359,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       if (!openChapter) return works.value
       const requestedWorkId = workId || catalog.value?.workId || works.value[0]?.workId
       if (!requestedWorkId) return null
-      if (!reuseCatalog || catalog.value?.workId !== requestedWorkId) await loadCatalog(requestedWorkId, controller.signal)
+      if (!reuseCatalog || catalog.value?.workId !== requestedWorkId || (editionId && edition.value?.editionId !== editionId)) await loadCatalog(requestedWorkId, controller.signal, editionId)
       if (!isActive()) return null
       let progressUnavailable = false
       try {
@@ -1440,11 +1442,11 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     closeQuestion()
   }
 
-  const openBook = async (workId) => {
+  const openBook = async (workId, editionId = null) => {
     const selection = ++bookSelectionGeneration
     const requestIdentity = identityGeneration
-    if (!works.value.some(book => book.workId === workId)) throw new Error('典籍不存在')
-    if (catalog.value?.workId !== workId) {
+    if (!editionId && !works.value.some(book => book.workId === workId)) throw new Error('典籍不存在')
+    if (catalog.value?.workId !== workId || edition.value?.editionId !== (editionId || works.value.find(book => book.workId === workId)?.editionId)) {
       if (bookmarkCreateOperation || newNoteOperation || noteOperations.size ||
         deleteBookmarkOperations.size || deleteNoteOperations.size || questionCreatePromise || questionRetryPromise) {
         throw new Error('请先完成或重试当前书籍的保存操作，再切换典籍。')
@@ -1457,7 +1459,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       clearIdentityBoundState()
       works.value = shelf
     }
-    return initialize({ workId, reuseCatalog: true })
+    return initialize({ workId, editionId, reuseCatalog: true })
   }
 
   onMounted(() => {
