@@ -1,101 +1,125 @@
 import { expect } from 'chai'
-import { readFileSync } from 'node:fs'
-import { compileScript, parse } from '@vue/compiler-sfc'
+import { mount } from '@vue/test-utils'
+import { skillComponents, button, until, settle } from './helpers/skill-management-components.js'
+import { apiFixture, locks, deferred, fixture } from './fixtures/skill-management/helpers.js'
 
-let Vue
-let mount
-let flushPromises
-const wrappers = []
-
-const loadComponent = (relativePath, id, imports) => {
-  const filename = new URL(relativePath, import.meta.url)
-  const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename: filename.pathname })
-  const compiled = compileScript(descriptor, { id, inlineTemplate: true }).content
-  const source = compiled
-    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_all, names, path) =>
-      `const { ${names.split(',').map(name => name.trim().replace(/\s+as\s+/, ': ')).join(', ')} } = imports[${JSON.stringify(path)}]`)
-    .replace(/^import\s+([^\s]+)\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_all, name, path) =>
-      `const ${name} = imports[${JSON.stringify(path)}]`)
-    .replace('export default', 'return')
-  return new Function('imports', source)(imports)
-}
-
-const marketState = () => {
-  const { ref } = Vue
-  const calls = []
-  return {
-    calls,
-    state: {
-      products: ref([{ productId: 'p-1', productVersionId: 'pv-1', skillKey: 'first', canPurchase: true }]),
-      selectedProduct: ref(null), targetAgent: ref(null), approvedPermissions: ref([]), quote: ref(null), order: ref(null), entitlements: ref([]),
-      loading: ref(false), quoteLoading: ref(false), purchaseLoading: ref(false), orderLoading: ref(false), orderPolling: ref(false), orderPollAttempts: ref(0),
-      error: ref(''), previewEnabled: ref(true), actorScopeFingerprint: ref('scope-a'), storageAvailable: ref(true), operationLockAvailable: ref(true),
-      unresolvedOperations: ref([{ phase: 'QUOTE', intentFingerprint: 'quote-a', productVersionId: 'pv-1', targetAgentId: 'agent-a', expectedAgentVersion: '7' }]),
-      canRequestQuote: ref(true), canPurchase: ref(false),
-      loadProducts: async () => calls.push('loadProducts'), loadProduct: async () => null,
-      selectProduct: product => { calls.push('selectProduct');; }, setTargetAgent: agent => calls.push(`target:${agent?.agentId || ''}`),
-      setApprovedPermissions: () => {}, requestQuote: async () => {}, purchase: async () => null, pollOrder: async () => null, loadOrder: async () => null,
-      resumeOperation: async () => ({ quoteId: 'sq-a' }), abandonQuote: () => { calls.push('abandonQuote'); return true }, dispose: () => {}
-    }
+describe('SM-C1 actual management component lifecycle (no composable stub)', () => {
+  let wrapper; let previousLocks; let mock
+  beforeEach(() => {
+    window.localStorage.clear(); mock = apiFixture()
+    previousLocks = Object.getOwnPropertyDescriptor(navigator, 'locks'); Object.defineProperty(navigator, 'locks', { configurable: true, value: locks })
+  })
+  afterEach(async () => { wrapper?.unmount(); await settle(); window.localStorage.clear(); if (previousLocks) Object.defineProperty(navigator, 'locks', previousLocks); else delete navigator.locks })
+  const open = async () => {
+    wrapper = mount(skillComponents().Management, { attachTo: document.body, props: { show: true, targetAgent: { agentId: 'agt_demo', name: '测试好汉' }, actorScopeKey: 'actor-a', agentApi: mock.api }, global: { stubs: { teleport: true } } })
+    await until(() => button(wrapper, '安装')); await button(wrapper, '安装').trigger('click')
   }
-}
-
-describe('skill market mounted lifecycle regressions', () => {
-  before(async () => {
-    global.SVGElement = global.window?.SVGElement
-    global.Element = global.window?.Element
-    global.Node = global.window?.Node
-    Vue = await import('vue')
-    ;({ mount, flushPromises } = await import('@vue/test-utils'))
+  it('collapse/Esc preserves permission draft and valid quote; quote focus moves near target; close emits only dismissal', async () => {
+    await open()
+    for (const input of wrapper.findAll('input')) await input.setValue(true)
+    await button(wrapper, '获取报价').trigger('click'); await until(() => button(wrapper, '确认安装'))
+    expect(document.activeElement.textContent).to.equal('确认安装')
+    expect(wrapper.find('.skill-inline-footer').text()).to.include('测试好汉 · 图片修改 · 1.1.0')
+    await wrapper.find('dialog').trigger('keydown', { key: 'Escape' })
+    expect(wrapper.find('.skill-inline-panel').exists()).to.equal(false)
+    await button(wrapper, '安装').trigger('click')
+    expect(wrapper.findAll('input').every(input => input.element.checked)).to.equal(true)
+    expect(button(wrapper, '确认安装')).not.to.equal(undefined)
+    await wrapper.find('dialog').trigger('keydown', { key: 'Escape' }); await wrapper.find('dialog').trigger('keydown', { key: 'Escape' })
+    expect(wrapper.emitted('update:show').at(-1)).to.deep.equal([false])
+    expect(mock.requests.filter(r => r.method === 'POST')).to.have.length(1)
   })
-  afterEach(() => { for (const wrapper of wrappers.splice(0)) wrapper.unmount() })
-
-  it('mounts the actual market with nested composable refs unwrapped and resumes/cancels a quote dialog', async () => {
-    const controlled = marketState()
-    const Card = { props: ['product'], template: '<button class="product" @click="$emit(\'select\', product)">product</button>' }
-    const Dialog = { props: ['show'], emits: ['update:show'], template: '<section v-if="show" class="dialog"><button @click="$emit(\'update:show\', false)">close</button></section>' }
-    const Market = loadComponent('../src/components/economy/SkillMarket.vue', 'skill-market-lifecycle', {
-      vue: Vue,
-      './SkillProductCard.vue': Card,
-      './SkillPurchaseDialog.vue': Dialog,
-      '@/composables/useSkillMarket.js': {
-        useSkillMarket: () => controlled.state,
-        formatEntitlementSkillFact: () => '', formatInstalledSkillFact: () => '', orderStatusLabel: () => ''
-      }
-    })
-    const wrapper = mount(Market, { props: { previewEnabled: true, actorScopeKey: 'scope-a', targetAgent: { agentId: 'agent-a', version: '7' } }, global: { stubs: { 'var-button': { template: '<button><slot /></button>' }, 'var-loading': true, 'var-empty': true } } })
-    wrappers.push(wrapper)
-    await flushPromises()
-    expect(wrapper.find('.product').exists()).to.equal(true)
-    expect(wrapper.findComponent({ name: 'var-loading' }).exists()).to.equal(false)
-    await wrapper.find('.recovery-item button').trigger('click')
-    await flushPromises()
-    expect(wrapper.find('.dialog').exists()).to.equal(true)
-    await wrapper.find('.dialog button').trigger('click')
-    expect(controlled.calls).to.include('abandonQuote')
+  it('closed window does not cancel pending write; reopening reads its original operation', async () => {
+    await open(); for (const input of wrapper.findAll('input')) await input.setValue(true)
+    await button(wrapper, '获取报价').trigger('click'); await until(() => button(wrapper, '确认安装'))
+    const wait = deferred(); const post = mock.api.post
+    mock.api.post = async (...args) => { await wait.promise; return post(...args) }
+    await button(wrapper, '确认安装').trigger('click'); await settle(); await wrapper.setProps({ show: false })
+    wait.resolve(); await until(() => mock.requests.some(r => r.path === '/agt_demo/skill-changes'))
+    await wrapper.setProps({ show: true }); await until(() => wrapper.text().includes('等待连接'))
+    expect(mock.requests.filter(r => r.path === '/agt_demo/skill-changes' && r.method === 'POST')).to.have.length(1)
+  })
+  it('real Agent projection replacement retains draft; changed identity clears it and rejects late quote', async () => {
+    await open(); for (const input of wrapper.findAll('input')) await input.setValue(true)
+    await wrapper.setProps({ targetAgent: { agentId: 'agt_demo', name: '同一好汉补齐投影', version: '13' } })
+    expect(wrapper.findAll('input').every(input => input.element.checked)).to.equal(true)
+    const wait = deferred(); const post = mock.api.post
+    mock.api.post = async (...args) => { await wait.promise; return post(...args) }
+    await until(() => button(wrapper, '获取报价'))
+    await button(wrapper, '获取报价').trigger('click')
+    await wrapper.setProps({ actorScopeKey: 'actor-b', targetAgent: { agentId: 'other', name: '另一身份' } })
+    wait.resolve(); await settle(); await settle()
+    expect(wrapper.find('.skill-inline-panel').exists()).to.equal(false)
+    expect(button(wrapper, '确认安装')).to.equal(undefined)
+  })
+  it('installed-version details stay truthful; enable/disable require confirmation and use the sole write', async () => {
+    mock.list = fixture('skill-list').data
+    const installed = mock.list.items[0]
+    installed.skillRevision = '8'; installed.installed.skillInstallationId = 'si_new'
+    wrapper = mount(skillComponents().Management, { attachTo: document.body, props: { embedded: true, targetAgent: { agentId: 'agt_demo', name: '测试好汉' }, actorScopeKey: 'actor-a', agentApi: mock.api } })
+    await until(() => button(wrapper, '详情')); await button(wrapper, '详情').trigger('click')
+    expect(wrapper.find('.skill-detail-grid').text()).to.include('image/png、image/jpeg')
+    expect(wrapper.find('.skill-detail-grid').text()).not.to.include('image/avif')
+    await button(wrapper, '停用新调用').trigger('click')
+    expect(mock.requests.filter(r => r.method === 'POST')).to.have.length(0)
+    mock.accepted = fixture('disabled-api-admission-closed').data
+    await button(wrapper, '确认停用').trigger('click'); await until(() => wrapper.text().includes('Runtime策略仍待同步'))
+    expect(mock.requests.find(r => r.method === 'POST').data).to.deep.equal(fixture('create-disable').data)
+  })
+  it('explicit original quote recovery after remount returns to inline confirmation, never automatic installation', async () => {
+    await open(); for (const input of wrapper.findAll('input')) await input.setValue(true)
+    const post = mock.api.post; mock.api.post = async () => { throw new TypeError('lost quote') }
+    await button(wrapper, '获取报价').trigger('click'); await until(() => button(wrapper, '放弃未提交报价'))
+    wrapper.unmount(); mock.api.post = post
+    wrapper = mount(skillComponents().Management, { attachTo: document.body, props: { show: true, targetAgent: { agentId: 'agt_demo', name: '测试好汉' }, actorScopeKey: 'actor-a', agentApi: mock.api }, global: { stubs: { teleport: true } } })
+    await until(() => button(wrapper, '核对结果')); await button(wrapper, '核对结果').trigger('click')
+    expect(wrapper.text()).to.include('报价结果待核对')
+    await button(wrapper, '以原键重放').trigger('click'); await until(() => button(wrapper, '确认安装'))
+    expect(mock.requests.some(r => r.path === '/agt_demo/skill-changes' && r.method === 'POST')).to.equal(false)
+    expect(wrapper.find('.skill-inline-footer').text()).to.include('测试好汉 · 图片修改 · 1.1.0')
+  })
+  it('confirmed terminal failure does not hide a new INSTALL action explicitly allowed by the server', async () => {
+    mock.list.items[0].latestChange = { ...fixture('accepted-offline-install').data, status: 'FAILED_FINAL', fundingStatus: 'REFUNDED' }
+    wrapper = mount(skillComponents().Management, { attachTo: document.body, props: { embedded: true, targetAgent: { agentId: 'agt_demo' }, actorScopeKey: 'actor-a', agentApi: mock.api } })
+    await until(() => button(wrapper, '安装')); expect(button(wrapper, '查看进度')).to.equal(undefined)
+    await button(wrapper, '安装').trigger('click'); expect(wrapper.find('.skill-inline-title').text()).to.include('确认安装')
+  })
+  it('real keyboard trap wraps Tab in both directions and dismissal restores the opening control', async () => {
+    const trigger = document.createElement('button'); document.body.append(trigger); trigger.focus()
+    try {
+      await open()
+      const controls = wrapper.findAll('button,summary,input').filter(el => !el.element.disabled)
+      for (const control of controls) control.element.getClientRects = () => [{}]
+      const first = controls[0]; const last = controls.at(-1)
+      first.element.focus(); await first.trigger('keydown', { key: 'Tab', shiftKey: true }); expect(document.activeElement).to.equal(last.element)
+      await last.trigger('keydown', { key: 'Tab' }); expect(document.activeElement).to.equal(first.element)
+      await wrapper.setProps({ show: false }); await settle(); expect(document.activeElement).to.equal(trigger)
+      const before = mock.requests.length; await settle(); expect(mock.requests.length).to.equal(before)
+    } finally { trigger.remove() }
   })
 
-  it('mounts the actual route and refreshes the same target from server roster version after two sequential product purchases', async () => {
-    const versions = ['7', '8', '9']
-    let reads = 0
-    const Market = { props: ['targetAgent'], emits: ['refresh-roster'], template: '<section><span class="version">{{ targetAgent.version }}</span><button class="first-product" @click="$emit(\'refresh-roster\')">first-product</button><button class="second-product" @click="$emit(\'refresh-roster\')">second-product</button></section>' }
-    const Route = loadComponent('../src/components/economy/SkillMarketRoute.vue', 'skill-market-route-lifecycle', {
-      vue: Vue,
-      './SkillMarket.vue': Market,
-      '@/utils/skillMarketRoster.js': { loadSkillMarketRoster: async () => ({ data: { code: 'E0', data: { items: [{ agentId: 'agent-a', name: 'A', version: versions[Math.min(reads++, versions.length - 1)], boundToMe: true, canOperate: true }] } } }) },
-      '@/utils/silverAmount': { isCanonicalDecimalString: value => typeof value === 'string' && /^(0|[1-9]\d*)$/.test(value) },
-      '@/utils/economyPreviewCapability': { isSkillMarketplaceCapability: capability => capability?.skillMarketplaceEnabled === true, loadEconomyPreviewCapability: async () => ({ skillMarketplaceEnabled: true, principalScopeFingerprint: 'scope-a' }) }
-    })
-    const wrapper = mount(Route, { global: { stubs: { SkillMarket: Market } } })
-    wrappers.push(wrapper)
-    await flushPromises()
-    await wrapper.find('select').setValue('agent-a')
-    expect(wrapper.find('.version').text()).to.equal('7')
-    await wrapper.find('.first-product').trigger('click')
-    await flushPromises()
-    expect(wrapper.find('.version').text()).to.equal('8')
-    await wrapper.find('.second-product').trigger('click')
-    await flushPromises()
-    expect(wrapper.find('.version').text()).to.equal('9')
+  it('actual UPGRADE flow shows old/target versions, requires permissions and submits its exact covered quote', async () => {
+    mock.list = fixture('skill-list').data; mock.accepted = fixture('accepted-upgrade').data
+    wrapper = mount(skillComponents().Management, { attachTo: document.body, props: { embedded: true, targetAgent: { agentId: 'agt_demo', name: '测试好汉' }, actorScopeKey: 'actor-a', agentApi: mock.api } })
+    await until(() => button(wrapper, '升级')); await button(wrapper, '升级').trigger('click')
+    expect(wrapper.find('.skill-version-compare').text()).to.include('1.0.0').and.include('1.1.0')
+    expect(button(wrapper, '获取报价').element.disabled).to.equal(true)
+    for (const input of wrapper.findAll('input')) await input.setValue(true)
+    await button(wrapper, '获取报价').trigger('click'); await until(() => button(wrapper, '确认升级'))
+    expect(wrapper.find('.skill-install-quote').text()).to.include('现有权益覆盖')
+    await button(wrapper, '确认升级').trigger('click'); await until(() => wrapper.text().includes('下载与校验'))
+    expect(mock.requests.find(r => r.method === 'POST' && r.path === '/agt_demo/skill-changes').data).to.deep.equal(fixture('create-upgrade').data)
   })
+  it('ENABLE is a confirmed server action; VERIFYING is not optimistic admission or runtime success', async () => {
+    mock.list = fixture('skill-list').data; const row = mock.list.items[0]
+    row.skillRevision = '8'; row.installed = { skillInstallationId: 'si_new', version: row.candidate }; row.desiredEnabled = false; row.admissionEnabled = false; row.allowedActions = ['VIEW', 'ENABLE']
+    mock.accepted = { ...fixture('disabled-api-admission-closed').data, action: 'ENABLE', desiredEnabled: true, status: 'VERIFYING', runtimeSynced: false }
+    wrapper = mount(skillComponents().Management, { attachTo: document.body, props: { embedded: true, targetAgent: { agentId: 'agt_demo' }, actorScopeKey: 'actor-a', agentApi: mock.api } })
+    await until(() => button(wrapper, '详情')); await button(wrapper, '详情').trigger('click'); await button(wrapper, '启用新调用').trigger('click')
+    expect(mock.requests.filter(r => r.method === 'POST')).to.have.length(0)
+    await button(wrapper, '确认启用').trigger('click'); await until(() => wrapper.text().includes('已应用，待运行核验'))
+    expect(mock.requests.find(r => r.method === 'POST').data).to.deep.equal(fixture('create-enable').data)
+    expect(wrapper.text()).not.to.include('该动作已完成')
+  })
+
 })

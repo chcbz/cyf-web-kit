@@ -1,16 +1,13 @@
+import { skillComponents } from './helpers/skill-management-components.js'
 import { readFileSync } from 'node:fs'
 import { expect } from 'chai'
-import { parse, compileScript } from '@vue/compiler-sfc'
+import { parse } from '@vue/compiler-sfc'
 import { mount } from '@vue/test-utils'
 import * as Vue from 'vue'
 
 const source = readFileSync(new URL('../src/components/juyiting/AgentPanel.vue', import.meta.url), 'utf8')
 const { descriptor } = parse(source)
-const body = compileScript(descriptor, { id: 'agent-actions-test', inlineTemplate: true }).content
-  .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_, imports) =>
-    `const { ${imports.replace(/\s+as\s+/g, ': ')} } = Vue`)
-  .replace('export default', 'return')
-const AgentPanel = new Function('Vue', body)(Vue)
+const AgentPanel = skillComponents().AgentPanel
 const agent = { agentId: 'agent-actions-fixture', name: '公孙胜', abilities: [] }
 const props = {
   selectedAgent: agent, hasPendingTask: true,

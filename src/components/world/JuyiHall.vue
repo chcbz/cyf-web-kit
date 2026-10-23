@@ -266,6 +266,7 @@
           <AgentPanel
             ref="agentPanelRef"
             :active="renderedPanel === 'agents' && activePanel === 'agents'"
+            :actor-scope-key="hallIdentityScope"
             :identity-key="hallIdentityScope + ':' + apiStore.authorizationGeneration"
             :panel-session-key="agentPanelSessionKey"
             :external-policy="externalPolicy.policy.value"

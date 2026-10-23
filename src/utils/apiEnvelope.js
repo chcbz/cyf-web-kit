@@ -2,14 +2,14 @@
 const own = (value, key) => Object.prototype.hasOwnProperty.call(value, key)
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 const exactKeys = (value, keys) => object(value) && Object.keys(value).length === keys.length && keys.every(key => own(value, key))
-export const validRequestId = value => typeof value === 'string' && value.trim().length > 0 && !/[\u0000-\u001f\u007f-\u009f]/u.test(value)
+export const validRequestId = value => typeof value === 'string' && value.trim().length > 0 && !Array.from(value).some(ch => ch.charCodeAt(0) < 32 || (ch.charCodeAt(0) >= 127 && ch.charCodeAt(0) <= 159))
 
 export function protocolError (code = 'PROTOCOL_INVALID_RESPONSE', details = {}) {
   return Object.assign(new Error(code), { code, failureClass: 'protocol', ...details })
 }
 
 /** Parses JSON with duplicate-member and unsafe-number detection BEFORE information is lost. */
-export function parseStrictJson (text) {
+export function parseStrictJson (text, { integerTokensOnly = false } = {}) {
   if (typeof text !== 'string') throw protocolError()
   let offset = 0
   const bad = () => { throw protocolError() }
@@ -19,7 +19,11 @@ export function parseStrictJson (text) {
     while (offset < text.length) {
       const ch = text[offset++]
       if (ch === '"') {
-        try { return JSON.parse(text.slice(start, offset)) } catch { return bad() }
+        try {
+          const parsed = JSON.parse(text.slice(start, offset))
+          if (integerTokensOnly && /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(parsed)) return bad()
+          return parsed
+        } catch { return bad() }
       }
       if (ch === '\\') offset++
     }
@@ -68,6 +72,7 @@ export function parseStrictJson (text) {
     }
     const match = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/u.exec(text.slice(offset))
     if (!match) return bad()
+    if (integerTokensOnly && (!/^-?(?:0|[1-9][0-9]*)$/.test(match[0]) || match[0] === '-0')) return bad()
     offset += match[0].length
     const number = Number(match[0])
     if (!Number.isFinite(number) || (Number.isInteger(number) && !Number.isSafeInteger(number))) return bad()
@@ -89,10 +94,10 @@ export function encodeHttpRequest (data, requestId) {
   return { protocolVersion: 1, requestId, data: data === undefined ? null : data }
 }
 
-export function decodeHttpResponse (text, { status, requestId, responseRequestId } = {}) {
+export function decodeHttpResponse (text, { status, requestId, responseRequestId, integerTokensOnly = false } = {}) {
   const details = { status, requestId }
   let result
-  try { result = parseStrictJson(text) } catch { throw protocolError('PROTOCOL_INVALID_RESPONSE', details) }
+  try { result = parseStrictJson(text, { integerTokensOnly }) } catch { throw protocolError('PROTOCOL_INVALID_RESPONSE', details) }
   if (!Number.isInteger(status) || !exactKeys(result, ['protocolVersion', 'requestId', 'code', 'msg', 'data']) ||
       result.protocolVersion !== 1 || !validRequestId(result.requestId) || typeof result.code !== 'string' ||
       !result.code || typeof result.msg !== 'string' ||
@@ -100,6 +105,7 @@ export function decodeHttpResponse (text, { status, requestId, responseRequestId
       (responseRequestId !== undefined && result.requestId !== responseRequestId)) {
     throw protocolError('PROTOCOL_INVALID_RESPONSE', details)
   }
+  if (integerTokensOnly && (Array.from(result.requestId).length > 100 || /\s/u.test(result.requestId) || (result.code !== 'E0' && result.data !== null))) throw protocolError('PROTOCOL_INVALID_RESPONSE', details)
   const success = status >= 200 && status < 300
   if (success !== (result.code === 'E0')) throw protocolError('PROTOCOL_INVALID_RESPONSE', details)
   if (!success) {

@@ -67,6 +67,7 @@ export function useHttp (options = {}) {
       streamChunks = false,
       signal,
       authStore,
+      strictJsonIntegers = false,
       rum = true,
       rumRoute,
       rumSampleRate,
@@ -99,7 +100,6 @@ export function useHttp (options = {}) {
         method: method.toUpperCase(),
         headers
       }
-
 
       // 添加URL参数和baseURL
       const runtimeEnv = import.meta.env ?? {}
@@ -188,7 +188,7 @@ export function useHttp (options = {}) {
         try {
           decodeHttpResponse(await httpResponse.text(), {
             status: httpResponse.status, requestId: rumRequestId,
-            responseRequestId: httpResponse.headers.get('x-request-id')
+            responseRequestId: httpResponse.headers.get('x-request-id'), integerTokensOnly: strictJsonIntegers
           })
         } catch (failure) {
           failure.response = httpResponse
@@ -282,7 +282,6 @@ export function useHttp (options = {}) {
 
       // 处理响应数据
       let result
-      let resultObj
       const responseMetadata = {
         status: httpResponse.status,
         statusText: httpResponse.statusText,
@@ -305,12 +304,12 @@ export function useHttp (options = {}) {
       } else {
         const decoded = decodeHttpResponse(await httpResponse.text(), {
           status: httpResponse.status, requestId: rumRequestId,
-          responseRequestId: httpResponse.headers.get('x-request-id')
+          responseRequestId: httpResponse.headers.get('x-request-id'), integerTokensOnly: strictJsonIntegers
         })
         result = decoded.value
       }
       throwIfAborted(requestSignal.signal)
-      resultObj = responseMetadata
+      const resultObj = responseMetadata
       response.value = httpResponse
       data.value = result
       if (onSuccess) onSuccess(result, resultObj)

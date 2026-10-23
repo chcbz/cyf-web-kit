@@ -18,6 +18,7 @@
         v-if="selectedAgent"
         :preview-enabled="marketEnabled"
         :actor-scope-key="capability.principalScopeSha256"
+        :identity-key="capability.principalScopeSha256 + ':' + apiStore.authorizationGeneration"
         :target-agent="selectedAgent"
         @refresh-roster="refreshRoster"
       />
@@ -26,12 +27,15 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onScopeDispose, ref } from 'vue'
+import { useApiStore } from '@/stores/api'
+import { registerIdentityCleanup } from '@/utils/identityLifecycle.js'
 import SkillMarket from './SkillMarket.vue'
 import { loadSkillMarketRoster } from '@/utils/skillMarketRoster.js'
 import { isCanonicalDecimalString } from '@/utils/silverAmount'
 import { isSkillMarketplaceCapability, loadEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
 
+const apiStore = useApiStore()
 const loading = ref(true)
 const error = ref('')
 const capability = ref(null)
@@ -40,14 +44,12 @@ const selectedAgentId = ref('')
 const marketEnabled = computed(() => isSkillMarketplaceCapability(capability.value))
 const selectedAgent = computed(() => ownedAgents.value.find(agent => agent.agentId === selectedAgentId.value) || null)
 
-const unwrap = result => {
-  const body = result?.data ?? result
-  if (body && typeof body === 'object' && Object.prototype.hasOwnProperty.call(body, 'code')) {
-    if (body.code !== 'E0' && body.code !== '0' && body.code !== 0 && body.code !== '200' && body.code !== 200) return null
-    return body.data
-  }
-  return body?.data ?? body
-}
+const controller = new AbortController()
+const generation = apiStore.authorizationGeneration
+const current = () => !controller.signal.aborted && generation === apiStore.authorizationGeneration
+const clearIdentity = () => { controller.abort(); capability.value = null; ownedAgents.value = []; selectedAgentId.value = ''; loading.value = false }
+const unregister = registerIdentityCleanup(clearIdentity)
+onScopeDispose(() => { clearIdentity(); unregister() })
 const rosterItems = payload => Array.isArray(payload) ? payload :
   (Array.isArray(payload?.items) ? payload.items : (Array.isArray(payload?.list) ? payload.list : []))
 const ownedRosterAgent = agent => agent?.boundToMe === true && agent?.canOperate === true &&
@@ -55,7 +57,8 @@ const ownedRosterAgent = agent => agent?.boundToMe === true && agent?.canOperate
 
 const refreshRoster = async () => {
   const priorSelection = selectedAgentId.value
-  const refreshed = rosterItems(unwrap(await loadSkillMarketRoster())).filter(ownedRosterAgent)
+  const refreshed = rosterItems(await loadSkillMarketRoster({ signal: controller.signal })).filter(ownedRosterAgent)
+  if (!current()) return []
   ownedAgents.value = refreshed
   selectedAgentId.value = refreshed.some(agent => agent.agentId === priorSelection) ? priorSelection : ''
   return refreshed
@@ -63,14 +66,17 @@ const refreshRoster = async () => {
 
 onMounted(async () => {
   try {
-    capability.value = await loadEconomyPreviewCapability()
+    const next = await loadEconomyPreviewCapability({ signal: controller.signal })
+    if (!current()) return
+    capability.value = next
     if (!marketEnabled.value) return
     await refreshRoster()
   } catch (cause) {
+    if (!current()) return
     capability.value = null
     error.value = cause?.message || '技能集市预览能力暂不可用。'
   } finally {
-    loading.value = false
+    if (current()) loading.value = false
   }
 })
 </script>
