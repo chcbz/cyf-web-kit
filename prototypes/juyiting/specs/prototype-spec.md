@@ -2,7 +2,7 @@
 
 版本：2026-10-18（页面补缺修正）；状态：当前离线原型规格及已确认交互要求，**不是生产已实现说明**。
 
-唯一原型：`/home/isp/wsps/cyf/web/prototypes/juyiting/index.html`。页面以 `#页面标识` 进入；revision参数不代表另一套页面。固定源码、文件摘要与引用证据见 `/home/isp/wsps/cyf/specs/juyiting-ui-baseline-20261006/optimization/baseline.json`，落地方案见 `/home/isp/wsps/cyf/specs/juyiting-ui-baseline-20261006/optimization/change-plan.md`。本规格覆盖19页及共用卡片/控件；不新增页面体系。
+唯一原型：`/home/isp/wsps/cyf/web/prototypes/juyiting/index.html`。页面以 `#页面标识` 进入；revision参数不代表另一套页面。固定源码、文件摘要与引用证据见 `/home/isp/wsps/cyf/specs/juyiting-ui-baseline-20261006/optimization/baseline.json`，落地方案见 `/home/isp/wsps/cyf/specs/juyiting-ui-baseline-20261006/optimization/spec.md`。本规格覆盖19页及共用卡片/控件；不新增页面体系。
 
 ## 1. 范围和依据
 
