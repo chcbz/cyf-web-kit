@@ -2991,7 +2991,6 @@ describe('archive multi-book data-driven shelf', () => {
   })
 })
 
-
 describe('archive maintenance published edition navigation', () => {
   it('opens the explicitly selected historical edition rather than silently following active', async () => {
     const api = makeApi()
