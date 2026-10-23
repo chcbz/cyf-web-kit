@@ -154,6 +154,7 @@ const makeApi = ({
   deleteHandler,
   getBlock,
   getCatalog,
+  getWorks,
   notesByBlock = {},
   progress = null,
   progressEnvelope,
@@ -172,6 +173,7 @@ const makeApi = ({
     get: async (path, params, options = {}) => {
       const call = { method: 'get', options, params, path }
       calls.push(call)
+      if (path === '/works') return getWorks ? getWorks(call) : response({ items: [{ workId: catalog.workId, title: catalog.title, editionId, chapterCount: catalog.activeEdition.chapters.length }] })
       if (path === '/catalog') return getCatalog ? getCatalog(call) : response(catalog)
       if (path.startsWith('/me/progress/')) return progressEnvelope ?? response(progress)
       if (path === '/me/bookmarks') return response({ items: bookmarks, nextCursor: null })
@@ -818,13 +820,13 @@ describe('archive reader contract behavior', () => {
     }
   }
 
-  it('retries only the catalog before the user chooses a book', async () => {
-    let catalogAttempts = 0
+  it('retries only the shelf before the user chooses a book', async () => {
+    let shelfAttempts = 0
     const api = makeApi({
-      getCatalog: () => {
-        catalogAttempts += 1
-        if (catalogAttempts === 1) throw new Error('catalog unavailable')
-        return response(catalog)
+      getWorks: () => {
+        shelfAttempts += 1
+        if (shelfAttempts === 1) throw new Error('catalog unavailable')
+        return response({ items: [{ workId: catalog.workId, title: catalog.title, editionId, chapterCount: 120 }] })
       }
     })
     const wrapper = mountArchiveReader(api, { initialView: 'catalog' })
@@ -869,7 +871,7 @@ describe('archive reader contract behavior', () => {
         : response(blocksById.get(blockId))
     })
     const wrapper = mountArchiveReader(api, { initialView: 'catalog' })
-    await waitFor(() => wrapper.readerState.catalog.value && !wrapper.readerState.loading.value)
+    await waitFor(() => wrapper.readerState.works.value.length && !wrapper.readerState.loading.value)
     await wrapper.get('.archive-book-open').trigger('click')
     await waitFor(() => wrapper.readerState.chapter.value?.blockId === preface.blockId)
     await waitFor(() => wrapper.find('.reader-header-actions .reader-header-button').exists())
@@ -1833,8 +1835,8 @@ describe('archive reader contract behavior', () => {
     })
     const mounted = mountReader(api)
     const pending = mounted.reader.initialize()
-    await waitFor(() => api.calls.length === 1)
-    expect(api.calls[0].path).to.equal('/catalog')
+    await waitFor(() => api.calls.some(call => call.path === '/catalog'))
+    expect(api.calls[1].path).to.equal('/catalog')
 
     mounted.wrapper.unmount()
     await Promise.resolve()
@@ -1842,7 +1844,7 @@ describe('archive reader contract behavior', () => {
     catalogResponse.resolve(response(catalog))
     expect(await pending).to.equal(null)
     await settle()
-    expect(api.calls.map(call => call.path)).to.deep.equal(['/catalog'])
+    expect(api.calls.map(call => call.path)).to.deep.equal(['/works', '/catalog'])
   })
 
   it('aborts stale block work and clears pending DOM scroll saves on unmount', async () => {
@@ -2237,7 +2239,8 @@ describe('archive reader contract behavior', () => {
         selection: { startParagraphId: chapterOne.paragraphs[0].paragraphId, startOffset: 1, endParagraphId: chapterOne.paragraphs[1].paragraphId, endOffset: 2 }
       })
       const call = api.calls.find(item => item.method === 'put' && item.path.startsWith('/me/questions/'))
-      expect(call.body).to.have.all.keys(['anchor', 'question'])
+      expect(call.body).to.have.all.keys(['anchor', 'editionId', 'question'])
+      expect(call.body.editionId).to.equal(editionId)
       expect(call.body).not.to.have.any.keys(['targetAgentId', 'agentId', 'role', 'responder'])
       expect(call.body.anchor.segments.map(segment => [segment.startByte, segment.endByte])).to.deep.equal([[3, 13], [0, 6]])
       expect(call.body.anchor.selectionSha256).to.equal(createHash('sha256').update('水😀乙\n\n第二').digest('hex'))
@@ -2852,5 +2855,113 @@ describe('W04 explicit reading citation continuity', () => {
       expect(reader.currentLocation.value).to.deep.equal(location)
       expect(note.element.value).to.equal('私密手札，不得自动分享')
     } finally { wrapper.unmount() }
+  })
+})
+
+describe('archive multi-book data-driven shelf', () => {
+  const secondEdition = 'another-book-v2'
+  const secondChapter = {
+    ...blockSummary('CHAPTER', 'last-section', 1, '唯一章节'),
+    editionId: secondEdition,
+    manifestSha256: 'c'.repeat(64),
+    paragraphs: [paragraph('last-section', 1, '另一本书的正文', 'd')]
+  }
+  const secondCatalog = {
+    ...catalog,
+    workId: 'another-book',
+    title: '另一本书',
+    activeEdition: {
+      ...catalog.activeEdition,
+      editionId: secondEdition,
+      manifestSha256: secondChapter.manifestSha256,
+      preface: null,
+      chapters: [secondChapter]
+    }
+  }
+  const shelf = { items: [
+    { workId: catalog.workId, title: catalog.title, editionId, chapterCount: 120 },
+    { workId: secondCatalog.workId, title: secondCatalog.title, editionId: secondEdition, chapterCount: 1 }
+  ] }
+  const multiApi = () => {
+    const api = makeApi({
+      getWorks: () => response(shelf),
+      getCatalog: call => response(call.params.workId === catalog.workId ? catalog : secondCatalog)
+    })
+    const get = api.get
+    api.get = async (path, params, options) => {
+      if (path === `/editions/${secondEdition}/chapters/${secondChapter.blockId}`) {
+        api.calls.push({ method: 'get', path, params, options })
+        return response(secondChapter)
+      }
+      return get(path, params, options)
+    }
+    return api
+  }
+
+  it('loads a database shelf without reading any book and opens a no-preface book explicitly', async () => {
+    const api = multiApi()
+    const mounted = mountReader(api)
+    try {
+      await mounted.reader.initialize({ openChapter: false })
+      expect(mounted.reader.works.value).to.have.length(2)
+      expect(api.calls.map(call => call.path)).to.deep.equal(['/works'])
+      await mounted.reader.openBook(secondCatalog.workId)
+      expect(mounted.reader.catalog.value.workId).to.equal(secondCatalog.workId)
+      expect(mounted.reader.chapter.value.blockId).to.equal(secondChapter.blockId)
+      expect(api.calls.find(call => call.path === '/catalog').params).to.deep.equal({ workId: secondCatalog.workId })
+      expect(api.calls.some(call => call.path.endsWith('/preface'))).to.equal(false)
+    } finally { mounted.wrapper.unmount() }
+  })
+
+  it('renders every book from the shelf and an explicit empty state', async () => {
+    const wrapper = mountArchiveReader(multiApi(), { initialView: 'catalog' })
+    try {
+      await waitFor(() => wrapper.findAll('.archive-book-card').length === 2)
+      expect(wrapper.text()).to.include(secondCatalog.title)
+      await wrapper.findAll('.archive-book-open')[1].trigger('click')
+      await waitFor(() => wrapper.readerState.chapter.value?.editionId === secondEdition)
+    } finally { wrapper.unmount() }
+    const empty = mountArchiveReader(makeApi({ getWorks: () => response({ items: [] }) }), { initialView: 'catalog' })
+    try {
+      await waitFor(() => !empty.readerState.loading.value)
+      expect(empty.findAll('.archive-book-card')).to.have.length(0)
+      expect(empty.text()).to.include('暂无')
+    } finally { empty.unmount() }
+  })
+
+  it('ignores late private notes from the previously selected book', async () => {
+    const api = multiApi()
+    const oldNotes = deferred()
+    const get = api.get
+    api.get = (path, params, options) => path === '/me/notes' && params.editionId === editionId
+      ? oldNotes.promise : get(path, params, options)
+    const mounted = mountReader(api)
+    try {
+      await mounted.reader.initialize()
+      await mounted.reader.openBook(secondCatalog.workId)
+      oldNotes.resolve(response({ items: [{ noteId: 'old-book-note', version: '1', state: 'ACTIVE' }], nextCursor: null }))
+      await settle()
+      expect(mounted.reader.catalog.value.workId).to.equal(secondCatalog.workId)
+      expect(mounted.reader.notes.value).to.deep.equal([])
+    } finally { oldNotes.resolve(response({ items: [], nextCursor: null })); mounted.wrapper.unmount() }
+  })
+
+  it('keeps the current book and reports a failed progress save instead of discarding it on switch', async () => {
+    const api = multiApi()
+    const put = api.put
+    api.put = (path, body, options) => {
+      if (path.startsWith('/me/progress/')) throw Object.assign(new Error('save failed'), { status: 500 })
+      return put(path, body, options)
+    }
+    const mounted = mountReader(api)
+    try {
+      await mounted.reader.initialize()
+      mounted.reader.setCurrentParagraph(preface.paragraphs[0], 0)
+      let failure
+      try { await mounted.reader.openBook(secondCatalog.workId) } catch (error) { failure = error }
+      expect(failure?.message).to.include('暂未保存')
+      expect(mounted.reader.catalog.value.workId).to.equal(catalog.workId)
+      expect(mounted.reader.saveState.value).to.equal('error')
+    } finally { mounted.wrapper.unmount() }
   })
 })
