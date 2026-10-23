@@ -166,8 +166,8 @@ export function useHostingRent({ agentApi, economyApi, loadCapability, enabled =
     try {
       const capability = await loadCapability({ signal: ctx.signal })
       if (!current(ctx) || !selected()) return false
-      if (capability?.economyPreviewEnabled !== true || !text(capability.principalScopeFingerprint)) throw new Error('服务端未提供已启用的预览及明确 scope；不会改走免费 server 接口。')
-      scope = capability.principalScopeFingerprint
+      if (capability?.economyPreviewEnabled !== true || !text(capability.principalScopeSha256)) throw new Error('服务端未提供已启用的预览及明确 scope；不会改走免费 server 接口。')
+      scope = capability.principalScopeSha256
       restore()
       ready.value = true
       await readWallet(ctx)

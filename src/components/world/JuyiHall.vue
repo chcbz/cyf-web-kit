@@ -212,7 +212,7 @@
     />
 
     <transition name="panel" @after-leave="handlePanelAfterLeave">
-      <div v-if="activePanel" :key="panelSessionGeneration" class="panel-overlay" :class="{ 'is-full-window': panelLayout === 'full-window', 'is-low-height': isLowHeightPanel, 'is-chat-overlay': renderedPanel === 'chat', 'is-compact-chat-overlay': renderedPanel === 'chat' && isCompactChat, 'theme-workbench': isOverviewHome, 'is-workbench-panel': isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel), 'is-workbench-page': isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) }" :data-panel-generation="panelSessionGeneration" @pointerdown.self="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? null : closePanel()">
+      <div v-if="activePanel" :key="panelSessionGeneration" class="panel-overlay" :class="{ 'is-full-window': panelLayout === 'full-window', 'is-agent-overlay': renderedPanel === 'agents', 'is-low-height': isLowHeightPanel, 'is-chat-overlay': renderedPanel === 'chat', 'is-compact-chat-overlay': renderedPanel === 'chat' && isCompactChat, 'theme-workbench': isOverviewHome, 'is-workbench-panel': isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel), 'is-workbench-page': isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) }" :data-panel-generation="panelSessionGeneration" @pointerdown.self="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? null : closePanel()">
         <section
           ref="panelRef"
           class="floating-panel"
@@ -234,23 +234,24 @@
         >
           <div v-if="!navigationPresentation.isPrimarySurface || navigationPresentation.showPrimaryChildHeader" class="panel-title">
             <button
-              v-if="navigationPresentation.showHallClose"
+              v-if="navigationPresentation.showHallClose && !(renderedPanel === 'agents' && agentPanelRef?.canGoBack)"
               class="panel-close"
               type="button"
               aria-label="关闭面板"
+              :title="renderedPanel === 'agents' ? '关闭面板' : undefined"
               :disabled="voiceInteractionLocked"
               @click="closePanel"
             >
-              <var-icon :name="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? 'window-close' : 'close-circle-outline'" aria-hidden="true" />
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" /></svg>
             </button>
             <button
-              v-if="navigationPresentation.showHallReturn"
+              v-if="navigationPresentation.showHallReturn || (renderedPanel === 'agents' && agentPanelRef?.canGoBack)"
               class="panel-return"
               type="button"
-              :aria-label="navigationPresentation.showRootReturn ? '返回聚义厅' : '返回上一层'"
+              :aria-label="renderedPanel === 'agents' && agentPanelRef?.canGoBack ? '返回名册' : navigationPresentation.showRootReturn ? '返回聚义厅' : '返回上一层'"
               :disabled="voiceInteractionLocked"
               @click="handleHallReturn"
-            >← 返回</button>
+            >{{ renderedPanel === 'agents' && agentPanelRef?.canGoBack ? '← 名册' : '← 返回' }}</button>
             <span :id="panelTitleId">{{ activePanelTitle }}</span>
             <button
               v-if="taskWorkspaceEnabled && renderedPanel === 'tasks' && !formalTaskRef && taskWorkspaceSubject"
@@ -263,6 +264,19 @@
           </div>
 
           <AgentPanel
+            ref="agentPanelRef"
+            :active="renderedPanel === 'agents' && activePanel === 'agents'"
+            :identity-key="hallIdentityScope + ':' + apiStore.authorizationGeneration"
+            :panel-session-key="agentPanelSessionKey"
+            :external-policy="externalPolicy.policy.value"
+            :external-policy-status="externalPolicy.status.value"
+            :external-policy-busy="externalPolicy.busy.value"
+            :external-policy-can-write="externalPolicy.canWrite.value"
+            :external-policy-error="externalPolicy.error.value"
+            :profile-capabilities="agentProfile.projection.value"
+            :profile-capabilities-loading="agentProfile.loading.value"
+            :profile-capabilities-error="agentProfile.error.value"
+            :profile-reason-text="agentProfileReasonText"
             v-if="panelFrames.includes('agents')"
             v-show="renderedPanel === 'agents'"
             :inert="renderedPanel !== 'agents' ? '' : null"
@@ -284,8 +298,13 @@
             :point-and-start-busy="pointAndStartBusy"
             :can-point-and-deliberate="canPointAndDeliberateAgent"
             :can-start-conversation="canStartAgentConversation"
+            @set-external-policy="externalPolicy.setEnabled"
+            @refresh-external-policy="externalPolicy.refresh"
+            @check-external-policy="externalPolicy.checkOriginal"
+            @resume-external-policy="externalPolicy.resumeOriginal"
+            @refresh-profile-capabilities="agentProfile.refresh"
             @set-agent-filter="setAgentFilter"
-            @select-agent="selectAgent"
+            @select-agent="handleRosterSelectAgent"
             @point-and-deliberate="handlePointAndDeliberateAgent"
             @start-conversation="handleStartAgentConversation"
             @open-catalog="openPanel('catalog')"
@@ -298,6 +317,12 @@
             <button type="button" :disabled="leaveState === 'saving'" @click="discardPanelChangesAndLeave">放弃未保存修改并继续</button>
           </section>
 
+    <section v-if="deliveryReview.recoveryNeeded.value && reviewTaskId" class="hall-review-recovery" role="status" aria-label="原验收操作">
+      <p>{{ deliveryReview.operation.value.message }}</p>
+      <button v-if="deliveryReview.operation.value.intent" type="button" :disabled="deliveryReview.operation.value.busy" @click="deliveryReview.checkOriginal">查询原验收</button>
+      <button v-if="deliveryReview.operation.value.state === 'UNKNOWN' || deliveryReview.operation.value.state === 'PROCESSING'" type="button" :disabled="deliveryReview.operation.value.busy" @click="deliveryReview.resumeOriginal">继续原验收</button>
+      <button v-if="deliveryReview.operation.value.receipt && ['COMMITTED', 'REJECTED'].includes(deliveryReview.operation.value.state)" type="button" :disabled="deliveryReview.operation.value.busy" @click="deliveryReview.settleOriginal">重新核对并结束原操作</button>
+    </section>
           <BountyPanel
             v-if="panelFrames.includes('tasks')"
             v-show="renderedPanel === 'tasks' && !formalTaskRef"
@@ -306,6 +331,8 @@
             v-model:task-keyword="taskKeyword"
             embedded-hall
             :detail-allowed="canOpenPanelDetail"
+            :resources-active="renderedPanel === 'tasks' && !formalTaskRef"
+            :resource-review-context="deliveryReview.context.value"
             :inert="renderedPanel !== 'tasks' || formalTaskRef ? '' : null"
             :aria-hidden="renderedPanel !== 'tasks' || formalTaskRef ? 'true' : null"
             :ability-text="abilityText"
@@ -328,6 +355,10 @@
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
             :recommended-agents="recommendedAgents"
+            :assignee-candidates="assigneeCandidates"
+            :candidates-loading="candidatesLoading"
+            :candidates-error="candidatesError"
+            :candidates-next-after-agent-id="candidatesNextAfterAgentId"
             :selected-agent="selectedAgent"
             :operable-agents="operableRosterAgents"
             :selected-task="selectedTask"
@@ -343,6 +374,8 @@
             :error-message="tasksError"
             :counts-loading="taskCountsLoading"
             :counts-error-message="taskCountsError"
+            @refresh-candidates="loadAssigneeCandidates()"
+            @more-candidates="loadAssigneeCandidates({ more: true })"
             @mark-changed="hallReadRevision += 1"
             @confirm-funded-quote="settleFundedQuote(true)"
             @cancel-funded-quote="settleFundedQuote(false)"
@@ -355,6 +388,7 @@
             @check-requirement-create="checkRequirementCreate"
             @resume-requirement-create="resumeRequirementCreate"
             @open-formal-results="openFormalResults"
+            @review-delivery="openDeliveryReview"
             @resume-funded-create="resumeFundedCreate"
             @check-point-and-start="checkPointAndStartOriginal"
             @resume-point-and-start="resumePointAndStartOriginal"
@@ -404,40 +438,21 @@
             </article>
           </section>
           <BountyAcceptancePanel
-            v-else-if="renderedPanel === 'tasks' && formalTaskRef && hallIdentityScope && multimediaDeliberationUiEnabled && !taskReviewRef && formalTaskRef.funding?.mode !== 'FUNDED_SINGLE_AGENT'"
+            v-else-if="renderedPanel === 'tasks' && formalTaskRef && hallIdentityScope"
             :key="formalTaskRef.id"
             :task-id="formalTaskRef.id"
             :identity-key="`${apiStore.authorizationGeneration}\u0000${hallIdentityScope}`"
             :task-version="formalTaskRef.taskVersion ?? formalTaskRef.version"
             :task-completed="formalTaskRef.status === 'completed'"
             :conversation-id="chatMode === 'bounty' && conversationTask?.id === formalTaskRef.id ? conversationId : ''"
+            :review-context="deliveryReview.context.value" :review-loading="deliveryReview.loading.value"
+            :review-busy="deliveryReview.operation.value.busy" :review-error="deliveryReview.error.value"
+            @review-delivery="openDeliveryReview()" @refresh-review="deliveryReview.refresh"
+            @preview-output="previewReviewOutput"
             @continue-modification="continueBountyModification(formalTaskRef, $event)"
-            @task-completed="loadTasks"
           >
-            <template #legacy>
-              <FormalTaskDeliveryPanel
-                :key="formalTaskRef.id"
-                :task-id="formalTaskRef.id"
-                :identity-fingerprint="`${hallIdentityScope}:${apiStore.authorizationGeneration}`"
-                :focus-delivery-id="''"
-                :execution-context="formalTaskExecutionContext"
-                :selected-agent-id="selectedAgent?.agentId || ''"
-                @discuss-task="discussTask(formalTaskRef)"
-                @rework-created="hallReadRevision += 1"
-              />
-            </template>
+            <template #preview><OutputPreview v-if="reviewPreviewItem" :item="reviewPreviewItem" :load="reviewOutputs.preview" :context-key="reviewOutputs.cacheKey.value" /></template>
           </BountyAcceptancePanel>
-          <FormalTaskDeliveryPanel
-            v-else-if="renderedPanel === 'tasks' && formalTaskRef && hallIdentityScope"
-            :key="formalTaskRef.id"
-            :task-id="formalTaskRef.id"
-            :identity-fingerprint="`${hallIdentityScope}:${apiStore.authorizationGeneration}`"
-            :focus-delivery-id="taskReviewRef?.taskId === formalTaskRef.id ? taskReviewRef.deliveryId : ''"
-            :execution-context="formalTaskExecutionContext"
-            :selected-agent-id="selectedAgent?.agentId || ''"
-            @discuss-task="discussTask(formalTaskRef)"
-            @rework-created="hallReadRevision += 1"
-          />
 
           <template v-if="taskWorkspaceEnabled && renderedPanel === 'workspace' && taskWorkspaceSubject">
             <TaskWorkspacePanel
@@ -468,6 +483,7 @@
             @open="openPanel($event, { root: true })"
             @map="openWorkbenchMap"
             @profile="openProfile"
+            @help="emit('open-onboarding', $event)"
           />
 
           <HallOverview
@@ -504,12 +520,14 @@
             v-if="panelFrames.includes('formalDraft')"
             v-show="renderedPanel === 'formalDraft'"
             ref="formalDraftRef"
+            :key="formalDraftGeneration"
+            :initial-context="formalDraftContext"
             :inert="renderedPanel !== 'formalDraft' ? '' : null"
             :aria-hidden="renderedPanel !== 'formalDraft' ? 'true' : null"
             initial-kind="TASK_CREATE"
             :identity-scope="hallIdentityScope"
             :identity-epoch="apiStore.authorizationGeneration"
-            @open-task="openOverviewTask"
+            @open-task="openPendingTaskDetail"
             @close="returnPanel() || closePanel()"
           />
 
@@ -537,7 +555,7 @@
             :aria-hidden="renderedPanel !== 'treasure' ? 'true' : null"
             :detail-allowed="true"
             embedded
-            @start-draft="openPrivateDraft"
+            @start-draft="openReferencedRequirement"
           />
 
           <PersonaCatalogPanel
@@ -590,6 +608,7 @@
             :conversation-busy="isConversationBusy"
             :deliberation-status="deliberationStatus"
             :durable-cancel-target="durableCancelTarget"
+            :reply-cancellation-state="replyCancellationState"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -615,16 +634,26 @@
           />
 
           <BountyDiscussionPanel
+            ref="bountyDiscussionRef"
+            @outputs-change="selectedOutputCandidates = $event"
+            @accept-output="openSelectedOutputReview($event)"
+            @preview-ready="selectedOutputPreview = $event"
             v-if="panelFrames.includes('chat') && chatMode === 'bounty'"
             v-show="renderedPanel === 'chat'"
             :inert="renderedPanel !== 'chat' ? '' : null"
             :aria-hidden="renderedPanel !== 'chat' ? 'true' : null"
             :active-request="activeRequest"
-            :request-catalog="bountyRequestCatalog.entries"
+            :request-catalog="bountyRequestCatalog.entries.value"
             :active-turns="activeTurns"
             :capability-state="capabilityState"
             :deliberation-v2-enabled="multimediaDeliberationUiEnabled"
+            :review-context="deliveryReview.context.value"
+            :review-busy="deliveryReview.operation.value.busy || deliveryReview.loading.value || selectedOutputReview.busy.value"
+            @review-delivery="openSelectedOutputReview()"
             :typed-outcomes="typedDeliberation.cards.value"
+            :delivery-choices="typedDeliberation.deliveryChoices.value"
+            :selected-delivery-id="typedDeliberation.selectedDeliveryId.value"
+            @choose-delivery="typedDeliberation.chooseDelivery"
             :conversation-generation="typedConversationGeneration()"
             :typed-pending-question="typedDeliberation.selectedPending.value"
             :typed-enabled="typedDeliberationEnabled"
@@ -650,6 +679,7 @@
             :conversation-busy="isConversationBusy"
             :deliberation-status="deliberationStatus"
             :durable-cancel-target="durableCancelTarget"
+            :reply-cancellation-state="replyCancellationState"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -676,7 +706,6 @@
             @retry-conversation="retryHallConversation"
             @select-conversation="selectHallConversation"
             @send-message="handleSendHallMessage"
-            @task-completed="loadTasks"
           />
 
           <PrivateDiscussionPanel
@@ -702,6 +731,7 @@
             :conversation-busy="isConversationBusy"
             :deliberation-status="deliberationStatus"
             :durable-cancel-target="durableCancelTarget"
+            :reply-cancellation-state="replyCancellationState"
             :conversation-history="conversationHistory"
             :conversation-history-deleting-id="conversationHistoryDeletingId"
             :conversation-history-error="conversationHistoryError"
@@ -743,13 +773,33 @@
             embedded
             :active="renderedPanel === 'library'"
             :virtual-landscape="isVirtualLandscape"
-            @start-draft="openPrivateDraft"
+            @start-draft="openReferencedRequirement"
             @cite-library="citeLibraryItem"
             @search-library="searchLibrary"
           />
         </section>
       </div>
     </transition>
+
+    <section v-if="selectedOutputReview.locked.value && deliveryReview.context.value?.taskState !== 'COMPLETED' && chatMode === 'bounty' && renderedPanel === 'chat'" class="hall-review-recovery" role="status">
+      <p>{{ selectedOutputReview.message.value }}</p><button type="button" :disabled="selectedOutputReview.busy.value" @click="openSelectedOutputReview()">查看原提交并验收</button>
+    </section>
+    <HallDeliveryReviewDialog
+      :open="selectedOutputReview.open.value || deliveryReview.dialogOpen.value" :context="deliveryReview.frozenContext.value"
+      :selection-mode="selectedOutputReview.open.value" :choices="selectedOutputReview.choices.value.map(item => ({ ...item, key: selectionKey(item) }))"
+      :selected-keys="selectedOutputReview.selected.value.map(selectionKey)" :selection-locked="selectedOutputReview.locked.value"
+      @toggle="selectedOutputReview.toggle" @preview-selection="previewSelectedOutput"
+      :frozen-batch="deliveryReview.frozenContext.value?.currentDelivery || null"
+      :pending="deliveryReview.operation.value.busy || selectedOutputReview.busy.value" :error="selectedOutputReview.open.value ? selectedOutputReview.message.value : deliveryReview.error.value || (deliveryReview.operation.value.intent ? deliveryReview.operation.value.message : reviewPreviewError)"
+      @confirm="selectedOutputReview.open.value ? selectedOutputReview.confirm() : confirmDeliveryReview()" @back="selectedOutputReview.open.value ? selectedOutputReview.close() : deliveryReview.close()" @preview="previewReviewOutput"
+    ><template #selection-preview>
+      <div v-if="selectedOutputPreview" class="selected-output-preview">
+        <p v-if="selectedOutputPreview.error" role="alert">{{ selectedOutputPreview.error }}</p>
+        <img v-else-if="selectedOutputPreview.url && selectedOutputPreview.item.contentMimeType.startsWith('image/')" :src="selectedOutputPreview.url" alt="所选版本成果预览" />
+        <audio v-else-if="selectedOutputPreview.url && selectedOutputPreview.item.contentMimeType.startsWith('audio/')" :src="selectedOutputPreview.url" controls />
+        <pre v-else-if="selectedOutputPreview.text">{{ selectedOutputPreview.text }}</pre><p v-else>此格式暂不支持内嵌预览。</p>
+      </div>
+    </template><template #preview><OutputPreview v-if="reviewPreviewItem" :item="reviewPreviewItem" :load="reviewOutputs.preview" :context-key="reviewOutputs.cacheKey.value" /></template></HallDeliveryReviewDialog>
 
     <transition name="toast">
       <div v-if="toast" class="toast" role="status" aria-live="polite">{{ toast }}</div>
@@ -768,13 +818,14 @@ import { isTerminalMatter } from '@/composables/juyiting/useHallOrdinaryCancella
 import HallOverview from '@/components/juyiting/HallOverview.vue'
 import HallMinePage from '@/components/juyiting/HallMinePage.vue'
 import HallDraftEditor from '@/components/juyiting/HallDraftEditor.vue'
-import FormalTaskDeliveryPanel from '@/components/deliveries/FormalTaskDeliveryPanel.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { useGlobalStore } from '@/stores/global'
 import { useApiStore } from '@/stores/api'
 import { browserBusinessNamespace } from '@/utils/tenantBusinessNamespace'
 import { agentApi, chatApi } from '@/composables/useHttp'
+import { assignedTaskTarget } from '@/composables/juyiting/hallAssigneeCandidates.js'
+import { useExternalServicePolicy } from '@/composables/juyiting/useExternalServicePolicy.js'
 import { useHallChatContext, bountyInteractionTargetId } from '@/composables/juyiting/useHallChatContext'
 import { useHallBackendSceneState } from '@/composables/juyiting/useHallBackendSceneState'
 import { useHallCommandQueue } from '@/composables/juyiting/useHallCommandQueue'
@@ -797,11 +848,11 @@ import { useHallTaskActions } from '@/composables/juyiting/useHallTaskActions'
 import { useHallRequirementCreate } from '@/composables/juyiting/useHallRequirementCreate'
 import { useHallPointAndStart } from '@/composables/juyiting/useHallPointAndStart'
 import { useHallBountyAssignmentContext } from '@/composables/juyiting/useHallBountyAssignmentContext'
-import { currentBountyAssignmentRevision } from '@/composables/juyiting/hallBountyAssignmentContext'
 import { createPointAndStartIntentStore } from '@/composables/juyiting/hallPointAndStartIntent'
 import { pointAndStartRecoveryLane } from '@/composables/juyiting/hallPointAndStartRecoveryLane'
 import { useHallBountyRequestCatalog } from '@/composables/juyiting/useHallBountyRequestCatalog'
 import { useHallTypedDeliberation } from '@/composables/juyiting/useHallTypedDeliberation'
+import { useHallAgentProfileCapabilities, agentProfileReasonText } from '@/composables/juyiting/useHallAgentProfileCapabilities'
 import { useHallSkillCapabilities } from '@/composables/juyiting/useHallSkillCapabilities'
 import { typedLong } from '@/composables/juyiting/hallTypedDeliberation'
 import { pointAndStartIntentReadLane } from '@/composables/juyiting/hallNativeBountyCapability'
@@ -818,6 +869,11 @@ import { portraitName, portraitRole, portraitShortName, portraitStyle, roleClass
 import AgentPanel from '@/components/juyiting/AgentPanel.vue'
 import BountyDiscussionPanel from '@/components/juyiting/BountyDiscussionPanel.vue'
 import BountyAcceptancePanel from '@/components/juyiting/BountyAcceptancePanel.vue'
+import HallDeliveryReviewDialog from '@/components/juyiting/HallDeliveryReviewDialog.vue'
+import { useHallSelectedOutputReview } from '@/composables/juyiting/useHallSelectedOutputReview.js'
+import { selectionKey } from '@/composables/juyiting/hallSelectedOutputs.js'
+import { useHallDeliveryReview } from '@/composables/juyiting/useHallDeliveryReview.js'
+import { projectHallTask } from '@/composables/juyiting/hallTaskPresentation'
 import BountyPanel from '@/components/juyiting/BountyPanel.vue'
 import HallPortraitHome from '@/components/juyiting/HallPortraitHome.vue'
 import HallStage from '@/components/juyiting/HallStage.vue'
@@ -903,6 +959,8 @@ const panelFrames = ref([])
 const privateDraftRef = ref(null)
 const itemDraftRef = ref(null)
 const formalDraftRef = ref(null)
+const formalDraftContext = ref(null)
+const formalDraftGeneration = ref(0)
 const draftContext = ref(null)
 const privateDraftGeneration = ref(0)
 const formalTaskRef = ref(null)
@@ -949,18 +1007,23 @@ const guardPanelLeave = action => {
 const overviewItemRef = ref(null)
 const taskReviewRef = ref(null)
 const hallReadRevision = ref(0)
+const agentPanelRef = ref(null)
+const agentPanelSessionKey = ref(0)
+watch(() => panelFrames.value.includes('agents'), (present, previous) => { if (present && !previous) agentPanelSessionKey.value++ }, { flush: 'sync' })
 const bountyPanelRef = ref(null)
 const panelLocations = new Map()
 const treasurePanelRef = ref(null)
 const libraryPanelRef = ref(null)
 // Retained file/reading detail also consumes a logical layer while its source is hidden.
 const panelDepth = computed(() => panelFrames.value.length
+  + Number(panelFrames.value.includes('agents') && Boolean(agentPanelRef.value?.canGoBack))
   + Number(panelFrames.value.includes('tasks') && Boolean(bountyPanelRef.value?.canGoBack))
   + Number(panelFrames.value.includes('treasure') && Boolean(treasurePanelRef.value?.canGoBack))
   + Number(panelFrames.value.includes('library') && Boolean(libraryPanelRef.value?.canGoBack)))
 const canOpenPanelDetail = computed(() => panelDepth.value < 3)
 const panelChildCanReturn = computed(() => {
   if (activeDraftEditor()) return Boolean(activeDraftEditor().canGoBack)
+  if (renderedPanel.value === 'agents') return Boolean(agentPanelRef.value?.canGoBack)
   if (renderedPanel.value === 'tasks') return Boolean(formalTaskRef.value || bountyPanelRef.value?.canGoBack)
   if (renderedPanel.value === 'treasure') return Boolean(treasurePanelRef.value?.canGoBack)
   if (renderedPanel.value === 'library') return Boolean(libraryPanelRef.value?.canGoBack)
@@ -1019,7 +1082,7 @@ const hallViewportStyle = computed(() => {
 // This follows the live visual viewport, including a keyboard-only shrink.
 const isCompactChat = computed(() => resolvedHallViewportHeight.value > 0 && resolvedHallViewportHeight.value <= 320)
 const isLowHeightPanel = computed(() => resolvedHallViewportHeight.value > 0 && resolvedHallViewportHeight.value <= 500)
-const { panelLayout } = useHallPanels({ experienceMode, isMobileCoarse, viewportHeight: resolvedHallViewportHeight })
+const { panelLayout } = useHallPanels({ experienceMode, isMobileCoarse, viewportHeight: resolvedHallViewportHeight, renderedPanel })
 const navigationPresentation = computed(() => resolveHallNavigationPresentation({
   isMobileCoarse: isMobileCoarse.value,
   experienceMode: experienceMode.value,
@@ -1142,11 +1205,11 @@ const {
 } = useHallSound()
 
 const activePanelTitle = computed(() => {
-  const childTitle = activeDraftEditor()?.windowTitle || (renderedPanel.value === 'treasure' && treasurePanelRef.value?.windowTitle)
+  const childTitle = (renderedPanel.value === 'agents' && agentPanelRef.value?.windowTitle) || activeDraftEditor()?.windowTitle || (renderedPanel.value === 'treasure' && treasurePanelRef.value?.windowTitle)
   if (childTitle) return childTitle
   if (renderedPanel.value === 'draft') return '提出需求'
   if (renderedPanel.value === 'tasks' && formalTaskRef.value) return '正式成果与验收'
-  if (renderedPanel.value === 'formalDraft') return '起草正式任务'
+  if (renderedPanel.value === 'formalDraft') return '提出需求'
   if (renderedPanel.value === 'messages') return '消息'
   if (renderedPanel.value === 'item') return overviewItemRef.value?.sourceType === 'DRAFT' ? '继续草稿' : '事项进展'
   if (renderedPanel.value === 'agents') return '点将册'
@@ -1179,9 +1242,8 @@ const statusText = (status = '') => {
 
 // Use the filter metadata as the single lifecycle presentation contract. `detailAllowed`
 // only controlled panel nesting; file reads still go through PersonalWorkspace's scoped API.
-const taskStatusMeta = status => taskStatusFilters.find(item => item.value === normalizeStatus(status))
-const taskStatusText = status => taskStatusMeta(status)?.label || '状态待核对'
-const taskStateClass = status => taskStatusMeta(status)?.className || 'task-state-unknown'
+const taskStatusText = task => projectHallTask({ task }).label
+const taskStateClass = task => projectHallTask({ task }).className
 
 const abilityText = (agent) => {
   const abilities = agent.abilities || []
@@ -1198,12 +1260,18 @@ const taskAgentMatchScore = (task, agent) => {
 }
 
 const {
+  dispose: disposeHallData,
   applySceneEvent,
   applySceneSnapshot,
   agentFilter,
   agents,
   bindPersona,
   canAssign,
+  assigneeCandidates,
+  candidatesLoading,
+  candidatesError,
+  candidatesNextAfterAgentId,
+  loadAssigneeCandidates,
   catalogError,
   catalogLoading,
   filteredAgents,
@@ -1212,6 +1280,7 @@ const {
   loadPersonaCatalog,
   loadRosterAgents,
   loadTasks,
+  loadTaskDetail,
   loadTaskRecommendations,
   mapAgents,
   mapError,
@@ -1236,6 +1305,8 @@ const {
   visibleAgents
 } = useHallData({
   agentApi,
+  identityScope: hallIdentityScope,
+  authorizationGeneration: () => apiStore.authorizationGeneration,
   log,
   normalizeStatus,
   selectedAgent,
@@ -1260,6 +1331,7 @@ const {
   chatContext,
   conversationAgent,
   conversationTask,
+  refreshConversationTask,
   chatMentionAgentIds,
   chatMentionAgents,
   chatMode,
@@ -1382,10 +1454,22 @@ const {
 })
 
 const selectTask = async (task) => {
+  const returningToList = !task && Boolean(selectedTask.value) && activePanel.value === 'tasks'
   selectedTask.value = task
   if (task) {
-    await loadTaskRecommendations(task)
+    const identity = hallIdentityScope.value, generation = apiStore.authorizationGeneration
+    // Search rows need not contain grant-backed assignedTarget. Read the exact
+    // detail instead of looking the executor up in the owner's roster.
+    if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT' && (task.assignedAgentId || task.assignedAgentIds?.length === 1) && !assignedTaskTarget(task)) {
+      await loadTaskDetail(task)
+    }
+    if (identity !== hallIdentityScope.value || generation !== apiStore.authorizationGeneration || selectedTask.value?.id !== task.id) return false
+    await loadTaskRecommendations(selectedTask.value)
     markRecommendedAgents(recommendedAgents.value)
+  } else if (returningToList) {
+    // Overview opens an exact detail without loading the underlying list.
+    // On back, query the existing filters rather than exposing an uninitialized list.
+    await loadTasks()
   }
   playTap()
 }
@@ -1400,6 +1484,11 @@ const selectAgent = (agent) => {
   taskWorkspaceBinding.selectExplicitActor(agent)
   playAgentSelect()
   return agent || null
+}
+
+const handleRosterSelectAgent = agent => {
+  if (selectedAgent.value?.agentId === agent?.agentId) return selectedAgent.value
+  return selectAgent(agent)
 }
 
 const exactHostedAgentId = value => typeof value === 'string' && value.trim() === value && value.length > 0 ? value : ''
@@ -1506,8 +1595,11 @@ const openPanel = (panel, options = {}) => {
   if (panelDisposed || voiceInteractionLocked.value || !panelWhitelist.has(panel)) return false
   if (panel !== activePanel.value && guardPanelLeave(() => openPanel(panel, options))) return false
   const openingFromClosed = !activePanel.value
-  const existingIndex = panelFrames.value.indexOf(panel)
-  if (!options.root && !openingFromClosed && panel !== activePanel.value && existingIndex < 0 && panelDepth.value >= 3) {
+  const replaceAgentSelection = options.consumeAgentSelection === true && panel === 'chat' && activePanel.value === 'agents'
+  const frames = replaceAgentSelection ? panelFrames.value.slice(0, -1) : panelFrames.value
+  const depth = panelDepth.value - (replaceAgentSelection ? 1 + Number(Boolean(agentPanelRef.value?.canGoBack)) : 0)
+  const existingIndex = frames.indexOf(panel)
+  if (!options.root && !openingFromClosed && panel !== activePanel.value && existingIndex < 0 && depth >= 3) {
     showToast('请先返回上一层，再打开新的办理入口')
     return false
   }
@@ -1519,8 +1611,9 @@ const openPanel = (panel, options = {}) => {
     panelLocations.clear()
     if (!openingFromClosed && isOverviewHome.value) captureWorkbenchReturnTarget(panel)
   }
+  if (replaceAgentSelection) panelLocations.delete('agents')
   panelFrames.value = openingFromClosed || options.root ? [panel]
-    : existingIndex >= 0 ? panelFrames.value.slice(0, existingIndex + 1) : [...panelFrames.value, panel]
+    : existingIndex >= 0 ? frames.slice(0, existingIndex + 1) : [...frames, panel]
   panelReturnPanel.value = panelFrames.value.at(-2) || ''
   if (openingFromClosed) {
     formalTaskRef.value = null
@@ -1745,9 +1838,12 @@ const handlePortraitTaskBoard = () => {
 
 const handlePortraitTaskDiscussion = task => {
   if (voiceInteractionLocked.value || !task?.id) return false
-  closePortraitTaskDetail()
-  discussTask(task)
-  return true
+  const target = task.funding?.mode === 'FUNDED_SINGLE_AGENT'
+    ? operableRosterAgents.value.find(agent => agent.agentId === task.assignedAgentId)
+    : assignedTaskTarget(task)
+  const entered = discussTask(task, target)
+  if (entered) closePortraitTaskDetail()
+  return entered
 }
 
 watch(experienceMode, mode => {
@@ -1768,10 +1864,10 @@ const openOverviewItem = ref => {
 }
 
 const handleQuickRequest = async (request, settle = () => {}) => {
-  if (typeof request?.request !== 'string' || !request.request.trim()) return false
+  if (typeof request?.request !== 'string' || (!request.request.trim() && !request.materials?.length)) return false
   const identity = hallIdentityScope.value
   const epoch = apiStore.authorizationGeneration
-  const created = await createTask({ title: request.request, description: request.request, attachments: request.materials ?? [] })
+  const created = await createTask({ title: [...request.request.trim()].slice(0, 36).join('') || '资料处理', description: request.request, attachments: request.materials ?? [] })
   if (identity !== hallIdentityScope.value || epoch !== apiStore.authorizationGeneration) return false
   settle(created === true)
   if (!created) {
@@ -1779,24 +1875,39 @@ const handleQuickRequest = async (request, settle = () => {}) => {
     return false
   }
   hallReadRevision.value += 1
-  openPanel('agents')
+  // onCommitted already opens the saved task and its recommendations.
   return true
 }
 
-const openOverviewTask = async (task, review = null) => {
-  if (guardPanelLeave(() => openOverviewTask(task, review))) return false
-  if (!task?.id || !openPanel('tasks', { restore: true })) return false
+const openOverviewTask = async (task, review = null, options = {}) => {
+  if (guardPanelLeave(() => openOverviewTask(task, review, options))) return false
+  if (!task?.id || !openPanel('tasks', { ...options, restore: true })) return false
   taskReviewRef.value = review ? { ...review, taskId: task.id } : null
   selectedTask.value = task
   await nextTick()
   bountyPanelRef.value?.openTask(task)
-  formalTaskRef.value = review ? task : null
+  // Overview review hints are metadata, not a separate destination or acceptance authority.
+  formalTaskRef.value = null
   return true
 }
 
+const openPendingTaskDetail = task => openOverviewTask(task, null, { root: true })
+
 // Creation owns a separate page in every layout; the task board only manages existing matters.
 const openDefaultRequirementCreate = () => {
-  return openPrivateDraft()
+  return openPanel('formalDraft', { restore: true })
+}
+const openReferencedRequirement = (context = {}) => {
+  if (guardPanelLeave(() => openReferencedRequirement(context))) return false
+  if (!openPanel('formalDraft', { restore: true })) return false
+  // Source provenance is readable text/origin, not private-execution source authority.
+  formalDraftContext.value = {
+    originRef: context.originRef || 'juyiting',
+    instruction: context.instruction || '',
+    inputs: (context.inputs || []).map(({ fileId, version }) => ({ fileId, version }))
+  }
+  formalDraftGeneration.value += 1
+  return true
 }
 const openPrivateDraft = (context = {}) => {
   if (guardPanelLeave(() => openPrivateDraft(context))) return false
@@ -1814,7 +1925,7 @@ const openFormalResults = task => {
 }
 // Return only to the scoped existing discussion; never point, create, or send on navigation.
 const continueBountyModification = async (task, source) => {
-  if (!task?.id || isTerminalMatter(task) || (source && source.taskId !== task.id) || !openPanel('chat')) return false
+  if (!task?.id || (isTerminalMatter(task) && String(task.status).toLowerCase() !== 'completed') || (source && source.taskId !== task.id) || !openPanel('chat')) return false
   const identity = `${apiStore.authorizationGeneration}\u0000${hallIdentityScope.value}`
   const sameDiscussion = chatMode.value === 'bounty' && conversationTask.value?.id === task.id
   if (sameDiscussion && conversationId.value && (!source?.conversationId || conversationId.value === source.conversationId)) return true
@@ -1850,7 +1961,7 @@ const returnPanel = () => {
   if (guardPanelLeave(() => returnPanel() || closePanel())) return true
   if (renderedPanel.value === 'tasks' && formalTaskRef.value) { formalTaskRef.value = null; return true }
   if (panelChildCanReturn.value) {
-    const child = renderedPanel.value === 'tasks' ? bountyPanelRef.value
+    const child = renderedPanel.value === 'agents' ? agentPanelRef.value : renderedPanel.value === 'tasks' ? bountyPanelRef.value
       : renderedPanel.value === 'treasure' ? treasurePanelRef.value : libraryPanelRef.value
     return child.back()
   }
@@ -1869,6 +1980,7 @@ const closePanel = () => {
 }
 
 const handleHallReturn = () => {
+  if (renderedPanel.value === 'agents' && agentPanelRef.value?.canGoBack) return returnPanel()
   if (navigationPresentation.value.showRootReturn) return closePanel()
   return returnPanel()
 }
@@ -1925,6 +2037,7 @@ watch([() => apiStore.authorizationGeneration, hallIdentityScope], () => {
   panelLocations.clear()
   cancelPanelLeave()
   draftContext.value = null
+  formalDraftContext.value = null
   formalTaskRef.value = null
   overviewItemRef.value = null
   taskReviewRef.value = null
@@ -1947,26 +2060,27 @@ const briefSelectedTask = (task = selectedTask.value, agent = selectedAgent.valu
   } else {
     enterBountyDiscussion(task)
   }
-  const abilities = (task.requiredAbilities || []).join(' / ') || '不拘本领'
-  const target = agent ? `可请 ${portraitShortName(agent)} / ${agent.name || agent.personaName || agent.agentId} 领令。` : '请点一位合适好汉领令。'
-  if (!draft.value.trim()) setDraft(`请就榜文「${task.title}」议事：榜号 ${task.id}，眼下 ${taskStatusText(task.status)}，所需本领 ${abilities}。${target}请说明险处与下一步章程。`)
-  showToast('议事话头已备')
+  showToast('已进入议事')
 }
 
 const discussTask = (task, explicitAgent) => {
   if (isTerminalMatter(task)) return false
-  const assignedIds = [...new Set((Array.isArray(task?.assignedAgentIds) ? task.assignedAgentIds : [task?.assignedAgentId]).filter(Boolean))]
-  const actorAgentId = typeof explicitAgent?.agentId === 'string' ? explicitAgent.agentId : ''
-  const actor = assignedIds.length === 1 && assignedIds[0] === actorAgentId
-    ? operableRosterAgents.value.find(agent => agent.agentId === actorAgentId) || null
-    : null
+  let actor
+  if (task?.funding?.mode === 'FUNDED_SINGLE_AGENT') {
+    const ids = [...new Set((Array.isArray(task.assignedAgentIds) ? task.assignedAgentIds : [task.assignedAgentId]).filter(Boolean))]
+    actor = ids.length === 1 && ids[0] === explicitAgent?.agentId
+      ? operableRosterAgents.value.find(agent => agent.agentId === ids[0]) : null
+  } else {
+    if (!projectHallTask({ task }).actions.includes('DISCUSS')) return false
+    const target = assignedTaskTarget(task)
+    actor = target?.agentId === explicitAgent?.agentId ? target : null
+  }
   if (!task?.id || !actor || !openPanel('chat')) return false
   enterBountyDiscussion(task)
   // Clicking the task-scoped button is the user's explicit actor selection. Keep
   // assignment itself non-authorizing, then bind only this exact task/actor pair.
   taskWorkspaceBinding.selectExplicitActor(actor)
   markDiscussionStarted(task, chatContext.value?.participantAgentIds || [])
-  if (!draft.value.trim()) setDraft(`请就榜文「${task.title}」议事。`)
   return true
 }
 
@@ -2039,7 +2153,7 @@ const {
     hallReadRevision.value += 1
     syncAfterPersonaChanged()
   },
-  fundedActorScopeKey: computed(() => economyPreviewCapability.value?.principalScopeFingerprint || ''),
+  fundedActorScopeKey: computed(() => economyPreviewCapability.value?.principalScopeSha256 || ''),
   resolveFundedAgent: agent => agents.value.find(item => item.agentId === agent.agentId),
   canAssign,
   log,
@@ -2074,7 +2188,8 @@ const {
     selectedTask.value = receipt.task
     markTaskCreated(receipt.task)
     playSuccess()
-    showToast('榜文及所选资料已确认；点将后才开始办理。')
+    showToast('需求已保存为待点将事项；确认承办后才开始办理。')
+    void openPendingTaskDetail(receipt.task)
     return true
   }
 })
@@ -2149,6 +2264,7 @@ const {
   cancelHallReplyTurn,
   cancelDeliberation,
   durableCancelTarget,
+  replyCancellationState,
   chatConnectionStatus,
   deliberationStatus,
   conversationHistory,
@@ -2174,8 +2290,9 @@ const {
   newHallConversation,
   pendingAgentName,
   replyEventSequence,
-  retryHallConversation,
+  retryHallConversation: reloadHallConversation,
   refreshExecutionRequest,
+  refreshHallProjections,
   sendHallMessage,
   senderText,
   selectHallConversation,
@@ -2186,6 +2303,7 @@ const {
   stopHallReplyPolling,
   stopHallReplyStreaming
 } = useHallConversation({
+  identityScope: hallIdentityScope,
   apiStore,
   chatContext,
   chatMode,
@@ -2214,27 +2332,25 @@ let typedDeliberation = null
 const bountyAssignmentContext = useHallBountyAssignmentContext({
   chatApi, identityScope: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
   getContext: () => ({ conversationId: conversationId.value, taskId: conversationTask.value?.id || '',
-    targetAgentId: bountyInteractionTargetId(chatContext.value), taskVersion: conversationTask.value?.taskVersion || '',
-    conversationGeneration: activeRequest.value?.conversationGeneration || '' }),
-  getContextGeneration: () => followupContextGeneration.value, enabled: () => typedDeliberationEnabled.value
+    targetAgentId: bountyInteractionTargetId(chatContext.value), taskVersion: conversationTask.value?.taskVersion || '' }),
+  enabled: () => typedDeliberationEnabled.value
 })
 const bountyRequestCatalog = useHallBountyRequestCatalog({
   chatApi, identityScope: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
   getContext: () => ({ conversationId: conversationId.value, taskId: conversationTask.value?.id || '',
-    targetAgentId: bountyInteractionTargetId(chatContext.value), assignmentRevision: typedAssignmentRevision() }),
+    targetAgentId: bountyInteractionTargetId(chatContext.value), assignmentRevision: typedAssignmentRevision(),
+    conversationGeneration: typedConversationGeneration() }),
   getContextGeneration: () => followupContextGeneration.value, enabled: () => multimediaDeliberationUiEnabled && chatMode.value === 'bounty'
 })
 notifyBountyRequestCatalog = async () => {
-  if (await bountyRequestCatalog.refresh()) await typedDeliberation?.refresh?.()
+  if (!typedDeliberationEnabled.value) return true
+  return refreshFollowupContext()
 }
 const invalidateFollowupContext = () => { followupContextGeneration.value++; typedDeliberation?.invalidate?.() }
-const typedAssignmentRevision = () => currentBountyAssignmentRevision({
-  task: conversationTask.value, targetAgentId: bountyInteractionTargetId(chatContext.value),
-  conversationId: conversationId.value, state: pointAndStartState.value
-}) || bountyAssignmentContext.projection.value?.assignmentRevision || ''
-const typedConversationGeneration = () => typedLong(activeRequest.value?.conversationGeneration) ||
-  typedLong(bountyRequestCatalog.entries.value?.[0]?.request?.conversationGeneration) ||
-  bountyAssignmentContext.projection.value?.conversationGeneration || ''
+// Only the authenticated binding owns these values. A newly adopted request or
+// a catalog reset is a projection update, not a new conversation generation.
+const typedAssignmentRevision = () => bountyAssignmentContext.projection.value?.assignmentRevision || ''
+const typedConversationGeneration = () => bountyAssignmentContext.projection.value?.conversationGeneration || ''
 const typedDeliberationContext = () => ({ conversationId: conversationId.value, taskId: conversationTask.value?.id || '',
   targetAgentId: bountyInteractionTargetId(chatContext.value), assignmentRevision: typedAssignmentRevision(),
   conversationGeneration: typedConversationGeneration() })
@@ -2262,6 +2378,7 @@ typedDeliberation = useHallTypedDeliberation({
 // admission is marked below, so its own reactive write cannot cancel adoption.
 const pointAndStartContextGeneration = ref(0)
 let admittedPointAndStartTaskFingerprint = null
+let admittedPointAndStartActorReset = null
 const pointAndStartTaskFingerprint = task => [task?.id, task?.taskVersion, task?.requirementRevision, task?.revision]
   .map(value => value == null ? '' : String(value)).join('\u0000')
 const preserveAdmittedPointAndStartContext = task => { admittedPointAndStartTaskFingerprint = pointAndStartTaskFingerprint(task) }
@@ -2278,14 +2395,17 @@ const attachAdmittedPointAndStart = async ({ task, targetAgentId, reference, isC
   if (!isCurrent?.() || panelDisposed || task?.id !== reference?.taskId || targetAgentId !== reference?.targetAgentId) return false
   // Admission receives only the canonical TaskDTO. Never synthesize assignment
   // fields from a grant receipt or choose a different roster target.
-  const target = operableRosterAgents.value.find(agent => agent?.agentId === targetAgentId)
-  if (!target) return false
+  const target = assignedTaskTarget(task)
+  if (target?.agentId !== targetAgentId) return false
   tasks.value = tasks.value.map(item => item?.id === task.id ? task : item)
   preserveAdmittedPointAndStartContext(task)
   hallReadRevision.value += 1
   selectedTask.value = task
-  if (!openPanel('chat')) return false
-  enterBountyDiscussion(task)
+  if (!openPanel('chat', { consumeAgentSelection: true })) return false
+  // Bounty context clears the directory selection synchronously; this is not
+  // a user target change and must not invalidate its own admitted bootstrap.
+  admittedPointAndStartActorReset = selectedAgent.value?.agentId || null
+  try { enterBountyDiscussion(task) } finally { admittedPointAndStartActorReset = null }
   await nextTick()
   if (!isCurrent?.() || panelDisposed || selectedTask.value?.id !== task.id) return false
   return adoptBountyBootstrap(reference)
@@ -2304,10 +2424,7 @@ const {
   actorScopeKey: hallIdentityScope,
   storage: pointAndStartStorage,
   getContextGeneration: () => pointAndStartContextGeneration.value,
-  canAssign: (task, agent) => {
-    const current = operableRosterAgents.value.find(item => item?.agentId === agent?.agentId)
-    return Boolean(current && canAssign(task, current))
-  },
+  canAssign,
   onAssignmentConfirmed: ({ isCurrent }) => {
     if (isCurrent?.() && !panelDisposed) hallReadRevision.value += 1
   },
@@ -2315,6 +2432,22 @@ const {
 })
 // The directory starts an immediate context watch; initialize the assignment
 // state first so mounted private and bounty panels share the same safe fence.
+const agentProfile = useHallAgentProfileCapabilities({
+  api: agentApi,
+  getAgent: () => selectedAgent.value,
+  identityKey: () => hallIdentityScope.value ? `${hallIdentityScope.value}:${apiStore.authorizationGeneration}` : '',
+  enabled: () => renderedPanel.value === 'agents' && activePanel.value === 'agents' && Boolean(agentPanelRef.value?.profileVisible)
+})
+const externalPolicy = useExternalServicePolicy({
+  api: agentApi,
+  getAgent: () => selectedAgent.value,
+  identityScope: () => hallIdentityScope.value,
+  authorizationGeneration: () => apiStore.authorizationGeneration,
+  enabled: () => renderedPanel.value === 'agents' && activePanel.value === 'agents' && Boolean(agentPanelRef.value?.profileVisible),
+  storage: pointAndStartStorage
+})
+onUnmounted(() => { agentProfile.dispose(); externalPolicy.dispose() })
+
 const taskSkillDirectory = useHallSkillCapabilities({ api: agentApi, getContext: typedDeliberationContext,
   identityKey: () => `${hallIdentityScope.value}\u0000${apiStore.authorizationGeneration}\u0000${followupContextGeneration.value}`,
   enabled: () => typedDeliberationEnabled.value })
@@ -2325,7 +2458,8 @@ const explainPointAndStartState = () => ({
   PREPARING: '正在准备会话。',
   ADMITTED: '需求已发送，正在进入会话。',
   HISTORICAL: '本次指派已结束，可查看历史记录。',
-  FAILED: '点将未完成，请刷新状态查看详情。'
+  FAILED: '点将未完成，请刷新状态查看详情。',
+  REJECTED: '委派未受理，候选已重新核对；请确认目标和事项状态。'
 }[pointAndStartState.value.status] || '正在确认点将结果。')
 const checkPointAndStartOriginal = async (task) => {
   if (!task?.id) return false
@@ -2381,11 +2515,12 @@ const assignTask = async (task, agent) => {
   const oneOrdinaryTarget = task.funding?.mode !== 'FUNDED_SINGLE_AGENT' && targetAgents.length === 1
   if (oneOrdinaryTarget) {
     const started = await startPointAndStart({ task, agent: targetAgents[0] })
-    if (!started) showToast(explainPointAndStartState())
+    if (!started) { showToast(explainPointAndStartState()); void loadAssigneeCandidates() }
     if (pointAndStartState.value.status === 'PREPARING') observePointAndStart(task.id)
     return started
   }
 
+  if (targetAgents.some(target => !operableRosterAgents.value.some(owned => owned.agentId === target.agentId && normalizeStatus(owned.status) === 'online'))) return false
   taskWorkspaceBinding.clearExplicitActor()
   const assignmentSucceeded = await runAssignTask(task, agent)
   if (!assignmentSucceeded) return false
@@ -2401,20 +2536,54 @@ watch(() => [selectedTask.value?.id, selectedTask.value?.taskVersion, selectedTa
   admittedPointAndStartTaskFingerprint = null
   if (admittedProjection) return
   clearPointAndStartCapability()
-  if (taskId && pointAndStartIntentState(taskId).state === 'PRESENT') void checkPointAndStartOriginal({ id: taskId })
+  // A selected snapshot refresh is not an explicit request to enter discussion.
+  if (taskId && pointAndStartIntentState(taskId).state === 'PRESENT') void checkPointAndStart(taskId, { attach: false })
 }, { flush: 'sync' })
-watch([() => apiStore.authorizationGeneration, hallIdentityScope, () => selectedAgent.value?.agentId], clearPointAndStartCapability, { flush: 'sync' })
-const followupTaskFence = computed(() => [selectedTask.value?.id, selectedTask.value?.taskVersion,
-  selectedTask.value?.requirementRevision, selectedTask.value?.revision].map(value => value == null ? '' : String(value)).join('\u0000'))
-watch([followupTaskFence, () => apiStore.authorizationGeneration, hallIdentityScope, () => conversationId.value,
-  () => activeRequest.value?.conversationGeneration, () => bountyInteractionTargetId(chatContext.value), () => chatMode.value], invalidateFollowupContext, { flush: 'sync' })
-watch([followupTaskFence, () => apiStore.authorizationGeneration, hallIdentityScope, () => conversationId.value,
-  () => activeRequest.value?.conversationGeneration, () => bountyInteractionTargetId(chatContext.value), () => chatMode.value], () => {
-  bountyRequestCatalog.reset()
-  if (chatMode.value === 'bounty' && conversationId.value) {
-    void bountyRequestCatalog.refresh()
-    void typedDeliberation?.recover?.()
+watch([() => apiStore.authorizationGeneration, hallIdentityScope], clearPointAndStartCapability, { flush: 'sync' })
+watch(() => selectedAgent.value?.agentId, (target, previous) => {
+  if (!target && previous && admittedPointAndStartActorReset === previous) return
+  clearPointAndStartCapability()
+}, { flush: 'sync' })
+const followupTaskFence = computed(() => [conversationTask.value?.id, conversationTask.value?.taskVersion,
+  conversationTask.value?.requirementRevision, conversationTask.value?.revision].map(value => value == null ? '' : String(value)).join('\u0000'))
+const refreshCurrentConversationTask = () => {
+  const fence = [hallIdentityScope.value, apiStore.authorizationGeneration, conversationId.value, conversationTask.value?.id, chatMode.value]
+  return refreshConversationTask({ agentApi, isCurrent: () => {
+    const now = [hallIdentityScope.value, apiStore.authorizationGeneration, conversationId.value, conversationTask.value?.id, chatMode.value]
+    return fence.every((value, index) => value === now[index])
+  } })
+}
+const retryHallConversation = async () => {
+  if (chatMode.value === 'bounty' && !await refreshCurrentConversationTask()) {
+    showToast('事项状态未能核对，请重试；草稿已保留。')
+    return false
   }
+  return reloadHallConversation()
+}
+const refreshFollowupContext = async () => {
+  if (!typedDeliberationEnabled.value || !conversationId.value) return false
+  if (!await refreshCurrentConversationTask()) return false
+  const captured = followupContextGeneration.value
+  if (!await bountyAssignmentContext.refresh() || captured !== followupContextGeneration.value) return false
+  if (!await bountyRequestCatalog.refresh() || captured !== followupContextGeneration.value) return false
+  return await typedDeliberation.refresh() && await typedDeliberation.recover()
+}
+const resetFollowupContext = () => {
+  invalidateFollowupContext()
+  bountyRequestCatalog.reset()
+  void refreshHallProjections({ type: 'resync_required', conversationId: conversationId.value })
+}
+watch([followupTaskFence, () => apiStore.authorizationGeneration, hallIdentityScope, () => conversationId.value,
+  () => bountyInteractionTargetId(chatContext.value), () => chatMode.value], resetFollowupContext, { flush: 'sync' })
+// Initial binding publication is not a switch. A later authoritative generation
+// or assignment change fences old operations without resetting the binding itself.
+watch(() => bountyAssignmentContext.projection.value, (next, previous) => {
+  if (next && previous && (next.conversationGeneration !== previous.conversationGeneration ||
+    next.assignmentRevision !== previous.assignmentRevision)) resetFollowupContext()
+}, { flush: 'sync' })
+watch(() => activeRequest.value?.conversationGeneration, generation => {
+  const trusted = bountyAssignmentContext.projection.value?.conversationGeneration
+  if (trusted && typedLong(generation) && generation !== trusted) resetFollowupContext()
 }, { flush: 'sync' })
 
 const terminalHistory = useOutputs({
@@ -2453,7 +2622,7 @@ watch([() => terminalHistory.cacheKey.value, () => terminalConversationHistory.s
       const requestId = entry.request?.requestId
       if (!requestId) continue
       const response = await chatApi.get(`/requests/${encodeURIComponent(requestId)}`, {}, { autoLoading: false, signal: controller.signal })
-      const request = response?.data?.data ?? response?.data
+      const request = response
       if (request?.requestId !== requestId || request.conversationId !== scope.conversationId) throw new Error('历史议事来源不匹配')
       for (const turn of request.turns || []) {
         if (turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state)) continue
@@ -2557,6 +2726,70 @@ hallVoice = useHallVoiceConversation({
   showToast
 })
 const voiceInteractionLocked = computed(() => hallVoice.voiceInteractionLocked)
+// Task-level review ownership is independent of the currently browsed message/output.
+const reviewTaskId = computed(() => renderedPanel.value === 'chat' && chatMode.value === 'bounty'
+  ? conversationTask.value?.id || '' : renderedPanel.value === 'tasks' ? formalTaskRef.value?.id || selectedTask.value?.id || '' : '')
+const deliveryReview = useHallDeliveryReview({ api: agentApi, taskId: reviewTaskId,
+  identityScope: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
+  enabled: () => multimediaDeliberationUiEnabled })
+const selectedOutputCandidates = ref([]); const selectedOutputPreview = ref(null); const bountyDiscussionRef = ref(null)
+const selectedOutputReview = useHallSelectedOutputReview({ api: agentApi, review: deliveryReview, taskId: reviewTaskId,
+  conversationId, identityKey: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration, candidates: selectedOutputCandidates })
+const openSelectedOutputReview = async item => {
+  if (reviewInteractionLocked()) return
+  selectedOutputPreview.value = null
+  await selectedOutputReview.show(item)
+}
+const previewSelectedOutput = item => { selectedOutputPreview.value = null; return bountyDiscussionRef.value?.previewSelected(item) }
+watch(() => [reviewTaskId.value, conversationId.value, apiStore.authorizationGeneration, hallIdentityScope.value], () => {
+  selectedOutputCandidates.value = []; selectedOutputPreview.value = null
+}, { flush: 'sync' })
+const reviewPreviewItem = ref(null); const reviewPreviewError = ref('')
+const reviewOutputs = useOutputs({ source: () => reviewTaskId.value && (deliveryReview.dialogOpen.value || formalTaskRef.value)
+  ? { type: 'task', id: reviewTaskId.value } : null,
+  identityFingerprint: () => `${apiStore.authorizationGeneration}\u0000${hallIdentityScope.value}`, pageSize: 100 })
+const reviewInteractionLocked = () => Boolean(hallVoice?.voiceInteractionLocked || (chatMode.value === 'bounty' && conversationTask.value?.id === reviewTaskId.value && isConversationBusy.value))
+const openDeliveryReview = async task => {
+  if (reviewInteractionLocked()) return
+  if (task?.id) selectedTask.value = task
+  reviewPreviewItem.value = null; reviewPreviewError.value = ''
+  await deliveryReview.openConfirmation()
+}
+const confirmDeliveryReview = async () => {
+  if (reviewInteractionLocked()) return
+  await deliveryReview.confirmAcceptance()
+}
+let reviewPreviewGeneration = 0
+const previewReviewOutput = async item => {
+  const generation = ++reviewPreviewGeneration
+  const id = reviewTaskId.value; const identity = hallIdentityScope.value; const auth = apiStore.authorizationGeneration
+  reviewPreviewError.value = ''; reviewPreviewItem.value = null
+  const current = () => generation === reviewPreviewGeneration && id === reviewTaskId.value && identity === hallIdentityScope.value && auth === apiStore.authorizationGeneration
+  const findExact = () => reviewOutputs.items.value.find(output => output.artifactId === item.artifactId && String(output.artifactVersion) === item.artifactVersion && output.sha256 === item.contentHash)
+  if (!findExact()) {
+    try { await reviewOutputs.refresh() } catch {
+      if (current()) reviewPreviewError.value = '成果读取失败，请重试；不会换用其他版本。'
+      return
+    }
+  }
+  if (!current()) return
+  const exact = findExact()
+  if (!exact || !exact.canPreview) { reviewPreviewError.value = '此固定成果暂不可预览，请重新核对；不会换用其他版本。'; return }
+  reviewPreviewItem.value = exact
+}
+watch(() => [reviewTaskId.value, apiStore.authorizationGeneration, hallIdentityScope.value], () => { reviewPreviewGeneration++; reviewPreviewItem.value = null; reviewPreviewError.value = '' }, { flush: 'sync' })
+let lastReviewCompletion = ''
+watch(() => deliveryReview.operation.value.receipt, receipt => {
+  if (!receipt || receipt.taskId !== reviewTaskId.value || receipt.state !== 'COMMITTED' || receipt.decision !== 'ACCEPT' || receipt.taskState !== 'COMPLETED') return
+  const key = `${apiStore.authorizationGeneration}\u0000${hallIdentityScope.value}\u0000${receipt.operationId}`
+  if (key === lastReviewCompletion) return
+  lastReviewCompletion = key
+  hallReadRevision.value += 1
+  void loadTasks({ refreshTaskId: receipt.taskId, minimumTaskVersion: receipt.taskVersion })
+})
+watch(() => [conversationTask.value?.taskVersion, selectedTask.value?.taskVersion, formalTaskRef.value?.taskVersion,
+  typedDeliberation.cards.value.map(card => `${card.outcome?.outcomeId}:${card.state}:${card.submissionProgress?.state}:${card.submissionProgress?.dispatchVersion}:${card.submissionProgress?.operationStateVersion}:${card.reviewProgress?.state}:${card.reviewProgress?.stateVersion}`).join('|')].join('\u0000'), () => { if (reviewTaskId.value) void deliveryReview.refresh() })
+
 const accountEntryDisabled = computed(() => isPanelSessionActive.value || voiceInteractionLocked.value)
 const hallLeaveHasMeaningfulWork = computed(() => hasMeaningfulHallLeaveWork({
   draft: draft.value,
@@ -2608,6 +2841,7 @@ const {
   librarySourceType,
   searchLibrary: runSearchLibrary
 } = useHallLibrary({
+  openRequirement: openReferencedRequirement,
   chatApi,
   draft,
   log,
@@ -2625,8 +2859,7 @@ const searchLibrary = async () => {
 }
 
 const citeLibraryItem = (item) => {
-  runCiteLibraryItem(item)
-  markLibraryCitation(item)
+  if (runCiteLibraryItem(item)) markLibraryCitation(item)
 }
 
 const startDialogueBubbles = () => {
@@ -2677,10 +2910,10 @@ const handleSendHallMessage = async (typedInput = {}) => {
   playSend()
   if (typedDeliberationEnabled.value) {
     const sourceSelectors = Array.isArray(typedInput?.sourceSelectors) ? typedInput.sourceSelectors : []
-    if (!typedAssignmentRevision() && conversationTask.value?.id) {
+    if (conversationTask.value?.id) {
       const fence = [hallIdentityScope.value, apiStore.authorizationGeneration, conversationTask.value.id,
         conversationId.value, bountyInteractionTargetId(chatContext.value), draft.value]
-      const prepared = await bountyAssignmentContext.refresh()
+      const prepared = await refreshCurrentConversationTask() && await bountyAssignmentContext.refresh()
       const current = [hallIdentityScope.value, apiStore.authorizationGeneration, conversationTask.value?.id,
         conversationId.value, bountyInteractionTargetId(chatContext.value), draft.value]
       if (fence.some((value, index) => value !== current[index])) return false
@@ -2754,7 +2987,6 @@ const handleStartAgentConversation = (candidate) => {
   playAgentSelect()
   enterPrivateConversation(agent)
   markAgentSpeaking(agent, '入席密议', 'system')
-  if (!draft.value.trim()) setDraft('请报眼下动静、可领何榜、还需哪路照应。')
   showToast(`正与 ${portraitShortName(agent)} 密议`)
   return true
 }
@@ -2849,6 +3081,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  disposeHallData?.()
   cancelHostedPointWait()
   document.removeEventListener?.('visibilitychange', handleDocumentVisibility)
   panelDisposed = true
@@ -2863,6 +3096,7 @@ onUnmounted(() => {
   renderedPanel.value = ''
   taskWorkspaceBinding.dispose()
   voiceReplyCorrelation.close('unmount')
+  reviewOutputs.dispose()
   hallVoice?.dispose()
   clearPointAndStartCapability()
   disposeRequirementCreate()
@@ -3538,7 +3772,23 @@ button.hall-room {
   bottom: auto;
   height: min(100%, var(--hall-visual-height, 100%));
   max-height: 100%;
+  padding: 0;
 }
+.panel-overlay.is-chat-overlay > .floating-panel {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+}
+.panel-overlay.is-chat-overlay :deep(.discussion-panel) { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+.panel-overlay.is-chat-overlay :deep(.chat-panel) { flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+.panel-overlay.is-chat-overlay :deep(.hall-messages) { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+
 
 /* A handling session is one active, near-full work window. Landscape does
  * not degrade it into a right-side half drawer. */
@@ -3556,6 +3806,9 @@ button.hall-room {
   max-height: 100%;
   border-radius: 10px;
 }
+
+.panel-overlay.is-full-window.is-chat-overlay { padding: 0; }
+.panel-overlay.is-full-window.is-chat-overlay > .floating-panel.layout-full-window { width: 100%; max-width: none; border-radius: 0; }
 
 .panel-overlay.is-compact-chat-overlay .panel-title {
   padding: 6px 10px;
@@ -4287,7 +4540,7 @@ button.hall-room {
   gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--work-line); scrollbar-width: none;
 }
 .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs button) {
-  flex: 0 0 auto; min-height: 38px; background: var(--hall-surface-subtle); color: var(--work-muted); border: 1px solid var(--work-line);
+  flex: 0 0 auto; min-height: 44px; background: var(--hall-surface-subtle); color: var(--work-muted); border: 1px solid var(--work-line);
 }
 .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs::-webkit-scrollbar) { display: none; }
 .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .task-status-tabs button.active) { background: var(--hall-surface-brand); color: var(--work-brand); border-color: #e3d8d0; }
@@ -4614,18 +4867,21 @@ button.hall-room {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 12px 12px 18px;
-    overflow: auto;
+    padding: 12px;
+    overflow: hidden;
   }
   .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .agent-list) {
     order: 1;
-    flex: 0 0 auto;
-    max-height: 44vh;
+    flex: 1;
+    min-height: 0;
+    max-height: none;
     overflow: auto;
   }
   .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .detail-card) {
     order: 2;
-    flex: 0 0 auto;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .home-overview .panel-overlay.theme-workbench :deep(.bounty-panel .panel-toolbar) {
@@ -4679,8 +4935,8 @@ button.hall-room {
     overflow: visible;
   }
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions .icon-button) {
-    min-width: 38px;
-    height: 38px;
+    min-width: 44px;
+    height: 44px;
   }
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions .material-reference-entry),
   .home-overview .panel-overlay.theme-workbench.is-chat-overlay :deep(.toolbar-actions .workspace-entry) {
@@ -4728,7 +4984,7 @@ button.hall-room {
   }
   .home-overview .panel-overlay.theme-workbench :deep(.agent-panel-body) {
     display: grid;
-    grid-template-columns: minmax(260px, .85fr) minmax(0, 1.15fr);
+    grid-template-columns: minmax(0, 43fr) minmax(0, 57fr);
     gap: 10px;
     overflow: hidden;
   }
@@ -4739,7 +4995,7 @@ button.hall-room {
   }
   .home-overview .panel-overlay.theme-workbench :deep(.agent-panel .detail-card) {
     order: initial;
-    overflow: auto;
+    overflow: hidden;
   }
   .home-overview .panel-overlay.theme-workbench :deep(.hall-draft-editor form) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4761,4 +5017,67 @@ button.hall-room {
   }
 }
 
+
+.home-overview .panel-overlay.theme-workbench.is-agent-overlay .panel-title .panel-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 44px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  color: var(--hall-text-muted);
+}
+.home-overview .panel-overlay.theme-workbench.is-agent-overlay .panel-title .panel-close:hover:not(:disabled) {
+  background: var(--hall-surface-brand);
+  color: var(--hall-brand);
+}
+.home-overview .panel-overlay.theme-workbench.is-agent-overlay .panel-title .panel-close:focus-visible {
+  outline: 2px solid var(--hall-brand);
+  outline-offset: 2px;
+}
+@media (min-width: 721px) {
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel-body) {
+    display: grid;
+    grid-template-columns: minmax(0, 43fr) minmax(0, 57fr);
+    min-height: 0;
+    overflow: hidden;
+  }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel .detail-card) { overflow: hidden; }
+}
+@media (max-width: 720px) {
+  .juyi-page .panel-overlay.is-agent-overlay {
+    inset: 0;
+    width: 100%;
+    height: var(--hall-visual-height, 100dvh);
+    max-height: var(--hall-visual-height, 100dvh);
+    padding: 0;
+    align-items: stretch;
+    overflow: hidden;
+  }
+  .panel-overlay.is-agent-overlay > .floating-panel.panel-agents {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    min-height: 0;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    overflow: hidden;
+  }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel-body) { display: flex; min-height: 0; overflow: hidden; }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel .detail-card) { min-height: 0; padding: 0; overflow: hidden; }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel.is-agent-detail .panel-toolbar) { display: none; }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel .panel-toolbar > button) { width: 100%; }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel .status-filter) { flex-wrap: wrap; gap: 6px; overflow: visible; }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel .status-filter button) { min-height: 44px; padding: 8px 10px; }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel.is-agent-detail .agent-panel-body) { padding: 0; gap: 0; }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay :deep(.agent-panel.is-agent-detail .detail-card) { width: 100%; border: 0; border-radius: 0; }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay .panel-title { padding: 4px 12px; }
+  .home-overview .panel-overlay.theme-workbench.is-agent-overlay .panel-title > span { display: block; }
+}
+.selected-output-preview img{display:block;max-width:100%;max-height:280px;object-fit:contain}.selected-output-preview pre{white-space:pre-wrap;overflow-wrap:anywhere}.selected-output-preview audio{max-width:100%}
 </style>

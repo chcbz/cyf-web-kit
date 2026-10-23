@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 const source = readFileSync(new URL('../src/composables/useOutputs.js', import.meta.url), 'utf8')
 
 assert.match(source, /const documentPreviewMimeTypes = new Set\(\[/)
-assert.match(source, /const previewPartMimeTypes = new Set\(\[TEXT_PREVIEW_MIME, 'image\/png'\]\)/)
+assert.match(source, /const previewPartMimeTypes = new Set\(\[TEXT_PREVIEW_MIME, 'image\/png', 'application\/pdf'\]\)/)
 assert.match(source, /const structuredPreviewMimeTypes = new Set\(\[\.\.\.documentPreviewMimeTypes, 'application\/pdf'\]\)/)
 assert.match(source, /if \(!structuredPreviewMimeTypes\.has\(contentMimeType\)\)/)
 assert.match(source, /deliverables\/\$\{encodeURIComponent\(artifactId\)\}\/versions\/\$\{artifactVersion\}/)
@@ -27,3 +27,5 @@ assert.match(source, /if \(item\.byteLength > 1024 \* 1024\) return 'none'/)
 assert.doesNotMatch(source, /storageUri/)
 
 console.log('Output multi-part preview static contract passed')
+
+assert.doesNotMatch(source, /presentationml\.presentation|PAGED_IMAGE/)

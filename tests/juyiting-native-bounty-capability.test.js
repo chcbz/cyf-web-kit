@@ -132,7 +132,7 @@ describe('native bounty capability contract', () => {
     const calls = []
     const agentApi = { get: async (path, query, options) => {
       calls.push({ path, query, options })
-      return { data: { data: capability() } }
+      return ((capability()))
     } }
     const parsed = await loadNativeBountyCapability({ agentApi, taskId: 'task-1', targetAgentId: 'agent-1' })
     expect(parsed?.taskId).to.equal('task-1')
@@ -140,7 +140,7 @@ describe('native bounty capability contract', () => {
     expect(calls[0].query).to.deep.equal({ targetAgentId: 'agent-1' })
     expect(calls[0].options.autoLoading).to.equal(false)
     const mismatched = await loadNativeBountyCapability({
-      agentApi: { get: async () => ({ data: { data: capability({ targetAgentId: 'other-agent' }) } }) },
+      agentApi: { get: async () => (((capability({ targetAgentId: 'other-agent' })))) },
       taskId: 'task-1', targetAgentId: 'agent-1'
     })
     expect(mismatched).to.equal(null)
@@ -172,7 +172,8 @@ const pageHarness = ({ original = { state: 'ABSENT' }, started = true, status = 
     pointAndStartState: { value: { status } }, observePointAndStart: id => calls.push(['observe', id]),
     explainPointAndStartState: () => '核对原点将', taskWorkspaceBinding: { clearExplicitActor: () => {} },
     runAssignTask: async (task, target) => { calls.push(['other-workflow', task, target]); return true },
-    tasks: { value: [] }, markTaskAssigned: () => {}
+    tasks: { value: [] }, markTaskAssigned: () => {}, loadAssigneeCandidates: async () => {},
+    operableRosterAgents: { value: [{ agentId: 'explicit-agent', status: 'online' }, { agentId: 'second', status: 'online' }] }, normalizeStatus: value => value
   }
   return { calls, assign: new Function(...Object.keys(deps), `return async (task, agent) => {${actualAssign}}`)(...Object.values(deps)) }
 }

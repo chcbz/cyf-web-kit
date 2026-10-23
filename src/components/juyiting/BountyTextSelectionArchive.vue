@@ -25,6 +25,7 @@
 </template>
 
 <script setup>
+import { validMaterialVersion } from '../../composables/juyiting/materialVersion.js'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { createApi } from '../../composables/useHttp.js'
 
@@ -96,7 +97,7 @@ const archive = async retry => {
     requestStarted = true
     const response = await api.execute({ url: `/conversations/${encodeURIComponent(props.conversationId)}/archive-operations`, method: 'POST', headers: { 'Idempotency-Key': intent.idempotencyKey }, data: intent.body, autoLoading: false, needAuth: true })
     if (!ownsAttempt()) return
-    const value = response?.data?.data ?? response?.data
+    const value = response
     const expected = intent.body.items[0].textSelection
     const item = Array.isArray(value?.items) && value.items.length === 1 ? value.items[0] : null
     const selected = item?.textSelection
@@ -117,7 +118,7 @@ const archive = async retry => {
     } else if (value.state === 'partial_failed') {
       state.value = { state: 'error', busy: false, message: typeof item.message === 'string' && item.message ? item.message : '服务端确认文字片段未保存。', intent }
     } else {
-      if (typeof item.fileId !== 'string' || !item.fileId.trim() || !Number.isSafeInteger(item.version) || item.version < 1) throw receiptUnknown()
+      if (typeof item.fileId !== 'string' || !item.fileId.trim() || !validMaterialVersion(item.version)) throw receiptUnknown()
       state.value = { state: 'saved', busy: false, message: `文字片段已保存：${item.fileId} v${item.version}`, intent }
     }
   } catch (cause) {

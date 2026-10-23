@@ -17,8 +17,11 @@ let store
 let originalFetch
 const originalLocks = Object.getOwnPropertyDescriptor(window.navigator, 'locks')
 
-const response = data => new Response(JSON.stringify(data), { status: 200,
+const jsonResponse = data => new Response(JSON.stringify(data), { status: 200,
   headers: { 'Content-Type': 'application/json' } })
+const response = (data, requestId) => new Response(JSON.stringify({
+  protocolVersion: 1, requestId, code: 'E0', msg: 'ok', data
+}), { status: 200, headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId } })
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done }); return { promise, resolve } }
 
 // Compile the actual production call graph with fixed Vite configuration. Do
@@ -91,13 +94,14 @@ function transport (claims = basicClaims(), { identity, profile = { id: 42, jiac
   global.fetch = async (url, options = {}) => {
     calls.push({ url, options })
     if (url === `${fixedRuntime.VITE_OAUTH_BASE_URL}/oauth2/token`) {
-      return response({ access_token: token, token_type: 'Bearer', expires_in: 300 })
+      return jsonResponse({ access_token: token, token_type: 'Bearer', expires_in: 300 })
     }
     // The mock server validates the RS256 signature of this exact bearer. The
     // fixture is intentionally offline and is not a real account/issuer login.
     const current = verifiedClaims(options.headers.Authorization.slice('Bearer '.length))
-    if (url === `${fixedRuntime.VITE_OAUTH_BASE_URL}/resource`) return response(identity || resourceIdentity(current))
-    if (url === `${fixedRuntime.VITE_API_BASE_URL}/user/my`) return response({ data: profile })
+    const requestId = new Headers(options.headers).get('X-Request-Id')
+    if (url === `${fixedRuntime.VITE_OAUTH_BASE_URL}/resource`) return response(identity || resourceIdentity(current), requestId)
+    if (url === `${fixedRuntime.VITE_API_BASE_URL}/user/my`) return response(profile, requestId)
     throw new Error(`Unexpected offline URL: ${url}`)
   }
   return { token, claims, calls }
@@ -214,7 +218,7 @@ async function login (claims = basicClaims(), options) {
     await started.promise
     store.clearIdentity()
     expect(request.signal.aborted).to.equal(true)
-    wait.resolve(response(resourceIdentity(server.claims)))
+    wait.resolve(response(resourceIdentity(server.claims), new Headers(request.headers).get('X-Request-Id')))
     expect((await pending).name).to.equal('AbortError')
     expect(store.hasActiveToken()).to.equal(false)
     expect(store.tenantIdentity).to.equal(null)
@@ -235,7 +239,7 @@ async function login (claims = basicClaims(), options) {
     expect(request.cache).to.equal('no-store')
     store.clearIdentity()
     expect(request.signal.aborted).to.equal(true)
-    wait.resolve(response({ data: 'old-permission' }))
+    wait.resolve(response('old-permission', new Headers(request.headers).get('X-Request-Id')))
     expect((await pending).name).to.equal('AbortError')
     expect(published).to.deep.equal([])
     expect(runtime.browserBusinessNamespace(store, runtime.useGlobalStore())).to.equal('')
@@ -256,7 +260,8 @@ async function login (claims = basicClaims(), options) {
     const server = transport(basicClaims({ auth_epoch: 8 }))
     const next = await authorization()
     const resource = await global.fetch(`${fixedRuntime.VITE_OAUTH_BASE_URL}/resource`,
-      { headers: { Authorization: `Bearer ${server.token}` } }).then(value => value.json())
+      { headers: { Authorization: `Bearer ${server.token}`, 'X-Request-Id': crypto.randomUUID() } })
+      .then(value => value.json()).then(value => value.data)
     const identity = runtime.bindFixedTenantIdentity(resource, server.token,
       { issuer: context.issuer, clientId: 'cyf-local', tenantId: '1' })
     await runtime.commitTenantAuthorization({ ...next.context, verifiedTenant: '1',
@@ -266,7 +271,7 @@ async function login (claims = basicClaims(), options) {
     expect(store.tenantIdentity.authEpoch).to.equal('8')
     expect(runtime.browserBusinessNamespace(store, runtime.useGlobalStore())).not.to.equal(originalKey)
     expect(request.signal.aborted).to.equal(true)
-    wait.resolve(response({ data: 'old-epoch' }))
+    wait.resolve(response('old-epoch', new Headers(request.headers).get('X-Request-Id')))
     expect((await pending).name).to.equal('AbortError')
     expect(published).to.deep.equal([])
   })
@@ -276,12 +281,18 @@ async function login (claims = basicClaims(), options) {
     let source
     let options
     const opened = await runtime.fetchHallConversationEvents({ apiStore: store, url: '/fixed/events',
-      fetchImpl: async (_url, config) => { options = config; return new Response(new ReadableStream({ start: value => { source = value } })) } })
+      fetchImpl: async (_url, config) => {
+        options = config
+        return new Response(new ReadableStream({ start: value => { source = value } }), { headers: {
+          'Content-Type': 'text/event-stream',
+          'X-Request-Id': new Headers(config.headers).get('X-Request-Id')
+        } })
+      } })
     const reader = opened.body.getReader()
     source.enqueue(new TextEncoder().encode('first'))
     expect(new TextDecoder().decode((await reader.read()).value)).to.equal('first')
     expect(options.cache).to.equal('no-store')
-    expect(options.headers.Authorization).to.equal(`Bearer ${token}`)
+    expect(new Headers(options.headers).get('Authorization')).to.equal(`Bearer ${token}`)
     const late = reader.read().catch(error => ({ error }))
     await login(basicClaims({ auth_epoch: 8 }))
     expect(options.signal.aborted).to.equal(true)

@@ -16,8 +16,8 @@
     </section>
     <template v-else-if="wallet">
       <section class="wallet-balances" aria-label="SILVER 余额">
-        <div><small>可用</small><strong>{{ format(wallet.availableMicro) }}</strong></div>
-        <div><small>已托管</small><strong>{{ format(wallet.heldMicro) }}</strong></div>
+        <div><small>可用</small><strong>{{ format(wallet.available) }}</strong></div>
+        <div><small>已托管</small><strong>{{ format(wallet.held) }}</strong></div>
       </section>
 
       <section class="wallet-ledger" aria-labelledby="ledger-title">
@@ -33,7 +33,7 @@
               <small>{{ entry.businessRef || entry.transactionId }}</small>
             </div>
             <div class="ledger-amount" :class="entry.direction === 'DEBIT' ? 'is-debit' : 'is-credit'">
-              {{ entry.direction === 'DEBIT' ? '−' : '+' }}{{ format(entry.amountMicro) }}
+              {{ entry.direction === 'DEBIT' ? '−' : '+' }}{{ format(entry.amount) }}
               <small>{{ formatPostedAt(entry.postedAt) }}</small>
             </div>
           </li>
@@ -56,20 +56,11 @@ const loading = ref(false)
 const refreshing = ref(false)
 const error = ref('')
 
-const unwrap = result => result?.data?.data ?? result?.data ?? result
-const format = value => formatSilverMicro(typeof value === 'string' ? value : '0')
-const MAX_ECMASCRIPT_EPOCH_MILLIS = 8640000000000000n
-const formatPostedAt = value => {
-  if (typeof value !== 'string' || !/^(0|[1-9]\d*)$/.test(value)) return ''
-  try {
-    const epochMillis = BigInt(value)
-    if (epochMillis > MAX_ECMASCRIPT_EPOCH_MILLIS) return ''
-    const date = new Date(Number(epochMillis))
-    return Number.isNaN(date.getTime()) ? '' : date.toLocaleString()
-  } catch {
-    return ''
-  }
-}
+const unwrap = result => result
+const validMoney = value => value?.currency === 'SILVER' && typeof value.amountMinor === 'string' && /^(0|[1-9][0-9]*)$/.test(value.amountMinor) && BigInt(value.amountMinor) <= 9223372036854775807n
+const format = value => validMoney(value) ? formatSilverMicro(value.amountMinor) : '—'
+const formatPostedAt = value => Number.isSafeInteger(value) && value >= 0 && Number.isFinite(new Date(value).getTime())
+  ? new Date(value).toLocaleString() : ''
 
 const loadWallet = async () => {
   if (!previewBuildEnabled) return
@@ -82,11 +73,11 @@ const loadWallet = async () => {
     }
     const [walletResult, ledgerResult] = await Promise.all([
       economyApi.get('/wallet', undefined, { autoLoading: false }),
-      economyApi.get('/ledger', { limit: '50' }, { autoLoading: false })
+      economyApi.get('/ledger', { pageSize: 50 }, { autoLoading: false })
     ])
     const nextWallet = unwrap(walletResult)
     const nextLedger = unwrap(ledgerResult)
-    if (!nextWallet || typeof nextWallet.availableMicro !== 'string' || typeof nextWallet.heldMicro !== 'string') {
+    if (!nextWallet || !validMoney(nextWallet.available) || !validMoney(nextWallet.held)) {
       throw new Error('经济预览能力未提供钱包数据')
     }
     wallet.value = nextWallet

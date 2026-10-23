@@ -13,11 +13,11 @@ global.Element = global.window?.Element
 global.Node = global.window?.Node
 const wrappers = []
 const source = path => readFileSync(new URL(path, import.meta.url), 'utf8')
-const success = data => ({ data: { code: 'E0', data } })
+const success = data => data
 const deferred = () => { let resolve; let reject; return { promise: new Promise((res, rej) => { resolve = res; reject = rej }), resolve, reject } }
 const tick = async () => { await Promise.resolve(); await Promise.resolve() }
 const capabilities = (features = {}) => ({
-  contractVersion: 'economy-readonly-v1', mode: 'READ_ONLY_PREVIEW', enabled: true, principalScopeFingerprint: 'scope-a',
+  contractVersion: 'economy-readonly-v2', mode: 'READ_ONLY_PREVIEW', enabled: true, principalScopeSha256: 'f051bb2c68cb7b2fe9691ea7de83f8fb8658bf6622d053f0258e89ef3578d058',
   features: { wallet: false, ledger: false, catalog: false, installationStatus: false, hostingPlan: false, hostingLease: false, ...features },
   actions: { estimate: false, issue: false, purchase: false, settle: false, refund: false, install: false, hostingActivate: false, hostingRenew: false }
 })
@@ -62,10 +62,10 @@ describe('economy readonly preview UI behavior', () => {
     } finally { scope.stop() }
   })
 
-  it('accepts actual roster Page.list and only retains own operable Agents', async () => {
+  it('accepts actual roster PageData.items and only retains own operable Agents', async () => {
     const { scope, preview } = scopedPreview(baseClient({
       capabilities: async () => capabilities({ installationStatus: true }),
-      roster: async () => success({ list: [{ agentId: 'mine', boundToMe: true, canOperate: true }, { agentId: 'other', boundToMe: false, canOperate: true }] })
+      roster: async () => success({ items: [{ agentId: 'mine', boundToMe: true, canOperate: true }, { agentId: 'other', boundToMe: false, canOperate: true }] })
     }))
     try { await preview.refresh(); expect(preview.agents.value.map(agent => agent.agentId)).to.deep.equal(['mine']) } finally { scope.stop() }
   })
@@ -169,12 +169,12 @@ describe('economy readonly preview UI behavior', () => {
     expect(() => compileScript(descriptor, { id: 'economy-readonly-preview' })).not.to.throw()
     const state = {
       capabilityError: ref(''), enabled: ref(true), refresh: async () => {}, canonical: value => /^\d+$/.test(value), selectedAgentId: ref('agent-a'), selectedAgent: ref({ agentId: 'agent-a' }), agents: ref([{ agentId: 'agent-a', name: 'A' }]),
-      wallet: ref({ status: 'ready', data: { currency: 'SILVER', availableMicro: '0', heldMicro: '0', version: '1' }, error: '' }), ledger: ref({ status: 'empty', data: { items: [] }, error: '' }), catalog: ref({ status: 'empty', data: { items: [] }, error: '' }), detail: ref({ status: 'idle', data: null, error: '' }), roster: ref({ status: 'ready', data: [], error: '' }),
-      estimate: ref({ status: 'idle', data: null, error: '' }), agentSkills: ref({ status: 'ready', data: { observedAt: '1000', entitlements: [{ skillKey: 'read', skillVersion: '1', status: 'ACTIVE' }], installationEvidence: [{ installationId: 'i-1', skillKey: 'read', skillVersion: '1', status: 'VERIFIED_INSTALLED', evidenceKind: 'ACK', verifiedAt: '1000' }] }, error: '' }),
+      wallet: ref({ status: 'ready', data: { currency: 'SILVER', available: { amountMinor: '0', currency: 'SILVER' }, held: { amountMinor: '0', currency: 'SILVER' }, version: '1' }, error: '' }), ledger: ref({ status: 'empty', data: { items: [] }, error: '' }), catalog: ref({ status: 'empty', data: { items: [] }, error: '' }), detail: ref({ status: 'idle', data: null, error: '' }), roster: ref({ status: 'ready', data: [], error: '' }),
+      estimate: ref({ status: 'idle', data: null, error: '' }), agentSkills: ref({ status: 'ready', data: { observedAt: '1000', entitlements: [{ skillKey: 'read', skillVersion: '1', status: 'ACTIVE' }], installationEvidence: [{ skillInstallationId: 'i-1', skillKey: 'read', skillVersion: '1', status: 'VERIFIED_INSTALLED', evidenceKind: 'ACK', verifiedAt: '1000' }] }, error: '' }),
       hostingPlan: ref({ status: 'unavailable', data: null, error: '未配置参考方案' }), hostingLease: ref({ status: 'idle', data: null, error: '' }), loadLedger: async () => {}, loadCatalog: async () => {}, loadDetail: async () => {}, loadAgentFacts: async () => {}, submitEstimate: async () => {}
     }
     const Component = loadComponent('../src/components/economy/EconomyReadOnlyPreview.vue', 'readonly-preview-mounted', {
-      vue: Vue, '@/stores/global.js': { useGlobalStore: () => ({ setTitle: () => {}, setShowBack: () => {}, setShowMore: () => {} }) }, '@/utils/silverAmount.js': { formatSilverMicro: value => `${value} SILVER` }, '@/composables/useEconomyReadOnlyPreview.js': { useEconomyReadOnlyPreview: () => state }
+      vue: Vue, '@/stores/global.js': { useGlobalStore: () => ({ setTitle: () => {}, setShowBack: () => {}, setShowMore: () => {} }) }, '@/utils/silverAmount.js': { formatSilverMoney: value => `${value.amountMinor} SILVER` }, '@/composables/useEconomyReadOnlyPreview.js': { useEconomyReadOnlyPreview: () => state }
     })
     const wrapper = mount(Component); wrappers.push(wrapper); await flushPromises()
     expect(wrapper.text()).to.include('i-1 · read@1 · 已验证安装（ACK）')

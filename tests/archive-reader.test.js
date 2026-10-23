@@ -1,3 +1,9 @@
+import { useHallSelectedOutputReview } from '../src/composables/juyiting/useHallSelectedOutputReview.js'
+import { selectionKey } from '../src/composables/juyiting/hallSelectedOutputs.js'
+import { assignedTaskTarget } from '../src/composables/juyiting/hallAssigneeCandidates.js'
+import { useExternalServicePolicy } from '../src/composables/juyiting/useExternalServicePolicy.js'
+import { useHallDeliveryReview } from '../src/composables/juyiting/useHallDeliveryReview.js'
+import { useHallAgentProfileCapabilities } from '../src/composables/juyiting/useHallAgentProfileCapabilities.js'
 import { currentBountyAssignmentRevision } from '../src/composables/juyiting/hallBountyAssignmentContext.js'
 import { useHallSkillCapabilities } from '../src/composables/juyiting/useHallSkillCapabilities.js'
 import { useOutputs } from '../src/composables/useOutputs.js'
@@ -29,7 +35,7 @@ global.Node = global.window?.Node
 
 const editionId = 'shuihuzhuan-zh-120-v1'
 const manifestSha256 = 'b'.repeat(64)
-const response = data => ({ data: { data, status: 200 } })
+const response = data => data
 const deferred = () => {
   let resolve
   let reject
@@ -148,6 +154,7 @@ const makeApi = ({
   deleteHandler,
   getBlock,
   getCatalog,
+  getWorks,
   notesByBlock = {},
   progress = null,
   progressEnvelope,
@@ -166,6 +173,7 @@ const makeApi = ({
     get: async (path, params, options = {}) => {
       const call = { method: 'get', options, params, path }
       calls.push(call)
+      if (path === '/works') return getWorks ? getWorks(call) : response({ items: [{ workId: catalog.workId, title: catalog.title, editionId, chapterCount: catalog.activeEdition.chapters.length }] })
       if (path === '/catalog') return getCatalog ? getCatalog(call) : response(catalog)
       if (path.startsWith('/me/progress/')) return progressEnvelope ?? response(progress)
       if (path === '/me/bookmarks') return response({ items: bookmarks, nextCursor: null })
@@ -283,6 +291,12 @@ const loadArchiveReaderSfc = (archiveModule) => {
 
 const loadActualHallForIntegration = (mocks, id) => {
   const effectiveMocks = {
+    useHallSelectedOutputReview,
+    selectionKey,
+    useHallDeliveryReview,
+    useHallAgentProfileCapabilities,
+    useExternalServicePolicy,
+    assignedTaskTarget,
     useHallSkillCapabilities,
     currentBountyAssignmentRevision,
     browserBusinessNamespace: (apiStore, globalStore) => {
@@ -325,7 +339,7 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
   const hallData = {
     applySceneEvent: noop, applySceneSnapshot: noop, agentFilter: Vue.ref('online'), agents: list, bindPersona: asyncNoop,
     canAssign: () => true, filteredAgents: list, hiddenAgentCount: Vue.ref(0), loadAgents: async () => { counters.hallLoads += 1 },
-    loadTasks: async () => { counters.hallLoads += 1 }, loadTaskRecommendations: asyncNoop, mapAgents: list, operableRosterAgents: list, personaCatalog: list,
+    loadTasks: async () => { counters.hallLoads += 1 }, loadTaskRecommendations: asyncNoop, loadTaskDetail: asyncNoop, mapAgents: list, operableRosterAgents: list, personaCatalog: list,
     recommendedAgents: list, setAgentFilter: asyncNoop, setTaskStatusFilter: asyncNoop, taskAbilityFilter: Vue.ref('ability-o04'),
     taskAbilityOptions: list, taskKeyword: Vue.ref('task-filter-o04'), tasks: list, taskStatusCount: Vue.ref({}), taskStatusFilter: Vue.ref('open'),
     unbindPersona: asyncNoop, visibleAgents: list
@@ -340,6 +354,7 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
     confirmHallLeave,
     hasMeaningfulHallLeaveWork,
     registerIdentityCleanup,
+    HallDeliveryReviewDialog: EmptyPanel,
     env: { VITE_JUYITING_TASK_WORKSPACE_ENABLED: workspaceState ? 'true' : undefined }, isMultimediaDeliberationUiEnabled: () => false,
     useHallDrafts,
     useHallRequirementCreate: () => ({ state: Vue.ref({ error: '' }), busy: Vue.ref(false), create: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, readOriginal: () => ({ state: 'ABSENT' }), dispose: noop }),
@@ -348,7 +363,7 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
     useHallBountyAssignmentContext: () => ({ projection: Vue.ref(null), error: Vue.ref(''), refresh: async () => false, dispose: noop }),
     useHallBountyRequestCatalog: () => ({ entries: Vue.ref([]), hint: noop, reset: noop, refresh: asyncNoop, dispose: noop }),
     useHallBountyFollowup: () => ({ state: Vue.ref({}), busy: Vue.ref(false), prepareGenerate: async () => false, prepareEdit: async () => false, confirm: async () => false, checkOriginal: async () => false, invalidate: noop, dispose: noop }),
-    useHallTypedDeliberation: () => ({ refresh: asyncNoop, readOne: asyncNoop, recover: asyncNoop, invalidate: noop, dispose: noop }), typedLong: () => '',
+    useHallTypedDeliberation: () => ({ cards: Vue.ref([]), refresh: asyncNoop, readOne: asyncNoop, recover: asyncNoop, invalidate: noop, dispose: noop }), typedLong: () => '',
     createControlledImageCapabilityObservationFence: () => ({ capture: () => ({ isCurrent: () => true }), invalidate: noop }), capabilityOffersControlledImageConsent: () => false, loadControlledImageBountyCapability: async () => null,
     useHallTaskLinkedReferenceInputs: () => ({ resolve: async () => ({ state: 'STALE', inputRefs: [] }), invalidate: noop, dispose: noop }), createPointAndStartIntentStore: () => ({ read: () => ({ state: 'ABSENT' }) }), pointAndStartRecoveryLane: () => 'NONE', providerConsentAcknowledgement: {},
     createNativeCapabilityObservationFence: () => ({ capture: () => ({ identityScope: '', authorizationGeneration: 0, isCurrent: () => true }), invalidate: noop }), loadNativeBountyCapability: async () => null, capabilityAllowsNewStart: () => false, capabilityAllowsOriginalReplay: () => false, pointAndStartIntentReadLane: () => 'ABSENT',
@@ -507,8 +522,14 @@ const makeQuestionApi = ({
     emit: (index, event, name = event.type, id = event.sequence) => {
       const session = sessions[index]
       const eventQuestionId = session.options.url.split('/')[3]
-      const idLine = id === null ? '' : `id: ${id}\n`
-      session.options.onStream(`event: ${name}\n${idLine}data: ${JSON.stringify({ ...event, questionId: eventQuestionId })}\n\n`)
+      const resync = event.type === 'resync_required'
+      const messageType = resync ? 'archive.question.resync.required' : 'archive.question.event'
+      const messageId = `archive:question:${eventQuestionId}:${resync ? 'resync:fixture' : event.sequence}`
+      const wireId = id === null ? null : resync && id === undefined ? messageId : `archive:question:${eventQuestionId}:${id}`
+      const message = { protocolVersion: 1, requestId: 'archive-test', messageType, messageId,
+        data: { ...event, questionId: eventQuestionId, ...(!resync ? { occurredAt: Date.parse(event.occurredAt) } : {}) } }
+      const idLine = wireId === null ? '' : `id: ${wireId}\n`
+      session.options.onStream(`event: ${name === event.type ? messageType : name}\n${idLine}data: ${JSON.stringify(message)}\n\n`)
     },
     chunk: (index, value) => sessions[index].options.onStream(value),
     end: index => sessions[index].options.onStreamEnd(),
@@ -527,11 +548,11 @@ describe('archive reader contract behavior', () => {
     let mounted
     try {
       globalThis.fetch = async (url, options) => {
-        const body = JSON.parse(options.body)
+        const envelope = JSON.parse(options.body); const body = envelope.data; expect(envelope.protocolVersion).to.equal(1)
         requests.push({ body, options, url: String(url) })
         return new Response(JSON.stringify({
-          status: 200,
-          code: 'OK',
+          protocolVersion: 1, requestId: envelope.requestId,
+          code: 'E0',
           msg: 'ok',
           data: {
             editionId,
@@ -539,7 +560,7 @@ describe('archive reader contract behavior', () => {
             state: 'IN_PROGRESS',
             version: '1'
           }
-        }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+        }), { status: 200, headers: { 'Content-Type': 'application/json', 'X-Request-Id': envelope.requestId } })
       }
 
       const authStore = {
@@ -603,7 +624,7 @@ describe('archive reader contract behavior', () => {
   })
 
   it('treats a successful JsonResult with omitted data as null and initializes the first save', async () => {
-    const progressEnvelope = { data: { status: 200, code: 'E0', msg: 'ok' } }
+    const progressEnvelope = ({ status: 200, code: 'E0', msg: 'ok' })
     const api = makeApi({ progressEnvelope })
     const mounted = mountReader(api)
     await mounted.reader.initialize()
@@ -817,13 +838,13 @@ describe('archive reader contract behavior', () => {
     }
   }
 
-  it('retries only the catalog before the user chooses a book', async () => {
-    let catalogAttempts = 0
+  it('retries only the shelf before the user chooses a book', async () => {
+    let shelfAttempts = 0
     const api = makeApi({
-      getCatalog: () => {
-        catalogAttempts += 1
-        if (catalogAttempts === 1) throw new Error('catalog unavailable')
-        return response(catalog)
+      getWorks: () => {
+        shelfAttempts += 1
+        if (shelfAttempts === 1) throw new Error('catalog unavailable')
+        return response({ items: [{ workId: catalog.workId, title: catalog.title, editionId, chapterCount: 120 }] })
       }
     })
     const wrapper = mountArchiveReader(api, { initialView: 'catalog' })
@@ -868,7 +889,7 @@ describe('archive reader contract behavior', () => {
         : response(blocksById.get(blockId))
     })
     const wrapper = mountArchiveReader(api, { initialView: 'catalog' })
-    await waitFor(() => wrapper.readerState.catalog.value && !wrapper.readerState.loading.value)
+    await waitFor(() => wrapper.readerState.works.value.length && !wrapper.readerState.loading.value)
     await wrapper.get('.archive-book-open').trigger('click')
     await waitFor(() => wrapper.readerState.chapter.value?.blockId === preface.blockId)
     await waitFor(() => wrapper.find('.reader-header-actions .reader-header-button').exists())
@@ -1832,8 +1853,8 @@ describe('archive reader contract behavior', () => {
     })
     const mounted = mountReader(api)
     const pending = mounted.reader.initialize()
-    await waitFor(() => api.calls.length === 1)
-    expect(api.calls[0].path).to.equal('/catalog')
+    await waitFor(() => api.calls.some(call => call.path === '/catalog'))
+    expect(api.calls[1].path).to.equal('/catalog')
 
     mounted.wrapper.unmount()
     await Promise.resolve()
@@ -1841,7 +1862,7 @@ describe('archive reader contract behavior', () => {
     catalogResponse.resolve(response(catalog))
     expect(await pending).to.equal(null)
     await settle()
-    expect(api.calls.map(call => call.path)).to.deep.equal(['/catalog'])
+    expect(api.calls.map(call => call.path)).to.deep.equal(['/works', '/catalog'])
   })
 
   it('aborts stale block work and clears pending DOM scroll saves on unmount', async () => {
@@ -2236,7 +2257,8 @@ describe('archive reader contract behavior', () => {
         selection: { startParagraphId: chapterOne.paragraphs[0].paragraphId, startOffset: 1, endParagraphId: chapterOne.paragraphs[1].paragraphId, endOffset: 2 }
       })
       const call = api.calls.find(item => item.method === 'put' && item.path.startsWith('/me/questions/'))
-      expect(call.body).to.have.all.keys(['anchor', 'question'])
+      expect(call.body).to.have.all.keys(['anchor', 'editionId', 'question'])
+      expect(call.body.editionId).to.equal(editionId)
       expect(call.body).not.to.have.any.keys(['targetAgentId', 'agentId', 'role', 'responder'])
       expect(call.body.anchor.segments.map(segment => [segment.startByte, segment.endByte])).to.deep.equal([[3, 13], [0, 6]])
       expect(call.body.anchor.selectionSha256).to.equal(createHash('sha256').update('水😀乙\n\n第二').digest('hex'))
@@ -2625,9 +2647,9 @@ describe('archive reader contract behavior', () => {
     expect(api.sessions[0].cancelled).to.equal(true)
 
     const delta = { ...questionEvent('2', 'ANSWER_DELTA', { delta: '跨块 CRLF' }), questionId: mounted.reader.question.value.questionId }
-    api.chunk(1, `event: ${delta.type}\r`)
-    api.chunk(1, `\nid: ${delta.sequence}\r`)
-    api.chunk(1, `\ndata: ${JSON.stringify(delta)}\r`)
+    api.chunk(1, `event: archive.question.event\r`)
+    api.chunk(1, `\nid: archive:question:${delta.questionId}:${delta.sequence}\r`)
+    api.chunk(1, `\ndata: ${JSON.stringify({ protocolVersion: 1, requestId: 'archive-test', messageType: 'archive.question.event', messageId: `archive:question:${delta.questionId}:${delta.sequence}`, data: { ...delta, occurredAt: Date.parse(delta.occurredAt) } })}\r`)
     api.chunk(1, '\n\r')
     api.chunk(1, '\n')
     await settle()
@@ -2780,7 +2802,7 @@ describe('archive reader contract behavior', () => {
       await wrapper.findAll('button').find(button => button.text() === '引用当前段落起草交办').trigger('click')
       await settle()
       expect(hall.panelDepth).to.equal(3)
-      expect(hall.panelFrames).to.deep.equal(['library', 'draft'])
+      expect(hall.panelFrames).to.deep.equal(['library', 'formalDraft'])
       expect(wrapper.findAll('[role="dialog"]')).to.have.length(1)
       const citation = wrapper.findComponent(DraftProbe).props('initialContext')
       expect(citation.originRef).to.equal('juyiting:archive')
@@ -2851,5 +2873,137 @@ describe('W04 explicit reading citation continuity', () => {
       expect(reader.currentLocation.value).to.deep.equal(location)
       expect(note.element.value).to.equal('私密手札，不得自动分享')
     } finally { wrapper.unmount() }
+  })
+})
+
+describe('archive multi-book data-driven shelf', () => {
+  const secondEdition = 'another-book-v2'
+  const secondChapter = {
+    ...blockSummary('CHAPTER', 'last-section', 1, '唯一章节'),
+    editionId: secondEdition,
+    manifestSha256: 'c'.repeat(64),
+    paragraphs: [paragraph('last-section', 1, '另一本书的正文', 'd')]
+  }
+  const secondCatalog = {
+    ...catalog,
+    workId: 'another-book',
+    title: '另一本书',
+    activeEdition: {
+      ...catalog.activeEdition,
+      editionId: secondEdition,
+      manifestSha256: secondChapter.manifestSha256,
+      preface: null,
+      chapters: [secondChapter]
+    }
+  }
+  const shelf = { items: [
+    { workId: catalog.workId, title: catalog.title, editionId, chapterCount: 120 },
+    { workId: secondCatalog.workId, title: secondCatalog.title, editionId: secondEdition, chapterCount: 1 }
+  ] }
+  const multiApi = () => {
+    const api = makeApi({
+      getWorks: () => response(shelf),
+      getCatalog: call => response(call.params.workId === catalog.workId ? catalog : secondCatalog)
+    })
+    const get = api.get
+    api.get = async (path, params, options) => {
+      if (path === `/editions/${secondEdition}/chapters/${secondChapter.blockId}`) {
+        api.calls.push({ method: 'get', path, params, options })
+        return response(secondChapter)
+      }
+      return get(path, params, options)
+    }
+    const put = api.put
+    api.put = async (path, body, options) => {
+      const result = await put(path, body, options)
+      return path.startsWith('/me/progress/') ? { ...result, editionId: decodeURIComponent(path.split('/').at(-1)) } : result
+    }
+    return api
+  }
+
+  it('loads a database shelf without reading any book and opens a no-preface book explicitly', async () => {
+    const api = multiApi()
+    const mounted = mountReader(api)
+    try {
+      await mounted.reader.initialize({ openChapter: false })
+      expect(mounted.reader.works.value).to.have.length(2)
+      expect(api.calls.map(call => call.path)).to.deep.equal(['/works'])
+      await mounted.reader.openBook(secondCatalog.workId)
+      expect(mounted.reader.catalog.value.workId).to.equal(secondCatalog.workId)
+      expect(mounted.reader.chapter.value.blockId).to.equal(secondChapter.blockId)
+      expect(api.calls.find(call => call.path === '/catalog').params).to.deep.equal({ workId: secondCatalog.workId })
+      expect(api.calls.some(call => call.path.endsWith('/preface'))).to.equal(false)
+    } finally { mounted.wrapper.unmount() }
+  })
+
+  it('renders every book from the shelf and an explicit empty state', async () => {
+    const wrapper = mountArchiveReader(multiApi(), { initialView: 'catalog' })
+    try {
+      await waitFor(() => wrapper.findAll('.archive-book-card').length === 2)
+      expect(wrapper.text()).to.include(secondCatalog.title)
+      await wrapper.findAll('.archive-book-open')[1].trigger('click')
+      await waitFor(() => wrapper.readerState.chapter.value?.editionId === secondEdition)
+    } finally { wrapper.unmount() }
+    const empty = mountArchiveReader(makeApi({ getWorks: () => response({ items: [] }) }), { initialView: 'catalog' })
+    try {
+      await waitFor(() => !empty.readerState.loading.value)
+      expect(empty.findAll('.archive-book-card')).to.have.length(0)
+      expect(empty.text()).to.include('暂无')
+    } finally { empty.unmount() }
+  })
+
+  it('keeps unsaved private drafts attached to their original edition across book switches', async () => {
+    const wrapper = mountArchiveReader(multiApi(), { initialView: 'catalog' })
+    try {
+      await waitFor(() => wrapper.findAll('.archive-book-open').length === 2)
+      await wrapper.findAll('.archive-book-open')[0].trigger('click')
+      await waitFor(() => wrapper.find('textarea').exists())
+      await wrapper.get('textarea').setValue('第一本书的未保存手札')
+      await wrapper.get('.reader-exit').trigger('click')
+      await wrapper.findAll('.archive-book-open')[1].trigger('click')
+      await waitFor(() => wrapper.readerState.chapter.value?.editionId === secondEdition)
+      expect(wrapper.get('textarea').element.value).to.equal('')
+      await wrapper.get('textarea').setValue('第二本书的未保存手札')
+      await wrapper.get('.reader-exit').trigger('click')
+      await wrapper.findAll('.archive-book-open')[0].trigger('click')
+      await waitFor(() => wrapper.readerState.chapter.value?.editionId === editionId)
+      expect(wrapper.get('textarea').element.value).to.equal('第一本书的未保存手札')
+    } finally { wrapper.unmount() }
+  })
+
+  it('ignores late private notes from the previously selected book', async () => {
+    const api = multiApi()
+    const oldNotes = deferred()
+    const get = api.get
+    api.get = (path, params, options) => path === '/me/notes' && params.editionId === editionId
+      ? oldNotes.promise : get(path, params, options)
+    const mounted = mountReader(api)
+    try {
+      await mounted.reader.initialize()
+      await mounted.reader.openBook(secondCatalog.workId)
+      oldNotes.resolve(response({ items: [{ noteId: 'old-book-note', version: '1', state: 'ACTIVE' }], nextCursor: null }))
+      await settle()
+      expect(mounted.reader.catalog.value.workId).to.equal(secondCatalog.workId)
+      expect(mounted.reader.notes.value).to.deep.equal([])
+    } finally { oldNotes.resolve(response({ items: [], nextCursor: null })); mounted.wrapper.unmount() }
+  })
+
+  it('keeps the current book and reports a failed progress save instead of discarding it on switch', async () => {
+    const api = multiApi()
+    const put = api.put
+    api.put = (path, body, options) => {
+      if (path.startsWith('/me/progress/')) throw Object.assign(new Error('save failed'), { status: 500 })
+      return put(path, body, options)
+    }
+    const mounted = mountReader(api)
+    try {
+      await mounted.reader.initialize()
+      mounted.reader.setCurrentParagraph(preface.paragraphs[0], 0)
+      let failure
+      try { await mounted.reader.openBook(secondCatalog.workId) } catch (error) { failure = error }
+      expect(failure?.message).to.include('暂未保存')
+      expect(mounted.reader.catalog.value.workId).to.equal(catalog.workId)
+      expect(mounted.reader.saveState.value).to.equal('error')
+    } finally { mounted.wrapper.unmount() }
   })
 })

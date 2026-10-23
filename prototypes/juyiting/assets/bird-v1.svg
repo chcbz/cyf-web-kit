@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 460" role="img" aria-label="原型示意：一只蓝色小鸟停在树枝上，非Agent生成结果">
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#e6eedc"/><stop offset="1" stop-color="#f5f0dc"/></linearGradient><linearGradient id="body" x2=".8" y2="1"><stop stop-color="#6d9da4"/><stop offset="1" stop-color="#416d83"/></linearGradient><filter id="blur"><feGaussianBlur stdDeviation="15"/></filter></defs>
+<rect width="720" height="460" fill="url(#bg)"/>
+<g filter="url(#blur)" opacity=".44"><circle cx="80" cy="64" r="85" fill="#b3c6a4"/><circle cx="656" cy="133" r="61" fill="#c7d6b2"/><circle cx="580" cy="340" r="78" fill="#dbe4c9"/></g>
+<g opacity=".5" fill="#abbc8b"><ellipse cx="114" cy="326" rx="48" ry="17" transform="rotate(-31 114 326)"/><ellipse cx="567" cy="291" rx="42" ry="14" transform="rotate(-28 567 291)"/></g>
+<path d="M81 387 C244 337 445 380 658 280" fill="none" stroke="#927354" stroke-width="14" stroke-linecap="round"/><path d="M158 370 L132 332 M505 333 L558 294" fill="none" stroke="#927354" stroke-width="6" stroke-linecap="round"/>
+<path d="M337 292 L269 367 L323 347 L366 297" fill="#446982"/>
+<ellipse cx="378" cy="258" rx="69" ry="81" transform="rotate(21 378 258)" fill="url(#body)"/>
+<path d="M416 223 C442 259 432 308 393 328 C344 344 326 305 333 274 C346 300 390 289 416 223Z" fill="#e8ddba"/>
+<path d="M328 237 C283 281 323 323 380 292 C364 265 349 247 328 237Z" fill="#53798f"/>
+<path d="M324 249 C321 275 343 288 362 291 M316 266 C324 284 340 294 350 295" fill="none" stroke="#85a9af" stroke-width="3" stroke-linecap="round"/>
+<circle cx="419" cy="193" r="48" fill="#6d9da4"/><path d="M402 229 Q438 247 456 208 L439 201Z" fill="#f2e8c7"/>
+<path d="M459 190 L493 200 L459 207Z" fill="#5b665a"/><circle cx="436" cy="181" r="6.5" fill="#253d39"/><circle cx="438" cy="179" r="2" fill="#fff"/>
+<path d="M379 331 L378 351 L366 355 M398 326 L401 350 L414 350" fill="none" stroke="#6c6652" stroke-width="3.5" stroke-linecap="round"/>
+<g opacity=".6" fill="#b2c595"><ellipse cx="574" cy="285" rx="28" ry="12" transform="rotate(-36 574 285)"/><ellipse cx="605" cy="295" rx="21" ry="9" transform="rotate(13 605 295)"/></g>
+</svg>

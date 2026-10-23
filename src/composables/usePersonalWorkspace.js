@@ -1,57 +1,51 @@
-import { computed, getCurrentInstance, onBeforeUnmount, ref, unref, watch } from 'vue'
+import { computed, getCurrentInstance, onBeforeUnmount, ref, toRaw, unref, watch } from 'vue'
 import { createApi } from './useHttp.js'
+import { usePersonalWorkspaceWriteIntent } from './usePersonalWorkspaceWriteIntent.js'
+import { workspaceDecimal as DECIMAL, validMaterialVersion as VERSION, workspaceRevisionTag } from '../utils/personalWorkspaceProtocol.js'
 import { registerIdentityCleanup } from '../utils/identityLifecycle.js'
 
 export const PERSONAL_WORKSPACE_MIME_TYPES = Object.freeze([
   'image/png', 'image/jpeg', 'image/webp', 'image/gif',
+  'image/bmp', 'image/tiff', 'image/heic', 'image/heif', 'image/avif',
   'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/mp4', 'audio/webm',
   'text/plain', 'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 ])
 
-const ALLOWED_MIME_TYPES = new Set(PERSONAL_WORKSPACE_MIME_TYPES)
+// Upload accepts any syntactically valid MIME; the preview list is not an upload gate.
+const validMime = value => typeof value === 'string' && /^[a-z0-9][a-z0-9!#$&^_.+-]{0,63}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,63}$/.test(value)
 const EXTENSION_MIME = Object.freeze({
-  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif',
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', jpe: 'image/jpeg', jfif: 'image/jpeg', webp: 'image/webp', gif: 'image/gif',
+  bmp: 'image/bmp', tif: 'image/tiff', tiff: 'image/tiff', heic: 'image/heic', heif: 'image/heif', avif: 'image/avif',
   mp3: 'audio/mpeg', ogg: 'audio/ogg', oga: 'audio/ogg', wav: 'audio/wav',
   m4a: 'audio/mp4', mp4: 'audio/mp4', webm: 'audio/webm', txt: 'text/plain', pdf: 'application/pdf',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
 })
-const MAX_INT = 2147483647
+const CURSOR = value => typeof value === 'string' && value.length > 0 && value.length <= 512 && ![...value].some(char => char.codePointAt(0) < 32)
 const ID = value => typeof value === 'string' && value.length > 0 && value.length <= 100 &&
   !/^\s|\s$/.test(value) && ![...value].some(char => char.codePointAt(0) < 32)
 const TEXT = (value, maximum) => typeof value === 'string' && value.length > 0 && value.length <= maximum &&
   !/^\s|\s$/.test(value) && ![...value].some(char => char.codePointAt(0) < 32)
-const VERSION = value => Number.isInteger(Number(value)) && Number(value) >= 1 && Number(value) <= MAX_INT
 const abortError = message => new DOMException(message, 'AbortError')
 const valueOf = value => typeof value === 'function' ? value() : unref(value)
 
-const unwrap = result => {
-  let value = result
-  for (let index = 0; index < 2 && value && typeof value === 'object' && Object.hasOwn(value, 'data'); index += 1) value = value.data
-  return value
+const normalizeMime = value => {
+  const mime = typeof value === 'string' ? value.split(';', 1)[0].trim().toLowerCase() : ''
+  return ({ 'image/jpg': 'image/jpeg', 'image/pjpeg': 'image/jpeg', 'image/x-png': 'image/png', 'image/x-ms-bmp': 'image/bmp', 'image/x-tiff': 'image/tiff' })[mime] || mime
 }
-const responseHeaders = response => response?.headers && typeof response.headers === 'object' ? response.headers : {}
-const getHeader = (headers, name) => Object.entries(headers).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1] || ''
-const normalizeMime = value => typeof value === 'string' ? value.split(';', 1)[0].trim().toLowerCase() : ''
 const extensionFor = filename => {
   const match = typeof filename === 'string' ? /\.([^.]+)$/.exec(filename.trim()) : null
   return match ? match[1].toLowerCase() : ''
 }
 const inferredMime = file => {
   const declared = normalizeMime(file?.type)
-  if (ALLOWED_MIME_TYPES.has(declared)) return declared
-  // An explicit video/active-content type must not be relabelled as audio by its extension.
-  return !declared || declared === 'application/octet-stream' ? EXTENSION_MIME[extensionFor(file?.name)] || '' : ''
+  if (declared && declared !== 'application/octet-stream') return declared
+  return EXTENSION_MIME[extensionFor(file?.name)] || 'application/octet-stream'
 }
-const fileNameMatchesMime = (name, mime) => EXTENSION_MIME[extensionFor(name)] === mime
-const randomKey = () => {
-  const value = globalThis.crypto?.randomUUID?.()
-  return typeof value === 'string' && value ? value : `pws-${Date.now()}-${Math.random().toString(36).slice(2)}`
-}
+
 const safeDownloadFilename = value => {
   const cleaned = String(value || 'workspace-file').replace(/[\\/:*?"<>|\p{Cc}]/gu, '_').replace(/^\.+/, '').trim()
   return (cleaned || 'workspace-file').slice(0, 180)
@@ -59,47 +53,45 @@ const safeDownloadFilename = value => {
 const errorMessage = error => {
   if (error?.name === 'AbortError') return ''
   if ([401, 403, 404].includes(error?.status)) return '当前身份或文件已不可访问，请刷新后重试。'
-  if (error?.code === 'FILE_TYPE_UNSUPPORTED' || error?.status === 415) return '此格式暂不支持，请选择工作空间支持的图片、音频、文本或办公文档。'
-  if (error?.code === 'METADATA_CHANGED' || error?.status === 412) return '文件信息已变化，请刷新后再操作。'
+  if (error?.code === 'FILE_TYPE_UNSUPPORTED' || error?.status === 415) return '文件可保存，但当前操作暂不支持此格式。'
+  if (error?.code === 'METADATA_CHANGED' || error?.status === 412) return '文件或关联情况已变化，请查看更新后的信息再确认。'
   if (error?.code === 'FILE_VERSION_CONFLICT' || error?.status === 409) return '文件版本已变化，请刷新后明确选择要追加的版本。'
-  if (error?.code === 'OPERATION_PROCESSING' || error?.status === 202) return '上一次操作仍在确认中，请使用原操作标识查询后再重试。'
+  if (error?.code === 'OPERATION_PROCESSING' || error?.status === 202) return '上一次操作仍在处理中，请点击“重试原操作”核对结果，不要重复新建。'
   if (error?.status === 503) return '工作空间存储暂不可用，请稍后重试。'
   return error?.message || '工作空间请求未完成，请刷新确认。'
 }
 const previewPartMimeTypes = new Set(PERSONAL_WORKSPACE_MIME_TYPES.filter(mime =>
-  mime === 'text/plain' || mime.startsWith('image/') || mime.startsWith('audio/')))
-// PreviewView from the current API does not carry a representation field. A known
-// label is tolerated during rollout but never controls rendering or authorization.
-const PREVIEW_REPRESENTATIONS = new Set(['EXTRACTED_TEXT', 'PAGED_IMAGE', 'SHEET_TEXT', 'PAGED_TEXT'])
+  mime === 'text/plain' || mime === 'application/pdf' || mime.startsWith('image/') || mime.startsWith('audio/')))
 const validPreviewPart = part => part && typeof part === 'object' && !Array.isArray(part) &&
   Object.keys(part).every(key => ['partId', 'contentMimeType'].includes(key)) && ID(part.partId) && previewPartMimeTypes.has(normalizeMime(part.contentMimeType))
 const validPreviewView = value => {
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
-    !Object.keys(value).every(key => ['state', 'representation', 'parts', 'partial', 'reason'].includes(key)) ||
-    value.state !== 'READY' || (value.representation != null && !PREVIEW_REPRESENTATIONS.has(value.representation)) ||
+    !Object.keys(value).every(key => ['state', 'parts', 'partial', 'reason'].includes(key)) ||
+    value.state !== 'READY' ||
     typeof value.partial !== 'boolean' || (value.reason != null && !TEXT(value.reason, 255)) ||
     !Array.isArray(value.parts) || !value.parts.length || !value.parts.every(validPreviewPart) ||
     new Set(value.parts.map(part => part.partId)).size !== value.parts.length) return false
   return true
 }
-// Rich PPT/PDF/XLSX previews append content/text only for old clients. Named parts
-// remain the user-facing navigation sequence for every rich preview type.
+// Prefer named document parts over the complete text part for navigation.
 const displayPreviewParts = preview => preview.parts.some(part => part.partId !== 'content')
   ? preview.parts.filter(part => part.partId !== 'content')
   : preview.parts
 const validFile = file => file && typeof file.name === 'string' && TEXT(file.name, 255) && Number.isFinite(file.size) && file.size >= 0
 const validFileView = value => value && typeof value === 'object' && ID(value.fileId) && TEXT(value.displayName, 255) &&
   (value.originKind == null || ['USER_UPLOAD', 'AGENT_DELIVERY'].includes(value.originKind)) &&
-  ['ACTIVE', 'TRASHED'].includes(value.state) && VERSION(value.latestVersion) && Number.isSafeInteger(value.metadataRevision) && value.metadataRevision >= 1
+  ['ACTIVE', 'TRASHED'].includes(value.state) && VERSION(value.latestVersion) && DECIMAL(value.metadataRevision) && BigInt(value.metadataRevision) >= 1n
 const validVersion = value => value && typeof value === 'object' && ID(value.fileId) && VERSION(value.version) &&
-  TEXT(value.originalFilename, 255) && ALLOWED_MIME_TYPES.has(normalizeMime(value.contentMimeType)) &&
-  Number.isSafeInteger(value.byteLength) && value.byteLength >= 0
+  TEXT(value.originalFilename, 255) && validMime(normalizeMime(value.contentMimeType)) &&
+  DECIMAL(value.byteLength)
 
 /**
  * Browser adapter for the 1.10 owner-scoped upload-only workspace API. It deliberately
  * contains no task selector, Actor ID, artifact projection, or Agent execution call.
  */
 export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch = 0, urlApi = globalThis.URL } = {}) {
+  const writes = usePersonalWorkspaceWriteIntent()
+  const confirmationStale = ref(false)
   const items = ref([])
   const nextCursor = ref(null)
   const listState = ref('idle')
@@ -109,12 +101,33 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
   const detail = ref(null)
   const preview = ref({ kind: 'none', message: '' })
   const lastOperation = ref(null)
+  const writeNotice = ref('')
+  const detailRetryFileId = ref(null)
+  const versionsState = ref('idle')
+  const versionsError = ref('')
+  const versionsNextCursor = ref(null)
+  const versionsLoaded = ref(false)
+  const versionItems = computed(() => detail.value?.versions || [])
+  const hasMoreVersions = computed(() => Boolean(detail.value && (versionsLoaded.value ? versionsNextCursor.value : versionItems.value.length >= 100)))
   const currentEpoch = computed(() => String(valueOf(identityEpoch) ?? ''))
   const controllers = new Set()
   const activeUrls = new Set()
   let generation = 0
   let previewGeneration = 0
   let detailGeneration = 0
+  let listGeneration = 0
+  let activeQuery = null
+  let versionsGeneration = 0
+  const captureView = () => ({ generation, epoch: currentEpoch.value, detailGeneration })
+  const ownsView = snapshot => !disposed && snapshot.generation === generation &&
+    snapshot.epoch === currentEpoch.value && snapshot.detailGeneration === detailGeneration
+  const resetVersions = () => {
+    versionsGeneration += 1
+    versionsState.value = 'idle'
+    versionsError.value = ''
+    versionsNextCursor.value = null
+    versionsLoaded.value = false
+  }
   let disposed = false
 
   const revokePreview = () => {
@@ -124,8 +137,13 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     preview.value = { kind: 'none', message: '' }
   }
   const reset = () => {
+    writes.clear()
+    confirmationStale.value = false
     generation += 1
     detailGeneration += 1
+    listGeneration += 1
+    activeQuery = null
+    resetVersions()
     for (const controller of controllers) controller.abort(abortError('Workspace identity changed'))
     controllers.clear()
     items.value = []
@@ -136,40 +154,62 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     error.value = ''
     detail.value = null
     lastOperation.value = null
+    writeNotice.value = ''
+    detailRetryFileId.value = null
     revokePreview()
   }
   const stillCurrent = (snapshot, controller) => !disposed && snapshot.generation === generation &&
     !controller.signal.aborted && currentEpoch.value === snapshot.epoch
   const request = async (options, snapshot = { generation, epoch: currentEpoch.value }) => {
     const controller = new AbortController()
+    if (!stillCurrent(snapshot, controller)) throw abortError('Workspace context changed')
     controllers.add(controller)
     try {
-      const response = await api.execute({ ...options, autoLoading: false, needAuth: true, signal: controller.signal })
+      let metadata
+      const response = await api.execute({
+        ...options, autoLoading: false, needAuth: true, signal: controller.signal,
+        onSuccess: (value, currentMetadata) => {
+          metadata = currentMetadata
+          options.onSuccess?.(value, currentMetadata)
+        }
+      })
       if (!stillCurrent(snapshot, controller)) throw abortError('Workspace context changed')
-      return { data: unwrap(response), headers: responseHeaders(response) }
+      return { data: response, headers: metadata?.headers || {} }
     } finally {
       controllers.delete(controller)
     }
   }
   const replaceFile = file => {
     if (!validFileView(file)) return
-    items.value = items.value.map(item => item.fileId === file.fileId ? file : item)
-    if (detail.value?.file?.fileId === file.fileId) detail.value = { ...detail.value, file }
+    items.value = items.value.map(item => item.fileId === file.fileId &&
+      BigInt(file.metadataRevision) >= BigInt(item.metadataRevision) && BigInt(file.latestVersion) >= BigInt(item.latestVersion) ? file : item)
   }
-  const refresh = async ({ q, mediaFamily, state = 'ACTIVE', cursor = null, append = false } = {}) => {
+  const queryParams = ({ q, mediaFamily, state = 'ACTIVE' } = {}) => {
+    const params = { state: ['ACTIVE', 'TRASHED'].includes(state) ? state : 'ACTIVE' }
+    if (TEXT(q, 100)) params.q = q
+    if (['IMAGE', 'AUDIO', 'TEXT', 'DOCUMENT', 'SPREADSHEET', 'PRESENTATION', 'PDF'].includes(mediaFamily)) params.mediaFamily = mediaFamily
+    return params
+  }
+  const refresh = async (options = {}) => {
+    const params = queryParams(options)
+    const append = options.append === true && JSON.stringify(params) === JSON.stringify(activeQuery)
+    if (append && (loading.value || !nextCursor.value)) return false
+    if (append) params.cursor = nextCursor.value
+    else {
+      activeQuery = { ...params }
+      items.value = []
+      nextCursor.value = null
+    }
     const snapshot = { generation, epoch: currentEpoch.value }
-    if (loading.value) return false
+    const listRequest = ++listGeneration
+    const current = () => !disposed && snapshot.generation === generation && snapshot.epoch === currentEpoch.value && listRequest === listGeneration
     loading.value = true
     listState.value = append ? listState.value : 'loading'
     error.value = ''
-    const params = {}
-    if (TEXT(q, 100)) params.q = q
-    if (['IMAGE', 'AUDIO', 'TEXT', 'DOCUMENT', 'SPREADSHEET', 'PRESENTATION', 'PDF'].includes(mediaFamily)) params.mediaFamily = mediaFamily
-    if (['ACTIVE', 'TRASHED'].includes(state)) params.state = state
-    if (cursor) params.cursor = cursor
     try {
       const { data } = await request({ url: '/personal-workspace/files', method: 'GET', params }, snapshot)
-      if (!data || !Array.isArray(data.items) || !data.items.every(validFileView) || (data.nextCursor != null && !ID(data.nextCursor))) {
+      if (!current()) return false
+      if (!data || !Array.isArray(data.items) || typeof data.hasMore !== 'boolean' || data.hasMore !== (data.nextCursor !== null) || !data.items.every(validFileView) || (data.nextCursor != null && !CURSOR(data.nextCursor))) {
         throw new Error('工作空间目录返回格式无效，未展示可能不完整的数据。')
       }
       if (append) {
@@ -180,29 +220,42 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
       listState.value = items.value.length ? 'ready' : 'empty'
       return true
     } catch (cause) {
-      if (cause?.name !== 'AbortError' && snapshot.generation === generation) {
+      if (cause?.name !== 'AbortError' && current()) {
         error.value = errorMessage(cause)
         listState.value = 'error'
       }
       return false
     } finally {
-      if (snapshot.generation === generation) loading.value = false
+      if (current()) loading.value = false
     }
   }
-  const loadMore = options => nextCursor.value ? refresh({ ...options, cursor: nextCursor.value, append: true }) : false
+  const loadMore = (options = activeQuery || {}) => {
+    if (JSON.stringify(queryParams(options)) !== JSON.stringify(activeQuery)) return refresh(options)
+    return nextCursor.value ? refresh({ ...options, append: true }) : Promise.resolve(false)
+  }
+  const closeDetail = () => {
+    detailGeneration += 1
+    detail.value = null
+    actionState.value = 'idle'
+    error.value = ''
+    writeNotice.value = ''
+    detailRetryFileId.value = null
+    resetVersions()
+    revokePreview()
+  }
   const select = async fileId => {
     if (!ID(fileId)) return null
     const detailRequest = ++detailGeneration
     const snapshot = { generation, epoch: currentEpoch.value }
-    actionState.value = 'loading-detail'; error.value = ''; revokePreview()
+    actionState.value = 'loading-detail'; error.value = ''; detail.value = null; writeNotice.value = ''; detailRetryFileId.value = null; resetVersions(); revokePreview()
     try {
       const response = await request({ url: `/personal-workspace/files/${encodeURIComponent(fileId)}`, method: 'GET' }, snapshot)
       if (detailRequest !== detailGeneration) return null
       const data = response.data
-      if (!data || !validFileView(data.file) || !validVersion(data.latestVersion) || !Array.isArray(data.versions) || !data.versions.every(validVersion)) {
+      if (!data || !validFileView(data.file) || !validVersion(data.latestVersion) || !Array.isArray(data.versions) || !data.versions.every(validVersion) || data.file.fileId !== fileId || data.latestVersion.fileId !== fileId || data.versions.some(item => item.fileId !== fileId)) {
         throw new Error('文件详情返回格式无效。')
       }
-      detail.value = { ...data, etag: getHeader(response.headers, 'etag') || `"${data.file.fileId}:${data.file.metadataRevision}"` }
+      detail.value = { ...data, etag: workspaceRevisionTag(data.file.fileId, data.file.metadataRevision) }
       replaceFile(data.file)
       actionState.value = 'ready'
       return detail.value
@@ -211,77 +264,165 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
       return null
     }
   }
+  const loadVersions = async ({ append = false } = {}) => {
+    const fileId = detail.value?.file.fileId
+    if (!ID(fileId) || versionsState.value === 'loading' || (append && !versionsNextCursor.value)) return false
+    const snapshot = captureView()
+    const serial = ++versionsGeneration
+    const current = () => ownsView(snapshot) && serial === versionsGeneration
+    const cursor = append ? versionsNextCursor.value : null
+    versionsState.value = 'loading'; versionsError.value = ''
+    try {
+      const { data } = await request({ url: `/personal-workspace/files/${encodeURIComponent(fileId)}/versions`, method: 'GET', params: cursor ? { cursor } : undefined }, snapshot)
+      if (!current()) return false
+      if (!data || !Array.isArray(data.items) || !data.items.every(item => validVersion(item) && item.fileId === fileId) ||
+        typeof data.hasMore !== 'boolean' || data.hasMore !== (data.nextCursor !== null) ||
+        (data.nextCursor != null && (!CURSOR(data.nextCursor) || data.nextCursor === cursor))) throw new Error('历史版本返回格式无效，请重新读取。')
+      const versions = new Map([...detail.value.versions, ...data.items].map(item => [item.version, item]))
+      detail.value = { ...detail.value, versions: [...versions.values()].sort((a, b) => Number(b.version) - Number(a.version)) }
+      versionsNextCursor.value = data.nextCursor
+      versionsLoaded.value = true
+      versionsState.value = 'ready'
+      return true
+    } catch (cause) {
+      if (current() && cause?.name !== 'AbortError') { versionsError.value = errorMessage(cause); versionsState.value = 'error' }
+      return false
+    }
+  }
+  const loadMoreVersions = () => loadVersions({ append: versionsLoaded.value })
+  const readCommittedDetail = async (fileId, label, snapshot) => {
+    if (!ownsView(snapshot)) return
+    const pending = select(fileId)
+    const readView = captureView()
+    writeNotice.value = `${label}已保存。`
+    detailRetryFileId.value = fileId
+    const result = await pending
+    if (!ownsView(readView)) return
+    if (result) { detailRetryFileId.value = null; actionState.value = 'ready' }
+    else { writeNotice.value = `${label}已保存，但详情读取失败；请重读详情，不要重复提交。`; actionState.value = 'ready' }
+  }
+  const retryDetail = async () => {
+    const fileId = detailRetryFileId.value
+    if (!fileId) return null
+    const pending = select(fileId)
+    const snapshot = captureView()
+    detailRetryFileId.value = fileId
+    writeNotice.value = '文件已保存，正在重新读取详情。'
+    const result = await pending
+    if (!ownsView(snapshot)) return null
+    if (result) { detailRetryFileId.value = null; writeNotice.value = '已保存，详情已重新读取。' }
+    else writeNotice.value = '文件已保存，但详情读取失败；请重读详情，不要重复提交。'
+    return result
+  }
   const normalizedFile = candidate => {
     if (!validFile(candidate)) throw new Error('请选择一个有效文件。')
     const mime = inferredMime(candidate)
-    if (!mime || !fileNameMatchesMime(candidate.name, mime)) throw new Error('文件扩展名或格式不受支持。')
+    if (!validMime(mime)) throw new Error('文件类型信息无效。')
+    if (/[\\/]/.test(candidate.name) || ['.', '..'].includes(candidate.name)) throw new Error('文件名无效。')
     if (typeof File === 'function' && normalizeMime(candidate.type) !== mime) {
       return { file: new File([candidate], candidate.name, { type: mime, lastModified: candidate.lastModified || Date.now() }), mime }
     }
     return { file: candidate, mime }
   }
+  const retryWrite = async target => {
+    const snapshot = captureView()
+    try { return await writes.retry(target) } catch (cause) {
+      if (ownsView(snapshot)) { error.value = errorMessage(cause); actionState.value = 'error' }
+      return null
+    }
+  }
   const upload = async (candidate, displayName = '') => {
-    const snapshot = { generation, epoch: currentEpoch.value }
+    const snapshot = captureView()
     let input
-    try { input = normalizedFile(candidate) } catch (cause) { error.value = cause.message; actionState.value = 'error'; return null }
+    try { input = normalizedFile(candidate) } catch (cause) { error.value = errorMessage(cause); actionState.value = 'error'; return null }
     const name = String(displayName || '').trim()
     if (name && !TEXT(name, 255)) { error.value = '文件显示名无效。'; actionState.value = 'error'; return null }
-    const body = new FormData()
-    body.append('file', input.file, input.file.name)
-    if (name) body.append('displayName', name)
     actionState.value = 'uploading'; error.value = ''
     try {
-      const { data } = await request({ url: '/personal-workspace/files', method: 'POST', data: body, headers: { 'Idempotency-Key': randomKey() } }, snapshot)
-      if (!data?.operation || !validFileView(data.file) || !validVersion(data.version)) throw new Error('上传回执无效，尚不能确认保存。')
-      lastOperation.value = data.operation
-      replaceFile(data.file)
-      await select(data.file.fileId)
-      actionState.value = 'ready'
-      return data
+      return await writes.run({ target: 'CREATE', input: [input.file, name], label: `上传文件：${name || input.file.name}`,
+        execute: async key => {
+          const body = new FormData()
+          body.append('file', input.file, input.file.name)
+          if (name) body.append('displayName', name)
+          const { data } = await request({ url: '/personal-workspace/files', method: 'POST', data: body,
+            headers: { 'Idempotency-Key': key } }, snapshot)
+          if (!data?.operation || data.operation.state !== 'COMMITTED' || !validFileView(data.file) || !validVersion(data.version) || data.version.fileId !== data.file.fileId) throw new Error('上传回执无效，尚不能确认保存。')
+          return data
+        },
+        committed: async data => {
+          lastOperation.value = data.operation
+          replaceFile(data.file)
+          await readCommittedDetail(data.file.fileId, '上传', snapshot)
+        }
+      })
     } catch (cause) {
-      if (cause?.name !== 'AbortError' && snapshot.generation === generation) { error.value = errorMessage(cause); actionState.value = 'error' }
+      if (cause?.name !== 'AbortError' && ownsView(snapshot)) { error.value = errorMessage(cause); actionState.value = 'error' }
       return null
     }
   }
   const appendVersion = async candidate => {
-    const file = detail.value?.file
+    const file = detail.value?.file ? { ...detail.value.file } : null
     if (!validFileView(file)) { error.value = '请先选择一个当前可用文件。'; return null }
-    const snapshot = { generation, epoch: currentEpoch.value }
+    const snapshot = captureView()
+    if (file.latestVersion === '2147483647') { error.value = '已达到文件版本上限，不能追加新版本。'; return null }
     let input
-    try { input = normalizedFile(candidate) } catch (cause) { error.value = cause.message; actionState.value = 'error'; return null }
-    const body = new FormData()
-    body.append('file', input.file, input.file.name)
-    body.append('expectedPreviousVersion', String(file.latestVersion))
+    try { input = normalizedFile(candidate) } catch (cause) { error.value = errorMessage(cause); actionState.value = 'error'; return null }
     actionState.value = 'appending-version'; error.value = ''
     try {
-      const { data } = await request({
-        url: `/personal-workspace/files/${encodeURIComponent(file.fileId)}/versions`, method: 'POST', data: body,
-        headers: { 'Idempotency-Key': randomKey() }
-      }, snapshot)
-      if (!data?.operation || !validFileView(data.file) || !validVersion(data.version)) throw new Error('版本追加回执无效，尚不能确认保存。')
-      lastOperation.value = data.operation
-      await select(file.fileId)
-      actionState.value = 'ready'
-      return data
+      return await writes.run({ target: file.fileId, input: ['APPEND', input.file, file.latestVersion], label: `追加版本：${file.displayName}`,
+        execute: async key => {
+          const body = new FormData()
+          body.append('file', input.file, input.file.name)
+          body.append('expectedPreviousVersion', file.latestVersion)
+          const { data } = await request({ url: `/personal-workspace/files/${encodeURIComponent(file.fileId)}/versions`, method: 'POST', data: body,
+            headers: { 'Idempotency-Key': key } }, snapshot)
+          if (!data?.operation || data.operation.state !== 'COMMITTED' || !validFileView(data.file) || !validVersion(data.version) || data.file.fileId !== file.fileId || data.version.fileId !== file.fileId || BigInt(data.version.version) !== BigInt(file.latestVersion) + 1n) throw new Error('版本追加回执无效，尚不能确认保存。')
+          return data
+        },
+        committed: async data => {
+          lastOperation.value = data.operation
+          replaceFile(data.file)
+          await readCommittedDetail(file.fileId, '新版本', snapshot)
+        }
+      })
     } catch (cause) {
-      if (cause?.name !== 'AbortError' && snapshot.generation === generation) { error.value = errorMessage(cause); actionState.value = 'error' }
+      if (cause?.name !== 'AbortError' && ownsView(snapshot)) { error.value = errorMessage(cause); actionState.value = 'error' }
       return null
     }
   }
-  const mutate = async (path, body, { method = 'POST' } = {}) => {
-    const file = detail.value?.file
-    if (!validFileView(file) || !detail.value?.etag) { error.value = '请先刷新并选择一个文件。'; return null }
-    const snapshot = { generation, epoch: currentEpoch.value }
+  const mutate = async (path, body, { method = 'POST', ifMatch: confirmedMatch = null } = {}) => {
+    const file = detail.value?.file ? { ...detail.value.file } : null
+    if (!validFileView(file)) { error.value = '请先刷新并选择一个文件。'; return null }
+    const snapshot = captureView()
+    const ifMatch = confirmedMatch || workspaceRevisionTag(file.fileId, file.metadataRevision)
+    const payload = body == null ? body : { ...body }
     actionState.value = 'saving'; error.value = ''
     try {
-      const { data, headers } = await request({ url: path, method, data: body, headers: { 'Idempotency-Key': randomKey(), 'If-Match': detail.value.etag } }, snapshot)
-      if (!validFileView(data)) throw new Error('文件操作回执无效，尚不能确认保存。')
-      replaceFile(data)
-      detail.value = { ...detail.value, file: data, etag: getHeader(headers, 'etag') || `"${data.fileId}:${data.metadataRevision}"` }
-      actionState.value = 'ready'
-      return data
+      return await writes.run({ target: file.fileId, input: [path, method, JSON.stringify(payload), ifMatch], label: `${path.endsWith('/trash') ? '移入回收站' : path.endsWith('/restore') ? '恢复文件' : '重命名'}：${file.displayName}`,
+        execute: async key => {
+          // Every attempt (including same-key retry) starts a new error lifecycle.
+          // Clear before awaiting, never erase another action's later error on success.
+          if (ownsView(snapshot)) error.value = ''
+          try {
+            const { data } = await request({ url: path, method, data: payload, headers: { 'Idempotency-Key': key, 'If-Match': ifMatch } }, snapshot)
+            if (!validFileView(data) || data.fileId !== file.fileId) throw new Error('文件操作回执无效，尚不能确认保存。')
+            return data
+          } catch (cause) {
+            if (cause?.status === 412 && ownsView(snapshot)) confirmationStale.value = true
+            throw cause
+          }
+        },
+        committed: data => {
+          replaceFile(data)
+          if (ownsView(snapshot)) {
+            detail.value = { ...detail.value, file: data, etag: workspaceRevisionTag(data.fileId, data.metadataRevision) }
+            actionState.value = 'ready'
+            writeNotice.value = '原操作已提交，已读取当前文件状态。'
+          }
+        }
+      })
     } catch (cause) {
-      if (cause?.name !== 'AbortError' && snapshot.generation === generation) { error.value = errorMessage(cause); actionState.value = 'error' }
+      if (cause?.name !== 'AbortError' && ownsView(snapshot)) { error.value = errorMessage(cause); actionState.value = 'error' }
       return null
     }
   }
@@ -293,49 +434,57 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
       ? mutate(`/personal-workspace/files/${encodeURIComponent(file.fileId)}`, { displayName: name }, { method: 'PATCH' })
       : Promise.resolve(null)
   }
+  const usageContexts = new WeakMap()
   const usage = async () => {
-    const file = detail.value?.file
+    const file = detail.value?.file ? { ...detail.value.file } : null
     if (!validFileView(file)) return null
-    const snapshot = { generation, epoch: currentEpoch.value }
+    const snapshot = captureView()
     try {
       const { data } = await request({ url: `/personal-workspace/files/${encodeURIComponent(file.fileId)}/usage`, method: 'GET' }, snapshot)
-      if (!data || !Number.isSafeInteger(data.impactRevision) || !Array.isArray(data.taskReferences) || !Array.isArray(data.activeExecutions)) throw new Error('文件引用信息返回无效。')
+      if (!data || data.fileId !== file.fileId || !DECIMAL(data.impactRevision) || BigInt(data.impactRevision) < 1n || !data.counts || !['taskReferences', 'conversationReferences', 'activeInputGrants'].every(key => DECIMAL(data.counts[key]))) throw new Error('文件引用信息返回无效。')
+      if (!ownsView(snapshot)) return null
+      usageContexts.set(toRaw(data), { ...snapshot, fileId: file.fileId, revision: data.impactRevision, ifMatch: workspaceRevisionTag(file.fileId, data.impactRevision) })
+      confirmationStale.value = false
       return data
     } catch (cause) {
-      if (cause?.name !== 'AbortError' && snapshot.generation === generation) error.value = errorMessage(cause)
+      if (cause?.name !== 'AbortError' && ownsView(snapshot)) error.value = errorMessage(cause)
       return null
     }
   }
   const trash = async (usageView) => {
     const file = detail.value?.file
-    if (!validFileView(file) || !usageView || !Number.isSafeInteger(usageView.impactRevision)) return null
+    if (!validFileView(file) || !usageView || !DECIMAL(usageView.impactRevision)) return null
+    const context = usageContexts.get(toRaw(usageView))
+    if (!context || !ownsView(context) || context.fileId !== file.fileId || context.revision !== usageView.impactRevision || confirmationStale.value) { error.value = '文件已切换，请重新确认引用信息。'; return null }
     return mutate(`/personal-workspace/files/${encodeURIComponent(file.fileId)}/trash`, {
-      impactRevision: usageView.impactRevision, acknowledgeExistingReferences: true
-    })
+      impactRevision: context.revision, acknowledgeExistingReferences: true
+    }, { ifMatch: context.ifMatch })
   }
   const restore = async () => {
     const file = detail.value?.file
-    return validFileView(file) ? mutate(`/personal-workspace/files/${encodeURIComponent(file.fileId)}/restore`, {}) : null
+    return validFileView(file) ? mutate(`/personal-workspace/files/${encodeURIComponent(file.fileId)}/restore`, null) : null
   }
   const readBlob = async (fileId, version, suffix = 'content') => {
     if (!ID(fileId) || !VERSION(version)) throw new Error('文件版本无效。')
     const snapshot = { generation, epoch: currentEpoch.value }
     const { data, headers } = await request({
-      url: `/personal-workspace/files/${encodeURIComponent(fileId)}/versions/${Number(version)}/${suffix}`,
+      url: `/personal-workspace/files/${encodeURIComponent(fileId)}/versions/${version}/${suffix}`,
       method: 'GET', responseType: 'blob'
     }, snapshot)
     if (!(data instanceof Blob)) throw new Error('文件内容响应无效。')
     return { blob: data, headers }
   }
-  const download = async (version = detail.value?.latestVersion) => {
+  const download = async (version = detail.value?.latestVersion?.version) => {
     const file = detail.value?.file
     if (!validFileView(file) || !VERSION(version)) return null
-    const versionInfo = detail.value?.versions?.find(item => Number(item.version) === Number(version)) || detail.value?.latestVersion
+    const versionInfo = detail.value?.versions?.find(item => item.version === version)
+    const snapshot = captureView()
     try {
       const content = await readBlob(file.fileId, version)
+      if (!ownsView(snapshot)) return null
       return { ...content, filename: safeDownloadFilename(versionInfo?.originalFilename || file.displayName) }
     } catch (cause) {
-      if (cause?.name !== 'AbortError') error.value = errorMessage(cause)
+      if (cause?.name !== 'AbortError' && ownsView(snapshot)) error.value = errorMessage(cause)
       return null
     }
   }
@@ -345,9 +494,15 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     preview.value = { ...preview.value, selectedIndex: index }
     return true
   }
-  const previewVersion = async (version = detail.value?.latestVersion) => {
+  const previewVersion = async (version = detail.value?.latestVersion?.version) => {
     const file = detail.value?.file
-    if (!validFileView(file) || !VERSION(version)) return null
+    if (!validFileView(file) || !VERSION(version)) { revokePreview(); error.value = '文件版本无效。'; preview.value = { kind: 'error', message: error.value }; return null }
+    const selectedVersion = detail.value?.versions?.find(item => String(item.version) === String(version))
+    if (['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/vnd.ms-powerpoint'].includes(selectedVersion?.contentMimeType)) {
+      revokePreview(); actionState.value = 'ready'; error.value = ''
+      preview.value = { kind: 'unsupported', message: 'PPT 文件不支持在线预览，请下载原文件查看。' }
+      return preview.value
+    }
     const snapshot = { generation, epoch: currentEpoch.value }
     revokePreview(); actionState.value = 'loading-preview'; error.value = ''
     const previewRequest = previewGeneration
@@ -355,12 +510,17 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
       snapshot.epoch === currentEpoch.value && previewRequest === previewGeneration
     const requireCurrent = () => { if (!current()) throw abortError('Workspace preview changed') }
     try {
-      const { data } = await request({ url: `/personal-workspace/files/${encodeURIComponent(file.fileId)}/versions/${Number(version)}/preview`, method: 'GET', params: { view: 'parts' } }, snapshot)
+      const { data } = await request({ url: `/personal-workspace/files/${encodeURIComponent(file.fileId)}/versions/${version}/preview`, method: 'GET', params: { view: 'parts' } }, snapshot)
       requireCurrent()
       if (!validPreviewView(data)) {
         preview.value = { kind: 'unsupported', message: data?.reason || '此文件可下载，但暂时无法生成可用预览。' }
         actionState.value = 'ready'
         return preview.value
+      }
+      const source = detail.value?.versions?.find(item => String(item.version) === String(version))
+      if (source?.contentMimeType === 'application/pdf' &&
+          (data.parts.length !== 1 || data.parts[0].partId !== 'content' || data.parts[0].contentMimeType !== 'application/pdf')) {
+        throw new Error('PDF 原文件预览类型无效，请下载原文件查看。')
       }
       const rendered = []
       for (const part of displayPreviewParts(data)) {
@@ -368,7 +528,11 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
         requireCurrent()
         const mime = normalizeMime(part.contentMimeType)
         if (normalizeMime(content.blob.type) !== mime) throw new Error('预览分片类型无效，请下载原文件查看。')
-        if (mime === 'text/plain') {
+        if (mime === 'application/pdf') {
+          // Keep authenticated original bytes local; never request server text extraction.
+          rendered.push({ partId: part.partId, contentMimeType: mime, kind: 'pdf', blob: content.blob, text: '', url: '' })
+        }
+        else if (mime === 'text/plain') {
           const text = await content.blob.text()
           requireCurrent()
           rendered.push({ partId: part.partId, contentMimeType: mime, kind: 'text', text, url: '' })
@@ -383,9 +547,11 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
       const note = data.partial ? (data.reason || '预览内容不完整；请下载原文件查看。') : ''
       if (rendered.length === 1) {
         const first = rendered[0]
-        preview.value = first.kind === 'text'
-          ? { kind: 'text', text: first.text, message: note, parts: rendered, selectedIndex: 0 }
-          : { kind: first.kind, url: first.url, message: note, parts: rendered, selectedIndex: 0 }
+        preview.value = first.kind === 'pdf'
+          ? { kind: 'pdf', blob: first.blob, message: note, parts: rendered, selectedIndex: 0 }
+          : first.kind === 'text'
+            ? { kind: 'text', text: first.text, message: note, parts: rendered, selectedIndex: 0 }
+            : { kind: first.kind, url: first.url, message: note, parts: rendered, selectedIndex: 0 }
       } else preview.value = { kind: 'parts', parts: rendered, selectedIndex: 0, message: note }
       actionState.value = 'ready'
       return preview.value
@@ -428,6 +594,7 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
 
   return {
     items, nextCursor, listState, loading, actionState, error, detail, preview, lastOperation,
+    pendingWrites: writes.pending, retryWrite, confirmationStale, writeNotice, detailRetryFileId, retryDetail, versionItems, hasMoreVersions, versionsState, versionsError, versionsNextCursor, versionsLoaded, loadVersions, loadMoreVersions, closeDetail,
     refresh, loadMore, select, upload, appendVersion, rename, usage, trash, restore,
     download, previewVersion, selectPreviewPart, operation, revokePreview, reset, dispose
   }

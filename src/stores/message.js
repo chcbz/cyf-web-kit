@@ -119,17 +119,11 @@ const useMessageStoreBase = defineStore('message', {
     },
 
     normalizeListResult (result) {
-      const data = result?.data
-      if (Array.isArray(data)) return data
-      if (Array.isArray(data?.list)) return data.list
-      if (Array.isArray(data?.records)) return data.records
-      return []
+      return Array.isArray(result?.items) ? result.items : []
     },
 
     normalizeTotal (result, fallbackLength) {
-      if (typeof result?.total === 'number') return result.total
-      if (typeof result?.data?.total === 'number') return result.data.total
-      return fallbackLength
+      return result?.total ?? String(fallbackLength)
     },
 
     async fetchMessages (options = {}) {
@@ -151,7 +145,7 @@ const useMessageStoreBase = defineStore('message', {
         const pageNum = options.pageNum || this.pageNum
         const statusFilter = options.statusFilter || this.statusFilter
         const result = await msgApi.list('/list', {
-          pageNum,
+          pageNum: pageNum,
           pageSize: this.pageSize,
           orderBy: 'id desc',
           search: this.buildSearch(userId, statusFilter)
@@ -210,7 +204,7 @@ const useMessageStoreBase = defineStore('message', {
       try {
         assertMessageOperationCurrent(this, operation)
         if (!hasStoredApiToken()) return
-        await msgApi.get('/read', { id }, { authStore: operation.authStore, autoLoading: false, signal: operation.signal })
+        await msgApi.post('/read', null, { params: { id }, authStore: operation.authStore, autoLoading: false, signal: operation.signal })
         assertMessageOperationCurrent(this, operation)
         const message = this.messages.find(item => item.id === id)
         if (message) message.status = MSG_STATUS.READ
@@ -229,7 +223,7 @@ const useMessageStoreBase = defineStore('message', {
         const userId = await this.ensureUserId(operation)
         assertMessageOperationCurrent(this, operation)
         if (!userId) return
-        await msgApi.get('/readall', { userId }, { authStore: operation.authStore, autoLoading: false, signal: operation.signal })
+        await msgApi.post('/readall', null, { params: { userId }, authStore: operation.authStore, autoLoading: false, signal: operation.signal })
         assertMessageOperationCurrent(this, operation)
         this.messages = this.messages.map(message => ({
           ...message,
@@ -247,10 +241,10 @@ const useMessageStoreBase = defineStore('message', {
       try {
         assertMessageOperationCurrent(this, operation)
         if (!hasStoredApiToken()) return
-        await msgApi.get('/recycle', { id }, { authStore: operation.authStore, autoLoading: false, signal: operation.signal })
+        await msgApi.post('/recycle', null, { params: { id }, authStore: operation.authStore, autoLoading: false, signal: operation.signal })
         assertMessageOperationCurrent(this, operation)
         this.messages = this.messages.filter(item => item.id !== id)
-        this.total = Math.max(0, this.total - 1)
+        this.total = (BigInt(this.total) > 0n ? BigInt(this.total) - 1n : 0n).toString()
         await this.fetchUnreadTotal(operation)
       } catch (error) {
         if (!isMessageOperationCurrent(this, operation)) assertMessageOperationCurrent(this, operation)

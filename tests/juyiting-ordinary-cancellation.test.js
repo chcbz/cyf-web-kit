@@ -7,7 +7,7 @@ import { useHallOrdinaryCancellation, ordinaryTaskVersion, canCancelOrdinaryTask
 import { useHallTaskActions } from '../src/composables/juyiting/useHallTaskActions.js'
 
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no }); return { promise, resolve, reject } }
-const receipt = { taskId: 'a', status: 'cancelled', taskVersion: 3 }
+const receipt = { taskId: 'a', status: 'cancelled', taskVersion: '3' }
 const task = overrides => ({ id: 'a', status: 'open', taskVersion: '2', funding: null, reward: 0, ...overrides })
 const disposables = []
 const harness = (overrides = {}) => {
@@ -30,12 +30,12 @@ const rejected = (status, code) => { throw Object.assign(new Error('rejected'), 
 
 describe('ordinary cancellation scoped existing API', () => {
   afterEach(() => { for (const actions of disposables.splice(0)) actions.dispose() })
-  for (const status of ['open', 'planning', 'assigned']) it(`cancels ${status} with only an integer version and preserves historical assignment`, async () => {
+  for (const status of ['open', 'planning', 'assigned']) it(`cancels ${status} with only a canonical string version and preserves historical assignment`, async () => {
     const h = harness({ task: { status, assignedAgentIds: ['old-agent'] } })
     expect(await h.actions.cancelTask(h.selectedTask.value)).to.equal(true)
     expect(posts(h)[0]).to.include({ url: '/tasks/a/cancel' })
-    expect(posts(h)[0].body).to.deep.equal({ expectedTaskVersion: 2 })
-    expect(typeof posts(h)[0].body.expectedTaskVersion).to.equal('number')
+    expect(posts(h)[0].body).to.deep.equal({ expectedTaskVersion: '2' })
+    expect(typeof posts(h)[0].body.expectedTaskVersion).to.equal('string')
     expect(h.requests[1]).to.include({ method: 'GET', url: '/tasks/a' })
     expect(h.selectedTask.value.status).to.equal('cancelled')
     expect(h.selectedTask.value.assignedAgentIds).to.deep.equal(['old-agent'])
@@ -138,12 +138,53 @@ describe('ordinary cancellation scoped existing API', () => {
     expect(posts(h)[0].body).to.deep.equal({ expectedTaskVersion: '2' })
     expect(await actions.cancelTask(h.selectedTask.value)).to.equal(false)
   })
-  it('accepts only safely representable canonical integer versions and preliminarily supported states', () => {
-    for (const version of [null, true, '02', '2.0', '', -1, 1.1, Number.MAX_SAFE_INTEGER, '9223372036854775806']) expect(ordinaryTaskVersion({ taskVersion: version })).to.equal(null)
+  it('accepts only canonical int64 string versions and preliminarily supported states', () => {
+    for (const version of [null, true, '02', '2.0', '', -1, 0, 2, 1.1, Number.MAX_SAFE_INTEGER, '9223372036854775808', ' 2', '+2', '2e1']) expect(ordinaryTaskVersion({ taskVersion: version })).to.equal(null)
     for (const status of ['running', 'cancelled', 'completed', 'queued']) expect(canCancelOrdinaryTask(task({ status }))).to.equal(false)
     expect(canCancelOrdinaryTask(task({ startedAt: 0 }))).to.equal(false)
     expect(canCancelOrdinaryTask(task({ reward: 1 }))).to.equal(false)
     expect(canCancelOrdinaryTask(task())).to.equal(true)
+  })
+  for (const [before, after] of [['0', '1'], ['9', '10'], ['9007199254740992', '9007199254740993'], ['9223372036854775806', '9223372036854775807']]) {
+    it(`preserves exact request, receipt and readback for ${before} → ${after}`, async () => {
+      const h = harness({ task: { taskVersion: before },
+        post: () => ({ ...receipt, taskVersion: after }),
+        get: () => task({ status: 'cancelled', taskVersion: after }) })
+      expect(await h.actions.cancelTask(h.selectedTask.value)).to.equal(true)
+      expect(posts(h)[0].body).to.deep.equal({ expectedTaskVersion: before })
+      expect(h.selectedTask.value.taskVersion).to.equal(after)
+    })
+    it(`reconciles lost POST with exact string increment for ${before} → ${after}`, async () => {
+      const h = harness({ task: { taskVersion: before }, post: () => { throw new TypeError('lost') },
+        get: () => task({ status: 'cancelled', taskVersion: after }) })
+      expect(await h.actions.cancelTask(h.selectedTask.value)).to.equal(true)
+      expect(posts(h)).to.have.length(1)
+    })
+  }
+  it('does not admit a cancellation that would overflow the server Long version', async () => {
+    const h = harness({ task: { taskVersion: '9223372036854775807' } })
+    expect(ordinaryTaskVersion(h.selectedTask.value)).to.equal('9223372036854775807')
+    expect(await h.actions.cancelTask(h.selectedTask.value)).to.equal(false)
+    expect(h.requests).to.have.length(0)
+  })
+  for (const version of [3, '03', '3.0', '9223372036854775808', '2', null]) {
+    it(`does not confirm malformed/non-advancing receipt ${JSON.stringify(version)} without valid readback`, async () => {
+      const h = harness({ post: () => ({ ...receipt, taskVersion: version }), get: () => task() })
+      expect(await h.actions.cancelTask(h.selectedTask.value)).to.equal(false)
+      expect(h.actions.cancellationState.value.status).to.equal('unresolved')
+      expect(h.success()).to.equal(0)
+    })
+  }
+  it('rejects rounded/equal large readback versions and only GETs when checking again', async () => {
+    const h = harness({ task: { taskVersion: '9007199254740992' }, post: () => { throw new TypeError('lost') },
+      get: () => task({ status: 'cancelled', taskVersion: '9007199254740992' }) })
+    expect(await h.actions.cancelTask(h.selectedTask.value)).to.equal(false)
+    expect(await h.actions.cancelTask(h.selectedTask.value)).to.equal(false)
+    expect(posts(h)).to.have.length(1)
+  })
+  it('does not accept a numeric canonical GET after a lost response', async () => {
+    const h = harness({ post: () => { throw new TypeError('lost') }, get: () => task({ status: 'cancelled', taskVersion: 3 }) })
+    expect(await h.actions.cancelTask(h.selectedTask.value)).to.equal(false)
   })
   it('decodes actual bare result.data and the existing business envelope without hiding failures', () => {
     expect(cancellationPayload({ data: receipt, status: 200 })).to.equal(receipt)

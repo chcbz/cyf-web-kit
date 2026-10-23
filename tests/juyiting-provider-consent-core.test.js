@@ -17,8 +17,8 @@ const harness = (overrides = {}) => {
   const memory = overrides.storage || storage(); const scope = overrides.scope || ref('tenant\u0000client\u0000owner'); const calls = []
   let issued = false; let revoked = false
   const api = {
-    get: async (path, query, options) => { calls.push(['get', path, options?.headers?.['Idempotency-Key']]); if (!issued) throw Object.assign(new Error('missing'), { status: 404, code: 'PROVIDER_CONSENT_NOT_FOUND' }); return { data: receipt({ state: revoked ? 'REVOKED' : 'ISSUED', version: revoked ? '2' : '1' }) } },
-    create: async (path, body, options) => { calls.push(['post', path, copy(body), options.headers['Idempotency-Key']]); if (path.endsWith('/revoke')) { revoked = true; return { data: receipt({ state: 'REVOKED', version: '2' }) } } issued = true; return { data: receipt() } }, ...overrides.api
+    get: async (path, query, options) => { calls.push(['get', path, options?.headers?.['Idempotency-Key']]); if (!issued) throw Object.assign(new Error('missing'), { status: 404, code: 'PROVIDER_CONSENT_NOT_FOUND' }); return (receipt({ state: revoked ? 'REVOKED' : 'ISSUED', version: revoked ? '2' : '1' })) },
+    create: async (path, body, options) => { calls.push(['post', path, copy(body), options.headers['Idempotency-Key']]); if (path.endsWith('/revoke')) { revoked = true; return (receipt({ state: 'REVOKED', version: '2' })) } issued = true; return (receipt()) }, ...overrides.api
   }
   const flow = useHallPointAndStartCostConsent({ agentApi: api, actorScopeKey: scope, storage: memory, keys: keyFactory() })
   instances.push(flow)
@@ -28,9 +28,9 @@ const harness = (overrides = {}) => {
 describe('frozen provider-consent intent and receipt contract', () => {
   afterEach(() => instances.splice(0).forEach(flow => flow.dispose()))
   it('only accepts the frozen one-image issue shape and at most 16 exact references', () => {
-    const refs = Array.from({ length: 16 }, (_, i) => ({ fileId: `f-${i}`, version: 1, purpose: 'REFERENCE' }))
+    const refs = Array.from({ length: 16 }, (_, i) => ({ fileId: `f-${i}`, version: '1', purpose: 'REFERENCE' }))
     expect(providerConsentIssueBody({ assignmentIdempotencyKey: 'assignment-key', assignment: assignment({ inputRefs: refs }), providerBinding: binding(), acknowledgement: providerConsentAcknowledgement })?.assignment.inputRefs).to.deep.equal(assignment({ inputRefs: refs }).inputRefs)
-    expect(providerConsentIssueBody({ assignmentIdempotencyKey: 'assignment-key', assignment: assignment({ inputRefs: [...refs, { fileId: 'too-many', version: 1, purpose: 'REFERENCE' }] }), providerBinding: binding(), acknowledgement: providerConsentAcknowledgement })).to.equal(null)
+    expect(providerConsentIssueBody({ assignmentIdempotencyKey: 'assignment-key', assignment: assignment({ inputRefs: [...refs, { fileId: 'too-many', version: '1', purpose: 'REFERENCE' }] }), providerBinding: binding(), acknowledgement: providerConsentAcknowledgement })).to.equal(null)
     expect(providerConsentIssueBody({ assignmentIdempotencyKey: 'assignment-key', assignment: assignment({ requestedOperations: ['GENERATE_IMAGE', 'EDIT_IMAGE'] }), providerBinding: binding(), acknowledgement: providerConsentAcknowledgement })).to.equal(null)
   })
   for (const [name, mutate] of [
@@ -95,7 +95,7 @@ describe('frozen provider-consent intent and receipt contract', () => {
     }
   })
   it('reads exact historical receipts without changing their stored key/body or permitting foreign identity', async () => {
-    const h = harness({ api: { get: async () => ({ data: receipt() }) } })
+    const h = harness({ api: { get: async () => ((receipt())) } })
     const name = `cyf.juyiting.point-and-start.v1.${encodeURIComponent(h.scope.value)}.task-1`
     h.memory.setItem(name, JSON.stringify(intent())); expect(await h.flow.checkOriginal('task-1')).to.equal(true)
     expect(h.flow.state.value.receipt.state).to.equal('ISSUED'); expect(h.memory.getItem(name)).to.equal(JSON.stringify(intent()))

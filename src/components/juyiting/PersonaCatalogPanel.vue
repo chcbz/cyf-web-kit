@@ -228,7 +228,7 @@ const importHandoff = async event => {
 }
 const currentOperation = (generation, context) => mounted && generation === operationGeneration && context === contextKey.value
 const matchesInstallationView = (view, request) => Boolean(view && request &&
-  view.installationId === request.installationId &&
+  view.runtimeInstallationId === request.installationId &&
   view.tenantId === runtimeSetup.value.tenantId && view.clientId === runtimeSetup.value.clientId &&
   view.canonicalAgentId === request.canonicalAgentId && view.manifestVersion === request.manifestVersion &&
   view.manifestSha256 === request.manifestSha256 && view.enrollmentExpiresAt === request.enrollmentExpiresAt)
@@ -244,14 +244,14 @@ const createInstallation = async () => {
   }
   createAttempted.value = true
   const generation = ++operationGeneration; const context = contextKey.value
-  const body = { ...request }
+  const { installationId, ...registration } = request
+  const body = { ...registration, runtimeInstallationId: installationId }
   runtimeBusy.value = true; runtimeError.value = ''; installationStatus.value = ''
   try {
     const result = await agentApi.post('/runtime/v1/installations', body, { autoLoading: false })
     if (!currentOperation(generation, context)) return
-    const envelope = result?.data
-    const view = envelope?.data
-    if (envelope?.code !== 'E0' || !matchesInstallationView(view, request)) throw new Error('registration not confirmed')
+    const view = result
+    if (!matchesInstallationView(view, request)) throw new Error('registration not confirmed')
     installationStatus.value = statusLabel(view.status)
     importedHandoff.value = null
   } catch {
@@ -267,9 +267,8 @@ const lookupInstallation = async () => {
   try {
     const result = await agentApi.get(`/runtime/v1/installations/${encodeURIComponent(id)}`, undefined, { autoLoading: false })
     if (!currentOperation(generation, context)) return
-    const envelope = result?.data
-    const view = envelope?.data
-    if (envelope?.code !== 'E0' || !matchesInstallationView(view, request)) throw new Error('lookup not confirmed')
+    const view = result
+    if (!matchesInstallationView(view, request)) throw new Error('lookup not confirmed')
     // A matching registration already exists; only query/enroll it, never offer create again.
     createAttempted.value = true
     installationStatus.value = statusLabel(view.status)

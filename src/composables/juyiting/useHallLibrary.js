@@ -2,11 +2,8 @@ import { ref } from 'vue'
 
 export const useHallLibrary = ({
   chatApi,
-  draft,
+  openRequirement,
   log,
-  openPanel,
-  outgoingMetadata,
-  setDraft,
   playSuccess,
   showToast
 }) => {
@@ -30,7 +27,7 @@ export const useHallLibrary = ({
       }, {
         autoLoading: false,
         onSuccess: (result) => {
-          libraryResults.value = result?.data || []
+          libraryResults.value = result || []
         }
       })
     } catch (error) {
@@ -46,16 +43,11 @@ export const useHallLibrary = ({
   const citeLibraryItem = (item) => {
     const content = String(item?.content || '').trim()
     if (!content) return
-    outgoingMetadata.value = {
-      ...(outgoingMetadata.value || {}),
-      libraryCitationId: item.id || item.conversationId,
-      librarySourceType: item.summaryType || item.sourceType || 'memory'
-    }
     const excerpt = content.length > 120 ? `${content.slice(0, 120)}...` : content
-    setDraft(`${draft.value ? `${draft.value}\n\n` : ''}参看案卷阁案卷：${excerpt}`)
-    openPanel('chat')
+    if (!openRequirement?.({ originRef: 'juyiting:library', instruction: `参看典籍阁案卷：${excerpt}`, inputs: [] })) return false
     playSuccess()
-    showToast('案卷已引入传令')
+    showToast('案卷已带入需求草稿，尚未提交')
+    return true
   }
 
   return {

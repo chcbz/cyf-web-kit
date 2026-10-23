@@ -1,7 +1,8 @@
 import { exactPointAndStartId, exactPointAndStartScope } from './hallPointAndStartIntent.js'
 
 // Keep the original single recovery slot: v1 pending work must block new v2 creation too.
-const PREFIX = 'cyf.juyiting.requirement-create.v1'
+const PREFIX = 'cyf.juyiting.requirement-create.protocol1'
+const fileVersion = value => typeof value === 'string' && /^[1-9][0-9]{0,9}$/.test(value) && BigInt(value) <= 2147483647n
 const clone = value => JSON.parse(JSON.stringify(value))
 const equal = (left, right) => JSON.stringify(left) === JSON.stringify(right)
 const object = value => value && typeof value === 'object' && !Array.isArray(value)
@@ -17,7 +18,7 @@ export const requirementReferenceInputs = list => {
   const seen = new Set()
   for (const item of list) {
     if (!exactKeys(item, ['fileId', 'version', 'purpose']) || !exactPointAndStartId(item.fileId) ||
-      !Number.isInteger(item.version) || item.version < 1 || item.version > 2147483647 || item.purpose !== 'REFERENCE') return null
+      !fileVersion(item.version) || item.purpose !== 'REFERENCE') return null
     const key = JSON.stringify([item.fileId, item.version, item.purpose])
     if (seen.has(key)) return null
     seen.add(key)
@@ -44,7 +45,7 @@ export const requirementCreateBody = payload => {
 export const requirementCreateReceipt = (value, intent) => {
   if (!exactKeys(value, ['schemaVersion', 'operationId', 'taskId', 'requirementRevision', 'state', 'inputRefs', 'task']) ||
     value.schemaVersion !== 1 || !exactPointAndStartId(value.operationId) || !exactPointAndStartId(value.taskId) ||
-    value.requirementRevision !== 1 || value.state !== 'COMMITTED' || !object(value.task) || value.task.id !== value.taskId) return null
+    value.requirementRevision !== '1' || value.state !== 'COMMITTED' || !object(value.task) || value.task.id !== value.taskId) return null
   const refs = requirementReferenceInputs(value.inputRefs)
   if (!refs || !equal(refs, intent?.body?.inputRefs)) return null
   const old = intent.receipt
@@ -71,7 +72,7 @@ export const requirementMaterialInputs = list => {
   const attachments = [], seen = new Set()
   for (const item of list) {
     if (!exactKeys(item, ['fileId', 'version']) || !exactPointAndStartId(item.fileId) || !wellFormed(item.fileId) ||
-      !Number.isInteger(item.version) || item.version < 1 || item.version > 2147483647) return null
+      !fileVersion(item.version)) return null
     const key = JSON.stringify([item.fileId, item.version])
     if (seen.has(key)) return null
     seen.add(key)
@@ -96,7 +97,7 @@ export const requirementMaterialsBody = payload => {
 export const requirementMaterialsReceipt = (value, intent) => {
   if (!exactKeys(value, ['schemaVersion', 'operationId', 'taskId', 'requirementRevision', 'state', 'attachments', 'task']) ||
     value.schemaVersion !== 2 || intent?.schemaVersion !== 2 || !exactPointAndStartId(value.operationId) || !exactPointAndStartId(value.taskId) ||
-    value.requirementRevision !== 1 || value.state !== 'COMMITTED' || !object(value.task) || value.task.id !== value.taskId) return null
+    value.requirementRevision !== '1' || value.state !== 'COMMITTED' || !object(value.task) || value.task.id !== value.taskId) return null
   const attachments = requirementMaterialInputs(value.attachments)
   if (!attachments || !equal(attachments, intent.body?.attachments)) return null
   const old = intent.receipt

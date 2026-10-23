@@ -1,20 +1,13 @@
 import { economyApi } from '@/composables/useHttp'
 
-const responseBody = result => result?.data ?? result
+export const readEconomyCapability = capability =>
+  capability && typeof capability === 'object' && !Array.isArray(capability) &&
+  Object.keys(capability).length === 3 && typeof capability.economyPreviewEnabled === 'boolean' &&
+  typeof capability.skillMarketplaceEnabled === 'boolean' && typeof capability.principalScopeSha256 === 'string' &&
+  /^[0-9a-f]{64}$/.test(capability.principalScopeSha256) ? capability : null
 
-export const readEconomyCapability = (result) => {
-  const body = responseBody(result)
-  const code = body?.code
-  if (code !== undefined && code !== null && code !== 'E0' && code !== '0' && code !== 0 && code !== '200' && code !== 200) return null
-  const capability = body?.data ?? body
-  if (!capability || typeof capability !== 'object') return null
-  return capability
-}
-
-export const isEconomyPreviewCapability = capability => capability?.economyPreviewEnabled === true
-export const isSkillMarketplaceCapability = capability => isEconomyPreviewCapability(capability) &&
-  capability?.skillMarketplaceEnabled === true && typeof capability?.principalScopeFingerprint === 'string' &&
-  Boolean(capability.principalScopeFingerprint.trim())
+export const isEconomyPreviewCapability = capability => readEconomyCapability(capability)?.economyPreviewEnabled === true
+export const isSkillMarketplaceCapability = capability => isEconomyPreviewCapability(capability) && capability.skillMarketplaceEnabled === true
 
 /**
  * Proposed preview API: GET /economy/capabilities. Missing or malformed data is

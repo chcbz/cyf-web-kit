@@ -1,3 +1,4 @@
+import { validMaterialVersion } from './materialVersion.js'
 import { computed, ref, unref, watch } from 'vue'
 import { usePersonalWorkspaceTaskLinks } from '../usePersonalWorkspaceTaskLinks.js'
 import { useHallDrafts } from './useHallDrafts.js'
@@ -16,9 +17,9 @@ const normalizeMaterials = values => {
   const seen = new Set()
   for (const value of values) {
     const fileId = String(value?.fileId || '')
-    const version = Number(value?.version)
+    const version = value?.version
     const role = value?.role === 'REFERENCE' ? 'REFERENCE' : value?.role === 'INPUT' ? 'INPUT' : ''
-    if (!validId(fileId) || !Number.isSafeInteger(version) || version < 1 || version > 2147483647 || !role) continue
+    if (!validId(fileId) || !validMaterialVersion(version) || !role) continue
     const key = `${fileId}\u0000${version}\u0000${role}`
     if (seen.has(key)) continue
     seen.add(key)

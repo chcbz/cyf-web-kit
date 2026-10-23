@@ -29,6 +29,7 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5v5h5M3 10a9 9 0 1 1 2 8M12 7v5l3 2" /></svg>
         </button>
         <button
+          v-if="!serverTaskCompleted"
           class="icon-button primary"
           type="button"
           title="另起话头"
@@ -38,31 +39,25 @@
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14" /></svg>
         </button>
-        <button
-          v-if="durableCancelTarget"
-          class="icon-button"
-          type="button"
-          title="取消待处理回话"
-          aria-label="取消待处理回话"
-          @click="$emit('cancel-deliberation', durableCancelTarget)"
-        ><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18" /></svg></button>
 
-
+        <slot name="matter-actions"></slot>
       </div>
     </div>
 
 
 
+    <slot name="after-toolbar"></slot>
     <HallConversationHistory
       v-if="historyOpen"
       :conversations="conversationHistory"
+      :read-only="serverTaskCompleted"
       :deleting-id="conversationHistoryDeletingId"
       :disabled="conversationBusy || voice?.voiceInteractionLocked"
       :error="conversationHistoryError"
       :has-more="conversationHistoryHasMore"
       :loading="conversationHistoryLoading"
       :selected-id="conversationId"
-      @delete="$emit('delete-conversation', $event)"
+      @delete="!serverTaskCompleted && $emit('delete-conversation', $event)"
       @load-more="$emit('load-more-history')"
       @select="$emit('select-conversation', $event)"
     />
@@ -108,13 +103,14 @@
           v-for="projection in typedForMessage(message)"
           :key="projection.key"
           :projection="projection"
-          @reply="$emit('typed-reply', $event)"
+          :read-only="serverTaskCompleted"
+          @reply="!serverTaskCompleted && $emit('typed-reply', $event)"
         />
         <small v-if="message.statusText" class="message-status">{{ message.statusText }}</small>
       </div>
       <slot name="bounty-results"></slot>
-      <p v-if="deliberationStatus" class="deliberation-status">{{ deliberationStatus }}</p>
-      <div v-if="isAwaitingReply" class="hall-message SYSTEM is-pending">
+      <p v-if="deliberationStatus && !serverTaskCompleted" class="deliberation-status" :role="deliberationStatus.startsWith('停止失败') ? 'alert' : 'status'">{{ deliberationStatus }}</p>
+      <div v-if="isAwaitingReply && !serverTaskCompleted" class="hall-message SYSTEM is-pending">
         <strong>{{ pendingAuthor }}</strong>
         <div class="message-content" v-html="renderMarkdown(pendingLabel)"></div>
       </div>
@@ -124,7 +120,11 @@
     </div>
 
     <HallChatComposer
+      v-if="!serverTaskCompleted"
+      :compact="discussionVariant === 'bounty'"
       :agents="agents"
+      :durable-cancel-target="durableCancelTarget"
+      :reply-cancellation-state="replyCancellationState"
       :discussion-variant="discussionVariant"
       :draft="draft"
       :has-typed-attachments="typedEnabled && discussionVariant === 'bounty' && typedSourceSelectors.length > 0"
@@ -139,6 +139,7 @@
       :typed-pending-question="typedPendingQuestion"
       :context-key="`${materialIdentityKey}\u0000${taskId}\u0000${conversationId}`"
       :voice="voice"
+      @cancel-deliberation="$emit('cancel-deliberation', $event)"
       @clear-target="$emit('clear-target', $event)"
       @mention-agent="$emit('mention-agent', $event)"
       @send-message="$emit('send-message', typedEnabled && discussionVariant === 'bounty' ? { sourceSelectors: typedSourceSelectors, materialScope: typedMaterialScope } : undefined)"
@@ -161,9 +162,20 @@
             {{ isTaskDiscussion ? '未确认当前事项标识，不能读取或展示资料。' : '请先发送一条消息建立话头，再从百宝箱引用资料。' }}
           </p>
           <template v-else>
+            <WorkspaceWriteRecovery :pending="selectedMaterialDirectory.pendingWrites.value" @retry="selectedMaterialDirectory.retryWrite" />
+            <p v-if="selectedMaterialDirectory.writeNotice.value" role="status">{{ selectedMaterialDirectory.writeNotice.value }}</p>
             <p v-if="materialError" class="material-reference-error" role="alert">{{ materialError }}</p>
             <div v-if="materialLoading" class="material-reference-state">正在查找百宝箱资料…</div>
             <div v-if="isTaskDiscussion" class="task-material-directory">
+              <HallMaterialPicker
+                :model-value="pendingTaskMaterials"
+                :identity-epoch="identityEpoch"
+                :identity-scope="`${identityScope}\u0000${taskId}\u0000${conversationId}`"
+                :enabled="hasMaterialScope && !serverTaskCompleted"
+                :disabled="materialSelectionBusy || materialActionBusy || conversationBusy || serverTaskCompleted"
+                @update:model-value="attachTaskMaterials"
+              />
+              <p v-if="materialSelectionBusy" role="status">正在关联所选固定版本，请稍候…</p>
               <label v-if="typedEnabled" class="typed-material-scope">资料范围
                 <select v-model="typedMaterialScope" aria-label="资料范围">
                   <option value="TASK_DEFAULT">本任务资料</option>
@@ -230,8 +242,10 @@ import BountyTextSelectionArchive from './BountyTextSelectionArchive.vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import HallChatComposer from './HallChatComposer.vue'
+import HallMaterialPicker from './HallMaterialPicker.vue'
 import HallConversationHistory from './HallConversationHistory.vue'
 import BountyTypedOutcomeCard from './BountyTypedOutcomeCard.vue'
+import WorkspaceWriteRecovery from '../personal-workspace/WorkspaceWriteRecovery.vue'
 import { usePersonalWorkspace } from '../../composables/usePersonalWorkspace.js'
 import { usePersonalWorkspaceConversationLinks } from '../../composables/usePersonalWorkspaceConversationLinks.js'
 import { usePersonalWorkspaceTaskLinks } from '../../composables/usePersonalWorkspaceTaskLinks.js'
@@ -255,8 +269,10 @@ const props = defineProps({
   conversationBusy: { type: Boolean, default: false },
   deliberationStatus: { type: String, default: '' },
   durableCancelTarget: { type: Object, default: null },
+  replyCancellationState: { type: Object, default: null },
   conversationId: { type: String, default: '' },
   discussionVariant: { type: String, default: 'public' },
+  matterReadOnly: { type: Boolean, default: false },
   draft: { type: String, default: '' },
   emptyText: { type: String, default: '厅中暂无话头，可先传一句。' },
   eventStreamRecovering: { type: Boolean, default: false },
@@ -305,7 +321,8 @@ const materialPickerOpen = ref(false)
 const pendingAuthor = '聚义厅'
 const materialIdentityKey = computed(() => `${props.identityEpoch}\u0000${props.identityScope}`)
 const taskId = computed(() => String(props.selectedTask?.id || '').trim())
-const serverTaskCompleted = computed(() => props.discussionVariant === 'bounty' && props.selectedTask?.status === 'completed')
+const serverTaskCompleted = computed(() => props.discussionVariant === 'bounty' &&
+  (props.matterReadOnly || ['completed', 'failed', 'cancelled', 'archived'].includes(props.selectedTask?.status)))
 const typedForMessage = message => props.typedOutcomes.filter(projection =>
   projection?.outcome?.assistantMessageId === String(message?.localId || ''))
 
@@ -320,6 +337,9 @@ const taskMaterialLinks = usePersonalWorkspaceTaskLinks({
   identityEpoch: materialIdentityKey
 })
 const materialNames = ref({})
+const pendingTaskMaterials = ref([])
+const materialSelectionBusy = ref(false)
+let materialSelectionGeneration = 0
 const typedSelectedSourceIds = ref(new Set())
 const hasMaterialScope = computed(() => isTaskDiscussion.value ? Boolean(taskId.value) : Boolean(props.conversationId))
 const selectedMaterialDirectory = computed(() => isTaskDiscussion.value ? taskMaterialLinks : conversationMaterialLinks)
@@ -362,6 +382,23 @@ const toggleMaterialPicker = async () => {
   materialPickerOpen.value = !materialPickerOpen.value
   if (materialPickerOpen.value) await refreshMaterialReferences()
 }
+const attachTaskMaterials = async materials => {
+  if (!isTaskDiscussion.value || serverTaskCompleted.value || materialSelectionBusy.value || !hasMaterialScope.value) return
+  pendingTaskMaterials.value = materials.map(material => ({ ...material }))
+  const generation = ++materialSelectionGeneration
+  materialSelectionBusy.value = true
+  try {
+    for (const material of materials) {
+      if (generation !== materialSelectionGeneration || serverTaskCompleted.value) return
+      const existing = activeMaterialLinks.value.find(link => link.fileId === material.fileId && link.version === material.version)
+      const link = existing || await taskMaterialLinks.attach({ fileId: material.fileId, version: material.version, role: 'REFERENCE' })
+      if (generation !== materialSelectionGeneration || serverTaskCompleted.value) return
+      if (!link || link.state !== 'ACTIVE') break // Keep failed/unattempted selections and the existing write recovery intent.
+      materialNames.value = { ...materialNames.value, [material.fileId]: material.displayName }
+      pendingTaskMaterials.value = pendingTaskMaterials.value.filter(item => item.fileId !== material.fileId || item.version !== material.version)
+    }
+  } finally { if (generation === materialSelectionGeneration) materialSelectionBusy.value = false }
+}
 const addMaterialReference = async file => {
   if (isTaskDiscussion.value) return
   await conversationMaterialLinks.attach({ fileId: file.fileId, version: file.latestVersion, role: 'REFERENCE' })
@@ -384,6 +421,7 @@ const resolvedSubtitle = computed(() => {
   return props.scopeHint === 'public' ? '未 @ 时由宋江分拨' : props.scopeHint
 })
 const displayStatus = computed(() => {
+  if (serverTaskCompleted.value) return ({ completed: '事项已完成', cancelled: '事项已取消', failed: '事项未完成', archived: '事项已归档' })[props.selectedTask?.status] || props.connectionStatus || '事项只读'
   if (props.eventStreamRecovering) return '正在续上传令'
   return props.connectionStatus || (props.isAwaitingReply ? pendingLabel.value : '传令畅通')
 })
@@ -404,10 +442,19 @@ watch(() => props.messages, () => {
 watch(() => `${materialIdentityKey.value}\u0000${taskId.value}\u0000${props.conversationId}\u0000${serverTaskCompleted.value}`, () => {
   materialPickerOpen.value = false
   materialNames.value = {}
+  materialSelectionGeneration++
+  materialSelectionBusy.value = false
+  pendingTaskMaterials.value = []
   typedSelectedSourceIds.value = new Set()
   typedMaterialScope.value = 'TASK_DEFAULT'
 }, { flush: 'sync' })
+watch(serverTaskCompleted, (terminal, previous) => {
+  if (!terminal) return
+  materialPickerOpen.value = false
+  if (!previous) props.voice?.cancel?.()
+}, { flush: 'sync', immediate: true })
 onBeforeUnmount(() => {
+  materialSelectionGeneration++
   workspace.dispose()
   conversationMaterialLinks.dispose()
   taskMaterialLinks.dispose()
@@ -486,13 +533,16 @@ button:disabled {
   min-width: 0;
 }
 
-.icon-button {
+.icon-button,
+.toolbar-actions :deep(.matter-action) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 0;
   flex: 0 0 auto;
   border-radius: 8px;
@@ -501,17 +551,20 @@ button:disabled {
   white-space: nowrap;
 }
 
-.icon-button svg {
+.icon-button svg,
+.toolbar-actions :deep(.matter-action svg) {
   width: 20px;
   height: 20px;
   flex: 0 0 auto;
 }
 
-.icon-button:hover:not(:disabled) {
+.icon-button:hover:not(:disabled),
+.toolbar-actions :deep(.matter-action:hover:not(:disabled)) {
   background: #f2e8d8;
 }
 
-.icon-button:focus-visible {
+.icon-button:focus-visible,
+.toolbar-actions :deep(.matter-action:focus-visible) {
   outline: 2px solid #7f4a22;
   outline-offset: 2px;
 }

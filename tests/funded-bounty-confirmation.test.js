@@ -1,3 +1,4 @@
+import { currentHttpResponse } from './fixtures/current-http-response.js'
 import { expect } from 'chai'
 import { ref } from 'vue'
 import { readFileSync } from 'node:fs'
@@ -5,7 +6,7 @@ import { useHallTaskActions } from '../src/composables/juyiting/useHallTaskActio
 import { createApi } from '../src/composables/useHttp.js'
 import { fundedQuote, fundedReceipt } from './funded-bounty-fixtures.js'
 
-const success = data => ({ data: { code: 'E0', data } })
+const success = data => data
 const deferred = () => {
   let resolve
   const promise = new Promise(done => { resolve = done })
@@ -218,8 +219,10 @@ describe('funded bounty explicit quote confirmation (W05 DTO)', () => {
   it('does not accept an error envelope containing otherwise matching receipt data', async () => {
     const h = harness({
       confirmFundedQuote: async () => true,
-      agentApi: { create: async url => url.endsWith('/quotes') ? success(fundedQuote()) :
-        { data: { code: 'QUOTE_EXPIRED', msg: 'expired', data: fundedReceipt() } } }
+      agentApi: { create: async url => {
+        if (url.endsWith('/quotes')) return fundedQuote()
+        throw Object.assign(new Error('expired'), { status: 409, code: 'QUOTE_EXPIRED', data: fundedReceipt() })
+      } }
     })
     expect(await h.actions.assignTask(h.task, h.agent)).to.equal(false)
     expect(h.actions.fundedClaimState.value.status).to.equal('rejected')
@@ -309,11 +312,11 @@ describe('funded bounty explicit quote confirmation (W05 DTO)', () => {
     const version = '9007199254740993'
     const nextVersion = '9007199254740994'
     globalThis.fetch = async (url, options) => {
-      requests.push({ url, method: options.method, body: options.body ? JSON.parse(options.body) : null })
+      requests.push({ url, method: options.method, body: options.body ? JSON.parse(options.body).data : null })
       const data = url.endsWith('/quotes') ? fundedQuote({ taskVersion: version }) : url.endsWith('/claim')
         ? fundedReceipt({ taskVersion: nextVersion })
         : { id: 'funded', status: 'assigned', taskVersion: nextVersion, assignedAgentId: 'explicit-agent' }
-      return new Response(JSON.stringify({ code: 'E0', data }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      return currentHttpResponse(options, { code: 'E0', data }, { status: 200, headers: { 'Content-Type': 'application/json' } })
     }
     try {
       const api = createApi('/agent')
@@ -342,15 +345,14 @@ describe('funded bounty explicit quote confirmation (W05 DTO)', () => {
       const requests = []
       let failClaim = true
       globalThis.fetch = async (url, options) => {
-        requests.push({ url, body: options.body ? JSON.parse(options.body) : null, key: options.headers['Idempotency-Key'] })
+        requests.push({ url, body: options.body ? JSON.parse(options.body).data : null, key: options.headers['Idempotency-Key'] })
         if (url.endsWith('/claim') && failClaim) {
           failClaim = false
-          return new Response(JSON.stringify({ code: definitive ? 'QUOTE_EXPIRED' : 'INTERNAL_ERROR', msg: 'claim error' }),
-            { status: definitive ? 409 : 503, headers: { 'Content-Type': 'application/json' } })
+          return currentHttpResponse(options, { code: definitive ? 'QUOTE_EXPIRED' : 'INTERNAL_ERROR', msg: 'claim error' }, { status: definitive ? 409 : 503, headers: { 'Content-Type': 'application/json' } })
         }
         const data = url.endsWith('/quotes') ? fundedQuote() : url.endsWith('/claim') ? fundedReceipt() :
           { id: 'funded', status: 'assigned', taskVersion: '9', assignedAgentId: 'explicit-agent' }
-        return new Response(JSON.stringify({ code: 'E0', data }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+        return currentHttpResponse(options, { code: 'E0', data }, { status: 200, headers: { 'Content-Type': 'application/json' } })
       }
       try {
         const api = createApi('/agent')

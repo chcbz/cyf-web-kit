@@ -1,3 +1,4 @@
+import { displayFixtures } from './fixtures/juyiting/interface-display-fixture.mjs'
 import { expect } from 'chai'
 import { Buffer } from 'node:buffer'
 import { readFileSync } from 'node:fs'
@@ -5,7 +6,7 @@ import { createHash } from 'node:crypto'
 import { completedTextItem, currentOutputDelivery, textDeliveryProjection, outputItemKey } from '../src/composables/juyiting/bountyOutputCatalog.js'
 import { typedOutcomeProjection } from '../src/composables/juyiting/hallTypedDeliberation.js'
 
-const fixture = () => JSON.parse(readFileSync(new URL('./fixtures/juyiting/completed-message-delivery-v3.json', import.meta.url), 'utf8'))
+const fixture = () => displayFixtures(JSON.parse(readFileSync(new URL('./fixtures/juyiting/completed-message-delivery-v3.json', import.meta.url), 'utf8')))
 const originalRequest = projection => ({ requestId: projection.requestId, requestRevision: projection.requestRevision,
   conversationId: projection.conversationId, conversationGeneration: projection.conversationGeneration, state: 'COMPLETED', steps: [] })
 const originalTurn = projection => ({ ...originalRequest(projection), turnId: projection.turnId, route: 'CHAT', state: 'FINAL_PERSISTED',
@@ -31,8 +32,8 @@ describe('explicit persisted completed text deliverable', () => {
   })
   it('does not turn missing/false marker, greeting or pending answer into a deliverable', async () => {
     for (const flag of [undefined, false]) {
-      const raw = fixture(); delete raw.outcome.messageSource; delete raw.outcome.deliverable
-      if (flag !== undefined) raw.outcome.deliverable = flag
+      const raw = fixture(); raw.outcome.messageSource = null; raw.outcome.deliverable = flag === undefined ? null : flag
+      if (flag === undefined) { raw.outcome.outcomeContractVersion = 1; raw.outcome.deliveryRelation = null }
       raw.outcome.text = '你好'
       expect(await readText(raw)).to.equal(null)
     }
@@ -42,7 +43,7 @@ describe('explicit persisted completed text deliverable', () => {
   it('rejects malformed marker and unauthorized source additions rather than guessing media/text', async () => {
     for (const mutate of [raw => { raw.outcome.deliverable = 'true' }, raw => { raw.outcome.deliverable = null },
       raw => { delete raw.outcome.messageSource }, raw => { raw.outcome.messageSource.grantId = 'forged' },
-      raw => { raw.outcome.messageSource.messageId = 9 }, raw => { raw.outcome.messageSource.finalDigest = `sha256:${'e'.repeat(64)}` },
+      raw => { raw.outcome.messageSource.messageId = 9 }, raw => { raw.outcome.messageSource.finalSha256 = `${'e'.repeat(64)}` },
       raw => { raw.outcome.messageSource.turnId = 'different-turn' }, raw => { raw.outcome.messageSource.snapshotId = 'different-snapshot' },
       raw => { raw.route = 'INSPECT' }, raw => { raw.outcome.kind = 'ACTION_REQUEST' }]) {
       const raw = fixture(); mutate(raw)
@@ -79,65 +80,65 @@ describe('explicit persisted completed text deliverable', () => {
 
 describe('explicit text delivery causal replay', () => {
   const item = (id, parent = null, mode = null) => ({ outcomeId: id, requestId: `request-${id}`, text: `原文-${id}`,
-    messageSource: { turnId: `turn-${id}`, messageId: '9', snapshotId: `snapshot-${id}`, finalDigest: `sha256:${id === 'one' ? 'a' : id === 'two' ? 'b' : 'c'}`.padEnd(71, id === 'one' ? 'a' : id === 'two' ? 'b' : 'c') },
-    deliveryRelation: parent ? { mode, parentOutcomeId: parent.outcomeId, parentFinalDigest: parent.messageSource.finalDigest } : null })
+    messageSource: { turnId: `turn-${id}`, messageId: '9', snapshotId: `snapshot-${id}`, finalSha256: `${id === 'one' ? 'a' : id === 'two' ? 'b' : 'c'}`.padEnd(64, id === 'one' ? 'a' : id === 'two' ? 'b' : 'c') },
+    deliveryRelation: parent ? { mode, parentOutcomeId: parent.outcomeId, parentFinalSha256: parent.messageSource.finalSha256, targetOutcomeId: null, targetFinalSha256: null } : null })
   it('append keeps previous work, replace changes only its exact parent, reset discards previous delivery', () => {
     const one = item('one'); const two = item('two', one, 'APPEND'); const three = item('three', two, 'REPLACE')
     expect(currentOutputDelivery([three, one, two])).to.deep.equal([one, three])
-    expect(textDeliveryProjection([two, one]).basis).to.deep.equal({ outcomeId: two.outcomeId, finalDigest: two.messageSource.finalDigest })
+    expect(textDeliveryProjection([two, one]).basis).to.deep.equal({ outcomeId: two.outcomeId, finalSha256: two.messageSource.finalSha256 })
     const reset = item('three', two, 'RESET')
     expect(currentOutputDelivery([reset, one, two])).to.deep.equal([reset])
     expect(Object.isFrozen(currentOutputDelivery([two, one]))).to.equal(true)
   })
   it('replaces an earlier retained item without moving the causal parent or dropping later appended work', () => {
     const one = item('one'); const two = item('two', one, 'APPEND'); const three = item('three', two, 'REPLACE')
-    Object.assign(three.deliveryRelation, { targetOutcomeId: one.outcomeId, targetFinalDigest: one.messageSource.finalDigest })
+    Object.assign(three.deliveryRelation, { targetOutcomeId: one.outcomeId, targetFinalSha256: one.messageSource.finalSha256 })
     expect(currentOutputDelivery([three, two, one])).to.deep.equal([three, two])
-    expect(textDeliveryProjection([two, three, one]).basis).to.deep.equal({ outcomeId: three.outcomeId, finalDigest: three.messageSource.finalDigest })
-    const later = { ...item('later', three, 'APPEND'), messageSource: { ...item('later').messageSource, finalDigest: `sha256:${'d'.repeat(64)}` } }
+    expect(textDeliveryProjection([two, three, one]).basis).to.deep.equal({ outcomeId: three.outcomeId, finalSha256: three.messageSource.finalSha256 })
+    const later = { ...item('later', three, 'APPEND'), messageSource: { ...item('later').messageSource, finalSha256: `${'d'.repeat(64)}` } }
     expect(currentOutputDelivery([later, one, three, two])).to.deep.equal([three, two, later])
     expect(currentOutputDelivery(JSON.parse(JSON.stringify([later, one, three, two])))).to.deep.equal([three, two, later])
     expect(one.text).to.equal('原文-one')
   })
   it('does not resurrect discarded texts or accept mismatched, incomplete or non-replacement target references', () => {
     const one = item('one'); const two = item('two', one, 'APPEND')
-    for (const patch of [{ targetOutcomeId: 'missing', targetFinalDigest: one.messageSource.finalDigest },
-      { targetOutcomeId: one.outcomeId, targetFinalDigest: `sha256:${'f'.repeat(64)}` }, { targetOutcomeId: one.outcomeId },
-      { targetFinalDigest: one.messageSource.finalDigest }, { targetOutcomeId: one.outcomeId, targetFinalDigest: null }]) {
+    for (const patch of [{ targetOutcomeId: 'missing', targetFinalSha256: one.messageSource.finalSha256 },
+      { targetOutcomeId: one.outcomeId, targetFinalSha256: `${'f'.repeat(64)}` }, { targetOutcomeId: one.outcomeId },
+      { targetFinalSha256: one.messageSource.finalSha256 }, { targetOutcomeId: one.outcomeId, targetFinalSha256: null }]) {
       const three = item('three', two, 'REPLACE'); Object.assign(three.deliveryRelation, patch)
       expect(() => currentOutputDelivery([three, two, one])).to.throw()
     }
     for (const mode of ['APPEND', 'RESET']) {
-      const three = item('three', two, mode); Object.assign(three.deliveryRelation, { targetOutcomeId: one.outcomeId, targetFinalDigest: one.messageSource.finalDigest })
+      const three = item('three', two, mode); Object.assign(three.deliveryRelation, { targetOutcomeId: one.outcomeId, targetFinalSha256: one.messageSource.finalSha256 })
       expect(() => currentOutputDelivery([three, two, one])).to.throw()
     }
     two.deliveryRelation.mode = 'RESET'
-    const three = item('three', two, 'REPLACE'); Object.assign(three.deliveryRelation, { targetOutcomeId: one.outcomeId, targetFinalDigest: one.messageSource.finalDigest })
+    const three = item('three', two, 'REPLACE'); Object.assign(three.deliveryRelation, { targetOutcomeId: one.outcomeId, targetFinalSha256: one.messageSource.finalSha256 })
     expect(() => currentOutputDelivery([three, two, one])).to.throw()
   })
   it('keeps targeted metadata strict in the ordinary typed projection reader', () => {
-    const value = fixture(); value.outcome.deliveryRelation = { mode: 'REPLACE', parentOutcomeId: 'causal', parentFinalDigest: `sha256:${'a'.repeat(64)}`,
-      targetOutcomeId: 'retained-earlier', targetFinalDigest: `sha256:${'b'.repeat(64)}` }
+    const value = fixture(); value.outcome.deliveryRelation = { mode: 'REPLACE', parentOutcomeId: 'causal', parentFinalSha256: `${'a'.repeat(64)}`,
+      targetOutcomeId: 'retained-earlier', targetFinalSha256: `${'b'.repeat(64)}` }
     expect(typedOutcomeProjection(value)?.outcome.deliveryRelation).to.deep.equal(value.outcome.deliveryRelation)
-    for (const patch of [{ mode: 'APPEND' }, { targetFinalDigest: 'bad' }, { targetOutcomeId: value.outcome.outcomeId }, { authority: 'fake' }]) {
+    for (const patch of [{ mode: 'APPEND' }, { targetFinalSha256: 'bad' }, { targetOutcomeId: value.outcome.outcomeId }, { authority: 'fake' }]) {
       const bad = structuredClone(value); Object.assign(bad.outcome.deliveryRelation, patch); expect(typedOutcomeProjection(bad)).to.equal(null)
     }
-    const missing = structuredClone(value); delete missing.outcome.deliveryRelation.targetFinalDigest
+    const missing = structuredClone(value); delete missing.outcome.deliveryRelation.targetFinalSha256
     expect(typedOutcomeProjection(missing)).to.equal(null)
   })
   it('rejects independent roots, missing parents, altered digests, forks and disconnected cycles', () => {
     const one = item('one'); const two = item('two', one, 'APPEND'); const three = item('three', one, 'REPLACE')
-    for (const list of [[one, item('two')], [two], [one, two, three], [one, { ...two, deliveryRelation: { ...two.deliveryRelation, parentFinalDigest: `sha256:${'f'.repeat(64)}` } }], [one, one]]) {
+    for (const list of [[one, item('two')], [two], [one, two, three], [one, { ...two, deliveryRelation: { ...two.deliveryRelation, parentFinalSha256: `${'f'.repeat(64)}` } }], [one, one]]) {
       expect(() => currentOutputDelivery(list)).to.throw()
     }
     const cycleTwo = item('two'); const cycleThree = item('three', cycleTwo, 'APPEND')
-    cycleTwo.deliveryRelation = { mode: 'APPEND', parentOutcomeId: cycleThree.outcomeId, parentFinalDigest: cycleThree.messageSource.finalDigest }
+    cycleTwo.deliveryRelation = { mode: 'APPEND', parentOutcomeId: cycleThree.outcomeId, parentFinalSha256: cycleThree.messageSource.finalSha256, targetOutcomeId: null, targetFinalSha256: null }
     expect(() => currentOutputDelivery([one, cycleTwo, cycleThree])).to.throw('不完整')
   })
   it('only precise true-marked relation metadata passes the original typed reader', () => {
-    const value = fixture(); value.outcome.deliveryRelation = { mode: 'APPEND', parentOutcomeId: 'parent', parentFinalDigest: `sha256:${'a'.repeat(64)}` }
+    const value = fixture(); value.outcome.deliveryRelation = { mode: 'APPEND', parentOutcomeId: 'parent', parentFinalSha256: `${'a'.repeat(64)}`, targetOutcomeId: null, targetFinalSha256: null }
     expect(typedOutcomeProjection(value)?.outcome.deliveryRelation).to.deep.equal(value.outcome.deliveryRelation)
-    for (const patch of [{ mode: 'LATEST' }, { parentFinalDigest: 'bad' }, { parentOutcomeId: value.outcome.outcomeId }, { authority: 'fake' }]) {
+    for (const patch of [{ mode: 'LATEST' }, { parentFinalSha256: 'bad' }, { parentOutcomeId: value.outcome.outcomeId }, { authority: 'fake' }]) {
       const bad = structuredClone(value); Object.assign(bad.outcome.deliveryRelation, patch); expect(typedOutcomeProjection(bad)).to.equal(null)
     }
   })
@@ -145,7 +146,7 @@ describe('explicit text delivery causal replay', () => {
 
 describe('actual API-generated text relation read projections', () => {
   it('rebuilds append/replace/reset from real service reads with exact original snapshots and UTF8', async () => {
-    const groups = JSON.parse(readFileSync(new URL('./fixtures/juyiting/text-delivery-relations-v3.json', import.meta.url), 'utf8'))
+    const groups = displayFixtures(JSON.parse(readFileSync(new URL('./fixtures/juyiting/text-delivery-relations-v3.json', import.meta.url), 'utf8')))
     for (const group of groups) {
       const items = []
       for (const projection of [group.initial, group.updated]) items.push(await completedTextItem(projection, originalRequest(projection), originalTurn(projection), 'task'))
@@ -153,14 +154,14 @@ describe('actual API-generated text relation read projections', () => {
       expect(actual.map(item => item.requestId), group.mode).to.deep.equal(group.mode === 'APPEND' ? ['request', 'child'] : ['child'])
       expect(actual.at(-1).text).to.equal('修改原文  ')
       expect(actual.at(-1).messageSource).to.deep.equal(group.updated.outcome.messageSource)
-      expect(textDeliveryProjection(items).basis).to.deep.equal({ outcomeId: group.updated.outcome.outcomeId, finalDigest: group.updated.outcome.finalDigest })
+      expect(textDeliveryProjection(items).basis).to.deep.equal({ outcomeId: group.updated.outcome.outcomeId, finalSha256: group.updated.outcome.finalSha256 })
     }
   })
 })
 
 describe('API-verified clarified text delivery replay', () => {
   it('ignores clarification messages and reconstructs all explicit modes from the original text basis', async () => {
-    const groups = JSON.parse(readFileSync(new URL('./fixtures/juyiting/clarified-text-delivery-v3.json', import.meta.url), 'utf8'))
+    const groups = displayFixtures(JSON.parse(readFileSync(new URL('./fixtures/juyiting/clarified-text-delivery-v3.json', import.meta.url), 'utf8')))
     for (const group of groups) {
       const items = []
       for (const projection of [group.updated, ...group.clarifications, group.initial]) {
@@ -182,7 +183,7 @@ describe('API-verified clarified text delivery replay', () => {
 
 describe('actual API retained earlier text replacement projection', () => {
   it('replays the earlier target, ignores its clarification and retains later appended sources after refresh', async () => {
-    const group = JSON.parse(readFileSync(new URL('./fixtures/juyiting/retained-text-delivery-v3.json', import.meta.url), 'utf8'))
+    const group = displayFixtures(JSON.parse(readFileSync(new URL('./fixtures/juyiting/retained-text-delivery-v3.json', import.meta.url), 'utf8')))
     const items = []
     for (const projection of [group.updated, group.appended, group.initial]) items.push(await completedTextItem(projection, originalRequest(projection), originalTurn(projection), 'task'))
     const delivery = currentOutputDelivery(items)
@@ -194,6 +195,6 @@ describe('actual API retained earlier text replacement projection', () => {
     const later = group.later
     items.push(await completedTextItem(later, originalRequest(later), originalTurn(later), 'task'))
     expect(currentOutputDelivery(items).map(item => item.requestId)).to.deep.equal(['earlier-edit', 'append', 'append-after-earlier'])
-    expect(textDeliveryProjection(items).basis).to.deep.equal({ outcomeId: later.outcome.outcomeId, finalDigest: later.outcome.finalDigest })
+    expect(textDeliveryProjection(items).basis).to.deep.equal({ outcomeId: later.outcome.outcomeId, finalSha256: later.outcome.finalSha256 })
   })
 })

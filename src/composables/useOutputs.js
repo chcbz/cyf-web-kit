@@ -9,11 +9,10 @@ const imageMimeTypes = new Set(['image/png', 'image/jpeg'])
 const pdfMimeTypes = new Set(['application/pdf'])
 const documentPreviewMimeTypes = new Set([
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 ])
 const TEXT_PREVIEW_MIME = 'text/plain'
-const previewPartMimeTypes = new Set([TEXT_PREVIEW_MIME, 'image/png'])
+const previewPartMimeTypes = new Set([TEXT_PREVIEW_MIME, 'image/png', 'application/pdf'])
 const structuredPreviewMimeTypes = new Set([...documentPreviewMimeTypes, 'application/pdf'])
 
 const valueOf = value => typeof value === 'function' ? value() : unref(value)
@@ -79,7 +78,7 @@ const conversationDeliverable = value => {
 // Task deliverable metadata may include a known representation label; private workspace
 // PreviewView intentionally omits it. Both forms carry only server-authorized part IDs
 // and MIME types, and the label never infers a part URL.
-const PREVIEW_REPRESENTATIONS = new Set(['EXTRACTED_TEXT', 'PAGED_IMAGE', 'SHEET_TEXT', 'PAGED_TEXT'])
+const PREVIEW_REPRESENTATIONS = new Set(['EXTRACTED_TEXT', 'SHEET_TEXT', 'ORIGINAL_PDF'])
 const validPreviewView = value => {
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
     !Object.keys(value).every(key => ['state', 'representation', 'parts', 'partial', 'reason'].includes(key)) ||
@@ -92,8 +91,8 @@ const validPreviewView = value => {
     new Set(value.parts.map(part => part.partId)).size !== value.parts.length) return false
   return true
 }
-// PPT/PDF/XLSX rich previews append the legacy content/text fallback after named
-// slide/page/sheet parts. Never turn that fallback into another navigation item.
+// XLSX rich previews append the legacy content/text fallback after named
+// sheet parts. Never turn that fallback into another navigation item.
 const displayPreviewParts = preview => preview.parts.some(part => part.partId !== 'content')
   ? preview.parts.filter(part => part.partId !== 'content')
   : preview.parts
@@ -184,7 +183,8 @@ export const outputReadAdapter = Object.freeze({
     const preview = unwrap(await api.execute({
       url: `${base}/preview`, method: 'GET', params: { view: 'parts' }, autoLoading: false, needAuth: true, signal
     }))
-    if (!validPreviewView(preview)) throw new Error('成果内容预览返回格式无效，未展示可能不完整的数据。')
+    if (!validPreviewView(preview) || (contentMimeType === 'application/pdf' &&
+        (preview.parts.length !== 1 || preview.parts[0].partId !== 'content' || preview.parts[0].contentMimeType !== 'application/pdf'))) throw new Error('成果内容预览返回格式无效，未展示可能不完整的数据。')
     const parts = []
     for (const part of displayPreviewParts(preview)) {
       const blob = unwrap(await api.execute({
@@ -420,13 +420,15 @@ export function useOutputs ({ source, taskId = null, identityFingerprint, adapte
 }
 
 export const outputPreviewKind = item => {
-  if (!item || item.byteLength == null) return 'none'
+  if (!item || !exactByteLength(item.byteLength)) return 'none'
   // Office previews come from the server's bounded, text-only extractor rather than
   // downloading the original archive into the browser.
   if (documentPreviewMimeTypes.has(item.mimeType)) return 'text'
-  if (item.byteLength > 1024 * 1024) return 'none'
-  if (textMimeTypes.has(item.mimeType)) return 'text'
+  // Raster images use the existing content contract and decoder dimension checks,
+  // not the small-text preview threshold. Generated PNGs commonly exceed 1 MiB.
   if (imageMimeTypes.has(item.mimeType)) return 'image'
   if (pdfMimeTypes.has(item.mimeType)) return 'pdf'
+  if (item.byteLength > 1024 * 1024) return 'none'
+  if (textMimeTypes.has(item.mimeType)) return 'text'
   return 'none'
 }

@@ -1,3 +1,5 @@
+import * as assigneeCandidates from '../src/composables/juyiting/hallAssigneeCandidates.js'
+import * as taskPresentation from '../src/composables/juyiting/hallTaskPresentation.js'
 import * as ordinaryCancellation from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
@@ -25,7 +27,7 @@ const compile = async () => {
       `const ${name} = imports[${JSON.stringify(path)}]`)
     .replace('export default', 'return')
   return new Function('imports', code)({
-    vue: Vue, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation,
+    vue: Vue, '@/composables/juyiting/hallAssigneeCandidates.js': assigneeCandidates, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation,
     './BountyActionIcon.vue': Vue.defineComponent({ render: () => Vue.h('span') }),
     '@/utils/silverAmount': silverAmount
   })

@@ -111,30 +111,9 @@ const DEMO_TASKS = [
   }
 ]
 
-const unwrapPayload = (result) => {
-  const body = result?.data ?? result
-  if (body && typeof body === 'object' && 'data' in body) {
-    return body.data
-  }
-  return body
-}
-
-const normalizeList = (result) => {
-  const payload = unwrapPayload(result)
-  if (Array.isArray(payload)) return payload
-  if (Array.isArray(payload?.list)) return payload.list
-  if (Array.isArray(payload?.records)) return payload.records
-  if (Array.isArray(payload?.rows)) return payload.rows
-  return []
-}
-
-const normalizeTotal = (result, fallbackLength) => {
-  const body = result?.data ?? result
-  const payload = unwrapPayload(result)
-  if (typeof body?.total === 'number') return body.total
-  if (typeof payload?.total === 'number') return payload.total
-  return fallbackLength
-}
+const unwrapPayload = result => result
+const normalizeList = result => Array.isArray(result?.items) ? result.items : []
+const normalizeTotal = (result, fallbackLength) => result?.total ?? String(fallbackLength)
 
 const normalizeAgent = (agent = {}) => {
   const agentId = agent.agentId || agent.id || agent.name

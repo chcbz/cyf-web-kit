@@ -1,4 +1,5 @@
-import { computed, ref, watch } from 'vue'
+import { createChatStreamDecoder } from '../../utils/chatStreamWire.js'
+import { computed, reactive, ref, unref, watch } from 'vue'
 import {
   appendHallEventMessage as reduceHallEventMessage,
   appendStreamPayload,
@@ -19,6 +20,8 @@ import {
   validateBountyBootstrapRequest, bootstrapReadbackIsCurrent
 } from './hallBountyBootstrap.js'
 import { typedId } from './hallTypedDeliberation.js'
+import { catalogPage, mergeCatalogEntries } from './bountyRequestCatalog.js'
+import { bountyInteractionTargetId } from './useHallChatContext.js'
 import {
   cancellationTarget,
   deliberationBusy,
@@ -50,7 +53,9 @@ export const useHallConversation = ({
   onFinalReply,
   onDelivery,
   onRequestCatalogHint = null,
-  onTypedOutcome = null
+  onTypedOutcome = null,
+  identityScope = null,
+  replyCancellationStorage = null
 }) => {
   const messages = ref([])
   const conversationId = ref('')
@@ -65,12 +70,26 @@ export const useHallConversation = ({
   const selectedHallConversationId = ref('')
   const draft = ref('')
   const scopeDrafts = new Map()
+  const threadDrafts = new Map()
+  const threadDraftKey = id => `${chatContext?.value?.conversationScopeType || ''}\u0000${chatContext?.value?.conversationScopeKey || ''}\u0000${id || ''}`
+  const saveThreadDraft = () => { threadDrafts.set(threadDraftKey(conversationId.value), { text: draft.value, metadata: { ...(outgoingMetadata?.value || {}) } }) }
+  const restoreThreadDraft = id => {
+    const saved = threadDrafts.get(threadDraftKey(id))
+    setDraft(saved?.text || '')
+    if (outgoingMetadata) outgoingMetadata.value = { ...(saved?.metadata || {}) }
+  }
+  const stopDraftAdoptionWatch = watch(conversationId, (nextId, previousId) => {
+    // A server-created thread adopts the current unsent draft; do not resurrect
+    // that new-thread slot later. Explicit history navigation sets selection first.
+    if (!previousId && nextId && selectedHallConversationId.value !== nextId) threadDrafts.delete(threadDraftKey(''))
+  }, { flush: 'sync' })
   const isStreaming = ref(false)
   const isAwaitingReply = ref(false)
   const isSubmitting = ref(false)
   const isAdoptingBountyBootstrap = ref(false)
   const eventStreamRecovering = ref(false)
   const deliberationStatus = ref('')
+  const restoredRequestIds = new Set()
   const activeRequest = ref(null)
   const activeTurns = ref([])
   const capabilityState = ref({ loaded: false, v2: false })
@@ -83,6 +102,35 @@ export const useHallConversation = ({
   const turnStates = new Map()
   const requestReadbackJobs = new Map()
   const requestReadbackInflight = new Map()
+  const cancellationJobs = reactive(new Map())
+  // This tab-scoped marker is a read-only recovery hint, never cancellation authority.
+  const cancellationStorage = () => {
+    try { return replyCancellationStorage || globalThis.window?.sessionStorage } catch { return null }
+  }
+  const cancellationKey = () => {
+    const identity = unref(identityScope)
+    const request = activeRequest.value
+    return identity && request?.requestId && request.conversationId && request.conversationGeneration && request.requestRevision
+      ? `juyiting:reply-stop:v1:${encodeURIComponent(JSON.stringify([identity, request.conversationId, request.conversationGeneration, request.requestId, request.requestRevision]))}` : ''
+  }
+  const savedCancellation = () => {
+    const key = cancellationKey()
+    if (!key) return null
+    try {
+      const target = JSON.parse(cancellationStorage()?.getItem(key) || 'null')
+      if (!target || !((typeof target.turnId === 'string' && target.turnId && Object.keys(target).length === 1) ||
+          (target.allPending === true && Object.keys(target).length === 1))) return null
+      return { inFlight: false, unknown: true, target }
+    } catch { return null }
+  }
+  const saveCancellation = (key, target) => {
+    if (!key) return
+    try {
+      if (target) cancellationStorage()?.setItem(key, JSON.stringify(target))
+      else cancellationStorage()?.removeItem(key)
+    } catch { /* Keep the current-tab in-memory recovery if browser storage is unavailable. */ }
+  }
+
   let capabilityPromise = null
   let capabilityAttempt = 0
   let authoritativeResyncPromise = null
@@ -120,7 +168,7 @@ export const useHallConversation = ({
 
   const exactRuntimeId = exactHallConversationId
   const now = () => Date.now()
-  const apiData = response => response?.data?.data ?? response?.data ?? response
+  const apiData = response => response
   const authEpoch = () => apiStore?.authorizationGeneration
   const v2Supported = capability => capability?.schemaVersion === '2' && capability.requestId === true &&
     capability.requestRevision === true && capability.contextSnapshot === true && capability.durableTurns === true &&
@@ -206,6 +254,10 @@ export const useHallConversation = ({
 
   const durableBusy = computed(() => deliberationBusy(activeRequest.value, activeTurns.value))
   const durableCancelTarget = computed(() => cancellationTarget(activeRequest.value, activeTurns.value))
+  const replyCancellationState = computed(() => {
+    const job = cancellationJobs.get(activeRequest.value?.requestId) || savedCancellation()
+    return job ? { inFlight: job.inFlight, unknown: job.unknown, target: job.target } : null
+  })
   const isConversationBusy = computed(() => isAdoptingBountyBootstrap.value || hasPendingSendSession.value || isSubmitting.value || durableBusy.value || isStreaming.value || isAwaitingReply.value || isConversationLoading.value || Boolean(conversationHistoryDeletingId.value))
 
   const pendingAgentName = computed(() => {
@@ -333,6 +385,13 @@ export const useHallConversation = ({
 
   const syncDurablePresentation = () => {
     if (!activeRequest.value?.requestId) return
+    for (const message of messages.value) {
+      if (!message.streaming || !message.turnId) continue
+      const turn = activeTurns.value.find(item => item.turnId === message.turnId)
+      if (!turn || !['CANCELLED', 'FAILED'].includes(turn.state)) continue
+      message.streaming = false
+      message.statusText = turn.state === 'CANCELLED' ? '已停止（未完成）' : '回复失败（未完成）'
+    }
     const busy = hasPendingSendSession.value || deliberationBusy(activeRequest.value, activeTurns.value)
     isAwaitingReply.value = busy
     isStreaming.value = activeTurns.value.some(turn => ['STREAMING', 'GENERATING'].includes(String(turn.state || '').toUpperCase()))
@@ -342,7 +401,11 @@ export const useHallConversation = ({
 
   const applyDeliberationEvent = event => {
     if (!event || typeof event !== 'object') return false
-    if (activeRequest.value?.requestId && event.requestId && event.requestId !== activeRequest.value.requestId) return false
+    if (activeRequest.value?.requestId && event.requestId && event.requestId !== activeRequest.value.requestId) {
+      // Known historical status frames advance the replay cursor, never the active round.
+      return event.conversationId === conversationId.value && restoredRequestIds.has(event.requestId) &&
+        ['interaction.state_changed', 'chat_request_replay'].includes(event.type)
+    }
     const session = activeSendSession?.roundCloseout ? activeSendSession : null
     if (session && event.requestId === session.requestId) {
       if (!currentSendSession(session) || !bindSendEvent(session, event)) return false
@@ -377,26 +440,68 @@ export const useHallConversation = ({
     return !canonicalWireString(event.stateVersion ?? event.agentDelivery?.stateVersion, { allowZero: true })
   }
 
+  let projectionsDirty = false
+  let projectionFlight = null
+  let projectionRevision = 0
+  const refreshHallProjections = event => {
+    if (!onRequestCatalogHint || disposed || !conversationId.value) return Promise.resolve(true)
+    projectionsDirty = true
+    projectionRevision++
+    const guard = captureGuard(); const id = conversationId.value
+    if (projectionFlight && projectionFlight.id === id && guardCurrent(projectionFlight.guard)) return projectionFlight.promise
+    const flight = { guard, id }; projectionFlight = flight
+    flight.promise = (async () => {
+      // Coalesce live hints in one read; new hints while awaiting need another read.
+      let revision
+      let success = false
+      do {
+        revision = projectionRevision
+        try { success = await onRequestCatalogHint(event) !== false } catch { success = false }
+        if (!guardCurrent(guard) || conversationId.value !== id) return false
+      } while (success && revision !== projectionRevision)
+      projectionsDirty = !success
+      if (!success) {
+        hallEventReconnectFailures++
+        scheduleHallEventReconnect(lifecycleGeneration)
+      }
+      return success
+    })().finally(() => { if (projectionFlight === flight) projectionFlight = null })
+    return flight.promise
+  }
+
   const refreshExecutionRequest = event => {
     if (disposed || event?.conversationId !== conversationId.value || !typedId(event?.requestId)) return false
-    onRequestCatalogHint?.(event)
+    void refreshHallProjections(event)
     if (event.requestId === activeRequest.value?.requestId) scheduleAuthoritativeRequestReadback(event.requestId, { immediate: true })
     return true
   }
 
   const appendHallEventMessage = (event, { deferServerResync = false } = {}) => {
+    if (event?.type === 'delivery_submission_completed' && event.conversationId === conversationId.value && typedId(event.requestId)) {
+      onTypedOutcome?.(event)
+      void refreshHallProjections(event)
+      return true
+    }
     // Receipt/journal events never replace a request projection or create a successful deliverable.
     if (['execution_abandoned', 'execution_terminal', 'action_started', 'action_failed', 'target_capability_unavailable', 'cancel_requested'].includes(event?.type)) return refreshExecutionRequest(event)
+    // Historical replay may contain deltas from an earlier cancelled request.
+    // Only the active request owns live bubbles; persisted historical finals still render.
+    if (event?.type === 'agent_message_delta' && activeRequest.value?.requestId &&
+        event.requestId && event.requestId !== activeRequest.value.requestId) return true
     const needsReadback = needsUnversionedTurnReadback(event)
     const durableHandled = applyDeliberationEvent(event)
     const messageEvent = event?.type === 'agent_message_delta' || event?.type === 'agent_message' || event?.type === 'resync_required' || ['part.processing', 'part.ready', 'part.failed'].includes(event?.type)
     // Keep the active-request reducer closed. A non-active media event can only ask the
     // independent read-only catalog to re-read its owner-scoped index.
-    if (['part.ready', 'agent_message', 'resync_required'].includes(event?.type) && event.requestId && event.conversationId === conversationId.value) onRequestCatalogHint?.(event)
+    if (['part.ready', 'agent_message', 'resync_required'].includes(event?.type) && event.requestId && event.conversationId === conversationId.value) void refreshHallProjections(event)
     const typedRequestId = event?.type === 'agent_message' && event?.typedOutcome ? event.requestId :
       event?.type === 'typed_question_answered' ? (event.requestId || event.replyRequestId) : ''
-    if (typedRequestId && event.conversationId === conversationId.value) onTypedOutcome?.({ ...event, requestId: typedRequestId })
+    if (typedRequestId && event.conversationId === conversationId.value) {
+      onTypedOutcome?.({ ...event, requestId: typedRequestId })
+      void refreshHallProjections(event)
+    }
     if (!messageEvent) {
+      if (typedRequestId && event.conversationId === conversationId.value) return true
       if (durableHandled) syncDurablePresentation()
       return durableHandled
     }
@@ -428,10 +533,14 @@ export const useHallConversation = ({
     const bootstrapEvent = adoptedBootstrap && event.requestId === adoptedBootstrap.initialRequestId &&
       activeRequest.value?.requestId === adoptedBootstrap.initialRequestId && event.conversationId === adoptedBootstrap.conversationId &&
       bountyBootstrapContextMatches(chatContext?.value, selectedTask?.value, selectedAgent?.value, adoptedBootstrap)
-    if (bootstrapEvent && ((event.type === 'agent_message' && ['final', 'duplicate', 'part'].includes(result.type)) ||
+    // Restored executions have no bootstrap receipt or CHAT turn checkpoint.
+    // Share the same media hint readback, rather than scheduling a second GET.
+    const executionEvent = event.requestId === activeRequest.value?.requestId && event.conversationId === conversationId.value &&
+      activeRequest.value?.steps?.some(step => step.kind === 'EXECUTE')
+    if ((bootstrapEvent || executionEvent) && ((event.type === 'agent_message' && ['final', 'duplicate', 'part'].includes(result.type)) ||
         (event.type === 'part.ready' && ['part', 'duplicate_part'].includes(result.type)))) {
       // A media event is a readback hint, never authority to mark execution/task completed.
-      scheduleAuthoritativeRequestReadback(adoptedBootstrap.initialRequestId, { immediate: true })
+      scheduleAuthoritativeRequestReadback(event.requestId, { immediate: true })
     }
     if (result.type === 'late_delta' || result.type === 'duplicate_part') { syncDurablePresentation(); return true }
     if (needsReadback && result.type === 'delta') scheduleAuthoritativeRequestReadback(event.requestId)
@@ -500,12 +609,42 @@ export const useHallConversation = ({
     const exponent = Math.max(0, hallEventReconnectFailures - 1)
     const base = Math.min(HALL_EVENT_RETRY_CAP_MS, HALL_EVENT_RETRY_BASE_MS * (2 ** exponent))
     const delay = Math.min(HALL_EVENT_RETRY_CAP_MS, base + Math.floor(base * boundedJitter()))
-    hallEventReconnectTimer = window.setTimeout(() => {
-      hallEventReconnectTimer = null
-      if (disposed || generation !== lifecycleGeneration || hallEventTerminal || !isPageVisible()) return
-      hallEventConversationId = ''
-      startHallEventStream()
+    const timer = window.setTimeout(async () => {
+      if (hallEventReconnectTimer !== timer || disposed || generation !== lifecycleGeneration || hallEventTerminal || !isPageVisible()) return
+      const guard = captureGuard()
+      const id = conversationId.value
+      const requestId = activeRequest.value?.requestId
+      const current = () => guardCurrent(guard) && conversationId.value === id && activeRequest.value?.requestId === requestId
+      try {
+        // A broken SSE transport can miss the final event after durable admission.
+        // Reuse the existing retry slot and single-flight read; never resend or poll in parallel.
+        let projectionsRead = false
+        const recoverTransport = !hallEventController
+        if (recoverTransport && requestId && await recoverUnknownRequest(requestId, guard) && current()) {
+          const missingFinal = activeTurns.value.some(turn => turn.finalMessageId &&
+            !messages.value.some(message => exactMessageId(message) === turn.finalMessageId && !message.streaming))
+          // Keep partial output while the turn is pending. Only missing durable finals
+          // require a history read; repeated reconnects must not reload an already rendered final.
+          if (!durableBusy.value && missingFinal) {
+            const loaded = await loadHallConversationContent(id, { identity: guard, adoptionCurrent: current, resumeEvents: false })
+            if (!loaded && current()) deliberationStatus.value = '回话已结束，正文加载待重试'
+          }
+          if (current()) { projectionsRead = true; await refreshHallProjections({ type: 'resync_required', conversationId: id, requestId }) }
+        }
+        if (!projectionsRead && projectionsDirty && current()) await refreshHallProjections({ type: 'resync_required', conversationId: id, requestId })
+      } catch (error) {
+        if (guardCurrent(guard) && error?.name !== 'AbortError') log.warn('核对断流原回话失败', error)
+      } finally {
+        if (hallEventReconnectTimer === timer) {
+          hallEventReconnectTimer = null
+          if (guardCurrent(guard) && !hallEventTerminal && isPageVisible()) {
+            if (!hallEventController) void startHallEventStream()
+            if (projectionsDirty) scheduleHallEventReconnect(generation)
+          }
+        }
+      }
     }, delay)
+    hallEventReconnectTimer = timer
   }
 
   const failHallEventStream = (generation, error) => {
@@ -544,7 +683,7 @@ export const useHallConversation = ({
       const response = await fetchHallConversationEvents({
         apiStore,
         url: apiStreamUrl('/chat/conversation/events', { id }),
-        headers: cursor ? { 'Last-Event-ID': cursor } : {},
+        headers: cursor ? { 'Last-Event-ID': `conversation:${id}:${cursor}` } : {},
         signal: eventSignal.signal
       })
       if (!guardCurrent(streamGuard) || !response) {
@@ -563,7 +702,7 @@ export const useHallConversation = ({
       const decoder = new TextDecoder()
       let pendingServerResyncCursor = ''
       const parser = createHallSseParser({
-        conversationId: id,
+        conversationId: id, requestId: response.headers.get('X-Request-Id'),
         onEvent: (event, candidateCursor) => {
           if (!guardCurrent(streamGuard)) return false
           if (event.type === 'stream_ready') { hallEventReconnectFailures = 0; return true }
@@ -626,11 +765,13 @@ export const useHallConversation = ({
       return
     }
     startHallEventStream()
+    if (projectionsDirty) scheduleHallEventReconnect(lifecycleGeneration)
   }
 
   const handleHallEventFocus = () => {
     if (!isPageVisible() || hallEventReconnectTimer != null) return
     startHallEventStream()
+    if (projectionsDirty) scheduleHallEventReconnect(lifecycleGeneration)
   }
 
   const resetDurableState = () => {
@@ -639,7 +780,9 @@ export const useHallConversation = ({
     capabilityState.value = { loaded: false, v2: false }
     deliberationStatus.value = ''
     activeRequest.value = null
+    restoredRequestIds.clear()
     activeTurns.value = []
+    cancellationJobs.clear()
     turnStates.clear()
     eventCursors.clear()
     for (const job of requestReadbackJobs.values()) {
@@ -664,6 +807,9 @@ export const useHallConversation = ({
     lifecycleGeneration += 1
     recoveringReplyTurn = null
     lifecycleController.abort(new DOMException('Hall identity lifecycle reset', 'AbortError'))
+    projectionsDirty = false
+    projectionFlight = null
+    projectionRevision++
     resetDurableState()
     if (!disposed) lifecycleController = new AbortController()
   }
@@ -691,6 +837,7 @@ export const useHallConversation = ({
     stopHallConversationSync()
     conversationId.value = ''
     scopeDrafts.clear()
+    threadDrafts.clear()
     setDraft('')
     if (outgoingMetadata) outgoingMetadata.value = {}
     messages.value = []
@@ -703,6 +850,7 @@ export const useHallConversation = ({
     () => `${chatContext?.value?.conversationScopeType || ''}\u0000${chatContext?.value?.conversationScopeKey || ''}`,
     (nextScope, previousScope) => {
       if (!previousScope || nextScope === previousScope || disposed) return
+      threadDrafts.set(`${previousScope}\u0000${conversationId.value || ''}`, { text: draft.value, metadata: { ...(outgoingMetadata?.value || {}) } })
       scopeDrafts.set(previousScope, { text: draft.value, metadata: { ...(outgoingMetadata?.value || {}) } })
       const restored = scopeDrafts.get(nextScope)
       setDraft(restored?.text || '')
@@ -740,11 +888,13 @@ export const useHallConversation = ({
 
   const unregisterIdentityCleanup = registerIdentityCleanup(clearHallConversationIdentityState)
   const disposeHallConversation = () => {
+    cancellationJobs.clear()
     if (disposed) return
     disposed = true
     browserDocument()?.removeEventListener?.('visibilitychange', handleHallEventVisibility)
     browserWindow()?.removeEventListener?.('focus', handleHallEventFocus)
     stopScopeWatch()
+    stopDraftAdoptionWatch()
     clearHallConversationIdentityState()
     unregisterIdentityCleanup()
   }
@@ -758,6 +908,7 @@ export const useHallConversation = ({
     const loadGeneration = guard.loadGeneration ?? hallConversationLoadGeneration
     const expectedScope = guard.scope || scopeSnapshot()
     const isSelectedLoad = guard.selection === true
+    const restoreRequest = expectedScope?.type === 'bounty' && !activeRequest.value?.requestId
     const isCurrentContentLoad = () => (
       !disposed &&
       generation === lifecycleGeneration &&
@@ -775,22 +926,50 @@ export const useHallConversation = ({
       if (!isCurrentContentLoad()) return
       contentFailed = true
       if (error?.name !== 'AbortError') log.warn('加载聚义厅会话内容失败', error)
-      if (isSelectedLoad && error?.name !== 'AbortError') {
+      if ((isSelectedLoad || restoreRequest) && error?.name !== 'AbortError') {
         messages.value = []
         conversationLoadError.value = '这段旧话暂不可取，请重试。'
       }
     }
-    if (isSelectedLoad) {
+    if (isSelectedLoad || restoreRequest) {
       isConversationLoading.value = true
       conversationLoadError.value = ''
     }
     try {
+      // Restore the current round from the exact conversation's durable ordered snapshot,
+      // before replay starts. The first historical SSE event is not the current request.
+      // Accepted bootstrap/typed receipts already own an exact request and skip this read.
+      if (restoreRequest) {
+        const taskId = expectedScope.key.startsWith('task:') ? expectedScope.key.slice(5) : ''
+        if (!typedId(taskId)) throw new Error('原事项范围无效，未恢复回话。')
+        let after = '0'; let through = null; let requestGeneration = null; let entries = []; const seen = new Set()
+        for (;;) {
+          const params = { after, ...(through !== null ? { through, expectedGeneration: requestGeneration } : {}) }
+          const response = await chatApi.get(`/conversations/${encodeURIComponent(exactId)}/requests`, params,
+            { autoLoading: false, needAuth: true, signal: lifecycleController.signal })
+          if (!isCurrentContentLoad() || activeRequest.value?.requestId) return false
+          const page = catalogPage(apiData(response), { conversationId: exactId, taskId, after, through, generation: requestGeneration })
+          if (!page) throw new Error('原回话索引范围或分页边界不一致，请重试。')
+          for (const entry of page.entries) {
+            if (seen.has(entry.request.requestId)) throw new Error('原回话索引重复，请重试。')
+            seen.add(entry.request.requestId)
+          }
+          const merged = mergeCatalogEntries(entries, page)
+          if (!merged) throw new Error('原回话索引冲突，请重试。')
+          entries = merged; through = page.through; requestGeneration = page.scope.conversationGeneration
+          if (!page.hasMore) break
+          after = page.nextAfter
+        }
+        for (const entry of entries) restoredRequestIds.add(entry.request.requestId)
+        const latest = entries.at(-1)?.request
+        if (latest && !applyRequestView(latest, latest.requestId)) throw new Error('原回话状态暂不可核实，请重试。')
+      }
       await chatApi.getById('/conversation/content', exactId, {
         autoLoading: false,
         signal: lifecycleController.signal,
         onSuccess: (contentResult) => {
           if (!isCurrentContentLoad()) return
-          messages.value = (Array.isArray(contentResult?.data) ? contentResult.data : [])
+          messages.value = (Array.isArray(contentResult) ? contentResult : [])
             .map(item => normalizeHallMessage(item, globalStore.getJiacn)).filter(Boolean)
           const recovery = recoveringReplyTurn?.conversationId === exactId ? recoveringReplyTurn : null
           const finalAgentReplies = messages.value.filter(message => message.sender === 'AGENT' && !message.streaming &&
@@ -828,7 +1007,7 @@ export const useHallConversation = ({
           if (activeRequest.value?.requestId) syncDurablePresentation()
           if (isSelectedLoad) conversationLoadError.value = ''
           loaded = true
-          startHallEventStream()
+          if (guard.resumeEvents !== false) startHallEventStream()
         },
         onError: failContentLoad
       })
@@ -838,7 +1017,7 @@ export const useHallConversation = ({
       failContentLoad(error)
       return false
     } finally {
-      if (isSelectedLoad && isCurrentContentLoad()) isConversationLoading.value = false
+      if ((isSelectedLoad || restoreRequest) && isCurrentContentLoad()) isConversationLoading.value = false
     }
   }
 
@@ -878,17 +1057,17 @@ export const useHallConversation = ({
         onSuccess: result => { callbackResult = result }
       })
       if (!isCurrentLoad()) return false
-      const result = callbackResult ?? response?.data
-      if (!Array.isArray(result?.data)) return false
-      const hallConversation = result.data[0]
+      const result = callbackResult ?? response
+      if (!Array.isArray(result?.items)) return false
+      const hallConversation = result.items[0]
       if (!hallConversation) return false
       if (hallConversation.conversationType !== 'juyiting' ||
           hallConversation.conversationScopeType !== expectedScope.type ||
           hallConversation.conversationScopeKey !== expectedScope.key) return false
       const id = exactRuntimeId(hallConversation.id)
       if (!id) return false
-      conversationId.value = id
       selectedHallConversationId.value = id
+      conversationId.value = id
       return loadHallConversationContent(id, { loadGeneration, scope: expectedScope })
     } catch (error) {
       if (error?.name !== 'AbortError' && isCurrentLoad()) log.warn('加载聚义厅会话失败', error)
@@ -916,13 +1095,9 @@ export const useHallConversation = ({
     })
   }
 
-  const readHistoryRows = result => {
-    if (Array.isArray(result?.data)) return result.data
-    if (Array.isArray(result?.data?.data)) return result.data.data
-    return []
-  }
+  const readHistoryRows = result => Array.isArray(result?.items) ? result.items : []
 
-  const loadHallConversationHistory = ({ force = false, loadMore = false } = {}) => {
+  const loadHallConversationHistory = ({ force: _force = false, loadMore = false } = {}) => {
     if (disposed) return Promise.resolve([])
     const expectedScope = scopeSnapshot()
     if (!expectedScope || conversationHistoryDeletingId.value || (loadMore && !conversationHistoryHasMore.value)) return Promise.resolve([])
@@ -949,7 +1124,7 @@ export const useHallConversation = ({
       try {
         let callbackResult
         const response = await chatApi.list('/conversation/list', {
-          pageNum,
+          pageNum: pageNum,
           pageSize: HALL_HISTORY_PAGE_SIZE,
           orderBy: 'update_time desc',
           search: {
@@ -963,7 +1138,7 @@ export const useHallConversation = ({
           onSuccess: result => { callbackResult = result }
         })
         if (!isCurrentHistoryLoad()) return []
-        const rawRows = readHistoryRows(callbackResult ?? response?.data)
+        const rawRows = readHistoryRows(callbackResult ?? response)
         const nextRows = rawRows.map(row => normalizeHallConversationHistory(row, expectedScope)).filter(Boolean)
         const merged = loadMore ? [...conversationHistory.value] : []
         const seen = new Set(merged.map(item => item.id))
@@ -1044,6 +1219,8 @@ export const useHallConversation = ({
     const exactId = exactRuntimeId(id)
     if (!expectedScope || !exactId || !conversationHistory.value.some(item => item.id === exactId)) return false
 
+    saveThreadDraft()
+    restoreThreadDraft(exactId)
     const loadGeneration = invalidateConversationLoads()
     pendingHallConversationLoad = null
     loadedConversationScopeSignature = ''
@@ -1052,8 +1229,8 @@ export const useHallConversation = ({
     stopHallReplyStreaming()
     stopHallReplyPolling()
     stopHallConversationSync()
-    conversationId.value = exactId
     selectedHallConversationId.value = exactId
+    conversationId.value = exactId
     messages.value = []
     isStreaming.value = false
     isAwaitingReply.value = false
@@ -1061,9 +1238,13 @@ export const useHallConversation = ({
     return loadHallConversationContent(exactId, { loadGeneration, scope: expectedScope, selection: true })
   }
 
-  const retryHallConversation = () => {
+  const retryHallConversation = async () => {
     resetHallEventRecovery()
     if (conversationLoadError.value && selectedHallConversationId.value) return selectHallConversation(selectedHallConversationId.value)
+    const guard = captureGuard()
+    const requestId = activeRequest.value?.requestId
+    if (requestId) await recoverUnknownRequest(requestId, guard)
+    if (!guardCurrent(guard) || activeRequest.value?.requestId !== requestId) return false
     return loadHallMessages({ force: true })
   }
 
@@ -1109,6 +1290,8 @@ export const useHallConversation = ({
   }
 
   const newHallConversation = ({ notify = true } = {}) => {
+    saveThreadDraft()
+    restoreThreadDraft(null)
     const currentScopeSignature = scopeSignature(scopeSnapshot())
     if (currentScopeSignature) suppressedRestoreScopes.add(currentScopeSignature)
     invalidateConversationLoads()
@@ -1434,13 +1617,16 @@ export const useHallConversation = ({
           selectedTaskId
         }
       }
+      let streamRequestId
+      const streamDecoder = createChatStreamDecoder()
       const transport = chatApi.create('/stream', body, {
         responseType: 'stream',
         autoLoading: false,
         timeout: 1800000,
         signal: replySignal.signal,
         headers: { 'Idempotency-Key': requestId },
-        onStreamOpen: handle => {
+        onStreamOpen: (handle, response) => {
+          streamRequestId = response.headers.get('x-request-id')
           if (!isCurrentReplyTurn()) {
             handle.cancel?.(new DOMException('Stale Hall reply stream', 'AbortError'))
             return
@@ -1450,18 +1636,19 @@ export const useHallConversation = ({
         },
         onStream: eventData => {
           if (!isCurrentReplyTurn()) return
-          let event
-          try { event = JSON.parse(String(eventData || '').replace(/^data:\s?/, '').trim()) } catch { /* text frame */ }
+          const event = streamDecoder.accept(eventData, streamRequestId)
+          if (!event) return
           const conversationReplay = isMessagePartEvent(event) || event?.type === 'execution_abandoned'
           if (session.roundCloseout && !conversationReplay && event && typeof event === 'object' && event.requestId &&
               (event.requestId !== session.requestId || !bindSendEvent(session, event))) return
           const previousConversationId = conversationId.value
-          const accepted = processStream(eventData)
+          const accepted = processStream(JSON.stringify(event))
           if (accepted) recordObservation('first_response', request)
           if (conversationId.value && conversationId.value !== previousConversationId) onConversationResolved?.(conversationId.value)
         },
         onStreamEnd: () => {
           if (!isCurrentReplyTurn()) return
+          streamDecoder.finish()
           session.streamHandle = null
           hallReplyStreamHandle = null
           publishStreamFinals()
@@ -1610,7 +1797,7 @@ export const useHallConversation = ({
   const typedAcceptedReceipt = (receipt, context) => {
     const fields = ['schemaVersion', 'intent', 'requestId', 'userMessageId', 'turnIds', 'state', 'stateVersion', 'eventCursor', 'statusUrl', 'typedOutcomeUrl', 'replay', 'pendingQuestionId']
     if (!receipt || Array.isArray(receipt) || typeof receipt !== 'object' || Object.keys(receipt).length !== fields.length ||
-        Object.keys(receipt).some(key => !fields.includes(key)) || receipt.schemaVersion !== 1 ||
+        Object.keys(receipt).some(key => !fields.includes(key)) || receipt.schemaVersion !== 3 ||
         !['DISCUSSION', 'CLARIFICATION_REPLY'].includes(receipt.intent) || !typedId(receipt.requestId) ||
         !canonicalWireString(receipt.userMessageId) || !Array.isArray(receipt.turnIds) || receipt.turnIds.length !== 1 ||
         !typedId(receipt.turnIds[0]) || receipt.state !== 'ADMITTED' || receipt.stateVersion !== '0' ||
@@ -1668,11 +1855,14 @@ export const useHallConversation = ({
       ? { conversationId: expectedConversationId, conversationGeneration: expectedGeneration, taskId: expectedTaskId, targetAgentId: expectedTargetAgentId } : null
     const acceptedReceipt = typedContext ? typedAcceptedReceipt(receipt, typedContext) : null
     const requestId = acceptedReceipt?.requestId || ''
-    if (disposed || !acceptedReceipt || !requestId ||
-        conversationId.value !== expectedConversationId || selectedTask.value?.id !== expectedTaskId || selectedAgent.value?.agentId !== expectedTargetAgentId) return false
+    // Browsing selection is independent from the conversation subject. Bind adoption to
+    // the roster-filtered active discussion, including actual target changes during GET.
+    const discussionMatches = () => conversationId.value === expectedConversationId &&
+      chatContext.value?.taskId === expectedTaskId &&
+      bountyInteractionTargetId(chatContext.value) === expectedTargetAgentId
+    if (disposed || !acceptedReceipt || !requestId || !discussionMatches()) return false
     const guard = captureGuard()
-    const current = () => guardCurrent(guard) && isCurrent?.() && conversationId.value === expectedConversationId &&
-      selectedTask.value?.id === expectedTaskId && selectedAgent.value?.agentId === expectedTargetAgentId
+    const current = () => guardCurrent(guard) && isCurrent?.() && discussionMatches()
     try {
       const response = await chatApi.get(`/requests/${encodeURIComponent(requestId)}`, {}, {
         autoLoading: false, signal: lifecycleController.signal
@@ -1763,13 +1953,23 @@ export const useHallConversation = ({
   const recoverUnknownRequest = async (requestId, guard = captureGuard()) => {
     const existing = requestReadbackInflight.get(requestId)
     if (existing) return existing
+    const expected = activeRequest.value
+    const sameBinding = value => value && expected && ['requestId', 'requestRevision', 'conversationId', 'conversationGeneration']
+      .every(key => expected[key] == null || value[key] === expected[key])
     const promise = (async () => {
       try {
         abortIfStale(guard)
         const response = await chatApi.get(`/requests/${encodeURIComponent(requestId)}`, {}, { autoLoading: false, signal: lifecycleController.signal })
         abortIfStale(guard)
-        if (activeRequest.value?.requestId !== requestId) return false
+        if (activeRequest.value?.requestId !== requestId || !sameBinding(activeRequest.value)) return false
         let requestView = apiData(response)
+        if (!sameBinding(requestView)) return false
+        // The aggregate version and each turn belong to this exact request generation.
+        const currentVersion = canonicalWireString(activeRequest.value.stateVersion, { allowZero: true })
+        const nextVersion = canonicalWireString(requestView?.stateVersion, { allowZero: true })
+        if (currentVersion && (!nextVersion || BigInt(nextVersion) < BigInt(currentVersion))) return false
+        if (!deliberationBusy(activeRequest.value, activeTurns.value) && deliberationBusy(requestView, requestView.turns)) return false
+        if (!Array.isArray(requestView.turns) || requestView.turns.some(turn => !sameBinding(turn))) return false
         if (adoptedBootstrap?.initialRequestId === requestId) {
           if (!bountyBootstrapContextMatches(chatContext?.value, selectedTask?.value, selectedAgent?.value, adoptedBootstrap)) return false
           requestView = validateBountyBootstrapRequest(requestView, adoptedBootstrap)
@@ -1909,24 +2109,79 @@ export const useHallConversation = ({
 
   const cancelDeliberation = async target => {
     const request = activeRequest.value
-    const selectedTarget = target && typeof target === 'object' ? target : durableCancelTarget.value
+    const pendingJob = cancellationJobs.get(request?.requestId) || savedCancellation()
+    const selectedTarget = pendingJob?.unknown ? pendingJob.target : (target && typeof target === 'object' ? target : durableCancelTarget.value)
     if (!request?.requestId || !selectedTarget) return false
+    const requestId = request.requestId
     const guard = captureGuard()
+    const originalConversationId = conversationId.value
+    const current = () => guardCurrent(guard) && activeRequest.value?.requestId === requestId && conversationId.value === originalConversationId
+    const previous = pendingJob
+    if (previous?.inFlight) return false
+    const job = reactive({ inFlight: true, unknown: previous?.unknown === true, target: selectedTarget })
+    cancellationJobs.set(requestId, job)
+    const persistenceKey = cancellationKey()
+    const notice = text => {
+      if (!current()) return
+      deliberationStatus.value = text
+      showToast(text)
+    }
+    const reconcile = async () => {
+      const recovered = await recoverUnknownRequest(requestId, guard)
+      if (!current()) return false
+      if (!recovered) {
+        job.unknown = true
+        notice('停止结果尚未确认，请再次核对；不会重复提交')
+        return false
+      }
+      const turns = selectedTarget.turnId
+        ? activeTurns.value.filter(turn => turn.turnId === selectedTarget.turnId)
+        : activeTurns.value
+      if (!turns.length) {
+        job.unknown = true
+        notice('停止结果尚未确认，请再次核对；不会重复提交')
+        return false
+      }
+      if (turns.every(turn => isTerminalTurnState(turn.state))) {
+        job.unknown = false
+        syncDurablePresentation()
+        showToast(turns.every(turn => turn.state === 'CANCELLED') ? '本轮回复已停止，可以继续发送消息' : '本轮回话已结束，保留已有回复，无需再次停止')
+        return true
+      }
+      // A fresh pending read cannot prove a lost cancellation write was rejected.
+      notice(job.unknown ? '停止结果尚未确认，请稍后再次核对；不会重复提交' : '回话状态已更新，尚未停止；如仍需停止，请再次点击')
+      return false
+    }
     try {
+      if (job.unknown) return await reconcile()
       let response
       if (selectedTarget.turnId) {
         const turn = activeTurns.value.find(item => item.turnId === selectedTarget.turnId)
-        if (!turn || !isPendingTurn(turn)) return true
+        if (!turn) return false
+        if (!isPendingTurn(turn)) return true
         const expectedStateVersion = canonicalWireString(turn.stateVersion, { allowZero: true })
         if (!expectedStateVersion) return false
-        response = await chatApi.post(`/turns/${turn.turnId}/cancel`, { expectedStateVersion }, { autoLoading: false, signal: lifecycleController.signal })
-        abortIfStale(guard)
-        const view = authoritativeTurnView(apiData(response), request.requestId, turn.turnId)
-        if (!view) return false
-        if (BigInt(view.stateVersion) <= BigInt(expectedStateVersion)) return false
-        if (!applyDeliberationEvent(view)) return false
+        saveCancellation(persistenceKey, selectedTarget)
+        const expectedLastDeltaSeq = canonicalWireString(turn.lastDeltaSeq, { allowZero: true })
+        if (!expectedLastDeltaSeq) return false
+        response = await chatApi.post(`/turns/${turn.turnId}/cancel`, { expectedStateVersion, expectedLastDeltaSeq }, { autoLoading: false, signal: lifecycleController.signal })
+        if (!current()) return false
+        const view = authoritativeTurnView(apiData(response), requestId, turn.turnId)
+        if (!view || view.conversationId !== originalConversationId ||
+            (request.conversationGeneration && view.conversationGeneration !== request.conversationGeneration)) {
+          job.unknown = true
+          notice('停止结果尚未确认，请再次核对；不会重复提交')
+          return false
+        }
+        if (BigInt(view.stateVersion) < BigInt(expectedStateVersion)) {
+          job.unknown = true
+          notice('停止结果尚未确认，请再次核对；不会重复提交')
+          return false
+        }
+        // Equal-version terminal replies are idempotent success, not stale failure.
+        if (!applyDeliberationEvent(view)) return await reconcile()
         const applied = activeTurns.value.find(item => item.turnId === turn.turnId)
-        if (applied?.stateVersion !== view.stateVersion || applied?.state !== view.state) return false
+        if (applied?.stateVersion !== view.stateVersion || applied?.state !== view.state) return await reconcile()
         activeTurns.value = activeTurns.value.map(item => item.turnId === turn.turnId ? view : item)
         const tracker = turnStates.get(turn.turnId) || { lastDeltaSeq: '0', waitingFinal: false, terminal: false }
         tracker.lastDeltaSeq = view.lastDeltaSeq
@@ -1934,16 +2189,33 @@ export const useHallConversation = ({
         tracker.terminal = isTerminalTurnState(view.state)
         turnStates.set(turn.turnId, tracker)
       } else if (selectedTarget.allPending === true) {
-        response = await chatApi.post(`/requests/${request.requestId}/cancel?allPending=true`, { allPending: true }, { autoLoading: false, signal: lifecycleController.signal })
-        abortIfStale(guard)
-        if (!applyRequestView(apiData(response), request.requestId)) return false
+        saveCancellation(persistenceKey, selectedTarget)
+        response = await chatApi.post(`/requests/${requestId}/cancel?allPending=true`, { allPending: true }, { autoLoading: false, signal: lifecycleController.signal })
+        if (!current()) return false
+        if (!applyRequestView(apiData(response), requestId)) {
+          job.unknown = true
+          notice('停止结果尚未确认，请再次核对；不会重复提交')
+          return false
+        }
       } else return false
       syncDurablePresentation()
-      if (deliberationBusy(activeRequest.value, activeTurns.value)) deliberationStatus.value = '取消请求已提交'
+      if (deliberationBusy(activeRequest.value, activeTurns.value) || hasPendingSendSession.value) return await reconcile()
+      showToast(activeTurns.value.every(turn => turn.state === 'CANCELLED') ? '本轮回复已停止，可以继续发送消息' : '本轮回话已结束，保留已有回复')
       return true
     } catch (error) {
-      if (error?.name !== 'AbortError' && guardCurrent(guard)) log.warn('取消聚义厅回话失败', error)
+      if (error?.name === 'AbortError' || !current()) return false
+      log.warn('取消聚义厅回话失败', error)
+      const status = error?.status ?? error?.response?.status
+      if (status === 409 || error?.code === 'CHAT_REQUEST_CONFLICT') return await reconcile()
+      job.unknown = !status || status >= 500
+      if (job.unknown) return await reconcile()
+      notice('停止失败，本轮回复尚未停止；请核对后重试')
       return false
+    } finally {
+      if (!current()) job.unknown = true
+      job.inFlight = false
+      if (!job.unknown) saveCancellation(persistenceKey, null)
+      if (!job.unknown && cancellationJobs.get(requestId) === job) cancellationJobs.delete(requestId)
     }
   }
 
@@ -1975,7 +2247,6 @@ export const useHallConversation = ({
     if (!agent) return
     if (chatMode) chatMode.value = 'private'
     selectedAgent.value = agent
-    if (!draft.value.trim()) setDraft('请报眼下动静、可领何榜、还需哪路照应。')
     openPanel('chat')
     showToast(`正与 ${portraitShortName(agent)} 密议`)
   }
@@ -1983,11 +2254,13 @@ export const useHallConversation = ({
   return {
     adoptBountyBootstrap,
     refreshExecutionRequest,
+    refreshHallProjections,
     adoptTypedDiscussionReceipt,
     isAdoptingBountyBootstrap,
     cancelHallReplyTurn,
     cancelDeliberation,
     durableCancelTarget,
+    replyCancellationState,
     activeRequest,
     activeTurns,
     capabilityState,

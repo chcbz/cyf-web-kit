@@ -25,7 +25,7 @@
             :enabled="enabled"
             :disabled="quickPending"
           >
-            <button class="primary" type="submit" :disabled="quickPending || !quickRequest.trim()"><var-icon name="send" aria-hidden="true" />{{ quickPending ? '正在建立事项…' : '开始办事' }}</button>
+            <button class="primary" type="submit" :disabled="quickPending || (!quickRequest.trim() && !selectedMaterials.length)"><var-icon name="send" aria-hidden="true" />{{ quickPending ? '正在建立事项…' : '开始办事' }}</button>
           </HallMaterialPicker>
           <p v-if="quickMessage" class="quick-request-error" role="status">{{ quickMessage }}</p>
         </div>
@@ -44,7 +44,7 @@
       <p v-if="model.state.value === 'loading'" role="status">正在读取事项…</p>
       <div v-for="source in issuesFor(view)" :key="source" class="overview-source-error" role="alert"><span>{{ sourceLabels[source] }}：{{ model.sections.value[view].partitions[source].readError || sourceError(model.sections.value[view].partitions[source].errorCode) }}</span><button type="button" :disabled="model.sections.value[view].partitions[source].loading" @click="model.loadPartition(view, source)">重试此来源</button></div>
       <article v-for="item in rowsFor(view)" :key="`${item.ref.sourceType}:${item.ref.sourceId}`" class="overview-item">
-        <div class="overview-item-copy"><div class="overview-item-title"><strong>{{ item.title || '未命名事项' }}</strong><span class="overview-status">{{ item.review ? '交付待验收' : statusText(item.status.code) }}</span></div>
+        <div class="overview-item-copy"><div class="overview-item-title"><strong>{{ item.title || '未命名事项' }}</strong><span class="overview-status">{{ statusText(item) }}</span></div>
           <p>{{ typeLabels[item.ref.sourceType] }} · {{ agentLabel(item) }}<span v-if="item.personalMark?.archived"> · 已收入案卷</span></p>
           <details class="overview-technical"><summary>事项信息</summary><small>状态核对于 {{ formatTime(item.status.observedAt) }}</small><small v-if="item.targetAgent">好汉标识：{{ item.targetAgent.agentId }}</small></details>
         </div>
@@ -58,7 +58,7 @@
       <button class="overview-map-link" type="button" @click="emit('set-home-mode', 'map')"><span aria-hidden="true">聚义厅</span>厅中实景 · 去梁山走一走 →</button>
       <section class="overview-aside-card"><h3>需要你看一眼</h3><p v-if="model.state.value === 'loading'">正在核对待处理事项…</p><p v-else-if="model.sections.value.needsAction.status !== 'complete'">待处理列表可能不完整，请在事项页核对。</p>
         <p v-if="!attentionItems.length">{{ model.sections.value.needsAction.status === 'complete' ? '当前没有需要处理的事项。' : '当前没有已确认的待处理项。' }}</p>
-        <button v-for="item in attentionItems" :key="`${item.ref.sourceType}:${item.ref.sourceId}`" type="button" :disabled="!canOpenHallItem(item) || Boolean(model.openingRef.value)" @click="openItem(item)"><span>{{ item.title || '未命名事项' }}<small>{{ item.review ? '交付待验收' : statusText(item.status.code) }}</small></span>→</button>
+        <button v-for="item in attentionItems" :key="`${item.ref.sourceType}:${item.ref.sourceId}`" type="button" :disabled="!canOpenHallItem(item) || Boolean(model.openingRef.value)" @click="openItem(item)"><span>{{ item.title || '未命名事项' }}<small>{{ statusText(item) }}</small></span>→</button>
         <button class="overview-aside-link" type="button" @click="openView('needsAction')">查看待处理列表 →</button>
       </section>
       <section class="overview-aside-card"><h3>找位好汉</h3><p>通过点将册核对实际本领和可用状态。</p><button type="button" @click="emit('open-agents')">打开点将册 →</button></section>
@@ -67,6 +67,7 @@
 </template>
 
 <script setup>
+import { taskStatusText } from '../../constants/juyiting.js'
 import { computed, ref, watch } from 'vue'
 import { canOpenHallItem, HALL_SOURCES, useHallOverview } from '@/composables/juyiting/useHallOverview'
 import HallMaterialPicker from './HallMaterialPicker.vue'
@@ -87,13 +88,29 @@ const quickRequest = ref('')
 const selectedMaterials = ref([])
 const quickRequestGeneration = ref(0)
 const onQuickRequestInput = () => { quickRequestGeneration.value++ }
-watch(quickRequest, onQuickRequestInput, { flush: 'sync' })
+let homeDraftKey = ''
+const draftStorage = () => { try { return window.sessionStorage } catch { return null } }
+watch(() => [props.identityScope, props.identityEpoch], ([scope], previous) => {
+  const storage = draftStorage()
+  // A real identity transition clears the prior actor's local unsent text.
+  try { if (previous && homeDraftKey) storage?.removeItem(homeDraftKey) } catch { /* storage may be unavailable */ }
+  homeDraftKey = scope ? `cyf:hall:home-draft:${encodeURIComponent(scope)}` : ''
+  let saved = ''
+  try { if (homeDraftKey) saved = storage?.getItem(homeDraftKey) || '' } catch { /* keep form usable */ }
+  quickRequest.value = saved
+  selectedMaterials.value = []
+}, { immediate: true, flush: 'sync' })
+watch(quickRequest, value => {
+  onQuickRequestInput()
+  if (!homeDraftKey) return
+  try { if (value) draftStorage()?.setItem(homeDraftKey, value); else draftStorage()?.removeItem(homeDraftKey) } catch { /* no submission side effect */ }
+}, { flush: 'sync' })
 watch(selectedMaterials, onQuickRequestInput, { deep: true, flush: 'sync' })
 const submitQuickRequest = () => {
   const value = quickRequest.value
   const generation = quickRequestGeneration.value
   const materials = selectedMaterials.value.map(({ fileId, version }) => ({ fileId, version }))
-  if (value.trim() && !props.quickPending) emit('quick-request', { request: value, materials }, succeeded => {
+  if ((value.trim() || materials.length) && !props.quickPending) emit('quick-request', { request: value, materials }, succeeded => {
     if (succeeded !== true || generation !== quickRequestGeneration.value) return
     if (quickRequest.value === value) quickRequest.value = ''
     if (JSON.stringify(selectedMaterials.value.map(({ fileId, version }) => ({ fileId, version }))) === JSON.stringify(materials)) selectedMaterials.value = []
@@ -107,11 +124,13 @@ const viewLabels = { recent: '最近事项', needsAction: '需要处理', archiv
 const sourceLabels = { private: '私人交办', task: '正式悬赏', draft: '未交办草稿' }
 const typeLabels = { PRIVATE_CASE: '私人事项', LEGACY_EXECUTION: '原私人交办', TASK: '正式事项', DRAFT: '草稿' }
 const actionLabels = { OPEN_CASE: '查看事项', OPEN_EXECUTION: '查看原交办', OPEN_TASK: '打开原悬赏', EDIT_DRAFT: '继续草稿' }
-const statusText = code => ({
-  EDITING: '尚未交办', SUBMITTED: '已交办', QUEUED: '等待执行', OUTPUT_COMMITTED: '成果可查看',
-  FAILED: '执行未完成', INPUTS_REVOKED: '资料授权已撤销', open: '待领令', assigned: '已领令',
-  running: '办理中', completed: '已完成', failed: '失败', blocked: '受阻', cancelled: '已取消', archived: '已归档'
-})[code] || '状态待核对'
+const statusText = item => item.ref.sourceType === 'TASK'
+  ? taskStatusText({ id: item.ref.sourceId, status: item.status.code, phase: item.phase })
+  : item.review ? '交付待验收' : ({
+    EDITING: '尚未交办', SUBMITTED: '已交办', QUEUED: '等待执行', OUTPUT_COMMITTED: '成果可查看',
+    FAILED: '执行未完成', INPUTS_REVOKED: '资料授权已撤销'
+  })[item.status.code] || '状态待核对'
+
 const rowsFor = view => sourcesFor(view).flatMap(source => model.sections.value[view].partitions[source].items).sort((a, b) => b.updatedAt - a.updatedAt)
 const attentionItems = computed(() => rowsFor('needsAction').slice(0, 2))
 const hasMore = view => sourcesFor(view).some(source => model.sections.value[view].partitions[source].nextCursor)
@@ -126,7 +145,7 @@ const agentLabel = item => {
   const agent = props.agents.find(agent => agent.agentId === item.targetAgent?.agentId)
   return agent?.name || agent?.displayName || agent?.personaName || (item.targetAgent ? '已指定好汉' : '待安排')
 }
-const nextLabel = item => item.review ? '查看待验收交付' : item.ref.sourceType === 'DRAFT' ? '继续填写' : item.status.code === 'OUTPUT_COMMITTED' ? '查看成果' : ['FAILED','UNKNOWN','failed'].includes(item.status.code) ? '处理异常' : '查看进展'
+const nextLabel = item => item.ref.sourceType === 'TASK' && item.phase === 'UNKNOWN' ? '核对事项' : item.ref.sourceType === 'TASK' ? '查看进展' : item.review ? '查看待验收交付' : item.ref.sourceType === 'DRAFT' ? '继续填写' : item.status.code === 'OUTPUT_COMMITTED' ? '查看成果' : ['FAILED','UNKNOWN','failed'].includes(item.status.code) ? '处理异常' : '查看进展'
 const formatTime = value => new Date(value).toLocaleString('zh-CN')
 const sourceError = code => ({
   VIEWED_RESULT_NOT_TRACKED: '成果查看记录尚未纳入，已查看的成果仍可能列在这里。',
@@ -153,7 +172,7 @@ const refresh = async () => {
   if (archiveView.value && !props.messagesOnly) await refreshArchive()
 }
 watch([() => props.enabled, () => props.identityScope, () => props.identityEpoch, () => props.refreshKey], refresh, { immediate: true })
-watch(() => [props.identityScope, props.identityEpoch], () => { quickRequest.value = ''; selectedMaterials.value = [] }, { flush: 'sync' })
+
 </script>
 
 <style scoped src="./hall-view-tabs.css"></style>

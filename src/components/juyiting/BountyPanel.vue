@@ -59,20 +59,39 @@
       <p v-if="loading" class="task-data-state" role="status">悬赏榜读取中…</p>
       <p v-else-if="errorMessage" class="task-data-state is-error" role="alert">{{ errorMessage }}</p>
       <p v-if="countsLoading" class="task-data-state" role="status">榜文数目统计中…</p>
-      <p v-else-if="countsErrorMessage" class="task-data-state is-error" role="alert">{{ countsErrorMessage }}</p>
+      <p v-else-if="countsErrorMessage && countsErrorMessage !== errorMessage" class="task-data-state is-error" role="alert">{{ countsErrorMessage }}</p>
 
-      <div class="task-status-tabs">
+      <div class="task-status-tabs" aria-label="事项状态" @focusin="revealStatusFilter">
         <button
-          v-for="item in taskStatusFilters"
+          v-for="item in primaryStatusFilters"
           :key="item.value"
           :class="{ active: taskStatusFilter === item.value }"
+          type="button"
+          :aria-pressed="taskStatusFilter === item.value"
           @click="$emit('set-status-filter', item.value)"
         >
           {{ item.label }}
           <small>{{ taskStatusCount(item.value) }}</small>
         </button>
+        <button
+          type="button"
+          :class="{ active: secondaryStatusActive }"
+          :aria-pressed="secondaryStatusActive"
+          :aria-expanded="secondaryStatusActive"
+          @click="openSecondaryStatus"
+        >异常/历史</button>
       </div>
 
+      <div v-if="secondaryStatusActive" class="task-secondary-filters" aria-label="异常与历史分类">
+        <span>异常/历史</span>
+        <button
+          v-for="item in secondaryStatusFilters"
+          :key="item.value"
+          type="button"
+          :aria-pressed="taskStatusFilter === item.value"
+          @click="$emit('set-status-filter', item.value)"
+        >{{ item.label }} <small>{{ taskStatusCount(item.value) }}</small></button>
+      </div>
       <div class="task-panel-body">
         <div class="task-list">
           <article
@@ -84,7 +103,7 @@
           >
             <div class="task-head">
               <strong>{{ task.title }}</strong>
-              <span :class="taskStateClass(task.status)">{{ taskStatusText(task.status) }}</span>
+              <span :class="taskStateClass(task)">{{ taskStatusText(task) }}</span>
             </div>
             <p>{{ task.description || '榜文尚未写明缘由' }}</p>
             <div class="task-meta">
@@ -98,7 +117,7 @@
               <span v-if="!(task.requiredAbilities || []).length">不拘本领</span>
             </div>
           </article>
-          <div v-if="!tasks.length" class="empty-list">榜上暂无悬赏，可换个筛法或重查一遍。</div>
+          <div v-if="!loading && !errorMessage && !tasks.length" class="empty-list">{{ taskKeyword || taskAbilityFilter || (taskStatusFilter && taskStatusFilter !== 'all') ? '没有符合当前筛选条件的事项，请调整筛选后重查。' : '还没有事项，先提出一个需求吧。' }}</div>
         </div>
       </div>
 
@@ -159,33 +178,87 @@
               >继续原点将</button>
             </section>
             <div class="modal-task-info">
-              <section v-if="embeddedHall" class="matter-advice-card" aria-label="办理建议">
-                <div class="matter-advice-heading"><span>办理建议</span><strong>{{ simpleMatterStatus(detailTask) }}</strong></div>
-                <p class="matter-request">{{ detailTask.description || detailTask.title }}</p>
+              <section v-if="embeddedHall" class="matter-advice-card" aria-label="事项进展">
+                <div class="matter-advice-heading"><span>事项进展</span><strong>{{ simpleMatterStatus(detailTask) }}</strong></div>
+                <h3>{{ detailTask.title }}</h3>
+                <p class="matter-request">{{ detailTask.description }}</p>
                 <dl>
-                  <div><dt>预计成果</dt><dd>在议事中协作完成文本、图片、音频或文件，按实际交付验收</dd></div>
-                  <div><dt>建议承办</dt><dd>{{ preferredAgentName || '吴用或林冲' }}</dd></div>
-                  <div><dt>资料</dt><dd>可选；没有资料也可以点将议事</dd></div>
+                  <div><dt>{{ hasTaskAction(detailTask, 'ASSIGN') ? '承办候选' : '承办好汉' }}</dt><dd>{{ matterAgent ? agentDisplayName(matterAgent) : (detailTask.assignedAgentName || (taskAssigneeIds(detailTask).length ? '承办信息待核对' : '尚未确认')) }}</dd></div>
+                  <div v-if="matterAgent"><dt>所属用户 / 运行</dt><dd>{{ assigneeProviderText(matterAgent) }} · {{ assigneeAvailabilityText(matterAgent) }}</dd></div>
+                  <div><dt>资料 / 成果</dt><dd>{{ matterResourceSummary?.taskId === String(detailTask.id) ? `${matterResourceSummary.materials} 份资料 · ${matterResultCount ?? matterResourceSummary.outputs} 份${matterResultCount == null ? '成果引用' : '成果'}` : '见下方资料与成果' }}</dd></div>
                 </dl>
-                <p class="matter-fee-note">点将后自动建立悬赏议事，将需求和资料交给所选 Agent；由 Agent 判断直接答复、查阅资料或澄清。执行遵循已有授权，不因点将自动扩大付费权限。</p>
-                <div v-if="detailTask.status === 'open' && preferredAgents.length" class="matter-agent-actions">
-                  <button v-for="agent in preferredAgents" :key="agent.agentId" type="button" :disabled="!canAssign(detailTask, agent)" @click="$emit('assign-task', detailTask, agent)">交给{{ agentDisplayName(agent) }}</button>
-                </div>
-                <button v-else-if="!isTerminalMatter(detailTask) && assignedAgentForTask(detailTask)" type="button" class="matter-primary-action" @click="$emit('discuss-task', detailTask, assignedAgentForTask(detailTask))">与{{ agentDisplayName(assignedAgentForTask(detailTask)) }}进入事项议事</button>
+                <template v-if="hasTaskAction(detailTask, 'ASSIGN')">
+                  <p v-if="matterAgent?.recommendationReason" class="matter-fee-note">推荐参考：{{ matterAgent.recommendationReason }}</p>
+                  <p class="matter-fee-note">确认后将任务内容和所列资料发送给该Agent开始办理；资料由该Agent运行环境及所使用的模型服务处理。离线或忙碌可委派，提交成功不代表模型已运行。</p>
+                  <button
+                    type="button"
+                    class="matter-agent-toggle"
+                    :aria-expanded="showMatterCandidates"
+                    :disabled="pointAndStartBusy || Boolean(pointAndStartForDetail)"
+                    @click="showMatterCandidates = !showMatterCandidates"
+                  >另选承办Agent</button>
+                  <div v-if="showMatterCandidates" class="matter-candidates" aria-label="承办候选">
+                    <button
+                      v-for="agent in matterCandidates"
+                      :key="agent.agentId"
+                      type="button"
+                      :aria-pressed="matterAgent?.agentId === agent.agentId"
+                      :disabled="pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, agent)"
+                      @click="matterCandidateId = agent.agentId"
+                    ><span>{{ agentDisplayName(agent) }}</span><small>{{ assigneeProviderText(agent) }} · {{ assigneeAvailabilityText(agent) }}</small><small v-if="agent.recommendationReason">{{ agent.recommendationReason }}</small></button>
+                    <p v-if="!matterCandidates.length && !candidatesLoading && !candidatesError" role="status">暂无可承办候选。</p>
+                    <button
+                      v-if="candidatesNextAfterAgentId"
+                      type="button"
+                      :disabled="candidatesLoading"
+                      @click="$emit('more-candidates')"
+                    >加载更多候选</button>
+                  </div>
+                  <p v-if="candidatesLoading" role="status">正在读取承办候选…</p>
+                  <p v-if="candidatesError" role="alert">{{ candidatesError }}</p>
+                  <button
+                    type="button"
+                    class="matter-agent-toggle"
+                    :disabled="candidatesLoading || pointAndStartBusy || Boolean(pointAndStartForDetail)"
+                    @click="$emit('refresh-candidates')"
+                  >刷新候选</button>
+                  <button
+                    type="button"
+                    class="matter-primary-action"
+                    :disabled="!matterAgent || pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, matterAgent)"
+                    @click="confirmMatterAgent"
+                  >确认承办，进入议事</button>
+                </template>
+                <template v-else>
+                  <p class="matter-fee-note">补充要求、查看结果和提出修改，都在原议事中继续。</p>
+                  <button
+                    v-if="taskPresentation(detailTask).phase === 'PENDING_ACCEPTANCE' && hasTaskAction(detailTask, 'DISCUSS')"
+                    type="button"
+                    class="matter-primary-action"
+                    @click="$emit('review-delivery', detailTask)"
+                  >查看成果并验收</button>
+                  <button
+                    v-if="hasTaskAction(detailTask, 'DISCUSS') && assignedAgentForTask(detailTask)"
+                    type="button"
+                    :class="taskPresentation(detailTask).phase === 'PENDING_ACCEPTANCE' ? 'matter-secondary-action' : 'matter-primary-action'"
+                    @click="$emit('discuss-task', detailTask, assignedAgentForTask(detailTask))"
+                  >继续议事</button>
+                </template>
                 <button
-                  v-if="detailTask.status === 'completed'"
+                  v-if="detailTask.status === 'completed' && taskPresentation(detailTask).phase === 'COMPLETED'"
                   type="button"
                   class="matter-archive-action"
                   @click="$emit('archive-task', detailTask)"
                 >收入案卷</button>
                 <p v-else-if="detailTask.status === 'archived'" class="matter-archive-note">已收入案卷，可在“办事 → 案卷”中查看。</p>
               </section>
+              <p v-if="taskPresentation(detailTask).readOnly && !isTerminalMatter(detailTask)" role="status">{{ taskPresentation(detailTask).reason }}；暂仅可查看，刷新核对后再操作。</p>
               <div v-if="!embeddedHall" class="task-detail-head">
                 <div>
                   <strong>{{ detailTask.title }}</strong>
-                  <small>{{ detailTask.id }} / {{ taskStatusText(detailTask.status) }}</small>
+                  <small>{{ detailTask.id }} / {{ taskStatusText(detailTask) }}</small>
                 </div>
-                <span :class="taskStateClass(detailTask.status)">{{ taskStatusText(detailTask.status) }}</span>
+                <span :class="taskStateClass(detailTask)">{{ taskStatusText(detailTask) }}</span>
               </div>
 
               <p v-if="!embeddedHall">{{ detailTask.description || '榜文尚未写明缘由' }}</p>
@@ -197,7 +270,7 @@
                 <button type="button" @click="$emit('open-workspace')">打开百宝箱</button>
               </section>
               <TaskMaterialLinks
-                v-if="formalTaskExecutionScope && !embeddedHall && !isTerminalMatter(detailTask)"
+                v-if="formalTaskExecutionScope && !embeddedHall && canActOnTask(detailTask)"
                 :key="formalTaskExecutionScope.taskId"
                 :task-id="formalTaskExecutionScope.taskId"
                 :conversation-id="formalTaskExecutionScope.conversationId"
@@ -211,12 +284,9 @@
                 @formal-execution-created="$emit('formal-execution-created', $event)"
                 @formal-execution-recovered="$emit('formal-execution-recovered', $event)"
               />
-              <section v-if="embeddedHall && !isTerminalMatter(detailTask)" class="deliberation-execution-route" role="status">
-                <strong>在议事中协作交付</strong>
-                <p>点将后自动进入悬赏议事。你可以继续补充文字和资料，与 Agent 反复沟通，在事项详情核对本次成果并确认验收，保存可选。</p>
-              </section>
+
               <section
-                v-if="canCancelOrdinaryTask(detailTask) || cancellationUnresolved"
+                v-if="(canActOnTask(detailTask) && canCancelOrdinaryTask(detailTask)) || cancellationUnresolved"
                 class="ordinary-cancellation"
                 aria-label="普通事项取消"
               >
@@ -246,21 +316,26 @@
               </section>
 
               <TeamRecommendationPanel
-                v-if="!embeddedHall && !isTerminalMatter(detailTask)"
+                v-if="!embeddedHall && canActOnTask(detailTask)"
                 :task="detailTask"
                 :authorization-generation="authorizationGeneration"
               />
 
               <p v-if="detailTask.status === 'cancelled'" role="status">事项已取消；历史指派与成果保留，不再继续办理。</p>
-              <button v-if="!embeddedHall || detailTask.status !== 'open'" type="button" class="matter-results-action" @click="$emit('open-formal-results', detailTask)">{{ isTerminalMatter(detailTask) ? '查看历史成果' : '查看正式成果与验收' }}</button>
-              <WorkItemPlanPanel v-if="!embeddedHall && !isTerminalMatter(detailTask)" :task="detailTask" :enabled="workItemPlanEnabled" :authorization-generation="authorizationGeneration" />
+              <HallTaskResources v-if="embeddedHall && resourcesActive" :key="`${identityScope}:${authorizationGeneration}:${detailTask.id}`"
+                :task-id="String(detailTask.id)" :identity-scope="identityScope" :identity-epoch="authorizationGeneration" :result-count="matterResultCount"
+                @summary="matterResourceSummary = $event" />
+              <section v-if="!embeddedHall || taskPresentation(detailTask).readOnly || taskPresentation(detailTask).phase === 'COMPLETED'" class="matter-resources" aria-label="资料与成果">
+                <button type="button" class="matter-results-action" @click="$emit('open-formal-results', detailTask)">{{ embeddedHall || taskPresentation(detailTask).readOnly ? '查看历史成果' : '查看正式成果与验收' }}</button>
+              </section>
+              <WorkItemPlanPanel v-if="!embeddedHall && canActOnTask(detailTask)" :task="detailTask" :enabled="workItemPlanEnabled" :authorization-generation="authorizationGeneration" />
 
               <div v-if="!embeddedHall" class="ability-tags">
                 <span v-for="ability in detailTask.requiredAbilities || []" :key="ability">{{ ability }}</span>
                 <span v-if="!(detailTask.requiredAbilities || []).length">不拘本领</span>
               </div>
 
-              <div v-if="!embeddedHall && !isTerminalMatter(detailTask)" class="task-operation-grid">
+              <div v-if="!embeddedHall && canActOnTask(detailTask)" class="task-operation-grid">
                 <button
                   :aria-label="agentDisplayName(selectedAgent) ? `点当前好汉 ${agentDisplayName(selectedAgent)} 领令` : '先择好汉再点将'"
                   :disabled="isFundedTask(detailTask) || !canAssign(detailTask, selectedAgent)"
@@ -294,7 +369,7 @@
                   class="auto-assign-task"
                   type="button"
                   aria-label="宋江代为点将"
-                  :disabled="isFundedTask(detailTask) || detailTask.status !== 'open' || !recommendedAgents.length"
+                  :disabled="isFundedTask(detailTask) || !hasTaskAction(detailTask, 'ASSIGN') || !recommendedAgents.length"
                   title="宋江代为点将"
                   @click="$emit('auto-assign-task', detailTask)"
                 >
@@ -305,7 +380,7 @@
                   class="discuss-task-button"
                   type="button"
                   aria-label="进入议事"
-                  :disabled="!taskAssigneeIds(detailTask).length"
+                  :disabled="!hasTaskAction(detailTask, 'DISCUSS') || !taskAssigneeIds(detailTask).length"
                   :title="!taskAssigneeIds(detailTask).length ? unassignedDiscussHint : '进入该悬赏的既有议事入口'"
                   @click="$emit('discuss-task', detailTask, assignedAgentForTask(detailTask))"
                 >
@@ -328,7 +403,7 @@
               </p>
             </div>
 
-            <div v-if="!embeddedHall" class="modal-agent-scroll">
+            <div v-if="!embeddedHall && canActOnTask(detailTask)" class="modal-agent-scroll">
               <div class="section-label">可点好汉</div>
               <div
                 v-for="agent in recommendedAgents"
@@ -393,7 +468,7 @@
                 </div>
               </div>
             </div>
-            <section v-if="detailTask.status === 'open' && !assignableRecommendedAgents.length" class="no-agent-recruitment" role="status">
+            <section v-if="hasTaskAction(detailTask, 'ASSIGN') && !assignableRecommendedAgents.length" class="no-agent-recruitment" role="status">
               <p>暂未寻得可领令的好汉。</p>
               <button type="button" @click="$emit('recruit-agent', detailTask)">去招贤令</button>
             </section>
@@ -416,16 +491,32 @@
 </template>
 
 <script setup>
+import { assignedTaskTarget, assigneeProviderText, assigneeAvailabilityText } from '@/composables/juyiting/hallAssigneeCandidates.js'
+import { projectHallTask } from '../../composables/juyiting/hallTaskPresentation.js'
 import { canCancelOrdinaryTask, ordinaryTaskVersion, isTerminalMatter } from '../../composables/juyiting/useHallOrdinaryCancellation.js'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import BountyActionIcon from './BountyActionIcon.vue'
+import HallTaskResources from './HallTaskResources.vue'
 import WorkItemPlanPanel from './WorkItemPlanPanel.vue'
 import TeamRecommendationPanel from './TeamRecommendationPanel.vue'
 import TaskMaterialLinks from '@/components/personal-workspace/TaskMaterialLinks.vue'
 import { formatSilverMicro, isCanonicalMicroAmount } from '@/utils/silverAmount'
 
+// Native horizontal scrolling also follows keyboard focus without scrolling the page.
+const revealStatusFilter = event => {
+  const button = event.target?.closest?.('button')
+  const row = event.currentTarget
+  if (!button || !row) return
+  const target = button.getBoundingClientRect()
+  const viewport = row.getBoundingClientRect()
+  if (target.left < viewport.left) row.scrollLeft += target.left - viewport.left
+  else if (target.right > viewport.right) row.scrollLeft += target.right - viewport.right
+}
+
 const props = defineProps({
   embeddedHall: { type: Boolean, default: false },
+  resourcesActive: { type: Boolean, default: true },
+  resourceReviewContext: { type: Object, default: null },
   detailAllowed: { type: Boolean, default: true },
   tasks: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
@@ -434,6 +525,10 @@ const props = defineProps({
   countsErrorMessage: { type: String, default: '' },
   selectedTask: { type: Object, default: null },
   selectedAgent: { type: Object, default: null },
+  assigneeCandidates: { type: Array, default: () => [] },
+  candidatesLoading: { type: Boolean, default: false },
+  candidatesError: { type: String, default: '' },
+  candidatesNextAfterAgentId: { type: String, default: null },
   operableAgents: { type: Array, default: () => [] },
   recommendedAgents: { type: Array, default: () => [] },
   taskAbilityOptions: { type: Array, default: () => [] },
@@ -468,6 +563,8 @@ const props = defineProps({
 
 const emit = defineEmits([
   'assign-task',
+  'refresh-candidates',
+  'more-candidates',
   'archive-task',
   'auto-assign-task',
   'brief-selected-task',
@@ -480,6 +577,7 @@ const emit = defineEmits([
   'check-requirement-create',
   'resume-requirement-create',
   'open-formal-results',
+  'review-delivery',
   'mark-changed',
   'resume-funded-create',
   'check-point-and-start',
@@ -510,6 +608,15 @@ watch(() => [props.identityScope, props.authorizationGeneration], () => {
   selectedAssigneeIds.value = []
 }, { flush: 'sync' })
 const detailTask = computed(() => modalTask.value)
+// Display only the already-validated context for this exact task revision; never grant acceptance here.
+const matterResultCount = computed(() => {
+  const task = detailTask.value, context = props.resourceReviewContext
+  if (!task || context?.taskId !== String(task.id) || context.taskState !== String(task.status).toUpperCase() ||
+      (task.taskVersion != null && String(task.taskVersion) !== context.taskVersion)) return null
+  return context.currentDelivery?.items?.filter(item => item.displayRole === 'RESULT').length ?? 0
+})
+const matterResourceSummary = ref(null)
+watch(() => [detailTask.value?.id, props.identityScope, props.authorizationGeneration], () => { matterResourceSummary.value = null }, { flush: 'sync' })
 const showCancellationDialog = ref(false)
 const cancellationCandidate = ref(null)
 const cancellationSubmitting = ref(false)
@@ -565,7 +672,7 @@ const pointAndStartRecoveryTitle = computed(() => ({
 const pointAndStartRecoveryHint = computed(() => ({
   UNKNOWN: '请刷新状态查看进度。',
   PREPARING: '准备完成后即可继续交流。',
-  ADMITTED: '正在进入会话。',
+  ADMITTED: '需求已发送，可从事项操作进入原议事。',
   ATTACHED: '可在会话中查看答复或继续修改。',
   HISTORICAL: '本次指派已结束，可查看历史记录。',
   FAILED: '请刷新状态查看详情。'
@@ -579,32 +686,36 @@ const pointAndStartInputSummary = computed(() => {
 // The parent is the only authority for task-scoped discussion/workspace facts.  A
 // detail may never borrow the context of whichever task was previously selected.
 const assignedAgentForTask = task => {
-  const assignedIds = [...new Set(taskAssigneeIds(task).filter(Boolean))]
-  if (assignedIds.length !== 1) return null
-  return props.operableAgents.find(agent => agent.agentId === assignedIds[0]) || null
+  if (task?.funding?.mode !== 'FUNDED_SINGLE_AGENT') return assignedTaskTarget(task)
+  const ids = taskAssigneeIds(task)
+  return ids.length === 1 ? props.operableAgents.find(agent => agent.agentId === ids[0]) || null : null
 }
 const assignableRecommendedAgents = computed(() => props.recommendedAgents.filter(agent => props.canAssign(detailTask.value, agent)))
-const selectedOperableAgent = computed(() => {
-  const agentId = props.selectedAgent?.agentId
-  if (!agentId) return null
-  const agent = props.operableAgents.find(item => item.agentId === agentId)
-  if (!agent || agent.canOperate !== true || agent.systemAgent === true) return null
-  return `${agent.status || ''}`.trim().toLowerCase() === 'online' ? agent : null
-})
-const preferredAgents = computed(() => {
-  const legacyFallback = props.recommendedAgents.filter(agent =>
-    ['吴用', '林冲'].some(name => `${agent.name || ''}${agent.displayName || ''}${agent.personaName || ''}`.includes(name)))
+const matterCandidateId = ref('')
+const showMatterCandidates = ref(false)
+const matterCandidates = computed(() => {
   const seen = new Set()
-  return [selectedOperableAgent.value, ...assignableRecommendedAgents.value, ...legacyFallback]
-    .filter(agent => agent?.agentId && !seen.has(agent.agentId) && seen.add(agent.agentId))
-    .slice(0, 2)
+  return [...assignableRecommendedAgents.value, ...props.assigneeCandidates]
+    .filter(agent => agent?.agentId && props.canAssign(detailTask.value, agent) && !seen.has(agent.agentId) && seen.add(agent.agentId))
 })
-const preferredAgentName = computed(() => {
-  const assignedId = taskAssigneeIds(detailTask.value)[0]
-  const assigned = props.operableAgents.find(agent => agent.agentId === assignedId)
-  return agentDisplayName(assigned || preferredAgents.value[0])
+const matterAgent = computed(() => {
+  if (!hasTaskAction(detailTask.value, 'ASSIGN')) return assignedAgentForTask(detailTask.value)
+  return matterCandidateId.value ? matterCandidates.value.find(agent => agent.agentId === matterCandidateId.value) || null : matterCandidates.value[0] || null
 })
-const simpleMatterStatus = task => ({ open: '待确认', assigned: '已受理', claimed: '已受理', queued: '已受理', running: '办理中', in_progress: '办理中', submitted: '待验收', review: '待验收', changes_requested: '待返工确认', completed: '已完成', accepted: '已完成', archived: '已归档', cancelled: '已取消', failed: '失败', blocked: '受阻' })[task?.status] || (taskAssigneeIds(task).length ? '已受理' : '状态待核对')
+watch(() => [props.identityScope, props.authorizationGeneration, detailTask.value?.id, detailTask.value?.taskVersion], () => { matterCandidateId.value = ''; showMatterCandidates.value = false }, { flush: 'sync' })
+const confirmMatterAgent = () => {
+  const agent = matterAgent.value
+  if (!agent || props.pointAndStartBusy || pointAndStartForDetail.value || !hasTaskAction(detailTask.value, 'ASSIGN') || !props.canAssign(detailTask.value, agent)) return
+  emit('assign-task', detailTask.value, agent)
+}
+const primaryStatusFilters = computed(() => props.taskStatusFilters.filter(item => !['HISTORY', 'UNKNOWN'].includes(item.value)))
+const secondaryStatusFilters = computed(() => props.taskStatusFilters.filter(item => ['HISTORY', 'UNKNOWN'].includes(item.value)))
+const secondaryStatusActive = computed(() => ['HISTORY', 'UNKNOWN'].includes(props.taskStatusFilter))
+const openSecondaryStatus = () => { if (!secondaryStatusActive.value) emit('set-status-filter', Number(props.taskStatusCount('UNKNOWN')) > 0 ? 'UNKNOWN' : 'HISTORY') }
+const simpleMatterStatus = task => props.taskStatusText(task)
+const taskPresentation = task => projectHallTask({ task })
+const hasTaskAction = (task, action) => taskPresentation(task).actions.includes(action)
+const canActOnTask = task => hasTaskAction(task, 'ASSIGN') || hasTaskAction(task, 'DISCUSS')
 
 const formalTaskExecutionScope = computed(() => {
   const taskId = detailTask.value?.id
@@ -636,14 +747,14 @@ const fundedClaimBlocked = (task, agent) => {
   return !props.canAssign(task, agent)
 }
 const formatMoney = value => formatSilverMicro(typeof value === 'string' && isCanonicalMicroAmount(value) ? value : '0')
-const canCancelFunding = task => isFundedTask(task) && task.status === 'open' && typeof (task.version ?? task.taskVersion) === 'string'
+const canCancelFunding = task => isFundedTask(task) && hasTaskAction(task, 'ASSIGN') && typeof (task.version ?? task.taskVersion) === 'string'
 const selectedAssignees = computed(() => {
   const selected = new Set(selectedAssigneeIds.value)
   return props.recommendedAgents.filter(agent =>
     selected.has(agent.agentId) && props.canAssign(detailTask.value, agent))
 })
 
-const agentDisplayName = (agent) => agent?.name || agent?.personaName || agent?.agentId || ''
+const agentDisplayName = (agent) => agent?.displayName || agent?.name || agent?.personaName || agent?.agentId || ''
 const recommendationReason = (agent) => agent?.recommendationReason || ''
 const recommendationExclusionReasons = (agent) => Array.isArray(agent?.exclusionReasons)
   ? agent.exclusionReasons.filter(reason => typeof reason === 'string' && reason)
@@ -868,6 +979,9 @@ button:disabled {
 
 .task-status-tabs {
   display: flex;
+  flex-wrap: nowrap;
+  min-width: 0;
+  overscroll-behavior-x: contain;
   flex: 0 0 auto;
   gap: 8px;
   padding: 0 12px 12px;
@@ -876,15 +990,18 @@ button:disabled {
 
 .task-status-tabs button {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 6px;
-  min-height: 34px;
+  min-height: 44px;
   padding: 0 10px;
   border-radius: 8px;
   background: #efe0c6;
   color: #4a3423;
   white-space: nowrap;
 }
+
+.task-status-tabs button:focus-visible { outline: 2px solid var(--hall-brand, #8d2d22); outline-offset: -2px; }
 
 .task-status-tabs button.active {
   background: #7c1f1b;
@@ -1541,8 +1658,16 @@ button:disabled {
 .point-and-start-recovery { margin: 12px 0; padding: 12px; border: 1px solid #d6bb7f; border-radius: 8px; background: #fff9e9; color: #624a20; }
 .point-and-start-recovery p { margin: 6px 0; }
 .point-and-start-recovery button + button { margin-left: 8px; }
+.matter-candidates,.task-secondary-filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}.matter-candidates button,.task-secondary-filters button,.matter-agent-toggle,.matter-secondary-action{min-height:44px;padding:8px 12px;border:1px solid var(--hall-border,#e3e5dc);border-radius:8px;background:var(--hall-surface,#fffefa);color:var(--hall-text,#242e2b)}.matter-candidates button[aria-pressed="true"],.task-secondary-filters button[aria-pressed="true"]{border-color:var(--hall-brand,#923f30);color:var(--hall-brand,#923f30)}.matter-agent-toggle{margin-bottom:10px}.matter-secondary-action{width:100%;margin-top:8px}.matter-advice-card h3{margin:12px 0;overflow-wrap:anywhere}
+.matter-resources h4{margin:12px 0 6px}.matter-resources p{color:var(--hall-text-muted,#68716b);font-size:13px;line-height:1.5}
+.matter-candidates button { min-width: 0; max-width: 100%; text-align: left; overflow-wrap: anywhere; }
+.matter-candidates button small { display: block; font-size: 12px; color: var(--hall-text-muted, #68716b); }
 </style>
 
 <style scoped>
 .bounty-modal-overlay.is-embedded-page{position:static;display:block;width:100%;height:auto;min-height:100%;padding:0;background:#f5f4f0;overflow:visible}.bounty-modal-overlay.is-embedded-page .bounty-modal{width:100%;max-width:none;min-height:100%;max-height:none;border:0;border-radius:0;box-shadow:none;background:#f5f4f0}.bounty-modal-overlay.is-embedded-page .bounty-modal-header{position:sticky;top:0;z-index:3;min-height:48px;padding:6px 16px;border-bottom:1px solid #e3e5dc;background:#fffefa}.bounty-modal-overlay.is-embedded-page .bounty-modal-header h3{font-size:17px;font-weight:500}.bounty-back-button{min-height:44px;padding:0 4px 0 0;border:0!important;background:transparent!important;color:#923f30!important;font:500 14px/1 inherit;cursor:pointer;white-space:nowrap}.bounty-modal-overlay.is-embedded-page .bounty-modal-header h3{flex:1;margin:0;color:#242e2b;text-align:left}.bounty-modal-overlay.is-embedded-page .bounty-modal-body{padding:0 0 96px}.bounty-modal-overlay.is-embedded-page .modal-task-info{padding:16px 16px 0}.matter-advice-card{display:grid;gap:12px;padding:16px;border:1px solid #eadfd4;border-radius:12px;background:#fffefa}.matter-advice-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.matter-advice-heading span{color:#923f30;font-size:13px;font-weight:600}.matter-advice-heading strong{padding:4px 8px;border-radius:999px;background:#f9efde;color:#87551c;font-size:12px}.matter-request{margin:0!important;padding-bottom:12px;border-bottom:1px solid #ece5dd;font-size:16px!important;line-height:1.75!important;color:#242e2b!important}.matter-advice-card dl{display:grid;gap:9px;margin:0}.matter-advice-card dl div{display:grid;grid-template-columns:70px minmax(0,1fr);gap:8px}.matter-advice-card dt{color:#68716b;font-size:12px}.matter-advice-card dd{margin:0;font-size:13px}.matter-fee-note{margin:0!important;padding:11px 12px;border-left:3px solid #c7a092;border-radius:8px;background:#f6eee8;color:#65473f!important;font-size:13px!important;line-height:1.65!important}.matter-agent-actions{display:flex;gap:8px;flex-wrap:wrap}.matter-primary-action,.matter-results-action{width:100%;min-height:46px;border-radius:8px!important;background:#923f30!important;color:#fffefa!important;border-color:#923f30!important}.matter-archive-action{width:100%;min-height:44px;border:1px solid #923f30!important;border-radius:8px!important;background:#fffefa!important;color:#923f30!important;font-weight:600}.matter-archive-note{margin:0!important;padding:10px;border-radius:8px;background:#eef5ec;color:#36643b!important;font-size:13px!important}.matter-agent-actions button{min-height:44px;padding:8px 14px;background:#923f30!important;color:#fffefa!important;border-color:#923f30!important}@media(max-width:620px){.bounty-modal-overlay.is-embedded-page .bounty-modal-body{display:block}.bounty-modal-overlay.is-embedded-page .modal-task-info{padding:12px 12px 0}.bounty-modal-overlay.is-embedded-page .modal-agent-scroll{margin-top:14px;max-height:none}.matter-advice-card dl div{grid-template-columns:64px minmax(0,1fr)}}
+.matter-candidates,.task-secondary-filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}.matter-candidates button,.task-secondary-filters button,.matter-agent-toggle,.matter-secondary-action{min-height:44px;padding:8px 12px;border:1px solid var(--hall-border,#e3e5dc);border-radius:8px;background:var(--hall-surface,#fffefa);color:var(--hall-text,#242e2b)}.matter-candidates button[aria-pressed="true"],.task-secondary-filters button[aria-pressed="true"]{border-color:var(--hall-brand,#923f30);color:var(--hall-brand,#923f30)}.matter-agent-toggle{margin-bottom:10px}.matter-secondary-action{width:100%;margin-top:8px}.matter-advice-card h3{margin:12px 0;overflow-wrap:anywhere}
+.matter-resources h4{margin:12px 0 6px}.matter-resources p{color:var(--hall-text-muted,#68716b);font-size:13px;line-height:1.5}
+.matter-candidates button { min-width: 0; max-width: 100%; text-align: left; overflow-wrap: anywhere; }
+.matter-candidates button small { display: block; font-size: 12px; color: var(--hall-text-muted, #68716b); }
 </style>

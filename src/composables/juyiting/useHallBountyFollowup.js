@@ -3,18 +3,7 @@ import { buildFollowupIntent, createHallBountyFollowupIntentStore, followupDescr
 
 export const followupProviderAcknowledgement = 'UNPRICED_EXTERNAL_ACCOUNT_ONE_IMAGE_REQUEST_ATTEMPT'
 const clone = value => JSON.parse(JSON.stringify(value))
-const unwrap = result => {
-  const envelope = result && Object.hasOwn(result, 'code') ? result : result?.data ?? result
-  if (envelope && Object.hasOwn(envelope, 'code')) {
-    if (![undefined, null, 'E0', '0', 0, '200', 200].includes(envelope.code)) {
-      const error = new Error(envelope.msg || envelope.message || '多轮图像办理被拒绝')
-      error.code = envelope.code; error.status = envelope.status
-      throw error
-    }
-    return envelope.data?.data ?? envelope.data
-  }
-  return envelope?.data ?? envelope
-}
+const unwrap = result => result
 const key = value => followupId(value) && value.length >= 8
 const exactKeys = (value, keys) => value && typeof value === 'object' && !Array.isArray(value) &&
   Object.keys(value).length === keys.length && Object.keys(value).every(name => keys.includes(name))

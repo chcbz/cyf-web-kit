@@ -99,7 +99,7 @@ const fetchTasks = async () => {
       }
     }, {
       onSuccess: (data) => {
-        monthTasks.value = Array.isArray(data.data) ? data.data : []
+        monthTasks.value = Array.isArray(data?.items) ? data.items : []
 
         // 更新选中日期的任务列表
         const dayTasks = getTasksForDate(selectedDate.value)
@@ -130,7 +130,7 @@ const onMonthChange = (newDate) => {
     }
   }, {
     onSuccess: (data) => {
-      monthTasks.value = Array.isArray(data.data) ? data.data : []
+      monthTasks.value = Array.isArray(data?.items) ? data.items : []
       const dayTasks = getTasksForDate(selectedDate.value)
       listPlan.value = dayTasks
     },
@@ -147,11 +147,11 @@ const doShowDetail = async (item) => {
 
   try {
     const data = await taskApi.getById('/get', item.planId)
-    if (data?.data) {
+    if (data) {
       taskDetailData.value = {
         periodText: item.crond || periodMap[item.period] || '一次性任务',
-        startTime: data.data.startTime,
-        endTime: data.data.endTime
+        startTime: data.startTime,
+        endTime: data.endTime
       }
     }
   } catch (_error) {

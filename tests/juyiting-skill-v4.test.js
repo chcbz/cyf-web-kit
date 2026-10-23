@@ -1,3 +1,4 @@
+import { displayFixture } from './fixtures/juyiting/interface-display-fixture.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import { discussionBody, sourceSelector, actionOutcomeProjection, actionProgressAdvances } from '../src/composables/juyiting/hallTypedDeliberation.js'
@@ -5,23 +6,23 @@ import { pointAndStartProjection, createPointAndStartIntentStore } from '../src/
 
 const clone = x => JSON.parse(JSON.stringify(x))
 const fixture = JSON.parse(fs.readFileSync(new URL('./fixtures/skill-v4/action-v4.json', import.meta.url)))
-const project = () => ({ schemaVersion: 4, route: 'CHAT', conversationId: '1', conversationGeneration: '1', requestId: 'req', requestRevision: '1', turnId: 'turn', state: 'READY', inspection: null,
+const project = () => displayFixture({ schemaVersion: 4, route: 'CHAT', conversationId: '1', conversationGeneration: '1', requestId: 'req', requestRevision: '1', turnId: 'turn', state: 'READY', inspection: null,
   outcome: { outcomeContractVersion: 4, outcomeId: 'outcome', taskId: 'task', assignmentRevision: '1', assistantMessageId: '2', finalDigest: fixture.final.finalDigest,
     ...Object.fromEntries(Object.entries(fixture.final.outcome).filter(([k]) => k !== 'schemaVersion')),
     action: { ...clone(fixture.final.outcome.action), actionRequestId: 'event' } },
-  actionProgress: { actionRequestId: 'event', state: 'ARCHIVING', dispatchVersion: '1', childRequestId: 'child', childRoute: 'EXECUTE', childStateVersion: '2', executionId: 'pwe_test', phase: 'ARCHIVING', resultDigest: 'a'.repeat(64) } })
+  actionProgress: { actionRequestId: 'event', state: 'ARCHIVING', dispatchVersion: '1', childRequestId: 'child', childRoute: 'EXECUTE', childStateVersion: '2', executionId: 'pwe_test', executionStateVersion: '2', phase: 'ARCHIVING', resultSha256: 'a'.repeat(64) } })
 
 describe('SE2 single discussion-v2 and action-v4 consumer', () => {
   it('has explicit material scope and strict tagged selectors', () => {
     const base = { intent: 'DISCUSSION', taskId: 'task', assignmentRevision: '1', content: '修改资料' }
     for (const materialScope of ['TASK_DEFAULT', 'EXPLICIT', 'NONE']) assert.equal(discussionBody({ ...base, materialScope }).materialScope, materialScope)
-    assert.equal(discussionBody(base).schemaVersion, 2)
+    assert.equal(discussionBody(base).schemaVersion, 3)
     const upload = { kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'f', version: '1', purpose: 'INPUT' }
-    const result = { kind: 'EXECUTION_RESULT', executionId: 'pwe_result', resultDigest: 'a'.repeat(64) }
+    const result = { kind: 'EXECUTION_RESULT', executionId: 'pwe_result', resultSha256: 'a'.repeat(64) }
     assert.deepEqual(sourceSelector(result), result)
     assert.equal(discussionBody({ ...base, materialScope: 'NONE', sourceSelectors: [upload] }), null)
     assert.equal(discussionBody({ ...base, sourceSelectors: [upload, upload] }), null)
-    assert.equal(sourceSelector({ ...result, resultDigest: 'wrong' }), null)
+    assert.equal(sourceSelector({ ...result, resultSha256: 'wrong' }), null)
     assert.equal(sourceSelector({ ...upload, producerExecutionId: 'fake' }), null)
   })
   it('projects an unknown skill parameter object without granting execution or approving costs', () => {

@@ -1,7 +1,9 @@
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { ref } from 'vue'
-import { useHallConversation } from '../src/composables/juyiting/useHallConversation.js'
+import { useHallConversation as actualHallConversation } from '../src/composables/juyiting/useHallConversation.js'
+import { currentChatStreamMock, conversationFrame } from './fixtures/current-chat-stream-mock.js'
+const useHallConversation = options => actualHallConversation({ ...options, chatApi: currentChatStreamMock(options.chatApi) })
 import { appendHallEventMessage } from '../src/composables/juyiting/hallConversationMessages.js'
 import { createHallSseParser } from '../src/composables/juyiting/hallConversationSse.js'
 import { cancellationTarget, deliberationBusy, isTerminalTurnState, reduceDeliberationEvent } from '../src/composables/juyiting/hallDeliberationState.js'
@@ -9,12 +11,12 @@ import { stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 
 import { hallCapabilities as capabilityV2 } from './fixtures/hall-current-protocol.js'
 const deferred = () => { let resolve; let reject; const promise = new Promise((ok, fail) => { resolve = ok; reject = fail }); return { promise, resolve, reject } }
-const base = ({ chatApi, apiStore = { authorizationGeneration: 1, token: async () => '' }, metadata, context, onDelivery, outgoingMetadata, onFinalReply } = {}) => useHallConversation({
-  apiStore, chatApi: chatApi || {},
+const base = ({ chatApi, apiStore = { authorizationGeneration: 1, token: async () => '' }, metadata, context, onDelivery, outgoingMetadata, onFinalReply, onTypedOutcome, identityScope, replyCancellationStorage } = {}) => useHallConversation({
+  apiStore, identityScope, replyCancellationStorage, chatApi: chatApi || {},
   chatContext: context || ref({ conversationScopeType: 'public', conversationScopeKey: 'public', mode: 'public', participantAgentIds: ['a'], targetAgentIds: ['a'], targetAgentId: 'a' }),
   chatMode: ref('public'), globalStore: { user: { username: 'tester' } }, log: { warn () {}, error () {} },
   openPanel () {}, outgoingMetadata: outgoingMetadata || ref(metadata || { inputRefs: [{ type: 'message', id: '9007199254740993', content: 'must never upload' }] }),
-  portraitShortName: agent => agent?.name || '', selectedAgent: ref({ agentId: 'a' }), selectedTask: ref(null), showToast () {}, onDelivery, onFinalReply
+  portraitShortName: agent => agent?.name || '', selectedAgent: ref({ agentId: 'a' }), selectedTask: ref(null), showToast () {}, onDelivery, onFinalReply, onTypedOutcome
 })
 
 const durableTurnView = ({ requestId, turnId, state, stateVersion, targetAgentId = 'a', lastDeltaSeq = '0' }) => ({
@@ -36,7 +38,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
   it('negotiates v2 before sending and keeps body requestId equal to Idempotency-Key', async () => {
     const sent = []
     const conversation = base({ chatApi: {
-      get: async path => path === '/capabilities' ? { data: { data: capabilityV2 } } : { data: { data: {} } },
+      get: async path => path === '/capabilities' ? ((capabilityV2)) : (({})),
       create: async (_path, body, options) => { sent.push({ body, options }); options.onStream('{"conversationId":"9007199254740993"}'); options.onStreamEnd() }
     } })
     conversation.setDraft('inspect only')
@@ -52,7 +54,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     let conversions = 0; const sent = []
     const content = { toString: () => { conversions++; return '  one normalized message  ' } }
     const conversation = base({ chatApi: {
-      get: async () => ({ data: capabilityV2 }),
+      get: async () => ((capabilityV2)),
       create: async (_path, body, options) => { sent.push(body); options.onStreamEnd() }
     } })
     try {
@@ -67,7 +69,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
   it('rejects empty text and non-string voice before protocol checks or state changes', async () => {
     let reads = 0; let sends = 0
     const conversation = base({ chatApi: {
-      get: async () => { reads++; return { data: capabilityV2 } },
+      get: async () => { reads++; return (capabilityV2) },
       create: async () => { sends++ }
     } })
     try {
@@ -96,7 +98,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     it(`blocks send through the shared entry guard while ${flag} is active`, async () => {
       let reads = 0; let sends = 0
       const conversation = base({ chatApi: {
-        get: async () => { reads++; return { data: capabilityV2 } },
+        get: async () => { reads++; return (capabilityV2) },
         create: async () => { sends++ }
       } })
       try {
@@ -123,7 +125,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     const second = conversation.sendHallMessage()
     expect(await second).to.equal(false)
     expect(conversation.isSubmitting.value).to.equal(true)
-    gate.resolve({ data: { data: capabilityV2 } })
+    gate.resolve(((capabilityV2)))
     expect(await first).to.equal(true)
     expect(sent).to.have.length(1)
     expect(sent[0].body.requestId).to.equal(sent[0].options.headers['Idempotency-Key'])
@@ -139,7 +141,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     await Promise.resolve()
     apiStore.authorizationGeneration = 8
     stopIdentityBoundWork()
-    gate.resolve({ data: { data: capabilityV2 } })
+    gate.resolve(((capabilityV2)))
     expect(await sending).to.equal(false)
     expect(creates).to.equal(0)
     expect(conversation.capabilityState.value.loaded).to.equal(false)
@@ -155,7 +157,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     const sending = conversation.sendHallMessage()
     await Promise.resolve()
     context.value = { conversationScopeType: 'private', conversationScopeKey: 'agent:b', mode: 'private', targetAgentIds: ['b'] }
-    gate.resolve({ data: { data: capabilityV2 } })
+    gate.resolve(((capabilityV2)))
     expect(await sending).to.equal(false)
     expect(creates).to.equal(0)
     expect(conversation.activeTurns.value).to.deep.equal([])
@@ -180,11 +182,11 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
       const sent = []; let available = false; let probes = 0
       const chatApi = {
         get: async path => {
-          if (path !== '/capabilities') return { data: {} }
+          if (path !== '/capabilities') return ({})
           probes++
-          if (available) return { data: { data: capabilityV2 } }
+          if (available) return ((capabilityV2))
           if (failure === 'network') throw new Error('network unavailable')
-          return { data: { data: { ...capabilityV2, durableTurns: false } } }
+          return (({ ...capabilityV2, durableTurns: false }))
         },
         create: async (_p, body, options) => { sent.push({ body, options }); options.onStreamEnd() }
       }
@@ -214,7 +216,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
   it('keeps pre-admission status neutral and only renders observed runtime policy', async () => {
     let statusDuringPost = ''; let stateDuringPost; const deliveries = []
     const conversation = base({ onDelivery: delivery => deliveries.push(delivery), chatApi: {
-      get: async () => ({ data: { data: capabilityV2 } }),
+      get: async () => (((capabilityV2))),
       create: async (_p, body, options) => {
         statusDuringPost = conversation.deliberationStatus.value
         stateDuringPost = { submitting: conversation.isSubmitting.value, streaming: conversation.isStreaming.value, awaiting: conversation.isAwaitingReply.value, deliveries: deliveries.length }
@@ -235,7 +237,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
   it('emits a scene receipt only after delivered or DISPATCHED, never for accepted QUEUED', async () => {
     const deliveries = []; let queuedDeliveryCount = -1
     const conversation = base({ onDelivery: delivery => deliveries.push(delivery), chatApi: {
-      get: async () => ({ data: { data: capabilityV2 } }),
+      get: async () => (((capabilityV2))),
       create: async (_path, body, options) => {
         const common = { conversationId: '9007199254740993', requestId: body.requestId, turnId: 'turn-delivery' }
         options.onStream(JSON.stringify({ ...common, state: 'QUEUED', agentDelivery: { agentId: 'a', accepted: true, delivered: false, state: 'QUEUED', turnId: 'turn-delivery' } }))
@@ -259,7 +261,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     const aliases = { interactionHint: 'execute', interaction_type: 'execute', interactionType: 'execute', interactionMode: 'command', action: 'run', route: 'EXECUTE', intent: 'deploy', mode: 'COMMAND', execute: true, executeHint: true, metadataAlias: 'EXECUTE', libraryCitationId: 'ref-1', librarySourceType: 'memory' }
     let sent
     const conversation = base({ metadata: aliases, chatApi: {
-      get: async () => ({ data: { data: capabilityV2 } }),
+      get: async () => (((capabilityV2))),
       create: async (_p, body, options) => { sent = body; options.onStreamEnd() }
     } })
     conversation.setDraft('do not execute')
@@ -274,11 +276,11 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     let creates = 0; let requestLookups = 0
     const conversation = base({ chatApi: {
       get: async path => {
-        if (path === '/capabilities') return { data: { data: capabilityV2 } }
-        if (path.startsWith('/requests/')) { requestLookups++; return { data: { data: durableRequestView({ requestId: path.slice(10), state: 'RUNNING', stateVersion: '1', turns: [durableTurnView({ requestId: path.slice(10), turnId: '9007199254740995', state: 'QUEUED', stateVersion: '1' })] }) } } }
-        return { data: { data: {} } }
+        if (path === '/capabilities') return ((capabilityV2))
+        if (path.startsWith('/requests/')) { requestLookups++; return ((durableRequestView({ requestId: path.slice(10), state: 'RUNNING', stateVersion: '1', turns: [durableTurnView({ requestId: path.slice(10), turnId: '9007199254740995', state: 'QUEUED', stateVersion: '1' })] }))) }
+        return (({}))
       },
-      getById: async (_p, _id, options) => options?.onSuccess?.({ data: [] }),
+      getById: async (_p, _id, options) => options?.onSuccess?.(([])),
       create: async () => { creates++; throw new TypeError('network unknown') }
     } })
     conversation.setDraft('once')
@@ -292,7 +294,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     const gate = deferred(); const started = deferred(); let creates = 0
     const conversation = base({ chatApi: {
       get: async path => {
-        if (path === '/capabilities') return { data: capabilityV2 }
+        if (path === '/capabilities') return (capabilityV2)
         started.resolve(path)
         return gate.promise
       },
@@ -302,7 +304,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     const sending = conversation.sendHallMessage()
     const path = await started.promise
     stopIdentityBoundWork()
-    gate.resolve({ data: { requestId: path.slice('/requests/'.length), state: 'RUNNING', conversationId: '1001', turns: [] } })
+    gate.resolve(({ requestId: path.slice('/requests/'.length), state: 'RUNNING', conversationId: '1001', turns: [] }))
     expect(await sending).to.equal(false)
     expect(creates).to.equal(1)
     expect(conversation.messages.value).to.deep.equal([])
@@ -316,10 +318,10 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     let requestId; let requestLookups = 0
     const conversation = base({ chatApi: {
       get: async path => {
-        if (path === '/capabilities') return { data: { data: capabilityV2 } }
+        if (path === '/capabilities') return ((capabilityV2))
         requestLookups += 1
-        return { data: { data: durableRequestView({ requestId, state: 'COMPLETED', stateVersion: '2',
-          turns: [durableTurnView({ requestId, turnId: 'turn-a', state: 'PUBLISHED', stateVersion: '2', lastDeltaSeq: '1' })] }) } }
+        return ((durableRequestView({ requestId, state: 'COMPLETED', stateVersion: '2',
+          turns: [durableTurnView({ requestId, turnId: 'turn-a', state: 'PUBLISHED', stateVersion: '2', lastDeltaSeq: '1' })] })))
       },
       create: async (_path, body, options) => {
         requestId = body.requestId
@@ -349,7 +351,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     let requestId; let streamOptions; let requestLookups = 0
     const conversation = base({ chatApi: {
       get: async path => {
-        if (path === '/capabilities') return { data: { data: capabilityV2 } }
+        if (path === '/capabilities') return ((capabilityV2))
         requestLookups += 1
         return requestLookups === 1 ? stale.promise : fresh.promise
       },
@@ -370,13 +372,13 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
       dispatchId: 'dispatch-turn-a', targetAgentId: 'a', contextSnapshotId: 'snapshot-turn-a',
       conversationId: '9007199254740993', conversationGeneration: '1', messageId: '91', finalSeq: '1',
       content: 'transport外终稿', senderType: 'agent', senderName: 'Agent A', occurredAt: '200' }))
-    stale.resolve({ data: { data: durableRequestView({ requestId, state: 'RUNNING', stateVersion: '1',
-      turns: [durableTurnView({ requestId, turnId: 'turn-a', state: 'QUEUED', stateVersion: '1', lastDeltaSeq: '0' })] }) } })
+    stale.resolve(((durableRequestView({ requestId, state: 'RUNNING', stateVersion: '1',
+      turns: [durableTurnView({ requestId, turnId: 'turn-a', state: 'QUEUED', stateVersion: '1', lastDeltaSeq: '0' })] }))))
     await flushReadbacks(16)
     expect(requestLookups).to.equal(2)
     expect(conversation.isConversationBusy.value).to.equal(true)
-    fresh.resolve({ data: { data: durableRequestView({ requestId, state: 'COMPLETED', stateVersion: '2',
-      turns: [durableTurnView({ requestId, turnId: 'turn-a', state: 'PUBLISHED', stateVersion: '2', lastDeltaSeq: '1' })] }) } })
+    fresh.resolve(((durableRequestView({ requestId, state: 'COMPLETED', stateVersion: '2',
+      turns: [durableTurnView({ requestId, turnId: 'turn-a', state: 'PUBLISHED', stateVersion: '2', lastDeltaSeq: '1' })] }))))
     expect(await sending).to.equal(false)
     await flushReadbacks(16)
     expect(requestLookups).to.equal(2)
@@ -389,7 +391,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     const first = deferred(); const second = deferred(); let requestId; let requestLookups = 0
     const conversation = base({ chatApi: {
       get: async path => {
-        if (path === '/capabilities') return { data: { data: capabilityV2 } }
+        if (path === '/capabilities') return ((capabilityV2))
         requestLookups += 1
         return requestLookups === 1 ? first.promise : second.promise
       },
@@ -418,10 +420,10 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     await flushReadbacks(12)
     expect(requestLookups).to.equal(2)
     expect(conversation.isConversationBusy.value).to.equal(true)
-    second.resolve({ data: { data: durableRequestView({ requestId, state: 'COMPLETED', stateVersion: '2', turns: [
+    second.resolve(((durableRequestView({ requestId, state: 'COMPLETED', stateVersion: '2', turns: [
       durableTurnView({ requestId, turnId: 'turn-a', state: 'PUBLISHED', stateVersion: '2', lastDeltaSeq: '1' }),
       durableTurnView({ requestId, turnId: 'turn-b', state: 'PUBLISHED', stateVersion: '2', targetAgentId: 'b', lastDeltaSeq: '1' })
-    ] }) } })
+    ] }))))
     await flushReadbacks(12)
     expect(requestLookups).to.equal(2)
     expect(conversation.activeTurns.value.map(turn => turn.state)).to.deep.equal(['PUBLISHED', 'PUBLISHED'])
@@ -433,7 +435,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     const gate = deferred(); let requestId; let requestLookups = 0
     const conversation = base({ chatApi: {
       get: async path => {
-        if (path === '/capabilities') return { data: { data: capabilityV2 } }
+        if (path === '/capabilities') return ((capabilityV2))
         requestLookups += 1
         return gate.promise
       },
@@ -453,8 +455,8 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     await conversation.sendHallMessage()
     expect(requestLookups).to.equal(1)
     stopIdentityBoundWork()
-    gate.resolve({ data: { data: durableRequestView({ requestId, state: 'COMPLETED', stateVersion: '2',
-      turns: [durableTurnView({ requestId, turnId: 'turn-a', state: 'PUBLISHED', stateVersion: '2' })] }) } })
+    gate.resolve(((durableRequestView({ requestId, state: 'COMPLETED', stateVersion: '2',
+      turns: [durableTurnView({ requestId, turnId: 'turn-a', state: 'PUBLISHED', stateVersion: '2' })] }))))
     await flushReadbacks(12)
     expect(conversation.activeRequest.value).to.equal(null)
     expect(conversation.activeTurns.value).to.deep.equal([])
@@ -487,10 +489,10 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     try {
       conversation = base({ chatApi: {
         get: async path => {
-          if (path === '/capabilities') return { data: { data: capabilityV2 } }
+          if (path === '/capabilities') return ((capabilityV2))
           requestLookups += 1
-          return { data: { data: durableRequestView({ requestId, state: 'COMPLETED', stateVersion: '2',
-            turns: [durableTurnView({ requestId, turnId: 'turn-a', state: 'PUBLISHED', stateVersion: '2', lastDeltaSeq: '12' })] }) } }
+          return ((durableRequestView({ requestId, state: 'COMPLETED', stateVersion: '2',
+            turns: [durableTurnView({ requestId, turnId: 'turn-a', state: 'PUBLISHED', stateVersion: '2', lastDeltaSeq: '12' })] })))
         },
         create: async (_path, body, options) => {
           requestId = body.requestId
@@ -531,8 +533,8 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     let requestId; let creates = 0; let contentLoads = 0
     const conversation = base({ chatApi: {
       get: async path => {
-        if (path === '/capabilities') return { data: { data: capabilityV2 } }
-        return { data: { data: durableRequestView({ requestId, state: 'COMPLETED', stateVersion: '2', turns: [durableTurnView({ requestId, turnId: 'turn-terminal', state: 'PUBLISHED', stateVersion: '2', lastDeltaSeq: '1' })] }) } }
+        if (path === '/capabilities') return ((capabilityV2))
+        return ((durableRequestView({ requestId, state: 'COMPLETED', stateVersion: '2', turns: [durableTurnView({ requestId, turnId: 'turn-terminal', state: 'PUBLISHED', stateVersion: '2', lastDeltaSeq: '1' })] })))
       },
       getById: async () => { contentLoads += 1; throw new Error('history unavailable') },
       create: async (_path, body) => { creates += 1; requestId = body.requestId; throw new TypeError('transport lost') }
@@ -552,13 +554,13 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
   it('fails all-pending cancellation when the returned request view is invalid', async () => {
     let requestId
     const conversation = base({ chatApi: {
-      get: async () => ({ data: { data: capabilityV2 } }),
+      get: async () => (((capabilityV2))),
       create: async (_path, body, options) => {
         requestId = body.requestId
         for (const turnId of ['turn-a', 'turn-b']) options.onStream(JSON.stringify({ requestId, turnId, state: 'QUEUED', agentDelivery: { agentId: turnId, accepted: true, state: 'QUEUED', turnId }, conversationId: '9007199254740993' }))
         options.onStreamEnd()
       },
-      post: async () => ({ data: { data: { requestId: 'different-request', state: 'CANCELLED', turns: [] } } })
+      post: async () => ((({ requestId: 'different-request', state: 'CANCELLED', turns: [] })))
     } })
     conversation.setDraft('cancel group')
     await conversation.sendHallMessage()
@@ -573,7 +575,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
       { requestId: '', turnId: 'wrong-turn' },
       { requestId: '', turnId: 'turn-a', state: 'CANCELLED', stateVersion: '1' }]
     const conversation = base({ chatApi: {
-      get: async () => ({ data: { data: capabilityV2 } }),
+      get: async () => (((capabilityV2))),
       create: async (_path, body, options) => {
         requestId = body.requestId
         responses[3].requestId = requestId
@@ -582,7 +584,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
           state: 'QUEUED', stateVersion: '0' }))
         options.onStreamEnd()
       },
-      post: async () => ({ data: { data: responses.shift() } })
+      post: async () => (((responses.shift())))
     } })
     conversation.setDraft('strict cancel')
     await conversation.sendHallMessage()
@@ -597,13 +599,126 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     conversation.disposeHallConversation()
   })
 
+  for (const mode of ['conflict', 'unknown', 'completed']) {
+    it(`reconciles ${mode} cancellation without an automatic second POST`, async () => {
+      let requestId, posts = 0, queried = 0, cancelled = false
+      const bodies = []
+      const conversation = base({ chatApi: {
+        get: async path => {
+          if (path === '/capabilities') return capabilityV2
+          queried += 1
+          const done = mode === 'completed' && posts > 0
+          return durableRequestView({ requestId, state: cancelled ? 'CANCELLED' : done ? 'COMPLETED' : 'RUNNING', stateVersion: '2',
+            turns: [durableTurnView({ requestId, turnId: 'turn-a', state: cancelled ? 'CANCELLED' : done ? 'PUBLISHED' : 'STREAMING', stateVersion: '2' })] })
+        },
+        create: async (_path, body, options) => {
+          requestId = body.requestId
+          options.onStream(JSON.stringify({ type: 'chat_request_replay', requestId, turnId: 'turn-a',
+            conversationId: '9007199254740993', state: 'QUEUED', stateVersion: '0' }))
+          options.onStreamEnd()
+        },
+        post: async (_path, body) => {
+          posts += 1; bodies.push(body)
+          if (posts === 1) throw mode === 'unknown' ? new TypeError('connection lost') : Object.assign(new Error('conflict'), { status: 409, code: 'CHAT_REQUEST_CONFLICT' })
+          cancelled = true
+          return durableTurnView({ requestId, turnId: 'turn-a', state: 'CANCELLED', stateVersion: '3' })
+        }
+      } })
+      conversation.setDraft('cancel test'); await conversation.sendHallMessage(); await flushReadbacks()
+      expect(await conversation.cancelDeliberation({ turnId: 'turn-a' })).to.equal(mode === 'completed')
+      expect(posts).to.equal(1); expect(queried).to.be.greaterThan(0)
+      if (mode === 'conflict') {
+        expect(conversation.activeTurns.value[0].stateVersion).to.equal('2')
+        expect(conversation.deliberationStatus.value).to.include('尚未停止')
+        await conversation.cancelDeliberation({ turnId: 'turn-a' })
+        expect(posts).to.equal(2); expect(bodies[1].expectedStateVersion).to.equal('2')
+      } else if (mode === 'unknown') {
+        expect(conversation.deliberationStatus.value).to.include('尚未确认')
+        await conversation.cancelDeliberation({ turnId: 'turn-a' }); expect(posts).to.equal(1)
+        cancelled = true
+        expect(await conversation.cancelDeliberation({ turnId: 'turn-a' })).to.equal(true)
+        expect(posts).to.equal(1)
+      } else {
+        expect(conversation.activeTurns.value[0].state).to.equal('PUBLISHED')
+        expect(conversation.isAwaitingReply.value).to.equal(false)
+      }
+      conversation.disposeHallConversation()
+    })
+  }
+
+  it('restores an unknown stop across remount for the exact identity/request and only reads it back', async () => {
+    const records = new Map()
+    const storage = { getItem: key => records.get(key) || null, setItem: (key, value) => records.set(key, value), removeItem: key => records.delete(key) }
+    const identityScope = ref('0\u0000client\u0000owner')
+    let posts = 0, reads = 0, requestId, done = false
+    const chatApi = {
+      get: async path => {
+        if (path === '/capabilities') return capabilityV2
+        reads += 1
+        return durableRequestView({ requestId, state: done ? 'CANCELLED' : 'RUNNING', stateVersion: '2', turns: [durableTurnView({ requestId, turnId: 'turn-a', state: done ? 'CANCELLED' : 'STREAMING', stateVersion: '2' })] })
+      },
+      create: async (_path, body, options) => {
+        requestId = body.requestId
+        options.onStream(JSON.stringify({ type: 'chat_request_replay', requestId, turnId: 'turn-a', conversationId: '9007199254740993', state: 'STREAMING', stateVersion: '2' })); options.onStreamEnd()
+      },
+      post: async () => { posts += 1; throw new TypeError('connection lost') }
+    }
+    const options = { chatApi, identityScope, replyCancellationStorage: storage }
+    const first = base(options)
+    first.setDraft('stop then reload'); await first.sendHallMessage(); await flushReadbacks()
+    await first.cancelDeliberation({ turnId: 'turn-a' })
+    expect(records.size).to.equal(1)
+    const snapshot = JSON.parse(JSON.stringify({ request: first.activeRequest.value, turns: first.activeTurns.value, id: first.conversationId.value }))
+    first.disposeHallConversation()
+    const restored = base(options)
+    restored.conversationId.value = snapshot.id; restored.activeRequest.value = snapshot.request; restored.activeTurns.value = snapshot.turns
+    expect(restored.replyCancellationState.value.unknown).to.equal(true)
+    identityScope.value = '0\u0000client\u0000other'
+    expect(restored.replyCancellationState.value).to.equal(null)
+    identityScope.value = '0\u0000client\u0000owner'
+    const readsBefore = reads
+    // Even a different supplied target must not widen a previously unknown operation.
+    expect(await restored.cancelDeliberation({ allPending: true })).to.equal(false)
+    expect(reads).to.be.greaterThan(readsBefore); expect(posts).to.equal(1)
+    done = true
+    expect(await restored.cancelDeliberation()).to.equal(true)
+    expect(posts).to.equal(1); expect(records.size).to.equal(0)
+    expect(restored.replyCancellationState.value).to.equal(null)
+    restored.disposeHallConversation()
+  })
+
+  it('deduplicates concurrent cancellation and accepts a same-version terminal receipt', async () => {
+    let requestId, posts = 0
+    const pending = deferred()
+    const conversation = base({ chatApi: {
+      get: async path => path === '/capabilities' ? capabilityV2 : durableRequestView({ requestId, state: posts ? 'CANCELLED' : 'RUNNING', stateVersion: '3',
+        turns: [durableTurnView({ requestId, turnId: 'turn-a', state: posts ? 'CANCELLED' : 'STREAMING', stateVersion: '3' })] }),
+      create: async (_path, body, options) => {
+        requestId = body.requestId
+        options.onStream(JSON.stringify({ type: 'chat_request_replay', requestId, turnId: 'turn-a',
+          conversationId: '9007199254740993', state: 'STREAMING', stateVersion: '3' })); options.onStreamEnd()
+      },
+      post: async () => { posts += 1; return pending.promise }
+    } })
+    conversation.setDraft('cancel test'); await conversation.sendHallMessage(); await flushReadbacks()
+    const first = conversation.cancelDeliberation({ turnId: 'turn-a' })
+    expect(conversation.replyCancellationState.value).to.include({ inFlight: true, unknown: false })
+    expect(await conversation.cancelDeliberation({ turnId: 'turn-a' })).to.equal(false)
+    expect(posts).to.equal(1)
+    pending.resolve(durableTurnView({ requestId, turnId: 'turn-a', state: 'CANCELLED', stateVersion: '3' }))
+    expect(await first).to.equal(true)
+    expect(conversation.replyCancellationState.value).to.equal(null)
+    expect(posts).to.equal(1)
+    conversation.disposeHallConversation()
+  })
+
   it('cancels an exact durable turn with a canonical state version and is terminal-idempotent', async () => {
     const posts = []
     let requestId
     const conversation = base({ chatApi: {
       get: async path => {
-        if (path === '/capabilities') return { data: { data: capabilityV2 } }
-        return { data: { data: durableRequestView({ requestId, state: 'RUNNING', stateVersion: '0', turns: [durableTurnView({ requestId, turnId: 'turn-a', state: 'QUEUED', stateVersion: '0' })] }) } }
+        if (path === '/capabilities') return ((capabilityV2))
+        return ((durableRequestView({ requestId, state: posts.length ? 'CANCELLED' : 'RUNNING', stateVersion: posts.length ? '1' : '0', turns: [durableTurnView({ requestId, turnId: 'turn-a', state: posts.length ? 'CANCELLED' : 'QUEUED', stateVersion: posts.length ? '1' : '0' })] })))
       },
       create: async (_path, body, options) => {
         requestId = body.requestId
@@ -614,22 +729,50 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
       },
       post: async (path, body) => {
         posts.push({ path, body })
-        return { data: { data: { turnId: 'turn-a', requestId, requestRevision: '1', conversationId: '9007199254740993',
+        return (({ turnId: 'turn-a', requestId, requestRevision: '1', conversationId: '9007199254740993',
           conversationGeneration: '1', targetAgentId: 'a', contextSnapshotId: 'snapshot-a', dispatchId: 'dispatch-a', route: 'CHAT',
           state: 'CANCELLED', stateVersion: '1', lastDeltaSeq: '0', terminalReason: 'user_cancelled', finalMessageId: null,
-          createdAt: '100', updatedAt: '101' } } }
+          createdAt: '100', updatedAt: '101' }))
       }
     } })
     conversation.setDraft('cancel me')
     await conversation.sendHallMessage()
     await Promise.resolve()
     expect(conversation.durableCancelTarget.value).to.deep.equal({ turnId: 'turn-a' })
+    conversation.messages.value.push({ sender: 'AGENT', turnId: 'turn-a', content: 'partial', streaming: true, statusText: '正在回话' })
+    conversation.messages.value.push({ sender: 'AGENT', turnId: 'other-turn', content: 'other', streaming: true })
     expect(await conversation.cancelDeliberation({ turnId: 'turn-a' })).to.equal(true)
-    expect(posts).to.deep.equal([{ path: '/turns/turn-a/cancel', body: { expectedStateVersion: '0' } }])
+    expect(posts).to.deep.equal([{ path: '/turns/turn-a/cancel', body: { expectedStateVersion: '0', expectedLastDeltaSeq: '0' } }])
     expect(conversation.deliberationStatus.value).to.equal('CHAT · 已取消')
+    expect(conversation.messages.value.find(m => m.turnId === 'turn-a')).to.include({ streaming: false, content: 'partial', statusText: '已停止（未完成）' })
+    expect(conversation.messages.value.find(m => m.turnId === 'other-turn').streaming).to.equal(true)
     expect(await conversation.cancelDeliberation({ turnId: 'turn-a' })).to.equal(true)
     expect(posts).to.have.length(1)
     conversation.disposeHallConversation()
+  })
+
+  it('does not resurrect a historical request delta after the current request is cancelled', async () => {
+    let requestId
+    const conversation = base({ chatApi: {
+      get: async path => path === '/capabilities' ? capabilityV2 : durableRequestView({ requestId,
+        state: 'CANCELLED', turns: [durableTurnView({ requestId, turnId: 'turn-a', state: 'CANCELLED' })] }),
+      create: async (_path, body, options) => {
+        requestId = body.requestId
+        options.onStream(JSON.stringify({ agentDelivery: { agentId: 'a', accepted: true, state: 'QUEUED' },
+          conversationId: '9007199254740993', requestId, turnId: 'turn-a' }))
+        conversation.activeRequest.value = { ...conversation.activeRequest.value, requestId, state: 'CANCELLED' }
+        conversation.activeTurns.value = [durableTurnView({ requestId, turnId: 'turn-a', state: 'CANCELLED' })]
+        options.onStream(JSON.stringify({ type: 'agent_message_delta', conversationId: '9007199254740993',
+          requestId: 'historical-request', turnId: 'historical-turn', deltaSeq: '1', content: 'old partial', agentId: 'a' }))
+        options.onStreamEnd()
+      }
+    } })
+    try {
+      conversation.setDraft('recover stopped reply'); await conversation.sendHallMessage(); await flushReadbacks()
+      expect(conversation.messages.value.some(message => message.content === 'old partial')).to.equal(false)
+      expect(conversation.messages.value.some(message => message.streaming)).to.equal(false)
+      expect(conversation.activeRequest.value.requestId).to.equal(requestId)
+    } finally { conversation.disposeHallConversation() }
   })
 
   it('derives group busy from every child and treats FINAL_PERSISTED/PUBLISHED as terminal', () => {
@@ -662,6 +805,22 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     expect(state.turns[0]).to.include({ state: 'FINAL_PERSISTED', stateVersion: '11', route: 'CHAT' })
   })
 
+  it('keeps streamed state version and delta checkpoint atomic for cancellation', () => {
+    let state = { request: { requestId: 'req' }, turns: [{ turnId: 'turn', state: 'QUEUED', stateVersion: '0', lastDeltaSeq: '0' }] }
+    state = reduceDeliberationEvent(state, { type: 'agent_message_delta', requestId: 'req', turnId: 'turn', stateVersion: '587', deltaSeq: '586' })
+    expect(state.turns[0]).to.include({ state: 'STREAMING', stateVersion: '587', lastDeltaSeq: '586' })
+    const before = structuredClone(state)
+    for (const patch of [{ stateVersion: '586', deltaSeq: '585' }, { stateVersion: '587', deltaSeq: '0' }]) {
+      state = reduceDeliberationEvent(state, { type: 'agent_message_delta', requestId: 'req', turnId: 'turn', ...patch })
+      expect(state).to.deep.equal(before)
+    }
+    state = reduceDeliberationEvent(state, { requestId: 'req', turnId: 'turn', state: 'CANCELLED', stateVersion: '590', lastDeltaSeq: '588' })
+    expect(state.turns[0]).to.include({ state: 'CANCELLED', stateVersion: '590', lastDeltaSeq: '588' })
+    const stopped = structuredClone(state)
+    state = reduceDeliberationEvent(state, { type: 'agent_message_delta', requestId: 'req', turnId: 'turn', stateVersion: '591', deltaSeq: '589' })
+    expect(state).to.deep.equal(stopped)
+  })
+
   it('merges replay final into an existing persisted message and removes its placeholder', () => {
     const state = { conversationId: '9007199254740993', messages: [{ localId: 'message-final', sender: 'AGENT', content: 'persisted', streaming: false }], isAwaitingReply: true, isStreaming: true, turnStates: new Map(), manageTurnBusy: true }
     appendHallEventMessage(state, { type: 'agent_message_delta', conversationId: state.conversationId, turnId: 'turn-a', deltaSeq: '1', agentId: 'a', content: 'partial' })
@@ -687,7 +846,9 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     expect(cancellationTarget({ requestId: 'req' }, [{ turnId: 't1', state: 'QUEUED' }])).to.equal(null)
     const panel = readFileSync(new URL('../src/components/juyiting/ChatPanel.vue', import.meta.url), 'utf8')
     const hall = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
-    expect(panel).to.include("$emit('cancel-deliberation', durableCancelTarget)")
+    expect(panel).to.include("$emit('cancel-deliberation', $event)")
+    expect(panel).to.include(':reply-cancellation-state="replyCancellationState"')
+    expect(panel).not.to.include('title="取消待处理回话"')
     expect(hall).to.include('@cancel-deliberation="cancelDeliberation"')
     expect(hall).not.to.include('@cancel-deliberation="cancelDeliberation()"')
     const sendHandler = hall.slice(hall.indexOf('const handleSendHallMessage'), hall.indexOf('const handleMentionAgent'))
@@ -700,26 +861,54 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
 })
 
 describe('Juyi Hall durable SSE recovery', () => {
+  for (const type of ['typed_question_answered', 'delivery_submission_completed']) {
+    it(`commits ${type} cursor for a non-active request without resync replay`, async () => {
+      const originalFetch = global.fetch
+      const requests = []; const hints = []; let contentLoads = 0; let conversation
+      global.fetch = async (_url, options) => {
+        requests.push(options)
+        return new Response(new ReadableStream({ start: controller => controller.enqueue(new TextEncoder().encode(
+          conversationFrame({ type, conversationId: '9007199254740993', eventSequence: '8', requestId: 'request-child', turnId: 'turn-child' }, '8', new Headers(options.headers).get('X-Request-Id')))) }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream', 'X-Request-Id': new Headers(options.headers).get('X-Request-Id') } })
+      }
+      try {
+        conversation = base({
+          apiStore: { authorizationGeneration: 1, token: async () => 'token' },
+          onTypedOutcome: event => hints.push(event.requestId),
+          chatApi: {
+            list: async (_path, _payload, options) => options.onSuccess({ items: [{ id: '9007199254740993', conversationType: 'juyiting', conversationScopeType: 'public', conversationScopeKey: 'public' }], nextCursor: null, hasMore: false }),
+            getById: async (_path, _id, options) => { contentLoads++; options.onSuccess([]) }
+          }
+        })
+        await conversation.loadHallMessages()
+        for (let index = 0; index < 12; index++) await new Promise(resolve => setImmediate(resolve))
+        expect(requests).to.have.length(1)
+        expect(contentLoads).to.equal(1)
+        expect(hints).to.deep.equal(['request-child'])
+      } finally { conversation?.disposeHallConversation(); global.fetch = originalFetch }
+    })
+  }
+
   it('reconnects after a valid resync_required from the committed cursor without a replay storm', async () => {
     const originalFetch = global.fetch
     const requests = []; let contentLoads = 0; let conversation
-    const fixture = new TextEncoder().encode('id: 8\ndata: {"type":"resync_required","eventSequence":"8","turnId":"turn-a"}\n\n')
+    const fixture = requestId => new TextEncoder().encode(conversationFrame({ type: 'resync_required', conversationId: '9007199254740993', eventSequence: '8', turnId: 'turn-a' }, '8', requestId))
     global.fetch = async (_url, options) => {
       requests.push(options)
-      return new Response(new ReadableStream({ start (controller) { controller.enqueue(fixture) } }), { status: 200 })
+      return new Response(new ReadableStream({ start (controller) { controller.enqueue(fixture(new Headers(options.headers).get('X-Request-Id'))) } }), { status: 200, headers: { 'Content-Type': 'text/event-stream', 'X-Request-Id': new Headers(options.headers).get('X-Request-Id') } })
     }
     try {
       conversation = base({
         apiStore: { authorizationGeneration: 1, token: async () => 'token' },
         chatApi: {
-          list: async (_path, _payload, options) => options.onSuccess({ data: [{ id: '9007199254740993', conversationType: 'juyiting', conversationScopeType: 'public', conversationScopeKey: 'public' }] }),
-          getById: async (_path, _id, options) => { contentLoads += 1; options.onSuccess({ data: [] }) }
+          list: async (_path, _payload, options) => options.onSuccess(({ items: [{ id: '9007199254740993', conversationType: 'juyiting', conversationScopeType: 'public', conversationScopeKey: 'public' }], nextCursor: null, hasMore: false })),
+          getById: async (_path, _id, options) => { contentLoads += 1; options.onSuccess(([])) }
         }
       })
       await conversation.loadHallMessages()
       for (let index = 0; index < 12; index += 1) await new Promise(resolve => setImmediate(resolve))
       expect(requests).to.have.length(2)
-      expect(requests[1].headers['Last-Event-ID']).to.equal('8')
+      expect(new Headers(requests[1].headers).get('Last-Event-ID')).to.equal('conversation:9007199254740993:8')
       expect(contentLoads).to.equal(2)
       for (let index = 0; index < 4; index += 1) await new Promise(resolve => setImmediate(resolve))
       expect(requests).to.have.length(2)
@@ -731,87 +920,8 @@ describe('Juyi Hall durable SSE recovery', () => {
   })
 })
 
-describe('Juyi Hall durable SSE parser', () => {
-  const parse = chunks => {
-    const events = []; const cursors = []; const invalid = []
-    const parser = createHallSseParser({ conversationId: '9007199254740993', onEvent: event => { events.push(event); return true }, onCursor: cursor => cursors.push(cursor), onInvalid: reason => invalid.push(reason) })
-    chunks.forEach(chunk => parser.push(chunk)); parser.finish()
-    return { events, cursors, invalid }
-  }
+// Pre-envelope SSE parser suite retired; current malformed/scope/cursor/chunk regressions live in interface-conversation-sse.test.mjs.
 
-  it('injects stream conversationId into API durable payloads that omit it', () => {
-    const result = parse(['id: 1\ndata: {"type":"agent_message_delta","eventSequence":"1","turnId":"t","deltaSeq":"1","content":"x"}\n\n'])
-    expect(result.events[0].conversationId).to.equal('9007199254740993')
-    expect(result.cursors).to.deep.equal(['1'])
-  })
-
-  it('handles CRLF split across chunks and multiline data', () => {
-    const result = parse(['id: 2\r', '\ndata: {"type":"stream_ready",\r\ndata: "cursor":"2"}\r', '\n\r\n'])
-    expect(result.events).to.have.length(1)
-    expect(result.events[0]).to.deep.include({ type: 'stream_ready', cursor: '2' })
-    expect(result.cursors).to.deep.equal(['2'])
-  })
-
-  it('does not advance cursor for invalid JSON', () => {
-    const result = parse(['id: 3\ndata: {invalid}\n\n'])
-    expect(result.events).to.deep.equal([])
-    expect(result.cursors).to.deep.equal([])
-    expect(result.invalid).to.deep.equal(['invalid_json'])
-  })
-
-  it('rejects an explicit conversation conflict without advancing cursor', () => {
-    const result = parse(['id: 4\ndata: {"type":"agent_message_delta","conversationId":"9007199254740994","eventSequence":"4","turnId":"t","deltaSeq":"1","content":"x"}\n\n'])
-    expect(result.events).to.deep.equal([])
-    expect(result.cursors).to.deep.equal([])
-    expect(result.invalid).to.deep.equal(['conversation_conflict'])
-  })
-
-  it('rejects a cursor that conflicts with the SSE id', () => {
-    const result = parse(['id: 4\ndata: {"type":"stream_ready","cursor":"5"}\n\n'])
-    expect(result.cursors).to.deep.equal([])
-    expect(result.invalid).to.deep.equal(['cursor_conflict'])
-  })
-
-
-  it('commits a valid resync_required cursor before scheduling one authoritative replay', () => {
-    let cursor = '7'; const resyncs = []; const headers = []
-    const connect = fixture => {
-      headers.push(cursor ? { 'Last-Event-ID': cursor } : {})
-      let pending = ''
-      const parser = createHallSseParser({
-        conversationId: '9007199254740993',
-        onEvent: (event, candidate) => {
-          if (event.type === 'resync_required') pending = candidate && BigInt(candidate) > BigInt(cursor) ? candidate : ''
-          return true
-        },
-        onCursor: next => { cursor = next },
-        onCommitted: (event, committed) => { if (event.type === 'resync_required' && pending === committed) resyncs.push(committed) }
-      })
-      parser.push(fixture); parser.finish()
-    }
-    const fixture = 'id: 8\ndata: {"type":"resync_required","eventSequence":"8","turnId":"turn-a"}\n\n'
-    connect(fixture)
-    connect(fixture)
-    expect(resyncs).to.deep.equal(['8'])
-    expect(headers).to.deep.equal([{ 'Last-Event-ID': '7' }, { 'Last-Event-ID': '8' }])
-  })
-
-  it('rejects non-canonical cursor and Long event fields without advancing cursor', () => {
-    const numeric = parse(['id: 6\ndata: {"type":"agent_message_delta","eventSequence":6,"turnId":"t","deltaSeq":"1","content":"x"}\n\n'])
-    expect(numeric.cursors).to.deep.equal([])
-    expect(numeric.invalid).to.deep.equal(['invalid_event_sequence'])
-    const overflow = parse(['id: 9223372036854775808\ndata: {"type":"stream_ready","cursor":"9223372036854775808"}\n\n'])
-    expect(overflow.cursors).to.deep.equal([])
-    expect(overflow.invalid).to.deep.equal(['invalid_event_id'])
-  })
-
-  it('rejects conflicting id and eventSequence without advancing cursor', () => {
-    const result = parse(['id: 4\ndata: {"type":"agent_message_delta","eventSequence":"5","turnId":"t","deltaSeq":"1","content":"x"}\n\n'])
-    expect(result.events).to.deep.equal([])
-    expect(result.cursors).to.deep.equal([])
-    expect(result.invalid).to.deep.equal(['event_sequence_conflict'])
-  })
-})
 
 // The transport deliberately remains pending after business completion. These tests
 // exercise the real composable rather than a mock that equates EOF with completion.
@@ -823,19 +933,19 @@ describe('HALL-ROUND-WEB-20261011 request-scoped closeout', () => {
     const posts = []; const views = new Map(); const reads = []; let contentReads = 0
     const conversation = base({ context, apiStore, outgoingMetadata, onFinalReply, chatApi: {
       get: async path => {
-        if (path === '/capabilities') return { data: capabilityV2 }
+        if (path === '/capabilities') return (capabilityV2)
         const requestId = decodeURIComponent(path.slice('/requests/'.length))
         reads.push(requestId)
         const view = views.get(requestId)
         if (view instanceof Error) throw view
-        return { data: view }
+        return (view)
       },
-      list: async (_path, _params, options) => options.onSuccess({ data: [{ id, conversationType: 'juyiting',
-        conversationScopeType: context.value.conversationScopeType, conversationScopeKey: context.value.conversationScopeKey }] }),
+      list: async (_path, _params, options) => options.onSuccess(({ items: [{ id, conversationType: 'juyiting',
+        conversationScopeType: context.value.conversationScopeType, conversationScopeKey: context.value.conversationScopeKey }], nextCursor: null, hasMore: false })),
       getById: async (_path, conversationId, options) => {
         contentReads++
         if (contentGet) return contentGet(conversationId, options, conversation)
-        options.onSuccess({ data: [] })
+        options.onSuccess(([]))
       },
       create: (_path, body, options) => {
         const transport = deferred()
@@ -1004,7 +1114,7 @@ describe('HALL-ROUND-WEB-20261011 request-scoped closeout', () => {
         metadata.value = { libraryCitationId: 'second' }
         secondSending = conversation.sendHallMessage({ content: 'second from recovery' })
       }
-      options.onSuccess({ data: [{ id: '91', senderType: 'agent', content: 'first body' }] })
+      options.onSuccess(([{ id: '91', senderType: 'agent', content: 'first body' }]))
     } })
     try {
       const first = await h.send()
@@ -1048,7 +1158,7 @@ describe('HALL-ROUND-WEB-20261011 request-scoped closeout', () => {
   it('releases the business gate while missing final body recovery fails, then reuses history GET on refresh', async () => {
     let fail = true; const h = harness({ contentGet: (_id, options) => {
       if (fail) throw new Error('history unavailable')
-      options.onSuccess({ data: [{ id: '91', senderType: 'agent', content: 'persisted body' }] })
+      options.onSuccess(([{ id: '91', senderType: 'agent', content: 'persisted body' }]))
     } })
     try {
       const { post, sending } = await h.send()
@@ -1122,7 +1232,7 @@ describe('HALL-ROUND-WEB-20261011 request-scoped closeout', () => {
     let eventSignal; let eventCancels = 0; let fetches = 0
     global.fetch = async (_url, options) => {
       fetches++; eventSignal = options.signal
-      return new Response(new ReadableStream({ cancel: () => { eventCancels++ } }), { status: 200 })
+      return new Response(new ReadableStream({ cancel: () => { eventCancels++ } }), { status: 200, headers: { 'Content-Type': 'text/event-stream', 'X-Request-Id': new Headers(options.headers).get('X-Request-Id') } })
     }
     const h = harness({ apiStore: { authorizationGeneration: 1, token: async () => 'test-token' } })
     try {

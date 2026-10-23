@@ -36,6 +36,7 @@
 </template>
 
 <script setup>
+import { createChatStreamDecoder } from '../../utils/chatStreamWire.js'
 import { marked } from 'marked'
 import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -46,6 +47,7 @@ import { useAgentStore } from '../../stores/agent'
 import { useI18n } from 'vue-i18n'
 import { chatApi, phraseApi } from '../../composables/useHttp'
 import { log } from '../../utils/logger'
+import { createHallSseParser } from '../../composables/juyiting/hallConversationSse.js'
 import { fetchChatConversationEvents } from '../../utils/authenticatedSse.js'
 import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
 import { combineAbortSignals } from '../../utils/abortSignals.js'
@@ -269,20 +271,14 @@ const startConversationEventStream = async () => {
 
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
-    let buffer = ''
+    const parser = createHallSseParser({ conversationId: id, requestId: response.headers.get('X-Request-Id'),
+      onEvent: event => { if (event.type !== 'stream_ready') appendConversationEventMessage(event); return true },
+      onInvalid: () => { throw new Error('Invalid conversation event') } })
     while (true) {
       const { done, value } = await reader.read()
-      if (done || chatDisposed || generation !== chatLifecycleGeneration) break
-      buffer += decoder.decode(value, { stream: true })
-      let eventEndIndex
-      while ((eventEndIndex = buffer.indexOf('\n')) !== -1) {
-        const line = buffer.substring(0, eventEndIndex).trim()
-        buffer = buffer.substring(eventEndIndex + 1)
-        if (!line.startsWith('data:')) continue
-        const payload = line.slice(5).trim()
-        if (!payload) continue
-        appendConversationEventMessage(JSON.parse(payload))
-      }
+      if (chatDisposed || generation !== chatLifecycleGeneration) break
+      if (done) { parser.push(decoder.decode()); parser.finish(); break }
+      parser.push(decoder.decode(value, { stream: true }))
     }
   } catch (error) {
     if (error.name !== 'AbortError' && !chatDisposed && generation === chatLifecycleGeneration) {
@@ -334,9 +330,9 @@ const loadRandomPhrase = async (generation = chatLifecycleGeneration) => {
       signal: chatLifecycleController.signal,
       onSuccess: (data) => {
         if (chatDisposed || generation !== chatLifecycleGeneration) return
-        if (data && data.data) {
-          randomPhrase.value = data.data.content
-          void phraseApi.getById('/read', data.data.id, { signal: chatLifecycleController.signal })
+        if (data) {
+          randomPhrase.value = data.content
+          void phraseApi.post('/read', null, { params: { id: data.id }, signal: chatLifecycleController.signal })
             .catch(error => {
               if (error?.name !== 'AbortError' && !chatDisposed && generation === chatLifecycleGeneration) {
                 log.warn('记录随机短语读取失败:', error)
@@ -374,8 +370,8 @@ const loadConversations = async () => {
       signal: chatLifecycleController.signal,
       onSuccess: (data) => {
         if (chatDisposed || generation !== chatLifecycleGeneration) return
-        if (data && data.data) {
-          conversations.value = data.data.map(conv => ({
+        if (data) {
+          conversations.value = data.items.map(conv => ({
             id: conv.id.toString(),
             title: conv.title || '新会话',
             lastUpdated: conv.updateTime,
@@ -411,7 +407,7 @@ const loadConversation = async (id) => {
       signal: chatLifecycleController.signal,
       onSuccess: (data) => {
         if (chatDisposed || generation !== chatLifecycleGeneration) return
-        const msgList = data?.data || []
+        const msgList = data || []
         messages.value = msgList.map(msg => normalizeLoadedMessage(msg, id))
         scrollToBottom()
         startConversationEventStream()
@@ -462,85 +458,51 @@ const updateBotMessage = async (content) => {
   scrollToBottom()
 }
 
-const processBotResponse = (eventData) => {
-  log.debug('Received event data:', eventData)
-
-  // 处理多种可能的数据格式
-  let payload = ''
-
-  // 如果是SSE格式 (data: {...})
-  if (eventData.startsWith('data:')) {
-    for (const line of eventData.split(/\n/)) {
-      if (line.startsWith('data:')) {
-        payload += line.slice(5).trim() + '\n'
-      }
+const processBotResponse = (data) => {
+  if (data.v) {
+    updateBotMessage(data.v)
+  } else if (data.agentDelivery) {
+    if (data.agentDelivery.delivered === false) {
+      messages.value = [
+        ...messages.value,
+        {
+          sender: 'SYSTEM',
+          content: '当前未连接可回话的 Agent，请稍后再试',
+          isError: true,
+          timestamp: new Date().getTime(),
+          senderType: 'system'
+        }
+      ]
     }
-  } else {
-    // 如果不是SSE格式，直接使用原始数据
-    payload = eventData
-  }
-
-  payload = payload.trim()
-
-  if (payload === '[DONE]' || payload === '[EOM]' || !payload) {
-    log.debug('Stream completed or empty payload')
-    return
-  }
-
-  try {
-    // 尝试解析为JSON
-    const data = JSON.parse(payload)
-    if (data.v) {
-      updateBotMessage(data.v)
-    } else if (data.agentDelivery) {
-      if (data.agentDelivery.delivered === false) {
-        messages.value = [
-          ...messages.value,
-          {
-            sender: 'SYSTEM',
-            content: '当前未连接可回话的 Agent，请稍后再试',
-            isError: true,
-            timestamp: new Date().getTime(),
-            senderType: 'system'
-          }
-        ]
-      }
-    } else if (data.conversationId) {
-      const nextConversationId = data.conversationId?.toString() || ''
-      const shouldReconnect = isJuyiting.value && nextConversationId && nextConversationId !== conversationId.value?.toString()
-      conversationId.value = nextConversationId
-      if (shouldReconnect) {
-        startConversationEventStream()
-        loadConversations()
-      }
-    } else if (data.t) {
-      globalStore.setTitle(data.t)
+  } else if (data.conversationId) {
+    const nextConversationId = data.conversationId?.toString() || ''
+    const shouldReconnect = isJuyiting.value && nextConversationId && nextConversationId !== conversationId.value?.toString()
+    conversationId.value = nextConversationId
+    if (shouldReconnect) {
+      startConversationEventStream()
       loadConversations()
-    } else if (data.senderType && data.content) {
-      // 处理带 sender 元数据的消息（聚义厅 agent 消息等）
-      const sender = senderForMessage(data)
-      const { isSelf, senderName } = senderNameForMessage(data, sender, globalStore.getJiacn)
-      const msg = {
-        sender,
-        content: data.content,
-        timestamp: new Date().getTime(),
-        localId: `${data.messageId || `${data.senderType || 'msg'}-${data.timestamp || Date.now()}`}`,
-        senderType: data.senderType,
-        senderName,
-        senderAvatar: data.senderAvatar || '',
-        jiacn: data.jiacn,
-        ownerJiacn: data.ownerJiacn,
-        isSelf
-      }
-      messages.value.push(msg)
-      scrollToBottom()
-    } else {
-      log.debug('No message content found in JSON:', data)
     }
-  } catch {
-    log.debug('Not JSON, treating as plain text:', payload)
-    // 如果不是JSON，直接作为文本显示
-    updateBotMessage(payload)
+  } else if (data.t) {
+    globalStore.setTitle(data.t)
+    loadConversations()
+  } else if (data.senderType && data.content) {
+    // 处理带 sender 元数据的消息（聚义厅 agent 消息等）
+    const sender = senderForMessage(data)
+    const { isSelf, senderName } = senderNameForMessage(data, sender, globalStore.getJiacn)
+    const msg = {
+      sender,
+      content: data.content,
+      timestamp: new Date().getTime(),
+      localId: `${data.messageId || `${data.senderType || 'msg'}-${data.timestamp || Date.now()}`}`,
+      senderType: data.senderType,
+      senderName,
+      senderAvatar: data.senderAvatar || '',
+      jiacn: data.jiacn,
+      ownerJiacn: data.ownerJiacn,
+      isSelf
+    }
+    messages.value.push(msg)
+    scrollToBottom()
   }
 }
 
@@ -548,6 +510,8 @@ const processBotResponse = (eventData) => {
 const sendMessage = async (message) => {
   if (chatDisposed || !message || isLoading.value) return
   const generation = chatLifecycleGeneration
+  let streamRequestId
+  const streamDecoder = createChatStreamDecoder()
 
   isLoading.value = true
   isStreaming.value = true
@@ -585,7 +549,8 @@ const sendMessage = async (message) => {
       autoLoading: false,
       timeout: 1800000,
       signal: streamSignal.signal,
-      onStreamOpen: handle => {
+      onStreamOpen: (handle, response) => {
+        streamRequestId = response.headers.get('x-request-id')
         if (chatDisposed || generation !== chatLifecycleGeneration) {
           handle.cancel?.(new DOMException('Stale Chat stream', 'AbortError'))
           return
@@ -595,10 +560,12 @@ const sendMessage = async (message) => {
       onStream: eventData => {
         if (chatDisposed || generation !== chatLifecycleGeneration) return
         log.debug('Stream data received:', eventData)
-        processBotResponse(eventData)
+        const data = streamDecoder.accept(eventData, streamRequestId)
+        if (data) processBotResponse(data)
       },
       onStreamEnd: () => {
         if (chatDisposed || generation !== chatLifecycleGeneration) return
+        streamDecoder.finish()
         log.debug('Stream ended')
         isStreaming.value = false
         isLoading.value = false

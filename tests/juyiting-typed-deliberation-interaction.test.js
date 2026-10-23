@@ -1,14 +1,15 @@
+import { displayFixture } from './fixtures/juyiting/interface-display-fixture.mjs'
 import { expect } from 'chai'
 import { ref } from 'vue'
 import { readFileSync } from 'node:fs'
 import { useHallTypedDeliberation } from '../src/composables/juyiting/useHallTypedDeliberation.js'
 
-const clarify = requestId => ({ schemaVersion: 1, conversationId: '7', conversationGeneration: '1', requestId, requestRevision: '1', turnId: `turn-${requestId}`, state: 'READY', outcome: {
-  outcomeId: `outcome-${requestId}`, taskId: 'task-1', assignmentRevision: '4', assistantMessageId: '101', finalDigest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', kind: 'CLARIFY', text: '请补充颜色', clarification: { pendingQuestionId: `pending-${requestId}`, state: 'OPEN', stateVersion: '0', question: '请补充颜色', requiredFacts: ['REQUIREMENT_DETAILS'], replyRequestId: null }, proposal: null } })
-const proposal = requestId => ({ schemaVersion: 1, conversationId: '7', conversationGeneration: '1', requestId, requestRevision: '1', turnId: `turn-${requestId}`, state: 'READY', outcome: {
-  outcomeId: `outcome-${requestId}`, taskId: 'task-1', assignmentRevision: '4', assistantMessageId: '102', finalDigest: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', kind: 'EXECUTION_PROPOSAL', text: '可生成蓝鸟', clarification: null, proposal: { proposalId: `proposal-${requestId}`, state: 'PROPOSED', stateVersion: '0', operation: 'GENERATE_IMAGE', instruction: '画一只蓝色小鸟', sourceRefIds: [], sourceSelectors: [], parent: null } } })
+const clarify = requestId => ({ schemaVersion: 6, submissionProgress: null, reviewProgress: null, route: 'CHAT', inspection: null, actionProgress: null, conversationId: '7', conversationGeneration: '1', requestId, requestRevision: '1', turnId: `turn-${requestId}`, state: 'READY', outcome: { outcomeContractVersion: 1, revision: null, action: null, deliverable: null, messageSource: null, deliveryRelation: null,
+  outcomeId: `outcome-${requestId}`, taskId: 'task-1', assignmentRevision: '4', assistantMessageId: '101', finalSha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', kind: 'CLARIFY', text: '请补充颜色', clarification: { pendingQuestionId: `pending-${requestId}`, state: 'OPEN', stateVersion: '0', question: '请补充颜色', requiredFacts: ['REQUIREMENT_DETAILS'], replyRequestId: null }, proposal: null } })
+const proposal = requestId => ({ schemaVersion: 6, submissionProgress: null, reviewProgress: null, route: 'CHAT', inspection: null, actionProgress: null, conversationId: '7', conversationGeneration: '1', requestId, requestRevision: '1', turnId: `turn-${requestId}`, state: 'READY', outcome: { outcomeContractVersion: 1, revision: null, action: null, deliverable: null, messageSource: null, deliveryRelation: null,
+  outcomeId: `outcome-${requestId}`, taskId: 'task-1', assignmentRevision: '4', assistantMessageId: '102', finalSha256: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', kind: 'EXECUTION_PROPOSAL', text: '可生成蓝鸟', clarification: null, proposal: { proposalId: `proposal-${requestId}`, state: 'PROPOSED', stateVersion: '0', operation: 'GENERATE_IMAGE', instruction: '画一只蓝色小鸟', sourceRefIds: [], sourceSelectors: [], parent: null } } })
 const store = () => { const values = new Map(); return { getItem: key => values.get(key) || null, setItem: (key, value) => values.set(key, value) } }
-const receipt = (intent, requestId, pendingQuestionId = null) => ({ schemaVersion: 2, intent, requestId, userMessageId: '100', turnIds: [`turn-${requestId}`], state: 'ADMITTED', stateVersion: '0', eventCursor: '9007199254740993', statusUrl: `/chat/requests/${requestId}`, typedOutcomeUrl: `/chat/conversations/7/requests/${requestId}/typed-outcome`, replay: false, pendingQuestionId })
+const receipt = (intent, requestId, pendingQuestionId = null) => ({ schemaVersion: 3, intent, requestId, userMessageId: '100', turnIds: [`turn-${requestId}`], state: 'ADMITTED', stateVersion: '0', eventCursor: '9007199254740993', statusUrl: `/chat/requests/${requestId}`, typedOutcomeUrl: `/chat/conversations/7/requests/${requestId}/typed-outcome`, replay: false, pendingQuestionId })
 const originalCrypto = Object.getOwnPropertyDescriptor(globalThis, 'crypto')
 const restoreCrypto = () => {
   if (originalCrypto) Object.defineProperty(globalThis, 'crypto', originalCrypto)
@@ -17,10 +18,24 @@ const restoreCrypto = () => {
 describe('typed natural discussion interaction adapter', () => {
   beforeEach(() => { Object.defineProperty(globalThis, 'crypto', { configurable: true, writable: true, value: { randomUUID: () => '00000000-0000-4000-8000-000000000001' } }) })
   afterEach(restoreCrypto)
+  it('reports failed authoritative GETs until recovered, but ordinary CHAT 404 is not a failure', async () => {
+    let status = 503
+    const lane = useHallTypedDeliberation({ chatApi: { get: async () => { if (status) throw Object.assign(new Error('offline'), { status }); return clarify('request-1') } },
+      actorScopeKey: ref('owner'), authorizationGeneration: ref(1), enabled: () => true,
+      getContext: () => ({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }),
+      getCatalogEntries: () => [{ request: { requestId: 'request-1', turns: [{ route: 'CHAT' }] } }] })
+    try {
+      expect(await lane.refresh()).to.equal(false)
+      status = 0; expect(await lane.refresh()).to.equal(true)
+      expect(lane.projections.value).to.have.length(1)
+      status = 404; expect(await lane.refresh()).to.equal(true)
+      status = undefined; expect(await lane.refresh()).to.equal(true)
+    } finally { lane.dispose() }
+  })
   it('new discussion does not manufacture a legacy catalog preparation round', async () => {
     for (const prepared of [false, true]) {
       const calls = []
-      const lane = useHallTypedDeliberation({ chatApi: { get: async () => { calls.push('typed'); return { data: { data: clarify('request-1') } } },
+      const lane = useHallTypedDeliberation({ chatApi: { get: async () => { calls.push('typed'); return clarify('request-1') },
         create: async () => { calls.push('POST'); throw new Error('unknown ACK') } },
       actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => ({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }),
       getContextGeneration: () => 1, getCatalogEntries: () => [{ request: { requestId: 'request-1', turns: [{ route: 'CHAT' }], steps: [] } }],
@@ -42,7 +57,7 @@ describe('typed natural discussion interaction adapter', () => {
   it('send preparation joins an existing typed refresh instead of treating it as a failed read', async () => {
     let resolveFirst; let reads = 0; const posts = []
     const lane = useHallTypedDeliberation({ chatApi: {
-      get: async () => ++reads === 1 ? await new Promise(resolve => { resolveFirst = resolve }) : { data: { data: clarify('request-1') } },
+      get: async () => ++reads === 1 ? await new Promise(resolve => { resolveFirst = resolve }) : clarify('request-1'),
       create: async (_path, body) => { posts.push(body); throw new Error('unknown ACK') }
     }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1),
     getContext: () => ({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }),
@@ -50,7 +65,7 @@ describe('typed natural discussion interaction adapter', () => {
     prepareCatalog: async () => true, storage: store(), enabled: () => true })
     try {
       const reading = lane.refresh(); const sending = lane.submit({ content: '继续需求' }); await Promise.resolve()
-      resolveFirst({ data: { data: clarify('request-1') } })
+      resolveFirst(clarify('request-1'))
       expect(await reading).to.equal(true); await sending
       expect(posts).to.have.length(1)
     } finally { lane.dispose() }
@@ -81,13 +96,13 @@ describe('typed natural discussion interaction adapter', () => {
   })
   it('posts exact DISCUSSION then only reads the typed projection; selected OPEN reply posts a new CHAT CAS body', async () => {
     const calls = []; const context = ref({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' })
-    const api = { create: async (path, body, options) => { calls.push(['POST', path, body, options.headers['Idempotency-Key']]); return { data: { data: receipt(body.intent, body.intent === 'DISCUSSION' ? 'request-1' : 'request-2', body.pendingQuestionId) } } },
-      get: async path => { calls.push(['GET', path]); return { data: { data: path.includes('request-1') ? clarify('request-1') : clarify('request-2') } } } }
+    const api = { create: async (path, body, options) => { calls.push(['POST', path, body, options.headers['Idempotency-Key']]); return receipt(body.intent, body.intent === 'DISCUSSION' ? 'request-1' : 'request-2', body.pendingQuestionId) },
+      get: async path => { calls.push(['GET', path]); return path.includes('request-1') ? clarify('request-1') : clarify('request-2') } }
     const lane = useHallTypedDeliberation({ chatApi: api, actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context.value, getContextGeneration: () => 1,
       getCatalogEntries: () => [], storage: store(), enabled: () => true })
     expect(await lane.submit({ content: '请先问我需要补充什么。' })).to.equal(true)
     expect(calls[0][1]).to.equal('/conversations/7/interactions/discussion')
-    expect(calls[0][2]).to.deep.include({ schemaVersion: 2, materialScope: 'TASK_DEFAULT', intent: 'DISCUSSION', parentOutcomeId: null, pendingQuestionId: null })
+    expect(calls[0][2]).to.deep.include({ schemaVersion: 3, materialScope: 'TASK_DEFAULT', intent: 'DISCUSSION', parentOutcomeId: null, pendingQuestionId: null })
     expect(calls.filter(call => call[0] === 'POST')).to.have.length(1)
     expect(lane.cards.value).to.have.length(1)
     expect(lane.choosePending(lane.projections.value[0])).to.equal(true)
@@ -98,7 +113,7 @@ describe('typed natural discussion interaction adapter', () => {
   })
   it('reads a historical proposal but cannot route its confirmation to a retired v3 writer', async () => {
     const context = ref({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }); const proposals = []
-    const lane = useHallTypedDeliberation({ chatApi: { get: async () => ({ data: { data: proposal('request-3') } }) }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1),
+    const lane = useHallTypedDeliberation({ chatApi: { get: async () => (proposal('request-3')) }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1),
       getContext: () => context.value, getContextGeneration: () => 1, getCatalogEntries: () => [{ request: { requestId: 'request-3' } }], storage: store(), enabled: () => true,
       onProposal: value => { proposals.push(value); return true } })
     expect(await lane.refresh()).to.equal(true)
@@ -114,8 +129,8 @@ describe('typed natural discussion interaction adapter', () => {
     const lane = useHallTypedDeliberation({ chatApi: { create: async (_path, body, options) => {
       calls.push({ body, key: options.headers['Idempotency-Key'] }); attempts++
       if (attempts === 1) throw new Error('ack lost')
-      return { data: { data: receipt(body.intent, 'request-9') } }
-    }, get: async () => ({ data: { data: clarify('request-9') } }) },
+      return receipt(body.intent, 'request-9')
+    }, get: async () => (clarify('request-9')) },
     actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context.value, getContextGeneration: () => 1, getCatalogEntries: () => [], storage: store(), enabled: () => true })
     try {
       expect(await lane.submit({ content: '' })).to.equal(false)
@@ -133,7 +148,7 @@ describe('typed natural discussion interaction adapter', () => {
   })
   it('persists an unknown original key and only re-POSTs that same key after explicit resume', async () => {
     const context = ref({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }); const keys = []; let attempts = 0
-    const lane = useHallTypedDeliberation({ chatApi: { create: async (_path, body, options) => { keys.push(options.headers['Idempotency-Key']); attempts++; if (attempts === 1) throw new Error('ack lost'); return { data: { data: receipt(body.intent, 'request-9') } } }, get: async () => ({ data: { data: clarify('request-9') } }) },
+    const lane = useHallTypedDeliberation({ chatApi: { create: async (_path, body, options) => { keys.push(options.headers['Idempotency-Key']); attempts++; if (attempts === 1) throw new Error('ack lost'); return receipt(body.intent, 'request-9') }, get: async () => (clarify('request-9')) },
       actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context.value, getContextGeneration: () => 1, getCatalogEntries: () => [], storage: store(), enabled: () => true })
     expect(await lane.submit({ content: '请继续讨论。' })).to.equal(false)
     expect(lane.recoveryAvailable.value).to.equal(true)
@@ -148,16 +163,16 @@ describe('typed natural discussion interaction adapter', () => {
     const lane = useHallTypedDeliberation({ chatApi: { get: () => new Promise(done => { resolve = done }), create: async () => { posts++; throw new Error('unexpected') } }, actorScopeKey: identity, authorizationGeneration: ref(1),
       getContext: () => context.value, getContextGeneration: () => 1, getCatalogEntries: () => [], storage: store(), enabled: () => true })
     const pending = lane.readOne('request-1'); identity.value = 'owner-b'; context.value = { ...context.value, targetAgentId: 'agent-b' }
-    resolve({ data: { data: clarify('request-1') } })
+    resolve(clarify('request-1'))
     expect(await pending).to.equal(null); expect(lane.cards.value).to.deep.equal([]); expect(posts).to.equal(0)
     lane.dispose()
   })
 
   it('keeps a selected OPEN clarification across the same-version poll and sends its original CAS reply; version drift still clears it', async () => {
     const context = ref({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }); const calls = []
-    const open = clarify('request-poll'); const sameOpen = JSON.parse(JSON.stringify(open)); const changedOpen = JSON.parse(JSON.stringify(open)); changedOpen.outcome.clarification.stateVersion = '1'
+    const open = clarify('request-poll'); const sameOpen = JSON.parse(JSON.stringify(open)); const changedOpen = JSON.parse(JSON.stringify(open)); Object.assign(changedOpen.outcome.clarification, { state: 'ANSWERED', stateVersion: '1', replyRequestId: 'reply' })
     const reads = [open, sameOpen, clarify('request-reply')]
-    const lane = useHallTypedDeliberation({ chatApi: { get: async () => ({ data: { data: reads.shift() } }), create: async (_path, body) => { calls.push(body); return { data: { data: receipt(body.intent, 'request-reply', body.pendingQuestionId) } } } },
+    const lane = useHallTypedDeliberation({ chatApi: { get: async () => (reads.shift()), create: async (_path, body) => { calls.push(body); return receipt(body.intent, 'request-reply', body.pendingQuestionId) } },
       actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context.value, getContextGeneration: () => 1, getCatalogEntries: () => [], storage: store(), enabled: () => true })
     expect(await lane.readOne('request-poll')).to.not.equal(null)
     expect(lane.choosePending(lane.projections.value[0])).to.equal(true)
@@ -179,7 +194,7 @@ describe('typed natural discussion interaction adapter', () => {
     const stale = JSON.parse(JSON.stringify(open)); const historical = JSON.parse(JSON.stringify(answered)); historical.requestId = 'request-historical'; historical.turnId = 'turn-request-historical'; historical.outcome.outcomeId = 'outcome-request-historical'; historical.outcome.assignmentRevision = '1'
     const foreign = JSON.parse(JSON.stringify(answered)); foreign.requestId = 'request-foreign'; foreign.turnId = 'turn-request-foreign'; foreign.outcome.outcomeId = 'outcome-request-foreign'; foreign.outcome.taskId = 'task-foreign'
     const replies = [open, answered, stale, historical, foreign]
-    const lane = useHallTypedDeliberation({ chatApi: { get: async () => ({ data: { data: replies.shift() } }) }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1),
+    const lane = useHallTypedDeliberation({ chatApi: { get: async () => (replies.shift()) }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1),
       getContext: () => context.value, getContextGeneration: () => 1, getCatalogEntries: () => [], storage: store(), enabled: () => true })
     expect(await lane.readOne('request-monotone')).to.not.equal(null)
     expect(lane.choosePending(lane.projections.value[0])).to.equal(true)
@@ -197,7 +212,7 @@ describe('typed natural discussion interaction adapter', () => {
 
   it('reacts to an UNKNOWN persisted original and retains GET-only recovery until explicit original-key resume', async () => {
     const storage = store(); const context = ref({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }); let posts = 0; let gets = 0
-    const lane = useHallTypedDeliberation({ chatApi: { create: async () => { posts++; throw new Error('lost') }, get: async () => { gets++; return { data: { data: clarify('request-never') } } } },
+    const lane = useHallTypedDeliberation({ chatApi: { create: async () => { posts++; throw new Error('lost') }, get: async () => { gets++; return clarify('request-never') } },
       actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context.value, getContextGeneration: () => 1, getCatalogEntries: () => [], storage, enabled: () => true })
     expect(lane.recoveryAvailable.value).to.equal(false)
     expect(await lane.submit({ content: '先记录这次讨论。' })).to.equal(false)
@@ -225,12 +240,12 @@ describe('typed inspection interaction adapter', () => {
       body: { schemaVersion: 1, intent: 'DISCUSSION', taskId: 'task-1', expectedAssignmentRevision: '4', content: '查阅', sourceSelectors: [] } }]))
     const lane = useHallTypedDeliberation({ chatApi: { get: async () => { calls.push('GET'); throw Object.assign(new Error('absent'), { status: 404 }) }, create: async () => calls.push('POST') },
       actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context, getContextGeneration: () => 1, getCatalogEntries: () => [], storage: memory, enabled: () => true })
-    try { expect(await lane.recover()).to.equal(true); expect(await lane.resumeUnknown()).to.equal(false); expect(calls).to.deep.equal(['GET']) } finally { lane.dispose() }
+    try { expect(await lane.recover()).to.equal(true); expect(await lane.resumeUnknown()).to.equal(false); expect(calls).to.deep.equal([]) } finally { lane.dispose() }
   })
   it('discovers INSPECT from the existing request catalog and does not force that request through CHAT', async () => {
     const calls = []; const context = ref({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' })
-    const pending = { schemaVersion: 2, contract: 'juyiting-typed-inspection-v1', conversationId: '7', conversationGeneration: '1', requestId: 'request-catalog-inspect', requestRevision: '1', turnId: 'turn-catalog-inspect', state: 'PENDING', outcome: null, inspection: { authorizationId: 'inspection-1', manifestDigest: `sha256:${'a'.repeat(64)}`, sourceRefIds: ['source-1'], inputSummary: null } }
-    const lane = useHallTypedDeliberation({ chatApi: { get: async path => { calls.push(path); return { data: { data: pending } } } }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context.value, getContextGeneration: () => 1,
+    const pending = { schemaVersion: 6, submissionProgress: null, reviewProgress: null, route: 'INSPECT', actionProgress: null, conversationId: '7', conversationGeneration: '1', requestId: 'request-catalog-inspect', requestRevision: '1', turnId: 'turn-catalog-inspect', state: 'PENDING', outcome: null, inspection: { authorizationId: 'inspection-1', manifestSha256: `${'a'.repeat(64)}`, sourceRefIds: ['source-1'], inputSummary: null } }
+    const lane = useHallTypedDeliberation({ chatApi: { get: async path => { calls.push(path); return pending } }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context.value, getContextGeneration: () => 1,
       getCatalogEntries: () => [{ request: { requestId: 'request-catalog-inspect', turns: [{ route: 'INSPECT' }] } }], storage: store(), enabled: () => true })
     expect(await lane.refresh()).to.equal(true)
     expect(calls).to.deep.equal(['/conversations/7/requests/request-catalog-inspect/inspection-outcome'])
@@ -238,9 +253,9 @@ describe('typed inspection interaction adapter', () => {
   })
   it('lets an inspection clarification continue as explicit CHAT when the user does not select another inspection', async () => {
     const calls = []; const context = ref({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' })
-    const inspectionClarify = { ...clarify('request-inspect-clarify'), schemaVersion: 2, contract: 'juyiting-typed-inspection-v1', inspection: { authorizationId: 'inspection-1', manifestDigest: `sha256:${'a'.repeat(64)}`, sourceRefIds: ['source-1'], inputSummary: { inputDigest: `sha256:${'b'.repeat(64)}`, sources: [{ sourceRefId: 'source-1', sha256: 'c'.repeat(64), byteLength: '1', carrier: 'DIRECT_TEXT', contributionDigest: `sha256:${'d'.repeat(64)}` }] } } }
+    const inspectionClarify = { ...clarify('request-inspect-clarify'), schemaVersion: 6, submissionProgress: null, reviewProgress: null, route: 'INSPECT', inspection: { authorizationId: 'inspection-1', manifestSha256: `${'a'.repeat(64)}`, sourceRefIds: ['source-1'], inputSummary: { inputSha256: `${'b'.repeat(64)}`, sources: [{ sourceRefId: 'source-1', sha256: 'c'.repeat(64), byteLength: '1', carrier: 'DIRECT_TEXT', contributionSha256: `${'d'.repeat(64)}` }] } } }
     const chatAdmission = receipt('CLARIFICATION_REPLY', 'request-chat-reply', 'pending-request-inspect-clarify')
-    const lane = useHallTypedDeliberation({ chatApi: { get: async () => ({ data: { data: inspectionClarify } }), create: async (path, body) => { calls.push([path, body]); return { data: { data: chatAdmission } } } }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context.value, getContextGeneration: () => 1, getCatalogEntries: () => [], storage: store(), enabled: () => true })
+    const lane = useHallTypedDeliberation({ chatApi: { get: async () => (inspectionClarify), create: async (path, body) => { calls.push([path, body]); return chatAdmission } }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context.value, getContextGeneration: () => 1, getCatalogEntries: () => [], storage: store(), enabled: () => true })
     expect(await lane.readOne('request-inspect-clarify', undefined, 'INSPECT')).to.not.equal(null)
     expect(lane.choosePending(lane.projections.value[0])).to.equal(true)
     expect(await lane.submit({ content: '只补充文字，不再查阅。' })).to.equal(true)
@@ -251,20 +266,20 @@ describe('typed inspection interaction adapter', () => {
 })
 
 describe('explicit text follow-up admission basis', () => {
-  const raw = () => JSON.parse(readFileSync(new URL('./fixtures/juyiting/completed-message-delivery-v3.json', import.meta.url), 'utf8'))
+  const raw = () => displayFixture(JSON.parse(readFileSync(new URL('./fixtures/juyiting/completed-message-delivery-v3.json', import.meta.url), 'utf8')))
   const value = (id, deliverable = true) => {
     const item = raw(); item.requestId = id; item.turnId = `turn-${id}`; item.outcome.outcomeId = `outcome-${id}`
     item.outcome.deliverable = deliverable
     if (deliverable) item.outcome.messageSource.turnId = item.turnId
-    else delete item.outcome.messageSource
+    else item.outcome.messageSource = null
     return item
   }
   it('binds the terminal causal text parent rather than a newer greeting and freezes original unknown body', async () => {
     const one = value('one'); const two = value('two'); const greeting = value('greeting', false)
-    two.outcome.deliveryRelation = { mode: 'APPEND', parentOutcomeId: one.outcome.outcomeId, parentFinalDigest: one.outcome.finalDigest }
+    two.outcome.deliveryRelation = { mode: 'APPEND', parentOutcomeId: one.outcome.outcomeId, parentFinalSha256: one.outcome.finalSha256, targetOutcomeId: null, targetFinalSha256: null }
     const values = [two, greeting, one]; const calls = []
     const context = ref({ conversationId: '42', conversationGeneration: '1', taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' })
-    const lane = useHallTypedDeliberation({ chatApi: { get: async path => ({ data: { data: values.find(v => path.includes(`/requests/${v.requestId}/`)) } }),
+    const lane = useHallTypedDeliberation({ chatApi: { get: async path => (values.find(v => path.includes(`/requests/${v.requestId}/`))),
       create: async (_path, body, options) => { calls.push({ body, key: options.headers['Idempotency-Key'] }); throw new Error('unknown ACK') } },
     actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context.value, getContextGeneration: () => 1,
     getCatalogEntries: () => values.map(v => ({ request: { requestId: v.requestId, steps: [] } })), storage: store(), enabled: () => true })
@@ -281,7 +296,7 @@ describe('explicit text follow-up admission basis', () => {
       const values = [value('one'), value('two')]; const calls = []
       if (mode === 'unresolved') values[1] = { ...values[1], state: 'PENDING', outcome: null }
       if (mode === 'media') values.splice(1)
-      const lane = useHallTypedDeliberation({ chatApi: { get: async path => ({ data: { data: values.find(v => path.includes(`/requests/${v.requestId}/`)) } }),
+      const lane = useHallTypedDeliberation({ chatApi: { get: async path => (values.find(v => path.includes(`/requests/${v.requestId}/`))),
         create: async (_path, body) => { calls.push(body); throw new Error('unknown ACK') } }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1),
       getContext: () => ({ conversationId: '42', conversationGeneration: '1', taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' }), getContextGeneration: () => 1,
       getCatalogEntries: () => values.map(v => ({ request: { requestId: v.requestId, steps: mode === 'media' ? [{ kind: 'EXECUTE' }] : [] } })), storage: store(), enabled: () => true })
@@ -296,19 +311,20 @@ describe('explicit text follow-up admission basis', () => {
 describe('clarified text original-CAS recovery', () => {
   it('freezes the immediate question CAS while the resulting delivery still targets the original text', async () => {
     const group = JSON.parse(readFileSync(new URL('./fixtures/juyiting/clarified-text-delivery-v3.json', import.meta.url), 'utf8'))[1]
+    group.initial = displayFixture(group.initial); group.updated = displayFixture(group.updated); group.clarifications = group.clarifications.map(displayFixture)
     // Emulate the earlier OPEN read; the exported actual final read has already answered this question.
     const open = structuredClone(group.clarifications.at(-1))
     Object.assign(open.outcome.clarification, { state: 'OPEN', stateVersion: '0', replyRequestId: null })
     const context = { conversationId: '42', conversationGeneration: '1', taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' }
     const storage = store(); const posts = []; let attempt = 0
-    const api = { get: async path => ({ data: { data: path.includes(`/requests/${group.initial.requestId}/`) ? group.initial :
-      path.includes(`/requests/${group.updated.requestId}/`) ? group.updated : open } }), create: async (_path, body, options) => {
+    const api = { get: async path => (path.includes(`/requests/${group.initial.requestId}/`) ? group.initial :
+      path.includes(`/requests/${group.updated.requestId}/`) ? group.updated : open), create: async (_path, body, options) => {
       posts.push(structuredClone({ body, key: options.headers['Idempotency-Key'] }))
       if (++attempt === 1) throw new Error('lost clarification receipt')
-      return { data: { data: { schemaVersion: 2, intent: 'CLARIFICATION_REPLY', requestId: group.updated.requestId,
+      return { schemaVersion: 3, intent: 'CLARIFICATION_REPLY', requestId: group.updated.requestId,
         userMessageId: '10', turnIds: [group.updated.turnId], state: 'ADMITTED', stateVersion: '0', eventCursor: '1',
         statusUrl: `/chat/requests/${group.updated.requestId}`, typedOutcomeUrl: `/chat/conversations/42/requests/${group.updated.requestId}/typed-outcome`,
-        replay: true, pendingQuestionId: group.admissionFacts.pendingQuestionId } } }
+        replay: true, pendingQuestionId: group.admissionFacts.pendingQuestionId }
     } }
     const makeLane = () => useHallTypedDeliberation({ chatApi: api, actorScopeKey: ref('owner-clarified'), authorizationGeneration: ref(1),
       getContext: () => context, getContextGeneration: () => 1, getCatalogEntries: () => [], storage, enabled: () => true })
@@ -334,7 +350,7 @@ describe('discussion-v2 effective materials replace browser history inference', 
   const context = () => ({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' })
   const asset = { kind: 'CURRENT_CONVERSATION_ASSET', assetId: 'asset-original', assetRevision: '1' }
   const workspace = { kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'file-pdf', version: '7', purpose: 'INPUT' }
-  const result = { kind: 'EXECUTION_RESULT', executionId: 'pwe-analysis', resultDigest: 'a'.repeat(64) }
+  const result = { kind: 'EXECUTION_RESULT', executionId: 'pwe-analysis', resultSha256: 'a'.repeat(64) }
   const harness = ({ catalog = [], memory = store(), identity = ref('owner'), authorization = ref(1), create, get } = {}) => {
     const calls = []; const current = ref(context())
     const api = { get: async path => { calls.push(['GET', path]); if (get) return get(path); throw new Error('No history reads during new admission') },
@@ -347,7 +363,7 @@ describe('discussion-v2 effective materials replace browser history inference', 
     const h = harness()
     try { await h.lane.submit({ content: '描述结果', materialScope }); expect(h.calls).to.have.length(1)
       expect(h.calls[0][1]).to.equal('/conversations/7/interactions/discussion')
-      expect(h.calls[0][2]).to.include({ schemaVersion: 2, materialScope, parentOutcomeId: null }); expect(h.calls[0][2].sourceSelectors).to.deep.equal([])
+      expect(h.calls[0][2]).to.include({ schemaVersion: 3, materialScope, parentOutcomeId: null }); expect(h.calls[0][2].sourceSelectors).to.deep.equal([])
     } finally { h.lane.dispose() }
   })
   for (const source of [asset, workspace, result]) it(`carries exact explicit ${source.kind} without a fabricated producer/replaces`, async () => {
@@ -365,7 +381,7 @@ describe('discussion-v2 effective materials replace browser history inference', 
     const h = harness({ catalog: [{ request: { requestId: 'one', steps: [{ kind: 'EXECUTE' }] } }, { request: { requestId: 'two', steps: [{ kind: 'EXECUTE' }] } }] })
     try { await h.lane.submit({ content: '改图' }); expect(h.calls[0][2].parentOutcomeId).to.equal(null); expect(h.calls[0][2].sourceSelectors).to.deep.equal([]) } finally { h.lane.dispose() }
   })
-  for (const source of [{ ...asset, producerExecutionId: 'fake' }, { ...asset, replaces: 'fake' }, { ...workspace, assetId: null, assetRevision: null }, { ...result, resultDigest: 'wrong' }])
+  for (const source of [{ ...asset, producerExecutionId: 'fake' }, { ...asset, replaces: 'fake' }, { ...workspace, assetId: null, assetRevision: null }, { ...result, resultSha256: 'wrong' }])
     it(`rejects malformed or invented ${JSON.stringify(source)} before POST`, async () => {
       const h = harness(); try { expect(await h.lane.submit({ content: '使用资料', materialScope: 'EXPLICIT', sourceSelectors: [source] })).to.equal(false); expect(h.calls).to.deep.equal([]) } finally { h.lane.dispose() }
     })
@@ -389,7 +405,7 @@ describe('discussion-v2 effective materials replace browser history inference', 
     try { const pending = h.lane.submit({ content: '需求', materialScope: 'EXPLICIT', sourceSelectors: [asset] }); await Promise.resolve()
       expect(await h.lane.submit({ content: 'duplicate' })).to.equal(false)
       if (mode === 'owner') h.identity.value = 'owner-b'; else if (mode === 'authorization') h.authorization.value++; else h.current.value = { ...h.current.value, assignmentRevision: '5' }
-      resolve({ data: { data: receipt('DISCUSSION', 'late') } }); expect(await pending).to.equal(false); expect(h.lane.projections.value).to.deep.equal([]); expect(h.calls).to.have.length(1)
+      resolve(receipt('DISCUSSION', 'late')); expect(await pending).to.equal(false); expect(h.lane.projections.value).to.deep.equal([]); expect(h.calls).to.have.length(1)
     } finally { h.lane.dispose() }
   })
 })

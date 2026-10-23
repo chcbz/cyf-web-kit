@@ -3,7 +3,7 @@ import { exactOutputId, outputRequestPending } from './bountyOutputCatalog.js'
 import { exactHallConversationId } from './hallConversationHistory.js'
 import { useHallBountyRequestCatalog } from './useHallBountyRequestCatalog.js'
 
-const unwrap = value => value?.data?.data ?? value?.data ?? value
+const unwrap = value => value?.items
 /** Read existing owner/task scoped sources only. Never choose the latest conversation,
  * create/point/send, or convert a legacy formal delivery into a conversation output. */
 export function useHallBountyAcceptance ({ api, taskId, identityKey, conversationId = () => '', enabled = () => true, taskCompleted = () => false, stateVersion = () => '' }) {
@@ -46,7 +46,7 @@ export function useHallBountyAcceptance ({ api, taskId, identityKey, conversatio
         // the existing paginated history, never replaced by a newer conversation.
         const pageSize = wanted ? 100 : 2
         let callbackResult
-        const response = await api.list('/conversation/list', { pageNum, pageSize,
+        const response = await api.list('/conversation/list', { pageNum: pageNum, pageSize: pageSize,
           orderBy: 'id asc', search: { conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: `task:${taskId()}` } },
         { autoLoading: false, needAuth: true, signal, onSuccess: value => { callbackResult = value } })
         if (!valid(captured)) return false

@@ -169,7 +169,7 @@ describe('direct SSE authentication boundary', () => {
             controller.enqueue(new TextEncoder().encode('data: ok\n\n'))
             controller.close()
           }
-        }), { status: 200 })
+        }), { status: 200, headers: { 'Content-Type': 'text/event-stream', 'X-Request-Id': new Headers(options.headers).get('X-Request-Id') } })
       }
     })
     await response.text()
@@ -186,9 +186,9 @@ describe('direct SSE authentication boundary', () => {
         apiStore: { authorizationGeneration: 3, token: async () => 'token' },
         url: 'https://api.example/events',
         signal: caller.signal,
-        fetchImpl: async () => new Response(new ReadableStream({
+        fetchImpl: async (_url, options) => new Response(new ReadableStream({
           cancel (reason) { cancelReason = reason; cancelCount += 1 }
-        }), { status: 200 })
+        }), { status: 200, headers: { 'Content-Type': 'text/event-stream', 'X-Request-Id': new Headers(options.headers).get('X-Request-Id') } })
       })
 
       expect(response.status).to.equal(200)
@@ -216,7 +216,7 @@ describe('direct SSE authentication boundary', () => {
       '\nconst stopStream = async () => {'
     )
     expect(stream).to.include('signal: streamSignal.signal')
-    expect(stream).to.include('onStreamOpen: handle =>')
+    expect(stream).to.include('onStreamOpen: (handle, response) =>')
     expect(stream).to.include('readerRef.value = handle')
     expect(stream).to.match(/AbortError[\s\S]*?generation !== chatLifecycleGeneration/)
   })
@@ -234,13 +234,16 @@ describe('direct SSE authentication boundary', () => {
     const response = await fetchChatConversationEvents({
       apiStore,
       url: 'https://api.example/events',
-      fetchImpl: async () => new Response(new ReadableStream({
+      fetchImpl: async (_url, config) => new Response(new ReadableStream({
         start (controller) {
           source = controller
           controller.enqueue(new TextEncoder().encode('data: old\n\n'))
         },
         cancel () { cancelled = true }
-      }), { status: 200 })
+      }), { status: 200, headers: {
+        'Content-Type': 'text/event-stream',
+        'X-Request-Id': new Headers(config.headers).get('X-Request-Id')
+      } })
     })
     const reader = response.body.getReader()
     expect(new TextDecoder().decode((await reader.read()).value)).to.equal('data: old\n\n')

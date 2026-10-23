@@ -23,6 +23,12 @@ describe('repository npm test bootstrap', () => {
   beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'cyf-ci-unit-')) })
   afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
+  it('uses the same fixed Node release for developer and asset CI tooling', async () => {
+    expect((await readFile(join(root, '.nvmrc'), 'utf8')).trim()).to.equal('24.22.1')
+    expect(PINS.node.sha256).to.equal('6c172a9ab6718f7b801fb5a7bd486af2ee5e32758086a04b84fcce2aa77095e6')
+    expect(PINS.node.urls.every(url => url.endsWith('/v24.22.1/node-v24.22.1-linux-x64.tar.xz'))).to.equal(true)
+  })
+
   it('does not cache extracted runtimes and removes only restored old run directories', async () => {
     const cache = join(dir, 'cache'), scratch = join(dir, 'scratch')
     await mkdir(join(cache, 'run-Ab1234'), { recursive: true })
@@ -69,7 +75,7 @@ describe('repository npm test bootstrap', () => {
   it('runs release CI with fresh reports but without Chrome, DNF or E14 preparation', async () => {
     const runtime = await fixture()
     const calls = []
-    const code = await runTests({ prepareWork: async () => runtime.work, repo: dir, env: { PIPELINE_ID: '4403172' }, node: '/pinned/node20',
+    const code = await runTests({ prepareWork: async () => runtime.work, repo: dir, env: { PIPELINE_ID: '4403172' }, node: '/pinned/node24',
       prepare: () => { throw new Error('release must not prepare asset runtime') }, log: () => {},
       execute: async (command, args) => {
         calls.push({ command, args })
@@ -79,7 +85,7 @@ describe('repository npm test bootstrap', () => {
       } })
     expect(code).to.equal(0)
     expect(calls).to.have.length(1)
-    expect(calls[0].command).to.equal('/pinned/node20')
+    expect(calls[0].command).to.equal('/pinned/node24')
     const profile = JSON.parse(await readFile(join(dir, 'mochawesome-report/ci-profile.json'), 'utf8'))
     expect(profile.profile).to.equal('release')
     expect(profile.separateAssetTests).to.have.length(16)
@@ -263,7 +269,7 @@ describe('repository npm test bootstrap', () => {
       await writeFile(join(dir, config), await readFile(join(root, config)))
     }
     await mkdir(join(dir, 'runtime'))
-    return { node: '/pinned/node20', env: { CI: 'true', E14_REQUIRE_REPORT: '1', MOCHAWESOME_CONSOLEREPORTER: 'dot' }, work: join(dir, 'runtime'), browser }
+    return { node: '/pinned/node24', env: { CI: 'true', E14_REQUIRE_REPORT: '1', MOCHAWESOME_CONSOLEREPORTER: 'dot' }, work: join(dir, 'runtime'), browser }
   }
 
   it('backs up prior reports and logs full failed E14 evidence before stopping without Mocha', async () => {

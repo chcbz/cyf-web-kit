@@ -1,3 +1,4 @@
+import { currentHttpResponse } from './fixtures/current-http-response.js'
 import { expect } from 'chai'
 import { ref } from 'vue'
 import { readFileSync } from 'node:fs'
@@ -8,7 +9,7 @@ import { identityCleanupHandlerCount, stopIdentityBoundWork } from '../src/utils
 import { hostingPersona, hostingQuote, hostingReceipt, hostingLookup, activeHostingLookup,
   freeReprovisionReceipt, memoryHostingStorage } from './hosting-rent-fixtures.js'
 
-const ok = data => ({ data: { code: 'E0', data } })
+const ok = data => data
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done }); return { resolve, promise } }
 const rents = []
 const harness = (overrides = {}) => {
@@ -18,7 +19,7 @@ const harness = (overrides = {}) => {
   let key = 0
   const rent = useHostingRent({ enabled: true, storage, now: () => 2000,
     createKey: () => `00000000-0000-4000-8000-${String(++key).padStart(12, '0')}`,
-    loadCapability: async () => ({ economyPreviewEnabled: true, principalScopeFingerprint: 'opaque-scope-a' }),
+    loadCapability: async () => ({ economyPreviewEnabled: true, principalScopeSha256: 'ab8c2a4766fc37cf16c5c7265178df250d479c2edda51374bc08dda8818f25b8' }),
     economyApi: { get: async (url, params, options) => { requests.push({ url, params, options }); return ok({ currency: 'SILVER', availableMicro: '9999999999', heldMicro: '0' }) }, create: async (url, body, options) => { requests.push({ url, body, options }); return ok({ transactionId: 'etx-welcome', status: 'POSTED', amountMicro: '1000000000', campaignRef: 'hosting-welcome-v1' }) } },
     agentApi: {
       create: async (url, body, options) => { requests.push({ url, body, options }); return ok(url.endsWith('/quotes') ? hostingQuote() : hostingReceipt()) },
@@ -168,7 +169,7 @@ describe('hosting rent frozen HTTP integration', () => {
       create: async (url, body, options) => {
         requests.push({ url, body, key: options.headers['Idempotency-Key'] })
         if (url.endsWith('/renewal-quotes')) return ok(hostingQuote({ purpose: 'RENEWAL', leaseId: 'hl-1', expectedLeaseVersion: '9007199254740993' }))
-        lookup = activeHostingLookup({ lease: { version: '9007199254740994', paidThrough: '345601000' }, intent: { intentId: 'hi-renew', version: '1' } })
+        lookup = activeHostingLookup({ lease: { version: '9007199254740994', paidThrough: 345601000 }, intent: { intentId: 'hi-renew', version: '1' } })
         return ok(hostingReceipt({ status: 'ACTIVE', intentId: 'hi-renew', transactionId: 'tx-renew' }))
       }
     } })
@@ -182,7 +183,7 @@ describe('hosting rent frozen HTTP integration', () => {
     expect(requests[1].body).to.deep.equal({ agentId: 'agt_server_proposal', quoteId: 'hq-1', expectedLeaseVersion: '9007199254740993',
       expectedPlanVersion: '7', expectedAmountMicro: '1234500000', expectedPeriodSeconds: '172800' })
     expect(h.rent.state.value.lookup.lease.version).to.equal('9007199254740994')
-    expect(h.rent.state.value.lookup.lease.paidThrough).to.equal('345601000')
+    expect(h.rent.state.value.lookup.lease.paidThrough).to.equal(345601000)
   })
 
   it('rejects a quote after lease version changes, and ignores later older snapshots', async () => {
@@ -210,7 +211,7 @@ describe('hosting rent frozen HTTP integration', () => {
       get: async () => ok(lookup),
       create: async (url, body) => {
         requests.push({ url, body })
-        lookup = activeHostingLookup({ lease: { version: '4' }, reprovision: { requestId: 'hr-1', version: '1', status: 'ACCEPTED', requestedAt: '2000', serviceReadyAt: null } })
+        lookup = activeHostingLookup({ lease: { version: '4' }, reprovision: { requestId: 'hr-1', version: '1', status: 'ACCEPTED', requestedAt: 2000, serviceReadyAt: null } })
         return ok(freeReprovisionReceipt())
       }
     } })
@@ -219,14 +220,14 @@ describe('hosting rent frozen HTTP integration', () => {
     expect(requests).to.deep.equal([{ url: '/personas/linchong/bind', body: { mode: 'server', hostingAction: 'REPROVISION',
       agentId: 'agt_server_proposal', leaseId: 'hl-1', expectedLeaseVersion: '3' } }])
     expect(h.rent.state.value.accepted.receipt.amountMicro).to.equal('0')
-    expect(h.rent.state.value.lookup.lease.paidThrough).to.equal('172801000')
+    expect(h.rent.state.value.lookup.lease.paidThrough).to.equal(172801000)
     expect(h.rent.canReprovision.value).to.equal(false)
     expect(await h.rent.reprovision()).to.equal(false)
     expect(requests).to.have.length(1)
   })
 
   it('expired leases offer manual renewal but never free reprovision; refunds remain canonical', async () => {
-    let lookup = activeHostingLookup({ admission: 'RENEWAL_REQUIRED', lease: { paidThrough: '2000' } })
+    let lookup = activeHostingLookup({ admission: 'RENEWAL_REQUIRED', lease: { paidThrough: 2000 } })
     const h = harness({ agentApi: { get: async () => ok(lookup) } })
     await h.rent.open(owned())
     expect(h.rent.canRenew.value).to.equal(true)
@@ -281,7 +282,7 @@ describe('hosting rent frozen HTTP integration', () => {
     }
     const first = harness({ storage, agentApi: api })
     await first.rent.open(owned()); await first.rent.previewRenewal(); await first.rent.confirmQuote()
-    lookup = activeHostingLookup({ lease: { version: '4', paidThrough: '345601000' }, intent: { intentId: 'hi-renew', version: '1' } })
+    lookup = activeHostingLookup({ lease: { version: '4', paidThrough: 345601000 }, intent: { intentId: 'hi-renew', version: '1' } })
     await first.rent.refresh()
     first.rent.dispose()
     const resumed = harness({ storage, agentApi: api })
@@ -300,7 +301,7 @@ describe('hosting rent frozen HTTP integration', () => {
     } } })
     await first.rent.open(first.persona); await first.rent.previewInitial(); await first.rent.confirmQuote()
     first.rent.dispose()
-    const next = harness({ storage, loadCapability: async () => ({ economyPreviewEnabled: true, principalScopeFingerprint: 'opaque-scope-b' }) })
+    const next = harness({ storage, loadCapability: async () => ({ economyPreviewEnabled: true, principalScopeSha256: '49b9b49e51700178777846f51eeb232189094ee6b284f0160067d0ac6bbdb768' }) })
     await next.rent.open(next.persona)
     expect(next.rent.state.value.operation).to.equal(null)
     expect(await next.rent.retryUnknown()).to.equal(false)
@@ -315,7 +316,7 @@ describe('hosting rent frozen HTTP integration', () => {
     const pending = h.rent.open(h.persona)
     h.rent.dispose()
     expect(firstSignal.aborted).to.equal(true)
-    waiting.resolve({ economyPreviewEnabled: true, principalScopeFingerprint: 'old' })
+    waiting.resolve({ economyPreviewEnabled: true, principalScopeSha256: 'cba06b5736faf67e54b07b561eae94395e774c517a7d910a54369e1263ccfbd4' })
     expect(await pending).to.equal(false)
     expect(h.requests).to.have.length(0)
     expect(identityCleanupHandlerCount()).to.equal(baseline)
@@ -323,11 +324,11 @@ describe('hosting rent frozen HTTP integration', () => {
     let first = true
     const switched = harness({ loadCapability: async () => {
       if (first) { first = false; return delayed.promise }
-      return { economyPreviewEnabled: true, principalScopeFingerprint: 'new' }
+      return { economyPreviewEnabled: true, principalScopeSha256: '11507a0e2f5e69d5dfa40a62a1bd7b6ee57e6bcd85c67c9b8431b36fff21c437' }
     } })
     const old = switched.rent.open(switched.persona)
     await switched.rent.open(hostingPersona({ personaCode: 'wuyong' }))
-    delayed.resolve({ economyPreviewEnabled: true, principalScopeFingerprint: 'old' })
+    delayed.resolve({ economyPreviewEnabled: true, principalScopeSha256: 'cba06b5736faf67e54b07b561eae94395e774c517a7d910a54369e1263ccfbd4' })
     expect(await old).to.equal(false)
     expect(switched.rent.target.value.personaCode).to.equal('wuyong')
     stopIdentityBoundWork()
@@ -344,12 +345,11 @@ describe('hosting rent frozen HTTP integration', () => {
       const originalFetch = globalThis.fetch
       const requests = []
       globalThis.fetch = async (url, options) => {
-        const body = options.body ? JSON.parse(options.body) : null
+        const body = options.body ? JSON.parse(options.body).data : null
         requests.push({ url, method: options.method, body })
         const failed = url.endsWith('/bind')
         const data = url.endsWith('/wallet') ? { currency: 'SILVER', availableMicro: '9999999999', heldMicro: '0' } : hostingQuote()
-        return new Response(JSON.stringify(failed ? { code: failure.code, msg: 'frozen rejection' } : { code: 'E0', data }),
-          { status: failed ? failure.status : 200, headers: { 'Content-Type': 'application/json' } })
+        return currentHttpResponse(options, failed ? { code: failure.code, msg: 'frozen rejection' } : { code: 'E0', data }, { status: failed ? failure.status : 200, headers: { 'Content-Type': 'application/json' } })
       }
       try {
         const authStore = { authorizationGeneration: 1, token: async () => 'test-only-token' }
@@ -373,10 +373,10 @@ describe('hosting rent frozen HTTP integration', () => {
     const originalFetch = globalThis.fetch
     const requests = []
     globalThis.fetch = async (url, options) => {
-      requests.push({ url, method: options.method, body: options.body ? JSON.parse(options.body) : null, key: options.headers['Idempotency-Key'] })
+      requests.push({ url, method: options.method, body: options.body ? JSON.parse(options.body).data : null, key: options.headers['Idempotency-Key'] })
       const data = url.endsWith('/wallet') ? { currency: 'SILVER', availableMicro: '9999999999', heldMicro: '0' } :
         url.endsWith('/quotes') ? hostingQuote() : url.endsWith('/bind') ? hostingReceipt() : hostingLookup()
-      return new Response(JSON.stringify({ code: 'E0', data }), { status: url.endsWith('/bind') ? 202 : 200, headers: { 'Content-Type': 'application/json' } })
+      return currentHttpResponse(options, { code: 'E0', data }, { status: url.endsWith('/bind') ? 202 : 200, headers: { 'Content-Type': 'application/json' } })
     }
     try {
       const authStore = { authorizationGeneration: 1, token: async () => 'test-only-token' }
@@ -397,7 +397,7 @@ describe('hosting rent frozen HTTP integration', () => {
     } finally { globalThis.fetch = originalFetch }
   })
 
-  for (const mismatch of [{ agentId: 'other' }, { quoteId: 'other' }, { status: 'ACTIVE' }, { amountMicro: '1' }, { occurredAt: 1000 }]) {
+  for (const mismatch of [{ agentId: 'other' }, { quoteId: 'other' }, { status: 'ACTIVE' }, { amountMicro: '1' }, { occurredAt: '1000' }]) {
     it(`does not accept mismatched immutable receipt ${JSON.stringify(mismatch)}`, async () => {
       let reads = 0
       const h = harness({ agentApi: {
@@ -426,9 +426,9 @@ describe('hosting rent frozen HTTP integration', () => {
   it('keeps local/default bind rent-free, and refuses legacy server bind before making a request', async () => {
     const requests = []
     const data = useHallData({ agentApi: {
-      post: async (url, body, options) => { requests.push({ url, body }); options.onSuccess({ data: { mode: 'local', agentId: 'local-agent' } }) },
-      get: async (_url, _params, options) => options.onSuccess?.({ data: [] }),
-      search: async (_url, _params, options) => options.onSuccess?.({ data: [] })
+      post: async (url, body, options) => { requests.push({ url, body }); options.onSuccess(({ mode: 'local', agentId: 'local-agent' })) },
+      get: async (_url, _params, options) => options.onSuccess?.([]),
+      search: async (_url, _params, options) => options.onSuccess?.({ items: [], pageNum: 1, pageSize: 100, total: "0" })
     }, selectedAgent: ref(null), selectedTask: ref(null), log: { warn: () => {} }, normalizeStatus: value => value, taskAgentMatchScore: () => 0 })
     expect((await data.bindPersona(hostingPersona())).mode).to.equal('local')
     expect((await data.bindPersona(hostingPersona(), 'local')).mode).to.equal('local')

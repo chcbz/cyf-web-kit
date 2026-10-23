@@ -1,6 +1,6 @@
 <template>
-  <div class="agent-panel">
-    <div class="panel-toolbar">
+  <div class="agent-panel" :class="{ 'is-compact-roster': isCompactRoster, 'is-agent-detail': canGoBack }">
+    <div v-show="!canGoBack" class="panel-toolbar">
       <div class="status-filter">
         <button
           v-for="item in statusFilters"
@@ -18,13 +18,20 @@
     <p v-else-if="errorMessage" class="panel-data-state is-error" role="alert">{{ errorMessage }}</p>
 
     <div class="agent-panel-body">
-      <div class="agent-list">
+      <div
+        v-show="listVisible"
+        ref="listRef"
+        class="agent-list"
+        :inert="!listVisible ? '' : null"
+        :aria-hidden="!listVisible ? 'true' : null"
+      >
         <button
           v-for="agent in filteredAgents"
           :key="agent.agentId"
           class="agent-row"
           :class="{ active: selectedAgent?.agentId === agent.agentId }"
-          @click="$emit('select-agent', agent)"
+          :data-agent-id="agent.agentId"
+          @click="openAgent(agent)"
         >
           <span
             class="mini-avatar portrait-avatar"
@@ -33,28 +40,94 @@
           ></span>
           <span>
             <strong>{{ agent.name || agent.personaName || agent.agentId }}</strong>
-            <small>{{ portraitName(agent) }} / {{ agent.currentTaskTitle || abilityText(agent) }}</small>
+            <small>{{ portraitName(agent) }} / {{ agent.currentTaskTitle || abilityText(displayAgent(agent)) }}</small>
           </span>
           <em :class="statusClass(agent.status)">{{ statusText(agent.status) }}</em>
         </button>
       </div>
 
-      <div class="detail-card">
+      <div
+        v-show="detailVisible"
+        class="detail-card"
+        :inert="!detailVisible ? '' : null"
+        :aria-hidden="!detailVisible ? 'true' : null"
+      >
         <template v-if="selectedAgent">
-          <div class="detail-head">
-            <span
-              class="large-avatar portrait-avatar"
-              :style="portraitStyle(selectedAgent, { highRes: true })"
-              :title="portraitName(selectedAgent)"
-            ></span>
-            <div>
-              <strong>{{ selectedAgent.name || selectedAgent.personaName }}</strong>
-              <small>{{ portraitName(selectedAgent) }} / {{ selectedAgent.agentId }}</small>
+          <div class="agent-detail-scroll">
+            <div class="detail-head">
+              <span
+                class="large-avatar portrait-avatar"
+                :style="portraitStyle(selectedAgent)"
+                :title="portraitName(selectedAgent)"
+              ></span>
+              <div>
+                <strong ref="detailTitleRef" tabindex="-1">{{ selectedAgent.name || selectedAgent.personaName || selectedAgent.agentId }}</strong>
+                <small>{{ portraitName(selectedAgent) }} / {{ selectedAgent.agentId }}</small>
+              </div>
             </div>
-          </div>
-          <div class="ability-tags">
-            <span v-for="ability in selectedAgent.abilities || []" :key="ability">{{ ability }}</span>
-            <span v-if="!(selectedAgent.abilities || []).length">未录本领</span>
+            <div v-if="canManagePolicy" class="external-policy" aria-label="接外单设置">
+              <div class="external-policy-row">
+                <span>允许其他用户委派任务</span>
+                <button
+                  v-if="externalPolicy"
+                  type="button"
+                  role="switch"
+                  :aria-checked="externalPolicy.enabled"
+                  aria-describedby="external-policy-hint"
+                  :disabled="!externalPolicyCanWrite"
+                  @click="$emit('set-external-policy', !externalPolicy.enabled)"
+                >
+                  {{ externalPolicy.enabled ? '已开启' : '已关闭' }}
+                </button>
+                <span v-else role="status">{{ externalPolicyBusy ? '正在核对…' : '设置不可用' }}</span>
+              </div>
+              <p id="external-policy-hint" class="profile-note">面向同平台所有用户；关闭不影响已接任务，不要求当前在线。</p>
+              <p v-if="externalPolicyError" class="profile-error" role="alert">{{ externalPolicyError }}</p>
+              <p v-if="externalPolicyStatus === 'UNKNOWN'" role="status">原修改结果未知，暂不能另开修改。</p>
+              <div v-if="externalPolicyStatus === 'UNKNOWN'" class="external-policy-recovery">
+                <button type="button" :disabled="externalPolicyBusy" @click="$emit('check-external-policy')">查询原操作</button>
+                <button type="button" :disabled="externalPolicyBusy" @click="$emit('resume-external-policy')">以原键继续</button>
+              </div>
+              <button
+                v-else-if="externalPolicyStatus === 'UNAVAILABLE'"
+                type="button"
+                :disabled="externalPolicyBusy"
+                @click="$emit('refresh-external-policy')"
+              >重查设置</button>
+            </div>
+            <section class="profile-section" aria-label="技能">
+              <div class="profile-heading"><h3>技能</h3><small v-if="profile?.skills.status === 'AVAILABLE'">已核验安装 {{ installedCount }} 项</small></div>
+              <p v-if="!canReadProfile" role="status">仅拥有者可查看技能</p>
+              <p v-else-if="profileCapabilitiesLoading" role="status">正在核对技能…</p>
+              <p v-else-if="profileCapabilitiesError" class="profile-error" role="status">{{ profileCapabilitiesError }}</p>
+              <p v-else-if="profile?.skills.status === 'UNAVAILABLE'" class="profile-error" role="status">技能读取失败，可重试</p>
+              <template v-else-if="profile?.skills.status === 'AVAILABLE'">
+                <p v-if="!profile.skills.items.length">暂无已登记技能</p>
+                <div v-for="skill in profile.skills.items" :key="JSON.stringify([skill.skillKey, skill.skillVersion])" class="skill-item">
+                  <div class="skill-title"><strong>{{ skill.title }}</strong><small>{{ skill.skillVersion }}</small></div>
+                  <div class="skill-states">
+                    <span>{{ skill.installationVerified ? '已核验安装' : '安装未核验' }}</span>
+                    <span :class="{ 'is-ready': skill.runtimeState === 'RUNTIME_READY' }">{{ skill.runtimeState === 'RUNTIME_READY' ? '运行就绪' : profileReasonText(skill.reasonCode) }}</span>
+                  </div>
+                </div>
+              </template>
+              <p v-else role="status">技能资料尚未读取</p>
+              <p class="profile-note">运行就绪不代表当前任务已获执行授权。</p>
+            </section>
+            <section class="profile-section" aria-label="本领">
+              <div class="profile-heading"><h3>本领</h3><small>{{ profile ? '最近读取记录' : '上次记录' }}</small></div>
+              <div class="ability-tags">
+                <span v-for="ability in displayedAbilities" :key="ability">{{ ability }}</span>
+                <span v-if="!displayedAbilities.length">未录本领</span>
+              </div>
+              <p class="profile-note">本领记录，不等同于已安装技能。</p>
+            </section>
+            <div v-if="canReadProfile" class="profile-refresh">
+              <button type="button" :disabled="profileCapabilitiesLoading" @click="$emit('refresh-profile-capabilities')">{{ profileCapabilitiesLoading ? '正在刷新…' : '刷新技能与本领' }}</button>
+              <small v-if="profile" role="status">最近读取 {{ new Date(profile.observedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }) }}</small>
+            </div>
+            <p v-if="canReadProfile" class="profile-note">只刷新当前好汉详情；读取最新已上报记录，不触发重新扫描或重注册。</p>
+            <p v-if="selectedAgent.errorMessage || selectedAgent.currentTaskTitle" class="profile-note">{{ selectedAgent.errorMessage || selectedAgent.currentTaskTitle }}</p>
           </div>
           <div class="agent-detail-actions">
             <button
@@ -70,7 +143,6 @@
               @click="$emit('point-and-deliberate', selectedAgent)"
             >{{ pointAndStartBusy ? '正在点将…' : '点将并议事' }}</button>
           </div>
-          <p>{{ selectedAgent.errorMessage || selectedAgent.currentTaskTitle || '正在厅中候令，可从悬赏榜点将。' }}</p>
         </template>
         <p v-else>点一位厅中好汉，查看动静、本领与所领榜文。</p>
       </div>
@@ -79,7 +151,21 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+
+const props = defineProps({
+  active: { type: Boolean, default: true },
+  identityKey: { type: String, default: '' },
+  panelSessionKey: { type: Number, default: 0 },
+  externalPolicy: { type: Object, default: null },
+  externalPolicyStatus: { type: String, default: 'IDLE' },
+  externalPolicyBusy: { type: Boolean, default: false },
+  externalPolicyCanWrite: { type: Boolean, default: false },
+  externalPolicyError: { type: String, default: '' },
+  profileCapabilities: { type: Object, default: null },
+  profileCapabilitiesLoading: { type: Boolean, default: false },
+  profileCapabilitiesError: { type: String, default: '' },
+  profileReasonText: { type: Function, default: () => '暂不可用' },
   hasPendingTask: { type: Boolean, default: false },
   pointAndStartBusy: { type: Boolean, default: false },
   canPointAndDeliberate: { type: Function, default: () => false },
@@ -99,7 +185,54 @@ defineProps({
   statusText: { type: Function, required: true }
 })
 
-defineEmits(['set-agent-filter', 'select-agent', 'start-conversation', 'open-catalog', 'point-and-deliberate'])
+const emit = defineEmits(['set-agent-filter', 'select-agent', 'start-conversation', 'open-catalog', 'point-and-deliberate', 'refresh-profile-capabilities', 'set-external-policy', 'check-external-policy', 'resume-external-policy', 'refresh-external-policy'])
+const media = typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 720px)') : null
+const isCompactRoster = ref(media?.matches || false)
+const mobileDetailOpen = ref(false)
+const listRef = ref(null)
+const detailTitleRef = ref(null)
+let listScrollTop = 0
+let focusAgentId = null
+const canGoBack = computed(() => props.active && isCompactRoster.value && mobileDetailOpen.value)
+const profileVisible = computed(() => props.active && Boolean(props.selectedAgent?.agentId) && (!isCompactRoster.value || mobileDetailOpen.value))
+const listVisible = computed(() => props.active && (!isCompactRoster.value || !mobileDetailOpen.value))
+const detailVisible = computed(() => props.active && (!isCompactRoster.value || mobileDetailOpen.value))
+const windowTitle = computed(() => canGoBack.value ? '好汉详情' : '点将册')
+const canManagePolicy = computed(() => props.selectedAgent?.boundToMe === true && props.selectedAgent?.canOperate === true && !props.selectedAgent?.systemAgent)
+const canReadProfile = computed(() => props.selectedAgent?.boundToMe === true && props.selectedAgent?.systemAgent !== true)
+const profile = computed(() => !props.profileCapabilitiesLoading && !props.profileCapabilitiesError && canReadProfile.value && props.profileCapabilities?.agentId === props.selectedAgent?.agentId ? props.profileCapabilities : null)
+const displayedAbilities = computed(() => profile.value?.abilities || props.selectedAgent?.abilities || [])
+const installedCount = computed(() => profile.value?.skills.items.filter(item => item.installationVerified).length || 0)
+const displayAgent = agent => profile.value?.agentId === agent.agentId ? { ...agent, abilities: profile.value.abilities } : agent
+const session = () => `${props.identityKey}:${props.panelSessionKey}`
+const openAgent = async agent => {
+  const origin = session()
+  listScrollTop = listRef.value?.scrollTop || 0
+  focusAgentId = agent.agentId
+  mobileDetailOpen.value = true
+  emit('select-agent', agent)
+  await nextTick()
+  if (origin === session() && canGoBack.value) detailTitleRef.value?.focus()
+}
+const back = () => {
+  if (!canGoBack.value) return false
+  const origin = session()
+  mobileDetailOpen.value = false
+  void nextTick(() => {
+    if (origin !== session() || !listVisible.value) return
+    if (listRef.value) {
+      listRef.value.scrollTop = listScrollTop
+      Array.from(listRef.value.querySelectorAll('[data-agent-id]')).find(row => row.dataset.agentId === focusAgentId)?.focus({ preventScroll: true })
+    }
+  })
+  return true
+}
+watch(() => [props.identityKey, props.panelSessionKey], () => { mobileDetailOpen.value = false; listScrollTop = 0; focusAgentId = null }, { flush: 'sync' })
+watch(() => props.selectedAgent?.agentId, id => { if (!id) mobileDetailOpen.value = false }, { flush: 'sync' })
+const updateMedia = event => { isCompactRoster.value = event.matches }
+onMounted(() => media?.addEventListener('change', updateMedia))
+onUnmounted(() => media?.removeEventListener('change', updateMedia))
+defineExpose({ canGoBack, back, windowTitle, profileVisible })
 </script>
 
 <style scoped>
@@ -160,7 +293,7 @@ button {
 
 .agent-panel-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  grid-template-columns: minmax(0, 43fr) minmax(0, 57fr);
   gap: 12px;
   flex: 1;
   min-width: 0;
@@ -230,8 +363,9 @@ button {
 }
 
 .large-avatar {
-  width: 58px;
-  height: 58px;
+  flex: none;
+  width: 68px;
+  height: 68px;
   font-size: 22px;
 }
 
@@ -258,36 +392,54 @@ button {
   min-width: 0;
   min-height: 0;
   margin: 0;
-  padding: 12px;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  box-sizing: border-box;
   border-radius: 8px;
-  background: #f4e2c3;
+  background: var(--hall-surface, #fffefa);
+  font-size: 14px;
 }
 
-/* Match the approved prototype's mmd-row / mmd-primary actions. */
+/* The dock participates in layout; it never overlays scrollable details. */
 .agent-detail-actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 8px;
+  flex: none;
+  margin-top: 0;
+  padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--hall-border, #e3e5dc);
+  background: var(--hall-surface, #fffefa);
   font-size: 14px;
   line-height: 1.6;
 }
 
 .agent-detail-actions button {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
   max-width: 100%;
-  padding: 7px 11px;
-  border: 1px solid #d6b98c;
+  padding: 10px 12px;
+  border: 1px solid var(--hall-brand, #923f30);
   border-radius: 7px;
-  background: #fffaf0;
-  color: #795332;
+  background: var(--hall-brand, #923f30);
+  color: var(--hall-surface, #fffefa);
+  white-space: normal;
 }
 
-.agent-detail-actions .point-and-deliberate {
-  border-color: #a44330;
-  background: #a44330;
-  color: #fff9ed;
+.agent-detail-actions:has(.point-and-deliberate) button:not(.point-and-deliberate) {
+  border-color: var(--hall-border, #e3e5dc);
+  background: var(--hall-surface-subtle, #f3f3ed);
+  color: var(--hall-text, #242e2b);
+}
+
+.agent-detail-actions button:hover:not(:disabled),
+.agent-detail-actions button:focus-visible {
+  filter: brightness(0.94);
 }
 
 .agent-detail-actions button:disabled {
@@ -296,7 +448,7 @@ button {
 }
 
 .agent-detail-actions button:focus-visible {
-  outline: 2px solid #a44330;
+  outline: 2px solid var(--hall-brand, #923f30);
   outline-offset: 2px;
 }
 
@@ -305,10 +457,16 @@ button {
   align-items: center;
   gap: 10px;
   margin-bottom: 10px;
+  overflow-wrap: anywhere;
 }
 
 .detail-head > div {
   min-width: 0;
+}
+
+.detail-head small {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .ability-tags {
@@ -326,21 +484,43 @@ button {
   font-size: 12px;
 }
 
-@media (max-width: 900px) {
-  .agent-panel-body {
-    grid-template-columns: 1fr;
-    overflow: auto;
-  }
-
-  .detail-card {
-    order: -1;
-  }
+.agent-detail-scroll {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  padding: 16px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
 }
+.profile-section { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--hall-border, #e3e5dc); }
+.profile-heading, .skill-title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.profile-heading h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.profile-heading small, .skill-title small, .profile-note, .profile-refresh small { color: var(--hall-text-muted, #68716b); font-size: 12px; line-height: 1.6; }
+.profile-note { margin: 8px 0; overflow-wrap: anywhere; }
+.skill-item { padding: 12px; border: 1px solid var(--hall-border, #e3e5dc); border-radius: 8px; background: var(--hall-surface, #fffefa); }
+.skill-item + .skill-item { margin-top: 8px; }
+.skill-states { display: flex; gap: 6px; flex-wrap: wrap; font-size: 12px; }
+.skill-states span { padding: 3px 7px; border-radius: 4px; color: #65665e; background: #f1f0eb; }
+.skill-states .is-ready { color: #31644b; background: #eaf2e9; }
+.profile-error { color: var(--hall-danger, #a13f35); }
+.profile-refresh { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--hall-border, #e3e5dc); }
+.profile-refresh button { min-height: 44px; padding: 8px 12px; border: 1px solid var(--hall-border-strong, #ccd2c5); border-radius: 7px; background: var(--hall-surface, #fffefa); color: var(--hall-text-muted, #68716b); font-size: 13px; }
+.profile-refresh button:disabled { opacity: 0.6; cursor: default; }
+.agent-panel button:focus-visible { outline: 2px solid var(--hall-brand, #923f30); outline-offset: 2px; }
+.detail-card > p { padding: 12px; }
 
-@media (max-width: 620px) {
-  .panel-toolbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
+@media (max-width: 720px) {
+  .agent-panel-body { display: flex; flex-direction: column; overflow: hidden; }
+  .agent-list, .detail-card { flex: 1; min-height: 0; max-height: none; }
+  .panel-toolbar { align-items: stretch; flex-wrap: wrap; padding: 10px 12px; }
+  .status-filter { flex: 1 0 100%; }
+  .agent-detail-scroll { padding: 16px; }
 }
+.external-policy { margin: 0; padding: 8px 0; min-width: 0; }
+.external-policy-row, .external-policy-recovery { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.external-policy button { font: inherit; min-height: 44px; padding: 8px 12px; border: 1px solid var(--hall-border-strong, #ccd2c5); border-radius: 7px; background: var(--hall-surface, #fffefa); color: var(--hall-text, #242e2b); }
+.external-policy button[aria-checked="true"] { background: var(--hall-brand, #923f30); color: white; }
+.external-policy button:disabled { opacity: .6; cursor: default; }
+.external-policy button:focus-visible { outline: 2px solid var(--hall-focus-ring, #923f3052); outline-offset: 2px; }
 </style>

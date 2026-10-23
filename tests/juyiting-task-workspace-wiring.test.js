@@ -1,3 +1,5 @@
+import { assignedTaskTarget } from '../src/composables/juyiting/hallAssigneeCandidates.js'
+import { projectHallTask } from '../src/composables/juyiting/hallTaskPresentation.js'
 import { expect } from 'chai'
 import { readFileSync } from 'fs'
 import { customRef, nextTick, ref } from 'vue'
@@ -204,7 +206,7 @@ describe('C07A task workspace wiring', () => {
     const assignTaskSource = hallSource.slice(assignTaskStart, hallSource.indexOf('\n\nwatch(', assignTaskStart))
     const autoAssignTaskSource = hallSource.slice(hallSource.indexOf('const autoAssignTask'), hallSource.indexOf('const archiveTask'))
     const conversationSource = hallSource.slice(hallSource.indexOf('const handleStartAgentConversation'), hallSource.indexOf('const canStartAgentConversation'))
-    expect(conversationSource).to.include("if (!draft.value.trim()) setDraft('请报眼下动静、可领何榜、还需哪路照应。')")
+    expect(conversationSource).not.to.include('setDraft(')
     expect(conversationSource).not.to.include('insertAgentMention(')
     expect(selectAgentSource).to.include('taskWorkspaceBinding.selectExplicitActor(agent)')
     expect(selectAgentSource).not.to.include('selectedAgent.value = agent')
@@ -262,4 +264,51 @@ describe('C07A task workspace wiring', () => {
     expect(taskActionAssignSource).to.include('targetAgents.some(item => !hasExplicitAgentId(item))')
     expect(taskActionAssignSource).not.to.match(/agent\s*=\s*selectedAgent\.value/)
   })
+})
+
+describe('discussion entry drafts', () => {
+  const agent = { agentId: 'agent-draft', displayName: '吴用', providerDisplayName: null, isMine: false, availability: 'online' }
+  const task = { id: 'task-draft', title: '议事测试', status: 'assigned', assignedAgentIds: [agent.agentId], assignedTarget: agent }
+  const entries = [
+    ['briefSelectedTask', 'const discussTask', [task]],
+    ['briefSelectedTask', 'const discussTask', [task, agent]],
+    ['discussTask', 'const toggleHallSound', [task, agent]],
+    ['handleStartAgentConversation', 'const canStartAgentConversation', [agent]]
+  ]
+
+  for (const [name, end, args] of entries) {
+    for (const initial of ['', '   ', '  保留我写的 @宋江 内容  ']) {
+      it(`${name} (${args.length} args) preserves ${JSON.stringify(initial)}`, () => {
+        const draft = ref(initial)
+        const panels = []
+        const contexts = []
+        const bindings = []
+        const mocks = {
+          projectHallTask, assignedTaskTarget, draft, setDraft: value => { draft.value = value },
+          selectedTask: ref(null), selectedAgent: ref(null),
+          isTerminalMatter: () => false,
+          canStartAgentConversation: () => true,
+          resolvePermittedConversationAgent: () => agent,
+          operableRosterAgents: ref([agent]),
+          openPanel: panel => { panels.push(panel); return true },
+          enterPrivateConversation: (...values) => contexts.push(['private', ...values]),
+          enterBountyDiscussion: value => contexts.push(['bounty', value]),
+          taskWorkspaceBinding: { selectExplicitActor: value => bindings.push(value) },
+          chatContext: ref({ participantAgentIds: [agent.agentId] }),
+          markDiscussionStarted: () => {}, markAgentSpeaking: () => {},
+          playAgentSelect: () => {}, showToast: () => {},
+          portraitShortName: value => value.name, taskStatusText: () => '待办'
+        }
+        const start = hallSource.indexOf(`const ${name} =`)
+        const source = hallSource.slice(start, hallSource.indexOf(end, start))
+        const action = new Function(...Object.keys(mocks), `${source}\nreturn ${name}`)(...Object.values(mocks))
+        action(...args)
+        expect(draft.value).to.equal(initial)
+        expect(panels).to.deep.equal(['chat'])
+        expect(contexts).to.have.length(1)
+        expect(contexts[0][0]).to.equal(name === 'handleStartAgentConversation' || args.length === 2 && name === 'briefSelectedTask' ? 'private' : 'bounty')
+        if (name !== 'briefSelectedTask') expect(bindings).to.deep.equal([agent])
+      })
+    }
+  }
 })

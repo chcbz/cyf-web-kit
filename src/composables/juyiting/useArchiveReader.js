@@ -1,5 +1,6 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { createApi } from '../useHttp'
+import { decodeMessage } from '../../utils/messageEnvelope.js'
 import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
 
 const DECIMAL = /^(?:0|[1-9][0-9]{0,18})$/
@@ -17,14 +18,7 @@ const QUESTION_SEGMENT_LIMIT = 16
 const RESPONDER = Object.freeze({ id: 'archive-clerk-v1', displayName: '案卷书吏', mode: 'fallback' })
 
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key)
-const unwrap = (response) => {
-  const envelope = response?.data
-  if (!envelope || typeof envelope !== 'object') return envelope ?? null
-  const isJsonResult = hasOwn(envelope, 'data') || (
-    hasOwn(envelope, 'status') && hasOwn(envelope, 'code') && hasOwn(envelope, 'msg')
-  )
-  return isJsonResult ? (hasOwn(envelope, 'data') ? envelope.data : null) : envelope
-}
+const unwrap = response => response
 const isCanonicalDecimal = value => typeof value === 'string' && DECIMAL.test(value) &&
   (value.length < MAX_DECIMAL.length || (value.length === MAX_DECIMAL.length && value <= MAX_DECIMAL))
 const lowerUuid = () => (globalThis.crypto?.randomUUID?.() ||
@@ -81,6 +75,7 @@ const replayAmbiguousMutation = async (send) => {
 export { isCanonicalDecimal, mutationHeaders, utf8ByteLength }
 
 export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitialize = true, saveDelay = 800 } = {}) => {
+  const works = ref([])
   const catalog = ref(null)
   const chapter = ref(null)
   const progress = ref(null)
@@ -133,6 +128,8 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
   let blockLoadKey = null
   let blockLoadPromise = null
   let catalogLoadPromise = null
+  let catalogLoadWorkId = null
+  let bookSelectionGeneration = 0
 
   const edition = computed(() => catalog.value?.activeEdition || null)
   const blocks = computed(() => edition.value
@@ -188,20 +185,33 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     return progress.value
   }
 
-  const loadCatalog = (signal) => {
-    if (catalogLoadPromise) return catalogLoadPromise
+  const loadWorks = async (signal) => {
+    const requestIdentity = identityGeneration
+    const result = await api.get('/works', undefined, { autoLoading: false, signal })
+    if (!isCurrentIdentity(requestIdentity) || signal?.aborted) return null
+    const shelf = unwrap(result)
+    if (!Array.isArray(shelf?.items) || shelf.items.some(book => !book?.workId || !book?.editionId || !book?.title)) {
+      throw new Error('典籍列表响应不完整')
+    }
+    works.value = shelf.items
+    return shelf.items
+  }
+
+  const loadCatalog = (workId, signal) => {
+    if (catalogLoadPromise && catalogLoadWorkId === workId) return catalogLoadPromise
     const requestIdentity = identityGeneration
     if (!isCurrentIdentity(requestIdentity) || signal?.aborted) return Promise.resolve(null)
-    const request = api.get('/catalog', undefined, { autoLoading: false, signal }).then((result) => {
+    const request = api.get('/catalog', { workId }, { autoLoading: false, signal }).then((result) => {
       if (!isCurrentIdentity(requestIdentity) || signal?.aborted) return null
       const nextCatalog = unwrap(result)
-      if (!nextCatalog?.activeEdition?.editionId) throw new Error('案卷阁目录响应不完整')
+      if (nextCatalog?.workId !== workId || !nextCatalog?.activeEdition?.editionId) throw new Error('案卷阁目录响应不完整')
       catalog.value = nextCatalog
       return nextCatalog
     })
     const pending = request.finally(() => {
       if (catalogLoadPromise === pending) catalogLoadPromise = null
     })
+    catalogLoadWorkId = workId
     catalogLoadPromise = pending
     return pending
   }
@@ -1062,23 +1072,26 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       if (frame.invalid || frame.id !== null || frame.event !== 'message') recoverQuestion(questionId, generation)
       return
     }
-    if (frame.event === 'resync_required') {
-      let value
-      try { value = JSON.parse(frame.data.join('\n')) } catch { recoverQuestion(questionId, generation); return }
-      if (frame.invalid || (frame.id !== null && frame.id !== '') || !exactKeys(value, ['schemaVersion', 'questionId', 'type']) ||
-        value.schemaVersion !== 1 || value.questionId !== questionId || value.type !== 'resync_required') {
-        recoverQuestion(questionId, generation)
-        return
-      }
-      recoverQuestion(questionId, generation)
-      return
+    let message
+    try { message = decodeMessage(frame.data.join('\n')) } catch { recoverQuestion(questionId, generation); return }
+    if (frame.invalid || frame.id !== message.messageId || frame.event !== message.messageType || hasOwn(message, 'correlationId')) {
+      recoverQuestion(questionId, generation); return
+    }
+    if (message.messageType === 'archive.question.resync.required') {
+      const value = message.data
+      if (!message.messageId.startsWith(`archive:question:${questionId}:resync:`) ||
+        !exactKeys(value, ['schemaVersion', 'questionId', 'type']) || value.schemaVersion !== 1 ||
+        value.questionId !== questionId || value.type !== 'resync_required') { recoverQuestion(questionId, generation); return }
+      recoverQuestion(questionId, generation); return
     }
     let event
-    try { event = requireQuestionEvent(JSON.parse(frame.data.join('\n')), questionId) } catch { recoverQuestion(questionId, generation); return }
-    if (frame.invalid || frame.event !== event.type || !isCanonicalDecimal(frame.id) || frame.id !== event.sequence) {
-      recoverQuestion(questionId, generation)
-      return
-    }
+    try {
+      const value = message.data
+      if (message.messageType !== 'archive.question.event' || !value ||
+        !Number.isSafeInteger(value.occurredAt) || !Number.isFinite(new Date(value.occurredAt).getTime())) throw new Error('Invalid archive event')
+      event = requireQuestionEvent({ ...value, occurredAt: new Date(value.occurredAt).toISOString() }, questionId)
+    } catch { recoverQuestion(questionId, generation); return }
+    if (message.messageId !== `archive:question:${questionId}:${event.sequence}`) { recoverQuestion(questionId, generation); return }
     const current = question.value
     if (!current || !isCanonicalDecimal(current.currentSequence)) { recoverQuestion(questionId, generation); return }
     if (compareDecimal(event.sequence, current.currentSequence) <= 0) return
@@ -1137,7 +1150,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     }
     api.execute({
       url: `/me/questions/${encodeURIComponent(questionId)}/events`, method: 'GET', autoLoading: false,
-      headers: { 'Last-Event-ID': cursor }, responseType: 'stream', streamChunks: true, signal: controller.signal,
+      headers: { 'Last-Event-ID': `archive:question:${questionId}:${cursor}` }, responseType: 'stream', streamChunks: true, signal: controller.signal,
       onStreamOpen: handle => {
         if (isCurrentStream()) questionStreamReader = handle
         else handle.cancel?.()
@@ -1229,7 +1242,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
         }
         const selectionValue = await buildQuestionAnchor(selection)
         if (!isQuestionGeneration(generation) || controller.signal.aborted) return null
-        operation = { questionId: lowerUuid(), idempotencyKey: lowerUuid(), body: { question: text, anchor: selectionValue.anchor } }
+        operation = { questionId: lowerUuid(), idempotencyKey: lowerUuid(), body: { editionId: edition.value.editionId, question: text, anchor: selectionValue.anchor } }
         questionCreateOperation = operation
       }
       const result = await replayAmbiguousMutation(() => api.put(
@@ -1328,7 +1341,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     return promise
   }
 
-  const initialize = async ({ openChapter = true, reuseCatalog = false } = {}) => {
+  const initialize = async ({ openChapter = true, reuseCatalog = false, workId = null } = {}) => {
     if (disposed) return null
     const generation = ++initializeGeneration
     if (catalog.value) initializeController?.abort()
@@ -1339,9 +1352,13 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     loading.value = true
     errorMessage.value = ''
     try {
-      if (!reuseCatalog || !catalog.value) await loadCatalog(controller.signal)
+      if (!reuseCatalog || works.value.length === 0) await loadWorks(controller.signal)
       if (!isActive()) return null
-      if (!openChapter) return catalog.value
+      if (!openChapter) return works.value
+      const requestedWorkId = workId || catalog.value?.workId || works.value[0]?.workId
+      if (!requestedWorkId) return null
+      if (!reuseCatalog || catalog.value?.workId !== requestedWorkId) await loadCatalog(requestedWorkId, controller.signal)
+      if (!isActive()) return null
       let progressUnavailable = false
       try {
         await loadProgress(edition.value.editionId, controller.signal)
@@ -1383,6 +1400,8 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
   const lifecycleTarget = globalThis.window || globalThis
 
   const clearIdentityBoundState = () => {
+    bookSelectionGeneration += 1
+    works.value = []
     identityGeneration += 1
     initializeGeneration += 1
     loadGeneration += 1
@@ -1419,6 +1438,26 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     noteConflictDraft.value = null
     noteRetryNotice.value = ''
     closeQuestion()
+  }
+
+  const openBook = async (workId) => {
+    const selection = ++bookSelectionGeneration
+    const requestIdentity = identityGeneration
+    if (!works.value.some(book => book.workId === workId)) throw new Error('典籍不存在')
+    if (catalog.value?.workId !== workId) {
+      if (bookmarkCreateOperation || newNoteOperation || noteOperations.size ||
+        deleteBookmarkOperations.size || deleteNoteOperations.size || questionCreatePromise || questionRetryPromise) {
+        throw new Error('请先完成或重试当前书籍的保存操作，再切换典籍。')
+      }
+      // Drain the old book's captured progress before changing any edition-bound state.
+      await flushProgress()
+      if (selection !== bookSelectionGeneration || !isCurrentIdentity(requestIdentity)) return null
+      if (saveState.value === 'error') throw new Error('阅读进度暂未保存，请重试保存后再切换典籍。')
+      const shelf = works.value
+      clearIdentityBoundState()
+      works.value = shelf
+    }
+    return initialize({ workId, reuseCatalog: true })
   }
 
   onMounted(() => {
@@ -1458,6 +1497,8 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     canGoNext,
     canGoPrevious,
     cancelBlockLoad,
+    works,
+    openBook,
     catalog,
     chapter,
     chapterLoading,

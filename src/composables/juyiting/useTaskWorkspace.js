@@ -297,8 +297,7 @@ export function useTaskWorkspace ({ agentApi = defaultAgentApi, setTimeoutFn = s
 }
 
 function unwrapSnapshot (result) {
-  const outer = result?.data ?? result
-  return outer && typeof outer === 'object' && outer.data && typeof outer.data === 'object' ? outer.data : outer
+  return result
 }
 function observableError (failure) { return { status: failure?.status ?? null, message: failure?.message || 'Task workspace connection failed' } }
 function isVisible (documentRef) { return !documentRef || documentRef.visibilityState !== 'hidden' }

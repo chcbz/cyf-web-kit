@@ -2,9 +2,9 @@ import { computed, unref } from 'vue'
 
 // Reuse the existing workspace compact-height breakpoint. A03 measured 390px
 // with a fine pointer: pointer type must not force the 164px + 48px modal gutters.
-export const classifyPanelLayout = ({ isMobileCoarse, viewportHeight = 0 }) => {
+export const classifyPanelLayout = ({ isMobileCoarse, viewportHeight = 0, renderedPanel = '' }) => {
   const compactHeight = viewportHeight > 0 && viewportHeight <= 500
-  return isMobileCoarse || compactHeight ? 'full-window' : 'center-modal'
+  return renderedPanel === 'chat' || isMobileCoarse || compactHeight ? 'full-window' : 'center-modal'
 }
 
 const RETURN_ACTIONS = new Set(['agents', 'tasks', 'discussion', 'catalog', 'library'])
@@ -129,11 +129,12 @@ export const trapPanelFocus = (event, panel) => {
   return false
 }
 
-export const useHallPanels = ({ experienceMode, isMobileCoarse, viewportHeight }) => ({
+export const useHallPanels = ({ experienceMode, isMobileCoarse, viewportHeight, renderedPanel }) => ({
   panelLayout: computed(() => classifyPanelLayout({
     experienceMode: unref(experienceMode),
     isMobileCoarse: unref(isMobileCoarse),
-    viewportHeight: unref(viewportHeight)
+    viewportHeight: unref(viewportHeight),
+    renderedPanel: unref(renderedPanel)
   }))
 })
 
@@ -175,12 +176,12 @@ export const resolveHallNavigationPresentation = ({
   const showWorkbenchDock = Boolean(
     isOverviewHome && isPrimarySurface && !hasChildDetail && !hasFrameParent && !isKeyboardActive && !externalRootModalOpen
   )
-  // Portrait root dialogs use the same single leading return treatment as
-  // nested pages. The action closes the root panel because there is no frame
-  // parent, while desktop/landscape roots retain the explicit close control.
-  const showRootReturn = Boolean(isPortraitMobile && !isPrimarySurface && !hasChildDetail)
+  // Workbench and portrait root dialogs share the leading return treatment.
+  // With no frame parent, returning closes the root panel. Independent
+  // desktop dialogs outside the workbench retain their close control.
+  const showRootReturn = Boolean((isPortraitMobile || isOverviewHome) && renderedPanel && !isPrimarySurface && !hasChildDetail)
   const showHallReturn = Boolean(returnOwner === 'hall' || showRootReturn)
-  const showHallClose = Boolean(!isPrimarySurface && !showRootReturn && (!hasChildDetail || !isPortraitMobile))
+  const showHallClose = Boolean(!isPrimarySurface && !showRootReturn && !hasChildDetail)
   const showPrimaryChildHeader = Boolean(isPrimarySurface && showHallReturn)
 
   return Object.freeze({

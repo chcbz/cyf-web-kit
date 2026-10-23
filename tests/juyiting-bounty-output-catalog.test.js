@@ -1,3 +1,4 @@
+import { displayFixtures } from './fixtures/juyiting/interface-display-fixture.mjs'
 import { expect } from 'chai'
 import { outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, outputAssetPart, currentOutputDelivery, applyOutputReplacements } from '../src/composables/juyiting/bountyOutputCatalog.js'
 
@@ -5,7 +6,7 @@ const requestId = 'request-1'
 const stepId = 'step-1'
 const prefix = `/chat/requests/${requestId}/steps/${stepId}/outputs/`
 const output = overrides => ({
-  outputId: 'output-1', contentMimeType: 'image/png', sha256: 'a'.repeat(64), byteLength: 15,
+  outputId: 'output-1', contentMimeType: 'image/png', sha256: 'a'.repeat(64), byteLength: '15',
   previewUrl: prefix + 'output-1', downloadUrl: prefix + 'output-1?download=true', ...overrides
 })
 

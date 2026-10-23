@@ -1,10 +1,11 @@
-import { parseTaskEventVersion } from './taskEventVersion'
+import { decodeMessage } from '../../utils/messageEnvelope.js'
+import { parseTaskEventVersion } from './taskEventVersion.js'
 
 const MAX_DATA_UTF8_BYTES = 16 * 1024
 const MAX_RECORD_UTF8_BYTES = MAX_DATA_UTF8_BYTES + 4 * 1024
 const MAX_UNTERMINATED_LINE_UTF8_BYTES = MAX_RECORD_UTF8_BYTES
 
-export function createTaskSseParser ({ onEvent, onResync, onMalformed } = {}) {
+export function createTaskSseParser ({ taskId, onEvent, onResync, onMalformed } = {}) {
   let line = ''
   let lineBytes = 0
   let record = []
@@ -31,7 +32,7 @@ export function createTaskSseParser ({ onEvent, onResync, onMalformed } = {}) {
   }
   const dispatch = () => {
     if (stopped) return
-    const parsed = parseRecord(record)
+    const parsed = parseRecord(record, taskId)
     resetRecord()
     if (parsed?.kind === 'comment') return
     if (!parsed) return fail('malformed_sse')
@@ -123,6 +124,7 @@ export function useTaskEventStream ({ agentApi, onOpen, onEvent, onResync, onEnd
       else if (kind === 'end') onEnd?.({ generation })
     }
     const parser = createTaskSseParser({
+      taskId,
       onEvent: event => onEvent?.({ generation, event }),
       onResync: () => terminate('resync', 'server_resync'),
       onMalformed: reason => terminate('resync', reason)
@@ -132,7 +134,7 @@ export function useTaskEventStream ({ agentApi, onOpen, onEvent, onResync, onEnd
       url: `/agent/tasks/${encodeURIComponent(taskId)}/events`,
       method: 'GET',
       params: { actorAgentId, sinceVersion },
-      headers: { Accept: 'text/event-stream', 'Last-Event-ID': sinceVersion },
+      headers: { Accept: 'text/event-stream', 'Last-Event-ID': `task:${taskId}:${sinceVersion}` },
       autoLoading: false,
       needAuth: true,
       responseType: 'stream',
@@ -164,7 +166,7 @@ export function useTaskEventStream ({ agentApi, onOpen, onEvent, onResync, onEnd
   return { open, close, get active () { return active } }
 }
 
-function parseRecord (lines) {
+function parseRecord (lines, taskId) {
   const fields = { id: [], event: [], data: [] }
   for (const line of lines) {
     if (!line || line.startsWith(':')) continue
@@ -174,13 +176,18 @@ function parseRecord (lines) {
   }
   if (fields.event.length === 0 && fields.data.length === 0 && fields.id.length === 0) return { kind: 'comment' }
   if (fields.event.length !== 1 || fields.data.length === 0 || fields.id.length > 1) return null
-  let data
-  try { data = JSON.parse(fields.data.join('\n')) } catch { return null }
-  if (fields.event[0] === 'resync_required') {
-    if (fields.id.length !== 0 || !isRecord(data) || parseTaskEventVersion(data.currentVersion) == null || typeof data.reason !== 'string' || Object.keys(data).some(key => key !== 'currentVersion' && key !== 'reason')) return null
+  let message
+  try { message = decodeMessage(fields.data.join('\n')) } catch { return null }
+  if (typeof taskId !== 'string' || !taskId || Object.hasOwn(message, 'correlationId') || fields.id.length !== 1 ||
+      fields.event[0] !== message.messageType || fields.id[0] !== message.messageId) return null
+  const data = message.data
+  if (message.messageType === 'task.resync.required') {
+    if (!message.messageId.startsWith(`task:${taskId}:resync:`) || !isRecord(data) || parseTaskEventVersion(data.currentVersion) == null ||
+        typeof data.reason !== 'string' || Object.keys(data).some(key => key !== 'currentVersion' && key !== 'reason')) return null
     return { kind: 'resync', data }
   }
-  if (fields.event[0] !== 'task_event' || fields.id.length !== 1 || parseTaskEventVersion(fields.id[0]) == null || fields.id[0] === '0' || !isRecord(data) || data.version !== fields.id[0]) return null
+  if (message.messageType !== 'task.event' || !isRecord(data) || parseTaskEventVersion(data.version) == null || data.version === '0' ||
+      message.messageId !== `task:${taskId}:${data.version}`) return null
   return { kind: 'event', data }
 }
 function sseField (line) { const separator = line.indexOf(':'); const key = separator < 0 ? line : line.slice(0, separator); let value = separator < 0 ? '' : line.slice(separator + 1); if (value.startsWith(' ')) value = value.slice(1); return { key, value } }

@@ -35,24 +35,25 @@
             <h3>阁中典籍</h3>
             <p>先择一部典籍，再进入沉浸翻阅。</p>
           </div>
-          <span class="archive-shelf-count">共 {{ reader.catalog ? 1 : 0 }} 部</span>
+          <span class="archive-shelf-count">共 {{ reader.works.length }} 部</span>
         </header>
 
-        <article class="archive-book-card">
+        <p v-if="reader.works.length === 0" class="archive-state">暂无已发布典籍。</p>
+        <article v-for="book in reader.works" :key="book.workId" class="archive-book-card">
           <div class="archive-book-cover" aria-hidden="true">
             <span>古典</span>
-            <strong>{{ reader.catalog?.title || '水滸傳' }}</strong>
-            <small>一百二十回</small>
+            <strong>{{ book.title }}</strong>
+            <small>{{ book.chapterCount }} 章</small>
           </div>
           <div class="archive-book-info">
             <p class="reader-kicker">已收录典籍</p>
-            <h4>{{ reader.catalog?.title || '水滸傳' }}</h4>
-            <p>含引首与 {{ chapterCount }} 回正文，可记录阅读进度、书签及私人手札。</p>
+            <h4>{{ book.title }}</h4>
+            <p>共 {{ book.chapterCount }} 章正文，可记录阅读进度、书签及私人手札。</p>
             <button
               type="button"
               class="archive-book-open"
               :disabled="embedded && !detailAllowed"
-              @click="enterReading"
+              @click="enterReading(book, $event)"
             >
               进入翻阅
             </button>
@@ -85,8 +86,8 @@
               <span class="reader-exit-short">← 返回</span>
             </button>
             <div class="reader-heading">
-              <p class="reader-kicker">固定典籍</p>
-              <h3 id="archive-reader-title">{{ reader.catalog?.title || '水滸傳' }}</h3>
+              <p class="reader-kicker">典籍阅读</p>
+              <h3 id="archive-reader-title">{{ reader.catalog?.title || '典籍' }}</h3>
             </div>
             <div class="reader-header-actions">
               <p
@@ -121,7 +122,7 @@
               v-if="catalogOpen"
               id="archive-reader-catalog"
               class="reader-catalog"
-              aria-label="《水滸傳》目录"
+              :aria-label="`${reader.catalog?.title || '典籍'}目录`"
             >
               <button
                 v-for="block in reader.blocks"
@@ -324,8 +325,8 @@
               v-if="embedded"
               type="button"
               :disabled="!citationParagraph"
+              class="reader-cite-action"
               @click="citeParagraph"
-            class="reader-cite-action"
             >引用当前段落起草交办</button>
             <button
               type="button"
@@ -409,6 +410,7 @@ const contentRef = ref(null)
 const noteText = ref('')
 const questionText = ref('')
 const editingNote = ref(null)
+const bookDrafts = new Map()
 const actionMessage = ref('')
 const NEW_NOTE_TARGET = Symbol('new-note-target')
 const noteBytes = computed(() => utf8ByteLength(noteText.value))
@@ -426,7 +428,6 @@ const citeParagraph = () => {
     inputs: []
   })
 }
-const chapterCount = computed(() => reader.catalog?.activeEdition?.chapters?.length || 0)
 const saveLabel = computed(() => ({
   error: '未保存',
   idle: '阅读进度未保存',
@@ -478,17 +479,17 @@ const retryCatalog = () => runAction(
   '典籍重试失败。'
 )
 
-const enterReading = async (event) => {
+const enterReading = async (book, event) => {
   if (embedded && !detailAllowed) return
   returnFocusElement = typeof event?.currentTarget?.focus === 'function'
     ? event.currentTarget
     : document.activeElement
   await closeProgressPromise
   const opened = await runAction(
-    () => reader.initialize({ reuseCatalog: true }),
+    () => reader.openBook(book.workId),
     '典籍暂无法读取，请稍后重试。'
   )
-  if ((!opened && !reader.chapter) || (embedded && (!detailAllowed || !active))) return
+  if (!opened || reader.catalog?.workId !== book.workId || (embedded && (!detailAllowed || !active))) return
   catalogOpen.value = false
   notesOpen.value = false
   readingOpen.value = true
@@ -771,11 +772,24 @@ const back = () => {
   return true
 }
 defineExpose({ back })
+// Drafts belong to an immutable edition, never to whichever book is currently visible.
+watch(() => reader.catalog?.activeEdition?.editionId, (nextEdition, previousEdition) => {
+  if (previousEdition) bookDrafts.set(previousEdition, {
+    noteText: noteText.value, questionText: questionText.value, editingNote: editingNote.value
+  })
+  const draft = nextEdition ? bookDrafts.get(nextEdition) : null
+  noteText.value = draft?.noteText || ''
+  questionText.value = draft?.questionText || ''
+  editingNote.value = draft?.editingNote || null
+  editorRevision += 1
+}, { flush: 'sync' })
 watch(readingOpen, value => emit('navigation-state', value), { immediate: true })
 onUpdated(() => { if (active) focusRequestedLocation() })
 
 onMounted(() => {
   unregisterEditorIdentityCleanup = registerIdentityCleanup(() => {
+    bookDrafts.clear()
+    questionText.value = ''
     noteText.value = ''
     editingNote.value = null
     editorRevision += 1

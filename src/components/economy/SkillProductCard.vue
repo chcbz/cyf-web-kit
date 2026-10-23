@@ -5,7 +5,7 @@
         <h3>{{ product.name || product.skillKey || '未命名技能' }}</h3>
         <p>{{ productIdentity }}</p>
       </div>
-      <strong>{{ formatMoney(product.priceMicro) }}</strong>
+      <strong>{{ formatMoney(product.price) }}</strong>
     </div>
     <p class="run-cost">{{ skillCostText(product.costInfo) }}</p>
     <p class="description">{{ product.description || '平台自营技能' }}</p>
@@ -31,7 +31,7 @@
 <script setup>
 import { computed } from 'vue'
 import { skillCostText } from '@/composables/juyiting/hallSkillCapabilities.js'
-import { formatSilverMicro, formatSkillProductIdentity } from '@/composables/useSkillMarket.js'
+import { formatSkillMoney, formatSkillProductIdentity } from '@/composables/useSkillMarket.js'
 
 const props = defineProps({
   product: { type: Object, required: true },
@@ -41,7 +41,7 @@ const props = defineProps({
 
 defineEmits(['select'])
 const productIdentity = computed(() => formatSkillProductIdentity(props.product))
-const formatMoney = (amount) => props.moneyFormatter ? props.moneyFormatter(amount) : formatSilverMicro(amount)
+const formatMoney = (amount) => props.moneyFormatter ? props.moneyFormatter(amount) : formatSkillMoney(amount)
 </script>
 
 <style scoped>

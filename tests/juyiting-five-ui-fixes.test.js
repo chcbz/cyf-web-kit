@@ -1,3 +1,8 @@
+import * as assigneeCandidates from '../src/composables/juyiting/hallAssigneeCandidates.js'
+import * as typedDeliberation from '../src/composables/juyiting/hallTypedDeliberation.js'
+import * as taskPresentation from '../src/composables/juyiting/hallTaskPresentation.js'
+import { taskStatusText } from '../src/constants/juyiting.js'
+import { displayFixture } from './fixtures/juyiting/interface-display-fixture.mjs'
 import * as skillResults from '../src/composables/juyiting/useHallSkillResults.js'
 import * as skillResultData from '../src/composables/juyiting/hallSkillResults.js'
 import { expect } from 'chai'
@@ -12,7 +17,7 @@ import { useHallBountyAcceptance } from '../src/composables/juyiting/useHallBoun
 import { useHallBountyFinalization, safeFinalizationVersion } from '../src/composables/juyiting/useHallBountyFinalization.js'
 import { useHallConversationArchive } from '../src/composables/juyiting/useHallConversationArchive.js'
 
-const raw = JSON.parse(readFileSync(new URL('./fixtures/juyiting/completed-message-delivery-v3.json', import.meta.url)))
+const raw = displayFixture(JSON.parse(readFileSync(new URL('./fixtures/juyiting/completed-message-delivery-v3.json', import.meta.url))))
 const request = () => ({ requestId: raw.requestId, requestRevision: raw.requestRevision, conversationId: raw.conversationId,
   conversationGeneration: raw.conversationGeneration, userMessageId: '1', state: 'COMPLETED', stateVersion: '1', steps: [], turns: [{
     turnId: raw.turnId, requestId: raw.requestId, requestRevision: raw.requestRevision, conversationId: raw.conversationId,
@@ -23,7 +28,7 @@ const Empty = Vue.defineComponent({ render: () => Vue.h('span') })
 const compile = (name, imports) => {
   const filename = new URL(`../src/components/juyiting/${name}.vue`, import.meta.url)
   const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename: filename.pathname })
-  const modules = new Proxy({ vue: Vue, '../../composables/juyiting/useHallSkillResults.js': skillResults, '../../composables/juyiting/hallSkillResults.js': skillResultData, ...imports }, { get: (obj, path) => obj[path] || Empty })
+  const modules = new Proxy({ vue: Vue, '../../composables/juyiting/hallTypedDeliberation.js': typedDeliberation, '../../composables/juyiting/useHallSkillResults.js': skillResults, '../../composables/juyiting/hallSkillResults.js': skillResultData, ...imports }, { get: (obj, path) => obj[path] || Empty })
   const code = compileScript(descriptor, { id: `five-${name}`, inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_, names, path) => `const { ${names.replace(/\s+as\s+/g, ': ')} } = imports[${JSON.stringify(path)}]`)
     .replace(/^import\s+(\w+)\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_, name, path) => `const ${name} = imports[${JSON.stringify(path)}]`)
@@ -40,14 +45,14 @@ const timers = () => {
 }
 const acceptanceHarness = () => {
   const reads = []; let snapshot = request()
-  const api = { list: async () => ({ data: [{ id: raw.conversationId, conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }] }),
+  const api = { list: async () => ({ items: [{ id: raw.conversationId, conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }], nextCursor: null, hasMore: false }),
     get: async (path, params) => {
       reads.push({ path, params })
-      if (path.endsWith('/requests')) return { data: { schemaVersion: 1, scope: { conversationId: raw.conversationId, conversationGeneration: raw.conversationGeneration, taskId: 'task' },
-        after: '0', through: '1', nextAfter: null, hasMore: false, entries: [{ ordinal: '1', request: snapshot }] } }
-      if (path.endsWith('/typed-outcome')) return { data: raw }
-      if (path.endsWith('/outputs')) return { data: [] }
-      if (path === `/requests/${raw.requestId}`) return { data: snapshot }
+      if (path.endsWith('/requests')) return ({ schemaVersion: 1, scope: { conversationId: raw.conversationId, conversationGeneration: raw.conversationGeneration, taskId: 'task' },
+        after: '0', through: '1', nextAfter: null, hasMore: false, entries: [{ ordinal: '1', request: snapshot }] })
+      if (path.endsWith('/typed-outcome')) return (raw)
+      if (path.endsWith('/outputs')) return ([])
+      if (path === `/requests/${raw.requestId}`) return (snapshot)
       throw new Error('unexpected read ' + path)
     }, execute: async () => { throw new Error('No mutations allowed') } }
   const shared = { '../../composables/useHttp.js': { createApi: () => api }, '../../composables/juyiting/bountyOutputCatalog.js': outputs,
@@ -66,7 +71,7 @@ describe('five fixes real mounted output consumers', () => {
     const clock = timers(); const h = acceptanceHarness(); let wrapper
     try {
       wrapper = mount(h.Panel, { props: { taskId: 'task', identityKey: 'owner-five', taskVersion: '9', taskCompleted: true } }); await settle()
-      expect(wrapper.text()).to.include('任务已完成')
+      expect(wrapper.text()).to.include('事项已完成')
       const initial = h.counts()
       for (let i = 0; i < 3; i++) await clock.tick()
       const expected = 1
@@ -79,9 +84,9 @@ describe('five fixes real mounted output consumers', () => {
 
 const panelProps = { embeddedHall: true, detailAllowed: true, identityScope: 'owner-five', authorizationGeneration: 1,
   abilityText: () => '', canAssign: () => true, formatTime: () => '', portraitName: () => '', portraitStyle: () => ({}),
-  taskAgentMatchScore: () => 0, taskStateClass: () => '', taskStatusCount: () => 0, taskStatusText: x => x }
+  taskAgentMatchScore: () => 0, taskStateClass: () => '', taskStatusCount: () => 0, taskStatusText }
 const panelTask = (overrides = {}) => ({ id: 'a', title: '原事项A', status: 'assigned', taskVersion: '2', funding: null, assignedAgentIds: ['old-agent'], ...overrides })
-const Panel = compile('BountyPanel', { '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinary, '@/utils/silverAmount': silver })
+const Panel = compile('BountyPanel', { '@/composables/juyiting/hallAssigneeCandidates.js': assigneeCandidates, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinary, '@/utils/silverAmount': silver })
 const DialogFixture = Vue.defineComponent({ props: ['show', 'title', 'message'], emits: ['confirm', 'cancel', 'close', 'update:show'],
   template: `<aside v-if="show" class="confirmation-fixture" role="dialog"><h3>{{title}}</h3><p>{{message}}</p><button class="confirm" @click="$emit('update:show', false); $emit('confirm')">确认取消事项</button><button class="dismiss" @click="$emit('update:show', false); $emit('cancel')">保留事项</button></aside>` })
 const openPanel = async (task = panelTask(), extra = {}) => {
@@ -90,7 +95,7 @@ const openPanel = async (task = panelTask(), extra = {}) => {
 }
 
 describe('five fixes cancellation thin confirmation layer', () => {
-  it('dismisses without POST, then confirms the exact original integer version once, not a newly selected task', async () => {
+  it('dismisses without POST, then confirms the exact original decimal-string version once, not a newly selected task', async () => {
     const task = panelTask(); const wrapper = await openPanel(task)
     try {
       await wrapper.get('.ordinary-cancel-action').trigger('click')
@@ -100,7 +105,7 @@ describe('five fixes cancellation thin confirmation layer', () => {
       await wrapper.get('.ordinary-cancel-action').trigger('click')
       await wrapper.get('.confirm').trigger('click')
       expect(wrapper.emitted('cancel-task')).to.have.length(1)
-      expect(wrapper.emitted('cancel-task')[0][0]).to.include({ id: 'a', taskVersion: 2 })
+      expect(wrapper.emitted('cancel-task')[0][0]).to.include({ id: 'a', taskVersion: '2' })
       await wrapper.get('.ordinary-cancel-action').trigger('click')
       expect(wrapper.emitted('cancel-task')).to.have.length(1)
     } finally { wrapper.unmount() }
@@ -128,7 +133,7 @@ describe('five fixes cancellation thin confirmation layer', () => {
   it('keeps unresolved as a GET-only check via the original composable, without another Dialog or POST', async () => {
     const task = Vue.ref(panelTask()); const calls = []
     const actions = ordinary.useHallOrdinaryCancellation({ selectedTask: task, tasks: Vue.ref([task.value]), identityScope: Vue.ref('owner-five'),
-      agentApi: { create: async () => { calls.push('POST'); throw new TypeError('ACK lost') }, get: async () => { calls.push('GET'); return { data: task.value } } }, log: { warn() {} } })
+      agentApi: { create: async () => { calls.push('POST'); throw new TypeError('ACK lost') }, get: async () => { calls.push('GET'); return (task.value) } }, log: { warn() {} } })
     let wrapper
     try {
       await actions.cancelTask(task.value)
@@ -140,7 +145,7 @@ describe('five fixes cancellation thin confirmation layer', () => {
       expect(calls).to.deep.equal(['POST', 'GET', 'GET'])
     } finally { wrapper?.unmount(); actions.dispose() }
   })
-  for (const [status, label] of [['failed', '失败'], ['blocked', '受阻'], ['cancelled', '已取消']]) it(`distinguishes ${status} in the actual detail advice DOM`, async () => {
+  for (const [status, label] of [['failed', '失败'], ['blocked', '进行中'], ['cancelled', '已取消']]) it(`distinguishes ${status} in the actual detail advice DOM`, async () => {
     const wrapper = await openPanel(panelTask({ status }))
     try { expect(wrapper.get('.matter-advice-heading').text()).to.include(label) } finally { wrapper.unmount() }
   })
@@ -158,7 +163,8 @@ describe('five fixes poll lifecycle and projection hints', () => {
       expect(h.counts()).to.deep.equal({ catalog: 2, request: 2, typed: 2 })
       await wrapper.setProps({ taskVersion: '10' }); await settle()
       expect(h.counts().catalog).to.equal(3)
-      expect(wrapper.find('.finalize-button').exists()).to.equal(true)
+      expect(wrapper.find('.finalize-button').exists()).to.equal(false)
+      expect(wrapper.emitted('task-completed')).to.equal(undefined)
     } finally { wrapper?.unmount(); clock.restore() }
   })
   it('keeps active execution refreshing across three cycles then stops both chains at terminal snapshots', async () => {
@@ -226,20 +232,20 @@ describe('five fixes poll lifecycle and projection hints', () => {
   it('aborts an in-flight catalog on disable and never admits its late response', async () => {
     const clock = timers(); const enabled = Vue.ref(true); let resolve, signal
     const source = useHallBountyAcceptance({ taskId: () => 'task', identityKey: () => 'owner-abort', enabled: () => enabled.value,
-      api: { list: async () => ({ data: [{ id: raw.conversationId, conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }] }),
+      api: { list: async () => ({ items: [{ id: raw.conversationId, conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }], nextCursor: null, hasMore: false }),
         get: (_path, _params, options) => { signal = options.signal; return new Promise(done => { resolve = done }) } } })
     try {
       await settle(); enabled.value = false; expect(signal.aborted).to.equal(true)
-      resolve({ data: {} }); await settle(); expect(source.scope.value).to.equal(null); expect(source.catalog.entries.value).to.deep.equal([])
+      resolve(({})); await settle(); expect(source.scope.value).to.equal(null); expect(source.catalog.entries.value).to.deep.equal([])
       expect(clock.jobs.size).to.equal(0)
     } finally { source.dispose(); clock.restore() }
   })
   it('does not lose a stateVersion refresh hint while the original catalogue read is in flight', async () => {
     const clock = timers(); const version = Vue.ref('1'); let resolve, reads = 0
-    const entryPage = snapshot => ({ data: { schemaVersion: 1, scope: { conversationId: '42', conversationGeneration: '1', taskId: 'task' },
-      after: '0', through: '1', nextAfter: null, hasMore: false, entries: [{ ordinal: '1', request: snapshot }] } })
+    const entryPage = snapshot => (({ schemaVersion: 1, scope: { conversationId: '42', conversationGeneration: '1', taskId: 'task' },
+      after: '0', through: '1', nextAfter: null, hasMore: false, entries: [{ ordinal: '1', request: snapshot }] }))
     const source = useHallBountyAcceptance({ taskId: () => 'task', identityKey: () => 'version-inflight', stateVersion: () => version.value,
-      api: { list: async () => ({ data: [{ id: '42', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }] }),
+      api: { list: async () => ({ items: [{ id: '42', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }], nextCursor: null, hasMore: false }),
         get: async () => { reads++; return reads === 1 ? new Promise(done => { resolve = done }) : entryPage({ ...request(), state: 'RUNNING', stateVersion: '2', turns: [] }) } } })
     try {
       await settle(); version.value = '2'
@@ -251,10 +257,10 @@ describe('five fixes poll lifecycle and projection hints', () => {
   it('queues a gallery version refresh during GET, and aborts/fences a late old-identity response', async () => {
     const clock = timers(); let wrapper, resolve, capturedSignal, reads = 0
     const lateApi = { get: async (path, _params, options) => {
-      if (path.endsWith('/typed-outcome')) return { data: raw }
+      if (path.endsWith('/typed-outcome')) return (raw)
       reads++; capturedSignal = options.signal
       if (reads === 1) return new Promise(done => { resolve = done })
-      return { data: request() }
+      return (request())
     }, execute: async () => { throw new Error('read only') } }
     const Gallery = compile('BountyExecutionOutputs', { '../../composables/useHttp.js': { createApi: () => lateApi },
       '../../composables/juyiting/bountyOutputCatalog.js': outputs, '../../utils/outputDownload.js': { saveOutputBlob() {} },
@@ -263,12 +269,12 @@ describe('five fixes poll lifecycle and projection hints', () => {
     try {
       wrapper = mount(Gallery, { props: { enabled: true, acceptance: true, taskId: 'task', conversationId: '42', identityKey: 'old', request: request() } })
       await settle(); await wrapper.setProps({ request: { ...request(), stateVersion: '2' } })
-      resolve({ data: request() }); await settle(); expect(reads).to.equal(2)
+      resolve((request())); await settle(); expect(reads).to.equal(2)
       // Same context stays fenced; a different identity must synchronously abort.
       reads = 0; await wrapper.setProps({ identityKey: 'delayed-owner' }); await settle()
       expect(reads).to.equal(1); const oldSignal = capturedSignal
       await wrapper.setProps({ enabled: false }); expect(oldSignal.aborted).to.equal(true)
-      resolve({ data: request() }); await settle()
+      resolve((request())); await settle()
       expect(wrapper.find('.bounty-output-text').exists()).to.equal(false); expect(clock.jobs.size).to.equal(0)
     } finally { wrapper?.unmount(); clock.restore() }
   })
@@ -277,10 +283,25 @@ describe('five fixes poll lifecycle and projection hints', () => {
     // Same composable used by JuyiHall terminalConversationHistory, not an output replacement.
     let reads = 0
     const source = useHallBountyAcceptance({ taskId: () => 'task', identityKey: () => 'cancelled-history', taskCompleted: () => true,
-      api: { list: async () => ({ data: [{ id: '42', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }] }),
-        get: async () => { reads++; return { data: { schemaVersion: 1, scope: { conversationId: '42', conversationGeneration: '1', taskId: 'task' },
-          after: '0', through: '1', nextAfter: null, hasMore: false, entries: [{ ordinal: '1', request: { ...request(), state: 'RUNNING', turns: [] } }] } } } } })
+      api: { list: async () => ({ items: [{ id: '42', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }], nextCursor: null, hasMore: false }),
+        get: async () => { reads++; return ({ schemaVersion: 1, scope: { conversationId: '42', conversationGeneration: '1', taskId: 'task' },
+          after: '0', through: '1', nextAfter: null, hasMore: false, entries: [{ ordinal: '1', request: { ...request(), state: 'RUNNING', turns: [] } }] }) } } })
     try { await settle(); for (let i = 0; i < 3; i++) await clock.tick(); expect(reads).to.equal(1); expect(clock.jobs.size).to.equal(0) }
     finally { source.dispose(); clock.restore() }
+  })
+})
+
+// UI parity: help reuses the existing parent-owned onboarding and focus target.
+describe('mine help entry', () => {
+  it('emits the existing help action with its trigger and keeps other entries intact', async () => {
+    const Mine = compile('HallMinePage', {})
+    const wrapper = mount(Mine)
+    try {
+      const trigger = wrapper.get('.mine-help button')
+      await trigger.trigger('click')
+      expect(wrapper.emitted('help')).to.have.length(1)
+      expect(wrapper.emitted('help')[0][0]).to.equal(trigger.element)
+      expect(wrapper.findAll('.mine-grid button')).to.have.length(5)
+    } finally { wrapper.unmount() }
   })
 })

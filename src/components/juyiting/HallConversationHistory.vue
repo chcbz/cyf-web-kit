@@ -19,6 +19,7 @@
           </button>
           <button
             type="button"
+            v-if="!readOnly"
             class="history-delete"
             :title="`删除话头：${conversation.title}`"
             :aria-label="conversation.id === deletingId ? `正在删除话头：${conversation.title}` : `删除话头：${conversation.title}`"
@@ -63,6 +64,7 @@ const props = defineProps({
   conversations: { type: Array, default: () => [] },
   deletingId: { type: String, default: '' },
   disabled: { type: Boolean, default: false },
+  readOnly: { type: Boolean, default: false },
   error: { type: String, default: '' },
   hasMore: { type: Boolean, default: false },
   loading: { type: Boolean, default: false },
@@ -75,7 +77,7 @@ const deleteCandidate = ref(null)
 const deleteDialogMessage = computed(() => `确认删除“${deleteCandidate.value?.title || '未题话头'}”吗？删除后无法恢复。`)
 
 const requestDelete = conversation => {
-  if (props.disabled || props.loading || props.deletingId || !conversation?.id) return
+  if (props.readOnly || props.disabled || props.loading || props.deletingId || !conversation?.id) return
   deleteCandidate.value = conversation
   showDeleteDialog.value = true
 }
@@ -88,7 +90,7 @@ const confirmDelete = () => {
   const id = deleteCandidate.value?.id
   showDeleteDialog.value = false
   deleteCandidate.value = null
-  if (id) emit('delete', id)
+  if (id && !props.readOnly && !props.disabled && !props.loading && !props.deletingId) emit('delete', id)
 }
 
 const formatTime = value => {

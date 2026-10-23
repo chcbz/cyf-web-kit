@@ -10,7 +10,7 @@ const exactId = value => typeof value === 'string' && value.length > 0 && value.
   const point = char.codePointAt(0)
   return point >= 0x20 && point !== 0x7f && !(point >= 0x80 && point <= 0x9f) && !(point >= 0xd800 && point <= 0xdfff)
 })
-const exactVersion = value => Number.isInteger(value) && value >= 1 && value <= MAX_INT
+const exactVersion = value => typeof value === 'string' && /^[1-9][0-9]{0,9}$/.test(value) && BigInt(value) <= BigInt(MAX_INT)
 const valueOf = value => typeof value === 'function' ? value() : unref(value)
 const normalizeMime = value => typeof value === 'string' ? value.split(';', 1)[0].trim().toLowerCase() : ''
 const result = (state, reason = null, inputRefs = []) => Object.freeze({

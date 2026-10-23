@@ -1,3 +1,4 @@
+import { hallTaskPhases, projectHallTask } from './hallTaskPresentation.js'
 import { computed, getCurrentInstance, onBeforeUnmount, ref, unref, watch } from 'vue'
 import { agentApi as defaultApi } from '../useHttp.js'
 import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
@@ -12,7 +13,7 @@ const valueOf = value => typeof value === 'function' ? value() : unref(value)
 const timestamp = value => Number.isSafeInteger(value) && value >= 0
 const id = value => typeof value === 'string' && value.length > 0 && value.length <= 100 && value === value.trim() && ![...value].some(char => char.codePointAt(0) < 32)
 const text = value => typeof value === 'string' && value.length > 0
-const unwrap = response => response?.data?.data ?? response?.data ?? response
+const unwrap = response => response
 const abort = () => new DOMException('Hall read context changed', 'AbortError')
 const partition = (status = 'idle', errorCode = null) => ({ items: [], status, nextCursor: null, count: null, errorCode, loading: false, readError: '', asOf: null })
 const section = (status = 'idle', errorCode = null) => ({ status, partitions: Object.fromEntries(HALL_SOURCES.map(source => [source, partition(status, errorCode)])) })
@@ -24,7 +25,7 @@ const aggregate = partitions => {
 export const canOpenHallItem = item => Boolean(actions[item?.ref?.sourceType] === item?.nextAction && item?.allowedActions?.includes(item.nextAction))
 
 const validResultRef = value => value === null || (id(value?.executionId) && id(value?.manifestId))
-const validMark = value => value && timestamp(value.revision) && typeof value.archived === 'boolean' && validResultRef(value.viewedResultRef)
+const validMark = value => value && typeof value.revision === 'string' && /^(0|[1-9][0-9]*)$/.test(value.revision) && BigInt(value.revision) <= 9223372036854775807n && typeof value.archived === 'boolean' && validResultRef(value.viewedResultRef)
 const validReview = value => value?.code === 'FORMAL_DELIVERY_SUBMITTED' && id(value.deliveryId) && id(value.workItemId) &&
   text(value.deliveryVersion) && text(value.taskVersion)
 const validItem = (item, source) => item && sourceTypes[source].includes(item.ref?.sourceType) && id(item.ref.sourceId) &&
@@ -32,7 +33,8 @@ const validItem = (item, source) => item && sourceTypes[source].includes(item.re
   timestamp(item.status.observedAt) && (item.targetAgent === null || id(item.targetAgent?.agentId)) &&
   item.nextAction === actions[item.ref.sourceType] && Array.isArray(item.allowedActions) && item.allowedActions.every(text) && timestamp(item.updatedAt) &&
   (item.personalMark == null || (source === 'private' && validMark(item.personalMark))) &&
-  (item.review == null || (source === 'task' && validReview(item.review)))
+  (source !== 'task' || (hallTaskPhases.includes(item.phase) && projectHallTask({ task: { id: item.ref.sourceId, status: item.status.code, phase: item.phase } }).phase === item.phase)) &&
+  (item.review == null || (source === 'task' && validReview(item.review) && item.phase === 'PENDING_ACCEPTANCE'))
 
 const readPartition = (value, source, sourceStatus, asOf) => {
   if (!value || !statuses.includes(value.status) || value.count !== null || !Array.isArray(value.items) ||

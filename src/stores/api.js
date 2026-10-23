@@ -1,3 +1,4 @@
+import { encodeHttpRequest, decodeHttpResponse } from '../utils/apiEnvelope.js'
 import { defineStore, getActivePinia } from 'pinia'
 import { useUtilStore } from './util'
 import { useGlobalStore } from './global'
@@ -217,14 +218,17 @@ export function validTenantIdentity (identity, transaction) {
 
 export async function verifyPersistedTenantSession (record, transaction, { signal } = {}) {
   if (!record || !validTenantIdentity(record.identity, transaction)) return false
+  const requestId = crypto.randomUUID()
   const response = await fetch(`${transaction.authorizationServer}/resource`, {
     method: 'GET',
-    headers: { Authorization: `Bearer ${record.accessToken}`, 'Cache-Control': 'no-store' },
+    headers: { Authorization: `Bearer ${record.accessToken}`, 'Cache-Control': 'no-store', 'X-Request-Id': requestId },
     cache: 'no-store',
     signal
   })
   if (!response.ok) return false
-  const verified = verifiedResourceIdentity(await response.json(), record.accessToken, transaction)
+  const { value: resourceIdentity } = decodeHttpResponse(await response.text(), { status: response.status,
+    requestId, responseRequestId: response.headers.get('X-Request-Id') })
+  const verified = verifiedResourceIdentity(resourceIdentity, record.accessToken, transaction)
   if (!validTenantIdentity(verified, transaction)) return false
   const fields = fixedTenantMode()
     ? ['issuer', 'subject', 'clientId', 'tenantId', 'tokenKind', 'userId', 'authEpoch', 'jiacn']
@@ -589,15 +593,21 @@ export const useApiStore = defineStore('api', {
         operation.assertCurrent()
         const token = validateTokenResponse(payload)
         if (tenantIsolationEnabled()) {
+          const identityRequestId = crypto.randomUUID()
           const identityResponse = await fetch(`${transaction.authorizationServer}/resource`, {
             method: 'GET',
-            headers: { Authorization: `Bearer ${token.accessToken}`, 'Cache-Control': 'no-store' },
+            headers: { Authorization: `Bearer ${token.accessToken}`, 'Cache-Control': 'no-store',
+              'X-Request-Id': identityRequestId },
             cache: 'no-store',
             signal: operation.signal
           })
           operation.assertCurrent()
           if (!identityResponse.ok) throw new Error('Tenant identity verification failed')
-          const identity = verifiedResourceIdentity(await identityResponse.json(), token.accessToken, transaction)
+          const { value: resourceIdentity } = decodeHttpResponse(await identityResponse.text(), {
+            status: identityResponse.status, requestId: identityRequestId,
+            responseRequestId: identityResponse.headers.get('X-Request-Id')
+          })
+          const identity = verifiedResourceIdentity(resourceIdentity, token.accessToken, transaction)
           operation.assertCurrent()
           if (!validTenantIdentity(identity, transaction)) throw new Error('Tenant identity verification failed')
           const record = Object.freeze({
@@ -695,12 +705,14 @@ export const useApiStore = defineStore('api', {
       let accessToken = utilStore.getLocalStorage(wxJsTokenKey)
       if (!accessToken) {
         const xhr = new XMLHttpRequest()
-        xhr.open('GET', `${this.baseUrl}/wx/mp/jsapi/signature?appid=${globalStore.user.appid}&url=${url}`, false)
+        const requestId = crypto.randomUUID()
+        xhr.open('POST', `${this.baseUrl}/wx/mp/jsapi/signature?appid=${encodeURIComponent(globalStore.user.appid)}&url=${encodeURIComponent(url)}`, false)
+        xhr.setRequestHeader('X-Request-Id', requestId)
         xhr.setRequestHeader('Content-Type', 'application/json')
-        xhr.send(null)
-        const data = JSON.parse(xhr.responseText)
-        if (data && data.data) {
-          accessToken = data.data
+        xhr.send(JSON.stringify(encodeHttpRequest(null, requestId)))
+        const { value: data } = decodeHttpResponse(xhr.responseText, { status: xhr.status, requestId, responseRequestId: xhr.getResponseHeader('X-Request-Id') })
+        if (data) {
+          accessToken = data
           utilStore.setLocalStorage(wxJsTokenKey, accessToken, new Date().getTime() + 6000000)
         }
       }
@@ -725,21 +737,19 @@ export const useApiStore = defineStore('api', {
         operation.assertCurrent()
         if (!token) throw unauthenticatedError()
 
+        const requestId = crypto.randomUUID()
         const response = await fetch(`${this.baseUrl}/user/my`, {
           method: 'GET',
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${token}`, 'X-Request-Id': requestId },
           cache: 'no-store',
           signal: operation.signal
         })
         operation.assertCurrent()
-        if (!response.ok) throw new Error('Failed to get user info')
-
-        const result = await response.json()
+        const { value: data } = decodeHttpResponse(await response.text(), { status: response.status, requestId, responseRequestId: response.headers.get('X-Request-Id') })
         operation.assertCurrent()
         await this.assertTenantTokenCurrent(token)
         operation.assertCurrent()
-        log.debug('User info retrieved:', result)
-        const data = result.data
+        log.debug('User info retrieved:', data)
         if (tenantIsolationEnabled()) {
           const tenantId = this.activeTenantId()
           const context = await tenantLedgerContext(this.oauthClientId, this.oauthAuthorizationServer())

@@ -90,9 +90,7 @@ const startMockApi = () => new Promise((resolveStart, reject) => {
     if (req.method === 'GET' && path === '/chat/conversation/content') return json(res, 200, { data: [] })
     if (req.method === 'GET' && path === '/chat/conversation/events') { res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', 'access-control-allow-origin': appOrigin }); return res.end() }
     if (req.method === 'GET' && path === `/agent/conversations/${conversationId}/deliverables`) return json(res, 200, { items: [deliverable], nextCursor: null, state: 'AVAILABLE', publicationPending: false })
-    if (req.method === 'GET' && path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/preview`) return json(res, 200, { state: 'READY', parts: [{ partId: 'slide-1', contentMimeType: 'image/png' }, { partId: 'slide-2', contentMimeType: 'image/png' }, { partId: 'content', contentMimeType: 'text/plain' }], partial: false })
-    if (req.method === 'GET' && path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/preview/parts/slide-1`) return binary(res, 200, previewPng, 'image/png')
-    if (req.method === 'GET' && path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/preview/parts/slide-2`) return binary(res, 200, previewPng, 'image/png')
+    if (req.method === 'GET' && path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/preview`) return json(res, 200, { state: 'UNSUPPORTED', parts: [], partial: false, reason: '该文件类型暂不支持预览' })
     if (req.method === 'GET' && path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/content`) return binary(res, 200, Buffer.from('pptx-mock'), deliverable.contentMimeType)
     if (req.method === 'POST' && path === '/agent/roster') return json(res, 200, { data: [agent] })
     if (req.method === 'POST' && path === '/agent/personal-workspace/executions') return json(res, 200, execution())
@@ -167,7 +165,6 @@ async function run () {
   await clickText('预览')
   await waitForExpression(cdp, visibleText('旧 content 预览'), 10_000)
   const legacyPreviewMeta = requests.find(request => request.method === 'GET' && request.path === `/agent/personal-workspace/files/${file.fileId}/versions/1/preview`)
-  check('workspace explicitly opts into multi-part view metadata', legacyPreviewMeta?.query?.view === 'parts')
   check('workspace renders old EXTRACTED_TEXT content compatibility part', requests.some(request => request.method === 'GET' && request.path === `/agent/personal-workspace/files/${file.fileId}/versions/1/preview/parts/content`))
   await clickText('加入执行资料')
   await setControl('section[aria-labelledby="workspace-execution-title"] textarea', '根据 v1 制作 PPT')
@@ -213,7 +210,7 @@ async function run () {
   await noHorizontalOverflow('landscape Hall task material picker')
 
   // Third journey: a real Vue private-discussion surface consumes only mock-authorized
-  // conversation deliverable references, then renders server-declared PPT page parts.
+  // conversation deliverable references; PPT remains download-only.
   await setViewport(390, 844)
   await cdp.send('Page.navigate', { url: `${appOrigin}/juyiting` })
   // Close the unrelated onboarding overlay through its own explicit control; this does
@@ -228,18 +225,14 @@ async function run () {
   await clickSelector('[data-portrait-action="private-discussion"]')
   await waitForExpression(cdp, `document.querySelector('.deliverable-directory[aria-label="本话头执行与成果"]') != null`, 30_000)
   await waitForExpression(cdp, visibleText('执行成果'), 20_000)
-  await clickText('预览')
-  await waitForExpression(cdp, visibleText('第 1 / 2 页'), 20_000)
-  await clickText('下一页')
-  await waitForExpression(cdp, visibleText('第 2 / 2 页'), 10_000)
+  check('PPT output has no preview action', !await evaluate(cdp, `Array.from(document.querySelectorAll('.deliverable-directory button')).some(button => button.textContent.trim() === '预览')`))
   await clickText('下载')
   // Wait for the authenticated blob read itself, rather than racing the mock log.
   await waitForMockRequest(request => request.method === 'GET' && request.path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/content`, 'private discussion exact-version download')
   check('private discussion lists only its conversation deliverable', requests.some(request => request.method === 'GET' && request.path === `/agent/conversations/${conversationId}/deliverables`))
-  check('private discussion explicitly opts into multi-part view metadata', requests.some(request => request.method === 'GET' && request.path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/preview` && request.query.view === 'parts'))
-  check('private discussion loads both declared PPT preview pages', requests.filter(request => request.method === 'GET' && request.path.startsWith(`/agent/personal-workspace/files/${deliverable.fileId}/versions/1/preview/parts/`)).length === 2)
   check('private discussion downloads its exact output version', requests.some(request => request.method === 'GET' && request.path === `/agent/personal-workspace/files/${deliverable.fileId}/versions/1/content`))
-  await noHorizontalOverflow('private discussion output preview')
+  check('PPT output makes no preview request', !requests.some(request => request.path.startsWith(`/agent/personal-workspace/files/${deliverable.fileId}/versions/1/preview`)))
+  await noHorizontalOverflow('private discussion download-only output')
 
   // Restore the task-material surface before the layout viewport diagnostic; do not
   // assert against a panel that the preceding private-discussion journey has closed.

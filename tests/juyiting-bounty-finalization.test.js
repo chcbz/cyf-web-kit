@@ -3,17 +3,17 @@ import { ref } from 'vue'
 import { flushPromises } from '@vue/test-utils'
 import { safeFinalizationVersion, validFinalizationReceipt, useHallBountyFinalization } from '../src/composables/juyiting/useHallBountyFinalization.js'
 
-const body = () => ({ expectedTaskVersion: 9, expectedAssignmentRevision: 3, conversationId: 'conversation-1',
+const body = () => ({ expectedTaskVersion: '9', expectedAssignmentRevision: '3', conversationId: 'conversation-1',
   summary: '选定鸟图验收', selectedOutputs: [{ requestId: 'request-1', stepId: 'step-1', outputId: 'output_1',
     sha256: 'a'.repeat(64), title: '鸟', purpose: '最终成果' }] })
 const intent = () => ({ taskId: 'task-1', body: body(), operationId: '' })
 const receipt = (patch = {}, original = body()) => ({ operationId: 'finalization-1', taskId: 'task-1',
-  conversationId: 'conversation-1', state: 'pending', stateVersion: '1', stage: 'PROMOTING',
+  conversationId: 'conversation-1', state: 'PENDING', stateVersion: '1', stage: 'PROMOTING',
   expectedTaskVersion: String(original.expectedTaskVersion), expectedAssignmentRevision: String(original.expectedAssignmentRevision),
-  selectedOutputs: original.selectedOutputs, deliveryId: null, deliveryState: null, taskState: 'running', taskVersion: '9',
+  selectedOutputs: original.selectedOutputs, deliveryId: null, deliveryState: null, taskState: 'RUNNING', taskVersion: '9',
   errorCode: null, retryable: false, ...patch })
-const completed = (patch = {}, original = body()) => receipt({ state: 'completed', stage: 'TASK_COMPLETED', stateVersion: '5',
-  deliveryId: 'delivery-1', deliveryState: 'accepted', taskState: 'completed', taskVersion: '12', ...patch }, original)
+const completed = (patch = {}, original = body()) => receipt({ state: 'COMPLETED', stage: 'TASK_COMPLETED', stateVersion: '5',
+  deliveryId: 'delivery-1', deliveryState: 'ACCEPTED', taskState: 'COMPLETED', taskVersion: '12', ...patch }, original)
 const memory = () => { const values = new Map(); return { values, getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) } }
 const error = status => Object.assign(new Error('request failed'), { status })
 const setup = (execute, options = {}) => {
@@ -36,8 +36,8 @@ describe('MMD finalization immutable owner acceptance', () => {
       { taskId: 'other-task' }, { conversationId: 'other-conversation' }, { expectedTaskVersion: '10' },
       { expectedAssignmentRevision: '4' }, { expectedTaskVersion: 9 }, { stateVersion: '0' }, { stateVersion: '01' },
       { taskVersion: '8' }, { taskVersion: 12 }, { taskVersion: '9223372036854775808' },
-      { deliveryId: null }, { deliveryState: 'submitted' }, { taskState: 'reviewing' }, { state: 'pending' },
-      { stage: 'SUBMITTED' }, { errorCode: 'FAILURE' }, { retryable: true },
+      { deliveryId: null }, { deliveryState: 'SUBMITTED' }, { taskState: 'REVIEWING' }, { state: 'PENDING' },
+      { stage: 'READY_TO_SUBMIT' }, { errorCode: 'FAILURE' }, { retryable: true },
       { selectedOutputs: [] }, { selectedOutputs: [{ ...body().selectedOutputs[0], sha256: 'b'.repeat(64) }] },
       { selectedOutputs: [{ ...body().selectedOutputs[0], title: 'changed' }] }, { producerId: 'forged' }
     ]
@@ -46,8 +46,18 @@ describe('MMD finalization immutable owner acceptance', () => {
     expect(validFinalizationReceipt(missing, intent())).to.equal(false)
     expect(validFinalizationReceipt(completed(), { ...intent(), operationId: 'other-operation' })).to.equal(false)
   })
+  it('completes submission while leaving owner acceptance outstanding, including later reviewed readback', () => {
+    for (const deliveryState of ['SUBMITTED', 'ACCEPTED', 'CHANGES_REQUESTED']) {
+      expect(validFinalizationReceipt(completed({ stage: 'SUBMITTED', deliveryState,
+        taskState: deliveryState === 'ACCEPTED' ? 'COMPLETED' : deliveryState === 'SUBMITTED' ? 'REVIEWING' : 'RUNNING' }), intent())).to.equal(true)
+    }
+    for (const patch of [{ deliveryId: null }, { deliveryState: null }, { deliveryState: 'FAILED' },
+      { errorCode: 'FAILURE' }, { retryable: true }]) {
+      expect(validFinalizationReceipt(completed({ stage: 'SUBMITTED', ...patch }), intent())).to.equal(false)
+    }
+  })
   it('accepts actual nullable media receipt slots without relaxing the frozen source or request union', async () => {
-    const wire = completed({ selectedOutputs: [{ ...body().selectedOutputs[0], messageSource: null }] })
+    const wire = completed({ selectedOutputs: [{ ...body().selectedOutputs[0] }] })
     expect(validFinalizationReceipt(wire, intent())).to.equal(true)
     for (const patch of [{ messageSource: {} }, { messageSource: { turnId: 'forged' } },
       { sha256: 'b'.repeat(64) }, { stepId: 'other-step' }, { outputId: 'other-output' },
@@ -55,13 +65,13 @@ describe('MMD finalization immutable owner acceptance', () => {
       const changed = structuredClone(wire); Object.assign(changed.selectedOutputs[0], patch)
       expect(validFinalizationReceipt(changed, intent()), JSON.stringify(patch)).to.equal(false)
     }
-    const { client, calls } = setup(() => ({ data: wire }))
+    const { client, calls } = setup(() => (wire))
     try {
       const hybrid = body(); hybrid.selectedOutputs[0].messageSource = null
       expect(await client.submit({ taskId: 'task-1', body: hybrid })).to.equal(null)
       expect(calls).to.have.length(0)
-      expect((await send(client)).state).to.equal('completed')
-      expect(client.status.value.state).to.equal('completed')
+      expect((await send(client)).state).to.equal('COMPLETED')
+      expect(client.status.value.state).to.equal('COMPLETED')
       expect(calls).to.have.length(1)
       expect(calls[0].data.selectedOutputs[0]).not.to.have.property('messageSource')
     } finally { client.dispose() }
@@ -69,12 +79,12 @@ describe('MMD finalization immutable owner acceptance', () => {
   it('reads a nullable media completion on remount without resubmitting', async () => {
     const { client, storage, calls, api } = setup(() => { throw new TypeError('lost response') })
     await send(client); client.dispose()
-    api.execute = async request => { calls.push(request); return { data: completed({ selectedOutputs: [{ ...body().selectedOutputs[0], messageSource: null }] }) } }
+    api.execute = async request => { calls.push(request); return completed({ selectedOutputs: [{ ...body().selectedOutputs[0] }] }) }
     const restored = useHallBountyFinalization({ api, storage, conversationId: 'conversation-1', identityKey: 'owner-a',
       idempotencyKeyFactory: () => { throw new Error('must keep original key') } })
     try {
       await flushPromises()
-      expect(restored.status.value.state).to.equal('completed')
+      expect(restored.status.value.state).to.equal('COMPLETED')
       expect(calls.map(c => c.method)).to.deep.equal(['POST', 'GET'])
       await restored.resume()
       expect(calls.map(c => c.method)).to.deep.equal(['POST', 'GET', 'GET'])
@@ -87,18 +97,18 @@ describe('MMD finalization immutable owner acceptance', () => {
       expect(request.headers['Idempotency-Key']).to.equal(persisted.idempotencyKey)
       expect(request.data).to.deep.equal(persisted.body)
       expect(Object.isFrozen(request.data.selectedOutputs[0])).to.equal(true)
-      return { data: { data: completed() } }
+      return completed()
     })
-    try { expect((await send(client)).state).to.equal('completed'); expect(client.status.value.state).to.equal('completed'); expect(calls).to.have.length(1) } finally { client.dispose() }
+    try { expect((await send(client)).state).to.equal('COMPLETED'); expect(client.status.value.state).to.equal('COMPLETED'); expect(calls).to.have.length(1) } finally { client.dispose() }
   })
   it('does not infer completion from a bare stage/delivery label', async () => {
-    const { client } = setup(() => ({ data: { stage: 'TASK_COMPLETED', deliveryId: 'delivery-1', deliveryState: 'accepted' } }))
+    const { client } = setup(() => ({ stage: 'TASK_COMPLETED', deliveryId: 'delivery-1', deliveryState: 'ACCEPTED' }))
     try { await send(client); expect(client.status.value.state).to.equal('unknown'); expect(client.status.value.intent).not.to.equal(null); expect(client.status.value.receipt).to.equal(null) } finally { client.dispose() }
   })
   it('does not submit concurrently on a second click', async () => {
     let finish
     const { client, calls } = setup(() => new Promise(resolve => { finish = resolve }))
-    try { const pending = send(client); expect(await send(client)).to.equal(null); expect(calls).to.have.length(1); finish({ data: completed() }); await pending } finally { client.dispose() }
+    try { const pending = send(client); expect(await send(client)).to.equal(null); expect(calls).to.have.length(1); finish(completed()); await pending } finally { client.dispose() }
   })
   it('lost acknowledgement/remount keeps the original key/body; a status check never writes', async () => {
     const { client, storage, calls, api } = setup(() => { throw new TypeError('lost acknowledgement') })
@@ -109,11 +119,11 @@ describe('MMD finalization immutable owner acceptance', () => {
       expect(calls).to.have.length(2); expect(calls[1].method).to.equal('GET'); expect(recovered.status.value.state).to.equal('unknown')
       await flushPromises()
       const original = recovered.status.value.intent
-      api.execute = async request => { calls.push(request); expect(request.method).to.equal('GET'); return { data: completed() } }
+      api.execute = async request => { calls.push(request); expect(request.method).to.equal('GET'); return completed() }
       await recovered.check()
       expect(calls[1].url).to.equal('/tasks/task-1/finalizations/request')
       expect(calls[1].headers['Idempotency-Key']).to.equal(original.idempotencyKey)
-      expect(recovered.status.value.state).to.equal('completed')
+      expect(recovered.status.value.state).to.equal('COMPLETED')
       await recovered.resume(); expect(calls.filter(c => c.method === 'POST')).to.have.length(1)
     } finally { recovered.dispose() }
   })
@@ -121,7 +131,7 @@ describe('MMD finalization immutable owner acceptance', () => {
     const { client, calls } = setup((request, count) => {
       if (count === 1) throw new TypeError('lost acknowledgement')
       if (request.method === 'GET') throw error(404)
-      return { data: completed() }
+      return completed()
     })
     try {
       await send(client); await client.check()
@@ -136,7 +146,7 @@ describe('MMD finalization immutable owner acceptance', () => {
     } finally { client.dispose() }
   })
   it('known operation reads by ID and resumes pending only with the original write', async () => {
-    const { client, calls } = setup(request => ({ data: request.method === 'POST' && calls.length > 1 ? completed() : receipt() }))
+    const { client, calls } = setup(request => (request.method === 'POST' && calls.length > 1 ? completed() : receipt()))
     try {
       await send(client); await client.check()
       expect(calls[1].url).to.equal('/tasks/task-1/finalizations/finalization-1')
@@ -147,16 +157,16 @@ describe('MMD finalization immutable owner acceptance', () => {
     } finally { client.dispose() }
   })
   for (const status of [401, 403, 409, 500]) it(`does not replay a POST when status reconciliation fails with ${status}`, async () => {
-    const { client, calls } = setup((request, count) => { if (count === 1) return { data: receipt() }; throw error(status) })
-    try { await send(client); await client.resume(); expect(calls.map(c => c.method)).to.deep.equal(['POST', 'GET']); expect(client.status.value.state).not.to.equal('completed') } finally { client.dispose() }
+    const { client, calls } = setup((request, count) => { if (count === 1) return receipt(); throw error(status) })
+    try { await send(client); await client.resume(); expect(calls.map(c => c.method)).to.deep.equal(['POST', 'GET']); expect(client.status.value.state).not.to.equal('COMPLETED') } finally { client.dispose() }
   })
   it('nonretryable domain failure is not automatically submitted again', async () => {
-    const { client, calls } = setup(() => ({ data: receipt({ state: 'failed', errorCode: 'ASSIGNMENT_CHANGED', retryable: false }) }))
-    try { await send(client); await client.resume(); expect(calls.map(c => c.method)).to.deep.equal(['POST', 'GET']); expect(client.status.value.state).to.equal('failed') } finally { client.dispose() }
+    const { client, calls } = setup(() => (receipt({ state: 'FAILED', errorCode: 'ASSIGNMENT_CHANGED', retryable: false })))
+    try { await send(client); await client.resume(); expect(calls.map(c => c.method)).to.deep.equal(['POST', 'GET']); expect(client.status.value.state).to.equal('FAILED') } finally { client.dispose() }
   })
   it('retryable phase failure can resume the original operation without generation', async () => {
-    const { client, calls } = setup(request => ({ data: request.method === 'POST' && calls.length > 1 ? completed() : receipt({ state: 'failed', errorCode: 'PROMOTION_STORAGE', retryable: true }) }))
-    try { await send(client); await client.resume(); expect(calls.map(c => c.method)).to.deep.equal(['POST', 'GET', 'POST']); expect(client.status.value.state).to.equal('completed') } finally { client.dispose() }
+    const { client, calls } = setup(request => (request.method === 'POST' && calls.length > 1 ? completed() : receipt({ state: 'FAILED', errorCode: 'PROMOTION_STORAGE', retryable: true })))
+    try { await send(client); await client.resume(); expect(calls.map(c => c.method)).to.deep.equal(['POST', 'GET', 'POST']); expect(client.status.value.state).to.equal('COMPLETED') } finally { client.dispose() }
   })
   it('identity switching aborts and fences a late completion while preserving each owner recovery key', async () => {
     const owner = ref('owner-a'); let finish
@@ -164,7 +174,7 @@ describe('MMD finalization immutable owner acceptance', () => {
     try {
       const pending = send(client); owner.value = 'owner-b'
       expect(calls[0].signal.aborted).to.equal(true)
-      finish({ data: completed() }); await pending
+      finish(completed()); await pending
       expect(client.status.value.state).to.equal('idle'); expect(client.status.value.receipt).to.equal(null)
       expect(storage.values.size).to.equal(1)
       owner.value = 'owner-a'; expect(client.status.value.state).to.equal('unknown')
@@ -173,12 +183,12 @@ describe('MMD finalization immutable owner acceptance', () => {
   })
   it('rejects receipt version rollback and conflicting same-version facts', async () => {
     const states = [receipt({ stateVersion: '4' }), receipt({ stateVersion: '3' }), receipt({ stateVersion: '4', stage: 'READY_TO_SUBMIT' })]
-    const { client } = setup(() => ({ data: states.shift() }))
+    const { client } = setup(() => (states.shift()))
     try { await send(client); await client.check(); expect(client.status.value.receipt.stateVersion).to.equal('4'); await client.check(); expect(client.status.value.receipt.stage).to.equal('PROMOTING') } finally { client.dispose() }
   })
   it('rejects a higher-version receipt that regresses a confirmed domain stage or completion', async () => {
     const states = [completed(), receipt({ stateVersion: '6', taskVersion: '12' })]
-    const { client } = setup(() => ({ data: states.shift() }))
+    const { client } = setup(() => (states.shift()))
     try { await send(client); await client.check(); expect(client.status.value.receipt.stage).to.equal('TASK_COMPLETED'); expect(client.status.value.receipt.deliveryId).to.equal('delivery-1') } finally { client.dispose() }
   })
   for (const label of ['unavailable', 'readback mismatch', 'corrupt recovered intent', 'recovery read error']) it(`never opens a new operation with ${label} storage`, async () => {
@@ -194,8 +204,8 @@ describe('MMD finalization immutable owner acceptance', () => {
     const storage = memory(); let writes = 0
     const original = storage.setItem
     storage.setItem = (key, value) => { if (++writes > 1) throw new Error('storage changed'); original(key, value) }
-    const { client } = setup(() => ({ data: completed() }), { storage })
-    try { await send(client); expect(client.status.value.state).to.equal('completed'); expect(client.status.value.receipt.deliveryId).to.equal('delivery-1') } finally { client.dispose() }
+    const { client } = setup(() => (completed()), { storage })
+    try { await send(client); expect(client.status.value.state).to.equal('COMPLETED'); expect(client.status.value.receipt.deliveryId).to.equal('delivery-1') } finally { client.dispose() }
   })
   it('does not accept hidden permission fields or duplicate source selections', async () => {
     const { client, calls } = setup(() => { throw new Error('must not request') })
@@ -208,7 +218,7 @@ describe('MMD finalization immutable owner acceptance', () => {
 })
 
 const textSelection = () => ({ requestId: 'text-request-1', sha256: 'c'.repeat(64), title: '文字成果', purpose: '最终成果',
-  messageSource: { turnId: 'text-turn-1', messageId: '9223372036854775807', snapshotId: 'snapshot-1', finalDigest: `sha256:${'d'.repeat(64)}` } })
+  messageSource: { turnId: 'text-turn-1', messageId: '9223372036854775807', snapshotId: 'snapshot-1', finalSha256: `${'d'.repeat(64)}` } })
 const textBody = (mixed = false) => ({ ...body(), summary: '文字直接验收',
   selectedOutputs: mixed ? [body().selectedOutputs[0], textSelection()] : [textSelection()] })
 const sendBody = (client, original) => client.submit({ taskId: 'task-1', body: original })
@@ -227,8 +237,8 @@ describe('MMD completed-message finalization wire and recovery', () => {
       const frozen = JSON.parse([...storage.values.values()][0]).body
       original.selectedOutputs.at(-1).messageSource.snapshotId = 'later-snapshot'
       expect(selected.messageSource.snapshotId).to.equal('snapshot-1')
-      finish({ data: completed({}, frozen) })
-      expect((await pending).state).to.equal('completed')
+      finish(completed({}, frozen))
+      expect((await pending).state).to.equal('COMPLETED')
       expect(client.status.value.receipt.selectedOutputs).to.deep.equal(frozen.selectedOutputs)
       expect(calls).to.have.length(1)
     } finally { client.dispose() }
@@ -236,7 +246,7 @@ describe('MMD completed-message finalization wire and recovery', () => {
   it('compares every actual message ref and preserves order rather than accepting a newer text receipt', () => {
     const original = textBody(true); const command = { ...intent(), body: original }
     expect(validFinalizationReceipt(completed({}, original), command)).to.equal(true)
-    for (const [field, value] of [['turnId', 'other-turn'], ['messageId', '101'], ['snapshotId', 'other-snapshot'], ['finalDigest', `sha256:${'e'.repeat(64)}`]]) {
+    for (const [field, value] of [['turnId', 'other-turn'], ['messageId', '101'], ['snapshotId', 'other-snapshot'], ['finalSha256', `${'e'.repeat(64)}`]]) {
       const changed = structuredClone(original); changed.selectedOutputs[1].messageSource[field] = value
       expect(validFinalizationReceipt(completed({}, changed), command), field).to.equal(false)
     }
@@ -255,7 +265,7 @@ describe('MMD completed-message finalization wire and recovery', () => {
         const invalid = textBody(); invalid.selectedOutputs[0].messageSource.messageId = id
         expect(await sendBody(client, invalid), String(id)).to.equal(null)
       }
-      for (const field of ['turnId', 'messageId', 'snapshotId', 'finalDigest']) {
+      for (const field of ['turnId', 'messageId', 'snapshotId', 'finalSha256']) {
         const invalid = textBody(); delete invalid.selectedOutputs[0].messageSource[field]
         expect(await sendBody(client, invalid), field).to.equal(null)
       }
@@ -264,7 +274,7 @@ describe('MMD completed-message finalization wire and recovery', () => {
         const invalid = textBody(); Object.assign(invalid.selectedOutputs[0], patch)
         expect(await sendBody(client, invalid), JSON.stringify(patch)).to.equal(null)
       }
-      for (const patch of [{ finalDigest: 'd'.repeat(64) }, { finalDigest: `sha256:${'D'.repeat(64)}` }, { turnId: '../other' },
+      for (const patch of [{ finalSha256: `sha256:${'d'.repeat(64)}` }, { finalSha256: `${'D'.repeat(64)}` }, { turnId: '../other' },
         { snapshotId: '' }, { messageId: '101', grantId: 'fake-grant' }]) {
         const invalid = textBody(); Object.assign(invalid.selectedOutputs[0].messageSource, patch)
         expect(await sendBody(client, invalid), JSON.stringify(patch)).to.equal(null)
@@ -276,10 +286,10 @@ describe('MMD completed-message finalization wire and recovery', () => {
   it('rejects duplicate actual text message even with a changed snapshot, digest or title', async () => {
     const { client, calls } = setup(() => { throw new Error('must not request') })
     try {
-      for (const field of ['snapshotId', 'finalDigest', 'title']) {
+      for (const field of ['snapshotId', 'finalSha256', 'title']) {
         const duplicate = textBody(); const second = textSelection()
         if (field === 'title') second.title = '另一标题'
-        else second.messageSource[field] = field === 'snapshotId' ? 'snapshot-2' : `sha256:${'e'.repeat(64)}`
+        else second.messageSource[field] = field === 'snapshotId' ? 'snapshot-2' : `${'e'.repeat(64)}`
         duplicate.selectedOutputs.push(second)
         expect(await sendBody(client, duplicate)).to.equal(null)
       }
@@ -297,20 +307,20 @@ describe('MMD completed-message finalization wire and recovery', () => {
     try {
       expect(recovered.status.value.intent.body).to.deep.equal(frozen)
       expect(Object.isFrozen(recovered.status.value.intent.body.selectedOutputs[1].messageSource)).to.equal(true)
-      api.execute = async request => { calls.push(request); if (request.method === 'GET') throw error(404); return { data: completed({}, frozen) } }
+      api.execute = async request => { calls.push(request); if (request.method === 'GET') throw error(404); return completed({}, frozen) }
       await flushPromises()
       expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET'])
       await sendBody(recovered, textBody())
       expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET', 'GET', 'POST'])
       expect(calls[3].data).to.deep.equal(frozen)
       expect(calls[3].headers).to.deep.equal(calls[0].headers)
-      expect(recovered.status.value.state).to.equal('completed')
+      expect(recovered.status.value.state).to.equal('COMPLETED')
     } finally { recovered.dispose() }
   })
   it('changed nested message refs in a server receipt leave original text intent unresolved', async () => {
     const original = textBody(); const changed = textBody()
     changed.selectedOutputs[0].messageSource.snapshotId = 'different-snapshot'
-    const { client, calls } = setup(() => ({ data: completed({}, changed) }))
+    const { client, calls } = setup(() => (completed({}, changed)))
     try {
       expect(await sendBody(client, original)).to.equal(null)
       expect(client.status.value.state).to.equal('unknown')
@@ -326,7 +336,7 @@ describe('MMD completed-message finalization wire and recovery', () => {
     try {
       const pending = sendBody(client, original); owner.value = 'owner-b'
       expect(calls[0].signal.aborted).to.equal(true)
-      finish({ data: completed({}, original) }); await pending
+      finish(completed({}, original)); await pending
       expect(client.status.value.state).to.equal('idle')
       expect(client.status.value.intent).to.equal(null)
       owner.value = 'owner-a'
@@ -350,16 +360,15 @@ describe('MMD completed-message finalization wire and recovery', () => {
 })
 
 
-describe('real API text receipt nullable DTO source slots', () => {
-  const dtoReceipt = original => completed({ selectedOutputs: original.selectedOutputs.map(item => item.messageSource
-    ? { ...item, stepId: null, outputId: null } : item) }, original)
+describe('public finalization exact source union', () => {
+  const dtoReceipt = original => completed({ selectedOutputs: structuredClone(original.selectedOutputs) }, original)
   it('recognizes completed pure text and mixed receipts without changing frozen request sources', async () => {
     for (const mixed of [false, true]) {
       const original = textBody(mixed)
-      const { client, calls } = setup(() => ({ data: dtoReceipt(original) }))
+      const { client, calls } = setup(() => (dtoReceipt(original)))
       try {
         await client.submit({ taskId: 'task-1', body: original })
-        expect(client.status.value.state).to.equal('completed')
+        expect(client.status.value.state).to.equal('COMPLETED')
         expect(client.status.value.receipt.selectedOutputs).to.deep.equal(original.selectedOutputs)
         expect(calls[0].data).to.deep.equal(original)
         expect(calls).to.have.length(1)
@@ -371,13 +380,13 @@ describe('real API text receipt nullable DTO source slots', () => {
     const { client, calls } = setup((request, count) => {
       if (count === 1) throw new TypeError('lost acknowledgement')
       expect(request.method).to.equal('GET')
-      return { data: dtoReceipt(original) }
+      return dtoReceipt(original)
     })
     try {
       await client.submit({ taskId: 'task-1', body: original })
       const key = client.status.value.intent.idempotencyKey
       await client.check()
-      expect(client.status.value.state).to.equal('completed')
+      expect(client.status.value.state).to.equal('COMPLETED')
       expect(client.status.value.intent.idempotencyKey).to.equal(key)
       expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET'])
     } finally { client.dispose() }
@@ -389,7 +398,7 @@ describe('real API text receipt nullable DTO source slots', () => {
       const changed = dtoReceipt(original); changed.selectedOutputs[1] = { ...changed.selectedOutputs[1], ...patch }
       expect(validFinalizationReceipt(changed, command)).to.equal(false)
     }
-    const partial = dtoReceipt(original); delete partial.selectedOutputs[1].outputId
+    const partial = dtoReceipt(original); partial.selectedOutputs[1].outputId = null
     expect(validFinalizationReceipt(partial, command)).to.equal(false)
     const reordered = dtoReceipt(original); reordered.selectedOutputs.reverse()
     expect(validFinalizationReceipt(reordered, command)).to.equal(false)
@@ -398,21 +407,21 @@ describe('real API text receipt nullable DTO source slots', () => {
 
 describe('UR06 completed acceptance reload reconciliation', () => {
   it('automatically reads a completed operation on remount without a second POST', async () => {
-    const { client, calls, api, storage } = setup(() => ({ data: completed() }))
+    const { client, calls, api, storage } = setup(() => (completed()))
     await send(client); client.dispose()
     const recovered = useHallBountyFinalization({ api, storage, taskId: 'task-1', conversationId: 'conversation-1', identityKey: 'owner-a' })
     try {
       expect(recovered.status.value.message).to.equal('正在核对验收状态…')
       expect(recovered.status.value.busy).to.equal(true)
       await flushPromises()
-      expect(recovered.status.value.state).to.equal('completed')
+      expect(recovered.status.value.state).to.equal('COMPLETED')
       expect(recovered.status.value.message).to.equal('验收完成。')
       expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET'])
       expect(calls[1].url).to.equal('/tasks/task-1/finalizations/finalization-1')
     } finally { recovered.dispose() }
   })
   for (const code of [401, 403, 404, 500, 'network']) it(`recovery ${code} never replays a POST or infers completion`, async () => {
-    const { client, calls, api, storage } = setup(() => ({ data: completed() }))
+    const { client, calls, api, storage } = setup(() => (completed()))
     await send(client); client.dispose()
     api.execute = async request => { calls.push(request); throw code === 'network' ? new TypeError('offline') : error(code) }
     const recovered = useHallBountyFinalization({ api, storage, taskId: 'task-1', conversationId: 'conversation-1', identityKey: 'owner-a' })
@@ -420,14 +429,14 @@ describe('UR06 completed acceptance reload reconciliation', () => {
       await flushPromises()
       expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET'])
       expect(recovered.status.value.busy).to.equal(false)
-      expect(recovered.status.value.state).not.to.equal('completed')
+      expect(recovered.status.value.state).not.to.equal('COMPLETED')
       expect(recovered.status.value.receipt).to.equal(null)
       expect(recovered.status.value.message).not.to.include('验收尚未完成')
       if (code === 404 || code === 500 || code === 'network') expect(recovered.status.value.message).to.include('暂时无法确认')
     } finally { recovered.dispose() }
   })
   for (const change of ['task', 'identity', 'conversation', 'dispose']) it(`fences late recovery after ${change} changes`, async () => {
-    const { client, calls, api, storage } = setup(() => ({ data: completed() }))
+    const { client, calls, api, storage } = setup(() => (completed()))
     await send(client); client.dispose()
     let finish
     api.execute = request => { calls.push(request); return new Promise(resolve => { finish = resolve }) }
@@ -440,7 +449,7 @@ describe('UR06 completed acceptance reload reconciliation', () => {
       if (change === 'conversation') conversationId.value = 'conversation-2'
       if (change === 'dispose') recovered.dispose()
       expect(calls[1].signal.aborted).to.equal(true)
-      finish({ data: completed() }); await flushPromises()
+      finish(completed()); await flushPromises()
       expect(recovered.status.value.state).to.equal('idle')
       expect(recovered.status.value.receipt).to.equal(null)
       expect(recovered.status.value.intent).to.equal(null)

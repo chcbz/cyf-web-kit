@@ -3,19 +3,7 @@ import { bountyBootstrapReference } from './hallBountyBootstrap.js'
 import { createPointAndStartIntentStore, exactPointAndStartId, exactPointAndStartScope, pointAndDeliberateBody,
   pointAndStartReadPath, pointAndStartTarget, pointAndStartLong, pointAndStartProjection } from './hallPointAndStartIntent.js'
 
-const unwrap = result => {
-  const envelope = result && Object.hasOwn(result, 'code') ? result : result?.data ?? result
-  if (envelope && Object.hasOwn(envelope, 'code')) {
-    if (![undefined, null, 'E0', '0', 0, '200', 200].includes(envelope.code)) {
-      const error = new Error(envelope.msg || '点将读取或办理被拒绝')
-      error.code = envelope.code
-      error.status = envelope.status
-      throw error
-    }
-    return envelope.data?.data ?? envelope.data
-  }
-  return envelope?.data ?? envelope
-}
+const unwrap = result => result
 const clone = value => JSON.parse(JSON.stringify(value))
 const initialState = () => ({ status: 'IDLE', intent: null, projection: null, error: null })
 const statusForProjection = projection => !projection ? 'UNKNOWN' : !projection.currentAssignment ? 'HISTORICAL' :
@@ -52,7 +40,7 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
   }
   const options = key => ({ autoLoading: false, ...(key ? { headers: { 'Idempotency-Key': key } } : {}) })
   const get = async (path, key) => unwrap(await agentApi.get(path, undefined, options(key)))
-  const project = async (intent, captured, epoch, contextEpoch) => {
+  const project = async (intent, captured, epoch, contextEpoch, attach = true) => {
     const value = await get(pointAndStartReadPath(intent), intent.key)
     if (!current(captured, epoch, contextEpoch)) return null
     const projection = pointAndStartProjection(value, intent, intent.projection)
@@ -74,7 +62,7 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
     if (!current(captured, epoch, contextEpoch)) return null
     if (task?.id !== intent.taskId || !pointAndStartLong(task.taskVersion, true) ||
       BigInt(task.taskVersion) < BigInt(projection.taskVersion) || task.assignedAgentId !== pointAndStartTarget(intent) ||
-      !['assigned', 'running', 'submitted', 'completed'].includes(task.status)) throw new Error('点将已确认，当前榜文快照尚未核对；未补发首轮')
+      !['assigned', 'running', 'reviewing', 'completed'].includes(task.status)) throw new Error('点将已确认，当前榜文快照尚未核对；未补发首轮')
     // A newer task snapshot may reflect reassignment; recheck the original action
     // before attaching, instead of treating taskVersion as assignmentRevision.
     if (task.taskVersion !== projection.taskVersion) {
@@ -85,6 +73,8 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
       state.value = { ...state.value, intent, projection: fresh }
     }
     if (!current(captured, epoch, contextEpoch)) return null
+    // Passive snapshot checks must not reopen a conversation while the user navigates.
+    if (!attach) return intent
     const adopted = await onAdmitted({ task: clone(task), targetAgentId: pointAndStartTarget(intent),
       reference: bountyBootstrapReference(intent.projection), isCurrent: () => current(captured, epoch, contextEpoch) })
     if (!current(captured, epoch, contextEpoch)) return null
@@ -113,7 +103,7 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
       return false
     } finally { if (current(captured, epoch, contextEpoch)) busy.value = false }
   }
-  const checkOriginal = taskId => run(taskId, async (captured, epoch, contextEpoch) => {
+  const checkOriginal = (taskId, { attach = true } = {}) => run(taskId, async (captured, epoch, contextEpoch) => {
     const intent = readIntent(captured, taskId)
     if (!intent) return false
     if (intent.providerConsent && !intent.controlledImageBridge) {
@@ -121,7 +111,7 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
       return false
     }
     state.value = { status: statusForProjection(intent.projection), intent, projection: intent.projection || null, error: null }
-    return project(intent, captured, epoch, contextEpoch)
+    return project(intent, captured, epoch, contextEpoch, attach)
   })
   // Read-only observation has no retry budget or deadline. It ends only at a
   // terminal/non-current projection, explicit stop, identity generation change, or disposal.
@@ -170,7 +160,14 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
       if (!exactPointAndStartId(key)) throw new Error('原点将键无效；未发送点将')
       const intent = persist(captured, { schemaVersion: 2, taskId, key, body, postAcknowledged: false })
       state.value = { status: 'SENDING', intent, projection: null, error: null }
-      return send(intent, captured, epoch, contextEpoch)
+      try { return await send(intent, captured, epoch, contextEpoch) } catch (error) {
+        // Only the first POST's definitive rejection can release a new intent.
+        // A timed-out original or recovery retry remains pinned to its old key.
+        if (error?.status === 409 && current(captured, epoch, contextEpoch) &&
+          !state.value.intent?.postAcknowledged && !state.value.projection &&
+          store(captured, taskId).forgetRejected(intent)) state.value = initialState()
+        throw error
+      }
     })
   }
   // This method is ONLY for an explicit user recovery action. Refresh/mount uses

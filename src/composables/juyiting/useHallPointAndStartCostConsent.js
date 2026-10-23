@@ -4,19 +4,7 @@ import { providerConsentReceipt } from './hallPointAndStartProviderConsent.js'
 
 const clone = value => JSON.parse(JSON.stringify(value))
 const initialState = () => ({ status: 'IDLE', intent: null, receipt: null, error: null })
-const unwrap = result => {
-  const envelope = result && Object.hasOwn(result, 'code') ? result : result?.data ?? result
-  if (envelope && Object.hasOwn(envelope, 'code')) {
-    if (![undefined, null, 'E0', '0', 0, '200', 200].includes(envelope.code)) {
-      const error = new Error(envelope.msg || '费用同意读取或办理被拒绝')
-      error.code = envelope.code
-      error.status = envelope.status
-      throw error
-    }
-    return envelope.data?.data ?? envelope.data
-  }
-  return envelope?.data ?? envelope
-}
+const unwrap = result => result
 
 /** Retired consent lane: exact historical GET audit only, never issue/revoke/replay. */
 export const useHallPointAndStartCostConsent = ({ agentApi, actorScopeKey, storage = null }) => {

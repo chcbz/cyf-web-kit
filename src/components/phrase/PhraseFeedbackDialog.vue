@@ -101,7 +101,7 @@ const handleSubmit = () => {
 
   kefuApi.post('/message/create', formData, {
     onSuccess: (data) => {
-      if (data.code === 'E0') {
+      {
         title.value = ''
         content.value = ''
         visible.value = false

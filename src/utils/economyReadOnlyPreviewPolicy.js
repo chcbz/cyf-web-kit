@@ -30,7 +30,7 @@ const MUTATION_ACTIONS = new Set([
   'hostingRenew',
 ]);
 
-const CONTRACT_VERSION = 'economy-readonly-v1';
+const CONTRACT_VERSION = 'economy-readonly-v2';
 const MODE = 'READ_ONLY_PREVIEW';
 
 function isRecord(value) {
@@ -52,7 +52,7 @@ function frozenCopy(capabilities) {
     contractVersion: capabilities.contractVersion,
     mode: capabilities.mode,
     enabled: capabilities.enabled,
-    principalScopeFingerprint: capabilities.principalScopeFingerprint,
+    principalScopeSha256: capabilities.principalScopeSha256,
     features: Object.freeze(Object.fromEntries(
       FEATURE_KEYS.map((key) => [key, capabilities.features[key]]),
     )),
@@ -67,7 +67,7 @@ function unavailable(reason) {
 }
 
 /**
- * Strictly validates the fixed `economy-readonly-v1` capability contract.
+ * Strictly validates the fixed `economy-readonly-v2` capability contract.
  *
  * The returned capabilities are a deeply frozen, detached copy. Invalid,
  * stale, or mutation-capable inputs are contained as an unavailable result so
@@ -81,7 +81,7 @@ function assessReadOnlyPreviewCapabilities(capabilities) {
   if (!isRecord(capabilities)) return unavailable('CAPABILITIES_MALFORMED');
 
   const rootKeys = [
-    'contractVersion', 'mode', 'enabled', 'principalScopeFingerprint', 'features', 'actions',
+    'contractVersion', 'mode', 'enabled', 'principalScopeSha256', 'features', 'actions',
   ];
   if (!hasExactKeys(capabilities, rootKeys)) return unavailable('CAPABILITIES_MALFORMED');
   if (capabilities.contractVersion !== CONTRACT_VERSION) {
@@ -89,8 +89,8 @@ function assessReadOnlyPreviewCapabilities(capabilities) {
   }
   if (capabilities.mode !== MODE) return unavailable('CAPABILITIES_UNSUPPORTED_MODE');
   if (typeof capabilities.enabled !== 'boolean') return unavailable('CAPABILITIES_MALFORMED');
-  if (typeof capabilities.principalScopeFingerprint !== 'string'
-      || capabilities.principalScopeFingerprint.length === 0) {
+  if (typeof capabilities.principalScopeSha256 !== 'string'
+      || !/^[0-9a-f]{64}$/.test(capabilities.principalScopeSha256)) {
     return unavailable('CAPABILITIES_MALFORMED');
   }
   if (!isRecord(capabilities.features)

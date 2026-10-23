@@ -1,3 +1,4 @@
+import { displayFixture } from './fixtures/juyiting/interface-display-fixture.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import { effectScope, ref } from 'vue'
@@ -7,13 +8,13 @@ import { useHallSkillCapabilities } from '../src/composables/juyiting/useHallSki
 import { useHallSkillResults } from '../src/composables/juyiting/useHallSkillResults.js'
 const fixture = JSON.parse(fs.readFileSync(new URL('./fixtures/skill-v4/action-v4.json', import.meta.url)))
 const context = { conversationId: '1', conversationGeneration: '1', taskId: 'task' }
-const outcome = () => ({ schemaVersion: 4, route: 'CHAT', conversationId: context.conversationId, conversationGeneration: context.conversationGeneration, requestId: 'req', requestRevision: '1', turnId: 'turn', state: 'READY', inspection: null,
+const outcome = () => displayFixture({ schemaVersion: 4, route: 'CHAT', conversationId: context.conversationId, conversationGeneration: context.conversationGeneration, requestId: 'req', requestRevision: '1', turnId: 'turn', state: 'READY', inspection: null,
   outcome: { outcomeContractVersion: 4, outcomeId: 'outcome', taskId: 'task', assignmentRevision: '1', assistantMessageId: '2', finalDigest: fixture.final.finalDigest,
     ...Object.fromEntries(Object.entries(fixture.final.outcome).filter(([key]) => key !== 'schemaVersion')),
     action: { ...fixture.final.outcome.action, actionRequestId: 'event' } },
-  actionProgress: { actionRequestId: 'event', state: 'ARCHIVING', dispatchVersion: '1', childRequestId: 'child', childRoute: 'EXECUTE', childStateVersion: '2', executionId: 'pwe_test', phase: 'ARCHIVING', resultDigest: 'a'.repeat(64) } })
+  actionProgress: { actionRequestId: 'event', state: 'ARCHIVING', dispatchVersion: '1', childRequestId: 'child', childRoute: 'EXECUTE', childStateVersion: '2', executionId: 'pwe_test', executionStateVersion: '3', phase: 'ARCHIVING', resultSha256: 'a'.repeat(64) } })
 const expected = () => skillResultReferences([outcome()], context)[0]
-const result = () => ({ schemaVersion: 1, ...context, requestId: 'child', stepId: 'step', executionId: 'pwe_test', state: 'RESULT_COMMITTED', phase: 'COMPLETE', resultDigest: 'a'.repeat(64), data: ['真实数据', { text: '<script>not html</script>' }], outputs: [] })
+const result = () => ({ schemaVersion: 2, executionStateVersion: '4', ...context, requestId: 'child', stepId: 'step', executionId: 'pwe_test', state: 'RESULT_COMMITTED', phase: 'COMPLETE', resultSha256: 'a'.repeat(64), data: ['真实数据', { text: '<script>not html</script>' }], outputs: [] })
 const drain = async () => { for (let i = 0; i < 8; i++) await Promise.resolve() }
 const directory = { catalogRevision: 'catalog_1', items: [{ skillKey: 'analysis.new', skillVersion: '1', title: '分析', state: 'CALLABLE', reasonCode: null, costInfo: { mode: 'UNKNOWN' } }] }
 describe('SE2 scoped directory and generic data-only result consumers', () => {
@@ -41,14 +42,14 @@ describe('SE2 scoped directory and generic data-only result consumers', () => {
     assert.equal(skillResultProjection({ ...result(), token: 'leak' }, expected()), null)
   })
   it('does not declare complete before persisted projection or permit cross-scope result substitution', () => {
-    const pending = skillResultProjection({ ...result(), phase: 'ARCHIVING' }, expected())
+    const pending = skillResultProjection({ ...result(), phase: 'ARCHIVING', data: null }, expected())
     assert.equal(pending.complete, false); assert.equal(pending.data, null); assert.deepEqual(pending.outputs, [])
-    for (const field of ['conversationId', 'conversationGeneration', 'taskId', 'requestId', 'executionId', 'resultDigest'])
+    for (const field of ['conversationId', 'conversationGeneration', 'taskId', 'requestId', 'executionId', 'resultSha256'])
       assert.equal(skillResultProjection({ ...result(), [field]: 'wrong' }, expected()), null, field)
     assert.equal(skillResultProjection({ ...result(), state: 'RUNNING' }, expected()), null)
   })
   it('allows unknown MIME only through exact opaque attachment URLs', () => {
-    const item = { outputId: 'out', sha256: 'b'.repeat(64), byteLength: 8, contentMimeType: 'application/x-special', previewUrl: null,
+    const item = { outputId: 'out', sha256: 'b'.repeat(64), byteLength: '8', contentMimeType: 'application/x-special', previewUrl: null,
       downloadUrl: '/chat/requests/child/steps/step/outputs/out?download=true', assetRef: null, replaces: null }
     assert.equal(skillResultProjection({ ...result(), outputs: [item] }, expected()).outputs.length, 1)
     assert.equal(skillResultProjection({ ...result(), outputs: [{ ...item, previewUrl: 'https://external' }] }, expected()), null)
@@ -59,9 +60,9 @@ describe('SE2 scoped directory and generic data-only result consumers', () => {
     scope.run(() => { service = useHallSkillCapabilities({ api: { get: (...args) => { calls.push(args); return new Promise(done => { resolve = done }) } },
       getContext: () => ({ taskId: 'task', targetAgentId: 'agent' }), identityKey: () => identity.value, enabled: () => true }) })
     assert.equal(calls[0][0], '/tasks/task/skill-capabilities')
-    const old = resolve; identity.value = 'owner:b:auth2'; old({ data: directory }); await drain()
+    const old = resolve; identity.value = 'owner:b:auth2'; old((directory)); await drain()
     assert.equal(service.projection.value, null); assert.equal(calls[0][2].signal.aborted, true)
-    resolve({ data: directory }); await drain(); assert.equal(service.projection.value.items[0].state, 'CALLABLE')
+    resolve((directory)); await drain(); assert.equal(service.projection.value.items[0].state, 'CALLABLE')
     service.dispose(); scope.stop()
   })
   it('reads execution before catalog and discards completed data when identity switches', async () => {
@@ -69,9 +70,9 @@ describe('SE2 scoped directory and generic data-only result consumers', () => {
     scope.run(() => { service = useHallSkillResults({ api: { get: (...args) => { calls.push(args); return new Promise(done => { resolve = done }) } },
       getContext: () => context, getOutcomes: () => [outcome()], identityKey: () => identity.value, enabled: () => true }) })
     assert.equal(calls[0][0], '/conversations/1/executions/pwe_test/result')
-    const old = resolve; identity.value = 'owner:b'; old({ data: result() }); await drain(); assert.equal(service.results.value.length, 0)
+    const old = resolve; identity.value = 'owner:b'; old((result())); await drain(); assert.equal(service.results.value.length, 0)
     assert.equal(calls[0][2].signal.aborted, true)
-    resolve({ data: result() }); await drain(); assert.equal(service.results.value[0].complete, true)
+    resolve((result())); await drain(); assert.equal(service.results.value[0].complete, true)
     service.dispose(); scope.stop()
   })
 })

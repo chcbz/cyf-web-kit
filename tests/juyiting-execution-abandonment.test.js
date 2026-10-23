@@ -2,7 +2,9 @@ import { expect } from 'chai'
 import { ref } from 'vue'
 import { createApi } from '../src/composables/useHttp.js'
 import { abandonmentCommand, validAbandonmentReceipt, useHallExecutionAbandonment } from '../src/composables/juyiting/useHallExecutionAbandonment.js'
-import { useHallConversation } from '../src/composables/juyiting/useHallConversation.js'
+import { useHallConversation as actualHallConversation } from '../src/composables/juyiting/useHallConversation.js'
+import { currentChatStreamMock } from './fixtures/current-chat-stream-mock.js'
+const useHallConversation = options => actualHallConversation({ ...options, chatApi: currentChatStreamMock(options.chatApi) })
 
 const request = (patch = {}) => ({ requestId: 'request-1', requestRevision: '1', conversationId: '42', conversationGeneration: '1',
   userMessageId: '7', state: 'RUNNING', stateVersion: '0', turns: [], steps: [{ stepId: 'step-1', stepNumber: '1', taskId: 'task-1',
@@ -46,7 +48,7 @@ describe('execution abandonment immutable recovery and authority boundaries', ()
       expect(JSON.parse([...context.storage.data.values()][0])).to.deep.equal(intent())
       expect(options.data).to.deep.equal(intent().body)
       expect(options.url).to.equal('/conversations/42/requests/request-1/abandon-execution')
-      return { data: { data: receipt() } }
+      return ((receipt()))
     })
     try {
       expect(await context.client.submit(request())).to.deep.equal(receipt())
@@ -66,7 +68,7 @@ describe('execution abandonment immutable recovery and authority boundaries', ()
     globalThis.fetch = async (url, options) => {
       wire.push({ url: String(url), options })
       if (wire.length === 1) return new Response(JSON.stringify({ message: 'conflict' }), { status: 409, headers: { 'Content-Type': 'application/json' } })
-      return new Response(JSON.stringify({ data: receipt() }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify({ protocolVersion: 1, requestId: new Headers(options.headers).get('X-Request-Id'), code: 'E0', msg: 'success', data: receipt() }), { status: 200, headers: { 'Content-Type': 'application/json', 'X-Request-Id': new Headers(options.headers).get('X-Request-Id') } })
     }
     try {
       expect(await client.submit(request())).to.equal(null)
@@ -76,7 +78,7 @@ describe('execution abandonment immutable recovery and authority boundaries', ()
       expect(wire.every(call => call.url === '/chat/conversations/42/requests/request-1/abandon-execution')).to.equal(true)
       expect(wire.every(call => call.options.headers.Authorization === 'Bearer test-abandonment-token')).to.equal(true)
       expect(wire.every(call => call.options.headers['Idempotency-Key'] === 'abandon-key-0001')).to.equal(true)
-      expect(JSON.parse(wire[0].options.body)).to.deep.equal(intent().body)
+      expect(JSON.parse(wire[0].options.body).data).to.deep.equal(intent().body)
       expect(wire[1].options.body).to.equal(undefined)
     } finally { client.dispose(); globalThis.fetch = originalFetch }
   })
@@ -182,7 +184,7 @@ describe('execution abandonment authoritative request readback', () => {
       expect(client.activeRequest.value.state).to.equal('RUNNING')
       expect(calls).to.deep.equal(['/requests/request-1']); expect(hints.length).to.equal(1)
       const terminal = request({ state: 'CANCELLED', stateVersion: '1', steps: [{ ...request().steps[0], state: 'CANCELLED', stateVersion: '3', executionState: 'CANCELLED' }] })
-      pending.resolve({ data: { data: terminal } }); await flush()
+      pending.resolve(((terminal))); await flush()
       expect(client.activeRequest.value.state).to.equal('CANCELLED'); expect(client.isAwaitingReply.value).to.equal(false)
     } finally { client.disposeHallConversation() }
   })

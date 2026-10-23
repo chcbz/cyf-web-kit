@@ -12,7 +12,7 @@ const request = (conversationId = '101', _taskId = 'task-1') => ({ requestId: 'r
   conversationGeneration: '1', userMessageId: '1', state: 'COMPLETED', stateVersion: '1', turns: [], steps: [] })
 const page = (conversationId = '101', taskId = 'task-1', entries = [{ ordinal: '1', request: request(conversationId, taskId) }]) => ({ schemaVersion: 1,
   scope: { conversationId, conversationGeneration: '1', taskId }, after: '0', through: entries.length ? '1' : '0', nextAfter: null, hasMore: false, entries })
-const response = value => ({ data: { data: value } })
+const response = value => Array.isArray(value) ? { items: value } : value
 const deferred = () => { let resolve; return { promise: new Promise(done => { resolve = done }), resolve: value => resolve(value) } }
 
 describe('task acceptance existing scoped source reads', () => {
@@ -25,7 +25,7 @@ describe('task acceptance existing scoped source reads', () => {
   afterEach(() => { for (const [key, value] of originals) globalThis[key] = value; originals.clear() })
   it('cold-reads a unique task conversation and its durable catalogue, supporting existing callback responses without a write', async () => {
     const calls = []; const api = {
-      list: async (path, body, options) => { calls.push([path, body, options.needAuth]); options.onSuccess({ data: [scoped()] }) },
+      list: async (path, body, options) => { calls.push([path, body, options.needAuth]); options.onSuccess({ items: [scoped()] }) },
       get: async (path, _params, options) => { calls.push([path, options.needAuth]); return response(page()) },
       execute: () => { throw new Error('read only') }
     }
@@ -123,6 +123,12 @@ describe('task acceptance return to original discussion', () => {
     expect(await returnToDiscussion(state)({ id: 'task-1', status: 'cancelled' }, null)).to.equal(false)
     expect(opens).to.equal(0)
   })
+  it('allows completed task history navigation without resuming or creating a discussion', async () => {
+    const state = deps()
+    state.loadHallConversationHistory = () => { throw new Error('already in the exact original') }
+    expect(await returnToDiscussion(state)({ id: 'task-1', status: 'completed' }, { taskId: 'task-1', conversationId: '101' })).to.equal(true)
+    expect(await returnToDiscussion(state)({ id: 'task-1', status: 'completed' }, { taskId: 'foreign', conversationId: '101' })).to.equal(false)
+  })
   it('returns to an already active original without resets, draft changes, polling restarts or new sends', async () => {
     const state = deps(); state.isConversationBusy.value = true
     state.loadHallConversationHistory = () => { throw new Error('must preserve active discussion') }
@@ -154,14 +160,15 @@ describe('task acceptance return to original discussion', () => {
     expect(await returnToDiscussion(state)({ id: 'task-1' }, null)).to.equal(false)
     expect(selections).to.equal(0)
   })
-  it('preserves focused review and funded formal delivery lanes and wires completion to server refresh', () => {
+  it('routes focused, ordinary and funded results through the single shell review owner', () => {
     const start = hall.indexOf('<BountyAcceptancePanel'); const end = hall.indexOf('</BountyAcceptancePanel>', start)
     const integration = hall.slice(start, end)
-    expect(integration).to.include('!taskReviewRef').and.include("formalTaskRef.funding?.mode !== 'FUNDED_SINGLE_AGENT'")
-    expect(integration).to.include('<template #legacy>').and.include('<FormalTaskDeliveryPanel').and.include('@task-completed="loadTasks"')
+    expect(integration).to.include(':review-context="deliveryReview.context.value"')
+    expect(integration).to.include('@review-delivery="openDeliveryReview()"')
+    expect(integration).to.include('@preview-output="previewReviewOutput"')
+    expect(integration).not.to.include('<FormalTaskDeliveryPanel').and.not.to.include('@task-completed')
     expect(returnBody).not.to.match(/setDraft|pointAnd|sendMessage|createTask/)
-  })
-})
+  })})
 
 describe('mounted task acceptance panel', () => {
   const installed = []
@@ -176,26 +183,31 @@ describe('mounted task acceptance panel', () => {
     .replace(/^import\s+\{\s*(createApi|useHallBountyAcceptance)\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, (_, name) => `var { ${name} } = deps`)
     .replace(/^import\s+BountyExecutionOutputs\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { BountyExecutionOutputs } = deps')
     .replace('export default', 'return')
-  it('uses the original source and task version and forwards acceptance completion and modification without choosing an actor', async () => {
+  it('uses the original read-only source and task version, and emits only explicit review or discussion navigation', async () => {
     const scope = Object.freeze({ taskId: 'task-1', conversationId: '101' }); const receipt = Object.freeze({ taskId: 'task-1', operationId: 'accepted' })
     const Gallery = Vue.defineComponent({ props: { acceptance: Boolean, enabled: Boolean, taskVersion: String, conversationId: String, catalog: Array }, emits: ['task-completed', 'continue-modification'],
       setup: (_props, { emit }) => () => Vue.h('button', { onClick: () => { emit('task-completed', receipt); emit('continue-modification') } }, '操作') })
     const source = { scope: Vue.ref(scope), loading: Vue.ref(false), error: Vue.ref(''), legacy: Vue.ref(false),
       catalog: { entries: Vue.ref([{ ordinal: '1', request: request() }]), error: Vue.ref('') } }
     const Component = new Function('Vue', 'deps', script)(Vue, { createApi: () => ({}), useHallBountyAcceptance: () => source, BountyExecutionOutputs: Gallery })
-    const wrapper = mount(Component, { props: { taskId: 'task-1', identityKey: 'owner-1', taskVersion: '9' },
+    const wrapper = mount(Component, { props: { taskId: 'task-1', identityKey: 'owner-1', taskVersion: '9', reviewContext: { currentDelivery: { summary: '正式交付', items: [], allowedActions: ['ACCEPT'] }, history: [] } },
       slots: { legacy: '<div class="legacy-domain">旧成果</div>' } })
     try {
       const gallery = wrapper.findComponent(Gallery)
       expect(gallery.props()).to.include({ acceptance: true, enabled: true, taskVersion: '9', conversationId: '101' })
       await gallery.find('button').trigger('click')
-      expect(wrapper.emitted('task-completed')).to.deep.equal([[receipt]])
+      expect(wrapper.emitted('task-completed')).to.equal(undefined)
+      expect(wrapper.emitted('continue-modification')).to.equal(undefined)
+      await wrapper.findAll('button').find(button => button.text() === '继续议事').trigger('click')
       expect(wrapper.emitted('continue-modification')).to.deep.equal([[scope]])
+      await wrapper.findAll('button').find(button => button.text() === '查看成果并验收').trigger('click')
+      expect(wrapper.emitted('review-delivery')).to.have.length(1)
       source.catalog.error.value = 'failed catalogue'; await Vue.nextTick()
       expect(gallery.props('enabled')).to.equal(false)
       source.catalog.error.value = ''
       source.legacy.value = true; await Vue.nextTick()
-      expect(wrapper.findComponent(Gallery).exists()).to.equal(false); expect(wrapper.find('.legacy-domain').exists()).to.equal(true)
+      expect(wrapper.findComponent(Gallery).exists()).to.equal(false); expect(wrapper.find('.legacy-domain').exists()).to.equal(false)
+      expect(wrapper.text()).to.include('正式交付')
       source.legacy.value = false; source.loading.value = true; await Vue.nextTick()
       expect(wrapper.findComponent(Gallery).exists()).to.equal(false)
     } finally { wrapper.unmount() }

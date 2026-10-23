@@ -1,3 +1,4 @@
+import { currentHttpResponse } from './fixtures/current-http-response.js'
 import { expect } from 'chai'
 import { readFileSync } from 'fs'
 import { ref } from 'vue'
@@ -16,7 +17,7 @@ describe('economy preview wallet and funded bounty integration', () => {
   it('keeps wallet presentation default-off and formats canonical amounts without number money conversion', () => {
     expect(walletSource).to.include("isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)")
     expect(walletSource).to.include("economyApi.get('/wallet'")
-    expect(walletSource).to.include("economyApi.get('/ledger', { limit: '50' }")
+    expect(walletSource).to.include("economyApi.get('/ledger', { pageSize: 50 }")
     expect(walletSource).to.include('formatSilverMicro')
     expect(walletSource).not.to.match(/parseFloat\(|Number\(wallet\.(availableMicro|heldMicro)/)
     expect(httpSource).to.include("export const economyApi = createApi('/economy')")
@@ -45,11 +46,11 @@ describe('economy preview wallet and funded bounty integration', () => {
     const agentApi = {
       create: async (url, payload, options = {}) => {
         calls.push({ url, payload, options })
-        if (url.endsWith('/quotes')) return { data: { code: 'E0', data: fundedQuote({ taskId: 'funded-1', agentId: 'clicked-agent' }) } }
-        if (url.endsWith('/claim')) return { data: { code: 'E0', data: fundedReceipt({ taskId: 'funded-1', agentId: 'clicked-agent' }) } }
+        if (url.endsWith('/quotes')) return (fundedQuote({ taskId: 'funded-1', agentId: 'clicked-agent' }))
+        if (url.endsWith('/claim')) return (fundedReceipt({ taskId: 'funded-1', agentId: 'clicked-agent' }))
         throw new Error(`unexpected ${url}`)
       },
-      get: async () => ({ data: { code: 'E0', data: { ...task, taskVersion: '9', status: 'assigned', assignedAgentId: 'clicked-agent' } } })
+      get: async () => (({ ...task, taskVersion: '9', status: 'assigned', assignedAgentId: 'clicked-agent' }))
     }
     const actions = useHallTaskActions({
       agentApi, confirmFundedQuote: async () => true, canAssign: () => true, createIdempotencyKey: () => 'idem-1', log: { warn: () => {} }, playError: () => {}, playSuccess: () => {}, selectedAgent: hiddenAgent, selectedTask, showToast: () => {}, tasks: ref([task])
@@ -71,8 +72,8 @@ describe('economy preview wallet and funded bounty integration', () => {
     const task = { id: 'funded-2', title: 'Funded', status: 'open', version: '9', funding: { mode: 'FUNDED_SINGLE_AGENT', remainingMicro: '10' } }
     const actions = useHallTaskActions({
       agentApi: {
-        create: async (url, payload, options = {}) => { calls.push({ url, payload, options }); return { data: { code: 'E0', data: { taskId: task.id, fundingStatus: 'REFUNDED', refundTransactionId: 'tx-1', refundedMicro: '10', remainingMicro: '0', taskVersion: '10', fundingVersion: '2', refundedAt: '1000' } } } },
-        get: async url => { calls.push({ url }); return { data: { code: 'E0', data: url.endsWith('/settlement') ? { status: 'CANCELLED', refundMicro: '10' } : { ...task, taskVersion: '10', status: 'cancelled', funding: { ...task.funding, status: 'REFUNDED' } } } } }
+        create: async (url, payload, options = {}) => { calls.push({ url, payload, options }); return ({ taskId: task.id, fundingStatus: 'REFUNDED', refundTransactionId: 'tx-1', refundedMicro: '10', remainingMicro: '0', taskVersion: '10', fundingVersion: '2', refundedAt: '1000' }) },
+        get: async url => { calls.push({ url }); return (url.endsWith('/settlement') ? { status: 'CANCELLED', refundMicro: '10' } : { ...task, taskVersion: '10', status: 'cancelled', funding: { ...task.funding, status: 'REFUNDED' } }) }
       }, canAssign: () => true, createIdempotencyKey: () => 'idem-2', log: { warn: () => {} }, playError: () => {}, playSuccess: () => {}, selectedAgent: ref(null), selectedTask: ref(null), showToast: () => {}, tasks: ref([task])
     })
     expect(await actions.assignTask(task, [{ agentId: 'a' }, { agentId: 'b' }])).to.equal(false)
@@ -118,10 +119,8 @@ describe('funded bounty remediation', () => {
     const successEvents = []
     const toast = []
     const actions = useHallTaskActions(actionOptions({
-      create: async (url) => url.endsWith('/quotes')
-        ? { data: { code: 'QUOTE_EXPIRED', msg: '报价已过期' } }
-        : { data: { code: 'CANCEL_NOT_ALLOWED', msg: '已开工' } },
-      get: async () => ({ data: { code: 'E0', data: {} } })
+      create: async (url) => { throw Object.assign(new Error(url.endsWith('/quotes') ? '报价已过期' : '已开工'), { status: 409, code: url.endsWith('/quotes') ? 'QUOTE_EXPIRED' : 'CANCEL_NOT_ALLOWED' }) },
+      get: async () => (({}))
     }, {
       playSuccess: () => successEvents.push('success'),
       showToast: message => toast.push(message),
@@ -145,7 +144,7 @@ describe('funded bounty remediation', () => {
       create: async (_url, _payload, options) => {
         createKeys.push(options.headers['Idempotency-Key'])
         if (++createAttempts === 1) throw new TypeError('response lost')
-        return { data: { code: 'E0', data: { id: 'created', title: 'Created' } } }
+        return ({ id: 'created', title: 'Created' })
       }
     }))
     const createPayload = { title: 'Created', grossBountyAmountMicro: '100', settlementPolicy: 'GROSS_INCLUSIVE' }
@@ -163,9 +162,9 @@ describe('funded bounty remediation', () => {
         if (url.endsWith('/quotes')) {
           quoteKeys.push(options.headers['Idempotency-Key'])
           if (++quoteAttempts === 1) throw new TypeError('quote response lost')
-          return { data: { code: 'E0', data: fundedQuote({ taskId: task.id, quoteId: 'q-retry', agentId: agent.agentId }) } }
+          return (fundedQuote({ taskId: task.id, quoteId: 'q-retry', agentId: agent.agentId }))
         }
-        return { data: { code: 'E0', data: fundedReceipt({ taskId: task.id, quoteId: 'q-retry', agentId: agent.agentId }) } }
+        return (fundedReceipt({ taskId: task.id, quoteId: 'q-retry', agentId: agent.agentId }))
       }
     }))
     expect(await quoteActions.assignTask(task, agent)).to.equal(false)
@@ -177,10 +176,10 @@ describe('funded bounty remediation', () => {
     let claimAttempts = 0
     const claimActions = useHallTaskActions(actionOptions({
       create: async (url, _payload, options) => {
-        if (url.endsWith('/quotes')) return { data: { code: 'E0', data: fundedQuote({ taskId: claimTask.id, quoteId: 'q-claim', agentId: agent.agentId }) } }
+        if (url.endsWith('/quotes')) return (fundedQuote({ taskId: claimTask.id, quoteId: 'q-claim', agentId: agent.agentId }))
         claimKeys.push(options.headers['Idempotency-Key'])
         if (++claimAttempts === 1) throw new TypeError('claim response lost')
-        return { data: { code: 'E0', data: fundedReceipt({ taskId: claimTask.id, quoteId: 'q-claim', agentId: agent.agentId }) } }
+        return (fundedReceipt({ taskId: claimTask.id, quoteId: 'q-claim', agentId: agent.agentId }))
       }
     }))
     expect(await claimActions.assignTask(claimTask, agent)).to.equal(false)
@@ -194,7 +193,7 @@ describe('funded bounty remediation', () => {
       create: async (_url, _payload, options) => {
         cancelKeys.push(options.headers['Idempotency-Key'])
         if (++cancelAttempts === 1) throw new TypeError('cancel response lost')
-        return { data: { code: 'E0', data: { taskId: cancelTask.id, fundingStatus: 'REFUNDED', refundTransactionId: 'tx-2', refundedMicro: '100', remainingMicro: '0', taskVersion: '9', fundingVersion: '2', refundedAt: '1000' } } }
+        return ({ taskId: cancelTask.id, fundingStatus: 'REFUNDED', refundTransactionId: 'tx-2', refundedMicro: '100', remainingMicro: '0', taskVersion: '9', fundingVersion: '2', refundedAt: '1000' })
       }
     }))
     expect(await cancelActions.cancelFunding(cancelTask)).to.equal(false)
@@ -208,15 +207,15 @@ describe('funded bounty remediation', () => {
     expect(bountySource).not.to.include('submitCreateTask')
     expect(bountySource).to.include("$emit('resume-funded-create')")
     expect(bountySource).to.include('当前编辑稿不会提交或替换原请求。')
-    expect(walletSource).to.include('const epochMillis = BigInt(value)')
-    expect(walletSource).to.include('MAX_ECMASCRIPT_EPOCH_MILLIS')
+    expect(walletSource).to.include('Number.isSafeInteger(value)')
+    expect(walletSource).to.include('Number.isSafeInteger(value)')
     expect(profileSource).to.include('v-if="economyPreviewAvailable"')
     expect(profileSource).to.include('fetchEconomyPreviewCapability')
     expect(profileSource).not.to.include("economyApi.get('/wallet'")
     expect(routerSource).to.include("path: '/skill-market'")
     expect(routerSource).to.include("import('@/components/economy/SkillMarketRoute.vue')")
     expect(skillMarketRouteSource).to.include('await loadSkillMarketRoster()')
-    expect(skillMarketRouteSource).to.include('principalScopeFingerprint')
+    expect(skillMarketRouteSource).to.include('principalScopeSha256')
     expect(skillMarketRouteSource).to.include('agent?.boundToMe === true && agent?.canOperate === true')
     expect(skillMarketRouteSource).to.include('isCanonicalDecimalString(agent?.version)')
     expect(routerSource).to.include('beforeEnter: () => economyPreviewRouteGuard(isSkillMarketplaceCapability)')
@@ -230,7 +229,7 @@ describe('funded bounty remediation', () => {
     const controller = new AbortController()
     globalThis.fetch = async (url, options) => {
       requests.push({ url, options })
-      return new Response(JSON.stringify({ code: 'E0', data: roster }), {
+      return currentHttpResponse(options, { code: 'E0', data: roster }, {
         status: 200, headers: { 'Content-Type': 'application/json' }
       })
     }
@@ -245,10 +244,10 @@ describe('funded bounty remediation', () => {
       expect(requestUrl.pathname).to.match(/\/agent\/roster$/)
       expect(requestUrl.search).to.equal('')
       expect(options.method).to.equal('POST')
-      expect(JSON.parse(options.body)).to.deep.equal({ pageNum: 1, pageSize: 50 })
+      expect(JSON.parse(options.body).data).to.deep.equal({ pageNum: 1, pageSize: 50 })
       expect(options.headers.Authorization).to.equal('Bearer test-only-token')
       expect(options.signal.aborted).to.equal(false)
-      expect(result.data).to.deep.equal({ code: 'E0', data: roster })
+      expect(result).to.deep.equal(roster)
     } finally {
       globalThis.fetch = originalFetch
     }
@@ -257,7 +256,7 @@ describe('funded bounty remediation', () => {
   it('classifies actual useHttp 409 error shapes by documented code while retaining ambiguous replay keys', async () => {
     const actualHttpError = async (status, code) => {
       const originalFetch = globalThis.fetch
-      globalThis.fetch = async () => new Response(JSON.stringify({ code, msg: code }), {
+      globalThis.fetch = async (_url, options) => currentHttpResponse(options, { code, msg: code }, {
         status,
         headers: { 'Content-Type': 'application/json' }
       })
@@ -297,7 +296,7 @@ describe('funded bounty remediation', () => {
   it('rejects numeric or noncanonical funded task/quote versions before a money mutation', async () => {
     const calls = []
     const actions = useHallTaskActions(actionOptions({
-      create: async (...args) => { calls.push(args); return { data: { code: 'E0', data: {} } } }
+      create: async (...args) => { calls.push(args); return ({}) }
     }))
     const agent = { agentId: 'agent-explicit' }
     expect(await actions.assignTask({ ...fundedTask('unsafe'), version: 9007199254740993 }, agent)).to.equal(false)

@@ -9,8 +9,13 @@
         <button type="button" :disabled="selectedPartIndex >= parts.length - 1" @click="selectedPartIndex += 1">下一页</button>
       </div>
       <pre v-if="typeof currentPart.text === 'string'" v-text="currentPart.text"></pre>
-      <img v-else-if="currentPart.imageUrl" :src="currentPart.imageUrl" :alt="`${item.title} 第 ${selectedPartIndex + 1} 页`" @error="failImage" />
-      <iframe v-else-if="currentPart.pdfUrl" class="output-preview-pdf" :src="currentPart.pdfUrl" :title="`${item.title} PDF 预览`" sandbox referrerpolicy="no-referrer" />
+      <img
+        v-else-if="currentPart.imageUrl"
+        :src="currentPart.imageUrl"
+        :alt="`${item.title} 第 ${selectedPartIndex + 1} 页`"
+        @error="failImage"
+      />
+      <PdfDocumentPreview v-else-if="currentPart.pdfBlob" :blob="currentPart.pdfBlob" />
       <p v-else>此预览分片不可用，请下载原文件查看。</p>
       <p v-if="previewNote" class="output-preview-note">{{ previewNote }}</p>
     </template>
@@ -20,9 +25,9 @@
 
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import PdfDocumentPreview from '../workspace/PdfDocumentPreview.vue'
 import { outputPreviewKind } from '../../composables/useOutputs.js'
 
-const MAX_PREVIEW_BYTES = 1024 * 1024
 const PDF_MIME = 'application/pdf'
 const TEXT_PREVIEW_MIME = 'text/plain'
 const documentPreviewMimeTypes = new Set([
@@ -42,7 +47,6 @@ let generation = 0
 const release = () => {
   for (const part of parts.value) {
     if (part.imageUrl) URL.revokeObjectURL(part.imageUrl)
-    if (part.pdfUrl) URL.revokeObjectURL(part.pdfUrl)
   }
   parts.value = []
 }
@@ -52,7 +56,7 @@ const isDocumentTextPreview = item => documentPreviewMimeTypes.has(item?.mimeTyp
 const previewKind = item => {
   const kind = outputPreviewKind(item)
   if (kind !== 'none') return kind
-  return item?.mimeType === PDF_MIME && Number.isSafeInteger(item.byteLength) && item.byteLength >= 0 && item.byteLength <= MAX_PREVIEW_BYTES ? 'pdf' : 'none'
+  return 'none'
 }
 const validateImageDimensions = (url, signal) => new Promise((resolve, reject) => {
   const image = new Image()
@@ -71,7 +75,7 @@ const legacyPart = (result, kind, item) => {
   if (!(blob instanceof Blob)) return []
   const expectedMime = kind === 'text' && isDocumentTextPreview(item) ? TEXT_PREVIEW_MIME : item.mimeType
   if (blob.type !== expectedMime) throw new Error('文件类型不匹配，请下载文件查看。')
-  return [{ partId: 'content', contentMimeType: blob.type, blob, legacyPdf: kind === 'pdf' }]
+  return [{ partId: 'content', contentMimeType: blob.type, blob }]
 }
 const previewParts = (result, kind, item) => Array.isArray(result?.parts) ? result.parts : legacyPart(result, kind, item)
 
@@ -90,20 +94,18 @@ watch(() => [props.item?.artifactId, props.item?.artifactVersion, props.item?.fi
     const received = previewParts(result, kind, item)
     if (!received.length) throw new Error('预览内容为空，请下载原文件查看。')
     for (const part of received) {
-      if (!part || typeof part.partId !== 'string' || !['text/plain', 'image/png', item.mimeType].includes(part.contentMimeType) || !(part.blob instanceof Blob) || part.blob.type !== part.contentMimeType || (part.legacyPdf && part.blob.size > MAX_PREVIEW_BYTES)) {
+      if (!part || typeof part.partId !== 'string' || !['text/plain', 'image/png', item.mimeType].includes(part.contentMimeType) || !(part.blob instanceof Blob) || part.blob.type !== part.contentMimeType) {
         throw new Error('预览分片无效，请下载原文件查看。')
       }
-      if (part.contentMimeType === TEXT_PREVIEW_MIME) rendered.push({ partId: part.partId, contentMimeType: part.contentMimeType, text: await part.blob.text(), imageUrl: '', pdfUrl: '' })
+      if (part.contentMimeType === TEXT_PREVIEW_MIME) rendered.push({ partId: part.partId, contentMimeType: part.contentMimeType, text: await part.blob.text(), imageUrl: '' })
+      else if (part.contentMimeType === PDF_MIME) rendered.push({ partId: part.partId, contentMimeType: PDF_MIME, pdfBlob: part.blob })
       else {
         const url = URL.createObjectURL(part.blob)
-        if (part.legacyPdf) rendered.push({ partId: part.partId, contentMimeType: part.contentMimeType, text: null, imageUrl: '', pdfUrl: url })
-        else {
-          try { await validateImageDimensions(url, requestController.signal); rendered.push({ partId: part.partId, contentMimeType: part.contentMimeType, text: null, imageUrl: url, pdfUrl: '' }) }
-          catch (error) { URL.revokeObjectURL(url); throw error }
-        }
+        try { await validateImageDimensions(url, requestController.signal); rendered.push({ partId: part.partId, contentMimeType: part.contentMimeType, text: null, imageUrl: url }) }
+        catch (error) { URL.revokeObjectURL(url); throw error }
       }
     }
-    if (current !== generation || requestController.signal.aborted) { for (const part of rendered) if (part.imageUrl || part.pdfUrl) URL.revokeObjectURL(part.imageUrl || part.pdfUrl); return }
+    if (current !== generation || requestController.signal.aborted) { for (const part of rendered) if (part.imageUrl) URL.revokeObjectURL(part.imageUrl); return }
     parts.value = rendered
     const partialNote = result?.partial === true
       ? (typeof result?.reason === 'string' && result.reason.trim() ? result.reason.trim() : '预览内容不完整；请下载原文件查看。')
@@ -113,7 +115,7 @@ watch(() => [props.item?.artifactId, props.item?.artifactVersion, props.item?.fi
       : ''
     previewNote.value = [partialNote, documentNote].filter(Boolean).join(' ')
   } catch (error) {
-    for (const part of rendered) if (part.imageUrl || part.pdfUrl) URL.revokeObjectURL(part.imageUrl || part.pdfUrl)
+    for (const part of rendered) if (part.imageUrl) URL.revokeObjectURL(part.imageUrl)
     if (current === generation && error?.name !== 'AbortError') message.value = error?.message || '预览不可用，请下载文件查看。'
   } finally { if (current === generation) loading.value = false }
 }, { immediate: true })
@@ -124,7 +126,6 @@ onBeforeUnmount(reset)
 .output-preview { margin-top: 8px; max-height: 260px; overflow: auto; padding: 8px; border-radius: 6px; background: #f7f3ea; font-size: 12px; }
 .output-preview pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .output-preview img { display: block; max-width: 100%; max-height: 240px; object-fit: contain; }
-.output-preview-pdf { display: block; width: 100%; height: 240px; border: 0; background: #fff; }
 .output-preview-navigation { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .output-preview-navigation button { border: 1px solid #b99862; border-radius: 4px; padding: 3px 7px; background: #fff8eb; color: #4a3423; }
 .output-preview-error { color: #9b3a28; }

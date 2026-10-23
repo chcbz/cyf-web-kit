@@ -1,3 +1,9 @@
+import { useHallSelectedOutputReview } from '../src/composables/juyiting/useHallSelectedOutputReview.js'
+import { selectionKey } from '../src/composables/juyiting/hallSelectedOutputs.js'
+import { assignedTaskTarget } from '../src/composables/juyiting/hallAssigneeCandidates.js'
+import { useExternalServicePolicy } from '../src/composables/juyiting/useExternalServicePolicy.js'
+import { useHallDeliveryReview } from '../src/composables/juyiting/useHallDeliveryReview.js'
+import { useHallAgentProfileCapabilities } from '../src/composables/juyiting/useHallAgentProfileCapabilities.js'
 import { currentBountyAssignmentRevision } from '../src/composables/juyiting/hallBountyAssignmentContext.js'
 import { useHallSkillCapabilities } from '../src/composables/juyiting/useHallSkillCapabilities.js'
 import { useOutputs } from '../src/composables/useOutputs.js'
@@ -64,6 +70,12 @@ const loadSelectedAgentCard = () => {
 
 const loadActualJuyiHall = mocks => {
   const effectiveMocks = {
+    useHallSelectedOutputReview,
+    selectionKey,
+    useHallDeliveryReview,
+    useHallAgentProfileCapabilities,
+    useExternalServicePolicy,
+    assignedTaskTarget,
     useHallSkillCapabilities,
     currentBountyAssignmentRevision,
     browserBusinessNamespace: (apiStore, globalStore) => {
@@ -97,7 +109,7 @@ const createHallMocks = ({ SelectedAgentCard, counters }) => {
   const EmptyPanel = Vue.defineComponent({ setup: () => () => Vue.h('section') })
   const hallData = {
     applySceneEvent: noop, applySceneSnapshot: noop, agentFilter: text, agents: Vue.ref([selected]), bindPersona: asyncNoop, canAssign: () => true,
-    filteredAgents: Vue.ref([selected]), hiddenAgentCount: Vue.ref(0), loadAgents: asyncNoop, loadTasks: asyncNoop, loadTaskRecommendations: asyncNoop,
+    filteredAgents: Vue.ref([selected]), hiddenAgentCount: Vue.ref(0), loadAgents: asyncNoop, loadTasks: asyncNoop, loadTaskDetail: asyncNoop, loadTaskRecommendations: asyncNoop,
     mapAgents: Vue.ref([selected]), operableRosterAgents: Vue.ref([selected]), personaCatalog: list, recommendedAgents: list, setAgentFilter: asyncNoop, setTaskStatusFilter: asyncNoop,
     taskAbilityFilter: text, taskAbilityOptions: list, taskKeyword: text, tasks: list, taskStatusCount: Vue.ref({}), taskStatusFilter: text,
     unbindPersona: asyncNoop, visibleAgents: Vue.ref([selected])
@@ -109,7 +121,7 @@ const createHallMocks = ({ SelectedAgentCard, counters }) => {
     resolveAccountDisplayName: (user, fallback = '用户') => user?.nickname || user?.username || fallback,
     createHydratedIdentityScope, hasHydratedIdentity,
     isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: async () => null,
-    env: {}, isMultimediaDeliberationUiEnabled: () => false,
+    HallDeliveryReviewDialog: EmptyPanel, env: {}, isMultimediaDeliberationUiEnabled: () => false,
     useHallDrafts,
     useHallRequirementCreate: () => ({ state: Vue.ref({ error: '' }), busy: Vue.ref(false), create: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, readOriginal: () => ({ state: 'ABSENT' }), dispose: noop }),
     // Real read adapters stay inert without a cancelled-task source.
@@ -117,7 +129,7 @@ const createHallMocks = ({ SelectedAgentCard, counters }) => {
     useHallBountyAssignmentContext: () => ({ projection: Vue.ref(null), error: Vue.ref(''), refresh: async () => false, dispose: noop }),
     useHallBountyRequestCatalog: () => ({ entries: Vue.ref([]), hint: noop, reset: noop, refresh: asyncNoop, dispose: noop }),
     useHallBountyFollowup: () => ({ state: Vue.ref({}), busy: Vue.ref(false), prepareGenerate: async () => false, prepareEdit: async () => false, confirm: async () => false, checkOriginal: async () => false, invalidate: noop, dispose: noop }),
-    useHallTypedDeliberation: () => ({ refresh: asyncNoop, readOne: asyncNoop, recover: asyncNoop, invalidate: noop, dispose: noop }), typedLong: () => '',
+    useHallTypedDeliberation: () => ({ cards: Vue.ref([]), refresh: asyncNoop, readOne: asyncNoop, recover: asyncNoop, invalidate: noop, dispose: noop }), typedLong: () => '',
     createControlledImageCapabilityObservationFence: () => ({ capture: () => ({ isCurrent: () => true }), invalidate: noop }), capabilityOffersControlledImageConsent: () => false, loadControlledImageBountyCapability: async () => null,
     useHallTaskLinkedReferenceInputs: () => ({ resolve: async () => ({ state: 'STALE', inputRefs: [] }), invalidate: noop, dispose: noop }), createPointAndStartIntentStore: () => ({ read: () => ({ state: 'ABSENT' }) }), pointAndStartRecoveryLane: () => 'NONE', providerConsentAcknowledgement: {},
     createNativeCapabilityObservationFence: () => ({ capture: () => ({ identityScope: '', authorizationGeneration: 0, isCurrent: () => true }), invalidate: noop }), loadNativeBountyCapability: async () => null, capabilityAllowsNewStart: () => false, capabilityAllowsOriginalReplay: () => false, pointAndStartIntentReadLane: () => 'ABSENT',

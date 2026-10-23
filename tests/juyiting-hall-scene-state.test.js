@@ -257,9 +257,9 @@ describe('hall scene state', () => {
     const appliedSnapshots = []
     const agentApi = {
       get: async (url, _params, options) => {
-        if (url === '/map') options.onSuccess({ data: [{
+        if (url === '/map') options.onSuccess(([{
           agentId: 'agent-songjiang', personaCode: 'songjiang', status: 'online', x: 321, y: 654
-        }] })
+        }]))
       }
     }
     const hallData = useHallData({

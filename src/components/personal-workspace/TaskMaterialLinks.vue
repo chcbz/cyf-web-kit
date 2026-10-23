@@ -14,6 +14,9 @@
     <p v-if="links.listState.value === 'loading'" class="task-material-note" role="status">正在读取已关联资料…</p>
     <p v-else-if="links.error.value" class="task-material-error" role="alert">{{ links.error.value }}</p>
 
+    <WorkspaceWriteRecovery :pending="links.pendingWrites.value" @retry="links.retryWrite" />
+    <p v-if="links.writeNotice.value" class="task-material-note" role="status">{{ links.writeNotice.value }}</p>
+
     <div v-if="links.links.value.length" class="task-link-list" aria-label="已关联资料">
       <article v-for="link in links.links.value" :key="link.relationId" class="task-link-row" :class="link.role.toLowerCase()">
         <div>
@@ -63,11 +66,13 @@
         <button v-if="workspace.nextCursor.value" type="button" class="load-more" :disabled="workspace.loading.value" @click="workspace.loadMore({ state: 'ACTIVE' })">读取更多文件</button>
       </div>
       <footer class="material-picker-footer">
+        <WorkspaceWriteRecovery :pending="links.pendingWrites.value" @retry="links.retryWrite" />
         <template v-if="workspace.detail.value?.file?.state === 'ACTIVE'">
           <div class="material-picker-fields">
-            <label><span>文件版本</span><select v-model.number="selectedVersion"><option v-for="version in workspace.detail.value.versions" :key="version.version" :value="version.version">v{{ version.version }} · {{ version.originalFilename }}</option></select></label>
+            <label><span>文件版本</span><select v-model="selectedVersion"><option v-for="version in workspace.detail.value.versions" :key="version.version" :value="version.version">v{{ version.version }} · {{ version.originalFilename }}</option></select></label>
             <label><span>资料用途</span><select v-model="selectedRole"><option value="INPUT">用于办理</option><option value="REFERENCE">仅供参考</option></select></label>
           </div>
+            <template v-if="workspace.hasMoreVersions.value"><button type="button" :disabled="workspace.versionsState.value === 'loading'" @click="workspace.loadMoreVersions">{{ workspace.versionsState.value === 'loading' ? '正在读取历史版本…' : '读取更早版本' }}</button></template><p v-if="workspace.versionsError.value" role="alert">{{ workspace.versionsError.value }}</p>
           <button type="button" class="attach-material" :disabled="!canAttach" @click="attach">确认使用此版本</button>
         </template>
         <p v-else class="task-material-note">尚未选择资料。资料不是开始办理的前置条件。</p>
@@ -137,9 +142,11 @@
 </template>
 
 <script setup>
+import WorkspaceWriteRecovery from './WorkspaceWriteRecovery.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { usePersonalWorkspace } from '@/composables/usePersonalWorkspace'
 import { usePersonalWorkspaceTaskLinks } from '@/composables/usePersonalWorkspaceTaskLinks'
+import { validMaterialVersion } from '../../composables/juyiting/materialVersion.js'
 import { useFormalTaskExecution } from '@/composables/useFormalTaskExecution'
 
 const emit = defineEmits(['formal-execution-created', 'formal-execution-recovered'])
@@ -176,7 +183,7 @@ const formal = useFormalTaskExecution({
   identityScope: () => props.identityScope || String(props.identityEpoch)
 })
 const selectedFile = computed(() => workspace.detail.value?.file?.fileId === selectedFileId.value ? workspace.detail.value.file : null)
-const canAttach = computed(() => Boolean(selectedFile.value?.state === 'ACTIVE' && Number.isSafeInteger(selectedVersion.value) && selectedVersion.value > 0 && links.actionState.value !== 'saving'))
+const canAttach = computed(() => Boolean(selectedFile.value?.state === 'ACTIVE' && validMaterialVersion(selectedVersion.value) && links.actionState.value !== 'saving'))
 const outputLinks = computed(() => links.links.value.filter(link => link.state === 'ACTIVE' && link.role === 'OUTPUT'))
 const activeExecutionLinks = computed(() => links.links.value.filter(link => link.state === 'ACTIVE' && ['INPUT', 'REFERENCE'].includes(link.role)))
 const selectedInputs = computed(() => activeExecutionLinks.value
@@ -203,13 +210,14 @@ const resolveLinkNames = async operationKey => {
 }
 const inputKey = link => `${link.fileId}\u0000${link.version}`
 const isOtherVersionSelected = link => selectedInputKeys.value.some(key => key.startsWith(`${link.fileId}\u0000`) && key !== inputKey(link))
-const resetPickerSelection = () => { selectedFileId.value = ''; selectedVersion.value = null; selectedRole.value = 'INPUT' }
+let pickerGeneration = 0
+const resetPickerSelection = () => { pickerGeneration += 1; selectedFileId.value = ''; selectedVersion.value = null; selectedRole.value = 'INPUT' }
 const resetSelection = () => {
   resetPickerSelection(); materialPickerOpen.value = false; selectedInputKeys.value = []
   instruction.value = String(props.defaultInstruction || '').trim().slice(0, 4000)
 }
 const openMaterialPicker = () => { materialPickerOpen.value = true }
-const closeMaterialPicker = () => { materialPickerOpen.value = false; resetPickerSelection() }
+const closeMaterialPicker = () => { materialPickerOpen.value = false; resetPickerSelection(); workspace.closeDetail() }
 const refresh = async () => {
   const operationKey = `${materialIdentityKey.value}\u0000${props.taskId}`
   const [, loaded] = await Promise.all([workspace.refresh({ state: 'ACTIVE' }), links.load(), formal.refreshReadiness()])
@@ -230,8 +238,10 @@ const openLinkedFile = async link => {
 }
 const attach = async () => {
   if (!canAttach.value) return
-  const saved = await links.attach({ fileId: selectedFile.value.fileId, version: selectedVersion.value, role: selectedRole.value })
-  if (saved) {
+  const epoch = pickerGeneration
+  const input = { fileId: selectedFile.value.fileId, version: selectedVersion.value, role: selectedRole.value }
+  const saved = await links.attach(input)
+  if (saved?.state === 'ACTIVE' && epoch === pickerGeneration && selectedFile.value?.fileId === input.fileId && selectedVersion.value === input.version && selectedRole.value === input.role) {
     if (saved.role === 'INPUT' && !selectedInputKeys.value.includes(inputKey(saved))) selectedInputKeys.value = [...selectedInputKeys.value, inputKey(saved)]
     closeMaterialPicker()
   }

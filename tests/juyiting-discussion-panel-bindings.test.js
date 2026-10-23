@@ -88,6 +88,21 @@ describe('discussion panel shared bindings', () => {
     })
   }
 
+  it('makes an accepted task read-only immediately from its exact review context', async () => {
+    const wrapper = mount(loadPanel('BountyDiscussionPanel'), { props: { ...functions,
+      selectedTask: { id: 'task-1', status: 'reviewing' }, reviewContext: { taskId: 'task-1', taskState: 'REVIEWING' } } })
+    try {
+      const chat = wrapper.findComponent(ChatProbe)
+      expect(chat.props('matterReadOnly')).to.equal(false)
+      await wrapper.setProps({ reviewContext: { taskId: 'task-1', taskState: 'COMPLETED' } })
+      expect(chat.props('matterReadOnly')).to.equal(true)
+      await wrapper.setProps({ selectedTask: { id: 'task-2', status: 'running' } })
+      expect(chat.props('matterReadOnly')).to.equal(false)
+      await wrapper.setProps({ matterReadOnly: true })
+      expect(chat.props('matterReadOnly')).to.equal(true)
+    } finally { wrapper.unmount() }
+  })
+
   it('keeps bounty-only state local while forwarding typed chat inputs and recovery actions', async () => {
     const wrapper = mount(loadPanel('BountyDiscussionPanel'), { props: {
       ...functions, activeRequest: { requestId: 'request-1', state: 'RUNNING' }, activeTurns: [], requestCatalog: [],

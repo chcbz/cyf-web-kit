@@ -3,18 +3,7 @@ import { createRequirementCreateIntentStore, requirementCreateBody, requirementM
 
 const valueOf = value => typeof value === 'function' ? value() : unref(value)
 const clone = value => JSON.parse(JSON.stringify(value))
-const unwrap = result => {
-  const envelope = result?.data ?? result
-  if (envelope && Object.hasOwn(envelope, 'code')) {
-    if (!['E0', '0', 0, '200', 200].includes(envelope.code)) {
-      const error = new Error('原张榜请求未确认')
-      error.code = envelope.code; error.status = envelope.status
-      throw error
-    }
-    return envelope.data
-  }
-  return envelope
-}
+const unwrap = result => result
 const initial = () => ({ status: 'IDLE', intent: null, error: null })
 const storageError = state => state === 'CORRUPT'
   ? '原张榜恢复记录损坏；未创建另一份榜文，请核对原请求。'

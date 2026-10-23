@@ -1,7 +1,7 @@
 <template>
   <div ref="composerRef" class="hall-chat-composer chat-composer" :class="composerClass">
     <form class="composer-submit" @submit.prevent="submit">
-      <div class="composer-context" :class="`is-${discussionVariant}`">
+      <div v-if="!hideFixedContext" class="composer-context" :class="`is-${discussionVariant}`">
         <span class="composer-context-label">{{ contextLabel }}</span>
         <div v-if="targetChips.length" class="composer-targets" aria-label="传话对象">
           <button
@@ -59,6 +59,28 @@
             ><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m8 12 7-7a3 3 0 0 1 4 4l-9 9a5 5 0 0 1-7-7l9-9M7 14l8-8" /></svg></button>
             <div ref="voiceActionRef" class="composer-inline-voice"></div>
             <button
+              v-if="stopTarget"
+              class="composer-send composer-stop"
+              type="button"
+              :disabled="replyCancellationState?.inFlight || actionsDisabled || voice?.voiceInteractionLocked"
+              :title="stopLabel"
+              :aria-label="stopLabel"
+              :aria-busy="Boolean(replyCancellationState?.inFlight)"
+              @click="$emit('cancel-deliberation', stopTarget)"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                aria-hidden="true"
+                focusable="false"
+              ><rect x="6" y="6" width="12" height="12" rx="1.5" /></svg>
+            </button>
+            <button
+              v-else
               class="composer-send"
               type="submit"
               :disabled="!canSend"
@@ -70,6 +92,7 @@
             </button>
           </div>
         </div>
+        <p v-if="replyCancellationState?.inFlight || replyCancellationState?.unknown" class="composer-stop-status" role="status">{{ replyCancellationState.inFlight ? stopLabel : '停止结果尚未确认，请核对；不会重复提交。' }}</p>
         <p v-if="typedPendingQuestion" class="typed-pending-question">正在回答：{{ typedPendingQuestion.question }}</p>
 
       </div>
@@ -122,6 +145,9 @@ import HallVoiceControls from './HallVoiceControls.vue'
 
 const props = defineProps({
   agents: { type: Array, default: () => [] },
+  compact: { type: Boolean, default: false },
+  durableCancelTarget: { type: Object, default: null },
+  replyCancellationState: { type: Object, default: null },
   discussionVariant: { type: String, default: 'public' },
   draft: { type: String, default: '' },
   hasTypedAttachments: { type: Boolean, default: false },
@@ -140,6 +166,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits([
+  'cancel-deliberation',
   'clear-target',
   'mention-agent',
   'send-message',
@@ -177,14 +204,19 @@ onBeforeUnmount(() => {
 })
 const isFocused = ref(false)
 
+const stopTarget = computed(() => props.replyCancellationState?.target || props.durableCancelTarget)
+const stopLabel = computed(() => props.replyCancellationState?.inFlight
+  ? (props.replyCancellationState.unknown ? '正在核对停止结果' : '正在停止本轮回复')
+  : props.replyCancellationState?.unknown ? '核对停止结果' : '停止本轮回复')
 const draftText = computed(() => String(props.draft || ''))
 const draftLength = computed(() => draftText.value.length)
 const hasDraft = computed(() => Boolean(draftText.value.trim()))
 const inputLocked = computed(() => props.interactionLocked || props.isStreaming || props.isAwaitingReply || Boolean(props.voice?.voiceInteractionLocked))
-const canSend = computed(() => (hasDraft.value || (props.discussionVariant === 'bounty' && props.hasTypedAttachments)) && !inputLocked.value)
+const canSend = computed(() => (hasDraft.value || (props.discussionVariant === 'bounty' && props.hasTypedAttachments)) && !inputLocked.value && !stopTarget.value)
 const composerClass = computed(() => ({
   'is-streaming': props.isStreaming,
-  'has-draft': hasDraft.value
+  'has-draft': hasDraft.value,
+  'is-compact': props.compact
 }))
 const voiceHasDetail = computed(() => Boolean(props.voice?.supported) && props.voice?.state !== 'idle')
 
@@ -216,6 +248,10 @@ const targetChips = computed(() => {
   return targets.map(agent => ({ id: agent.agentId, label: props.mentionLabel(agent), locked }))
 })
 
+// The bounty header already names its single fixed target. Public and multi-target
+// controls are functional, and must not disappear as a visual simplification.
+const hideFixedContext = computed(() => props.compact && props.discussionVariant === 'bounty' && targetChips.value.length === 1)
+
 const contextLabel = computed(() => {
   if (props.discussionVariant === 'bounty') return props.targetText || '榜文议事'
   if (props.discussionVariant === 'private') return props.targetText || '当前好汉'
@@ -231,6 +267,10 @@ const hintText = computed(() => {
 const resizeTextarea = () => {
   const el = textareaRef.value
   if (!el) return
+  if (props.compact) {
+    el.style.height = '44px'
+    return
+  }
   el.style.height = 'auto'
   el.style.height = `${Math.min(el.scrollHeight, 132)}px`
 }
@@ -268,9 +308,17 @@ const submit = () => {
   emit('send-message')
 }
 
+watch([stopTarget, inputLocked, () => props.contextKey], ([target, locked, context], [previous, , previousContext]) => {
+  if (previous && !target && !locked && context === previousContext) {
+    nextTick(() => {
+      if (!stopTarget.value && !inputLocked.value && props.contextKey === context) textareaRef.value?.focus()
+    })
+  }
+})
+
 watch(() => props.contextKey, () => { moreOpen.value = false })
 
-watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
+watch([() => props.draft, () => props.compact], () => nextTick(resizeTextarea), { immediate: true })
 </script>
 
 <style scoped>
@@ -299,7 +347,7 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
 
 .composer-context-label {
   flex: 0 0 auto;
-  color: #765f40;
+  color: var(--hall-text-muted,#68716b);
   font-size: 12px;
   font-weight: 700;
 }
@@ -330,9 +378,9 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
   flex: 0 0 auto;
   gap: 4px;
   padding: 0 8px;
-  border: 1px solid #d7c3a2;
+  border: 1px solid var(--hall-border,#e3e5dc);
   border-radius: 999px;
-  background: #fffdf6;
+  background: var(--hall-surface,#fffefa);
   color: #5b432a;
   font-size: 12px;
   white-space: nowrap;
@@ -346,7 +394,7 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
 .composer-target-chip.is-locked {
   border-color: rgba(116, 75, 35, 0.12);
   background: #efe0c6;
-  color: #765f40;
+  color: var(--hall-text-muted,#68716b);
 }
 
 .composer-target-remove {
@@ -363,14 +411,14 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
 .composer-input-area {
   min-width: 0;
   padding: 6px;
-  border: 1px solid #d7c3a2;
+  border: 1px solid var(--hall-border,#e3e5dc);
   border-radius: 12px;
-  background: #fffdf6;
+  background: var(--hall-surface,#fffefa);
 }
 
 .composer-input-area:focus-within {
-  border-color: #7f4a22;
-  box-shadow: 0 0 0 2px rgba(127, 74, 34, 0.12);
+  border-color: var(--hall-brand,#923f30);
+  box-shadow: 0 0 0 2px var(--hall-focus-ring,#923f3052);
 }
 
 .composer-textarea {
@@ -384,7 +432,7 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
   padding: 8px 6px;
   border: 0;
   background: transparent;
-  color: #3f2815;
+  color: var(--hall-text,#242e2b);
   font: inherit;
   line-height: 1.45;
   outline: none;
@@ -415,14 +463,14 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
   justify-content: center;
   box-sizing: border-box;
   flex: 0 0 auto;
-  width: 38px;
-  height: 38px;
-  min-height: 38px;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
   padding: 0;
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: #765f40;
+  color: var(--hall-text-muted,#68716b);
   font: inherit;
   cursor: pointer;
 }
@@ -466,9 +514,20 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
 }
 
 .composer-send {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
   background: #7f4a22;
   color: #fff8e8;
 }
+
+.composer-stop {
+  background: #eee8df;
+  color: var(--hall-text,#242e2b);
+}
+
+.composer-stop:hover:not(:disabled) { background: #e4dbcf; }
+.composer-stop-status { margin: 0; color: var(--hall-text-muted,#68716b); font-size: 12px; line-height: 1.5; }
 
 .composer-materials {
   display: contents;
@@ -492,9 +551,9 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
   max-height: min(50vh, 320px);
   overflow-y: auto;
   padding: 10px;
-  border: 1px solid #d7c3a2;
+  border: 1px solid var(--hall-border,#e3e5dc);
   border-radius: 10px;
-  background: #fffdf6;
+  background: var(--hall-surface,#fffefa);
   box-shadow: 0 10px 24px rgba(54, 35, 18, 0.18);
 }
 
@@ -518,7 +577,7 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
   padding: 8px;
   border: 1px solid rgba(116, 75, 35, 0.16);
   border-radius: 8px;
-  background: #fffdf6;
+  background: var(--hall-surface,#fffefa);
   box-shadow: 0 14px 34px rgba(54, 35, 18, 0.18);
 }
 
@@ -533,7 +592,7 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
   border: 0;
   border-radius: 7px;
   background: #f5ead6;
-  color: #3f2815;
+  color: var(--hall-text,#242e2b);
   cursor: pointer;
   font: inherit;
   text-align: left;
@@ -580,4 +639,29 @@ watch(() => props.draft, () => nextTick(resizeTextarea), { immediate: true })
     max-height: 150px;
   }
 }
+/* Only formal discussions opt into fixed-height editing; text scrolls inside the
+   input rather than consuming the message viewport. Voice review stays reachable. */
+.is-compact .composer-textarea {
+  height: 44px;
+  min-height: 44px;
+  max-height: 44px;
+}
+.is-compact .composer-input-area {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 4px;
+}
+.is-compact .composer-textarea { flex: 1 0 100%; width: 100%; box-sizing: border-box; }
+.is-compact .composer-actions { flex: 0 0 auto; gap: 0; margin-left: auto; }
+.is-compact .composer-inline-voice { margin-left: 0; }
+@media (max-width: 360px) {
+  .is-compact .composer-input-area { flex-wrap: wrap; }
+  .is-compact .composer-textarea { flex-basis: 100%; width: 100%; }
+  .is-compact .composer-actions { margin-left: auto; }
+}
+/* Shared workbench palette; no changes to voice/target/stop semantics. */
+.discussion-surface .composer-textarea { color: var(--hall-text,#242e2b); background:var(--hall-surface,#fffefa); border-color:var(--hall-border,#e3e5dc); }
+.composer-more,.composer-add-materials,.composer-stop { color:var(--hall-text,#242e2b); }
+.composer-send:not(.composer-stop){background:var(--hall-brand,#923f30);color:var(--hall-surface,#fffefa)}
 </style>

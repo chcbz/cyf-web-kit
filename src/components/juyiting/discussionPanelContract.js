@@ -1,6 +1,7 @@
 // Shared input contract for the three existing discussion panels; no extra component layer.
 export const discussionPanelProps = {
   agents: { type: Array, default: () => [] },
+  matterReadOnly: { type: Boolean, default: false },
   connectionStatus: { type: String, default: '' },
   conversationHistory: { type: Array, default: () => [] },
   conversationHistoryDeletingId: { type: String, default: '' },
@@ -11,6 +12,7 @@ export const discussionPanelProps = {
   conversationBusy: { type: Boolean, default: false },
   deliberationStatus: { type: String, default: '' },
   durableCancelTarget: { type: Object, default: null },
+  replyCancellationState: { type: Object, default: null },
   conversationId: { type: String, default: '' },
   identityEpoch: { type: [Number, String], default: 0 },
   draft: { type: String, default: '' },

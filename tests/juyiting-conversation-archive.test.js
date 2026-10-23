@@ -31,8 +31,8 @@ describe('JYT-MMD-W2 conversation archive operations', () => {
   it('accepts the real typed assetRef server receipt and recovers its original operation after reload', async () => {
     const stored = new Map(); const calls = []
     const storage = { getItem: key => stored.get(key) ?? null, setItem: (key, value) => stored.set(key, value) }
-    const body = receipt('saved', { sourceKind: 'assetRef', textSelection: null, fileId: 'workspace-file-1', version: 1 })
-    const api = { execute: async options => { calls.push(options); return { data: { status: 200, location: null, data: body, msg: 'ok', code: 'E0' } } } }
+    const body = receipt('saved', { sourceKind: 'assetRef', textSelection: null, fileId: 'workspace-file-1', version: '1' })
+    const api = { execute: async options => { calls.push(options); return ({ status: 200, location: null, data: body, msg: 'ok', code: 'E0' }) } }
     const args = { api, storage, conversationId: Vue.ref('conversation-1'), identityScope: Vue.ref('tenant-client-owner'), idempotencyKeyFactory: () => 'typed-archive-original-key' }
     const first = useHallConversationArchive(args)
     try {
@@ -52,7 +52,7 @@ describe('JYT-MMD-W2 conversation archive operations', () => {
     for (const extra of [{ sourceKind: 'textSelection', textSelection: null },
       { sourceKind: 'assetRef', textSelection: { text: 'not this asset' } },
       { sourceKind: 'assetRef', textSelection: null, unexpected: true }]) {
-      const api = { execute: async () => ({ data: receipt('saved', { fileId: 'workspace-file-1', version: 1, ...extra }) }) }
+      const api = { execute: async () => ((receipt('saved', { fileId: 'workspace-file-1', version: '1', ...extra }))) }
       const archives = useHallConversationArchive({ api, storage: null, conversationId: Vue.ref('conversation-1'), identityEpoch: Vue.ref('owner-a'), idempotencyKeyFactory: () => 'typed-archive-negative-key' })
       try { await archives.save(part()); expect(archives.statusFor(part()).state).to.equal('error') } finally { archives.dispose() }
     }
@@ -62,8 +62,8 @@ describe('JYT-MMD-W2 conversation archive operations', () => {
     const calls = []
     const api = { execute: async options => {
       calls.push(options)
-      if (options.method === 'POST') return { data: receipt('pending') }
-      return { data: receipt('saved', { fileId: 'workspace-file-1', version: 2 }) }
+      if (options.method === 'POST') return (receipt('pending'))
+      return (receipt('saved', { fileId: 'workspace-file-1', version: '2' }))
     } }
     const archives = useHallConversationArchive({ api, conversationId: Vue.ref('conversation-1'), identityEpoch: Vue.ref('owner-a'), idempotencyKeyFactory: () => 'archive-key-0001' })
     try {
@@ -89,14 +89,14 @@ describe('JYT-MMD-W2 conversation archive operations', () => {
       attempt += 1
       if (attempt === 1) return new Promise(resolve => { resolveFirst = resolve })
       if (attempt === 2) throw new TypeError('network unavailable')
-      return Promise.resolve({ data: receipt('saved', { assetId: 'asset-2', fileId: 'workspace-file-1', version: 2 }) })
+      return Promise.resolve((receipt('saved', { assetId: 'asset-2', fileId: 'workspace-file-1', version: '2' })))
     } }
     const archives = useHallConversationArchive({ api, conversationId: Vue.ref('conversation-1'), identityEpoch: Vue.ref('owner-a'), idempotencyKeyFactory: () => 'archive-key-0002' })
     try {
       const first = archives.save(part())
       const duplicate = archives.save(part())
       expect(calls).to.have.length(1)
-      resolveFirst({ data: receipt('saved', { fileId: 'workspace-file-1', version: 2 }) })
+      resolveFirst((receipt('saved', { fileId: 'workspace-file-1', version: '2' })))
       await first
       expect(await duplicate).to.equal(null)
       expect(calls).to.have.length(1)
@@ -118,7 +118,7 @@ describe('JYT-MMD-W2 conversation archive operations', () => {
     const api = { execute: async options => {
       calls.push(options)
       if (calls.length === 1) throw new TypeError('lost acknowledgement')
-      return { data: receipt('saved', { fileId: 'workspace-file-1', version: 2 }) }
+      return (receipt('saved', { fileId: 'workspace-file-1', version: '2' }))
     } }
     const props = { api, storage, conversationId: Vue.ref('conversation-1'), identityScope: Vue.ref('tenant\u0000client\u0000owner-a'),
       idempotencyKeyFactory: () => 'archive-key-original' }
@@ -144,7 +144,7 @@ describe('JYT-MMD-W2 conversation archive operations', () => {
     const calls = []
     const api = { execute: async options => {
       calls.push(options)
-      return { data: calls.length === 1 ? receipt('pending') : receipt('saved', { fileId: 'workspace-file-1', version: 2 }) }
+      return (calls.length === 1 ? receipt('pending') : receipt('saved', { fileId: 'workspace-file-1', version: '2' }))
     } }
     const scope = Vue.ref('tenant\u0000client\u0000owner-a')
     const first = useHallConversationArchive({ api, storage, conversationId: Vue.ref('conversation-1'), identityScope: scope,
@@ -175,9 +175,9 @@ describe('JYT-MMD-W2 conversation archive operations', () => {
     const calls = []
     const api = { execute: async options => {
       calls.push(options)
-      if (calls.length === 1) return { data: receipt('pending') }
-      if (calls.length === 2 || calls.length === 3) return { data: receipt('pending') }
-      return { data: receipt('saved', { fileId: 'workspace-file-1', version: 1 }) }
+      if (calls.length === 1) return (receipt('pending'))
+      if (calls.length === 2 || calls.length === 3) return (receipt('pending'))
+      return (receipt('saved', { fileId: 'workspace-file-1', version: '1' }))
     } }
     const args = { api, storage, conversationId: Vue.ref('conversation-1'),
       identityScope: Vue.ref('tenant\u0000client\u0000owner-a'),
@@ -203,7 +203,7 @@ describe('JYT-MMD-W2 conversation archive operations', () => {
     const calls = []
     const api = { execute: async options => {
       calls.push(options)
-      return { data: receipt('pending') }
+      return (receipt('pending'))
     } }
     const archives = useHallConversationArchive({ api, conversationId: Vue.ref('conversation-1'),
       identityScope: Vue.ref('tenant\u0000client\u0000owner-a'), idempotencyKeyFactory: () => 'archive-key-query-only' })
@@ -219,7 +219,7 @@ describe('JYT-MMD-W2 conversation archive operations', () => {
     let sequence = 0
     const api = { execute: async () => {
       sequence += 1
-      return { data: sequence === 1 ? receipt('saved', { fileId: 'workspace-file-1' }) : receipt('partial_failed', { assetId: 'asset-2', message: '空间写入失败' }) }
+      return (sequence === 1 ? receipt('saved', { fileId: 'workspace-file-1' }) : receipt('partial_failed', { assetId: 'asset-2', message: '空间写入失败' }))
     } }
     const archives = useHallConversationArchive({ api, conversationId: Vue.ref('conversation-1'), identityEpoch: Vue.ref('owner-a'), idempotencyKeyFactory: () => `archive-key-${sequence + 10}` })
     try {
@@ -242,7 +242,7 @@ describe('JYT-MMD-W2 conversation archive operations', () => {
       expect(archives.statusFor(part()).state).to.equal('saving')
       identity.value = 'owner-b'
       await Vue.nextTick()
-      resolvePost({ data: receipt('saved', { fileId: 'workspace-file-1', version: 2 }) })
+      resolvePost((receipt('saved', { fileId: 'workspace-file-1', version: '2' })))
       await pending
       await flush()
       expect(archives.records.value).to.deep.equal({})
@@ -255,7 +255,7 @@ describe('JYT-MMD-W2 conversation archive operations', () => {
     const archive = { statusFor: () => ({ state: 'pending', message: '', busy: false, operationId: 'operation-1' }),
       save: () => { calls.push('save'); return Promise.resolve(null) },
       check: () => { calls.push('check'); return Promise.resolve(null) } }
-    const wrapper = mount(loadParts(archive), { props: { conversationId: 'conversation-1', identityKey: 'owner-a', parts: [part()] } })
+    const wrapper = mount(loadParts(archive), { props: { conversationId: 'conversation-1', identityKey: 'owner-a', parts: [part({ kind: 'text', text: '保存文本' })] } })
     try {
       expect(wrapper.get('.part-save-button').text()).to.equal('继续原保存')
       expect(wrapper.get('.part-archive-refresh').text()).to.equal('查询保存状态')
@@ -268,10 +268,10 @@ describe('JYT-MMD-W2 conversation archive operations', () => {
   it('renders save only for ready persisted assets and leaves existing media controls intact', async () => {
     const saves = []
     const archive = { statusFor: () => ({ state: 'idle', message: '', busy: false, operationId: '' }), save: item => { saves.push(item); return Promise.resolve(null) }, retry: () => Promise.resolve(null) }
-    const wrapper = mount(loadParts(archive), { props: { conversationId: 'conversation-1', identityKey: 'owner-a', parts: [part({ kind: 'text', text: '可保存文本' }), part({ partId: 'missing-asset', assetId: '' }), part({ partId: 'processing', state: 'processing' })] } })
+    const wrapper = mount(loadParts(archive), { props: { conversationId: 'conversation-1', identityKey: 'owner-a', parts: [part({ kind: 'text', text: '可保存文本' }), part({ partId: 'ready-image' }), part({ partId: 'ready-audio', kind: 'audio' }), part({ partId: 'ready-file', kind: 'file' }), part({ partId: 'missing-asset', assetId: '' }), part({ partId: 'processing', state: 'processing' })] } })
     try {
       expect(wrapper.findAll('.part-save-button')).to.have.length(1)
-      expect(wrapper.findAll('.media-stub')).to.have.length(1)
+      expect(wrapper.findAll('.media-stub')).to.have.length(4)
       await wrapper.get('.part-save-button').trigger('click')
       expect(saves).to.deep.equal([part({ kind: 'text', text: '可保存文本' })])
     } finally { wrapper.unmount() }

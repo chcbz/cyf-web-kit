@@ -282,7 +282,7 @@ export const useHallVoiceConversation = ({
     try {
       const response = await chatApi.create('/speech/transcriptions', body, { autoLoading: false, signal: uploadController.signal })
       if (current !== generation) return false
-      const text = String(response?.data?.data?.text || response?.data?.text || '').trim()
+      const text = String(response?.text || '').trim()
       if (!text) throw new Error('未识别到语音内容')
       transcriptRef.value = text
       if (!draftOnlyCapture && autoSendEnabledRef.value && matchesFrozen() && !isReplyBusy()) startCountdown(current)

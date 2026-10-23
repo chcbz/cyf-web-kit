@@ -1,3 +1,4 @@
+import { currentHttpResponse } from './fixtures/current-http-response.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { ref } from 'vue'
@@ -14,7 +15,7 @@ const suggested = (taskId = 'task-1') => ({
   confirmationRequired: true, confirmed: false,
   items: [{ itemKey: 'item-1', title: '拆解', description: '说明', workType: 'implementation', requiredAbilities: ['plan'], priority: 0, requiredItem: true, dependsOn: [], maxAttempts: 3 }]
 })
-const ok = data => ({ data: { data } })
+const ok = data => data
 const error = (status, code = '') => Object.assign(new Error(code || `HTTP error! status: ${status}`), { status, code })
 const fixture = ({ task = ref({ id: 'task-1', coordinatorAgentId: 'agent-a' }), actor = ref('agent-a'),
   identity = ref(0), enabled = ref(true), api, key = () => 'plan-key-0001' } = {}) =>
@@ -37,10 +38,10 @@ describe('E03 manual work item plan client', () => {
     const requests = []
     try {
       globalThis.fetch = async (url, options) => {
-        requests.push({ url: String(url), method: options.method, body: JSON.parse(options.body), headers: options.headers })
+        requests.push({ url: String(url), method: options.method, body: JSON.parse(options.body).data, headers: options.headers })
         const isConfirm = String(url).includes('/confirm')
         const data = isConfirm ? { ...suggested(), confirmed: true, items: [{ ...suggested().items[0], workItemId: 'work-1', status: 'pending' }] } : suggested()
-        return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } })
+        return currentHttpResponse(options, { code: 'E0', data }, { status: 200, headers: { 'Content-Type': 'application/json' } })
       }
       const api = createApi('/agent')
       const authStore = { authorizationGeneration: 1, token: async () => 'plan-token' }

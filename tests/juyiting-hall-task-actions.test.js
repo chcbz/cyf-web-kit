@@ -18,7 +18,10 @@ const createHarness = (response, { canAssign = () => true } = {}) => {
   const agentApi = {
     create: async (url, payload, options) => {
       apiCalls.push({ payload, url })
-      return options.onSuccess(response)
+      if (response.code !== 'E0') throw Object.assign(new Error(response.msg), { code: response.code, status: response.status })
+      const data = response.data ?? null
+      options.onSuccess?.(data)
+      return data
     }
   }
 
@@ -37,12 +40,12 @@ const createHarness = (response, { canAssign = () => true } = {}) => {
   return { actions, apiCalls, calls, selectedAgent, selectedTask, toasts, tasks }
 }
 
-const createHallData = (selectedAgent) => useHallData({
-  agentApi: {},
+const createHallData = (selectedAgent, options = {}) => useHallData({
+  agentApi: options.agentApi || {},
   log: { warn: () => {} },
   normalizeStatus: (status = '') => status.toLowerCase(),
   selectedAgent,
-  selectedTask: ref(null),
+  selectedTask: options.selectedTask || ref(null),
   taskAgentMatchScore: () => 0
 })
 
@@ -89,10 +92,12 @@ describe('useHallTaskActions', () => {
     expect(wrapper).not.to.include('selectedAgent.value')
   })
 
-  it('requires an explicit agent id in the real canAssign composable even when selectedAgent is populated', () => {
+  it('requires an explicit server-eligible agent id even when selectedAgent is populated', async () => {
     const selectedAgent = ref({ agentId: 'hidden-agent', status: 'online' })
-    const { canAssign } = createHallData(selectedAgent)
     const task = { id: 'task-a', status: 'open' }
+    const { canAssign, loadAssigneeCandidates } = createHallData(selectedAgent, { selectedTask: ref(task), agentApi: { get: async () => ({ items: [{ agentId: 'explicit-agent', displayName: 'Explicit', providerDisplayName: null, isMine: true, availability: 'online' }], nextAfterAgentId: null }) } })
+    expect(canAssign(task, { agentId: 'explicit-agent' })).to.equal(false)
+    expect(await loadAssigneeCandidates()).to.equal(true)
 
     expect(canAssign(task)).to.equal(false)
     expect(canAssign(task, undefined)).to.equal(false)
@@ -156,7 +161,7 @@ describe('useHallTaskActions', () => {
     const selectedAgent = ref({ agentId: 'hidden-agent', status: 'online' })
     const selectedTask = ref(null)
     const actions = useHallTaskActions({
-      agentApi: { create: async (url, payload) => { apiCalls.push({ url, payload }); return url.endsWith('/quotes') ? { data: { data: fundedQuote({ quoteId: 'q1' }) } } : { data: { data: fundedReceipt({ quoteId: 'q1' }) } } } },
+      agentApi: { create: async (url, payload) => { apiCalls.push({ url, payload }); return url.endsWith('/quotes') ? fundedQuote({ quoteId: 'q1' }) : fundedReceipt({ quoteId: 'q1' }) } },
       canAssign: () => true, confirmFundedQuote: async () => true, createIdempotencyKey: () => 'idem', log: { warn: () => {} }, playError: () => {}, playSuccess: () => {}, selectedAgent, selectedTask, showToast: () => {}, tasks: ref([funded])
     })
     expect(await actions.assignTask(funded, agent)).to.equal(true)

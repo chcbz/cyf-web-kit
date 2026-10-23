@@ -5,7 +5,7 @@ import { ref } from 'vue'
 import {
   codeUnitCompare,
   formatInstalledSkillFact,
-  formatSilverMicro,
+  formatSkillMoney,
   normalizeApprovedPermissions,
   orderStatusLabel,
   readSkillApiPayload,
@@ -30,12 +30,13 @@ const seededProducts = [
   productId: `sp-${skillKey}`,
   productVersionId: `spv-${skillKey}-1`,
   skillKey,
-  priceMicro,
+  price: { amountMinor: priceMicro, currency: 'SILVER' },
   permissions: ['repo.write', 'repo.read'],
   canPurchase: skillKey !== 'deploy-runner' // authoritative server fixture, not browser role inference
 }))
 
-const success = data => ({ data: { code: 'E0', data } })
+const money = amountMinor => ({ amountMinor, currency: 'SILVER' })
+const success = data => data
 
 const createApi = () => {
   const calls = []
@@ -43,8 +44,8 @@ const createApi = () => {
   const api = {
     get: async (url) => {
       calls.push({ method: 'GET', url })
-      if (url === '/skill-products') return success({ items: seededProducts })
-      if (url.includes('/skill-entitlements')) return success({ entitlements: [{ skillKey: 'repo-test', status: 'ACTIVE' }] })
+      if (url === '/skill-products') return success(seededProducts)
+      if (url.includes('/skill-entitlements')) return success([{ skillKey: 'repo-test', status: 'ACTIVE' }])
       if (url.startsWith('/skill-products/')) return success(seededProducts.find(product => url.endsWith(product.productId)))
       if (url.startsWith('/skill-orders/')) return success({ orderId: 'so-1', targetAgentId: 'agent-lin', productVersionId: 'spv-repo-test-1', expectedAgentVersion: '7', status: orderStatuses.shift() || 'ACTIVE' })
       throw new Error(`Unexpected GET ${url}`)
@@ -57,8 +58,8 @@ const createApi = () => {
           productVersionId: payload.productVersionId,
           targetAgentId: payload.targetAgentId,
           expectedAgentVersion: payload.expectedAgentVersion,
-          expiresAt: String(Date.now() + 60000),
-          priceMicro: '30000000'
+          expiresAt: Date.now() + 60000,
+          price: money('30000000')
         })
       }
       if (url === '/skill-orders') return success({ orderId: 'so-1', targetAgentId: payload.targetAgentId, productVersionId: payload.productVersionId, expectedAgentVersion: payload.expectedAgentVersion, status: 'FUNDS_HELD' })
@@ -120,18 +121,18 @@ after(() => Object.defineProperty(globalThis.navigator, 'locks', { configurable:
 
 describe('skill market preview', () => {
   it('keeps the frozen six seeded prices as decimal micro-silver strings', () => {
-    expect(seededProducts.map(product => [product.skillKey, product.priceMicro])).to.deep.equal([
+    expect(seededProducts.map(product => [product.skillKey, product.price.amountMinor])).to.deep.equal([
       ['repo-inspector', '0'], ['code-reviewer', '20000000'], ['repo-test', '30000000'],
       ['code-editor', '50000000'], ['web-builder', '60000000'], ['deploy-runner', '100000000']
     ])
   })
 
   it('formats micro-silver with BigInt without Number precision loss', () => {
-    expect(formatSilverMicro('100000000')).to.equal('100 SILVER')
-    expect(formatSilverMicro('9007199254740993000001')).to.equal('9007199254740993.000001 SILVER')
-    expect(formatSilverMicro('not-money')).to.equal('—')
-    expect(formatSilverMicro('01')).to.equal('—')
-    expect(formatSilverMicro(-1)).to.equal('—')
+    expect(formatSkillMoney(money('100000000'))).to.equal('100 SILVER')
+    expect(formatSkillMoney(money('9223372036854775807'))).to.equal('9223372036854.775807 SILVER')
+    expect(formatSkillMoney('not-money')).to.equal('—')
+    expect(formatSkillMoney('01')).to.equal('—')
+    expect(formatSkillMoney(-1)).to.equal('—')
   })
 
   it('uses byte-stable UTF-16 code-unit ordering instead of locale-dependent sorting', () => {
@@ -153,7 +154,7 @@ describe('skill market preview', () => {
     const purchase = calls.find(call => call.url === '/skill-orders')
     expect(purchase.payload).to.deep.equal({
       quoteId: 'sq-1', productVersionId: 'spv-repo-test-1', targetAgentId: 'agent-lin',
-      expectedPriceMicro: '30000000', expectedAgentVersion: '7',
+      expectedPrice: money('30000000'), expectedAgentVersion: '7',
       approvedPermissions: ['repo.read', 'repo.write']
     })
   })
@@ -164,11 +165,11 @@ describe('skill market preview', () => {
     let quoteCalls = 0
     let generated = 0
     const api = {
-      get: async () => success({ entitlements: [] }),
+      get: async () => success([]),
       post: async (url, payload, options) => {
         if (url === '/skill-orders/quotes') {
           quoteCalls += 1
-          return success({ quoteId: `sq-${quoteCalls}`, productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
+          return success({ quoteId: `sq-${quoteCalls}`, productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: Date.now() + 60000, price: money('30000000') })
         }
         purchaseCalls.push({ payload, key: options.headers['Idempotency-Key'] })
         if (purchaseCalls.length === 1) throw new TypeError('network connection lost after send')
@@ -199,7 +200,7 @@ describe('skill market preview', () => {
     const storage = memoryStorage()
     const requests = []
     const api = {
-      get: async () => success({ entitlements: [] }),
+      get: async () => success([]),
       post: async (url, payload, options) => {
         requests.push({ url, payload, key: options.headers['Idempotency-Key'] })
         throw new TypeError('ambiguous send')
@@ -226,7 +227,7 @@ describe('skill market preview', () => {
       get: async () => success([]),
       post: async (url, payload, options) => {
         requests.push({ url, payload, key: options.headers['Idempotency-Key'] })
-        if (url === '/skill-orders/quotes') return success({ quoteId: 'sq-1', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
+        if (url === '/skill-orders/quotes') return success({ quoteId: 'sq-1', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: Date.now() + 60000, price: money('30000000') })
         throw new TypeError('ambiguous order')
       }
     }
@@ -269,7 +270,7 @@ describe('skill market preview', () => {
 
     market.setTargetAgent({ agentId: 'agent-lin', version: '8' })
     market.setApprovedPermissions(['repo.read', 'repo.write'])
-    pending.resolve(success({ quoteId: 'late', productVersionId: 'spv-repo-test-1', targetAgentId: 'agent-lin', expectedAgentVersion: '7', expiresAt: String(Date.now() + 60000), priceMicro: '30000000' }))
+    pending.resolve(success({ quoteId: 'late', productVersionId: 'spv-repo-test-1', targetAgentId: 'agent-lin', expectedAgentVersion: '7', expiresAt: Date.now() + 60000, price: money('30000000') }))
 
     expect(await request).to.equal(null)
     expect(market.quote.value).to.equal(null)
@@ -280,8 +281,8 @@ describe('skill market preview', () => {
   it('clears expired or invalid quote responses so a fresh quote can use a new key', async () => {
     const keys = []
     const responses = [
-      { quoteId: 'expired', productVersionId: 'spv-repo-test-1', targetAgentId: 'agent-lin', expectedAgentVersion: '7', expiresAt: '1000', priceMicro: '30000000' },
-      { quoteId: 'fresh', productVersionId: 'spv-repo-test-1', targetAgentId: 'agent-lin', expectedAgentVersion: '7', expiresAt: '2000', priceMicro: '30000000' }
+      { quoteId: 'expired', productVersionId: 'spv-repo-test-1', targetAgentId: 'agent-lin', expectedAgentVersion: '7', expiresAt: 1000, price: money('30000000') },
+      { quoteId: 'fresh', productVersionId: 'spv-repo-test-1', targetAgentId: 'agent-lin', expectedAgentVersion: '7', expiresAt: 2000, price: money('30000000') }
     ]
     let generated = 0
     const api = { get: async () => success([]), post: async (url, payload, options) => { keys.push(options.headers['Idempotency-Key']); return success(responses.shift()) } }
@@ -326,7 +327,7 @@ describe('skill market preview', () => {
     expect(await stale).to.equal(null)
     expect(market.order.value.status).to.equal('INSTALLING')
 
-    const terminalApi = { get: async () => success({ orderId: 'so-1', targetAgentId: 'agent-lin', productVersionId: 'spv-repo-test-1', expectedAgentVersion: '7', status: 'ACTIVE' }) }
+    const terminalApi = { get: async url => url.includes('/skill-entitlements') ? [] : success({ orderId: 'so-1', targetAgentId: 'agent-lin', productVersionId: 'spv-repo-test-1', expectedAgentVersion: '7', status: 'ACTIVE' }) }
     const terminalMarket = useSkillMarket({ actorScopeKey: 'actor-a', agentApi: terminalApi, enabled: ref(true) })
     terminalMarket.setTargetAgent({ agentId: 'agent-lin', version: '7' })
     terminalMarket.order.value = { orderId: 'so-1', targetAgentId: 'agent-lin', productVersionId: 'spv-repo-test-1', expectedAgentVersion: '7', status: 'INSTALLING' }
@@ -345,9 +346,9 @@ describe('skill market preview', () => {
     const stale = market.loadEntitlements()
     market.setTargetAgent({ agentId: 'agent-song', version: '8' })
     const latest = market.loadEntitlements()
-    song.resolve(success({ entitlements: [{ skillKey: 'repo-test', skillVersion: '2.0.0', productVersionId: 'spv-song', status: 'ACTIVE' }] }))
+    song.resolve(success([{ skillKey: 'repo-test', skillVersion: '2.0.0', productVersionId: 'spv-song', status: 'ACTIVE' }]))
     await latest
-    lin.resolve(success({ entitlements: [{ skillKey: 'repo-test', skillVersion: '1.0.0', productVersionId: 'spv-lin', status: 'ACTIVE' }] }))
+    lin.resolve(success([{ skillKey: 'repo-test', skillVersion: '1.0.0', productVersionId: 'spv-lin', status: 'ACTIVE' }]))
     expect(await stale).to.equal(null)
     expect(market.entitlements.value[0].productVersionId).to.equal('spv-song')
   })
@@ -357,7 +358,7 @@ describe('skill market preview', () => {
     const api = {
       get: async () => success([]),
       post: async (url, payload) => url === '/skill-orders/quotes'
-        ? success({ quoteId: 'sq-1', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
+        ? success({ quoteId: 'sq-1', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: Date.now() + 60000, price: money('30000000') })
         : success({ orderId: 'so-bad', targetAgentId: payload.targetAgentId, productVersionId: 'spv-other', expectedAgentVersion: payload.expectedAgentVersion, status: 'FUNDS_HELD' })
     }
     const market = useSkillMarket({ actorScopeKey: 'actor-a', agentApi: api, enabled: ref(true), purchaseIdempotencyStorage: storage, createIdempotencyKey: () => 'bad-response-key' })
@@ -367,10 +368,9 @@ describe('skill market preview', () => {
     expect(JSON.parse([...storage.values.values()][0]).records).to.have.length(1)
   })
 
-  it('rejects non-E0 JsonResult business responses instead of treating them as payloads', async () => {
-    expect(() => readSkillApiPayload({ data: { code: 'SKILL_NOT_AVAILABLE', msg: '商品已下架', data: seededProducts } }))
-      .to.throw('商品已下架')
-    const api = { get: async () => ({ data: { code: 'NOT_FOUND_OR_FORBIDDEN', msg: '不可见' } }) }
+  it('preserves typed errors already rejected by the shared HTTP boundary', async () => {
+    expect(readSkillApiPayload(seededProducts)).to.equal(seededProducts)
+    const api = { get: async () => { throw Object.assign(new Error('不可见'), { code: 'NOT_FOUND_OR_FORBIDDEN', status: 404 }) } }
     const market = useSkillMarket({ actorScopeKey: 'actor-a', agentApi: api, enabled: ref(true) })
     try {
       await market.loadProducts()
@@ -402,7 +402,7 @@ describe('skill market preview', () => {
       get: async (url) => {
         calls.push(url)
         if (url === '/skill-orders/so-refund') return success({ orderId: 'so-refund', targetAgentId: 'agent-lin', productVersionId: 'spv-repo-test-1', expectedAgentVersion: '7', status: 'REFUNDED' })
-        if (url === '/agent-lin/skill-entitlements') return success({ entitlements: [] })
+        if (url === '/agent-lin/skill-entitlements') return success([])
         throw new Error(`Unexpected GET ${url}`)
       }
     }
@@ -458,7 +458,7 @@ describe('skill market preview', () => {
         agentApi: {
           get: async () => success([]),
           post: async (url, payload) => url === '/skill-orders/quotes'
-            ? success({ quoteId: 'sq-1', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
+            ? success({ quoteId: 'sq-1', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: Date.now() + 60000, price: money('30000000') })
             : (() => { const error = new Error(code); error.code = code; error.status = status; error.businessFailure = true; throw error })()
         }
       })
@@ -476,7 +476,7 @@ describe('skill market preview', () => {
       agentApi: {
         get: async () => success([]),
         post: async (url, payload, options) => {
-          if (url === '/skill-orders/quotes') return success({ quoteId: 'sq-1', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
+          if (url === '/skill-orders/quotes') return success({ quoteId: 'sq-1', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: Date.now() + 60000, price: money('30000000') })
           keys.push(options.headers['Idempotency-Key'])
           throw new TypeError('response lost')
         }
@@ -496,7 +496,7 @@ describe('skill market preview', () => {
     const api = {
       get: async url => url === '/skill-orders/so-a' ? lateA.promise : success([]),
       post: async (url, payload) => {
-        if (url === '/skill-orders/quotes') return success({ quoteId: `sq-${++sequence}`, productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: payload.productVersionId.includes('editor') ? '50000000' : '30000000' })
+        if (url === '/skill-orders/quotes') return success({ quoteId: `sq-${++sequence}`, productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: Date.now() + 60000, price: money(payload.productVersionId.includes('editor') ? '50000000' : '30000000') })
         return success({ orderId: sequence === 1 ? 'so-a' : 'so-b', targetAgentId: payload.targetAgentId, productVersionId: payload.productVersionId, expectedAgentVersion: payload.expectedAgentVersion, status: sequence === 1 ? 'ACTIVE' : 'FUNDS_HELD' })
       }
     }
@@ -529,7 +529,7 @@ describe('skill market preview', () => {
     const failure = await load
     expect(failure.name).to.equal('AbortError')
     expect(catalogOptions.signal.aborted).to.equal(true)
-    catalog.resolve(success({ items: seededProducts }))
+    catalog.resolve(success(seededProducts))
     await Promise.resolve()
     expect(market.products.value).to.deep.equal([])
 
@@ -544,7 +544,7 @@ describe('skill market preview', () => {
     disposed.dispose()
     expect((await late).name).to.equal('AbortError')
     expect(entitlementOptions.signal.aborted).to.equal(true)
-    entitlement.resolve(success({ entitlements: [{ skillKey: 'late' }] }))
+    entitlement.resolve(success([{ skillKey: 'late' }]))
     await Promise.resolve()
     expect(disposed.entitlements.value).to.deep.equal([])
   })
@@ -585,7 +585,7 @@ describe('skill market recovery hardening', () => {
       get: async () => success([]),
       post: async (url, payload, options) => {
         calls.push({ url, payload, key: options.headers['Idempotency-Key'] })
-        return success({ quoteId: 'sq-1', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
+        return success({ quoteId: 'sq-1', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: Date.now() + 60000, price: money('30000000') })
       }
     }
     const market = useSkillMarket({ actorScopeKey: 'actor-a', enabled: ref(true), purchaseIdempotencyStorage: storage, agentApi: api })
@@ -621,7 +621,7 @@ describe('skill market recovery hardening', () => {
     const first = useSkillMarket({ actorScopeKey: 'tenant-a:client-a:principal-a', enabled: ref(true), purchaseIdempotencyStorage: storage, agentApi: api, createIdempotencyKey: () => 'actor-a-quote' })
     first.selectProduct(seededProducts[2]); first.setTargetAgent({ agentId: 'agent-lin', version: '7' }); first.setApprovedPermissions(['repo.read'])
     try { await first.requestQuote() } catch {}
-    const second = useSkillMarket({ actorScopeKey: 'tenant-b:client-b:principal-b', enabled: ref(true), purchaseIdempotencyStorage: storage, agentApi: { get: async () => success([]), post: async () => success({ quoteId: 'sq-b', productVersionId: 'spv-repo-test-1', targetAgentId: 'agent-lin', expectedAgentVersion: '7', expiresAt: String(Date.now() + 60000), priceMicro: '30000000' }) }, createIdempotencyKey: () => 'actor-b-quote' })
+    const second = useSkillMarket({ actorScopeKey: 'tenant-b:client-b:principal-b', enabled: ref(true), purchaseIdempotencyStorage: storage, agentApi: { get: async () => success([]), post: async () => success({ quoteId: 'sq-b', productVersionId: 'spv-repo-test-1', targetAgentId: 'agent-lin', expectedAgentVersion: '7', expiresAt: Date.now() + 60000, price: money('30000000') }) }, createIdempotencyKey: () => 'actor-b-quote' })
     second.selectProduct(seededProducts[2]); second.setTargetAgent({ agentId: 'agent-lin', version: '7' }); second.setApprovedPermissions(['repo.read'])
     expect(second.unresolvedOperations.value).to.deep.equal([])
     expect(await second.requestQuote()).to.have.property('quoteId', 'sq-b')
@@ -636,7 +636,7 @@ describe('skill market recovery hardening', () => {
       post: async (url, payload, options) => {
         calls.push({ url, payload, key: options.headers['Idempotency-Key'] })
         if (calls.length === 1) throw new TypeError('lost after send')
-        return success({ quoteId: 'sq-restored', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
+        return success({ quoteId: 'sq-restored', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: Date.now() + 60000, price: money('30000000') })
       }
     }
     const first = useSkillMarket({ actorScopeKey: 'actor-a', enabled: ref(true), purchaseIdempotencyStorage: storage, agentApi: api, createIdempotencyKey: () => 'quote-replay-key' })
@@ -655,7 +655,7 @@ describe('skill market recovery hardening', () => {
   it('resumes an old unresolved operation with its persisted agent version after agent refresh', async () => {
     const storage = memoryStorage()
     const attempts = []
-    const api = { get: async () => success([]), post: async (url, payload, options) => { attempts.push({ payload, key: options.headers['Idempotency-Key'] }); if (attempts.length === 1) throw new TypeError('ambiguous'); return success({ quoteId: 'sq-old', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' }) } }
+    const api = { get: async () => success([]), post: async (url, payload, options) => { attempts.push({ payload, key: options.headers['Idempotency-Key'] }); if (attempts.length === 1) throw new TypeError('ambiguous'); return success({ quoteId: 'sq-old', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: Date.now() + 60000, price: money('30000000') }) } }
     const first = useSkillMarket({ actorScopeKey: 'actor-a', enabled: ref(true), purchaseIdempotencyStorage: storage, agentApi: api, createIdempotencyKey: () => 'old-version-key' })
     first.selectProduct(seededProducts[2]); first.setTargetAgent({ agentId: 'agent-lin', version: '7' }); first.setApprovedPermissions(['repo.read'])
     try { await first.requestQuote() } catch {}
@@ -673,7 +673,7 @@ describe('skill market recovery hardening', () => {
     expect(input.target.value.expectedAgentVersion).to.equal('')
     expect(await input.requestQuote()).to.equal(null)
     expect(calls).to.deep.equal([])
-    const response = useSkillMarket({ actorScopeKey: 'actor-b', enabled: ref(true), agentApi: { get: async () => success([]), post: async (url, payload) => success({ quoteId: 'sq-number', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: 7, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' }) } })
+    const response = useSkillMarket({ actorScopeKey: 'actor-b', enabled: ref(true), agentApi: { get: async () => success([]), post: async (url, payload) => success({ quoteId: 'sq-number', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: 7, expiresAt: Date.now() + 60000, price: money('30000000') }) } })
     response.selectProduct(seededProducts[2]); response.setTargetAgent({ agentId: 'agent-lin', version: '7' })
     expect(await response.requestQuote()).to.equal(null)
     expect(response.quote.value).to.equal(null)
@@ -707,7 +707,7 @@ describe('skill market recovery hardening', () => {
         ? success({ orderId: 'so-recover', targetAgentId: 'agent-lin', productVersionId: 'spv-repo-test-1', expectedAgentVersion: '7', status: orderResponses.shift() || 'ACTIVE' })
         : success([]),
       post: async (url, payload) => url === '/skill-orders/quotes'
-        ? success({ quoteId: 'sq-recover', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
+        ? success({ quoteId: 'sq-recover', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: Date.now() + 60000, price: money('30000000') })
         : success({ orderId: 'so-recover', targetAgentId: payload.targetAgentId, productVersionId: payload.productVersionId, expectedAgentVersion: payload.expectedAgentVersion, status: 'FUNDS_HELD' })
     }
     const original = useSkillMarket({ actorScopeKey: 'actor-a', enabled: ref(true), purchaseIdempotencyStorage: storage, agentApi: api, createIdempotencyKey: (() => { let n = 0; return () => `recover-${++n}` })() })
@@ -730,7 +730,7 @@ describe('skill market recovery hardening', () => {
       post: async (url, payload) => {
         calls.push({ url, payload })
         if (calls.length === 1) return firstPost.promise
-        return success({ quoteId: 'unexpected', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
+        return success({ quoteId: 'unexpected', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: Date.now() + 60000, price: money('30000000') })
       }
     }
     const one = useSkillMarket({ actorScopeKey: 'actor-a', enabled: ref(true), purchaseIdempotencyStorage: storage, agentApi: api, operationLocks: locks })
@@ -750,7 +750,7 @@ describe('skill market recovery hardening', () => {
 
   it('fails closed for purchase mutation when Web Locks are unavailable while catalog browsing remains available', async () => {
     const calls = []
-    const market = useSkillMarket({ actorScopeKey: 'actor-a', enabled: ref(true), operationLocks: null, agentApi: { get: async url => { calls.push(url); return success({ items: seededProducts }) }, post: async () => { throw new Error('must not post') } } })
+    const market = useSkillMarket({ actorScopeKey: 'actor-a', enabled: ref(true), operationLocks: null, agentApi: { get: async url => { calls.push(url); return success(seededProducts) }, post: async () => { throw new Error('must not post') } } })
     expect((await market.loadProducts())).to.have.length(6)
     market.selectProduct(seededProducts[2]); market.setTargetAgent({ agentId: 'agent-lin', version: '7' }); market.setApprovedPermissions(['repo.read'])
     expect(market.operationLockAvailable.value).to.equal(false)
@@ -763,7 +763,7 @@ describe('skill market recovery hardening', () => {
 
 describe('skill market W12 recovery closure', () => {
   it('clears only exact frozen HTTP pre-order failures and retains TypeError, empty, statusless, 5xx, and unknown ORDER evidence', async () => {
-    const quoteResponse = payload => success({ quoteId: 'sq-1', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: String(Date.now() + 60000), priceMicro: '30000000' })
+    const quoteResponse = payload => success({ quoteId: 'sq-1', productVersionId: payload.productVersionId, targetAgentId: payload.targetAgentId, expectedAgentVersion: payload.expectedAgentVersion, expiresAt: Date.now() + 60000, price: money('30000000') })
     for (const [code, status] of [['SKILL_QUOTE_EXPIRED', 409], ['AGENT_VERSION_CONFLICT', 409], ['INSUFFICIENT_FUNDS', 422]]) {
       const storage = memoryStorage()
       const market = useSkillMarket({ actorScopeKey: `actor-clear-${code}`, enabled: ref(true), purchaseIdempotencyStorage: storage,

@@ -17,7 +17,7 @@
       <SkillMarket
         v-if="selectedAgent"
         :preview-enabled="marketEnabled"
-        :actor-scope-key="capability.principalScopeFingerprint"
+        :actor-scope-key="capability.principalScopeSha256"
         :target-agent="selectedAgent"
         @refresh-roster="refreshRoster"
       />

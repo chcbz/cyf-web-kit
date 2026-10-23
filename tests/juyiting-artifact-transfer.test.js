@@ -1,3 +1,4 @@
+import { currentHttpResponse } from './fixtures/current-http-response.js'
 import { expect } from 'chai'
 import { ref } from 'vue'
 import { createApi } from '../src/composables/useHttp.js'
@@ -27,11 +28,11 @@ describe('F02 Juyi Hall artifact transfer', () => {
       globalThis.fetch = async (url, options) => {
         requests.push({ url: String(url), options })
         if (options.method === 'POST') {
-          const body = JSON.parse(options.body)
-          return new Response(JSON.stringify(publishReply(body)), { status: 201, headers: { 'Content-Type': 'application/json' } })
+          const body = JSON.parse(options.body).data
+          return currentHttpResponse(options, { code: 'E0', data: publishReply(body) }, { status: 201, headers: { 'Content-Type': 'application/json' } })
         }
         return new Response(new ReadableStream({ start (controller) { controller.enqueue(bytes); controller.close() } }), {
-          status: 200, headers: { 'Content-Type': 'application/zip', 'Content-Length': String(bytes.byteLength), 'Content-Disposition': 'attachment' }
+          status: 200, headers: { 'X-Request-Id': options.headers['X-Request-Id'], 'Content-Type': 'application/zip', 'Content-Length': String(bytes.byteLength), 'Content-Disposition': 'attachment' }
         })
       }
       const t = transfer({ api: authApi(), documentRef: { createElement: () => ({ click () { clicks.push(true) } }) }, urlApi: { createObjectURL: blob => { urls.push(blob); return 'blob:f02' }, revokeObjectURL () {} } })
@@ -41,7 +42,7 @@ describe('F02 Juyi Hall artifact transfer', () => {
       expect(receipt).to.include({ artifactId: 'artifact-1', artifactVersion: 3, contentByteLength: 4, contentMimeType: 'application/zip' })
       expect(requests[0].url).to.equal('/agent/tasks/task-1/artifacts?actorAgentId=agent-1')
       expect(requests[0].options.headers.Authorization).to.equal('Bearer artifact-token')
-      expect(JSON.parse(requests[0].options.body)).to.deep.equal({ artifactId: 'artifact-1', workItemId: null, artifactType: 'evidence', title: '精确字节', contentBytes: 'AP8BAg==', contentMimeType: 'application/zip', artifactVersion: 3, expectedPreviousVersion: 2, visibility: 'task_members', metadata: {} })
+      expect(JSON.parse(requests[0].options.body).data).to.deep.equal({ artifactId: 'artifact-1', workItemId: null, artifactType: 'evidence', title: '精确字节', contentBytes: 'AP8BAg==', contentMimeType: 'application/zip', artifactVersion: 3, expectedPreviousVersion: 2, visibility: 'task_members', metadata: {} })
       t.selectDownload({ artifactId: 'artifact-1', artifactVersion: '3' })
       const download = await t.downloadExact()
       expect(requests[1].url).to.equal('/agent/tasks/task-1/artifacts/artifact-1/versions/3/content?actorAgentId=agent-1')

@@ -6,7 +6,7 @@ import { economyReadOnlyPreviewClient, readEconomyReadOnlyPreviewPayload } from 
 const initialCard = () => ({ status: 'idle', data: null, error: '' })
 const canonical = value => typeof value === 'string' && /^(0|[1-9]\d*)$/.test(value)
 const ownRosterAgent = agent => agent?.boundToMe === true && agent?.canOperate === true && typeof agent?.agentId === 'string' && agent.agentId.length > 0
-const rosterItems = payload => Array.isArray(payload) ? payload : (Array.isArray(payload?.items) ? payload.items : (Array.isArray(payload?.list) ? payload.list : []))
+const rosterItems = payload => Array.isArray(payload?.items) ? payload.items : []
 const aborted = error => error?.name === 'AbortError'
 
 function newCard () {
@@ -31,7 +31,7 @@ export function useEconomyReadOnlyPreview ({ client = economyReadOnlyPreviewClie
   const assessment = computed(() => assessReadOnlyPreviewCapabilities(capability.value))
   const enabled = computed(() => assessment.value.available && !protocolError.value)
   const features = computed(() => assessment.value.capabilities?.features || {})
-  const scopeFingerprint = computed(() => assessment.value.capabilities?.principalScopeFingerprint || '')
+  const scopeFingerprint = computed(() => assessment.value.capabilities?.principalScopeSha256 || '')
   const selectedAgent = computed(() => agents.value.find(agent => agent.agentId === selectedAgentId.value) || null)
   const binding = (entry, agentId) => ({ scopeFingerprint: scopeFingerprint.value, agentId, requestGeneration: entry.generation, authGeneration: authGeneration() })
   const current = (entry, captured) => !disposed && evaluateReadOnlyPreviewResponse(binding(entry, captured.agentId), captured).accepted
@@ -107,13 +107,13 @@ export function useEconomyReadOnlyPreview ({ client = economyReadOnlyPreviewClie
   const loadLedger = (cursor = '') => {
     if (!requireFeature('ledger')) return null
     const prior = cursor && Array.isArray(cards.ledger.state.value.data?.items) ? cards.ledger.state.value.data.items : []
-    return finish(cards.ledger, options => client.ledger({ cursor, limit: '50' }, options), { preserveData: prior.length ? cards.ledger.state.value.data : null })
+    return finish(cards.ledger, options => client.ledger({ cursor, pageSize: 50 }, options), { preserveData: prior.length ? cards.ledger.state.value.data : null })
       .then(result => appendPage(cards.ledger, prior, result, item => `${item?.transactionId || ''}:${item?.entryId || ''}`))
   }
-  const loadCatalog = (offset = '0') => {
+  const loadCatalog = (cursor = '') => {
     if (!requireFeature('catalog')) return null
-    const prior = offset !== '0' && Array.isArray(cards.catalog.state.value.data?.items) ? cards.catalog.state.value.data.items : []
-    return finish(cards.catalog, options => client.catalog({ offset, limit: '50' }, options), { preserveData: prior.length ? cards.catalog.state.value.data : null })
+    const prior = cursor && Array.isArray(cards.catalog.state.value.data?.items) ? cards.catalog.state.value.data.items : []
+    return finish(cards.catalog, options => client.catalog({ cursor, pageSize: 50 }, options), { preserveData: prior.length ? cards.catalog.state.value.data : null })
       .then(result => appendPage(cards.catalog, prior, result, item => item?.productId || ''))
   }
   const loadDetail = productId => typeof productId === 'string' && productId ? finish(cards.detail, options => client.product(productId, options)) : null

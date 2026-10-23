@@ -1,3 +1,4 @@
+import { validMaterialVersion } from './materialVersion.js'
 import { bountyBootstrapReference } from './hallBountyBootstrap.js'
 import { providerConsentExtension } from './hallPointAndStartProviderConsent.js'
 import { controlledImageBridgeExtension } from './hallControlledImagePointAndStartBridge.js'
@@ -29,8 +30,7 @@ const inputs = list => {
   const result = []
   const seen = new Set()
   for (const item of list) {
-    if (!exactPointAndStartId(item?.fileId) || !Number.isSafeInteger(item.version) || item.version < 1 ||
-      item.version > 2147483647 || !['INPUT', 'REFERENCE'].includes(item.purpose)) return null
+    if (!exactPointAndStartId(item?.fileId) || !validMaterialVersion(item.version) || !['INPUT', 'REFERENCE'].includes(item.purpose)) return null
     const key = JSON.stringify([item.fileId, item.version, item.purpose])
     if (seen.has(key)) return null
     seen.add(key)
@@ -154,7 +154,12 @@ export const createPointAndStartIntentStore = ({ storage, scope, taskId }) => {
       return validIntent(record) && record.taskId === taskId ? { state: 'PRESENT', record: clone(record) } : { state: 'CORRUPT' }
     } catch { return { state: 'UNAVAILABLE' } }
   }
-  return { read, write: record => {
+  return { read, forgetRejected: record => {
+    const saved = read()
+    if (saved.state !== 'PRESENT' || saved.record.key !== record.key || !equal(saved.record.body, record.body) ||
+      saved.record.postAcknowledged || saved.record.projection) return false
+    try { storage.removeItem(name); return read().state === 'ABSENT' } catch { return false }
+  }, write: record => {
     const old = read()
     if (record?.schemaVersion !== 2 || !validIntent(record) || record.taskId !== taskId || !['ABSENT', 'PRESENT'].includes(old.state)) return { state: 'UNAVAILABLE' }
     if (old.state === 'PRESENT' && (old.record.schemaVersion !== record.schemaVersion || old.record.key !== record.key || !equal(old.record.body, record.body) ||

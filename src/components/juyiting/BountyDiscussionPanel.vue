@@ -1,8 +1,8 @@
 <template>
   <section class="bounty-discussion-panel discussion-panel">
-    <BountyDeliberationStatus :presentation="v2Presentation" />
+    <BountyDeliberationStatus v-if="!taskCompleted" :presentation="v2Presentation" />
     <BountyExecutionTermination
-      :enabled="deliberationV2Enabled"
+      :enabled="deliberationV2Enabled && !taskCompleted"
       :requests="requestCatalog.length ? requestCatalog.map(entry => entry.request) : activeRequest ? [activeRequest] : []"
       :conversation-id="conversationId"
       :identity-key="`${identityEpoch}\u0000${identityScope}`"
@@ -10,12 +10,11 @@
     />
     <p v-if="typedInspectionStatus" class="typed-inspection-status" role="status">{{ typedInspectionStatus }}</p>
     <button
-      v-if="typedRecoveryAvailable"
+      v-if="typedRecoveryAvailable && !taskCompleted"
       type="button"
       class="typed-recovery"
       @click="$emit('typed-resume')"
     >刷新处理状态</button>
-    <TaskSkillCapabilities v-if="typedEnabled" :projection="skillDirectory" :error="skillDirectoryError" :loading="skillDirectoryLoading" @refresh="$emit('skill-directory-refresh')" />
     <ChatPanel
       @update:draft="$emit('update:draft', $event)"
       discussion-variant="bounty"
@@ -39,10 +38,41 @@
       @voice-apply="$emit('voice-apply', $event)"
       @typed-reply="$emit('typed-reply', $event)"
     >
+      <template #after-toolbar>
+        <label v-if="typedEnabled && !taskCompleted && deliveryChoices.length > 1" class="media-basis-choice">
+          <span>本轮成果</span>
+          <select
+            :value="selectedDeliveryId"
+            aria-label="本轮成果"
+            :disabled="conversationBusy"
+            @change="$emit('choose-delivery', $event.target.value)"
+          >
+            <option value="">请选择要继续议事的成果</option>
+            <option v-for="choice in deliveryChoices" :key="choice.outcomeId" :value="choice.outcomeId">{{ choice.label }}</option>
+          </select>
+        </label>
+        <TaskSkillCapabilities v-if="typedEnabled" :projection="skillDirectory" :error="skillDirectoryError" :loading="skillDirectoryLoading" @refresh="$emit('skill-directory-refresh')" />
+      </template>
+      <template #matter-actions>
+        <button
+          v-if="!taskCompleted && deliberationV2Enabled"
+          type="button"
+          class="matter-action"
+          aria-label="统一验收"
+          title="验收"
+          :disabled="reviewBusy || conversationBusy || voice?.voiceInteractionLocked"
+          @click="$emit('review-delivery')"
+        ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5h10M9 12h10M9 19h10M3 5l1 1 2-2M3 12l1 1 2-2M3 19l1 1 2-2" /></svg></button>
+      </template>
       <template #bounty-results>
         <BountyExecutionOutputs
+          ref="outputGallery"
+          :review-busy="reviewBusy || conversationBusy"
+          @outputs-change="$emit('outputs-change', $event)"
+          @accept-output="$emit('accept-output', $event)"
+          @preview-ready="$emit('preview-ready', $event)"
           :enabled="deliberationV2Enabled"
-          :task-completed="selectedTask?.status === 'completed'"
+          :task-completed="taskCompleted"
           :request="activeRequest"
           :catalog="requestCatalog"
           :typed-outcomes="typedOutcomes"
@@ -51,7 +81,6 @@
           :conversation-id="conversationId"
           :identity-key="`${identityEpoch}\u0000${identityScope}`"
           :task-version="selectedTask?.taskVersion ?? selectedTask?.version"
-          @task-completed="$emit('task-completed', $event)"
         />
       </template>
     </ChatPanel>
@@ -59,7 +88,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import ChatPanel from './ChatPanel.vue'
 import TaskSkillCapabilities from './TaskSkillCapabilities.vue'
 import { discussionPanelProps, discussionPanelEmits } from './discussionPanelContract.js'
@@ -70,6 +99,10 @@ import { bountyDeliberationPresentation } from '../../composables/juyiting/hallM
 
 const props = defineProps({
   ...discussionPanelProps,
+  deliveryChoices: { type: Array, default: () => [] },
+  selectedDeliveryId: { type: String, default: '' },
+  reviewContext: { type: Object, default: null },
+  reviewBusy: { type: Boolean, default: false },
   activeRequest: { type: Object, default: null },
   requestCatalog: { type: Array, default: () => [] },
   activeTurns: { type: Array, default: () => [] },
@@ -85,7 +118,10 @@ const props = defineProps({
   identityScope: { type: String, default: '' },
 })
 
-defineEmits([...discussionPanelEmits, 'execution-settled', 'task-completed', 'typed-reply', 'typed-resume', 'skill-directory-refresh'])
+defineEmits([...discussionPanelEmits, 'execution-settled', 'review-delivery', 'typed-reply', 'typed-resume', 'skill-directory-refresh', 'choose-delivery', 'outputs-change', 'accept-output', 'preview-ready'])
+
+const outputGallery = ref(null)
+defineExpose({ previewSelected: item => outputGallery.value?.previewSelected(item) })
 
 const v2Presentation = computed(() => bountyDeliberationPresentation({
   enabled: props.deliberationV2Enabled,
@@ -101,12 +137,15 @@ const bountySubtitle = computed(() => {
   return `${taskName}${countText}`
 })
 
+const taskCompleted = computed(() => props.selectedTask?.status === 'completed' ||
+  Boolean(props.selectedTask?.id && props.reviewContext?.taskId === props.selectedTask.id && props.reviewContext.taskState === 'COMPLETED'))
+
 const chatProps = computed(() => {
   const {
-    activeRequest, requestCatalog, activeTurns, capabilityState, deliberationV2Enabled,
+    deliveryChoices: _deliveryChoices, selectedDeliveryId: _selectedDeliveryId, reviewContext, reviewBusy, activeRequest, requestCatalog, activeTurns, capabilityState, deliberationV2Enabled,
     typedRecoveryAvailable, typedInspectionStatus, ...chat
   } = props
-  return chat
+  return { ...chat, matterReadOnly: chat.matterReadOnly || taskCompleted.value, connectionStatus: taskCompleted.value ? '事项已完成' : chat.connectionStatus }
 })
 </script>
 
@@ -126,4 +165,10 @@ const chatProps = computed(() => {
 
 <style scoped>
 .typed-inspection-status{margin:8px 0;padding:8px 10px;border-left:3px solid #6f8c81;background:#f3f8f4;color:#3f6254;font-size:12px;line-height:1.5}
+</style>
+
+<style scoped>
+.media-basis-choice{display:flex;align-items:center;gap:8px;padding:6px 12px;font-size:12px;color:var(--hall-text-muted,#68716b)}
+.media-basis-choice span{flex:none}
+.media-basis-choice select{min-width:0;max-width:100%;flex:1;border:1px solid var(--hall-border,#e3e5dc);border-radius:6px;padding:5px 8px;background:var(--hall-surface,#fffefa);color:var(--hall-text,#242e2b);font:inherit}
 </style>

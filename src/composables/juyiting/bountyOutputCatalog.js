@@ -44,7 +44,7 @@ export function outputCatalogItems (items, requestId, stepId) {
     if (!exactOutputId(item?.outputId) || seen.has(item.outputId) ||
         typeof item.contentMimeType !== 'string' || !item.contentMimeType ||
         typeof item.sha256 !== 'string' || !HASH.test(item.sha256) ||
-        !Number.isSafeInteger(item.byteLength) || item.byteLength < 0) return false
+        typeof item.byteLength !== 'string' || !/^(0|[1-9][0-9]{0,18})$/.test(item.byteLength) || BigInt(item.byteLength) > 9223372036854775807n) return false
     if (item.assetRef != null && !assetRefValid(item.assetRef)) return false
     if (item.replaces != null && (!replacementValid(item.replaces) || item.replaces.requestId === requestId)) return false
     const expected = `${prefix}${encodeURIComponent(item.outputId)}`
@@ -63,7 +63,7 @@ export function outputCatalogItems (items, requestId, stepId) {
 // authoritative request and step rather than the output identifier alone.
 export function outputItemKey (item) {
   if (item?.messageSource) return JSON.stringify(['COMPLETED_MESSAGE', item.requestId, item.messageSource.turnId,
-    item.messageSource.messageId, item.messageSource.snapshotId, item.messageSource.finalDigest])
+    item.messageSource.messageId, item.messageSource.snapshotId, item.messageSource.finalSha256])
   return JSON.stringify([item?.requestId, item?.stepId, item?.outputId])
 }
 
@@ -147,7 +147,7 @@ export async function completedTextItem (raw, request, turn, taskId) {
     conversationGeneration: request.conversationGeneration, requestId: request.requestId,
     requestRevision: request.requestRevision, turnId: turn.turnId, taskId })
   if (!value) throw new Error('文字成果来源回执不匹配。')
-  if (![3, 4].includes(value.schemaVersion) || value.state !== 'READY' || value.outcome?.deliverable !== true) return null
+  if (value.schemaVersion !== 6 || value.state !== 'READY' || value.outcome?.deliverable !== true) return null
   const source = value.outcome.messageSource
   if (request.state !== 'COMPLETED' || turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state) ||
     source.messageId !== turn.finalMessageId || source.snapshotId !== turn.contextSnapshotId ||
@@ -169,7 +169,7 @@ export function textDeliveryProjection (texts) {
   if (!Array.isArray(texts) || !texts.length) return Object.freeze({ items: Object.freeze([]), basis: null })
   const nodes = new Map()
   for (const text of texts) {
-    if (!exactOutputId(text?.outcomeId) || nodes.has(text.outcomeId) || !/^sha256:[0-9a-f]{64}$/.test(text.messageSource?.finalDigest || '')) throw new Error('文字交付关联尚不明确。')
+    if (!exactOutputId(text?.outcomeId) || nodes.has(text.outcomeId) || !/^[0-9a-f]{64}$/.test(text.messageSource?.finalSha256 || '')) throw new Error('文字交付关联尚不明确。')
     nodes.set(text.outcomeId, text)
   }
   const roots = texts.filter(text => !text.deliveryRelation)
@@ -177,8 +177,8 @@ export function textDeliveryProjection (texts) {
   const children = new Map()
   for (const text of texts.filter(text => text.deliveryRelation)) {
     const relation = text.deliveryRelation; const parent = nodes.get(relation.parentOutcomeId)
-    if (!parent || parent.messageSource.finalDigest !== relation.parentFinalDigest || !['APPEND', 'REPLACE', 'RESET'].includes(relation.mode) || children.has(parent.outcomeId)) throw new Error('文字改稿关联有歧义，请回到议事明确本次成果。')
-    if ((Object.hasOwn(relation, 'targetOutcomeId') || Object.hasOwn(relation, 'targetFinalDigest')) && relation.mode !== 'REPLACE') throw new Error('文字改稿对象不匹配。')
+    if (!parent || parent.messageSource.finalSha256 !== relation.parentFinalSha256 || !['APPEND', 'REPLACE', 'RESET'].includes(relation.mode) || children.has(parent.outcomeId)) throw new Error('文字改稿关联有歧义，请回到议事明确本次成果。')
+    if (((relation.targetOutcomeId !== null) || (relation.targetFinalSha256 !== null)) && relation.mode !== 'REPLACE') throw new Error('文字改稿对象不匹配。')
     children.set(parent.outcomeId, text)
   }
   let node = roots[0]; let result = [node]; const visited = new Set([node.outcomeId])
@@ -191,17 +191,17 @@ export function textDeliveryProjection (texts) {
     else {
       const relation = child.deliveryRelation
       const target = relation.targetOutcomeId ?? node.outcomeId
-      const targetDigest = relation.targetFinalDigest ?? node.messageSource.finalDigest
-      if ((Object.hasOwn(relation, 'targetOutcomeId') !== Object.hasOwn(relation, 'targetFinalDigest')) ||
-        (Object.hasOwn(relation, 'targetOutcomeId') && (!exactOutputId(target) || !/^sha256:[0-9a-f]{64}$/.test(targetDigest)))) throw new Error('文字改稿对象不匹配。')
-      const index = result.findIndex(item => item.outcomeId === target && item.messageSource.finalDigest === targetDigest)
+      const targetDigest = relation.targetFinalSha256 ?? node.messageSource.finalSha256
+      if (((relation.targetOutcomeId !== null) !== (relation.targetFinalSha256 !== null)) ||
+        ((relation.targetOutcomeId !== null) && (!exactOutputId(target) || !/^[0-9a-f]{64}$/.test(targetDigest)))) throw new Error('文字改稿对象不匹配。')
+      const index = result.findIndex(item => item.outcomeId === target && item.messageSource.finalSha256 === targetDigest)
       if (index < 0) throw new Error('文字改稿对象已变化。')
       result[index] = child
     }
     node = child
   }
   if (visited.size !== texts.length) throw new Error('文字交付关联不完整，请回到议事明确本次成果。')
-  return Object.freeze({ items: Object.freeze([...result]), basis: Object.freeze({ outcomeId: node.outcomeId, finalDigest: node.messageSource.finalDigest }) })
+  return Object.freeze({ items: Object.freeze([...result]), basis: Object.freeze({ outcomeId: node.outcomeId, finalSha256: node.messageSource.finalSha256 }) })
 }
 
 /** Join only the actual v3 action progress child to its completed EXECUTE step.
@@ -213,7 +213,7 @@ export function completedExecutionDelivery (raw, request, turn, snapshots, taskI
     conversationGeneration: request.conversationGeneration, requestId: request.requestId,
     requestRevision: request.requestRevision, turnId: turn.turnId, taskId })
   if (!value) throw new Error('媒体交付来源回执不匹配。')
-  if (![3, 4].includes(value.schemaVersion) || value.state !== 'READY' || value.outcome?.kind !== 'ACTION_REQUEST') return null
+  if (value.schemaVersion !== 6 || value.state !== 'READY' || value.outcome?.kind !== 'ACTION_REQUEST') return null
   const outcome = value.outcome; const progress = value.actionProgress
   if (!outcome.deliveryRelation && progress.childRoute !== 'EXECUTE') return null
   if (request.state !== 'COMPLETED' || turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state) ||
@@ -225,19 +225,20 @@ export function completedExecutionDelivery (raw, request, turn, snapshots, taskI
   // Keep its failure card/history, but do not poison the committed media basis.
   if (progress.state === 'FAILED' && progress.childRequestId === null &&
     progress.childRoute === null && progress.childStateVersion === null) return null
-  const node = { outcomeId: outcome.outcomeId, finalDigest: outcome.finalDigest,
+  const node = { outcomeId: outcome.outcomeId, finalSha256: outcome.finalSha256,
     deliveryRelation: outcome.deliveryRelation ? Object.freeze({ ...outcome.deliveryRelation }) : null, requestId: progress.childRequestId, stepId: null }
   if (progress.childRoute != null && progress.childRoute !== 'EXECUTE') throw new Error('查阅动作不是媒体交付。')
   if (progress.state !== 'COMPLETED') return Object.freeze(node)
   const children = snapshots.filter(child => child.requestId === progress.childRequestId)
   if (children.length !== 1) return Object.freeze(node) // Late catalog page: keep polling, no guessed child.
   const child = children[0]; const steps = child.steps || []
-  if (child.state !== (value.schemaVersion === 4 ? 'RESULT_COMMITTED' : 'OUTPUT_COMMITTED') || child.requestRevision !== '1' || child.stateVersion !== progress.childStateVersion ||
+  if (child.state !== ([4, 5].includes(value.outcome.outcomeContractVersion) ? 'RESULT_COMMITTED' : 'OUTPUT_COMMITTED') || child.requestRevision !== '1' || child.stateVersion !== progress.childStateVersion ||
     child.conversationId !== request.conversationId || child.conversationGeneration !== request.conversationGeneration ||
-    steps.length !== 1 || steps[0].kind !== 'EXECUTE' || steps[0].state !== (value.schemaVersion === 4 ? 'RESULT_COMMITTED' : 'OUTPUT_COMMITTED') ||
-    steps[0].executionState !== (value.schemaVersion === 4 ? 'RESULT_COMMITTED' : 'OUTPUT_COMMITTED') || steps[0].taskId !== taskId ||
+    steps.length !== 1 || steps[0].kind !== 'EXECUTE' || steps[0].state !== ([4, 5].includes(value.outcome.outcomeContractVersion) ? 'RESULT_COMMITTED' : 'OUTPUT_COMMITTED') ||
+    steps[0].executionState !== ([4, 5].includes(value.outcome.outcomeContractVersion) ? 'RESULT_COMMITTED' : 'OUTPUT_COMMITTED') || steps[0].taskId !== taskId ||
     steps[0].assignmentRevision !== outcome.assignmentRevision || steps[0].targetAgentId !== turn.targetAgentId ||
-    !exactOutputId(steps[0].stepId) || !exactOutputId(steps[0].executionId)) throw new Error('媒体交付执行来源不一致。')
+    !exactOutputId(steps[0].stepId) || !exactOutputId(steps[0].executionId) ||
+    ([4, 5].includes(outcome.outcomeContractVersion) && steps[0].executionId !== progress.executionId)) throw new Error('媒体交付执行来源不一致。')
   return Object.freeze({ ...node, stepId: steps[0].stepId })
 }
 
@@ -248,14 +249,14 @@ export function completedExecutionDelivery (raw, request, turn, snapshots, taskI
 function explicitExecutionDelivery (catalog, executionDeliveries) {
   if (!Array.isArray(catalog) || !Array.isArray(executionDeliveries)) throw new Error('交付来源无效。')
   const texts = catalog.filter(item => item.messageSource)
-  const nodes = texts.map(item => ({ outcomeId: item.outcomeId, finalDigest: item.messageSource.finalDigest,
+  const nodes = texts.map(item => ({ outcomeId: item.outcomeId, finalSha256: item.messageSource.finalSha256,
     deliveryRelation: item.deliveryRelation, items: [item] }))
   const assigned = new Set(texts.map(outputItemKey))
   if (assigned.size !== texts.length) throw new Error('交付来源重复。')
   for (const action of executionDeliveries) {
     if (!action?.stepId) throw new Error('本次媒体成果尚未完成，完成后可验收。')
     const relation = action.deliveryRelation
-    if ((relation && (!['APPEND', 'RESET'].includes(relation.mode) || Object.keys(relation).length !== 3)) ||
+    if ((relation && (!['APPEND', 'RESET'].includes(relation.mode) || Object.keys(relation).length !== 5 || relation.targetOutcomeId !== null || relation.targetFinalSha256 !== null)) ||
       ![action.requestId, action.stepId].every(exactOutputId)) throw new Error('媒体交付意图不明确。')
     const batch = catalog.filter(item => !item.messageSource && item.requestId === action.requestId && item.stepId === action.stepId)
     if (!batch.length || batch.some(item => (item.replaces != null && (!replacementValid(item.replaces) || item.replaces.requestId === action.requestId)) || !exactOutputId(item.outputId) || !HASH.test(item.sha256) || assigned.has(outputItemKey(item)))) throw new Error('本次媒体清单尚未明确。')
@@ -265,14 +266,14 @@ function explicitExecutionDelivery (catalog, executionDeliveries) {
   if (assigned.size !== catalog.length) throw new Error('存在未关联本次交付的成果，请回到议事明确。')
   const byId = new Map(); const children = new Map()
   for (const node of nodes) {
-    if (!exactOutputId(node.outcomeId) || !/^sha256:[0-9a-f]{64}$/.test(node.finalDigest || '') || byId.has(node.outcomeId)) throw new Error('交付关联来源无效。')
+    if (!exactOutputId(node.outcomeId) || !/^[0-9a-f]{64}$/.test(node.finalSha256 || '') || byId.has(node.outcomeId)) throw new Error('交付关联来源无效。')
     byId.set(node.outcomeId, node)
   }
   const roots = nodes.filter(node => !node.deliveryRelation)
   if (roots.length !== 1) throw new Error('本次交付范围尚不明确。')
   for (const node of nodes.filter(node => node.deliveryRelation)) {
     const relation = node.deliveryRelation; const parent = byId.get(relation.parentOutcomeId)
-    if (!parent || parent.finalDigest !== relation.parentFinalDigest || children.has(parent.outcomeId) ||
+    if (!parent || parent.finalSha256 !== relation.parentFinalSha256 || children.has(parent.outcomeId) ||
       !['APPEND', 'REPLACE', 'RESET'].includes(relation.mode)) throw new Error('交付关联有歧义。')
     children.set(parent.outcomeId, node)
   }
@@ -299,9 +300,9 @@ function explicitExecutionDelivery (catalog, executionDeliveries) {
       else { for (const [index, part] of replacements) retained[index] = part; retained.push(...additions) }
     } else {
       const target = relation.targetOutcomeId ?? current.outcomeId
-      const digest = relation.targetFinalDigest ?? current.finalDigest
-      if (Object.hasOwn(relation, 'targetOutcomeId') !== Object.hasOwn(relation, 'targetFinalDigest')) throw new Error('交付改稿对象不匹配。')
-      const index = retained.findIndex(node => node.outcomeId === target && node.finalDigest === digest)
+      const digest = relation.targetFinalSha256 ?? current.finalSha256
+      if ((relation.targetOutcomeId !== null) !== (relation.targetFinalSha256 !== null)) throw new Error('交付改稿对象不匹配。')
+      const index = retained.findIndex(node => node.outcomeId === target && node.finalSha256 === digest)
       if (index < 0 || retained[index].items.length !== 1 || !retained[index].items[0].messageSource || next.items.length !== 1 || !next.items[0].messageSource) throw new Error('交付改稿对象已变化。')
       retained[index] = next
     }
@@ -309,7 +310,7 @@ function explicitExecutionDelivery (catalog, executionDeliveries) {
   }
   if (visited.size !== nodes.length) throw new Error('交付关联不完整。')
   return Object.freeze({ items: Object.freeze(retained.flatMap(node => node.items)),
-    basis: Object.freeze({ outcomeId: current.outcomeId, finalDigest: current.finalDigest }) })
+    basis: Object.freeze({ outcomeId: current.outcomeId, finalSha256: current.finalSha256 }) })
 }
 
 /** Same exact projection supplies a natural follow-up basis, not the latest visible card. */

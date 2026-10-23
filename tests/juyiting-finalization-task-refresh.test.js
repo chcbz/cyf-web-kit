@@ -1,56 +1,64 @@
-import * as discussionContract from '../src/components/juyiting/discussionPanelContract.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import * as Vue from 'vue'
 import { mount } from '@vue/test-utils'
 import { compileScript, compileTemplate, parse } from '@vue/compiler-sfc'
+import * as discussionContract from '../src/components/juyiting/discussionPanelContract.js'
 import { bountyDeliberationPresentation } from '../src/composables/juyiting/hallMultimediaDeliberationUi.js'
-
 const source = name => readFileSync(new URL(`../src/components/${name}.vue`, import.meta.url), 'utf8')
-const filename = new URL('../src/components/juyiting/BountyDiscussionPanel.vue', import.meta.url).pathname
-const { descriptor } = parse(source('juyiting/BountyDiscussionPanel'), { filename })
-const script = compileScript(descriptor, { id: 'bounty-completed-task-refresh', inlineTemplate: true }).content
-  .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm,
-    (_, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
-  .replace(/^import\s+(TaskSkillCapabilities|ChatPanel|BountyDeliberationStatus|BountyExecutionTermination|BountyExecutionOutputs|BountyFollowupConsentPanel)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_, name) => `var { ${name} } = deps`)
-  .replace(/^import\s+\{\s*bountyDeliberationPresentation\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { bountyDeliberationPresentation } = deps')
-  .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\/discussionPanelContract\.js['"];?\s*$/gm, (_, names) => `var { ${names} } = deps`)
+const filename = 'src/components/juyiting/BountyDiscussionPanel.vue'
+const descriptor = parse(source('juyiting/BountyDiscussionPanel'), { filename }).descriptor
+const script = compileScript(descriptor, { id: 'review-entry', inlineTemplate: true }).content
+  .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
+  .replace(/^import\s+\{([^}]+)\}\s+from\s+['"][^'"]+['"];?\s*$/gm, (_, names) => `var { ${names} } = deps`)
+  .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_, name) => `var ${name} = deps.${name}`)
   .replace('export default', 'return')
-
-describe('validated finalization completion refresh boundary', () => {
+describe('submission does not complete the root; explicit review owns completion', () => {
   const installed = []
   before(() => { for (const name of ['Element', 'HTMLElement', 'SVGElement', 'Node']) if (!globalThis[name]) {
     installed.push(name); Object.defineProperty(globalThis, name, { value: window[name], configurable: true })
   } })
   after(() => { for (const name of installed) delete globalThis[name] })
-  it('forwards the exact scoped completion to the page without mutating the selected task', async () => {
-    const receipt = Object.freeze({ taskId: 'task-1', conversationId: 'conversation-1', operationId: 'finalization-1',
-      deliveryId: 'delivery-1', taskVersion: '12' })
-    const Gallery = Vue.defineComponent({ emits: ['task-completed'], setup: (_, { emit }) => () =>
-      Vue.h('button', { class: 'validated-gallery-completion', onClick: () => emit('task-completed', receipt) }, '完成回执') })
-    const ChatPanel = Vue.defineComponent({ setup: (_, { slots }) => () => Vue.h('div', {}, slots['bounty-results']?.()) })
-    const Component = new Function('Vue', 'deps', script)(Vue, { ...discussionContract, ChatPanel, TaskSkillCapabilities: { render: () => null },
-      BountyExecutionTermination: { render: () => null }, BountyDeliberationStatus: { render: () => null }, BountyExecutionOutputs: Gallery, BountyFollowupConsentPanel: { render: () => null }, bountyDeliberationPresentation })
-    const task = { id: 'task-1', title: '画鸟', status: 'running', version: '9' }
-    const wrapper = mount(Component, { props: { selectedTask: task, conversationId: 'conversation-1', identityScope: 'owner-a',
-      deliberationV2Enabled: true, mentionLabel: () => '', senderText: () => '' },
-      global: { stubs: { 'var-icon': true } } })
+  it('the unique toolbar icon emits only a review-opening event and cannot complete a task', async () => {
+    const Gallery = Vue.defineComponent({ emits: ['task-completed'], setup: (_, { emit }) => () => Vue.h('button', { class: 'old-submission', onClick: () => emit('task-completed', { state: 'COMPLETED', stage: 'SUBMITTED' }) }, '提交回执') })
+    const Chat = Vue.defineComponent({ setup: (_, { slots }) => () => Vue.h('div', {}, [Vue.h('header', { class: 'toolbar' }, slots['matter-actions']?.()), Vue.h('main', { class: 'messages' }, slots['bounty-results']?.())]) })
+    const noRender = { render: () => null }
+    const Component = new Function('Vue', 'deps', script)(Vue, { ...discussionContract, bountyDeliberationPresentation, ChatPanel: Chat,
+      BountyExecutionOutputs: Gallery, TaskSkillCapabilities: noRender, BountyDeliberationStatus: noRender, BountyExecutionTermination: noRender })
+    const task = { id: 'task-1', status: 'reviewing', taskVersion: '7' }
+    const wrapper = mount(Component, { props: { deliberationV2Enabled: true, selectedTask: task, reviewContext: { currentDelivery: { allowedActions: ['VIEW', 'ACCEPT'] } }, mentionLabel: () => '', senderText: () => '' } })
     try {
-      await wrapper.find('.validated-gallery-completion').trigger('click')
-      expect(wrapper.emitted('task-completed')).to.deep.equal([[receipt]])
-      expect(wrapper.emitted('task-completed')[0][0]).to.equal(receipt)
-      expect(task.status).to.equal('running'); expect(task.version).to.equal('9')
+      await wrapper.get('.old-submission').trigger('click'); expect(wrapper.emitted('task-completed')).to.equal(undefined)
+      expect(wrapper.findAll('[aria-label="统一验收"]')).to.have.length(1)
+      expect(wrapper.get('.messages').find('[aria-label="统一验收"]').exists()).to.equal(false)
+      await wrapper.get('[aria-label="统一验收"]').trigger('click'); expect(wrapper.emitted('review-delivery')).to.deep.equal([[]])
+      expect(task.status).to.equal('reviewing'); await wrapper.setProps({ voice: { voiceInteractionLocked: true } })
+      expect(wrapper.get('[aria-label="统一验收"]').attributes('disabled')).to.equal('')
+      await wrapper.setProps({ reviewContext: { currentDelivery: { allowedActions: ['VIEW'] } } })
+      expect(wrapper.find('[aria-label="统一验收"]').exists()).to.equal(true)
+      await wrapper.setProps({ reviewContext: null, voice: null })
+      expect(wrapper.find('[aria-label="统一验收"]').exists()).to.equal(true)
+      expect(wrapper.find('[aria-label="统一验收"] svg').exists()).to.equal(true)
+      await wrapper.setProps({ selectedTask: { ...task, status: 'completed' } })
+      expect(wrapper.find('[aria-label="统一验收"]').exists()).to.equal(false)
     } finally { wrapper.unmount() }
   })
-  it('wires the actual bounty page to refresh server tasks, not to a local completion mutation', () => {
+  it('the actual page guards root refresh by a scoped COMMITTED ACCEPT, not a gallery/submission receipt', () => {
     const page = source('world/JuyiHall')
-    const start = page.indexOf('<BountyDiscussionPanel'); const end = page.indexOf('/>', start)
-    expect(start).to.be.greaterThan(-1)
-    expect(page.slice(start, end)).to.include('@task-completed="loadTasks"')
-    expect(source('juyiting/BountyDiscussionPanel')).to.include('@task-completed="$emit(\'task-completed\', $event)"')
+    expect(page).to.include("receipt.state !== 'COMMITTED'")
+    expect(page).to.include("receipt.decision !== 'ACCEPT'")
+    expect(page).to.include("receipt.taskState !== 'COMPLETED'")
+    expect(page).to.include('receipt.taskId !== reviewTaskId.value')
+    expect(page).to.include('if (key === lastReviewCompletion) return')
+    const gallery = source('juyiting/BountyExecutionOutputs')
+    expect(gallery).not.to.include('finalizationCompleted')
+    expect(gallery).not.to.include("emit('task-completed'")
+    expect(gallery).not.to.include('finalizeSelected')
+    expect(gallery).not.to.include('保存到工作空间')
+    expect(gallery).not.to.include('>下载</button>')
   })
-  it('compiles the affected templates and scripts', () => {
-    for (const name of ['juyiting/BountyExecutionOutputs', 'juyiting/BountyDiscussionPanel', 'world/JuyiHall']) {
+  it('compiles every affected view and the shared frozen-batch dialog', () => {
+    for (const name of ['juyiting/BountyExecutionOutputs', 'juyiting/BountyDiscussionPanel', 'juyiting/BountyAcceptancePanel', 'juyiting/HallDeliveryReviewDialog', 'world/JuyiHall']) {
       const file = `src/components/${name}.vue`; const { descriptor, errors } = parse(source(name), { filename: file })
       expect(errors, name).to.deep.equal([]); compileScript(descriptor, { id: name })
       expect(compileTemplate({ source: descriptor.template.content, filename: file, id: name }).errors, name).to.deep.equal([])

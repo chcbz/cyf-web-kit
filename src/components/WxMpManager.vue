@@ -238,17 +238,13 @@ const notify = (message, type = 'success') => {
   noticeTimer = setTimeout(() => { notice.value = null }, 3600)
 }
 
-const unwrap = (response) => {
-  const result = response?.data
-  if (!result || result.code === 'E0' || result.code === '0' || result.code === 0 || result.code === '200' || result.code === 200) return result
-  throw new Error(result.msg || '请求未成功')
-}
+const unwrap = response => response
 
 const loadAccounts = async () => {
   loading.value = true
   try {
     const result = unwrap(await wxApi.list('/mp/info/list', { pageNum: 1, pageSize: 100, search: {} }))
-    accounts.value = Array.isArray(result?.data) ? result.data : []
+    accounts.value = Array.isArray(result?.items) ? result.items : []
     if (selectedAccount.value) {
       selectedAccount.value = accounts.value.find((account) => account.acid === selectedAccount.value.acid) || accounts.value[0] || null
     } else {
@@ -318,7 +314,7 @@ const confirmDelete = (account) => {
     confirmButtonTextType: 'danger',
     onConfirm: async () => {
       try {
-        unwrap(await wxApi.get('/mp/info/delete', { id: account.acid }))
+        unwrap(await wxApi.delete('/mp/info/delete', account.acid))
         if (selectedAccount.value?.acid === account.acid) selectedAccount.value = null
         await loadAccounts()
         notify('公众号已删除。')
@@ -350,7 +346,7 @@ const runAction = async (key, request, successMessage) => {
   }
 }
 
-const syncUsers = () => runAction('sync', () => wxApi.get('/mp/user/sync', accountParams()), '粉丝同步任务已完成。')
+const syncUsers = () => runAction('sync', () => wxApi.post('/mp/user/sync', null, { params: accountParams() }), '粉丝同步任务已完成。')
 
 const removeEmptyValues = (value) => Object.fromEntries(Object.entries(value).filter(([, item]) => item !== null && item !== undefined && item !== ''))
 
@@ -444,7 +440,7 @@ const fetchMenu = async () => {
   actionLoading.value = 'menuGet'
   try {
     const result = unwrap(await wxApi.get('/mp/menu/get', accountParams()))
-    const payload = toWechatMenuPayload(result?.data)
+    const payload = toWechatMenuPayload(result)
     menuButtons.value = payload.button.map(normalizeMenuButton)
     notify('已读取微信端菜单。')
   } catch (error) {
@@ -478,7 +474,7 @@ const confirmDeleteMenu = () => {
     message: '确认删除微信端当前自定义菜单吗？',
     confirmButtonText: '删除',
     confirmButtonTextType: 'danger',
-    onConfirm: () => runAction('menuDelete', () => wxApi.get('/mp/menu/delete', accountParams()), '微信端菜单已删除。')
+    onConfirm: () => runAction('menuDelete', () => wxApi.delete('/mp/menu/delete', { params: accountParams() }), '微信端菜单已删除。')
   })
 }
 

@@ -1,3 +1,4 @@
+import { validMaterialVersion } from '../src/composables/juyiting/materialVersion.js'
 import { expect } from 'chai'
 import { after, before, describe, it } from 'mocha'
 import { readFileSync } from 'node:fs'
@@ -9,6 +10,18 @@ let mount
 let HallDraftEditor
 let model
 
+const loadMaterialPicker = deps => {
+  const filename = new URL('../src/components/juyiting/HallMaterialPicker.vue', import.meta.url).pathname
+  const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
+  const code = compileScript(descriptor, { id: 'draft-shared-material-picker', inlineTemplate: true }).content
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_line, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]@\/composables\/usePersonalWorkspace['"];?\s*$/gm, 'var { usePersonalWorkspace, savePersonalWorkspaceBlob } = deps')
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"][^'"]*materialVersion\.js['"];?\s*$/gm, 'var { validMaterialVersion } = deps')
+    .replace(/^import\s+PdfDocumentPreview\s+from\s+['"][^'"]+['"];?\s*$/gm, "var PdfDocumentPreview = { name: 'PdfDocumentPreview', template: '<section class=\"pdf-preview-test-slot\" />', props: ['blob'] }")
+    .replace('export default', 'return')
+  return new Function('Vue', 'deps', code)(Vue, { ...deps, validMaterialVersion })
+}
+
 const load = () => {
   const filename = new URL('../src/components/juyiting/HallDraftEditor.vue', import.meta.url).pathname
   const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
@@ -16,10 +29,14 @@ const load = () => {
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_line, bindings) => `var { ${bindings.split(',').map(binding => { const [name, alias] = binding.trim().split(/\s+as\s+/); return alias ? `${name}: ${alias}` : name }).join(', ')} } = Vue`)
     .replace(/^import\s+\{[^}]+\}\s+from\s+['"]@\/composables\/usePersonalWorkspace['"];?\s*$/gm, 'var { savePersonalWorkspaceBlob, usePersonalWorkspace } = deps')
     .replace(/^import\s+\{\s*useHallDrafts\s*\}\s+from\s+['"]@\/composables\/juyiting\/useHallDrafts['"];?\s*$/gm, 'var { useHallDrafts } = deps')
+    .replace(/^import\s+HallMaterialPicker\s+from\s+['"]\.\/HallMaterialPicker\.vue['"];?\s*$/gm, 'var HallMaterialPicker = deps.HallMaterialPicker')
     .replace(/^import\s+HallPrivateMark\s+from\s+['"]\.\/HallPrivateMark\.vue['"];?\s*$/gm, "var HallPrivateMark = { name: 'HallPrivateMark', template: '<i />' }")
     .replace(/^import\s+\{\s*deliveryTypeText\s*\}\s+from\s+['"]@\/utils\/executionFormats['"];?\s*$/gm, 'var { deliveryTypeText } = deps')
+    .replace(/^import\s+\{\s*validMaterialVersion\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { validMaterialVersion } = deps')
+    .replace(/^import\s+PdfDocumentPreview\s+from\s+['"][^'"]+['"];?\s*$/gm, "var PdfDocumentPreview = { name: 'PdfDocumentPreview', template: '<section class=\"pdf-preview-test-slot\" />', props: ['blob'] }")
     .replace('export default', 'return')
-  return new Function('Vue', 'deps', script)(Vue, { ...deps(), deliveryTypeText })
+  const dependencies = deps()
+  return new Function('Vue', 'deps', script)(Vue, { ...dependencies, deliveryTypeText, validMaterialVersion, HallMaterialPicker: loadMaterialPicker(dependencies) })
 }
 
 const deps = () => {
@@ -27,7 +44,7 @@ const deps = () => {
   const state = Vue.ref('idle')
   const error = Vue.ref('')
   const receipt = Vue.ref(null)
-  const workspaceItems = Vue.ref([{ fileId: 'brief', displayName: '会议简报.pdf', latestVersion: 3 }])
+  const workspaceItems = Vue.ref([{ fileId: 'brief', displayName: '会议简报.pdf', latestVersion: '3' }])
   const submissions = []
   model = { draft, error, receipt, submissions }
   return {
@@ -41,10 +58,11 @@ const deps = () => {
       submit: async payload => { submissions.push(payload); error.value = '服务端暂未确认；请核对原请求。'; return null }, reconcileSubmission: async () => null,
       loadCase: async () => null, loadExecution: async () => null, loadResults: async () => null, loadFormalTask: async () => null, dispose: () => {}
     }),
-    usePersonalWorkspace: () => ({
-      loading: Vue.ref(false), error: Vue.ref(''), items: workspaceItems, listState: Vue.ref('ready'), detail: Vue.ref(null), preview: Vue.ref({ kind: 'text', text: '固定版本预览' }),
-      refresh: async () => true, select: async fileId => ({ file: { fileId } }), previewVersion: async () => true, download: async () => null, dispose: () => {}
-    }),
+    usePersonalWorkspace: () => { const detail = Vue.ref(null); return ({
+      closeDetail () { this.detail.value = null; this.preview.value = { kind: 'none' } },
+      nextCursor: Vue.ref(null), loading: Vue.ref(false), error: Vue.ref(''), items: workspaceItems, listState: Vue.ref('ready'), detail, preview: Vue.ref({ kind: 'text', text: '固定版本预览' }),
+      refresh: async () => true, select: async fileId => { detail.value = { file: { fileId, displayName: '会议简报.pdf', state: 'ACTIVE' }, latestVersion: { version: '3' }, versions: [{ version: '3', contentMimeType: 'application/pdf' }] }; return detail.value }, previewVersion: async () => true, download: async () => null, dispose: () => {}
+    }) },
     savePersonalWorkspaceBlob: () => {}
   }
 }
@@ -62,32 +80,27 @@ after(() => { document.body.innerHTML = '' })
 
 describe('prototype-conformance draft flow', () => {
   it('keeps picker changes temporary, preserves them through preview, and returns to a separate confirmation', async () => {
-    const wrapper = mount(HallDraftEditor, { props: { identityScope: 'tenant\u0000client\u0000owner', agents: [{ agentId: 'wuyong', name: '吴用' }] } })
+    const wrapper = mount(HallDraftEditor, { props: { identityScope: 'tenant\u0000client\u0000owner', agents: [{ agentId: 'wuyong', name: '吴用' }] }, global: { stubs: { teleport: true } } })
     try {
       await tick()
       await wrapper.find('input').setValue('整理会议纪要')
       await wrapper.find('textarea').setValue('列出结论和待办。')
       await wrapper.find('select[aria-label="期望格式"]').setValue('application/pdf')
-      await button(wrapper, '添加资料').trigger('click')
-      await tick()
-      await wrapper.find('input[type="checkbox"]').setValue(true)
-      await button(wrapper, '取消').trigger('click')
-      await tick()
-      expect(wrapper.text()).to.include('未引用资料')
-      await button(wrapper, '添加资料').trigger('click')
-      await tick()
-      await wrapper.find('input[type="checkbox"]').setValue(true)
-      await button(wrapper, '预览').trigger('click')
-      await tick()
-      expect(wrapper.vm.windowTitle).to.equal('会议简报.pdf')
-      expect(wrapper.vm.navigationDepth).to.equal(3)
-      expect(wrapper.vm.canGoBack).to.equal(true)
-      expect(wrapper.vm.goBack()).to.equal(true)
-      await tick()
-      expect(wrapper.text()).to.include('已选 1 份')
-      await button(wrapper, '使用所选资料').trigger('click')
-      await tick()
-      expect(wrapper.text()).to.include('会议简报.pdf · v3')
+      await wrapper.get('.quick-material-open').trigger('click'); await tick()
+      await wrapper.get('.quick-material-files button').trigger('click'); await tick()
+      await wrapper.get('.quick-material-version-actions .primary').trigger('click')
+      await button(wrapper, '取消').trigger('click'); await tick()
+      expect(wrapper.find('.quick-material-summary').exists()).to.equal(false)
+      await wrapper.get('.quick-material-open').trigger('click'); await tick()
+      await wrapper.get('.quick-material-files button').trigger('click'); await tick()
+      expect(wrapper.get('.quick-material-version').text()).to.include('v3')
+      expect(wrapper.vm.windowTitle).to.equal('提出需求')
+      expect(wrapper.vm.navigationDepth).to.equal(1)
+      expect(wrapper.vm.canGoBack).to.equal(false)
+      await wrapper.get('.quick-material-version-actions .primary').trigger('click')
+      expect(wrapper.get('dialog footer').text()).to.include('已选 1 份资料')
+      await wrapper.get('.quick-material-confirm').trigger('click'); await tick()
+      expect(wrapper.get('.quick-material-summary').text()).to.include('会议简报.pdfv3')
       await button(wrapper, '下一步：确认交办').trigger('click')
       await tick()
       expect(wrapper.vm.windowTitle).to.equal('确认交办')
@@ -97,12 +110,12 @@ describe('prototype-conformance draft flow', () => {
       expect(wrapper.vm.goBack()).to.equal(true)
       await tick()
       expect(wrapper.find('input').element.value).to.equal('整理会议纪要')
-      expect(wrapper.text()).to.include('会议简报.pdf · v3')
+      expect(wrapper.get('.quick-material-summary').text()).to.include('会议简报.pdfv3')
     } finally { wrapper.unmount() }
   })
 
   it('does not claim a receipt when confirm fails and does not submit until explicit authorization', async () => {
-    const wrapper = mount(HallDraftEditor, { props: { identityScope: 'tenant\u0000client\u0000owner', agents: [{ agentId: 'wuyong', name: '吴用' }] } })
+    const wrapper = mount(HallDraftEditor, { props: { identityScope: 'tenant\u0000client\u0000owner', agents: [{ agentId: 'wuyong', name: '吴用' }] }, global: { stubs: { teleport: true } } })
     try {
       await tick()
       await wrapper.find('input').setValue('一页简报')

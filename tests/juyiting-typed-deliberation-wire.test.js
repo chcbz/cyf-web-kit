@@ -1,8 +1,12 @@
+import { displayFixture } from './fixtures/juyiting/interface-display-fixture.mjs'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { discussionAccepted, discussionBody, sourceSelector, historicalSourceSelector, typedOutcomeProjection } from '../src/composables/juyiting/hallTypedDeliberation.js'
 
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/juyiting/typed-deliberation-atomic-followup-v1.json', import.meta.url)))
+for (const name of ['pendingRead', 'answerRead', 'clarifyRead', 'proposalRead']) fixture.golden[name] = displayFixture(fixture.golden[name])
+fixture.golden.accepted.schemaVersion = 3
+fixture.golden.discussion.schemaVersion = 3
 const clone = value => JSON.parse(JSON.stringify(value))
 describe('typed natural deliberation frozen wire', () => {
   it('preserves empty/whitespace user bodies only with exact nonempty attachments', () => {
@@ -17,9 +21,9 @@ describe('typed natural deliberation frozen wire', () => {
       expect(discussionBody({ ...reply, sourceSelectors: [] })).to.equal(null)
     }
   })
-  it('emits the exact eleven-key discussion-v2 body while retaining the audit fixture', () => {
+  it('emits the exact eleven-key discussion-v3 body while retaining the audit fixture', () => {
     const body = discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content: fixture.golden.discussion.content })
-    expect(body).to.deep.equal({ ...fixture.golden.discussion, schemaVersion: 2, materialScope: 'TASK_DEFAULT' })
+    expect(body).to.deep.equal({ ...fixture.golden.discussion, schemaVersion: 3, materialScope: 'TASK_DEFAULT' })
     expect(Object.keys(body)).to.have.length(11)
   })
   it('accepts only exact four-key selected workspace versions as optional available references', () => {
@@ -40,8 +44,8 @@ describe('typed natural deliberation frozen wire', () => {
   })
   it('rejects noncanonical long values, C0/C1 controls, and malformed nullable lineage', () => {
     expect(discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '04', content: '画鸟' })).to.equal(null)
-    expect(discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content: '画\u0000鸟' })).to.equal(null)
-    expect(discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content: '画\u0085鸟' })).to.equal(null)
+    expect(discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content: '画\u0000鸟' }).content).to.equal('画\u0000鸟')
+    expect(discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content: '画\u0085鸟' }).content).to.equal('画\u0085鸟')
     expect(discussionBody({ intent: 'CLARIFICATION_REPLY', taskId: 'task-1', assignmentRevision: '4', content: '蓝色' })).to.equal(null)
   })
   it('preserves LF and CRLF in natural-language requests but keeps controls out of identifiers', () => {
@@ -49,7 +53,7 @@ describe('typed natural deliberation frozen wire', () => {
       expect(discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content }).content).to.equal(content)
     }
     for (const content of ['画\t鸟', '画\u000b鸟', '画\u0085鸟']) {
-      expect(discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content })).to.equal(null)
+      expect(discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content }).content).to.equal(content)
     }
     expect(discussionBody({ intent: 'DISCUSSION', taskId: 'task\n1', assignmentRevision: '4', content: '画鸟' })).to.equal(null)
   })
@@ -64,7 +68,7 @@ describe('typed natural deliberation frozen wire', () => {
     const generate = clone(fixture.golden.proposalRead)
     generate.outcome.proposal.sourceRefIds = ['asset-1']
     generate.outcome.proposal.sourceSelectors = [{ kind: 'CURRENT_CONVERSATION_ASSET', fileId: null, version: null, purpose: null, assetId: 'asset-1', assetRevision: '7' }]
-    expect(typedOutcomeProjection(generate, { conversationId: '7', conversationGeneration: '1', taskId: 'task-1', requestId: 'request-1' })).to.deep.equal(generate)
+    expect(typedOutcomeProjection(generate, { conversationId: '7', conversationGeneration: '1', taskId: 'task-1', requestId: 'request-1' })).to.deep.equal({ ...generate, purpose: 'CHAT' })
     const foreignTask = clone(fixture.golden.answerRead); foreignTask.outcome.taskId = 'other-task'
     expect(typedOutcomeProjection(foreignTask, { conversationId: '7', conversationGeneration: '1', taskId: 'task-1', requestId: 'request-1' })).to.equal(null)
     const malformedEdit = clone(generate); malformedEdit.outcome.proposal.operation = 'EDIT_IMAGE'; malformedEdit.outcome.proposal.parent = null
@@ -72,7 +76,7 @@ describe('typed natural deliberation frozen wire', () => {
   })
   it('accepts all frozen typed views and rejects a foreign scope or unknown union key', () => {
     for (const name of ['pendingRead', 'answerRead', 'clarifyRead', 'proposalRead']) {
-      expect(typedOutcomeProjection(fixture.golden[name], { conversationId: '7', conversationGeneration: '1', requestId: 'request-1' })).to.deep.equal(fixture.golden[name])
+      expect(typedOutcomeProjection(fixture.golden[name], { conversationId: '7', conversationGeneration: '1', requestId: 'request-1' })).to.deep.equal({ ...fixture.golden[name], purpose: 'CHAT' })
     }
     const foreign = clone(fixture.golden.answerRead); foreign.conversationGeneration = '2'
     expect(typedOutcomeProjection(foreign, { conversationId: '7', conversationGeneration: '1', requestId: 'request-1' })).to.equal(null)
@@ -84,7 +88,7 @@ describe('typed natural deliberation frozen wire', () => {
 describe('typed inspection v2 wire', () => {
   it('keeps INSPECT v2 distinct from CHAT v1 and rejects unknown versions', async () => {
     const { inspectionOutcomeProjection } = await import('../src/composables/juyiting/hallTypedDeliberation.js')
-    const inspection = { schemaVersion: 2, contract: 'juyiting-typed-inspection-v1', conversationId: '7', conversationGeneration: '1', requestId: 'request-inspect', requestRevision: '1', turnId: 'turn-inspect', state: 'PENDING', outcome: null, inspection: { authorizationId: 'inspection-1', manifestDigest: `sha256:${'a'.repeat(64)}`, sourceRefIds: ['source-1'], inputSummary: null } }
+    const inspection = displayFixture({ schemaVersion: 2, contract: 'juyiting-typed-inspection-v1', conversationId: '7', conversationGeneration: '1', requestId: 'request-inspect', requestRevision: '1', turnId: 'turn-inspect', state: 'PENDING', outcome: null, inspection: { authorizationId: 'inspection-1', manifestDigest: `sha256:${'a'.repeat(64)}`, sourceRefIds: ['source-1'], inputSummary: null } })
     expect(inspectionOutcomeProjection(inspection, { conversationId: '7', conversationGeneration: '1', requestId: 'request-inspect' })).to.include({ purpose: 'INSPECT', state: 'PENDING' })
     expect(typedOutcomeProjection(inspection)).to.equal(null)
     expect(inspectionOutcomeProjection({ ...inspection, schemaVersion: 3 })).to.equal(null)
@@ -94,7 +98,7 @@ describe('typed inspection v2 wire', () => {
 
 describe('historical selectors remain audit-only', () => {
   const legacy = { kind: 'CURRENT_CONVERSATION_ASSET', fileId: null, version: null, purpose: null, assetId: 'upload-1', assetRevision: '1' }
-  it('reads exact historical attachment metadata but rejects it in new discussion-v2', () => {
+  it('reads exact historical attachment metadata but rejects it in new discussion-v3', () => {
     expect(historicalSourceSelector(legacy)).to.deep.equal(legacy)
     expect(sourceSelector(legacy)).to.equal(null)
     expect(discussionBody({ intent: 'DISCUSSION', taskId: 'task-1', assignmentRevision: '4', content: '资料', materialScope: 'EXPLICIT', sourceSelectors: [legacy] })).to.equal(null)

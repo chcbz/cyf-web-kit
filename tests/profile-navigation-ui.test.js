@@ -23,7 +23,7 @@ const deferred = () => {
   return { promise: new Promise((res, rej) => { resolve = res; reject = rej }), resolve, reject }
 }
 const capabilities = enabled => ({
-  contractVersion: 'economy-readonly-v1', mode: 'READ_ONLY_PREVIEW', enabled, principalScopeFingerprint: 'scope-current',
+  contractVersion: 'economy-readonly-v2', mode: 'READ_ONLY_PREVIEW', enabled, principalScopeSha256: 'f83ef1217c8072b3478d9298a9b56823b65d4bc518119626f0cfbe36362e01cb',
   features: { wallet: false, ledger: false, catalog: false, installationStatus: false, hostingPlan: false, hostingLease: false },
   actions: { estimate: false, issue: false, purchase: false, settle: false, refund: false, install: false, hostingActivate: false, hostingRenew: false }
 })

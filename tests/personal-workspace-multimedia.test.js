@@ -9,8 +9,8 @@ const formats = [
   ['sound.webm', 'audio/webm'], ['bird.webp', 'image/webp'], ['bird.gif', 'image/gif']
 ]
 const detail = (filename, mime, fileId = 'file-a') => {
-  const version = { fileId, version: 1, originalFilename: filename, contentMimeType: mime, byteLength: 5 }
-  return { file: { fileId, displayName: filename, state: 'ACTIVE', metadataRevision: 1, latestVersion: 1 }, latestVersion: version, versions: [version] }
+  const version = { fileId, version: '1', originalFilename: filename, contentMimeType: mime, byteLength: '5' }
+  return { file: { fileId, displayName: filename, state: 'ACTIVE', metadataRevision: '1', latestVersion: '1' }, latestVersion: version, versions: [version] }
 }
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r }); return { promise, resolve } }
 
@@ -23,7 +23,7 @@ describe('workspace general multimedia compatibility (no Provider)', () => {
         createObjectURL: blob => { created.push(blob); return 'blob:owned-preview' }, revokeObjectURL: url => revoked.push(url)
       }, api: { execute: async options => {
         calls.push(options)
-        if (options.method === 'POST') return { operation: { operationId: 'op-a' }, file: value.file, version: value.latestVersion }
+        if (options.method === 'POST') return { operation: { operationId: 'op-a', state: 'COMMITTED' }, file: value.file, version: value.latestVersion }
         if (options.url.endsWith('/preview')) return { state: 'READY', parts: [{ partId: 'content', contentMimeType: mime }], partial: false }
         if (options.url.includes('/preview/parts/')) return new Blob(['bytes'], { type: mime })
         return value
@@ -33,7 +33,7 @@ describe('workspace general multimedia compatibility (no Provider)', () => {
         const candidate = new Blob(['bytes'], { type: mime }); Object.defineProperty(candidate, 'name', { value: filename })
         assert.ok(await workspace.upload(candidate))
         assert.equal(calls[0].data.get('file').type, mime)
-        const preview = await workspace.previewVersion(1)
+        const preview = await workspace.previewVersion('1')
         assert.equal(preview.kind, mime.startsWith('audio/') ? 'audio' : 'image')
         assert.equal(preview.url, 'blob:owned-preview')
         assert.equal(created[0].type, mime)
@@ -47,7 +47,7 @@ describe('workspace general multimedia compatibility (no Provider)', () => {
     const calls = []; const created = []
     const workspace = usePersonalWorkspace({ urlApi: { createObjectURL: value => { created.push(value); return 'blob:unsafe' } }, api: { execute: async options => {
       calls.push(options)
-      if (options.url === '/personal-workspace/files') return { items: [], nextCursor: null }
+      if (options.url === '/personal-workspace/files') return { items: [], nextCursor: null, hasMore: false }
       if (options.url.endsWith('/preview')) return { state: 'READY', parts: [{ partId: 'content', contentMimeType: 'audio/mpeg' }], partial: false }
       if (options.url.includes('/parts/')) return new Blob(['<script>bad()</script>'], { type: 'text/html' })
       return detail('sound.mp3', 'audio/mpeg')
@@ -56,15 +56,36 @@ describe('workspace general multimedia compatibility (no Provider)', () => {
       assert.equal(await workspace.refresh({ mediaFamily: 'AUDIO' }), true)
       assert.equal(calls[0].params.mediaFamily, 'AUDIO')
       await workspace.select('file-a')
-      assert.equal(await workspace.previewVersion(1), null)
+      assert.equal(await workspace.previewVersion('1'), null)
       assert.match(workspace.error.value, /类型无效/)
       assert.deepEqual(created, [])
-      for (const [filename, type] of [['evil.svg', 'image/svg+xml'], ['evil.html', 'text/html'], ['evil.js', 'text/javascript'], ['video.mp4', 'video/mp4'], ['video.webm', 'video/webm'], ['renamed.mp3', 'text/html']]) {
-        const file = new Blob(['bad'], { type }); Object.defineProperty(file, 'name', { value: filename })
-        assert.equal(await workspace.upload(file), null)
-      }
       assert.equal(calls.some(call => call.method === 'POST'), false)
     } finally { workspace.dispose() }
+  })
+
+  it('stores arbitrary formats without granting active-content preview capability', async () => {
+    for (const [filename, type, expected] of [
+      ['page.html', 'text/html', 'text/html'], ['icon.svg', 'image/svg+xml', 'image/svg+xml'],
+      ['archive.zip', 'application/zip', 'application/zip'], ['video.mp4', 'video/mp4', 'video/mp4'],
+      ['renamed.mp3', 'text/html', 'text/html'], ['README', '', 'application/octet-stream'],
+      ['data.custom', '', 'application/octet-stream'], ['data.custom', 'application/x-custom', 'application/x-custom']
+    ]) {
+      const calls = []; const objects = []; const value = detail(filename, expected)
+      const workspace = usePersonalWorkspace({ urlApi: { createObjectURL: blob => { objects.push(blob); return 'blob:unexpected' } }, api: { execute: async options => {
+        calls.push(options)
+        if (options.method === 'POST') return { operation: { operationId: 'op-a', state: 'COMMITTED' }, file: value.file, version: value.latestVersion }
+        if (options.url.endsWith('/preview')) return { state: 'UNSUPPORTED', reason: 'No preview renderer' }
+        return value
+      } } })
+      try {
+        const file = new File(['opaque'], filename, { type })
+        assert.ok(await workspace.upload(file), filename)
+        assert.equal(calls[0].data.get('file').type, expected)
+        await workspace.previewVersion('1')
+        assert.equal(workspace.preview.value.kind, 'unsupported')
+        assert.deepEqual(objects, [])
+      } finally { workspace.dispose() }
+    }
   })
 
   it('late old-file preview cannot overwrite or revoke a new audio preview', async () => {
@@ -78,8 +99,8 @@ describe('workspace general multimedia compatibility (no Provider)', () => {
       return detail('sound.wav', 'audio/wav', options.url.endsWith('file-b') ? 'file-b' : 'file-a')
     } } })
     try {
-      await workspace.select('file-a'); const pending = workspace.previewVersion(1)
-      await workspace.select('file-b'); await workspace.previewVersion(1)
+      await workspace.select('file-a'); const pending = workspace.previewVersion('1')
+      await workspace.select('file-b'); await workspace.previewVersion('1')
       old.resolve({ state: 'UNSUPPORTED', reason: 'stale file' })
       assert.equal(await pending, null)
       assert.equal(workspace.preview.value.kind, 'audio')
@@ -109,11 +130,29 @@ describe('workspace general multimedia compatibility (no Provider)', () => {
       return detail('sound.mp3', 'audio/mpeg')
     } } })
     try {
-      await workspace.select('file-a'); const preview = workspace.previewVersion(1)
+      await workspace.select('file-a'); const preview = workspace.previewVersion('1')
       await new Promise(resolve => setTimeout(resolve, 0))
       epoch.value = 'owner-b'; pendingBytes.resolve(new Blob(['old owner bytes'], { type: 'audio/mpeg' }))
       assert.equal(await preview, null)
       assert.deepEqual(created, []); assert.equal(workspace.preview.value.kind, 'none')
+    } finally { workspace.dispose() }
+  })
+})
+
+describe('workspace original PDF preview', () => {
+  it('keeps PDF bytes as a Blob, never requests page-text, and clears them on identity switch', async () => {
+    const epoch = ref('owner-a'), calls = [], pdf = new Blob(['%PDF-original'], { type: 'application/pdf' })
+    const workspace = usePersonalWorkspace({ identityEpoch: epoch, urlApi: { createObjectURL: () => { throw new Error('PDF must not create image URL') } }, api: { execute: async options => {
+      calls.push(options.url)
+      if (options.url.endsWith('/preview')) return { state: 'READY', parts: [{ partId: 'content', contentMimeType: 'application/pdf' }], partial: false }
+      if (options.url.endsWith('/parts/content')) return pdf
+      return detail('file.pdf', 'application/pdf')
+    } } })
+    try {
+      await workspace.select('file-a'); const preview = await workspace.previewVersion('1')
+      assert.equal(preview.kind, 'pdf'); assert.equal(await preview.blob.text(), '%PDF-original')
+      assert.equal(calls.some(url => url.includes('page-')), false)
+      epoch.value = 'owner-b'; assert.equal(workspace.preview.value.kind, 'none')
     } finally { workspace.dispose() }
   })
 })

@@ -23,7 +23,7 @@ Preparation runs only for `CI=1/true/yes`, a nonempty `PIPELINE_ID`, or explicit
 `CYF_CI_BOOTSTRAP=1`. The supported CI worker is Alinux3 Linux x64 with root.
 
 CI installs signed distribution dependencies, SHA-verifies the pinned Node
-20.20.2 / Chrome 133.0.6943.141 / WebP 1.2 RPM downloads, and extracts into a
+24.22.1 / Chrome 133.0.6943.141 / WebP 1.2 RPM downloads, and extracts into a
 fresh directory under the worker temporary directory (outside the Flow cache).
 Only pinned archives and signed DNF data stay in `.cache/cyf-test-runtime`.
 Restored legacy `run-XXXXXX` directories are removed only on this job's isolated
@@ -87,3 +87,13 @@ browser identity and full tests. Local bootstrap tests are diagnostic only;
 cache size/speed and the <=5 minute release target still require exact-source
 Flow evidence. Timing evidence is maintained by the root task
 `FRONTEND-RELEASE-5M-20261009`, not inferred from this change.
+
+## TMX editor parse reuse (2026-10-20)
+
+TMX edit operations retain their release-profile tests. The editor reuses only
+its most recently parsed, byte-identical XML within one `applyTmxEditOps` call.
+Any changed document is reparsed so element offsets stay fresh; exceptions and
+reentrant calls cannot share cached state. Byte-identical replacements return
+the original string. No parsed document or test result is cached across calls.
+No TMX/runtime regressions, authoring checks, or profile selectors are removed.
+Flow timing, rather than local host timings, determines release speed gains.

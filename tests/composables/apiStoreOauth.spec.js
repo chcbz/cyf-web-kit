@@ -22,6 +22,14 @@ const transaction = Object.freeze({
   authorizationServer: 'https://api.example'
 })
 
+const envelopeResponse = (data, options = {}) => {
+  const requestId = new Headers(options.headers).get('X-Request-Id')
+  return new Response(JSON.stringify({ protocolVersion: 1, requestId, code: 'E0', msg: 'ok', data }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId }
+  })
+}
+
 describe('OAuth API store token exchange', () => {
   it('displays an area only for an active verified session in the current tab', () => {
     const area = Object.freeze({ tenantId: '1', tenantName: '华南测试区', tenantKind: 'TEST' })
@@ -102,8 +110,8 @@ describe('OAuth API store token exchange', () => {
     store.oauthClientId = ctx.clientId
     const oldFetch = global.fetch
     try {
-      global.fetch = async url => new Response(JSON.stringify(url.endsWith('/resource')
-        ? identity : { data: { id: 123, jiacn: 'owner-A' } }), { status: 200 })
+      global.fetch = async (url, options) => envelopeResponse(url.endsWith('/resource')
+        ? identity : { id: 123, jiacn: 'owner-A' }, options)
       const snapshot = await readTenantSession({ ...ctx, tenantId: '1' })
       expect(await store.verifyTenantSnapshot(snapshot, ctx, '1')).to.equal('restored-token')
       const user = useGlobalStore()
@@ -180,13 +188,27 @@ describe('OAuth API store token exchange', () => {
     try {
       global.fetch = async (url, options) => {
         seen.push({ url, options })
-        return new Response(JSON.stringify(identity), { status: 200 })
+        return envelopeResponse(identity, options)
       }
       expect(await verifyPersistedTenantSession(record, { ...transaction, expectedTenant: '1' })).to.equal(true)
       expect(seen[0].url).to.equal('https://api.example/resource')
       expect(seen[0].options.headers.Authorization).to.equal('Bearer candidate-token')
-      global.fetch = async () => new Response(JSON.stringify({ ...identity, scopes: ['openid'] }), { status: 200 })
+      global.fetch = async (_url, options) => envelopeResponse({ ...identity, scopes: ['openid'] }, options)
       expect(await verifyPersistedTenantSession(record, { ...transaction, expectedTenant: '1' })).to.equal(false)
+      global.fetch = async (_url, options) => {
+        const requestId = new Headers(options.headers).get('X-Request-Id')
+        return new Response(JSON.stringify(identity), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId }
+        })
+      }
+      let protocolFailure
+      try {
+        await verifyPersistedTenantSession(record, { ...transaction, expectedTenant: '1' })
+      } catch (error) {
+        protocolFailure = error
+      }
+      expect(protocolFailure?.code).to.equal('PROTOCOL_INVALID_RESPONSE')
     } finally {
       global.fetch = earlierFetch
     }

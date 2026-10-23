@@ -1,3 +1,5 @@
+import * as assigneeCandidates from '../src/composables/juyiting/hallAssigneeCandidates.js'
+import * as taskPresentation from '../src/composables/juyiting/hallTaskPresentation.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { parse, compileScript, compileTemplate } from '@vue/compiler-sfc'
@@ -5,6 +7,7 @@ import { mount } from '@vue/test-utils'
 import * as Vue from 'vue'
 import * as silver from '../src/utils/silverAmount.js'
 import * as cancellation from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
+import { taskStatusText, taskStateClass } from '../src/constants/juyiting.js'
 
 const read = name => readFileSync(new URL(`../src/components/${name}.vue`, import.meta.url), 'utf8')
 const hall = read('world/JuyiHall')
@@ -12,7 +15,8 @@ const Empty = Vue.defineComponent({ render: () => Vue.h('span') })
 const compile = name => {
   const { descriptor } = parse(read(name))
   const imports = new Proxy({ vue: Vue, '@/utils/silverAmount': silver,
-    '../../composables/juyiting/useHallOrdinaryCancellation.js': cancellation }, { get: (target, key) => target[key] || Empty })
+    './HallTaskResources.vue': Vue.defineComponent({ name: 'HallTaskResources', props: ['resultCount'], render: () => Vue.h('section') }),
+    '@/composables/juyiting/hallAssigneeCandidates.js': assigneeCandidates, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': cancellation }, { get: (target, key) => target[key] || Empty })
   const code = compileScript(descriptor, { id: 'flow-ui-test', inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_, names, path) => `const { ${names.replace(/\s+as\s+/g, ': ')} } = imports[${JSON.stringify(path)}]`)
     .replace(/^import\s+(\w+)\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_, name, path) => `const ${name} = imports[${JSON.stringify(path)}]`)
@@ -23,10 +27,31 @@ const Panel = compile('juyiting/BountyPanel')
 const Catalog = compile('juyiting/PersonaCatalogPanel')
 const baseProps = { embeddedHall: true, detailAllowed: true, identityScope: 'owner-a',
   abilityText: () => '', canAssign: () => true, formatTime: () => '', portraitName: () => '', portraitStyle: () => ({}),
-  taskAgentMatchScore: () => 0, taskStateClass: () => '', taskStatusCount: () => 0, taskStatusText: value => value,
+  taskAgentMatchScore: () => 0, taskStateClass, taskStatusCount: () => '0', taskStatusText,
   operableAgents: [{ agentId: 'old-agent', name: '林冲', canOperate: true, status: 'online' }] }
 
 describe('flow gap actual UI consumers', () => {
+  it('pending acceptance has exactly one review CTA and a readonly resource card on the shared PC/mobile detail', async () => {
+    const task = { id: 'a', title: '待验收', status: 'reviewing', taskVersion: '3', assignedAgentIds: ['old-agent'], assignedTarget: { agentId: 'old-agent', displayName: '林冲', providerDisplayName: null, isMine: true, availability: 'online' } }
+    const wrapper = mount(Panel, { props: { ...baseProps, tasks: [task], selectedTask: task } })
+    try {
+      wrapper.vm.openTask(task); await Vue.nextTick()
+      const buttons = wrapper.findAll('button').filter(b => /成果.*验收/.test(b.text()))
+      expect(buttons).to.have.length(1)
+      expect(buttons[0].text()).to.equal('查看成果并验收')
+      expect(wrapper.find('.matter-results-action').exists()).to.equal(false)
+      await buttons[0].trigger('click')
+      expect(wrapper.emitted('review-delivery')[0][0].id).to.equal('a')
+      expect(wrapper.emitted('open-formal-results')).to.equal(undefined)
+      const context = { taskId: 'a', taskVersion: '3', taskState: 'REVIEWING', currentDelivery: { items: [{ displayRole: 'RESULT' }, { displayRole: 'MANIFEST' }] } }
+      await wrapper.setProps({ resourceReviewContext: context })
+      expect(wrapper.findComponent({ name: 'HallTaskResources' }).props('resultCount')).to.equal(1)
+      await wrapper.setProps({ resourceReviewContext: { ...context, taskVersion: '2' } })
+      expect(wrapper.findComponent({ name: 'HallTaskResources' }).props('resultCount')).to.equal(null)
+      await wrapper.setProps({ resourcesActive: false })
+      expect(wrapper.findAll('button').some(b => b.text() === '继续议事')).to.equal(true)
+    } finally { wrapper.unmount() }
+  })
   for (const assignedAgentIds of [[], ['old-agent']]) it(`renders cancelled with ${assignedAgentIds.length} historical assignee(s) without executable CTA; retains history entry`, async () => {
     const task = { id: 'a', title: '普通事项', status: 'cancelled', taskVersion: '3', assignedAgentIds }
     const wrapper = mount(Panel, { props: { ...baseProps, tasks: [task], selectedTask: task } })
@@ -45,6 +70,23 @@ describe('flow gap actual UI consumers', () => {
       expect(task.assignedAgentIds).to.deep.equal(assignedAgentIds)
     } finally { wrapper.unmount() }
   })
+  for (const embeddedHall of [true, false]) for (const status of ['open', 'assigned', 'reviewing', 'completed']) {
+    it(`keeps authoritative UNKNOWN read-only for ${status} (embedded=${embeddedHall})`, async () => {
+      const task = { id: 'unknown', title: '待核对事项', status, phase: 'UNKNOWN', taskVersion: '3', assignedAgentIds: ['old-agent'] }
+      const wrapper = mount(Panel, { props: { ...baseProps, embeddedHall, tasks: [task], selectedTask: task,
+        recommendedAgents: baseProps.operableAgents } })
+      try {
+        wrapper.vm.openTask(task); await Vue.nextTick()
+        for (const selector of ['.matter-agent-actions', '.matter-primary-action', '.matter-archive-action', '.ordinary-cancellation', '.task-operation-grid', '.modal-agent-scroll', '.deliberation-execution-route']) expect(wrapper.find(selector).exists(), selector).to.equal(false)
+        const results = wrapper.find('.matter-results-action')
+        if (results.exists()) {
+          await results.trigger('click')
+          expect(wrapper.emitted('open-formal-results')[0][0].id).to.equal('unknown')
+        }
+        for (const event of ['assign-task', 'discuss-task', 'review-delivery', 'archive-task', 'cancel-task']) expect(wrapper.emitted(event), event).to.equal(undefined)
+      } finally { wrapper.unmount() }
+    })
+  }
   it('confirms assigned pre-start cancellation with the original version; busy prevents another click', async () => {
     const task = { id: 'a', title: '普通事项', status: 'assigned', taskVersion: '2', funding: null, assignedAgentIds: ['old-agent'] }
     const wrapper = mount(Panel, { props: { ...baseProps, tasks: [task], selectedTask: task } })
@@ -54,7 +96,7 @@ describe('flow gap actual UI consumers', () => {
       await button.trigger('click'); expect(wrapper.emitted('cancel-task')).to.equal(undefined)
       wrapper.get('var-dialog').element.dispatchEvent(new window.Event('confirm')); await Vue.nextTick()
       expect(wrapper.emitted('cancel-task')).to.have.length(1)
-      expect(wrapper.emitted('cancel-task')[0][0]).to.include({ id: 'a', taskVersion: 2 })
+      expect(wrapper.emitted('cancel-task')[0][0]).to.include({ id: 'a', taskVersion: '2' })
       await wrapper.setProps({ cancellationBusy: true }); await button.trigger('click')
       expect(button.attributes('disabled')).to.equal(''); expect(wrapper.emitted('cancel-task')).to.have.length(1)
       await wrapper.setProps({ cancellationBusy: false, cancellationState: { taskId: 'a', status: 'unresolved' } })
@@ -97,7 +139,7 @@ describe('flow gap actual UI consumers', () => {
     const history = template.match(/<section\s+v-if="([^"]+)"\s+class="terminal-task-history"/)[1]
     const acceptance = template.match(/<BountyAcceptancePanel\s+v-else-if="([^"]+)"/)[1]
     const evaluate = (condition, status) => new Function('renderedPanel', 'formalTaskRef', 'hallIdentityScope',
-      'multimediaDeliberationUiEnabled', 'taskReviewRef', `return (${condition})`)('tasks', { id: 'a', status }, 'owner', true, null)
+      'multimediaDeliberationUiEnabled', 'taskReviewRef', `return Boolean(${condition})`)('tasks', { id: 'a', status }, 'owner', true, null)
     for (const status of ['completed', 'accepted']) {
       expect(evaluate(history, status)).to.equal(false)
       expect(evaluate(acceptance, status)).to.equal(true)

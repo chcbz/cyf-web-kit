@@ -1,3 +1,4 @@
+import { validMaterialVersion } from '../src/composables/juyiting/materialVersion.js'
 import { expect } from 'chai'
 import { before, after } from 'mocha'
 import { readFileSync } from 'node:fs'
@@ -12,6 +13,7 @@ const script = compileScript(descriptor, { id: 'bounty-text-selection-test', inl
   .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm,
     (_, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
   .replace(/^import\s+\{\s*createApi\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { createApi } = deps')
+  .replace(/^import\s+\{\s*validMaterialVersion\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, `var validMaterialVersion = ${validMaterialVersion.toString()}`)
   .replace('export default', 'return')
 
 const receipt = (selection, fileId = 'file-text-1', state = 'saved', extra = {}) => ({
@@ -19,10 +21,10 @@ const receipt = (selection, fileId = 'file-text-1', state = 'saved', extra = {})
   items: [{ sourceKind: 'textSelection', assetId: null, revision: null,
     textSelection: { ...selection, messageRevision: '9' },
     state: state === 'partial_failed' ? 'failed' : state,
-    fileId: state === 'saved' ? fileId : null, version: state === 'saved' ? 1 : null,
+    fileId: state === 'saved' ? fileId : null, version: state === 'saved' ? '1' : null,
     errorCode: null, message: null }], ...extra
 })
-const response = value => ({ data: { data: value } })
+const response = value => value
 
 describe('bounty persisted text selection archive', () => {
   const previous = new Map()

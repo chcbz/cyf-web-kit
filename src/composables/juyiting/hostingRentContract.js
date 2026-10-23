@@ -6,31 +6,21 @@ export const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]
 const optional = (value, validate) => value == null || validate(value)
 const oneOf = (value, values) => values.includes(value)
 
-export const hostingPayload = result => {
-  const body = result && Object.hasOwn(result, 'code') ? result : result?.data ?? result
-  if (body && Object.hasOwn(body, 'code')) {
-    if (!['E0', '0', 0, '200', 200].includes(body.code)) {
-      const error = new Error(body.msg || body.message || '租金请求未被接受')
-      error.code = body.code
-      throw error
-    }
-    return body.data
-  }
-  return body
-}
+export const hostingPayload = result => result
+const timestamp = value => Number.isSafeInteger(value) && value >= 0
 
 export const validQuote = (quote, purpose, personaCode, agentId, lease) =>
   ['INITIAL', 'RENEWAL'].includes(purpose) && text(quote?.quoteId) && quote.purpose === purpose && quote.personaCode === personaCode && text(quote.agentId) &&
   (!agentId || quote.agentId === agentId) && text(quote.planId) && positive(quote.planVersion) &&
-  quote.currency === 'SILVER' && positive(quote.amountMicro) && positive(quote.periodSeconds) && positive(quote.expiresAt) &&
+  quote.currency === 'SILVER' && positive(quote.amountMicro) && positive(quote.periodSeconds) && timestamp(quote.expiresAt) &&
   (purpose === 'INITIAL' ? quote.leaseId == null && quote.expectedLeaseVersion == null :
     quote.leaseId === lease?.leaseId && positive(quote.expectedLeaseVersion) && quote.expectedLeaseVersion === lease?.version)
 
 export const validLease = (lease, agentId, personaCode) => text(lease?.leaseId) && lease.agentId === agentId &&
   lease.personaCode === personaCode && text(lease.bindingId) && positive(lease.version) &&
   oneOf(lease.status, ['PROVISIONING', 'ACTIVE', 'REFUNDED']) && positive(lease.planVersion) &&
-  positive(lease.amountMicro) && positive(lease.periodSeconds) && optional(lease.paidFrom, decimal) && optional(lease.paidThrough, decimal) &&
-  (lease.status !== 'ACTIVE' || (decimal(lease.paidFrom) && positive(lease.paidThrough) && BigInt(lease.paidThrough) >= BigInt(lease.paidFrom)))
+  positive(lease.amountMicro) && positive(lease.periodSeconds) && optional(lease.paidFrom, timestamp) && optional(lease.paidThrough, timestamp) &&
+  (lease.status !== 'ACTIVE' || (timestamp(lease.paidFrom) && timestamp(lease.paidThrough) && BigInt(lease.paidThrough) >= BigInt(lease.paidFrom)))
 
 export const validLookup = (value, agentId, personaCode) => {
   if (typeof value?.managed !== 'boolean') return false
@@ -39,12 +29,12 @@ export const validLookup = (value, agentId, personaCode) => {
   const intent = value.intent
   if (intent != null && !(text(intent.intentId) && positive(intent.version) &&
     oneOf(intent.status, ['FUNDS_RESERVED', 'PROVISIONING_UNKNOWN', 'SERVICE_READY', 'FAILED_NO_EFFECT', 'ACTIVE', 'REFUNDED']) &&
-    text(intent.reserveTransactionId) && optional(intent.serviceReadyAt, decimal) &&
+    text(intent.reserveTransactionId) && optional(intent.serviceReadyAt, timestamp) &&
     optional(intent.captureTransactionId, text) && optional(intent.refundTransactionId, text))) return false
   const reprovision = value.reprovision
   return reprovision == null || (text(reprovision.requestId) && positive(reprovision.version) &&
     oneOf(reprovision.status, ['ACCEPTED', 'PROVISIONING_UNKNOWN', 'SERVICE_READY', 'FAILED_NO_EFFECT']) &&
-    decimal(reprovision.requestedAt) && optional(reprovision.serviceReadyAt, decimal))
+    timestamp(reprovision.requestedAt) && optional(reprovision.serviceReadyAt, timestamp))
 }
 
 export const validOperation = (op, personaCode) => {
@@ -71,7 +61,7 @@ export const hostingRequest = (op, personaCode) => {
 }
 
 export const matchingHostingReceipt = (receipt, op) => {
-  if (receipt?.agentId !== op.agentId || receipt.currency !== 'SILVER' || !decimal(receipt.occurredAt)) return false
+  if (receipt?.agentId !== op.agentId || receipt.currency !== 'SILVER' || !timestamp(receipt.occurredAt)) return false
   if (op.kind === 'REPROVISION') return text(receipt.requestId) && receipt.operation === 'REPROVISION' && receipt.status === 'ACCEPTED' &&
     receipt.leaseId === op.lease.leaseId && receipt.amountMicro === '0' && decimal(receipt.leaseVersion) &&
     BigInt(receipt.leaseVersion) === BigInt(op.lease.version) + 1n && receipt.paidThrough === op.lease.paidThrough

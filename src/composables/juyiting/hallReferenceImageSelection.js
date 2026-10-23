@@ -1,3 +1,4 @@
+import { validMaterialVersion } from './materialVersion.js'
 import { computed, getCurrentInstance, onBeforeUnmount, ref, unref, watch } from 'vue'
 import { usePersonalWorkspace } from '../usePersonalWorkspace.js'
 import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
@@ -16,7 +17,7 @@ const referenceKey = (fileId, version) => `${fileId}\u0000${version}`
 const abortError = message => new DOMException(message, 'AbortError')
 
 export function normalizeHallReferenceVersion (value) {
-  return Number.isInteger(value) && value >= 1 && value <= JAVA_INT_MAX ? value : null
+  return validMaterialVersion(value) ? value : null
 }
 
 export function toHallDraftReference (value) {
@@ -59,7 +60,7 @@ export function validateHallReferenceDetail (detail, expectedFileId) {
       supported: IMAGE_MIME_TYPES.has(contentMimeType),
       byteLength: item.byteLength
     })
-  }).sort((left, right) => right.version - left.version)
+  }).sort((left, right) => (BigInt(right.version) > BigInt(left.version) ? 1 : BigInt(right.version) < BigInt(left.version) ? -1 : 0))
 
   if (!seen.has(latestVersion)) throw new Error('文件详情缺少最新版本，请刷新后重试。')
   return Object.freeze({

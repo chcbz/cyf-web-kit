@@ -176,7 +176,7 @@ describe('HallPortraitHome', () => {
     expect(sheetStyles).to.include('overflow-y: auto')
     expect(sheetStyles).to.include('var(--hall-safe-bottom')
     expect(portraitHomeSource).to.include('min-height: 44px')
-    expect(portraitHomeSource).to.include('{{ taskStatusText(selectedTask.status) }}')
+    expect(portraitHomeSource).to.include('{{ taskStatusText(selectedTask) }}')
     expect(portraitHomeSource).to.include('榜号 {{ selectedTask.id }}')
     expect(portraitHomeSource).to.include("selectedTask.description || selectedTask.content || '暂无详情，待厅中议定。'")
     expect(portraitHomeSource).to.include("selectedTask.requiredAbilities?.length ? selectedTask.requiredAbilities.join(' / ') : '不拘本领'")
@@ -194,7 +194,8 @@ describe('HallPortraitHome', () => {
     expect(boardHandler).to.include('closePortraitTaskDetail()')
     expect(boardHandler).to.include("openPanel('tasks')")
     expect(discussionHandler).to.include('closePortraitTaskDetail()')
-    expect(discussionHandler).to.include('discussTask(task)')
+    expect(discussionHandler).to.include('assignedTaskTarget(task)')
+    expect(discussionHandler).to.include('discussTask(task, target)')
     expect(hallSource).to.include("if (mode !== 'portrait-command') closePortraitTaskDetail()")
   })
 

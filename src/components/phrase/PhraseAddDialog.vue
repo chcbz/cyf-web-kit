@@ -57,7 +57,7 @@ const handleSubmit = () => {
     tag: '毒鸡汤'
   }, {
     onSuccess: (data) => {
-      if (data.code === 'E0') {
+      {
         content.value = ''
         visible.value = false
         Dialog({
@@ -65,12 +65,6 @@ const handleSubmit = () => {
           message: t('phrase.add_success')
         })
         emit('success')
-      } else {
-        visible.value = false
-        Dialog({
-          title: t('app.alert'),
-          message: data.msg
-        })
       }
     }
   })

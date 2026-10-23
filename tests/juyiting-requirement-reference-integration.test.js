@@ -1,3 +1,6 @@
+import * as assigneeCandidates from '../src/composables/juyiting/hallAssigneeCandidates.js'
+import * as taskPresentation from '../src/composables/juyiting/hallTaskPresentation.js'
+import * as materialVersion from '../src/composables/juyiting/materialVersion.js'
 import * as ordinaryCancellation from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
 import { strict as assert } from 'node:assert'
 import { readFileSync } from 'node:fs'
@@ -12,11 +15,11 @@ import { useHallRequirementCreate } from '../src/composables/juyiting/useHallReq
 
 const scope = '0\u0000client-a\u0000owner-a'
 const mimeTypes = ['image/png', 'application/pdf', 'audio/mpeg', 'text/plain']
-const files = mimeTypes.map((mime, index) => ({ fileId: `pwf_material_${index}`, displayName: `资料${index}`, state: 'ACTIVE', latestVersion: 3, metadataRevision: 1 }))
-const attachments = files.map(file => ({ fileId: file.fileId, version: 3 }))
+const files = mimeTypes.map((mime, index) => ({ fileId: `pwf_material_${index}`, displayName: `资料${index}`, state: 'ACTIVE', latestVersion: '3', metadataRevision: '1' }))
+const attachments = files.map(file => ({ fileId: file.fileId, version: '3' }))
 const detailFor = index => {
   const file = files[index], contentMimeType = mimeTypes[index]
-  const versions = [2, 3].map(version => ({ fileId: file.fileId, version, originalFilename: `material-${index}-v${version}`, contentMimeType, byteLength: 5 }))
+  const versions = [2, 3].map(version => ({ fileId: file.fileId, version: String(version), originalFilename: `material-${index}-v${version}`, contentMimeType, byteLength: '5' }))
   return { file, latestVersion: versions[1], versions, relations: [], derivation: [] }
 }
 const props = { identityScope: scope, authorizationGeneration: 1, abilityText: () => '', canAssign: () => false,
@@ -48,12 +51,12 @@ function fixture (panelProps = {}) {
     calls.push(request)
     assert.equal(request.method, 'GET')
     assert.equal(request.needAuth, true)
-    if (request.url === '/personal-workspace/files') return { data: { items: files, nextCursor: null } }
+    if (request.url === '/personal-workspace/files') return ({ items: files, nextCursor: null, hasMore: false })
     for (let index = 0; index < files.length; index++) {
       const file = files[index], mime = mimeTypes[index]
-      if (request.url === `/personal-workspace/files/${file.fileId}`) return { data: detailFor(index), headers: { etag: '"materials:1"' } }
-      if (request.url === `/personal-workspace/files/${file.fileId}/versions/3/preview`) return { data: { state: 'READY', parts: [{ partId: 'content', contentMimeType: mime === 'application/pdf' ? 'text/plain' : mime }], partial: false } }
-      if (request.url === `/personal-workspace/files/${file.fileId}/versions/3/preview/parts/content`) return { data: new Blob(['media'], { type: mime === 'application/pdf' ? 'text/plain' : mime }) }
+      if (request.url === `/personal-workspace/files/${file.fileId}`) return detailFor(index)
+      if (request.url === `/personal-workspace/files/${file.fileId}/versions/3/preview`) return ({ state: 'READY', parts: [{ partId: 'content', contentMimeType: mime === 'application/pdf' ? 'text/plain' : mime }], partial: false })
+      if (request.url === `/personal-workspace/files/${file.fileId}/versions/3/preview/parts/content`) return (new Blob(['media'], { type: mime === 'application/pdf' ? 'text/plain' : mime }))
     }
     throw new Error(`unexpected workspace request ${request.url}`)
   } }
@@ -61,20 +64,20 @@ function fixture (panelProps = {}) {
   const agentApi = { create: async (path, body, options) => {
     calls.push({ method: 'POST', path, body, options })
     assert.equal(path, '/tasks/creation-operations/v2')
-    return { data: { schemaVersion: 2, operationId: 'atco2_exact', taskId: 'task-bird', requirementRevision: 1,
-      state: 'COMMITTED', attachments: body.attachments, task: { id: 'task-bird' } } }
+    return ({ schemaVersion: 2, operationId: 'atco2_exact', taskId: 'task-bird', requirementRevision: '1',
+      state: 'COMMITTED', attachments: body.attachments, task: { id: 'task-bird' } })
   } }
   const storage = { getItem: key => rows.get(key) ?? null, setItem: (key, value) => rows.set(key, value), removeItem: key => rows.delete(key) }
   const create = useHallRequirementCreate({ schemaVersion: 2, agentApi, actorScopeKey: Vue.ref(scope), identityEpoch: Vue.ref(1), storage,
     createIdempotencyKey: () => 'bird-original-key', onCommitted: (value, fence) => { if (!fence.isCurrent()) return false; adopted.push(value); return true } })
   disposers.push(() => create.dispose())
   const Picker = compileComponent('../src/components/juyiting/HallMaterialPicker.vue', {
-    vue: Vue, '@/composables/usePersonalWorkspace': { usePersonalWorkspace: options => usePersonalWorkspace({ ...options, api, urlApi }), savePersonalWorkspaceBlob: () => {} }
+    vue: Vue, '../../composables/juyiting/materialVersion.js': materialVersion, '@/composables/usePersonalWorkspace': { usePersonalWorkspace: options => usePersonalWorkspace({ ...options, api, urlApi }), savePersonalWorkspaceBlob: () => {} }
   })
   const stub = Vue.defineComponent({ render: () => Vue.h('span') })
   const TaskMaterialLinks = Vue.defineComponent({ name: 'TaskMaterialLinks', render: () => Vue.h('section', { class: 'formal-material-controls' }) })
   const Panel = compileComponent('../src/components/juyiting/BountyPanel.vue', new Proxy({
-    vue: Vue, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, '@/utils/silverAmount': silver, './HallMaterialPicker.vue': Picker, '@/components/personal-workspace/TaskMaterialLinks.vue': TaskMaterialLinks
+    vue: Vue, '@/composables/juyiting/hallAssigneeCandidates.js': assigneeCandidates, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, '@/utils/silverAmount': silver, './HallMaterialPicker.vue': Picker, '@/components/personal-workspace/TaskMaterialLinks.vue': TaskMaterialLinks
   }, { get: (target, name) => target[name] ?? stub }))
   // The task board no longer owns a create form. Exercise the actual neutral
   // picker and atomic controller directly; do not invent a replacement UI route.
@@ -110,7 +113,8 @@ describe('shared neutral picker + v2 atomic controller integration and read-only
       await f.wrapper.findAll('.quick-material-files button')[index].trigger('click'); await flush()
       assert.equal(f.wrapper.find('.quick-material-fields select').exists(), false)
       assert.match(f.wrapper.get('.quick-material-version').text(), /已固定 v3/)
-      await f.wrapper.findAll('.quick-material-fields button').find(item => item.text() === '预览').trigger('click'); await flush()
+      assert.equal(f.wrapper.find('.quick-material-preview-toggle').exists(), false)
+      await flush()
       if (index === 0) assert.equal(f.wrapper.get('.quick-material-preview img').attributes('src'), 'blob:exact-image/png')
       if (index === 2) assert.equal(f.wrapper.get('.quick-material-preview audio').attributes('src'), 'blob:exact-audio/mpeg')
       await button(f.wrapper, '添加').trigger('click')
@@ -137,7 +141,7 @@ describe('shared neutral picker + v2 atomic controller integration and read-only
     await f.wrapper.setProps({ embeddedHall: true }); await flush()
     assert.equal(f.wrapper.find('.formal-material-controls').exists(), false)
     assert.equal(f.wrapper.find('.workspace-shortcut').exists(), false)
-    assert.match(f.wrapper.get('.deliberation-execution-route').text(), /保存可选/)
+    assert.match(f.wrapper.get('.matter-advice-card').text(), /补充要求、查看结果和提出修改，都在原议事中继续/)
     assert.equal(f.calls.filter(call => call.method === 'POST').length, 0)
   })
   it('submits no-material requirement without reading workspace or creating grants/executions', async () => {

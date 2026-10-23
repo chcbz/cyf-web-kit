@@ -2,7 +2,7 @@ import { computed, getCurrentInstance, onBeforeUnmount, ref, unref, watch } from
 import { createApi } from '../useHttp.js'
 
 const ID = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/.test(value)
-const KEY = value => typeof value === 'string' && /^[A-Za-z0-9._~:/+-]{8,160}$/.test(value)
+const KEY = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{7,159}$/.test(value)
 const HASH = value => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value)
 const valueOf = value => typeof value === 'function' ? value() : unref(value)
 const decimal = (value, positive = false) => typeof value === 'string' && /^(0|[1-9][0-9]{0,18})$/.test(value) &&
@@ -13,13 +13,13 @@ export const safeFinalizationVersion = value => {
 }
 const exactKeys = (value, fields) => value && typeof value === 'object' && !Array.isArray(value) &&
   Object.keys(value).length === fields.length && Object.keys(value).every(key => fields.includes(key))
-const text = (value, limit) => typeof value === 'string' && value.trim() === value && value.length > 0 && [...value].length <= limit
+const text = (value, limit) => typeof value === 'string' && value.trim() === value && value.length > 0 && value.length <= limit && [...value].every(char => { const code = char.codePointAt(0); return code > 31 && (code < 127 || code > 159) })
 const selectionFields = ['requestId', 'stepId', 'outputId', 'sha256', 'title', 'purpose']
 const textSelectionFields = ['requestId', 'messageSource', 'sha256', 'title', 'purpose']
-const messageFields = ['turnId', 'messageId', 'snapshotId', 'finalDigest']
+const messageFields = ['turnId', 'messageId', 'snapshotId', 'finalSha256']
 const validMessageSource = source => exactKeys(source, messageFields) && ID(source.turnId) &&
   decimal(source.messageId, true) && ID(source.snapshotId) &&
-  typeof source.finalDigest === 'string' && /^sha256:[0-9a-f]{64}$/.test(source.finalDigest)
+  typeof source.finalSha256 === 'string' && /^[0-9a-f]{64}$/.test(source.finalSha256)
 const bodyFields = ['expectedTaskVersion', 'expectedAssignmentRevision', 'conversationId', 'summary', 'selectedOutputs']
 const validSelection = item => ((exactKeys(item, selectionFields) && ID(item.stepId) && ID(item.outputId)) ||
   (exactKeys(item, textSelectionFields) && validMessageSource(item.messageSource))) &&
@@ -29,8 +29,8 @@ const sourceKey = item => item.messageSource
   ? JSON.stringify(['COMPLETED_MESSAGE', item.requestId, item.messageSource.turnId, item.messageSource.messageId])
   : JSON.stringify([item.requestId, item.stepId, item.outputId])
 const validBody = body => exactKeys(body, bodyFields) &&
-  typeof body.expectedTaskVersion === 'number' && safeFinalizationVersion(body.expectedTaskVersion) != null &&
-  typeof body.expectedAssignmentRevision === 'number' && safeFinalizationVersion(body.expectedAssignmentRevision) != null &&
+  typeof body.expectedTaskVersion === 'string' && safeFinalizationVersion(body.expectedTaskVersion) != null &&
+  typeof body.expectedAssignmentRevision === 'string' && safeFinalizationVersion(body.expectedAssignmentRevision) != null &&
   ID(body.conversationId) && text(body.summary, 4000) && Array.isArray(body.selectedOutputs) &&
   body.selectedOutputs.length >= 1 && body.selectedOutputs.length <= 99 && body.selectedOutputs.every(validSelection) &&
   new Set(body.selectedOutputs.map(sourceKey)).size === body.selectedOutputs.length
@@ -43,27 +43,12 @@ const uuid = () => {
   if (!value) throw new Error('当前环境无法生成安全验收幂等键，未发送请求。')
   return `conversation-finalize-${value}`
 }
-const unwrap = response => {
-  let value = response
-  for (let i = 0; i < 2 && value && typeof value === 'object' && Object.hasOwn(value, 'data'); i++) value = value.data
-  return value
-}
+const unwrap = response => response
 const stages = new Set(['PROMOTING', 'READY_TO_SUBMIT', 'SUBMITTED', 'ACCEPTING', 'TASK_COMPLETED'])
 const receiptFields = ['operationId', 'taskId', 'conversationId', 'state', 'stateVersion', 'stage',
   'expectedTaskVersion', 'expectedAssignmentRevision', 'selectedOutputs', 'deliveryId', 'deliveryState',
   'taskState', 'taskVersion', 'errorCode', 'retryable']
-// Receipt serialization can retain the DTO's nullable source-union slots.
-// Validate them as null, never turn them into source IDs or relax the request union.
-const validReceiptSelection = item => {
-  if (validSelection(item)) return true
-  if (exactKeys(item, [...selectionFields, 'messageSource']) && item.messageSource === null) {
-    const { messageSource, ...selected } = item
-    return validSelection(selected)
-  }
-  if (!exactKeys(item, [...textSelectionFields, 'stepId', 'outputId']) || item.stepId !== null || item.outputId !== null) return false
-  const { stepId, outputId, ...selected } = item
-  return validSelection(selected)
-}
+const validReceiptSelection = validSelection
 const selectionMatches = (actual, expected) => Array.isArray(actual) && actual.length === expected.length && actual.every((item, i) =>
   validReceiptSelection(item) && validSelection(expected[i]) &&
     ((item.messageSource && expected[i].messageSource &&
@@ -74,22 +59,26 @@ export function validFinalizationReceipt (value, intent) {
   if (!exactKeys(value, receiptFields) || !ID(value.operationId) || !ID(value.taskId) ||
     value.taskId !== intent.taskId || value.conversationId !== intent.body.conversationId ||
     (intent.operationId && intent.operationId !== value.operationId) ||
-    !['pending', 'completed', 'failed'].includes(value.state) || !decimal(value.stateVersion, true) || !stages.has(value.stage) ||
+    !['PENDING', 'COMPLETED', 'FAILED'].includes(value.state) || !decimal(value.stateVersion, true) || !stages.has(value.stage) ||
     value.expectedTaskVersion !== String(intent.body.expectedTaskVersion) ||
     value.expectedAssignmentRevision !== String(intent.body.expectedAssignmentRevision) ||
     !selectionMatches(value.selectedOutputs, intent.body.selectedOutputs) || !decimal(value.taskVersion) ||
     BigInt(value.taskVersion) < BigInt(intent.body.expectedTaskVersion) ||
     (value.deliveryId != null && !ID(value.deliveryId)) ||
-    (value.deliveryState != null && (typeof value.deliveryState !== 'string' || !/^[a-z_]{1,64}$/.test(value.deliveryState))) ||
-    typeof value.taskState !== 'string' || !/^[a-z_]{1,64}$/.test(value.taskState) ||
+    (value.deliveryState != null && !['SUBMITTED', 'ACCEPTED', 'CHANGES_REQUESTED'].includes(value.deliveryState)) ||
+    !['OPEN', 'PLANNING', 'ASSIGNED', 'RUNNING', 'REVIEWING', 'BLOCKED', 'COMPLETED', 'FAILED', 'CANCELLED', 'ARCHIVED'].includes(value.taskState) ||
     (value.errorCode != null && (typeof value.errorCode !== 'string' || !/^[A-Za-z0-9_:-]{1,100}$/.test(value.errorCode))) ||
     typeof value.retryable !== 'boolean') return false
   if (['SUBMITTED', 'ACCEPTING', 'TASK_COMPLETED'].includes(value.stage) && !ID(value.deliveryId)) return false
-  if (value.stage === 'TASK_COMPLETED' || value.state === 'completed') {
-    return value.stage === 'TASK_COMPLETED' && value.state === 'completed' && value.deliveryState === 'accepted' &&
-      value.taskState === 'completed' && ID(value.deliveryId) && !value.errorCode && !value.retryable
+  if (value.stage === 'TASK_COMPLETED') {
+    return value.state === 'COMPLETED' && value.deliveryState === 'ACCEPTED' && value.taskState === 'COMPLETED' &&
+      ID(value.deliveryId) && !value.errorCode && !value.retryable
   }
-  return true
+  if (value.state === 'COMPLETED') {
+    return value.stage === 'SUBMITTED' && ID(value.deliveryId) &&
+      ['SUBMITTED', 'ACCEPTED', 'CHANGES_REQUESTED'].includes(value.deliveryState) && !value.errorCode && !value.retryable
+  }
+  return value.state !== 'FAILED' || typeof value.errorCode === 'string'
 }
 const stageOrder = [...stages]
 const stageLabel = receipt => ({ PROMOTING: '正在准备成果', READY_TO_SUBMIT: '成果已准备',
@@ -98,7 +87,7 @@ const statusCode = error => error?.status ?? error?.response?.status
 
 /** One immutable selected-set acceptance intent. No Provider call or automatic write on recovery. */
 export function useHallBountyFinalization ({ api = createApi('/agent'), conversationId = null, identityKey = null, taskId = null,
-  storage = browserStorage(), idempotencyKeyFactory = uuid } = {}) {
+  storage = browserStorage(), idempotencyKeyFactory = uuid, authorizationGeneration = 0 } = {}) {
   const status = ref({ state: 'idle', busy: false, message: '', intent: null, receipt: null })
   const conversation = computed(() => valueOf(conversationId))
   const identity = computed(() => valueOf(identityKey))
@@ -151,13 +140,13 @@ export function useHallBountyFinalization ({ api = createApi('/agent'), conversa
     const prior = status.value.receipt
     if (prior && (prior.operationId !== raw.operationId || BigInt(raw.stateVersion) < BigInt(prior.stateVersion) ||
       stageOrder.indexOf(raw.stage) < stageOrder.indexOf(prior.stage) ||
-      (prior.state === 'completed' && raw.state !== 'completed') ||
+      (prior.state === 'COMPLETED' && raw.state !== 'COMPLETED') ||
       (raw.stateVersion === prior.stateVersion && receiptFields.some(field => field !== 'selectedOutputs' && raw[field] !== prior[field])))) {
       throw new Error('验收状态尚未更新，请稍后刷新。')
     }
     const receipt = Object.freeze({ ...raw, selectedOutputs: freezeBody(snapshot.intent.body).selectedOutputs })
     const intent = Object.freeze({ ...snapshot.intent, operationId: raw.operationId })
-    const message = raw.state === 'failed'
+    const message = raw.state === 'FAILED'
       ? (raw.retryable ? '验收未完成，可继续验收。' : '验收未完成，请查看需求状态。')
       : `${stageLabel(raw)}。`
     status.value = { state: raw.state, busy: true, message, intent, receipt }
@@ -193,8 +182,16 @@ export function useHallBountyFinalization ({ api = createApi('/agent'), conversa
   const post = async (snapshot, controller) => {
     status.value = { ...status.value, state: 'submitting', busy: true, message: '正在验收…' }
     const intent = snapshot.intent
-    return applyReceipt(await request({ url: `/tasks/${encodeURIComponent(intent.taskId)}/finalizations`, method: 'POST',
-      headers: { 'Idempotency-Key': intent.idempotencyKey }, data: intent.body }, snapshot, controller), snapshot)
+    try {
+      return applyReceipt(await request({ url: `/tasks/${encodeURIComponent(intent.taskId)}/finalizations`, method: 'POST',
+        headers: { 'Idempotency-Key': intent.idempotencyKey }, data: intent.body }, snapshot, controller), snapshot)
+    } catch (error) {
+      // A non-success write cannot carry a receipt. Reconcile the immutable original key by GET only.
+      if (active(snapshot, controller) && error?.name !== 'AbortError' && Number.isInteger(statusCode(error)) && statusCode(error) >= 400) {
+        try { return await read(snapshot, controller) } catch { /* preserve the original write error */ }
+      }
+      throw error
+    }
   }
   const check = () => run(read)
   const resume = () => run(async (snapshot, controller) => {
@@ -204,7 +201,7 @@ export function useHallBountyFinalization ({ api = createApi('/agent'), conversa
       // A 404 does not prove absence. This explicit action may resend ONLY the same immutable key/body.
       if (statusCode(error) !== 404) throw error
     }
-    if (receipt?.state === 'completed' || (receipt?.state === 'failed' && !receipt.retryable)) return receipt
+    if (receipt?.state === 'COMPLETED' || (receipt?.state === 'FAILED' && !receipt.retryable)) return receipt
     if (!active(snapshot, controller)) return null
     return post({ ...snapshot, intent: status.value.intent || snapshot.intent }, controller)
   })
@@ -226,7 +223,7 @@ export function useHallBountyFinalization ({ api = createApi('/agent'), conversa
     }
     return run(post)
   }
-  const stop = watch([scopeKey, task], reset, { immediate: true, flush: 'sync' })
+  const stop = watch([scopeKey, task, () => valueOf(authorizationGeneration)], reset, { immediate: true, flush: 'sync' })
   const dispose = () => {
     if (disposed) return
     disposed = true; stop(); generation++; for (const controller of controllers) controller.abort(); controllers.clear()

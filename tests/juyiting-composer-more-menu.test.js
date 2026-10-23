@@ -28,6 +28,37 @@ describe('Juyi Hall simple composer more menu', () => {
       } finally { wrapper.unmount() }
     }
   })
+  it('uses fixed 44px editing only in compact mode, preserving IME and multi-line drafts', async () => {
+    const wrapper = create({ compact: true, discussionVariant: 'bounty', draft: '多行\n'.repeat(100) })
+    try {
+      const input = wrapper.get('textarea')
+      await Vue.nextTick()
+      expect(input.element.style.height).to.equal('44px')
+      Object.defineProperty(input.element, 'scrollHeight', { configurable: true, value: 200 })
+      await input.trigger('keydown', { key: 'Enter', isComposing: true })
+      await input.trigger('keydown', { key: 'Enter', shiftKey: true })
+      expect(wrapper.emitted('send-message')).to.equal(undefined)
+      await wrapper.setProps({ draft: '更新后\n仍保留多行' })
+      await Vue.nextTick()
+      expect(input.element.style.height).to.equal('44px')
+      await wrapper.setProps({ compact: false })
+      await Vue.nextTick()
+      expect(input.element.style.height).to.equal('132px')
+      expect(wrapper.emitted('update:draft')).to.equal(undefined)
+    } finally { wrapper.unmount() }
+  })
+  it('hides only a redundant fixed single bounty target, never public or multiple target controls', async () => {
+    const agents = [{ agentId: 'a', name: '吴用' }, { agentId: 'b', name: '宋江' }]
+    const wrapper = create({ compact: true, discussionVariant: 'bounty', agents: agents.slice(0, 1), mentionLabel: agent => agent.name })
+    try {
+      expect(wrapper.find('.composer-context').exists()).to.equal(false)
+      await wrapper.setProps({ agents })
+      expect(wrapper.findAll('.composer-target-chip')).to.have.length(2)
+      await wrapper.setProps({ discussionVariant: 'public', agents: agents.slice(0, 1), selectedAgent: agents[0] })
+      await wrapper.get('.composer-target-chip').trigger('click')
+      expect(wrapper.emitted('clear-target')).to.deep.equal([['a']])
+    } finally { wrapper.unmount() }
+  })
   it('maps target chips consistently without letting private or bounty targets be removed', async () => {
     const agents = [{ agentId: 'a', name: '甲' }, { agentId: 'b', name: '乙' }]
     for (const discussionVariant of ['public', 'private', 'bounty']) {

@@ -1,3 +1,4 @@
+import { decodeMessage } from '../../utils/messageEnvelope.js'
 import { ref } from 'vue'
 import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
 
@@ -75,7 +76,7 @@ export const useHallBackendSceneState = ({
     snapshotLoading.value = true
     snapshotError.value = ''
     try {
-      const response = await request({ url: SNAPSHOT_URL, method: 'GET', responseType: 'text' })
+      const response = await request({ url: SNAPSHOT_URL, method: 'GET' })
       const value = unwrapPayload(response)
       const cursor = normalizeVersion(value?.sceneVersion)
       if (!value || value.sceneId !== SCENE_ID || cursor == null) {
@@ -188,7 +189,7 @@ export const useHallBackendSceneState = ({
 
   const applySseRecord = (record) => {
     const parsed = parseSseRecord(record)
-    if (!parsed) return
+    if (!parsed) { if (record.split(/\r?\n/).some(line => line && !line.startsWith(':'))) void resync(); return }
     const version = parsed.id ?? normalizeVersion(parsed.data?.sceneVersion)
     if (version == null) {
       void resync()
@@ -231,7 +232,7 @@ export const useHallBackendSceneState = ({
       url: EVENTS_URL,
       method: 'GET',
       params: { sinceVersion: publishVersion(sceneCursor) },
-      headers: { 'Last-Event-ID': sceneCursor },
+      headers: { 'Last-Event-ID': `scene:${SCENE_ID}:${sceneCursor}` },
       onOpen: () => {
         if (active && generation === streamGeneration) {
           sseConnected.value = true
@@ -501,25 +502,26 @@ function nextRecordBoundary (value) {
 }
 
 function parseSseRecord (record) {
-  let id = null
-  let event = ''
-  const data = []
+  const fields = { id: [], event: [], data: [] }
   for (const line of record.split(/\r\n|\n|\r/)) {
     if (!line || line.startsWith(':')) continue
     const separator = line.indexOf(':')
-    const field = separator < 0 ? line : line.slice(0, separator)
+    const key = separator < 0 ? line : line.slice(0, separator)
     let value = separator < 0 ? '' : line.slice(separator + 1)
     if (value.startsWith(' ')) value = value.slice(1)
-    if (field === 'id') id = parseVersion(value)
-    else if (field === 'event') event = value
-    else if (field === 'data') data.push(value)
+    if (!Object.hasOwn(fields,key)) return null
+    fields[key].push(value)
   }
-  if (data.length === 0) return null
+  if (fields.id.length !== 1 || fields.event.length !== 1 || fields.data.length === 0) return null
   try {
-    return { id, event, data: parseWireJson(data.join('\n')) }
-  } catch {
-    return null
-  }
+    const message = decodeMessage(fields.data.join('\n'))
+    const data = message.data
+    if (Object.hasOwn(message,'correlationId') || !['scene.event','scene.resync.required'].includes(message.messageType) ||
+        message.messageType !== fields.event[0] || message.messageId !== fields.id[0] || !data || typeof data !== 'object' ||
+        normalizeVersion(data.sceneVersion) === null || message.messageId !== `scene:${SCENE_ID}:${data.sceneVersion}` ||
+        (message.messageType === 'scene.resync.required') !== (data.eventType === 'resync-required')) return null
+    return { id: data.sceneVersion, event: data.eventType, data }
+  } catch { return null }
 }
 
 function parseVersion (value) {
@@ -527,25 +529,9 @@ function parseVersion (value) {
 }
 
 function normalizeVersion (value) {
-  if (typeof value === 'number') {
-    return Number.isSafeInteger(value) && value >= 0 ? String(value) : null
-  }
-  if (typeof value === 'bigint') {
-    return value >= 0n && value <= JAVA_LONG_MAX ? value.toString() : null
-  }
-  if (typeof value !== 'string' || !/^\d+$/.test(value)) return null
-  try {
-    const version = BigInt(value)
-    return version <= JAVA_LONG_MAX ? version.toString() : null
-  } catch {
-    return null
-  }
+  return typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value) && BigInt(value) <= JAVA_LONG_MAX ? value : null
 }
-
-function publishVersion (value) {
-  const version = BigInt(value)
-  return version <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(version) : value
-}
+function publishVersion (value) { return value }
 
 function compareVersions (left, right) {
   const leftValue = BigInt(left)
@@ -557,73 +543,10 @@ function nextVersion (value) {
   return (BigInt(value) + 1n).toString()
 }
 
-function unwrapPayload (response) {
-  let body = response?.data ?? response
-  if (typeof body === 'string') body = parseWireJson(body)
-  if (body && typeof body === 'object' && Object.hasOwn(body, 'data')) return body.data
-  return body
-}
-
-function parseWireJson (source) {
-  return JSON.parse(quoteIntegerFields(source, new Set(['sceneVersion'])))
-}
-
-function quoteIntegerFields (source, fields) {
-  let result = ''
-  let index = 0
-  while (index < source.length) {
-    if (source[index] !== '"') {
-      result += source[index]
-      index += 1
-      continue
-    }
-    const start = index
-    index += 1
-    let escaped = false
-    while (index < source.length) {
-      const character = source[index]
-      index += 1
-      if (escaped) {
-        escaped = false
-      } else if (character === '\\') {
-        escaped = true
-      } else if (character === '"') {
-        break
-      }
-    }
-    const token = source.slice(start, index)
-    result += token
-    let cursor = index
-    while (/\s/.test(source[cursor] ?? '')) cursor += 1
-    if (source[cursor] !== ':') continue
-    let field
-    try {
-      field = JSON.parse(token)
-    } catch {
-      continue
-    }
-    if (!fields.has(field)) continue
-    result += source.slice(index, cursor + 1)
-    cursor += 1
-    const whitespaceStart = cursor
-    while (/\s/.test(source[cursor] ?? '')) cursor += 1
-    result += source.slice(whitespaceStart, cursor)
-    const numberStart = cursor
-    if (source[cursor] === '-') cursor += 1
-    const digitsStart = cursor
-    while (/\d/.test(source[cursor] ?? '')) cursor += 1
-    if (cursor === digitsStart || /[.eE]/.test(source[cursor] ?? '')) {
-      index = numberStart
-      continue
-    }
-    result += `"${source.slice(numberStart, cursor)}"`
-    index = cursor
-  }
-  return result
-}
+function unwrapPayload (response) { return response }
 
 function createPhasePayload (source) {
-  if (!source || typeof source !== 'object') throw new TypeError('Phase report is required')
+  if (!source || typeof source !== 'object' || normalizeVersion(source.stateVersion) === null) throw new TypeError('Phase report with canonical version is required')
   return Object.freeze({
     reportId: source.reportId,
     agentId: source.agentId,
