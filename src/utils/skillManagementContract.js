@@ -40,16 +40,22 @@ const kindMatches = v => v.kind === 'EXECUTABLE' ? sha(v.manifestSha256) : v.man
 const packageRef = v => shape({ skillInstallationId: skillId, ...packageFields })(v) && kindMatches(v)
 const details = v => shape({ ...packageFields, inputMimeTypes: list(text), requiredPermissions: permissions, requirements: list(text), changeSummary: text, executionCostDescription: nullable(text) })(v) && kindMatches(v)
 const installed = shape({ skillInstallationId: skillId, version: details })
-const change = v => shape({ skillChangeId: skillId, agentId: skillId, skillKey: key, action,
+const positionSource = shape({ type: one(['POSITION']), grantId: skillId, grantRevision: positive, bindingId: positive })
+const change = v => {
+  if (!object(v)) return false
+  const position = Object.hasOwn(v, 'authorizationSource')
+  return shape({ ...(position ? { authorizationSource: positionSource } : {}), skillChangeId: skillId, agentId: skillId, skillKey: key, action,
   skillRevision: positive, changeRevision: positive, attempt: n => Number.isInteger(n) && n >= 1 && n <= 2147483647,
   source: nullable(packageRef), target: packageRef, status: one(Object.keys(SKILL_CHANGE_LABELS)), desiredEnabled: bool,
   runtimeSynced: bool, reasonCode: reason, retryAllowed: bool, orderId: nullable(skillId), fundingStatus: one(['NONE', 'HELD', 'CAPTURED', 'REFUNDED']),
   price: nullable(money), actorLabel: text, createdAt: time, updatedAt: time })(v) &&
-  (v.action === 'INSTALL' ? v.source === null && money(v.price) && skillId(v.orderId) : packageRef(v.source)) &&
+  (v.action === 'INSTALL' ? v.source === null && (position || money(v.price) && skillId(v.orderId)) : packageRef(v.source)) &&
+  (!position || (v.price === null && v.orderId === null && v.fundingStatus === 'NONE')) &&
   (!['ENABLE', 'DISABLE'].includes(v.action) || (v.price === null && v.orderId === null && v.fundingStatus === 'NONE')) &&
   (v.retryAllowed === (v.status === 'FAILED_RETRYABLE')) &&
   (!v.retryAllowed || ['NONE', 'HELD'].includes(v.fundingStatus)) &&
   (!(v.status === 'SUCCEEDED' && v.action !== 'DISABLE') || v.runtimeSynced)
+}
 const row = shape({ skillKey: key, name: text, description: text, skillRevision,
   installed: nullable(installed), candidate: nullable(details), upgradeEligibility: one(['NOT_APPLICABLE', 'COVERED', 'PAID', 'POLICY_UNSET', 'NOT_ALLOWED']),
   desiredEnabled: bool, admissionEnabled: bool, runtime: shape({ state: one(Object.keys(SKILL_RUNTIME_LABELS)), reasonCode: reason, observedAt: nullable(time), catalogRevision: nullable(skillRevision) }),

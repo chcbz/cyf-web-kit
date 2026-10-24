@@ -28,6 +28,12 @@ describe('SM-C1 locked fixtures → actual Web parser', () => {
       const bytes = readFileSync(new URL(`./fixtures/skill-management/management-contract-v1.${suffix}.json`, import.meta.url))
       expect(createHash('sha256').update(bytes).digest('hex')).to.equal(source[field])
     }
+    const freePosition = { ...fixture('accepted-offline-install').data, price: null, orderId: null, fundingStatus: 'NONE',
+      authorizationSource: { type: 'POSITION', grantId: 'grant_1', grantRevision: '1', bindingId: '1' } }
+    expect(parseSkillManagement('SkillChange', freePosition)).to.deep.equal(freePosition)
+    const marketWithoutOrder = { ...freePosition }; delete marketWithoutOrder.authorizationSource
+    expect(() => parseSkillManagement('SkillChange', marketWithoutOrder)).to.throw()
+
   })
   for (const example of fixtures.cases.filter(e => responseDefinitions[e.definition] || requestDefinitions[e.definition] || e.definition === 'HttpError')) {
     it(`${example.name}: ${example.valid ? 'accepts' : 'rejects'} complete shared wire`, () => {
