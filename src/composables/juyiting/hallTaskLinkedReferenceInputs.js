@@ -75,11 +75,6 @@ export function useHallTaskLinkedReferenceInputs ({ identityEpoch = 0, taskLinks
     }
 
     const references = links.filter(link => link.state === 'ACTIVE' && link.role === 'REFERENCE')
-    if (references.length > 32) {
-      const failure = blocked('TOO_MANY_REFERENCES')
-      state.value = failure
-      return failure
-    }
     const exactReferences = new Set()
     for (const link of references) {
       const key = JSON.stringify([link.fileId, link.version])

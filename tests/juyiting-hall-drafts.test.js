@@ -55,6 +55,16 @@ describe('JYT-UX-W03 Hall draft submission and recovery adapter', () => {
     drafts.dispose()
   })
 
+  it('preserves all 129 fixed inputs in draft requests and receipts', async () => {
+    const inputs = Array.from({ length: 129 }, (_, index) => ({ fileId: `file-${index}`, version: '1' }))
+    const editableFields = { ...fields, inputs }
+    const api = { execute: async request => { expect(request.data.inputs).to.deep.equal(inputs); return draft({ editableFields }) } }
+    const { useHallDrafts } = await import('../src/composables/juyiting/useHallDrafts.js')
+    const drafts = useHallDrafts({ agentApi: api, keyFactory: () => 'many-inputs' })
+    expect((await createSaved(drafts, editableFields)).editableFields.inputs).to.deep.equal(inputs)
+    drafts.dispose()
+  })
+
   it('quotes If-Match, keeps local input on a 412, and asks the user to reload', async () => {
     const calls = []
     const api = { execute: async request => {

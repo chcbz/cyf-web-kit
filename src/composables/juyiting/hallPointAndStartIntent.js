@@ -26,7 +26,7 @@ const receiptLong = (value, zero = false) => Number.isSafeInteger(value) && valu
 const sortedOperations = (list, known = operations) => Array.isArray(list) && list.length > 0 &&
   list.every(item => known.has(item)) && new Set(list).size === list.length ? [...list].sort() : null
 const inputs = list => {
-  if (!Array.isArray(list) || list.length > 32) return null
+  if (!Array.isArray(list)) return null
   const result = []
   const seen = new Set()
   for (const item of list) {

@@ -53,7 +53,7 @@ export const normalizeHallMessage = (item, identity) => {
     content: item.content || '',
     typedTaskId: sender === 'USER' && metadata.conversationScopeType === 'bounty' ? typedId(metadata.selectedTaskId) : '',
     typedSourceSelectors: sender === 'USER' && metadata.conversationScopeType === 'bounty' &&
-      Array.isArray(metadata.typedSourceSelectors) && metadata.typedSourceSelectors.length <= 32
+      Array.isArray(metadata.typedSourceSelectors)
       ? metadata.typedSourceSelectors.map(historicalSourceSelector).filter(Boolean) : [],
     parts: mergeMessageParts([], Array.isArray(item.parts) ? item.parts : []),
     timestamp: item.createTime || metadata.timestamp || Date.now(),

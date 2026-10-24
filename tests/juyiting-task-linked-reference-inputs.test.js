@@ -110,15 +110,18 @@ describe('task-linked reference input resolver', () => {
     })
   })
 
-  it('rejects duplicate exact references and the 33rd reference without truncation or detail reads', async () => {
+  it('rejects duplicate exact references but resolves every one of 33 distinct references', async () => {
     const duplicate = resolverHarness({ pages: [{ items: [taskLink(), taskLink({ relationId: 'relation-2' })], nextCursor: null, hasMore: false }] })
     expect((await duplicate.resolver.resolve({ taskId: 'task-1', inputRefsPolicy: 'TASK_LINKED_REFERENCE' })).reason).to.equal('DUPLICATE_REFERENCE')
     expect(duplicate.calls.filter(call => call.url.includes('/personal-workspace/files/'))).to.have.length(0)
 
     const manyLinks = Array.from({ length: 33 }, (_, index) => taskLink({ relationId: `relation-${index}`, fileId: `image-${index}`, version: '1' }))
-    const many = resolverHarness({ pages: [{ items: manyLinks, nextCursor: null, hasMore: false }] })
-    expect((await many.resolver.resolve({ taskId: 'task-1', inputRefsPolicy: 'TASK_LINKED_REFERENCE' })).reason).to.equal('TOO_MANY_REFERENCES')
-    expect(many.calls.filter(call => call.url.includes('/personal-workspace/files/'))).to.have.length(0)
+    const details = Object.fromEntries(manyLinks.map(link => [link.fileId, fileDetail(link.fileId, [version(link.fileId, 1)])]))
+    const many = resolverHarness({ pages: [{ items: manyLinks, nextCursor: null, hasMore: false }], details })
+    const result = await many.resolver.resolve({ taskId: 'task-1', inputRefsPolicy: 'TASK_LINKED_REFERENCE' })
+    expect(result.state).to.equal('READY')
+    expect(result.inputRefs).to.have.length(33)
+    expect(many.calls.filter(call => call.url.includes('/personal-workspace/files/'))).to.have.length(33)
   })
 
   for (const status of [401, 403, 404, 503]) it(`does not reinterpret a catalog ${status} as an empty directory`, async () => {

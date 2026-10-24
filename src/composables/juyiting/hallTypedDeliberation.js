@@ -37,7 +37,7 @@ export const discussionBody = ({ intent, taskId, assignmentRevision, content, pa
   expectedParentStateVersion = null, pendingQuestionId = null, expectedPendingQuestionStateVersion = null, sourceSelectors = [], materialScope = 'TASK_DEFAULT' }) => {
   if (!['DISCUSSION', 'CLARIFICATION_REPLY'].includes(intent) || !typedId(taskId) || !typedLong(assignmentRevision, { allowZero: true }) ||
     typeof content !== 'string' || content.length > 200000 || !scalar(content) ||
-    !['TASK_DEFAULT', 'EXPLICIT', 'NONE'].includes(materialScope) || !Array.isArray(sourceSelectors) || sourceSelectors.length > 32 ||
+    !['TASK_DEFAULT', 'EXPLICIT', 'NONE'].includes(materialScope) || !Array.isArray(sourceSelectors) ||
     (materialScope === 'NONE' && sourceSelectors.length)) return null
   const selectors = sourceSelectors.map(sourceSelector)
   if (selectors.some(value => !value) || new Set(selectors.map(value => JSON.stringify(value))).size !== selectors.length || (!content.trim() && !selectors.length)) return null
@@ -126,12 +126,12 @@ const validOutcome = value => {
       exactKeys(p.parent, ['requestId', 'stepId']) && typedId(p.parent.requestId) && typedId(p.parent.stepId)))
   if (value.kind !== 'ACTION_REQUEST' || ![3, 4, 5].includes(value.outcomeContractVersion) || c !== null || p !== null ||
     !exactKeys(a, ['actionRequestId', 'actionId', 'instruction', 'sourceRefIds', 'parameters']) || !typedId(a.actionRequestId) || !actionId(a.actionId) || !prose(a.instruction) ||
-    !Array.isArray(a.sourceRefIds) || a.sourceRefIds.length > 32 || !a.sourceRefIds.every(actionId) || new Set(a.sourceRefIds).size !== a.sourceRefIds.length) return false
+    !Array.isArray(a.sourceRefIds) || !a.sourceRefIds.every(actionId) || new Set(a.sourceRefIds).size !== a.sourceRefIds.length) return false
   return value.outcomeContractVersion === 3 ? a.parameters === null : a.parameters !== null && typeof a.parameters === 'object' && !Array.isArray(a.parameters)
 }
 const validInspection = (value, state) => {
   if (!exactKeys(value, ['authorizationId', 'manifestSha256', 'sourceRefIds', 'inputSummary']) || !typedId(value.authorizationId) || !digest(value.manifestSha256) ||
-    !Array.isArray(value.sourceRefIds) || !value.sourceRefIds.length || value.sourceRefIds.length > 32 || !value.sourceRefIds.every(actionId) || new Set(value.sourceRefIds).size !== value.sourceRefIds.length) return false
+    !Array.isArray(value.sourceRefIds) || !value.sourceRefIds.length || !value.sourceRefIds.every(actionId) || new Set(value.sourceRefIds).size !== value.sourceRefIds.length) return false
   if (state === 'PENDING') return value.inputSummary === null
   const summary = value.inputSummary
   return exactKeys(summary, ['inputSha256', 'sources']) && digest(summary.inputSha256) && Array.isArray(summary.sources) && summary.sources.length === value.sourceRefIds.length &&

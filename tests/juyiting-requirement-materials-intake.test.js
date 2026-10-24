@@ -50,7 +50,7 @@ describe('neutral materials v2 atomic creation and immutable dual-version recove
   for (const [name, list] of [
     ['duplicates', [attachments()[0], attachments()[0]]], ['latest', [{ fileId: 'a', version: 'latest' }]],
     ['overflow', [{ fileId: 'a', version: '2147483648' }]], ['invalid Unicode', [{ fileId: '\uD800', version: '1' }]],
-    ['capacity', Array.from({ length: 33 }, (_, n) => ({ fileId: `f${n}`, version: '1' }))]
+
   ]) it(`rejects ${name} without dropping selected material`, () => { expect(requirementMaterialInputs(list)).to.equal(null) })
   it('rejects image-only contract and execution/funding fields in v2', () => {
     for (const key of ['inputRefs', 'grossBountyAmountMicro', 'targetAgentId', 'costAuthorizationRef'])
@@ -187,4 +187,9 @@ describe('new product entry wiring, no quick legacy task/link writes', () => {
     expect(h.readOriginal().record.body.attachments).to.deep.equal(attachments())
     h.dispose()
   })
+})
+
+it('preserves 129 distinct selections without a count gate', () => {
+  const values = Array.from({ length: 129 }, (_, n) => ({ fileId: `f${n}`, version: '1' }))
+  expect(requirementMaterialInputs(values)).to.have.length(129)
 })

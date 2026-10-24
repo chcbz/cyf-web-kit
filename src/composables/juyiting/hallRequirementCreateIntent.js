@@ -13,7 +13,7 @@ const exactKeys = (value, keys) => object(value) && Object.keys(value).length ==
 export const requirementCreateScope = exactPointAndStartScope
 
 export const requirementReferenceInputs = list => {
-  if (!Array.isArray(list) || list.length > 32) return null
+  if (!Array.isArray(list)) return null
   const refs = []
   const seen = new Set()
   for (const item of list) {
@@ -68,7 +68,7 @@ const wellFormed = value => typeof value === 'string' && [...value].every(char =
 
 /** Neutral product selection. MIME, purpose and execution parameters are server/adapter concerns. */
 export const requirementMaterialInputs = list => {
-  if (!Array.isArray(list) || list.length > 32) return null
+  if (!Array.isArray(list)) return null
   const attachments = [], seen = new Set()
   for (const item of list) {
     if (!exactKeys(item, ['fileId', 'version']) || !exactPointAndStartId(item.fileId) || !wellFormed(item.fileId) ||

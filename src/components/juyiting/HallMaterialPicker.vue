@@ -225,7 +225,6 @@ const runPickerUpload = async (operation, input = null) => {
 const uploadQuickMaterials = event => {
   const input = event.target, files = [...(input.files || [])]
   if (!files.length) return
-  if (files.length + draftMaterials.value.length > 32) { uploadMessage.value = '最多选择32份资料，请减少本次文件数量。'; input.value = ''; return }
   return runPickerUpload(async current => {
     for (const file of files) {
       if (!current()) break

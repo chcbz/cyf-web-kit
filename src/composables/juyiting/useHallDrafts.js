@@ -6,7 +6,6 @@ import { validPersonalWorkspaceExecutionCapabilities } from '../usePersonalWorks
 
 const MAX_ID_LENGTH = 100
 const MAX_TEXT_LENGTH = 16000
-const MAX_INPUTS = 100
 const MAX_CURSOR_LENGTH = 300
 const RECOVERY_PREFIX = 'cyf.hall.submission-recovery.v1'
 const BROWSER_KEY = `${RECOVERY_PREFIX}.browser`
@@ -34,7 +33,7 @@ const abortError = message => new DOMException(message, 'AbortError')
 const randomKey = () => globalThis.crypto?.randomUUID?.() || `hall-draft-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
 const sameScope = value => typeof value === 'string' && value.trim() && value.length <= 256 ? value.trim() : ''
-const validInputs = inputs => Array.isArray(inputs) && inputs.length <= MAX_INPUTS &&
+const validInputs = inputs => Array.isArray(inputs) &&
   inputs.every(input => ID(input?.fileId) && VERSION(input?.version)) &&
   new Set(inputs.map(input => `${input.fileId}\u0000${input.version}`)).size === inputs.length
 const validEditable = fields => fields && typeof fields === 'object' && !Array.isArray(fields) &&

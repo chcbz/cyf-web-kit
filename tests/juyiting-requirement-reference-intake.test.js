@@ -53,7 +53,7 @@ describe('exact requirement/reference create contract', () => {
     ['duplicate', [image(), image()]], ['wrong purpose', [{ ...image(), purpose: 'INPUT' }]],
     ['fractional version', [image(1.2)]], ['out-of-INT version', [image(2147483648)]],
     ['fake owner', [{ ...image(), owner: 'other' }]], ['latest marker', [image('latest')]],
-    ['too many refs', Array.from({ length: 33 }, (_, n) => ({ ...image(), fileId: `pwf_${n}` }))]
+
   ]) it(`rejects ${name} rather than silently filtering material`, () => { expect(requirementReferenceInputs(refs)).to.equal(null) })
   for (const key of ['owner', 'tenantId', 'grossBountyAmountMicro', 'grantId', 'targetAgentId', 'costAuthorizationRef'])
     it(`cannot reinterpret ${key} as ordinary task creation authority`, () => { expect(requirementCreateBody({ ...payload(), [key]: 'fake' })).to.equal(null) })
@@ -321,4 +321,9 @@ describe('mounted Bounty read/manage surface and original recovery', () => {
     expect(wrapper.emitted('resume-requirement-create')).to.have.length(1)
     expect(wrapper.emitted('create-task')).to.equal(undefined)
   })
+})
+
+it('preserves 129 distinct selections without a count gate', () => {
+  const values = Array.from({ length: 129 }, (_, n) => ({ ...image(), fileId: `pwf_${n}` }))
+  expect(requirementReferenceInputs(values)).to.have.length(129)
 })
