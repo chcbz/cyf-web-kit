@@ -10,7 +10,7 @@ Object.defineProperty(global, 'window', { value: dom.window, writable: true, con
 Object.defineProperty(global, 'document', { value: dom.window.document, writable: true, configurable: true })
 Object.defineProperty(global, 'navigator', { value: dom.window.navigator, writable: true, configurable: true })
 Object.defineProperty(global, 'DOMParser', { value: dom.window.DOMParser, writable: true, configurable: true })
-for (const name of ['Element', 'HTMLElement', 'SVGElement', 'Node', 'XMLSerializer', 'localStorage', 'sessionStorage', 'location', 'history']) {
+for (const name of ['Document', 'ShadowRoot', 'Element', 'HTMLElement', 'SVGElement', 'Node', 'XMLSerializer', 'localStorage', 'sessionStorage', 'location', 'history']) {
   Object.defineProperty(global, name, { value: dom.window[name], writable: true, configurable: true })
 }
 

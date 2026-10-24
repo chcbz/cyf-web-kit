@@ -85,6 +85,7 @@ describe('account security session boundary', () => {
     })
     const caller = new AbortController()
     const aborted = store.revokeAllSessions({ signal: caller.signal })
+    await waitFor(() => fetchCalls === 1)
     caller.abort(new DOMException('caller stopped', 'AbortError'))
     let abortError
     try { await aborted } catch (error) { abortError = error }

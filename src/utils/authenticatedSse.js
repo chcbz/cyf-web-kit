@@ -4,7 +4,7 @@ import { initiateReauthentication } from './reauthentication.js'
 import { registerIdentityCleanup } from './identityLifecycle.js'
 import { combineAbortSignals, throwIfAborted } from './abortSignals.js'
 
-function responseWithCleanup (response, signal, cleanup) {
+function responseWithCleanup (response, signal, cleanup, assertCurrentIdentity) {
   if (!response.body) {
     cleanup()
     return response
@@ -45,9 +45,11 @@ function responseWithCleanup (response, signal, cleanup) {
           controller.close()
           return
         }
+        await assertCurrentIdentity()
+        throwIfAborted(signal)
         controller.enqueue(value)
       } catch (error) {
-        finish()
+        await cancelReader(error)
         controller.error(error)
       }
     },
@@ -86,6 +88,14 @@ async function fetchAuthenticatedSse ({
     combined.cleanup()
   }
 
+  const assertCurrentIdentity = async () => {
+    throwIfAborted(combined.signal)
+    if (authorizationGeneration !== apiStore.authorizationGeneration) {
+      throw new DOMException('Identity changed', 'AbortError')
+    }
+    await apiStore.assertTokenCurrent?.(token)
+    throwIfAborted(combined.signal)
+  }
   try {
     throwIfAborted(combined.signal)
     const suppliedId = new Headers(headers).get('X-Request-Id')
@@ -94,9 +104,11 @@ async function fetchAuthenticatedSse ({
     const requestHeaders = new Headers(headers); requestHeaders.set('Authorization', `Bearer ${token}`); requestHeaders.set('X-Request-Id', requestId)
     const response = await fetchImpl(url, {
       method: 'GET',
+      cache: 'no-store',
       headers: Object.fromEntries(requestHeaders.entries()),
       signal: combined.signal
     })
+    await assertCurrentIdentity()
     if (response.status === 401) {
       throwIfAborted(combined.signal)
       if (authorizationGeneration === apiStore.authorizationGeneration) {
@@ -116,7 +128,7 @@ async function fetchAuthenticatedSse ({
         !/^text\/event-stream(?:;|$)/i.test(response.headers.get('Content-Type') || ''))) {
       await response.body?.cancel(); throw protocolError('PROTOCOL_INVALID_RESPONSE')
     }
-    return responseWithCleanup(response, combined.signal, cleanup)
+    return responseWithCleanup(response, combined.signal, cleanup, assertCurrentIdentity)
   } catch (error) {
     cleanup()
     throw error

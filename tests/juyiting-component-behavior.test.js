@@ -2740,6 +2740,22 @@ describe('O04 shared panel session contract', () => {
 })
 
 const loadActualJuyiHall = (mocks) => {
+  const effectiveMocks = {
+    useHallSelectedOutputReview,
+    selectionKey,
+    useHallDeliveryReview,
+    useHallAgentProfileCapabilities,
+    useExternalServicePolicy,
+    ...assigneeCandidates,
+    useHallSkillCapabilities,
+    currentBountyAssignmentRevision,
+    WorkspaceWriteRecovery: { template: '<section />', props: ['pending'], emits: ['retry'] },
+    // Match the real legacy namespace: cached local IDs are not hydrated identity.
+    browserBusinessNamespace: (apiStore, globalStore) =>
+      createHydratedIdentityScope(globalStore?.user, apiStore?.oauthClientId),
+    useHallHomeMode: () => ({ homeMode: Vue.ref('map'), isOverviewHome: Vue.ref(false), setHomeMode: () => {} }),
+    ...mocks
+  }
   const relativePath = '../src/components/world/JuyiHall.vue'
   const filename = new URL(relativePath, import.meta.url).pathname
   const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8')
@@ -2753,9 +2769,8 @@ const loadActualJuyiHall = (mocks) => {
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, imports) => `var { ${imports} } = mocks`)
     .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = mocks.${name}`)
     .replace(/import\.meta\.env/g, 'mocks.env')
-    .replace(/^import\s+WorkspaceWriteRecovery\s+from\s+['"][^'"]+['"];?\s*$/gm, "var WorkspaceWriteRecovery = { template: '<section />', props: ['pending'], emits: ['retry'] }")
-  .replace('export default', 'return')
-  const component = new Function('Vue', 'mocks', body)(Vue, { useHallSelectedOutputReview, selectionKey, useHallDeliveryReview, useHallAgentProfileCapabilities, useExternalServicePolicy, ...assigneeCandidates, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
+    .replace('export default', 'return')
+  const component = new Function('Vue', 'mocks', body)(Vue, effectiveMocks)
   const renderBody = template.code
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace('export function render', 'return function render')
@@ -2846,7 +2861,7 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
 }
 
 describe('JuyiHall restored-identity initialization', () => {
-  it('hydrates a retained token despite a cached local ID and restores the exact tenant-zero scope before Hall data loads', async () => {
+  it('hydrates a retained token despite a cached local ID and restores the account scope without a tenant before Hall data loads', async () => {
     const mode = Vue.ref('portrait-command')
     const order = []
     const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
@@ -2861,7 +2876,7 @@ describe('JuyiHall restored-identity initialization', () => {
       token: async () => 'retained-bearer-token',
       getUserInfo: async () => {
         order.push('profile')
-        globalStore.user = { id: 5, tenantId: '0', displayName: '已验证账号' }
+        globalStore.user = { id: 5, displayName: '已验证账号' }
       }
     })
     mocks.useGlobalStore = () => globalStore
@@ -2880,7 +2895,7 @@ describe('JuyiHall restored-identity initialization', () => {
       const state = wrapper.vm.$.setupState
       expect(order[0]).to.equal('profile')
       expect(order).to.include('agents')
-      expect(state.hallIdentityScope).to.equal('0\u0000client-a\u00005')
+      expect(state.hallIdentityScope).to.equal('client-a\u00005')
       expect(state.accountDisplayName).to.equal('已验证账号')
       expect(state.accountDisplayName).not.to.equal('5')
     } finally {

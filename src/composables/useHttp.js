@@ -175,13 +175,29 @@ export function useHttp (options = {}) {
         body: config.body,
         signal: requestSignal.signal
       }
+      // A browser HTTP cache must not serve the previous account/permission's
+      // representation at the same business URL after identity changes.
+      if (needAuth) fetchConfig.cache = 'no-store'
 
       // 对于 GET 请求，不要包含 body
       if (config.method === 'GET') {
         delete fetchConfig.body
       }
 
+      const assertCurrentIdentity = async () => {
+        throwIfAborted(requestSignal.signal)
+        if (!needAuth) return
+        if (authorizationGeneration !== requestAuthStore.authorizationGeneration) {
+          throw new DOMException('Identity changed', 'AbortError')
+        }
+        await requestAuthStore.assertTokenCurrent?.(token)
+        throwIfAborted(requestSignal.signal)
+        if (authorizationGeneration !== requestAuthStore.authorizationGeneration) {
+          throw new DOMException('Identity changed', 'AbortError')
+        }
+      }
       const httpResponse = await fetch(requestUrl, fetchConfig)
+      await assertCurrentIdentity()
 
       // 检查 HTTP 错误状态（fetch 不会自动抛出非 2xx 的错误）
       if (!httpResponse.ok && httpResponse.status !== 304) {
@@ -220,6 +236,7 @@ export function useHttp (options = {}) {
         try {
           while (true) {
             const { done, value } = await reader.read()
+            await assertCurrentIdentity()
             if (done) {
               // 处理缓冲区中剩余的数据
               const tail = decoder.decode()
@@ -308,6 +325,7 @@ export function useHttp (options = {}) {
         })
         result = decoded.value
       }
+      await assertCurrentIdentity()
       throwIfAborted(requestSignal.signal)
       const resultObj = responseMetadata
       response.value = httpResponse

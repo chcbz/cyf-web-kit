@@ -22,6 +22,8 @@ import { useGlobalStore } from '@/stores/global'
 import { guestDemoTemplates } from '@/constants/publicBetaDemo'
 import JuyiHall from './JuyiHall.vue'
 import HallOnboarding from '@/components/juyiting/HallOnboarding.vue'
+import { useApiStore } from '@/stores/api'
+import { browserBusinessNamespace } from '@/utils/businessNamespace'
 import {
   consumeGuestDemoTemplateQuery,
   createHallOnboarding,
@@ -32,12 +34,17 @@ const route = useRoute()
 const router = useRouter()
 const globalStore = useGlobalStore()
 const onboardingState = reactive({ visible: false, status: null, snoozed: false })
+const apiStore = useApiStore()
 const templateId = ref(null)
 const juyiHallContainer = ref(null)
 const onboardingReturnFocusTarget = ref(null)
 let onboarding = null
 
-const currentSubject = computed(() => hallOnboardingSubject(globalStore))
+const currentSubject = computed(() => {
+  const subject = hallOnboardingSubject(globalStore)
+  const namespace = browserBusinessNamespace(apiStore, globalStore)
+  return namespace && subject != null ? namespace : null
+})
 
 const browserStorage = name => {
   try {

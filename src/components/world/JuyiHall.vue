@@ -823,6 +823,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { useGlobalStore } from '@/stores/global'
 import { useApiStore } from '@/stores/api'
+import { browserBusinessNamespace } from '@/utils/businessNamespace'
 import { agentApi, chatApi } from '@/composables/useHttp'
 import { assignedTaskTarget } from '@/composables/juyiting/hallAssigneeCandidates.js'
 import { useExternalServicePolicy } from '@/composables/juyiting/useExternalServicePolicy.js'
@@ -893,7 +894,7 @@ import { log } from '@/utils/logger'
 import { isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
 import { isEconomyPreviewCapability, loadEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
 import { resolveAccountDisplayName } from '@/utils/displayName'
-import { createHydratedIdentityScope, hasHydratedIdentity } from '@/utils/identityScope'
+import { hasHydratedIdentity } from '@/utils/identityScope'
 import { juyitingGame } from '@/game/index.js'
 
 const emit = defineEmits(['open-onboarding'])
@@ -907,8 +908,7 @@ const accountDisplayName = computed(() => {
   const user = globalStore.user || {}
   return resolveAccountDisplayName(user, String(user.displayName || '')) || '个人中心'
 })
-const hallIdentityScope = computed(() => createHydratedIdentityScope(globalStore.user, apiStore.oauthClientId))
-
+const hallIdentityScope = computed(() => browserBusinessNamespace(apiStore, globalStore))
 // Existing unresolved draft writes are protected by the shared recovery store; new requirements never use TASK_CREATE + per-file links.
 const hallDraftRecovery = useHallDrafts({
   identityScope: hallIdentityScope,

@@ -6,6 +6,7 @@ import * as Vue from 'vue'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { mount, flushPromises } from '@vue/test-utils'
 import { deliveryTypeText } from '../src/utils/executionFormats.js'
+import { browserBusinessNamespace } from '../src/utils/businessNamespace.js'
 
 for (const name of ['Element', 'HTMLElement', 'SVGElement', 'Node']) { if (!globalThis[name] && globalThis.window?.[name]) Object.defineProperty(globalThis, name, { value: globalThis.window[name], configurable: true }) }
 
@@ -20,6 +21,7 @@ script = script
   .replace(/^import\s+\{\s*savePersonalWorkspaceBlob,\s*usePersonalWorkspace\s*\}\s+from\s+['"]@\/composables\/usePersonalWorkspace['"];?\s*$/gm, 'var { savePersonalWorkspaceBlob, usePersonalWorkspace } = deps')
   .replace(/^import\s+\{\s*usePersonalWorkspaceExecution\s*\}\s+from\s+['"]@\/composables\/usePersonalWorkspaceExecution['"];?\s*$/gm, 'var { usePersonalWorkspaceExecution } = deps')
   .replace(/^import\s+\{\s*deliveryTypeText\s*\}\s+from\s+['"]@\/utils\/executionFormats['"];?\s*$/gm, 'var { deliveryTypeText } = deps')
+  .replace(/^import\s+\{\s*browserBusinessNamespace\s*\}\s+from\s+['"]@\/utils\/businessNamespace['"];?\s*$/gm, 'var { browserBusinessNamespace } = deps')
   .replace(/^import\s+\{\s*workspaceByteText,\s*validMaterialVersion\s*\}\s+from\s+['"]@\/utils\/personalWorkspaceProtocol['"];?\s*$/gm, 'var { workspaceByteText, validMaterialVersion } = deps')
   .replace(/^import\s+WorkspaceWriteRecovery\s+from\s+['"][^'"]+['"];?\s*$/gm, "var WorkspaceWriteRecovery = { template: '<section />', props: ['pending'], emits: ['retry'] }")
   .replace(/^import\s+PdfDocumentPreview\s+from\s+['"][^'"]+['"];?\s*$/gm, "var PdfDocumentPreview = { name: 'PdfDocumentPreview', template: '<section />', props: ['blob'] }")
@@ -101,11 +103,12 @@ describe('personal workspace execution receipt presentation', () => {
     const workspace = workspaceMock(); const execution = executionMock(); let executionOptions
     const component = new Function('Vue', 'deps', script)(Vue, { workspaceByteText, validMaterialVersion,
       deliveryTypeText,
+      browserBusinessNamespace,
       useApiStore: () => ({ authorizationGeneration: 1, oauthClientId: 'web-client' }), useGlobalStore: () => ({ user: { id: 'owner-a', tenantId: 'tenant-a' }, getUserId: 'owner-a', getOpenid: '' }),
       usePersonalWorkspace: () => workspace, usePersonalWorkspaceExecution: options => { executionOptions = options; return execution }, savePersonalWorkspaceBlob: () => {}
     })
     const wrapper = mount(component)
-    assert.equal(executionOptions.identityScope.value, 'tenant-a\u0000web-client\u0000owner-a')
+    assert.equal(executionOptions.identityScope.value, 'web-client\u0000owner-a')
     execution.receipt.value = null; execution.historyState.value = 'loading'
     await Vue.nextTick()
     assert.match(wrapper.find('.box-footnote').text(), /最近执行：查询中/)
@@ -159,6 +162,7 @@ describe('personal workspace execution receipt presentation', () => {
     execution.loadAgents = execution.loadCapabilities = execution.recover = async () => { executionLoads += 1 }
     const component = new Function('Vue', 'deps', script)(Vue, { workspaceByteText, validMaterialVersion,
       deliveryTypeText,
+      browserBusinessNamespace,
       useApiStore: () => ({ authorizationGeneration: 1, oauthClientId: 'web-client' }),
       useGlobalStore: () => ({ user: { id: 'owner-a' } }),
       usePersonalWorkspace: () => workspace, usePersonalWorkspaceExecution: () => execution, savePersonalWorkspaceBlob: () => {}
@@ -219,7 +223,7 @@ describe('personal workspace execution receipt presentation', () => {
     workspace.loadMore = async () => { calls.push('more'); workspace.items.value.push({ fileId: 'out-1', displayName: '成果.pdf', originKind: 'AGENT_DELIVERY', latestVersion: '1', state: 'ACTIVE' }); workspace.nextCursor.value = null }
     workspace.usage = async () => ({ fileId: 'a', impactRevision: '1', counts: { taskReferences: '1', conversationReferences: '0', activeInputGrants: '0' } })
     workspace.trash = async value => { calls.push(value); return { state: 'TRASHED' } }
-    const component = new Function('Vue', 'deps', script)(Vue, { workspaceByteText, validMaterialVersion, deliveryTypeText, useApiStore: () => ({ authorizationGeneration: 1, oauthClientId: 'web-client' }), useGlobalStore: () => ({ user: { id: 'owner-a' } }), usePersonalWorkspace: () => workspace, usePersonalWorkspaceExecution: executionMock, savePersonalWorkspaceBlob: () => {} })
+    const component = new Function('Vue', 'deps', script)(Vue, { workspaceByteText, validMaterialVersion, deliveryTypeText, browserBusinessNamespace, useApiStore: () => ({ authorizationGeneration: 1, oauthClientId: 'web-client' }), useGlobalStore: () => ({ user: { id: 'owner-a' } }), usePersonalWorkspace: () => workspace, usePersonalWorkspaceExecution: executionMock, savePersonalWorkspaceBlob: () => {} })
     const wrapper = mount(component, { props: { embedded: true } })
     const click = async text => { await wrapper.findAll('button').find(b => b.text() === text).trigger('click'); await Vue.nextTick(); await Vue.nextTick() }
     try {

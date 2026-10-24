@@ -2,6 +2,7 @@ import { expect } from 'chai'
 import { createPinia, setActivePinia } from 'pinia'
 import { useHttp } from '../../src/composables/useHttp.js'
 import { useApiStore } from '../../src/stores/api.js'
+import { useUtilStore } from '../../src/stores/util.js'
 
 Object.defineProperty(global, 'location', { value: window.location, writable: true, configurable: true })
 Object.defineProperty(global, 'localStorage', { value: window.localStorage, writable: true, configurable: true })
@@ -36,6 +37,23 @@ describe('useHttp authentication boundary', () => {
 
     expect(failure?.message).to.include('Authentication failed')
     expect(fetchCount).to.equal(0)
+  })
+
+  it('drops a late response when another window invalidates the persisted identity', async () => {
+    let allowed = true
+    const store = { authorizationGeneration: 0, token: async () => 'token',
+      assertTokenCurrent: async () => { if (!allowed) throw new DOMException('Identity changed', 'AbortError') } }
+    let finishFetch
+    global.fetch = () => new Promise(resolve => { finishFetch = resolve })
+    const success = []
+    const pending = useHttp().get('/protected/late', {}, { authStore: store, onSuccess: () => success.push('published') })
+    await new Promise(resolve => window.setTimeout(resolve, 0))
+    allowed = false
+    finishFetch(new Response(JSON.stringify({ data: 'other-account' }), { status: 200 }))
+    let failure
+    try { await pending } catch (error) { failure = error }
+    expect(failure?.name).to.equal('AbortError')
+    expect(success).to.deep.equal([])
   })
 
   it('starts one reauthentication for concurrent 401s and never replays either request', async () => {
@@ -73,6 +91,7 @@ describe('useHttp authentication boundary', () => {
     const store = useApiStore()
     store.authorizationGeneration = 7
     store.token = async () => 'expired-token'
+    useUtilStore().setLocalStorage('api_token', 'expired-token', Date.now() + 60_000)
     store.cleanToken = () => { cleanCount += 1 }
     store.beginAuthorization = async () => { authorizationCount += 1 }
     global.fetch = async (_url, options) => {

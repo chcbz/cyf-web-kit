@@ -49,6 +49,7 @@ describe('OAuth callback flow', () => {
         scrubQuery: async () => calls.push('scrub'),
         transactionConfig,
         consumeTransaction: () => validTransaction,
+        onFailure: async () => calls.push('failure'),
         exchangeCodeForToken: async () => calls.push('exchange'),
         loadUserInfo: async () => calls.push('profile'),
         replace: async path => calls.push(`replace:${path}`)
@@ -61,7 +62,7 @@ describe('OAuth callback flow', () => {
     expect(failure.code).to.equal('authorization_denied')
     expect(oauthCallbackMessage(failure)).to.equal('授权未完成，请重新尝试。')
     expect(oauthCallbackMessage(failure)).not.to.include('token-secret')
-    expect(calls).to.deep.equal(['scrub'])
+    expect(calls).to.deep.equal(['scrub', 'failure'])
   })
 
   it('rejects duplicate or malformed callback parameters after one transaction consume and before exchange', async () => {
@@ -103,6 +104,7 @@ describe('OAuth callback flow', () => {
 
   it('does not exchange when the consumed transaction rejects current runtime configuration', async () => {
     let exchangeCount = 0
+    let clearedView = false
     let failure
     try {
       await processOAuthCallback({
@@ -113,6 +115,7 @@ describe('OAuth callback flow', () => {
           throw new OAuthTransactionError('configuration_mismatch', 'configuration mismatch')
         },
         exchangeCodeForToken: async () => { exchangeCount += 1 },
+        onFailure: async transaction => { expect(transaction).to.equal(undefined); clearedView = true },
         loadUserInfo: async () => {},
         replace: async () => {}
       })
@@ -121,6 +124,7 @@ describe('OAuth callback flow', () => {
     }
 
     expect(failure?.code).to.equal('configuration_mismatch')
+    expect(clearedView).to.equal(true)
     expect(exchangeCount).to.equal(0)
   })
 

@@ -208,6 +208,7 @@ import { savePersonalWorkspaceBlob, usePersonalWorkspace } from '@/composables/u
 import { usePersonalWorkspaceExecution } from '@/composables/usePersonalWorkspaceExecution'
 import { workspaceByteText, validMaterialVersion } from '@/utils/personalWorkspaceProtocol'
 import { deliveryTypeText } from '@/utils/executionFormats'
+import { browserBusinessNamespace } from '@/utils/businessNamespace'
 
 const { embedded, detailAllowed, compact } = defineProps({
   compact: { type: Boolean, default: false },
@@ -227,12 +228,7 @@ const useForDraft = () => {
 const apiStore = useApiStore()
 const globalStore = useGlobalStore()
 const identityEpoch = computed(() => apiStore.authorizationGeneration)
-const executionIdentityScope = computed(() => {
-  const owner = String(globalStore.user?.id || globalStore.user?.openid || globalStore.getUserId || globalStore.getOpenid || '').trim()
-  const client = String(apiStore.oauthClientId || '').trim()
-  const tenant = String(globalStore.user?.tenantId || globalStore.user?.tenantCode || globalStore.user?.tenant || '').trim()
-  return owner && client ? [tenant, client, owner].filter(Boolean).join('\u0000') : ''
-})
+const executionIdentityScope = computed(() => browserBusinessNamespace(apiStore, globalStore))
 const workspace = usePersonalWorkspace({ identityEpoch })
 const execution = usePersonalWorkspaceExecution({ identityEpoch, identityScope: executionIdentityScope })
 const query = ref('')

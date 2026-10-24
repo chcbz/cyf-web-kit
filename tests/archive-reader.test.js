@@ -290,6 +290,24 @@ const loadArchiveReaderSfc = (archiveModule) => {
 }
 
 const loadActualHallForIntegration = (mocks, id) => {
+  const effectiveMocks = {
+    useHallSelectedOutputReview,
+    selectionKey,
+    useHallDeliveryReview,
+    useHallAgentProfileCapabilities,
+    useExternalServicePolicy,
+    assignedTaskTarget,
+    useHallSkillCapabilities,
+    currentBountyAssignmentRevision,
+    browserBusinessNamespace: (apiStore, globalStore) => {
+      const owner = String(globalStore?.user?.id || globalStore?.user?.openid || globalStore?.getUserId || globalStore?.getOpenid || '').trim()
+      const tenant = String(globalStore?.user?.tenantId || globalStore?.user?.tenantCode || globalStore?.user?.tenant || '').trim()
+      const client = String(apiStore?.oauthClientId || '').trim()
+      return owner && client ? [tenant, client, owner].filter(Boolean).join('\u0000') : ''
+    },
+    useHallHomeMode: () => ({ homeMode: Vue.ref('map'), isOverviewHome: Vue.ref(false), setHomeMode: () => {} }),
+    ...mocks
+  }
   const relativePath = '../src/components/world/JuyiHall.vue'
   const filename = new URL(relativePath, import.meta.url).pathname
   const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8')
@@ -301,7 +319,7 @@ const loadActualHallForIntegration = (mocks, id) => {
     .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = mocks.${name}`)
     .replace(/import\.meta\.env/g, 'mocks.env')
     .replace('export default', 'return')
-  return new Function('Vue', 'mocks', body)(Vue, { useHallSelectedOutputReview, selectionKey, useHallDeliveryReview, useHallAgentProfileCapabilities, useExternalServicePolicy, assignedTaskTarget, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
+  return new Function('Vue', 'mocks', body)(Vue, effectiveMocks)
 }
 
 const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, workspaceState = null, counters }) => {
@@ -2771,8 +2789,8 @@ describe('archive reader contract behavior', () => {
         mode.value = 'portrait-command'; await Vue.nextTick()
         expect(wrapper.find('.panel-orientation').exists()).to.equal(false)
         expect(wrapper.find('.floating-panel').element).to.equal(floating)
-        expect(wrapper.findComponent(LibraryPanel).vm).to.equal(library.vm)
-        expect(wrapper.findComponent(ArchiveReader).vm).to.equal(reader.vm)
+        expect(wrapper.findComponent(LibraryPanel).vm.$).to.equal(library.vm.$)
+        expect(wrapper.findComponent(ArchiveReader).vm.$).to.equal(reader.vm.$)
         expect(readerState.currentLocation.value).to.equal(location)
         expect(readerState.progress.value).to.equal(progress)
         expect(wrapper.find('textarea').element.value).to.equal('五轮旋转仍须保留的批注')
@@ -2794,7 +2812,7 @@ describe('archive reader contract behavior', () => {
       await wrapper.find('.panel-return').trigger('click')
       await settle()
       expect(hall.panelFrames).to.deep.equal(['library'])
-      expect(wrapper.findComponent(ArchiveReader).vm).to.equal(reader.vm)
+      expect(wrapper.findComponent(ArchiveReader).vm.$).to.equal(reader.vm.$)
       expect(readerState.currentLocation.value).to.equal(location)
       expect(readerState.progress.value).to.equal(progress)
       expect(wrapper.find('textarea').element.value).to.equal('五轮旋转仍须保留的批注')
@@ -2805,7 +2823,7 @@ describe('archive reader contract behavior', () => {
       await Vue.nextTick()
       expect(hall.panelDepth).to.equal(3)
       expect(hall.openPanel('treasure')).to.equal(false)
-      expect(wrapper.findComponent(ArchiveReader).vm).to.equal(reader.vm)
+      expect(wrapper.findComponent(ArchiveReader).vm.$).to.equal(reader.vm.$)
       expect(wrapper.findComponent(LibraryPanel).attributes('inert')).to.equal('')
       expect(hall.returnPanel()).to.equal(true)
       await Vue.nextTick()

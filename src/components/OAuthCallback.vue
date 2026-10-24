@@ -33,6 +33,7 @@ onMounted(async () => {
       scrubQuery: () => router.replace({ path: route.path, query: {}, hash: '' }),
       transactionConfig: apiStore.oauthRuntimeConfig(),
       exchangeCodeForToken: (code, transaction) => apiStore.exchangeCodeForToken(code, transaction),
+      onFailure: () => apiStore.clearIdentity(),
       loadUserInfo: () => apiStore.getUserInfo(),
       replace: returnTo => completeOAuthNavigation(query.state, returnTo, {
         replace: path => router.replace(path)

@@ -1,6 +1,7 @@
 import { expect } from 'chai'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { useUtilStore } from '../src/stores/util.js'
 import { readFileSync } from 'node:fs'
 import { createApi } from '../src/composables/useHttp.js'
 import { stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
@@ -14,9 +15,10 @@ describe('SM-C1 mounted consumers through actual useHttp + public envelope', () 
   let originalFetch; let oldLocks; let wrappers; let scopes; let requests; let mock; let useApiStore; let pinia
   before(async () => { ({ useApiStore } = await import('../src/stores/api.js')) })
   beforeEach(() => {
-    pinia = createPinia(); setActivePinia(pinia); useApiStore(pinia).token = async () => 'isolated-test-token'
+    pinia = createPinia(); setActivePinia(pinia); useApiStore(pinia)
     wrappers = []; scopes = []; requests = []; mock = apiFixture()
     window.localStorage.clear()
+    useUtilStore(pinia).setLocalStorage('api_token', 'isolated-test-token', Date.now() + 60_000)
     oldLocks = Object.getOwnPropertyDescriptor(navigator, 'locks'); Object.defineProperty(navigator, 'locks', { configurable: true, value: locks })
     originalFetch = globalThis.fetch
     globalThis.fetch = async (url, options) => {

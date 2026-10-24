@@ -1,4 +1,4 @@
-export const OAUTH_TRANSACTION_STORAGE_KEY = 'cyf.oauth.pending.v1'
+export const OAUTH_TRANSACTION_STORAGE_KEY = 'cyf.oauth.pending.v3'
 export const OAUTH_TRANSACTION_TTL_MS = 10 * 60 * 1000
 export const OAUTH_RETURN_PATH_MAX_UTF8_BYTES = 2048
 export const OAUTH_RETURN_PATH_MAX_DECODE_PASSES = 32
@@ -175,7 +175,7 @@ export async function createOAuthTransaction ({
   }
 
   const transaction = {
-    version: 1,
+    version: 3,
     state: randomBase64Url(STATE_BYTES, cryptoImpl),
     codeVerifier: randomBase64Url(VERIFIER_BYTES, cryptoImpl),
     returnTo: safeAppRelativePath(returnTo),
@@ -220,7 +220,7 @@ export function consumeOAuthTransaction (receivedState, {
   }
 
   if (!hasExactTransactionFields(transaction) ||
-      transaction.version !== 1 ||
+      transaction.version !== 3 ||
       !isExpectedRandomValue(transaction.state, STATE_BYTES) ||
       !isExpectedRandomValue(transaction.codeVerifier, VERIFIER_BYTES) ||
       !isEpochMilliseconds(transaction.createdAt) ||

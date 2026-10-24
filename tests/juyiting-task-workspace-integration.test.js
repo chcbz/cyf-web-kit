@@ -1,3 +1,4 @@
+import { browserBusinessNamespace } from '../src/utils/businessNamespace.js'
 import { useHallSelectedOutputReview } from '../src/composables/juyiting/useHallSelectedOutputReview.js'
 import { selectionKey } from '../src/composables/juyiting/hallSelectedOutputs.js'
 import { assignedTaskTarget } from '../src/composables/juyiting/hallAssigneeCandidates.js'
@@ -59,6 +60,19 @@ const loadSfc = (relativePath, child = null, board = null) => {
 }
 
 const loadActualHallForIntegration = (mocks, id) => {
+  const effectiveMocks = {
+    useHallSelectedOutputReview,
+    selectionKey,
+    useHallDeliveryReview,
+    useHallAgentProfileCapabilities,
+    useExternalServicePolicy,
+    assignedTaskTarget,
+    useHallSkillCapabilities,
+    currentBountyAssignmentRevision,
+    browserBusinessNamespace,
+    useHallHomeMode: () => ({ homeMode: Vue.ref('map'), isOverviewHome: Vue.ref(false), setHomeMode: () => {} }),
+    ...mocks
+  }
   const relativePath = '../src/components/world/JuyiHall.vue'
   const filename = new URL(relativePath, import.meta.url).pathname
   const { descriptor } = parse(readFileSync(new URL(relativePath, import.meta.url), 'utf8'), { filename })
@@ -68,7 +82,7 @@ const loadActualHallForIntegration = (mocks, id) => {
     .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = mocks.${name}`)
     .replace(/import\.meta\.env/g, 'mocks.env')
     .replace('export default', 'return')
-  return new Function('Vue', 'mocks', body)(Vue, { useHallSelectedOutputReview, selectionKey, useHallDeliveryReview, useHallAgentProfileCapabilities, useExternalServicePolicy, assignedTaskTarget, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
+  return new Function('Vue', 'mocks', body)(Vue, effectiveMocks)
 }
 
 const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, workspaceState = null, counters }) => {

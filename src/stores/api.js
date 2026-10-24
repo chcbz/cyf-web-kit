@@ -2,7 +2,6 @@ import { encodeHttpRequest, decodeHttpResponse } from '../utils/apiEnvelope.js'
 import { defineStore, getActivePinia } from 'pinia'
 import { useUtilStore } from './util'
 import { useGlobalStore } from './global'
-import { log } from '../utils/logger.js'
 import { createCodeChallenge, createOAuthTransaction, safeAppRelativePath } from '../utils/oauthTransaction.js'
 import { rememberOAuthBackNavigation } from '../utils/oauthNavigationHistory.js'
 import { registerIdentityCleanup, stopIdentityBoundWork } from '../utils/identityLifecycle.js'
@@ -10,6 +9,18 @@ import { cancelReauthentication } from '../utils/reauthentication.js'
 import { combineAbortSignals, throwIfAborted } from '../utils/abortSignals.js'
 
 const runtimeEnv = import.meta.env ?? {}
+// Bind the hydrated account to the opaque bearer, not to a business region.
+const hydratedAccountTokens = new WeakMap()
+
+function discardAccountView (store) {
+  hydratedAccountTokens.delete(store)
+  store.authorizationGeneration += 1
+  store.authorizationStarted = false
+  cancelReauthentication(store)
+  stopIdentityBoundWork()
+  // Another tab may already own the shared token/cache. Do not delete its data.
+  useGlobalStore().clearUserIdentity()
+}
 
 function isNonblankRuntimeString (value) {
   return typeof value === 'string' && value.trim() !== ''
@@ -94,7 +105,7 @@ export const useApiStore = defineStore('api', {
       return Object.freeze({
         clientId: this.oauthClientId,
         redirectUri: `${window.location.origin}/oauth2/callback`,
-        authorizationServer: this.baseUrl || window.location.origin
+        authorizationServer: runtimeEnv.VITE_OAUTH_BASE_URL || this.baseUrl || window.location.origin
       })
     },
 
@@ -132,9 +143,31 @@ export const useApiStore = defineStore('api', {
       }
     },
 
+    hasActiveToken () {
+      return Boolean(useUtilStore().getLocalStorage('api_token'))
+    },
+
+    hasCurrentAccount () {
+      const bound = hydratedAccountTokens.get(this)
+      return Boolean(bound && useUtilStore().getLocalStorage('api_token') === bound)
+    },
+
+    assertTokenCurrent (token) {
+      if (!token || useUtilStore().getLocalStorage('api_token') !== token) {
+        if (hydratedAccountTokens.get(this) === token) discardAccountView(this)
+        throw new DOMException('Identity changed', 'AbortError')
+      }
+    },
+
     async token () {
       const utilStore = useUtilStore()
       const accessToken = utilStore.getLocalStorage('api_token')
+      const bound = hydratedAccountTokens.get(this)
+      if (bound && bound !== accessToken) {
+        discardAccountView(this)
+        // Never send an old view's input using the replacement account's bearer.
+        throw new DOMException('Login changed; refresh the page to continue', 'AbortError')
+      }
       if (!accessToken) {
         await this.beginAuthorization()
         return null
@@ -185,12 +218,13 @@ export const useApiStore = defineStore('api', {
     },
     clearIdentity () {
       const pinia = getActivePinia()
+      hydratedAccountTokens.delete(this)
       this.authorizationGeneration += 1
       this.authorizationStarted = false
       cancelReauthentication(this)
       stopIdentityBoundWork()
       const utilStore = useUtilStore(pinia)
-      for (const key of ['api_token', 'userId', 'jiacn', 'openid']) {
+      for (const key of ['api_token', 'userId', 'jiacn', 'openid', 'wxToken']) {
         try {
           utilStore.removeLocalStorage(key)
         } catch {
@@ -205,19 +239,23 @@ export const useApiStore = defineStore('api', {
     },
 
     async revokeAllSessions ({ signal, timeout = 15_000 } = {}) {
-      const token = useUtilStore().getLocalStorage('api_token')
+      const token = await this.token()
       if (!token) throw unauthenticatedError()
 
       const requestSignal = combineAbortSignals({ signals: [signal], timeout })
       try {
         throwIfAborted(requestSignal.signal)
+        this.assertTokenCurrent(token)
         const response = await fetch(`${this.baseUrl}/user/me/sessions/revoke-all`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
           signal: requestSignal.signal
         })
+        this.assertTokenCurrent(token)
         if (response.status === 204) return
-        throw revokeError(response, await responseErrorCode(response))
+        const code = await responseErrorCode(response)
+        this.assertTokenCurrent(token)
+        throw revokeError(response, code)
       } finally {
         requestSignal.cleanup()
       }
@@ -262,11 +300,14 @@ export const useApiStore = defineStore('api', {
         const response = await fetch(`${this.baseUrl}/user/my`, {
           method: 'GET',
           headers: { Authorization: `Bearer ${token}`, 'X-Request-Id': requestId },
+          cache: 'no-store',
           signal: operation.signal
         })
         operation.assertCurrent()
         const { value: data } = decodeHttpResponse(await response.text(), { status: response.status, requestId, responseRequestId: response.headers.get('X-Request-Id') })
         operation.assertCurrent()
+        this.assertTokenCurrent(token)
+        hydratedAccountTokens.set(this, token)
         const globalStore = useGlobalStore()
         globalStore.setUser(data)
         if (data.jiacn) globalStore.setJiacn(data.jiacn)

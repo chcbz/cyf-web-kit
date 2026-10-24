@@ -220,5 +220,39 @@ describe('direct SSE authentication boundary', () => {
     expect(stream).to.include('readerRef.value = handle')
     expect(stream).to.match(/AbortError[\s\S]*?generation !== chatLifecycleGeneration/)
   })
+  it('does not forward a chunk after another tab replaces the shared login session', async () => {
+    let source
+    let cancelled = false
+    let current = true
+    const apiStore = {
+      authorizationGeneration: 4,
+      token: async () => 'old-token',
+      assertTokenCurrent: async () => {
+        if (!current) throw new DOMException('Identity changed', 'AbortError')
+      }
+    }
+    const response = await fetchChatConversationEvents({
+      apiStore,
+      url: 'https://api.example/events',
+      fetchImpl: async (_url, config) => new Response(new ReadableStream({
+        start (controller) {
+          source = controller
+          controller.enqueue(new TextEncoder().encode('data: old\n\n'))
+        },
+        cancel () { cancelled = true }
+      }), { status: 200, headers: {
+        'Content-Type': 'text/event-stream',
+        'X-Request-Id': new Headers(config.headers).get('X-Request-Id')
+      } })
+    })
+    const reader = response.body.getReader()
+    expect(new TextDecoder().decode((await reader.read()).value)).to.equal('data: old\n\n')
+    current = false
+    source.enqueue(new TextEncoder().encode('data: forbidden\n\n'))
+    let failure
+    try { await reader.read() } catch (error) { failure = error }
+    expect(failure?.name).to.equal('AbortError')
+    expect(cancelled).to.equal(true)
+  })
 
 })

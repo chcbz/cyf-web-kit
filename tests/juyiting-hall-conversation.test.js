@@ -1556,7 +1556,9 @@ describe('useHallConversation history remediation', () => {
 
 describe('useHallConversation event-stream recovery policy', () => {
   const flush = async () => {
-    for (let index = 0; index < 5; index += 1) await Promise.resolve()
+    // Drain token acquisition, fetch and ReadableStream EOF without assuming
+    // an implementation-specific number of Promise continuations.
+    await new Promise(resolve => setImmediate(resolve))
   }
 
   const createConversation = ({ apiStore = { token: async () => 'token' } } = {}) => useHallConversation({
@@ -1582,6 +1584,7 @@ describe('useHallConversation event-stream recovery policy', () => {
     const originalSetTimeout = window.setTimeout
     let fetchCount = 0
     let timers = 0
+    let conversation
     global.fetch = async () => {
       fetchCount += 1
       return new Response('', { status: 403 })
@@ -1589,14 +1592,14 @@ describe('useHallConversation event-stream recovery policy', () => {
     window.setTimeout = () => { timers += 1; return 1 }
 
     try {
-      const conversation = createConversation()
+      conversation = createConversation()
       await conversation.loadHallMessages()
       await flush()
       window.dispatchEvent(new window.Event('focus'))
       await flush()
       expect({ fetchCount, timers, recovering: conversation.eventStreamRecovering.value }).to.deep.equal({ fetchCount: 1, timers: 0, recovering: false })
-      conversation.disposeHallConversation()
     } finally {
+      conversation?.disposeHallConversation()
       global.fetch = originalFetch
       window.setTimeout = originalSetTimeout
     }
@@ -1608,6 +1611,7 @@ describe('useHallConversation event-stream recovery policy', () => {
     const originalRandom = Math.random
     const timers = []
     let fetchCount = 0
+    let conversation
     global.fetch = async () => {
       fetchCount += 1
       return new Response('')
@@ -1615,7 +1619,7 @@ describe('useHallConversation event-stream recovery policy', () => {
     Math.random = () => 0
     window.setTimeout = (callback, delay) => { const timer = { callback, delay, active: true }; timers.push(timer); return timer }
     try {
-      const conversation = createConversation()
+      conversation = createConversation()
       await conversation.loadHallMessages()
       await flush()
       expect({ fetchCount, delays: timers.map(timer => timer.delay) }).to.deep.equal({ fetchCount: 1, delays: [1000] })
@@ -1626,8 +1630,8 @@ describe('useHallConversation event-stream recovery policy', () => {
       timers[0].callback()
       await flush()
       expect({ fetchCount, delays: timers.map(timer => timer.delay) }).to.deep.equal({ fetchCount: 2, delays: [1000, 2000] })
-      conversation.disposeHallConversation()
     } finally {
+      conversation?.disposeHallConversation()
       global.fetch = originalFetch
       window.setTimeout = originalSetTimeout
       Math.random = originalRandom
@@ -1638,13 +1642,14 @@ describe('useHallConversation event-stream recovery policy', () => {
     const originalFetch = global.fetch
     const descriptor = Object.getOwnPropertyDescriptor(document, 'visibilityState')
     let fetchCount = 0
+    let conversation
     global.fetch = async () => {
       fetchCount += 1
       return new Response(new ReadableStream({ start () {} }))
     }
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
     try {
-      const conversation = createConversation()
+      conversation = createConversation()
       await conversation.loadHallMessages()
       await flush()
       expect(fetchCount).to.equal(1)
@@ -1655,8 +1660,8 @@ describe('useHallConversation event-stream recovery policy', () => {
       document.dispatchEvent(new window.Event('visibilitychange'))
       await flush()
       expect(fetchCount).to.equal(2)
-      conversation.disposeHallConversation()
     } finally {
+      conversation?.disposeHallConversation()
       global.fetch = originalFetch
       if (descriptor) Object.defineProperty(document, 'visibilityState', descriptor)
       else delete document.visibilityState

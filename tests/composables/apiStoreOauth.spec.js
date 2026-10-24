@@ -3,6 +3,13 @@ import { readFileSync } from 'node:fs'
 import { createPinia, setActivePinia } from 'pinia'
 import { useApiStore } from '../../src/stores/api.js'
 import { initiateReauthentication } from '../../src/utils/reauthentication.js'
+import { useUtilStore } from '../../src/stores/util.js'
+import { OAUTH_TRANSACTION_STORAGE_KEY } from '../../src/utils/oauthTransaction.js'
+import { useGlobalStore } from '../../src/stores/global.js'
+import { useHttp } from '../../src/composables/useHttp.js'
+import { browserBusinessNamespace } from '../../src/utils/businessNamespace.js'
+import { fetchChatConversationEvents } from '../../src/utils/authenticatedSse.js'
+import { useAccountSecuritySession } from '../../src/composables/useAccountSecuritySession.js'
 
 Object.defineProperty(global, 'location', { value: window.location, writable: true, configurable: true })
 Object.defineProperty(global, 'localStorage', { value: window.localStorage, writable: true, configurable: true })
@@ -31,6 +38,126 @@ describe('OAuth API store token exchange', () => {
     window.localStorage.clear()
   })
 
+  for (const phase of ['before request', 'during response']) {
+    it(`preserves a replacement account when revoking sessions ${phase}`, async () => {
+      const store = useApiStore()
+      const util = useUtilStore()
+      util.setLocalStorage('api_token', 'account-A', Date.now() + 60_000)
+      global.fetch = async (_url, options) => {
+        const requestId = options.headers['X-Request-Id']
+        return new Response(JSON.stringify({ protocolVersion: 1, requestId, code: 'E0', msg: 'ok', data: { id: 42 } }), {
+          headers: { 'X-Request-Id': requestId }
+        })
+      }
+      await store.getUserInfo()
+      let writes = 0
+      const replaceToken = () => util.setLocalStorage('api_token', 'account-B', Date.now() + 60_000)
+      if (phase === 'before request') replaceToken()
+      global.fetch = async () => {
+        writes++
+        replaceToken()
+        return new Response(null, { status: 204 })
+      }
+      const session = useAccountSecuritySession({ apiStore: store, router: { replace: async () => {} } })
+      expect(await session.signOutAllDevices()).to.equal(false)
+      expect(writes).to.equal(phase === 'before request' ? 0 : 1)
+      expect(util.getLocalStorage('api_token')).to.equal('account-B')
+    })
+  }
+
+  it('uses an opaque stored bearer without a frontend tenant identity', async () => {
+    const store = useApiStore()
+    store.oauthClientId = 'public-web'
+    store.baseUrl = 'https://api.example'
+    const util = useUtilStore()
+    util.setLocalStorage('api_token', 'opaque-bearer', Date.now() + 60_000)
+    expect(await store.token()).to.equal('opaque-bearer')
+    expect(store.hasActiveToken()).to.equal(true)
+    expect(store.oauthRuntimeConfig()).not.to.have.property('expectedTenant')
+    store.assertTokenCurrent('opaque-bearer')
+    util.setLocalStorage('api_token', 'new-account-bearer', Date.now() + 60_000)
+    expect(() => store.assertTokenCurrent('opaque-bearer')).to.throw('Identity changed')
+    // A late request must not erase the newly logged-in account's bearer.
+    expect(await store.token()).to.equal('new-account-bearer')
+    store.clearIdentity()
+    expect(store.hasActiveToken()).to.equal(false)
+  })
+
+  it('loads an account without tenant fields and rejects a late profile after token replacement', async () => {
+    const store = useApiStore()
+    store.baseUrl = 'https://api.example'
+    const util = useUtilStore()
+    util.setLocalStorage('api_token', 'account-token', Date.now() + 60_000)
+    const profile = { id: 42, jiacn: 'owner-42' }
+    const reply = options => {
+      const requestId = new Headers(options.headers).get('X-Request-Id')
+      return new Response(JSON.stringify({ protocolVersion: 1, requestId, code: 'E0', msg: 'ok', data: profile }), {
+        headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId }
+      })
+    }
+    global.fetch = async (_url, options) => reply(options)
+    expect(await store.getUserInfo()).to.deep.equal(profile)
+    global.fetch = async (_url, options) => {
+      util.setLocalStorage('api_token', 'new-account-token', Date.now() + 60_000)
+      return reply(options)
+    }
+    let failure
+    try { await store.getUserInfo() } catch (error) { failure = error }
+    expect(failure?.name).to.equal('AbortError')
+    expect(await store.token()).to.equal('new-account-token')
+  })
+
+  it('blocks old account input before sending a replacement account bearer', async () => {
+    const store = useApiStore()
+    store.oauthClientId = 'web'
+    const util = useUtilStore()
+    const profileStore = useGlobalStore()
+    util.setLocalStorage('api_token', 'account-A', Date.now() + 60_000)
+    global.fetch = async (_url, options) => {
+      const requestId = options.headers['X-Request-Id']
+      return new Response(JSON.stringify({ protocolVersion: 1, requestId, code: 'E0', msg: 'ok', data: { id: 42 } }), {
+        headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId }
+      })
+    }
+    await store.getUserInfo()
+    expect(browserBusinessNamespace(store, profileStore)).to.equal('web\u000042')
+    const generation = store.authorizationGeneration
+    util.setLocalStorage('api_token', 'account-B', Date.now() + 60_000)
+    expect(browserBusinessNamespace(store, profileStore)).to.equal('')
+    let writes = 0
+    global.fetch = async () => { writes++; throw new Error('Old input must not be sent') }
+    let failure
+    try { await useHttp().post('/protected', { oldDraft: 'account-A-input' }, { authStore: store }) } catch (error) { failure = error }
+    expect(failure).to.be.instanceOf(Error)
+    expect(writes).to.equal(0)
+    expect(profileStore.user.id).to.equal(null)
+    expect(store.authorizationGeneration).to.equal(generation + 1)
+    expect(util.getLocalStorage('api_token')).to.equal('account-B')
+  })
+
+  it('does not let a late SSE 401 delete the replacement login', async () => {
+    const store = useApiStore()
+    const util = useUtilStore()
+    util.setLocalStorage('api_token', 'account-A', Date.now() + 60_000)
+    let finishFetch
+    let started
+    const ready = new Promise(resolve => { started = resolve })
+    let reauth = 0
+    store.beginAuthorization = async () => { reauth++; return true }
+    const pending = fetchChatConversationEvents({ apiStore: store, url: '/events', fetchImpl: async () => {
+      started()
+      return new Promise(resolve => { finishFetch = resolve })
+    } })
+    await ready
+    util.setLocalStorage('api_token', 'account-B', Date.now() + 60_000)
+    finishFetch(new Response('', { status: 401 }))
+    let failure
+    try { await pending } catch (error) { failure = error }
+    expect(failure?.name).to.equal('AbortError')
+    expect(util.getLocalStorage('api_token')).to.equal('account-B')
+    expect(reauth).to.equal(0)
+  })
+
   it('uses the consumed verifier and commits a valid bearer token only after validation', async () => {
     let request
     global.fetch = async (url, config) => {
@@ -50,6 +177,7 @@ describe('OAuth API store token exchange', () => {
     expect(request.config.body.get('code_verifier')).to.equal(transaction.codeVerifier)
     expect(request.config.body.get('code')).to.equal('authorization-code')
     expect(request.config.body.get('client_id')).to.equal(transaction.clientId)
+    expect(request.config.body.has('tenant_id')).to.equal(false)
     expect(request.config.body.get('redirect_uri')).to.equal(transaction.redirectUri)
     expect(JSON.parse(window.localStorage.getItem('api_token')).data).to.equal('access-token')
   })
@@ -156,7 +284,7 @@ function deferred () {
   return { promise, resolve }
 }
 
-const OAUTH_PENDING_KEY = 'cyf.oauth.pending.v1'
+const OAUTH_PENDING_KEY = OAUTH_TRANSACTION_STORAGE_KEY
 const OAUTH_HISTORY_KEY = 'cyf.oauth.history.v1'
 const DIGEST_NOT_STARTED = 'OAUTH_HARNESS_DIGEST_NOT_STARTED'
 const AUTH_SETTLED_BEFORE_DIGEST = 'OAUTH_HARNESS_AUTH_SETTLED_BEFORE_DIGEST'

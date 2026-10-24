@@ -11,6 +11,7 @@ import { useHallBountyAcceptance } from '../src/composables/juyiting/useHallBoun
 import { useHallDrafts } from '../src/composables/juyiting/useHallDrafts.js'
 import { bountyInteractionTargetId } from '../src/composables/juyiting/useHallChatContext.js'
 import { createHydratedIdentityScope, hasHydratedIdentity } from '../src/utils/identityScope.js'
+import { browserBusinessNamespace } from '../src/utils/businessNamespace.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
@@ -173,7 +174,7 @@ const makeHallPageMocks = ({ mode, counters, voiceLocked = Vue.ref(false) }) => 
   return {
     resolveLiveMapPreviewActivation, resolveHallNavigationPresentation, useFormalTaskExecutionScope,
     resolveAccountDisplayName: (user, fallback = '用户') => user?.nickname || user?.username || fallback,
-    createHydratedIdentityScope, hasHydratedIdentity,
+    createHydratedIdentityScope, hasHydratedIdentity, browserBusinessNamespace,
     isEconomyPreviewBuildEnabled: () => false,
     isEconomyPreviewCapability: () => false,
     loadEconomyPreviewCapability: async () => null,

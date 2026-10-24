@@ -116,14 +116,17 @@ before(async () => {
 after(() => { document.body.innerHTML = '' })
 
 describe('JYT-UX-W03 HallDraftEditor boundary', () => {
-  it('receives the stable owner/client scope from the production Hall path rather than an epoch', () => {
+  it('receives the hydrated client/owner scope from the production Hall path rather than an epoch', () => {
     const bounty = readFileSync(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url), 'utf8')
     const hall = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+    const namespace = readFileSync(new URL('../src/utils/businessNamespace.js', import.meta.url), 'utf8')
     expect(bounty).to.include(':identity-scope="identityScope"')
     expect(hall).to.include(':identity-scope="hallIdentityScope"')
-    expect(hall).to.include('createHydratedIdentityScope(globalStore.user, apiStore.oauthClientId)')
+    expect(hall).to.include('browserBusinessNamespace(apiStore, globalStore)')
+    expect(namespace).to.include('createHydratedIdentityScope(globalStore?.user, apiStore?.oauthClientId)')
+    expect(namespace).not.to.include('tenantId')
     const identityHelper = readFileSync(new URL('../src/utils/identityScope.js', import.meta.url), 'utf8')
-    expect(identityHelper).to.include("tenant && client && owner ? [tenant, client, owner].join('\\u0000') : ''")
+    expect(identityHelper).to.include("client && owner ? [client, owner].join('\\u0000') : ''")
     expect(identityHelper).not.to.include('filter(Boolean)')
     const editor = readFileSync(new URL('../src/components/juyiting/HallDraftEditor.vue', import.meta.url), 'utf8')
     expect(editor).to.include('.hall-draft-editor--draft .draft-actions .primary{flex:1 0 100%;white-space:nowrap}')
