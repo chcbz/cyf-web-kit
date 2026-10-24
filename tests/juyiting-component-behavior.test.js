@@ -2450,6 +2450,7 @@ describe('JuyiHall component behavior', () => {
     })
     const readerTab = wrapper.get('#library-reader-tab')
     const searchTab = wrapper.get('#library-search-tab')
+    const maintenanceTab = wrapper.get('#library-maintenance-tab')
 
     expect(readerTab.attributes('tabindex')).to.equal('0')
     expect(searchTab.attributes('tabindex')).to.equal('-1')
@@ -2459,6 +2460,9 @@ describe('JuyiHall component behavior', () => {
     await searchTab.trigger('keydown', { key: 'Home' })
     expect(document.activeElement).to.equal(readerTab.element)
     await readerTab.trigger('keydown', { key: 'End' })
+    expect(document.activeElement).to.equal(maintenanceTab.element)
+    expect(maintenanceTab.attributes('tabindex')).to.equal('0')
+    await maintenanceTab.trigger('keydown', { key: 'ArrowLeft' })
     expect(document.activeElement).to.equal(searchTab.element)
     await searchTab.trigger('keydown', { key: 'ArrowLeft' })
     expect(document.activeElement).to.equal(readerTab.element)
