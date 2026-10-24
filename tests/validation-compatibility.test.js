@@ -53,3 +53,44 @@ it('economy capability ignores additions without inventing write capability or a
   assert.deepEqual(readEconomyCapability({ ...value, mayPurchase: true }), value)
   assert.equal(readEconomyCapability({ ...value, principalScopeSha256: null }), null)
 })
+
+
+import { externalPolicyProjection } from '../src/composables/juyiting/useExternalServicePolicy.js'
+import { assessReadOnlyPreviewCapabilities, evaluateReadOnlyPreviewAction } from '../src/utils/economyReadOnlyPreviewPolicy.js'
+import { parseSkillManagement } from '../src/utils/skillManagementContract.js'
+it('external policy ignores metadata but keeps owner and revision checks', () => {
+  const expected = { agentId: 'a', enabled: true, revision: '3' }
+  assert.deepEqual(externalPolicyProjection({ ...expected, canDelete: true }, 'a'), expected)
+  assert.equal(externalPolicyProjection(expected, 'other'), null)
+  assert.equal(externalPolicyProjection({ ...expected, revision: 'invalid' }, 'a'), null)
+})
+it('read-only capability additions never grant an unknown or mutating action', () => {
+  const value = { contractVersion: 'economy-readonly-v2', mode: 'READ_ONLY_PREVIEW', enabled: true, principalScopeSha256: 'a'.repeat(64),
+    features: { wallet: true, ledger: true, catalog: true, installationStatus: true, hostingPlan: true, hostingLease: true, nextFeature: true },
+    actions: { estimate: true, issue: false, purchase: false, settle: false, refund: false, install: false, hostingActivate: false, hostingRenew: false, delete: true }, metadata: 'next' }
+  const result = assessReadOnlyPreviewCapabilities(value)
+  assert.equal(result.available, true)
+  assert.equal(result.capabilities.actions.delete, undefined)
+  assert.equal(result.capabilities.features.nextFeature, undefined)
+  assert.equal(evaluateReadOnlyPreviewAction(value, 'delete').allowed, false)
+  value.actions.purchase = true
+  assert.equal(assessReadOnlyPreviewCapabilities(value).available, false)
+})
+it('management read fields project additions while write intent stays closed', () => {
+  const examples = JSON.parse(readFileSync(new URL('./fixtures/skill-management/management-contract-v1.examples.json', import.meta.url))).cases
+  const definitions = { SkillListResponse: 'SkillList', SkillChangeResponse: 'SkillChange', ChangeListResponse: 'ChangeList', QuoteResponse: 'Quote' }
+  let checked = 0
+  for (const example of examples.filter(item => item.valid && definitions[item.definition])) {
+    const name = definitions[example.definition]
+    const expected = parseSkillManagement(name, example.value.data)
+    const add = value => {
+      if (Array.isArray(value)) return value.map(add)
+      if (value && typeof value === 'object') return { ...Object.fromEntries(Object.entries(value).map(([k, v]) => [k, add(v)])), extraMetadata: true }
+      return value
+    }
+    assert.deepEqual(parseSkillManagement(name, add(example.value.data)), expected)
+    checked++
+  }
+  assert.ok(checked > 0)
+  assert.throws(() => parseSkillManagement('ChangeActionData', { expectedChangeRevision: '1', approved: true }))
+})

@@ -37,10 +37,8 @@ function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function hasExactKeys(value, expectedKeys) {
-  const keys = Object.keys(value);
-  return keys.length === expectedKeys.length
-    && keys.every((key) => expectedKeys.includes(key));
+function hasRequiredKeys(value, expectedKeys) {
+  return expectedKeys.every((key) => Object.hasOwn(value, key));
 }
 
 function allBooleanProperties(value, keys) {
@@ -83,7 +81,7 @@ function assessReadOnlyPreviewCapabilities(capabilities) {
   const rootKeys = [
     'contractVersion', 'mode', 'enabled', 'principalScopeSha256', 'features', 'actions',
   ];
-  if (!hasExactKeys(capabilities, rootKeys)) return unavailable('CAPABILITIES_MALFORMED');
+  if (!hasRequiredKeys(capabilities, rootKeys)) return unavailable('CAPABILITIES_MALFORMED');
   if (capabilities.contractVersion !== CONTRACT_VERSION) {
     return unavailable('CAPABILITIES_UNSUPPORTED_CONTRACT');
   }
@@ -94,12 +92,12 @@ function assessReadOnlyPreviewCapabilities(capabilities) {
     return unavailable('CAPABILITIES_MALFORMED');
   }
   if (!isRecord(capabilities.features)
-      || !hasExactKeys(capabilities.features, FEATURE_KEYS)
+      || !hasRequiredKeys(capabilities.features, FEATURE_KEYS)
       || !allBooleanProperties(capabilities.features, FEATURE_KEYS)) {
     return unavailable('CAPABILITIES_MALFORMED');
   }
   if (!isRecord(capabilities.actions)
-      || !hasExactKeys(capabilities.actions, ACTION_KEYS)
+      || !hasRequiredKeys(capabilities.actions, ACTION_KEYS)
       || !allBooleanProperties(capabilities.actions, ACTION_KEYS)) {
     return unavailable('CAPABILITIES_MALFORMED');
   }

@@ -140,9 +140,10 @@ describe('D3.1 owner policy original-operation recovery (mounted real watchers)'
     expect(h.flow.canWrite.value).to.equal(false)
     await h.flow.refresh(); expect(h.flow.canWrite.value).to.equal(true)
   })
-  it('validates closed DTO and decimal revisions without Number conversion', () => {
+  it('projects read additions and validates decimal revisions without Number conversion', () => {
     expect(externalPolicyProjection(policyValue('mine', false, '9007199254740993'), 'mine').revision).to.equal('9007199254740993')
-    for (const raw of [{ ...policyValue(), owner: 'x' }, policyValue('wrong'), policyValue('mine', false, 1), policyValue('mine', false, '01')]) {
+    expect(externalPolicyProjection({ ...policyValue(), owner: 'x' }, 'mine')).to.deep.equal(policyValue())
+    for (const raw of [policyValue('wrong'), policyValue('mine', false, 1), policyValue('mine', false, '01')]) {
       expect(externalPolicyProjection(raw, 'mine')).to.equal(null)
     }
   })

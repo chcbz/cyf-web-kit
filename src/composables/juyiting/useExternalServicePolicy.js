@@ -3,9 +3,9 @@ import { exactPointAndStartId, exactPointAndStartScope, pointAndStartLong } from
 
 const keys = (value, names) => value && typeof value === 'object' && !Array.isArray(value) &&
   Object.keys(value).length === names.length && names.every(name => Object.hasOwn(value, name))
-export const externalPolicyProjection = (value, agentId) => keys(value, ['agentId', 'enabled', 'revision']) &&
+export const externalPolicyProjection = (value, agentId) => value && typeof value === 'object' && !Array.isArray(value) &&
   value.agentId === agentId && typeof value.enabled === 'boolean' && pointAndStartLong(value.revision, true)
-  ? Object.freeze({ ...value }) : null
+  ? Object.freeze({ agentId: value.agentId, enabled: value.enabled, revision: value.revision }) : null
 const validIntent = (value, scope, agentId) => keys(value, ['scope', 'agentId', 'key', 'requestId', 'body']) &&
   value.scope === scope && value.agentId === agentId && exactPointAndStartId(value.key) && exactPointAndStartId(value.requestId) &&
   keys(value.body, ['enabled', 'expectedRevision']) && typeof value.body.enabled === 'boolean' && pointAndStartLong(value.body.expectedRevision, true)

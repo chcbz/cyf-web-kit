@@ -10,8 +10,6 @@ import { validateSpriteManifest } from '../../src/game/sprites/spriteValidation.
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
 const RIFF_SIGNATURE = Buffer.from('RIFF')
 const WEBP_SIGNATURE = Buffer.from('WEBP')
-const MAX_PNG_BYTES = 64 * 1024 * 1024
-const MAX_IMAGE_BYTES = 64 * 1024 * 1024
 const MAX_DECODED_BYTES = 64 * 1024 * 1024
 const BYTES_PER_PIXEL = 4
 const MAX_PIXELS = MAX_DECODED_BYTES / BYTES_PER_PIXEL
@@ -26,14 +24,12 @@ export function inspectSpriteImageFile(path) {
   try {
     const stat = statSync(path)
     if (!stat.isFile()) return invalidInspection(false, 'sprite path is not a regular file')
-    if (stat.size > MAX_IMAGE_BYTES) return invalidInspection(false, `sprite image exceeds ${MAX_IMAGE_BYTES} bytes`)
     bytes = readFileSync(path)
   } catch (error) {
     if (error?.code === 'ENOENT') return invalidInspection(false, 'sprite image is missing', false)
     throw new Error(`Unable to read sprite image at ${path}: ${errorCode(error)}`)
   }
 
-  if (bytes.length > MAX_IMAGE_BYTES) return invalidInspection(false, `sprite image exceeds ${MAX_IMAGE_BYTES} bytes`)
   return inspectSpriteImageBytes(bytes)
 }
 
@@ -46,7 +42,6 @@ export function inspectPngBytes(bytes) {
   if (!Buffer.isBuffer(bytes) || bytes.length < PNG_SIGNATURE.length || !bytes.subarray(0, 8).equals(PNG_SIGNATURE)) {
     return invalidInspection(false, 'sprite PNG signature is invalid')
   }
-  if (bytes.length > MAX_PNG_BYTES) return invalidInspection(true, `sprite PNG exceeds ${MAX_PNG_BYTES} bytes`)
 
   let offset = PNG_SIGNATURE.length
   let width
@@ -108,7 +103,6 @@ export function inspectPngBytes(bytes) {
 
 export function inspectWebpBytes(bytes) {
   if (!isWebpBytes(bytes)) return invalidInspection(false, 'sprite WebP signature is invalid')
-  if (bytes.length > MAX_IMAGE_BYTES) return invalidInspection(true, `sprite WebP exceeds ${MAX_IMAGE_BYTES} bytes`)
 
   let offset = 12
   while (offset + 8 <= bytes.length) {
