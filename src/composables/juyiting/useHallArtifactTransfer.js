@@ -1,8 +1,6 @@
 import { computed, getCurrentInstance, onUnmounted, ref, unref, watch } from 'vue'
 import { createApi } from '../useHttp.js'
 
-export const MAX_UPLOAD_BYTES = 16 * 1024 * 1024
-export const MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
 const MAX_INT = 2147483647
 const MIME = /^[a-z0-9][a-z0-9!#$&^_.+-]{0,63}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,63}$/
 const hasControl = value => Array.from(value).some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)
@@ -10,10 +8,6 @@ const ID = value => typeof value === 'string' && value.length > 0 && value.lengt
   !/^[\s]|[\s]$/.test(value) && !hasControl(value)
 const TEXT = (value, maximum) => typeof value === 'string' && value.length > 0 && value.length <= maximum &&
   !/^[\s]|[\s]$/.test(value) && !hasControl(value)
-const ALLOWED_MIME_TYPES = new Set([
-  'text/plain', 'text/markdown', 'text/csv', 'application/json', 'application/pdf',
-  'image/png', 'image/jpeg', 'application/zip'
-])
 
 const resolveValue = value => typeof value === 'function' ? value() : unref(value)
 const unwrap = result => {
@@ -44,7 +38,7 @@ const failureMessage = error => {
   if (error?.requestErrorClass === 'network' || error instanceof TypeError) return '网络结果不明确，尚不能确认已保存；请先刷新确认，未自动重试。'
   return error?.message || '传输未完成；尚不能确认已保存。'
 }
-const responseMatchesPublish = (value, body, size) => value && Object.keys(value).length === 6 &&
+const responseMatchesPublish = (value, body, size) => value && typeof value === 'object' && !Array.isArray(value) &&
   value.artifactId === body.artifactId && value.artifactVersion === body.artifactVersion &&
   typeof value.contentHash === 'string' && /^[0-9a-f]{64}$/.test(value.contentHash) &&
   value.contentByteLength === size && value.contentMimeType === body.contentMimeType &&
@@ -107,12 +101,12 @@ export const useHallArtifactTransfer = ({ api = createApi('/agent'), subject, wo
   const setFile = candidate => {
     receipt.value = null; conflict.value = false; message.value = ''
     if (!candidate) { file.value = null; return false }
-    const mime = safeMime(candidate.type)
-    if (!Number.isFinite(candidate.size) || candidate.size < 0 || candidate.size > MAX_UPLOAD_BYTES) {
-      file.value = null; state.value = 'error'; message.value = '文件超过 16 MiB 上传上限或大小无效。'; return false
+    const mime = safeMime(candidate.type || 'application/octet-stream')
+    if (!Number.isSafeInteger(candidate.size) || candidate.size < 0) {
+      file.value = null; state.value = 'error'; message.value = '文件大小无效。'; return false
     }
-    if (!mime || !ALLOWED_MIME_TYPES.has(mime)) {
-      file.value = null; state.value = 'error'; message.value = '仅支持文本、JSON、PDF、PNG、JPEG 或 ZIP 文件。'; return false
+    if (!mime) {
+      file.value = null; state.value = 'error'; message.value = '文件 MIME 类型无效。'; return false
     }
     file.value = candidate
     draft.value = { ...draft.value, contentMimeType: mime }
@@ -143,7 +137,7 @@ export const useHallArtifactTransfer = ({ api = createApi('/agent'), subject, wo
     if (!ID(capturedTask) || !ID(capturedActor)) throw new Error('未取得当前任务与明确好汉身份，不能传输成果。')
     if (!chosen) throw new Error('请先明确选择要上传的文件。')
     if (!ID(snapshot.artifactId) || !TEXT(snapshot.artifactType, 30) || !TEXT(snapshot.title, 255)) throw new Error('请填写有效的成果标识、类型和标题。')
-    if (!mime || !ALLOWED_MIME_TYPES.has(mime) || !Number.isFinite(chosen.size) || chosen.size < 0 || chosen.size > MAX_UPLOAD_BYTES) throw new Error('文件类型或大小不符合上传边界。')
+    if (!mime || !Number.isSafeInteger(chosen.size) || chosen.size < 0) throw new Error('文件类型或大小不符合上传边界。')
     if (!artifactVersion || expectedPreviousVersion == null || artifactVersion !== expectedPreviousVersion + 1) throw new Error('成果版本必须是前一版本加一的精确整数。')
     return { artifactVersion, expectedPreviousVersion, mime }
   }
@@ -160,7 +154,7 @@ export const useHallArtifactTransfer = ({ api = createApi('/agent'), subject, wo
     try {
       const bytes = new Uint8Array(await chosen.arrayBuffer())
       if (!capturedCurrent(captured, capturedTask, capturedActor, capturedEpoch, controller)) return null
-      if (bytes.byteLength !== chosen.size || bytes.byteLength > MAX_UPLOAD_BYTES) throw new Error('读取的文件大小不符合上传边界。')
+      if (bytes.byteLength !== chosen.size) throw new Error('读取的文件大小不符合上传边界。')
       const body = {
         artifactId: snapshot.artifactId, workItemId: snapshot.workItemId || null,
         artifactType: snapshot.artifactType, title: snapshot.title, contentBytes: b64(bytes), contentMimeType: input.mime,
@@ -171,8 +165,9 @@ export const useHallArtifactTransfer = ({ api = createApi('/agent'), subject, wo
       const result = unwrap(await request({ url: `/tasks/${encodeURIComponent(capturedTask)}/artifacts`, method: 'POST', data: body, params: { actorAgentId: capturedActor } }, controller))
       if (!capturedCurrent(captured, capturedTask, capturedActor, capturedEpoch, controller)) return null
       if (!responseMatchesPublish(result, body, chosen.size)) throw new Error('服务回执与本次成果不匹配，未确认保存。')
-      receipt.value = result; state.value = 'published'; message.value = '服务已确认保存该精确成果版本。'
-      return result
+      const saved = Object.fromEntries(['artifactId', 'artifactVersion', 'contentHash', 'contentByteLength', 'contentMimeType', 'createdAt'].map(key => [key, result[key]]))
+      receipt.value = saved; state.value = 'published'; message.value = '服务已确认保存该精确成果版本。'
+      return saved
     } catch (error) {
       if (!capturedCurrent(captured, capturedTask, capturedActor, capturedEpoch, controller) || error?.name === 'AbortError') return null
       if ([401, 403, 404].includes(error?.status)) clearAccessState()
@@ -200,7 +195,6 @@ export const useHallArtifactTransfer = ({ api = createApi('/agent'), subject, wo
           const part = await read()
           if (!part.done) {
             const bytes = part.value instanceof Uint8Array ? part.value : new Uint8Array(part.value)
-            if (received + bytes.byteLength > MAX_DOWNLOAD_BYTES) { const failure = new Error('下载内容超过 64 MiB 边界。'); failure.code = 'ARTIFACT_DOWNLOAD_TOO_LARGE'; throw failure }
             received += bytes.byteLength; chunks.push(bytes.slice())
           }
           return part
@@ -208,7 +202,7 @@ export const useHallArtifactTransfer = ({ api = createApi('/agent'), subject, wo
       } }, controller)
       if (!capturedCurrent(captured, capturedTask, capturedActor, capturedEpoch, controller)) return null
       const declared = Number(response?.headers?.get?.('content-length'))
-      if (!response || !Number.isInteger(declared) || declared < 0 || declared > MAX_DOWNLOAD_BYTES || declared !== received) throw new Error('下载响应长度无效，未创建文件。')
+      if (!response || !Number.isSafeInteger(declared) || declared < 0 || declared !== received) throw new Error('下载响应长度无效，未创建文件。')
       const mime = safeMime((response.headers.get('content-type') || '').split(';', 1)[0]) || 'application/octet-stream'
       const blob = new Blob(chunks, { type: mime })
       const url = urlApi?.createObjectURL?.(blob)
@@ -239,5 +233,5 @@ export const useHallArtifactTransfer = ({ api = createApi('/agent'), subject, wo
   const dispose = () => { reset(); revokeObjectUrls() }
   if (getCurrentInstance()) onUnmounted(dispose)
 
-  return { MAX_UPLOAD_BYTES, MAX_DOWNLOAD_BYTES, ALLOWED_MIME_TYPES, file, draft, download, state, message, receipt, conflict, operable, artifacts, setFile, prepareNextVersion, selectDownload, publish, downloadExact, cancel, reset, revokeObjectUrls, dispose }
+  return { file, draft, download, state, message, receipt, conflict, operable, artifacts, setFile, prepareNextVersion, selectDownload, publish, downloadExact, cancel, reset, revokeObjectUrls, dispose }
 }

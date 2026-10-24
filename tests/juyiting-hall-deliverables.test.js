@@ -112,7 +112,7 @@ describe('1.13.2 Babao-box workspace entry', () => {
     }
   })
 
-  it('drops malformed or secret-bearing conversation items and clears a stale request after a conversation switch', async () => {
+  it('projects away extra secret fields and clears a stale request after a conversation switch', async () => {
     const source = ref({ type: 'conversation', id: 'conversation-1' })
     const identity = ref('owner-a')
     let resolveFirst
@@ -136,8 +136,10 @@ describe('1.13.2 Babao-box workspace entry', () => {
       source.value = { type: 'conversation', id: 'conversation-2' }
       resolveFirst({ state: 'AVAILABLE', publicationPending: false, nextCursor: null, items: [privateDeliverable()] })
       await tick()
-      expect(outputs.items.value).to.deep.equal([])
-      expect(outputs.state.value).to.equal('empty')
+      expect(outputs.items.value).to.have.length(1)
+      expect(outputs.items.value[0].outputId).to.equal('output-2')
+      expect(outputs.items.value[0]).not.to.have.property('storageUri')
+      expect(outputs.state.value).to.equal('available')
       expect(calls).to.equal(2)
     } finally {
       outputs.dispose()
@@ -159,5 +161,20 @@ describe('1.13.2 Babao-box workspace entry', () => {
     expect(source).to.not.match(/storageUri|leaseToken|runtimeCredential/)
     expect(hall).to.include('<PersonalWorkspace')
     expect(hall).to.include("renderedPanel === 'treasure'")
+  })
+})
+
+
+describe('Deliverable metadata compatibility', () => {
+  it('accepts a larger stored artifact and ignores additional read metadata', async () => {
+    const outputs = useOutputs({ source: ref({ type: 'conversation', id: 'conversation-1' }), identityFingerprint: ref('owner-a'),
+      adapter: { list: async () => ({ state: 'AVAILABLE', nextCursor: null, trace: 'extra', items: [privateDeliverable({ byteLength: 64 * 1024 * 1024 + 1, metadata: { display: true }, downloadUrl: 'https://invalid.example' })] }) } })
+    try {
+      await tick()
+      expect(outputs.state.value).to.equal('available')
+      expect(outputs.items.value).to.have.length(1)
+      expect(outputs.items.value[0].byteLength).to.equal(64 * 1024 * 1024 + 1)
+      expect(outputs.items.value[0]).not.to.have.property('downloadUrl')
+    } finally { outputs.dispose() }
   })
 })

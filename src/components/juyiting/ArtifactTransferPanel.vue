@@ -1,7 +1,7 @@
 <template>
   <section class="artifact-transfer-panel" aria-labelledby="artifact-transfer-heading">
     <header><span>成果传输</span><h3 id="artifact-transfer-heading">上传或下载精确成果版本</h3></header>
-    <p class="artifact-transfer-note">仅使用当前任务与明确好汉身份。上传上限 16 MiB，下载上限 64 MiB；不会自动重试或代为确认保存。</p>
+    <p class="artifact-transfer-note">仅使用当前任务与明确好汉身份。不会自动重试或代为确认保存。</p>
     <p
       v-if="transfer.message"
       class="artifact-transfer-status"
@@ -37,7 +37,7 @@
         <select v-model="transfer.draft.visibility"><option value="task_members">任务成员</option><option value="reviewer">审阅者</option><option value="private">私有</option></select>
       </label>
       <label>文件
-        <input type="file" accept=".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg,.zip,text/plain,text/markdown,text/csv,application/json,application/pdf,image/png,image/jpeg,application/zip" @change="onFile" />
+        <input type="file" @change="onFile" />
       </label>
       <p v-if="transfer.file">已选择：{{ transfer.file.name }}（{{ transfer.file.size }} bytes）</p>
       <div class="artifact-transfer-actions"><button type="submit" :disabled="!transfer.operable || ['publishing', 'downloading'].includes(transfer.state)">明确上传</button><button v-if="transfer.state === 'publishing'" type="button" @click="transfer.cancel">取消</button></div>

@@ -2,7 +2,7 @@ import { currentHttpResponse } from './fixtures/current-http-response.js'
 import { expect } from 'chai'
 import { ref } from 'vue'
 import { createApi } from '../src/composables/useHttp.js'
-import { MAX_DOWNLOAD_BYTES, MAX_UPLOAD_BYTES, useHallArtifactTransfer } from '../src/composables/juyiting/useHallArtifactTransfer.js'
+import { useHallArtifactTransfer } from '../src/composables/juyiting/useHallArtifactTransfer.js'
 
 const subject = ref({ taskId: 'task-1', actorAgentId: 'agent-1' })
 const workspace = ref({ recentArtifacts: [{ artifactId: 'artifact-1', artifactVersion: '2', title: '已有成果' }] })
@@ -53,11 +53,16 @@ describe('F02 Juyi Hall artifact transfer', () => {
     } finally { globalThis.fetch = originalFetch }
   })
 
-  it('bounds file type, size, and monotonic exact integer versions before transport', async () => {
+  it('accepts arbitrary stored MIME and large file metadata but keeps exact sizes and monotonic versions', async () => {
     const calls = []
     const t = transfer({ api: { execute: async options => { calls.push(options); return {} } } })
-    expect(t.setFile({ ...file(), size: MAX_UPLOAD_BYTES + 1 })).to.equal(false)
-    expect(t.setFile(file(Uint8Array.of(1), 'application/octet-stream'))).to.equal(false)
+    expect(t.setFile({ ...file(), size: 16 * 1024 * 1024 + 1 })).to.equal(true)
+    for (const size of [-1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1]) expect(t.setFile({ ...file(), size })).to.equal(false)
+    expect(t.setFile(file(Uint8Array.of(1), 'application/octet-stream'))).to.equal(true)
+    expect(t.setFile(file(Uint8Array.of(1), 'application/x-custom'))).to.equal(true)
+    expect(t.setFile(file(Uint8Array.of(1), ''))).to.equal(true)
+    expect(t.draft.value.contentMimeType).to.equal('application/octet-stream')
+    expect(t.setFile(file(Uint8Array.of(1), 'bad\r\nheader'))).to.equal(false)
     expect(t.setFile(file())).to.equal(true)
     t.draft.value = { ...t.draft.value, artifactId: 'artifact-1', title: 'x', artifactVersion: 4, expectedPreviousVersion: 2 }
     await t.publish()
@@ -127,19 +132,45 @@ describe('F02 Juyi Hall artifact transfer', () => {
     expect(ambiguous.message.value).to.include('尚不能确认已保存')
   })
 
-  it('does not leak credentials to an external origin and caps an oversized stream before file creation', async () => {
-    const calls = []
-    const huge = new Uint8Array(MAX_DOWNLOAD_BYTES + 1)
+  it('downloads a stream above the removed 64 MiB cap through the same-origin exact-version path', async () => {
+    const calls = [], clicks = [], revoked = []
+    const chunk = new Uint8Array(1024 * 1024), count = 65
     const t = transfer({ api: { execute: async options => {
       calls.push(options)
-      options.onStreamOpen({ reader: { read: async () => ({ done: false, value: huge }), cancel: async () => {} } }, { headers: new Headers({ 'content-length': String(huge.byteLength), 'content-type': 'application/zip' }) })
-      throw Object.assign(new Error('download content too large'), { code: 'ARTIFACT_DOWNLOAD_TOO_LARGE' })
-    } } })
+      let index = 0
+      const handle = { reader: { read: async () => index++ < count ? { done: false, value: chunk } : { done: true } } }
+      options.onStreamOpen(handle, { headers: new Headers({ 'content-length': String(count * chunk.byteLength), 'content-type': 'application/octet-stream' }) })
+      while (!(await handle.reader.read()).done) {}
+    } }, documentRef: { createElement: () => ({ click () { clicks.push(true) } }) },
+    urlApi: { createObjectURL: () => 'blob:large', revokeObjectURL: url => revoked.push(url) } })
+    try {
+      t.download.value = { artifactId: 'artifact-1', artifactVersion: '2' }
+      const result = await t.downloadExact()
+      expect(calls[0].url).to.equal('/tasks/task-1/artifacts/artifact-1/versions/2/content')
+      expect(result.blob.size).to.equal(count * chunk.byteLength)
+      expect(t.state.value).to.equal('downloaded')
+      expect(clicks).to.have.length(1); expect(revoked).to.deep.equal(['blob:large'])
+    } finally { t.dispose() }
+  })
+
+  it('retains actual byte-length mismatch and does not create a file', async () => {
+    let clicks = 0
+    const t = transfer({ api: { execute: async options => {
+      options.onStreamOpen({ reader: { read: async () => ({ done: true }) } }, { headers: new Headers({ 'content-length': '1' }) })
+    } }, documentRef: { createElement: () => ({ click () { clicks++ } }) } })
     t.download.value = { artifactId: 'artifact-1', artifactVersion: '2' }
-    await t.downloadExact()
-    expect(calls[0].url).to.equal('/tasks/task-1/artifacts/artifact-1/versions/2/content')
-    expect(calls[0].url).not.to.match(/^https?:/)
-    expect(t.state.value).to.equal('error')
+    expect(await t.downloadExact()).to.equal(null)
+    expect(t.state.value).to.equal('error'); expect(clicks).to.equal(0)
+    t.dispose()
+  })
+
+  it('accepts harmless publication metadata without exposing it as a receipt field', async () => {
+    const t = transfer({ api: { execute: async ({ data }) => ({ ...publishReply(data), metadata: 'extra', downloadUrl: 'https://invalid.example' }) } })
+    t.setFile(file()); t.draft.value = { ...t.draft.value, artifactId: 'artifact-1', title: 'x' }
+    const receipt = await t.publish()
+    expect(receipt.artifactId).to.equal('artifact-1')
+    expect(receipt).not.to.have.property('downloadUrl'); expect(receipt).not.to.have.property('metadata')
+    t.dispose()
   })
 })
 

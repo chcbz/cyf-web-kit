@@ -20,7 +20,6 @@ const validId = value => typeof value === 'string' && value.length > 0 && value.
 const validSource = value => value && ['task', 'conversation'].includes(value.type) && validId(value.id)
 const abortError = message => new DOMException(message, 'AbortError')
 
-const DELIVERABLE_PAGE_FIELDS = new Set(['items', 'nextCursor', 'publicationPending', 'state'])
 const TASK_DELIVERABLE_FIELDS = new Set([
   'artifactId', 'taskId', 'workItemId', 'producerAgentId', 'artifactType', 'title',
   'contentHash', 'contentByteLength', 'contentMimeType', 'artifactVersion', 'visibility', 'createdAt'
@@ -43,13 +42,13 @@ const exactId = value => typeof value === 'string' && value.length > 0 && value.
 const exactText = (value, maximum) => typeof value === 'string' && value.length > 0 && value.length <= maximum &&
   !/^\s|\s$/.test(value) && ![...value].some(char => { const code = char.codePointAt(0); return code < 32 || (code >= 127 && code <= 159) })
 const exactVersion = value => Number.isInteger(value) && value >= 1 && value <= 2147483647
-const exactByteLength = value => Number.isSafeInteger(value) && value >= 0 && value <= 64 * 1024 * 1024
+const exactByteLength = value => Number.isSafeInteger(value) && value >= 0
 const exactMime = value => typeof value === 'string' && /^[a-z0-9][a-z0-9!#$&^_.+-]{0,63}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,63}$/.test(value)
 const exactTimestamp = value => Number.isSafeInteger(value) && value >= 0
 const exactBoolean = value => typeof value === 'boolean'
 const exactState = value => typeof value === 'string' && DELIVERABLE_STATES.has(value)
 const taskDeliverable = (value, taskId) => value && typeof value === 'object' && !Array.isArray(value) &&
-  Object.keys(value).every(key => TASK_DELIVERABLE_FIELDS.has(key)) && value.taskId === taskId &&
+  value.taskId === taskId &&
   exactId(value.artifactId) && (value.workItemId == null || exactId(value.workItemId)) &&
   exactId(value.producerAgentId) && exactText(value.artifactType, 100) && exactText(value.title, 255) &&
   typeof value.contentHash === 'string' && /^[0-9a-f]{64}$/.test(value.contentHash) &&
@@ -58,7 +57,6 @@ const taskDeliverable = (value, taskId) => value && typeof value === 'object' &&
   exactTimestamp(value.createdAt)
 const conversationDeliverable = value => {
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
-    !Object.keys(value).every(key => CONVERSATION_DELIVERABLE_FIELDS.has(key)) ||
     !exactId(value.outputId) || !exactId(value.executionId) || !exactId(value.fileId) ||
     !exactVersion(value.fileVersion) || typeof value.contentHash !== 'string' || !/^[0-9a-f]{64}$/.test(value.contentHash) ||
     !exactMime(value.contentMimeType) || !exactByteLength(value.byteLength) || !exactTimestamp(value.committedAt) ||
@@ -81,12 +79,10 @@ const conversationDeliverable = value => {
 const PREVIEW_REPRESENTATIONS = new Set(['EXTRACTED_TEXT', 'SHEET_TEXT', 'ORIGINAL_PDF'])
 const validPreviewView = value => {
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
-    !Object.keys(value).every(key => ['state', 'representation', 'parts', 'partial', 'reason'].includes(key)) ||
     value.state !== 'READY' || (value.representation != null && !PREVIEW_REPRESENTATIONS.has(value.representation)) ||
     !exactBoolean(value.partial) || (value.reason != null && !exactText(value.reason, 255)) ||
     !Array.isArray(value.parts) || value.parts.length < 1 ||
     !value.parts.every(part => part && typeof part === 'object' && !Array.isArray(part) &&
-      Object.keys(part).every(key => ['partId', 'contentMimeType'].includes(key)) &&
       exactId(part.partId) && previewPartMimeTypes.has(part.contentMimeType)) ||
     new Set(value.parts.map(part => part.partId)).size !== value.parts.length) return false
   return true
@@ -102,7 +98,6 @@ const validatedPage = (value, sourceType, sourceId, limit) => {
     ? item => taskDeliverable(item, sourceId)
     : conversationDeliverable
   if (!value || typeof value !== 'object' || Array.isArray(value) ||
-    !Object.keys(value).every(key => DELIVERABLE_PAGE_FIELDS.has(key)) ||
     !Array.isArray(value.items) || value.items.length > limit || !itemValidator || !value.items.every(itemValidator) ||
     (value.state != null && !exactState(value.state)) ||
     (value.publicationPending != null && typeof value.publicationPending !== 'boolean') ||
@@ -118,7 +113,7 @@ const validatedPage = (value, sourceType, sourceId, limit) => {
   }
   return {
     state: value.state || (value.items.length ? 'AVAILABLE' : 'EMPTY'),
-    items: value.items,
+    items: value.items.map(item => Object.fromEntries([...(sourceType === 'task' ? TASK_DELIVERABLE_FIELDS : CONVERSATION_DELIVERABLE_FIELDS)].filter(key => Object.hasOwn(item, key)).map(key => [key, item[key]]))),
     publicationPending: value.publicationPending === true,
     nextCursor: value.nextCursor || null
   }
@@ -160,7 +155,7 @@ export const outputReadAdapter = Object.freeze({
     const blob = unwrap(await api.execute({
       url, method: 'GET', responseType: 'blob', autoLoading: false, needAuth: true, signal
     }))
-    if (!(blob instanceof Blob) || blob.size > 64 * 1024 * 1024) throw new Error('成果下载响应无效，未创建文件。')
+    if (!(blob instanceof Blob)) throw new Error('成果下载响应无效，未创建文件。')
     return blob
   },
   async preview ({ sourceType, sourceId, taskId = null, artifactId = null, artifactVersion = null, fileId = null, fileVersion = null, contentMimeType = null, signal } = {}) {

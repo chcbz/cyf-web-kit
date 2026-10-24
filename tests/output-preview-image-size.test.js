@@ -9,11 +9,11 @@ describe('Formal raster image preview size policy', () => {
   it('previews the real revised PNG and JPEG above the text threshold', () => {
     for (const mimeType of ['image/png', 'image/jpeg']) {
       assert.equal(policy({ mimeType, byteLength: 1429926 }), 'image')
-      assert.equal(policy({ mimeType, byteLength: 64 * 1024 * 1024 }), 'image')
+      assert.equal(policy({ mimeType, byteLength: 64 * 1024 * 1024 + 1 }), 'image')
     }
   })
   it('rejects invalid or out-of-contract lengths before choosing a decoder', () => {
-    for (const byteLength of [undefined, null, -1, 1.5, NaN, Infinity, '1429926', 64 * 1024 * 1024 + 1]) {
+    for (const byteLength of [undefined, null, -1, 1.5, NaN, Infinity, '1429926', Number.MAX_SAFE_INTEGER + 1]) {
       assert.equal(policy({ mimeType: 'image/png', byteLength }), 'none')
     }
   })
