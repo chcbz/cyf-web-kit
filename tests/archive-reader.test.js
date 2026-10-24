@@ -252,7 +252,7 @@ const loadArchiveReaderSfc = (archiveModule) => {
   const relativePath = '../src/components/juyiting/archive/ArchiveReader.vue'
   const filename = new URL(relativePath, import.meta.url).pathname
   const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8')
-    .replace('defineExpose({ back })', '')
+    .replace(/defineExpose\(\{ back(?:, openPublishedEdition)? \}\)/, '')
     .replace(
       '</script>',
       `defineExpose({
@@ -411,6 +411,7 @@ const loadLibraryPanelSfc = (ArchiveReader) => {
   const body = compileScript(descriptor, { id: 'archive-library-integration', inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace(/^import\s+ArchiveReader\s+from\s+['"].\/archive\/ArchiveReader\.vue['"];?\s*$/gm, 'var ArchiveReader = arguments[1]')
+    .replace(/^import\s+ArchiveMaintenance\s+from\s+['"].\/archive\/ArchiveMaintenance\.vue['"];?\s*$/gm, 'var ArchiveMaintenance = Vue.defineComponent({render: () => null})')
     .replace('export default', 'return')
   return new Function('Vue', 'ArchiveReader', body)(Vue, ArchiveReader)
 }
@@ -3005,5 +3006,39 @@ describe('archive multi-book data-driven shelf', () => {
       expect(mounted.reader.catalog.value.workId).to.equal(catalog.workId)
       expect(mounted.reader.saveState.value).to.equal('error')
     } finally { mounted.wrapper.unmount() }
+  })
+})
+
+describe('archive maintenance published edition navigation', () => {
+  it('opens the explicitly selected historical edition rather than silently following active', async () => {
+    const api = makeApi()
+    const originalGet = api.get
+    api.get = async (path, params, options) => {
+      if (path === `/works/${catalog.workId}/editions/${editionId}/catalog`) {
+        api.calls.push({ method: 'get', path, params, options })
+        return catalog
+      }
+      return originalGet(path, params, options)
+    }
+    const { reader, wrapper } = mountReader(api)
+    try {
+      await reader.initialize({ openChapter: false })
+      await reader.openBook(catalog.workId, editionId)
+      expect(reader.chapter.value.editionId).to.equal(editionId)
+      expect(api.calls.some(c => c.path === `/works/${catalog.workId}/editions/${editionId}/catalog`)).to.equal(true)
+      expect(api.calls.some(c => c.path === '/catalog')).to.equal(false)
+    } finally { wrapper.unmount() }
+  })
+  it('rejects a mismatched historical catalogue instead of showing a different edition', async () => {
+    const api = makeApi()
+    const originalGet = api.get
+    api.get = (path, params, options) => path.endsWith('/catalog') ? Promise.resolve(catalog) : originalGet(path, params, options)
+    const { reader, wrapper } = mountReader(api)
+    try {
+      let failure
+      try { await reader.openBook(catalog.workId, 'different-edition') } catch (error) { failure = error }
+      expect(failure?.message).to.contain('响应不完整')
+      expect(reader.chapter.value).to.equal(null)
+    } finally { wrapper.unmount() }
   })
 })
