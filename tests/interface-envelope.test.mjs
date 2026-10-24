@@ -39,3 +39,16 @@ test('response metadata must agree; domain data is not decoded twice', () => {
   assert.deepEqual(decodeHttpResponse(text, { status: 200, requestId: 'r' }).value, { data: 1 })
   assert.throws(() => decodeHttpResponse(text, { status: 200, requestId: 'r', responseRequestId: 'other' }))
 })
+
+import { decodeMessage, eventMessage } from '../src/utils/messageEnvelope.js'
+test('additive message metadata is ignored, never an alias or authorization source', () => {
+  const request = eventMessage('r', 'agent.register', 'm', { keep: 'data' })
+  assert.deepEqual(decodeMessage(JSON.stringify({ ...request, trace: 'next', type: 'another.operation', channel: 'admin', permissions: ['all'] })), request)
+  const { messageType, ...missing } = request
+  assert.throws(() => decodeMessage(JSON.stringify({ ...missing, type: messageType })))
+  assert.throws(() => decodeMessage(JSON.stringify({ ...request, code: 'E0' })))
+})
+test('additive response metadata cannot turn an HTTP failure into success', () => {
+  const text = JSON.stringify({ protocolVersion: 1, requestId: 'r', code: 'E403', msg: 'denied', data: null, status: 200, success: true })
+  assert.throws(() => decodeHttpResponse(text, { status: 403, requestId: 'r' }), error => error.code === 'E403')
+})

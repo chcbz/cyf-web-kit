@@ -30,7 +30,7 @@ export const isEconomyPreviewBuildEnabled = value => value === 'true'
 
 /** Public Money DTO; the ledger minor unit is retained exactly, without scaling. */
 export const isSilverMoney = value => value !== null && typeof value === 'object' && !Array.isArray(value) &&
-  Object.keys(value).length === 2 && Object.hasOwn(value, 'amountMinor') && Object.hasOwn(value, 'currency') &&
+  Object.hasOwn(value, 'amountMinor') && Object.hasOwn(value, 'currency') &&
   value.currency === 'SILVER' && isCanonicalMicroAmount(value.amountMinor) && BigInt(value.amountMinor) <= 9223372036854775807n
 export const formatSilverMoney = value => {
   if (!isSilverMoney(value)) throw new TypeError('Invalid SILVER Money DTO')

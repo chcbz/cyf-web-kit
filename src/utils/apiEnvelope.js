@@ -1,7 +1,7 @@
-// CYF interface-standard 1.2, protocolVersion 1. No legacy-wire fallbacks.
+// CYF interface-standard 1.4, protocolVersion 1. No legacy-wire fallbacks.
 const own = (value, key) => Object.prototype.hasOwnProperty.call(value, key)
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value)
-const exactKeys = (value, keys) => object(value) && Object.keys(value).length === keys.length && keys.every(key => own(value, key))
+const requiredKeys = (value, keys) => object(value) && keys.every(key => own(value, key))
 export const validRequestId = value => typeof value === 'string' && value.trim().length > 0 && !Array.from(value).some(ch => ch.charCodeAt(0) < 32 || (ch.charCodeAt(0) >= 127 && ch.charCodeAt(0) <= 159))
 
 export function protocolError (code = 'PROTOCOL_INVALID_RESPONSE', details = {}) {
@@ -98,7 +98,7 @@ export function decodeHttpResponse (text, { status, requestId, responseRequestId
   const details = { status, requestId }
   let result
   try { result = parseStrictJson(text, { integerTokensOnly }) } catch { throw protocolError('PROTOCOL_INVALID_RESPONSE', details) }
-  if (!Number.isInteger(status) || !exactKeys(result, ['protocolVersion', 'requestId', 'code', 'msg', 'data']) ||
+  if (!Number.isInteger(status) || !requiredKeys(result, ['protocolVersion', 'requestId', 'code', 'msg', 'data']) ||
       result.protocolVersion !== 1 || !validRequestId(result.requestId) || typeof result.code !== 'string' ||
       !result.code || typeof result.msg !== 'string' ||
       (requestId !== undefined && result.requestId !== requestId) ||

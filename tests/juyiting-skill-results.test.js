@@ -23,7 +23,7 @@ describe('SE2 scoped directory and generic data-only result consumers', () => {
     assert.match(skillCostText(null), /不等于免费/)
     assert.match(skillCostText({ mode: 'FIXED', amount: '0.20', currency: 'CNY' }), /非平台实扣/)
     assert.equal(skillCapabilityProjection(directory).items[0].state, 'CALLABLE')
-    assert.equal(skillCapabilityProjection({ ...directory, token: 'secret' }), null)
+    assert.deepEqual(skillCapabilityProjection({ ...directory, token: 'secret' }), skillCapabilityProjection(directory))
     assert.equal(skillCapabilityProjection({ ...directory, items: [{ ...directory.items[0], state: 'RUNTIME_READY' }] }), null)
   })
   it('derives an exact execution reference without discovering history or guessing IDs', () => {

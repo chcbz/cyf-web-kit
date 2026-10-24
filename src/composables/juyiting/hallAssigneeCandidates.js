@@ -2,15 +2,15 @@ import { exactPointAndStartId } from './hallPointAndStartIntent.js'
 
 export const assigneeSummary = value => {
   const fields = ['agentId', 'displayName', 'providerDisplayName', 'isMine', 'availability']
-  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length !== fields.length ||
+  if (!value || typeof value !== 'object' || Array.isArray(value) ||
     !fields.every(key => Object.hasOwn(value, key)) || !exactPointAndStartId(value.agentId) ||
     typeof value.displayName !== 'string' || !value.displayName.trim() ||
     !(value.providerDisplayName === null || typeof value.providerDisplayName === 'string') ||
     typeof value.isMine !== 'boolean' || typeof value.availability !== 'string' || !value.availability) return null
-  return Object.freeze({ ...value })
+  return Object.freeze(Object.fromEntries(fields.map(key => [key, value[key]])))
 }
 export const assigneePage = (value, afterAgentId = null) => {
-  if (!value || Object.keys(value).sort().join(',') !== 'items,nextAfterAgentId' || !Array.isArray(value.items) ||
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !['items', 'nextAfterAgentId'].every(key => Object.hasOwn(value, key)) || !Array.isArray(value.items) ||
     !(value.nextAfterAgentId === null || exactPointAndStartId(value.nextAfterAgentId))) return null
   const items = value.items.map(assigneeSummary)
   if (items.some(item => !item) || new Set(items.map(item => item.agentId)).size !== items.length ||

@@ -1,10 +1,10 @@
-import { economyApi } from '@/composables/useHttp'
+import { economyApi } from '../composables/useHttp.js'
 
 export const readEconomyCapability = capability =>
   capability && typeof capability === 'object' && !Array.isArray(capability) &&
-  Object.keys(capability).length === 3 && typeof capability.economyPreviewEnabled === 'boolean' &&
+  ['economyPreviewEnabled', 'skillMarketplaceEnabled', 'principalScopeSha256'].every(key => Object.hasOwn(capability, key)) && typeof capability.economyPreviewEnabled === 'boolean' &&
   typeof capability.skillMarketplaceEnabled === 'boolean' && typeof capability.principalScopeSha256 === 'string' &&
-  /^[0-9a-f]{64}$/.test(capability.principalScopeSha256) ? capability : null
+  /^[0-9a-f]{64}$/.test(capability.principalScopeSha256) ? { economyPreviewEnabled: capability.economyPreviewEnabled, skillMarketplaceEnabled: capability.skillMarketplaceEnabled, principalScopeSha256: capability.principalScopeSha256 } : null
 
 export const isEconomyPreviewCapability = capability => readEconomyCapability(capability)?.economyPreviewEnabled === true
 export const isSkillMarketplaceCapability = capability => isEconomyPreviewCapability(capability) && capability.skillMarketplaceEnabled === true

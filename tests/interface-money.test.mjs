@@ -3,12 +3,14 @@ import assert from 'node:assert/strict'
 import { isSilverMoney, formatSilverMoney } from '../src/utils/silverAmount.js'
 import { assessReadOnlyPreviewCapabilities } from '../src/utils/economyReadOnlyPreviewPolicy.js'
 
-test('Money preserves Long precision and rejects old scalar/wrong currency/extra aliases', () => {
+test('Money preserves Long precision and rejects old scalar/wrong currency; additive metadata cannot change the amount', () => {
   const max = { amountMinor: '9223372036854775807', currency: 'SILVER' }
   assert.equal(isSilverMoney(max), true)
+  assert.equal(formatSilverMoney({ ...max, amountMicro: '1', note: 'display only' }), formatSilverMoney(max))
+  assert.equal(isSilverMoney({ amountMicro: '1', currency: 'SILVER' }), false)
   assert.equal(formatSilverMoney(max), '9223372036854.775807 SILVER')
   for (const value of ['100', 100, { ...max, amountMinor: '9223372036854775808' },
-    { ...max, amountMinor: '01' }, { ...max, amountMinor: 100 }, { ...max, currency: 'USD' }, { ...max, amountMicro: '1' }]) {
+    { ...max, amountMinor: '01' }, { ...max, amountMinor: 100 }, { ...max, currency: 'USD' }]) {
     assert.equal(isSilverMoney(value), false); assert.throws(() => formatSilverMoney(value))
   }
 })

@@ -7,15 +7,15 @@ const fixture = (agentId = 'a') => ({ agentId, observedAt: 10000, abilities: ['å
 const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b }); return { promise, resolve, reject } }
 const settle = async () => { await Promise.resolve(); await nextTick(); await Promise.resolve() }
 
-describe('Agent private profile closed projection', () => {
+describe('Agent private profile safe field projection', () => {
   it('accepts exact DTO with huge decimal revision and immutable empty abilities', () => {
     const raw = fixture(); raw.abilities = []
     const result = project(raw, 'a')
     expect(result.abilities).to.deep.equal([]); expect(result.skills.catalogRevision).to.equal(raw.skills.catalogRevision)
     expect(Object.isFrozen(result.skills.items[0])).to.equal(true)
   })
-  it('rejects wrong identity, extra fields, unsafe times and impossible ready', () => {
-    const changes = [raw => { raw.agentId = 'b' }, raw => { raw.extra = true }, raw => { raw.observedAt = 9007199254740992 }, raw => { raw.skills.catalogRevision = '01' }, raw => { raw.skills.items[0].skillVersion = 1 }, raw => { raw.skills.items[0].installationVerified = false }, raw => { raw.skills.items.push(item()) }, raw => { raw.skills.items[0].reasonCode = 'UNAVAILABLE' }]
+  it('rejects wrong identity, unsafe times and impossible ready', () => {
+    const changes = [raw => { raw.agentId = 'b' }, raw => { raw.observedAt = 9007199254740992 }, raw => { raw.skills.catalogRevision = '01' }, raw => { raw.skills.items[0].skillVersion = 1 }, raw => { raw.skills.items[0].installationVerified = false }, raw => { raw.skills.items.push(item()) }, raw => { raw.skills.items[0].reasonCode = 'UNAVAILABLE' }]
     for (const change of changes) { const raw = fixture(); change(raw); expect(project(raw, 'a')).to.equal(null) }
   })
   it('distinguishes partial failure, empty directory and unknown safe reason', () => {

@@ -15,14 +15,14 @@ export const observationString = value => typeof value === 'string' && value.len
 
 /** Fails closed: the browser never derives this capability from a token or cached profile. */
 export function assessCommandObservabilityCapability (value) {
-  if (!isRecord(value) || Object.keys(value).length !== CAPABILITY_KEYS.length || !CAPABILITY_KEYS.every(key => own(value, key))) {
+  if (!isRecord(value) || !CAPABILITY_KEYS.every(key => own(value, key))) {
     return Object.freeze({ available: false, reason: 'MALFORMED' })
   }
   if (value.contractVersion !== CONTRACT_VERSION || typeof value.available !== 'boolean' || value.readOnly !== true || !CAPABILITY_REASONS.has(value.reason)) {
     return Object.freeze({ available: false, reason: 'MALFORMED' })
   }
   if (value.available !== (value.reason === null)) return Object.freeze({ available: false, reason: 'MALFORMED' })
-  return Object.freeze({ available: value.available, reason: value.reason, capability: Object.freeze({ ...value }) })
+  return Object.freeze({ available: value.available, reason: value.reason, capability: Object.freeze(Object.fromEntries(CAPABILITY_KEYS.map(key => [key, value[key]]))) })
 }
 
 const validCursor = value => typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value) && (value.length < 19 || (value.length === 19 && value <= '9223372036854775807'))

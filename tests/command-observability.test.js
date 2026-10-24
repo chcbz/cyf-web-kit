@@ -28,7 +28,7 @@ describe('command observability read-only policy and lifecycle', () => {
     expect(assessCommandObservabilityCapability(capability()).available).to.equal(true)
     expect(assessCommandObservabilityCapability(capability(false, 'FORBIDDEN'))).to.include({ available: false, reason: 'FORBIDDEN' })
     expect(assessCommandObservabilityCapability(capability(false, 'DISABLED'))).to.include({ available: false, reason: 'DISABLED' })
-    expect(assessCommandObservabilityCapability({ ...capability(), unexpected: true }).reason).to.equal('MALFORMED')
+    expect(assessCommandObservabilityCapability({ ...capability(), unexpected: true }).capability).to.deep.equal(capability())
     expect(assessCommandObservabilityCapability({ ...capability(), readOnly: false }).reason).to.equal('MALFORMED')
     expect(observationValue(9007199254740992)).to.equal('未知')
     expect(observationDuration(0.125)).to.equal('0.125')

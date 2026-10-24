@@ -1,15 +1,15 @@
 import { ref, watch } from 'vue'
 
-const exactKeys = (value, keys) => value !== null && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key))
+const requiredKeys = (value, keys) => value !== null && typeof value === 'object' && !Array.isArray(value) && keys.every(key => Object.hasOwn(value, key))
 const text = value => typeof value === 'string' && value.trim().length > 0
 const safeTime = value => Number.isSafeInteger(value) && value >= 0
 const reasonCode = value => typeof value === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(value)
 
-/** Closed, browser-safe DTO only; the HTTP client has already decoded the common envelope. */
+/** Required, browser-safe fields only; additive metadata is ignored; the HTTP client has already decoded the common envelope. */
 export const agentProfileCapabilitiesProjection = (raw, expectedAgentId) => {
-  if (!exactKeys(raw, ['agentId', 'observedAt', 'abilities', 'lastSeenAt', 'skills']) || raw.agentId !== expectedAgentId || !safeTime(raw.observedAt) || !(raw.lastSeenAt === null || safeTime(raw.lastSeenAt)) || !Array.isArray(raw.abilities) || !raw.abilities.every(text)) return null
+  if (!requiredKeys(raw, ['agentId', 'observedAt', 'abilities', 'lastSeenAt', 'skills']) || raw.agentId !== expectedAgentId || !safeTime(raw.observedAt) || !(raw.lastSeenAt === null || safeTime(raw.lastSeenAt)) || !Array.isArray(raw.abilities) || !raw.abilities.every(text)) return null
   const directory = raw.skills
-  if (!exactKeys(directory, ['status', 'catalogRevision', 'reasonCode', 'items']) || !Array.isArray(directory.items)) return null
+  if (!requiredKeys(directory, ['status', 'catalogRevision', 'reasonCode', 'items']) || !Array.isArray(directory.items)) return null
   if (directory.catalogRevision !== null && !(typeof directory.catalogRevision === 'string' && /^(0|[1-9][0-9]*)$/.test(directory.catalogRevision))) return null
   if (directory.status === 'UNAVAILABLE') {
     if (directory.reasonCode !== 'SKILL_DESCRIPTOR_SOURCE_UNAVAILABLE' || directory.items.length || directory.catalogRevision !== null) return null
@@ -17,16 +17,16 @@ export const agentProfileCapabilitiesProjection = (raw, expectedAgentId) => {
   const identities = new Set()
   const items = []
   for (const item of directory.items) {
-    if (!exactKeys(item, ['skillKey', 'skillVersion', 'title', 'installationVerified', 'runtimeState', 'reasonCode']) || !text(item.skillKey) || !text(item.skillVersion) || !text(item.title) || typeof item.installationVerified !== 'boolean') return null
+    if (!requiredKeys(item, ['skillKey', 'skillVersion', 'title', 'installationVerified', 'runtimeState', 'reasonCode']) || !text(item.skillKey) || !text(item.skillVersion) || !text(item.title) || typeof item.installationVerified !== 'boolean') return null
     if (item.runtimeState === 'RUNTIME_READY') {
       if (!item.installationVerified || item.reasonCode !== null) return null
     } else if (item.runtimeState !== 'UNAVAILABLE' || !reasonCode(item.reasonCode)) return null
     const key = JSON.stringify([item.skillKey, item.skillVersion])
     if (identities.has(key)) return null
     identities.add(key)
-    items.push(Object.freeze({ ...item }))
+    items.push(Object.freeze({ skillKey: item.skillKey, skillVersion: item.skillVersion, title: item.title, installationVerified: item.installationVerified, runtimeState: item.runtimeState, reasonCode: item.reasonCode }))
   }
-  return Object.freeze({ ...raw, abilities: Object.freeze([...raw.abilities]), skills: Object.freeze({ ...directory, items: Object.freeze(items) }) })
+  return Object.freeze({ agentId: raw.agentId, observedAt: raw.observedAt, lastSeenAt: raw.lastSeenAt, abilities: Object.freeze([...raw.abilities]), skills: Object.freeze({ status: directory.status, catalogRevision: directory.catalogRevision, reasonCode: directory.reasonCode, items: Object.freeze(items) }) })
 }
 
 const reasons = {

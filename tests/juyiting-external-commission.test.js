@@ -172,8 +172,8 @@ describe('D3.1 unified candidates and persistent task target', () => {
     expect(await pending).to.equal(false)
     expect(other.task.value.assignedTarget).to.equal(undefined)
   })
-  it('rejects full management DTOs, malformed cursors, duplicate IDs and numeric revisions', () => {
-    expect(candidates.assigneeSummary({ ...summary(), canOperate: true })).to.equal(null)
+  it('drops unrelated management fields and rejects malformed cursors, duplicate IDs and numeric revisions', () => {
+    expect(candidates.assigneeSummary({ ...summary(), canOperate: true })).to.deep.equal(summary())
     expect(candidates.assigneePage({ items: [summary()], nextAfterAgentId: 'wrong' })).to.equal(null)
     expect(candidates.assigneePage({ items: [summary(), summary()], nextAfterAgentId: null })).to.equal(null)
     expect(candidates.assigneePage({ items: [summary()], nextAfterAgentId: null }, 'external')).to.equal(null)
