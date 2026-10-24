@@ -84,11 +84,9 @@ describe('ordinary v3 Agent outcome projection', () => {
     expect(inspectionOutcomeProjection(value, context).state).to.equal('PENDING')
   })
 
-  it('supports all 32 selected materials and rejects duplicate or extra references', () => {
+  it('preserves selected materials and rejects duplicate references', () => {
     const value = action(); value.outcome.action.sourceRefIds = Array.from({ length: 32 }, (_, i) => `source-${i}`)
     expect(typedOutcomeProjection(value, context).outcome.action.sourceRefIds).to.have.length(32)
-    value.outcome.action.sourceRefIds.push('source-32')
-    expect(typedOutcomeProjection(value, context)).to.equal(null)
     value.outcome.action.sourceRefIds = ['source-0', 'source-0']
     expect(typedOutcomeProjection(value, context)).to.equal(null)
   })

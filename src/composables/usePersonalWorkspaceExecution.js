@@ -31,7 +31,7 @@ const normalizeAgent = value => ({
   status: typeof value.status === 'string' ? value.status : ''
 })
 const validSelection = value => value && typeof value === 'object' && ID(value.fileId) && REVISION(value.version) && BigInt(value.version) <= 2147483647n
-const validSelections = value => Array.isArray(value) && value.length <= 128 && value.every(validSelection) && new Set(value.map(item => item.fileId)).size === value.length
+const validSelections = value => Array.isArray(value) && value.every(validSelection) && new Set(value.map(item => item.fileId)).size === value.length
 const validOutputMime = value => EXECUTION_MIME_TYPES.has(value)
 const validInputMime = value => EXECUTION_INPUT_MIME_TYPES.has(value)
 const validCapabilities = value => value && typeof value === 'object' && Array.isArray(value.allowedMimeTypes) &&

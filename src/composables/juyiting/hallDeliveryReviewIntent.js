@@ -26,7 +26,7 @@ const validSource = source => {
 const taskStates = ['OPEN', 'PLANNING', 'ASSIGNED', 'RUNNING', 'BLOCKED', 'REVIEWING', 'COMPLETED', 'FAILED', 'CANCELLED', 'ARCHIVED']
 const validBatch = batch => exact(batch, ['deliveryId', 'deliveryVersion', 'state', 'batchSha256', 'summary', 'submittedAt', 'items', 'allowedActions']) &&
   reviewId(batch.deliveryId) && reviewVersion(batch.deliveryVersion) && oneOf(batch.state, ['SUBMITTED', 'ACCEPTED', 'CHANGES_REQUESTED']) && hash(batch.batchSha256) &&
-  typeof batch.summary === 'string' && Number.isSafeInteger(batch.submittedAt) && batch.submittedAt >= 0 && Array.isArray(batch.items) && batch.items.length > 0 && batch.items.length <= 100 &&
+  typeof batch.summary === 'string' && Number.isSafeInteger(batch.submittedAt) && batch.submittedAt >= 0 && Array.isArray(batch.items) && batch.items.length > 0 &&
   batch.items.every(item => exact(item, ['artifactId', 'artifactVersion', 'contentHash', 'purpose', 'displayRole', 'source', 'unavailableReason']) &&
     reviewId(item.artifactId) && reviewVersion(item.artifactVersion) && item.artifactVersion !== '0' && BigInt(item.artifactVersion) <= 2147483647n && hash(item.contentHash) &&
     typeof item.purpose === 'string' && item.purpose.length > 0 && oneOf(item.displayRole, ['RESULT', 'MANIFEST']) &&
@@ -39,7 +39,7 @@ export function validateContext (raw, taskId) {
   if (!exact(raw, ['schemaVersion', 'taskId', 'taskVersion', 'taskState', 'assignmentRevision', 'currentDelivery', 'history', 'pendingOperation']) ||
     raw.schemaVersion !== 1 || !reviewId(taskId) || raw.taskId !== taskId || !reviewVersion(raw.taskVersion) || !reviewVersion(raw.assignmentRevision) ||
     !taskStates.includes(raw.taskState) || (raw.currentDelivery !== null && !validBatch(raw.currentDelivery)) || !Array.isArray(raw.history) ||
-    raw.history.length > 100 || !raw.history.every(validBatch)) fail()
+    !raw.history.every(validBatch)) fail()
   const batches = [...raw.history, ...(raw.currentDelivery ? [raw.currentDelivery] : [])]
   if (new Set(batches.map(b => b.deliveryId)).size !== batches.length) fail()
   const pending = raw.pendingOperation

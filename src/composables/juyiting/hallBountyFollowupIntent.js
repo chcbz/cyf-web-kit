@@ -80,7 +80,7 @@ export const createHallBountyFollowupIntentStore = ({ storage = null, scope, con
       const parsed = JSON.parse(raw)
       if (!parsed || parsed.schemaVersion !== 1 || !parsed.records || typeof parsed.records !== 'object' || Array.isArray(parsed.records)) return { state: 'CORRUPT', records: {} }
       const entries = Object.entries(parsed.records)
-      if (entries.length > 64 || entries.some(([key, record]) => key !== record?.finalKey || !validFollowupRecord(record))) return { state: 'CORRUPT', records: {} }
+      if (entries.some(([key, record]) => key !== record?.finalKey || !validFollowupRecord(record))) return { state: 'CORRUPT', records: {} }
       return { state: 'PRESENT', records: Object.fromEntries(entries.map(([key, record]) => [key, clone(record)])) }
     } catch { return { state: 'CORRUPT', records: {} } }
   }

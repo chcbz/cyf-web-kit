@@ -37,7 +37,7 @@ export function scopedExecutionSteps (request, conversationId) {
 }
 
 export function outputCatalogItems (items, requestId, stepId) {
-  if (!exactOutputId(requestId) || !exactOutputId(stepId) || !Array.isArray(items) || items.length > 128) return []
+  if (!exactOutputId(requestId) || !exactOutputId(stepId) || !Array.isArray(items)) return []
   const prefix = `/chat/requests/${encodeURIComponent(requestId)}/steps/${encodeURIComponent(stepId)}/outputs/`
   const seen = new Set()
   return items.filter(item => {

@@ -33,13 +33,13 @@ const formalDelivery = (delivery, taskId) => delivery && typeof delivery === 'ob
   validId(delivery.manifestArtifactId) && validRevision(delivery.manifestArtifactVersion) && validTimestamp(delivery.submittedAt) &&
   (delivery.reviewedAt == null || validTimestamp(delivery.reviewedAt)) &&
   (delivery.reviewReason == null || validText(delivery.reviewReason, 4000)) && validEntityVersion(delivery.taskVersion) &&
-  validEntityVersion(delivery.workItemVersion) && Array.isArray(delivery.items) && delivery.items.length <= 100 && delivery.items.every(formalItem) &&
+  validEntityVersion(delivery.workItemVersion) && Array.isArray(delivery.items) && delivery.items.every(formalItem) &&
   (delivery.state === 'submitted' ? delivery.deliveryVersion === 0 && delivery.reviewedAt == null && delivery.reviewReason == null
     : delivery.deliveryVersion >= 1 && positiveTimestamp(delivery.reviewedAt) &&
       (delivery.state === 'accepted' ? delivery.reviewReason == null : validReviewReason(delivery.reviewReason)))
 const validatedPage = (value, taskId) => {
   if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.keys(value).every(key => PAGE_FIELDS.has(key)) ||
-    !Array.isArray(value.items) || value.items.length > 100 || !value.items.every(item => formalDelivery(item, taskId))) {
+    !Array.isArray(value.items) || !value.items.every(item => formalDelivery(item, taskId))) {
     throw new Error('正式交付返回格式无效，未展示可能不完整的数据。')
   }
   const seen = new Set()

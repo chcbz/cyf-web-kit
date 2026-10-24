@@ -17,7 +17,7 @@
       <button type="button" :disabled="disabled || state === 'loading-list'" @click="refresh">
         {{ state === 'loading-list' ? '读取中…' : '从个人工作空间选择' }}
       </button>
-      <span>{{ selected.length }}/{{ HALL_REFERENCE_MAX_ITEMS }}</span>
+      <span>已选 {{ selected.length }} 项</span>
     </div>
 
     <p v-if="error" class="reference-error" role="alert">{{ error }}</p>
@@ -69,7 +69,6 @@
 <script setup>
 import { computed, toRef, watch } from 'vue'
 import {
-  HALL_REFERENCE_MAX_ITEMS,
   useHallReferenceImageSelection
 } from '../../composables/juyiting/hallReferenceImageSelection.js'
 

@@ -3,7 +3,6 @@ import { computed, getCurrentInstance, onBeforeUnmount, ref, unref, watch } from
 import { usePersonalWorkspace } from '../usePersonalWorkspace.js'
 import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
 
-export const HALL_REFERENCE_MAX_ITEMS = 32
 export const HALL_REFERENCE_PURPOSE = 'REFERENCE'
 export const HALL_REFERENCE_IMAGE_MIME_TYPES = Object.freeze(['image/jpeg', 'image/png'])
 export const JAVA_INT_MAX = 2147483647
@@ -181,7 +180,6 @@ export function useHallReferenceImageSelection ({
 
     const key = referenceKey(fileId, version)
     if (sessions.has(key) || pendingKeys.has(key)) return setError('该文件版本已选择，不能重复加入。')
-    if (selected.value.length + pendingKeys.size >= HALL_REFERENCE_MAX_ITEMS) return setError('参考图最多选择 32 项。')
 
     const snapshot = { generation, epoch: currentEpoch.value }
     const previewSession = usePersonalWorkspace({ api, identityEpoch, urlApi })
@@ -237,8 +235,8 @@ export function useHallReferenceImageSelection ({
       return setError(message)
     }
 
-    if (!Array.isArray(references) || references.length > HALL_REFERENCE_MAX_ITEMS) {
-      return failCurrentReplacement('参考图草稿必须是 0 到 32 项的明确版本列表。')
+    if (!Array.isArray(references)) {
+      return failCurrentReplacement('参考图草稿必须是明确版本列表。')
     }
     const normalized = []
     const keys = new Set()

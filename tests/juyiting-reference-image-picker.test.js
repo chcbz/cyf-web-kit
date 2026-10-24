@@ -6,7 +6,6 @@ import { compileScript, compileTemplate, parse } from '@vue/compiler-sfc'
 import { defineComponent, h, nextTick, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import {
-  HALL_REFERENCE_MAX_ITEMS,
   JAVA_INT_MAX,
   normalizeHallReferenceVersion,
   toHallDraftReference,
@@ -210,17 +209,17 @@ describe('hall requirement-draft reference image selection', () => {
     selection.dispose()
   })
 
-  it('enforces 32 unique exact references and rejects a duplicate without another preview', async () => {
-    const details = new Map(Array.from({ length: HALL_REFERENCE_MAX_ITEMS + 1 }, (_, index) => {
+  it('keeps exact references and rejects a duplicate without another preview', async () => {
+    const details = new Map(Array.from({ length: 2 }, (_, index) => {
       const fileId = `file-${index + 1}`
       return [fileId, detailView(fileId)]
     }))
     const fixture = createFixture({ details })
     const selection = useHallReferenceImageSelection({ api: fixture.api, identityEpoch: ref('owner-a'), urlApi: fixture.urlApi })
-    for (let index = 1; index <= HALL_REFERENCE_MAX_ITEMS; index += 1) {
+    for (let index = 1; index <= 2; index += 1) {
       assert.ok(await addExact(selection, `file-${index}`, '1'))
     }
-    assert.equal(selection.draftReferences.value.length, HALL_REFERENCE_MAX_ITEMS)
+    assert.equal(selection.draftReferences.value.length, 2)
 
     await selection.openFile('file-1')
     const callsBeforeDuplicate = fixture.calls.length
@@ -228,9 +227,6 @@ describe('hall requirement-draft reference image selection', () => {
     assert.equal(fixture.calls.length, callsBeforeDuplicate)
     assert.match(selection.error.value, /重复|已选择/)
 
-    await selection.openFile(`file-${HALL_REFERENCE_MAX_ITEMS + 1}`)
-    assert.equal(await selection.addReference(`file-${HALL_REFERENCE_MAX_ITEMS + 1}`, '1'), null)
-    assert.match(selection.error.value, /32/)
     selection.dispose()
   })
 
@@ -334,8 +330,7 @@ describe('hall requirement-draft reference image selection', () => {
     const replacements = []
     const reference = fileId => ({ fileId, version: '1', purpose: 'REFERENCE' })
     const selectionModule = {
-      HALL_REFERENCE_MAX_ITEMS,
-      useHallReferenceImageSelection: ({ identityEpoch }) => {
+          useHallReferenceImageSelection: ({ identityEpoch }) => {
         const items = Vue.ref([])
         const listState = Vue.ref('idle')
         const currentDetail = Vue.ref(null)

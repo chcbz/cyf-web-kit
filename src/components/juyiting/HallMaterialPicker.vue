@@ -339,7 +339,6 @@ const stageQuickMaterial = () => {
   if (!detail || !validMaterialVersion(version) || !detail.versions.some(item => item.version === version)) return
   const material = { fileId: detail.file.fileId, version, displayName: detail.file.displayName, contentMimeType: detail.versions.find(item => item.version === version).contentMimeType }
   const others = draftMaterials.value.filter(item => materialKey(item) !== materialKey(material))
-  if (others.length >= 32) { workspace.error.value = '最多添加 32 份资料。'; return }
   draftMaterials.value = [...others, material]
 }
 const removeDraftMaterial = material => { draftMaterials.value = draftMaterials.value.filter(item => materialKey(item) !== materialKey(material)) }
