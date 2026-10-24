@@ -2861,7 +2861,7 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
 }
 
 describe('JuyiHall restored-identity initialization', () => {
-  it('hydrates a retained token despite a cached local ID and restores the exact tenant-zero scope before Hall data loads', async () => {
+  it('hydrates a retained token despite a cached local ID and restores the account scope without a tenant before Hall data loads', async () => {
     const mode = Vue.ref('portrait-command')
     const order = []
     const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
@@ -2876,7 +2876,7 @@ describe('JuyiHall restored-identity initialization', () => {
       token: async () => 'retained-bearer-token',
       getUserInfo: async () => {
         order.push('profile')
-        globalStore.user = { id: 5, tenantId: '0', displayName: '已验证账号' }
+        globalStore.user = { id: 5, displayName: '已验证账号' }
       }
     })
     mocks.useGlobalStore = () => globalStore
@@ -2895,7 +2895,7 @@ describe('JuyiHall restored-identity initialization', () => {
       const state = wrapper.vm.$.setupState
       expect(order[0]).to.equal('profile')
       expect(order).to.include('agents')
-      expect(state.hallIdentityScope).to.equal('0\u0000client-a\u00005')
+      expect(state.hallIdentityScope).to.equal('client-a\u00005')
       expect(state.accountDisplayName).to.equal('已验证账号')
       expect(state.accountDisplayName).not.to.equal('5')
     } finally {

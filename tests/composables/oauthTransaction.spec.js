@@ -68,8 +68,7 @@ describe('OAuth transaction utility', () => {
       'expiresAt',
       'clientId',
       'redirectUri',
-      'authorizationServer',
-      'expectedTenant'
+      'authorizationServer'
     ])
     expect(transaction.state).to.match(/^[A-Za-z0-9_-]{43}$/)
     expect(transaction.codeVerifier).to.match(/^[A-Za-z0-9_-]{86}$/)
@@ -83,44 +82,12 @@ describe('OAuth transaction utility', () => {
     const { storage, transaction } = await storedTransaction()
 
     expect(consumeOAuthTransaction(transaction.state, { storage, now: 200, ...runtimeConfig })).to.deep.equal({
-      state: transaction.state,
       codeVerifier: transaction.codeVerifier,
       returnTo: transaction.returnTo,
-      ...runtimeConfig,
-      expectedTenant: null
+      ...runtimeConfig
     })
     expect(() => consumeOAuthTransaction(transaction.state, { storage, now: 200, ...runtimeConfig }))
       .to.throw().with.property('code', 'missing_transaction')
-  })
-
-  it('allows only an intentional unspecified-area callback in selectable mode', async () => {
-    const choice = await storedTransaction()
-    expect(() => consumeOAuthTransaction(choice.transaction.state, {
-      storage: choice.storage, now: 200, ...runtimeConfig, expectedTenant: '1'
-    })).to.throw().with.property('code', 'configuration_mismatch')
-
-    const selectable = await storedTransaction()
-    expect(consumeOAuthTransaction(selectable.transaction.state, {
-      storage: selectable.storage, now: 200, ...runtimeConfig,
-      expectedTenant: '1', allowUnspecifiedTenant: true
-    }).expectedTenant).to.equal(null)
-
-    const boundStorage = memoryStorage()
-    const bound = await createOAuthTransaction({
-      ...runtimeConfig, expectedTenant: '1', storage: boundStorage,
-      cryptoImpl: deterministicCrypto(), now: 100
-    })
-    expect(() => consumeOAuthTransaction(bound.state, {
-      storage: boundStorage, now: 200, ...runtimeConfig,
-      expectedTenant: '2', allowUnspecifiedTenant: true
-    })).to.throw().with.property('code', 'configuration_mismatch')
-
-    const changedServer = await storedTransaction()
-    expect(() => consumeOAuthTransaction(changedServer.transaction.state, {
-      storage: changedServer.storage, now: 200, ...runtimeConfig,
-      authorizationServer: 'https://other.example',
-      expectedTenant: '1', allowUnspecifiedTenant: true
-    })).to.throw().with.property('code', 'configuration_mismatch')
   })
 
   it('removes and rejects mismatched state or any byte-different runtime configuration', async () => {

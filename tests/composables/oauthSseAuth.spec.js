@@ -220,14 +220,14 @@ describe('direct SSE authentication boundary', () => {
     expect(stream).to.include('readerRef.value = handle')
     expect(stream).to.match(/AbortError[\s\S]*?generation !== chatLifecycleGeneration/)
   })
-  it('does not forward a chunk after another tab replaces the shared tenant session', async () => {
+  it('does not forward a chunk after another tab replaces the shared login session', async () => {
     let source
     let cancelled = false
     let current = true
     const apiStore = {
       authorizationGeneration: 4,
       token: async () => 'old-token',
-      assertTenantTokenCurrent: async () => {
+      assertTokenCurrent: async () => {
         if (!current) throw new DOMException('Identity changed', 'AbortError')
       }
     }

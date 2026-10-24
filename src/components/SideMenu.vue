@@ -38,17 +38,6 @@
               </span>
             </router-link>
           </div>
-          <div v-if="canChooseArea" class="area-switch">
-            <button
-              type="button"
-              class="area-switch-button"
-              :disabled="choosingArea"
-              @click="chooseArea"
-            >
-              {{ choosingArea ? '正在前往选区…' : '切换业务区域' }}
-            </button>
-            <p v-if="areaSwitchError" role="alert">{{ areaSwitchError }}</p>
-          </div>
         </div>
       </template>
     </var-menu>
@@ -56,12 +45,11 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useWindowSize } from '@vueuse/core'
 import { useGlobalStore } from '@/stores/global'
 import { useMessageStore } from '@/stores/message'
-import { useApiStore } from '@/stores/api'
 
 const props = defineProps({
   modelValue: {
@@ -76,25 +64,7 @@ const router = useRouter()
 const { width } = useWindowSize()
 const globalStore = useGlobalStore()
 const messageStore = useMessageStore()
-const apiStore = useApiStore()
-const canChooseArea = import.meta.env.VITE_TENANT_SELECTION_MODE === 'selectable'
-const choosingArea = ref(false)
-const areaSwitchError = ref('')
 
-async function chooseArea () {
-  if (choosingArea.value) return
-  choosingArea.value = true
-  areaSwitchError.value = ''
-  try {
-    if (!(await apiStore.beginAuthorization(undefined, { chooseArea: true }))) {
-      areaSwitchError.value = '正在进行登录，请稍后重试。'
-    }
-  } catch {
-    areaSwitchError.value = '无法进入区域选择，请检查登录服务后重试。'
-  } finally {
-    choosingArea.value = false
-  }
-}
 const isMobile = computed(() => width.value < 768)
 const menuPlacement = computed(() => (isMobile.value ? 'bottom' : 'right'))
 const menuOffsetX = computed(() => (isMobile.value ? 0 : -16))
@@ -280,30 +250,6 @@ watch(showSideMenu, (val) => {
   font-size: 11px;
   line-height: 18px;
   text-align: center;
-}
-
-.area-switch {
-  padding: 8px 10px 16px;
-}
-
-.area-switch-button {
-  width: 100%;
-  min-height: 44px;
-  border: 1px solid var(--color-primary, #376c50);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--color-text);
-  cursor: pointer;
-}
-
-.area-switch-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.area-switch p {
-  color: var(--color-danger, #a02626);
-  font-size: 13px;
 }
 
 @media (max-width: 768px) {

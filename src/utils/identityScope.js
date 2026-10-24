@@ -23,20 +23,19 @@ const firstPresentIdentityPart = values => {
 }
 
 export const resolveHydratedIdentity = (user) => {
-  if (!user || typeof user !== 'object') return { tenant: '', owner: '' }
+  if (!user || typeof user !== 'object') return { owner: '' }
   return {
-    tenant: firstPresentIdentityPart([user.tenantId, user.tenantCode, user.tenant]),
     owner: firstPresentIdentityPart([user.id, user.openid])
   }
 }
 
 export const hasHydratedIdentity = (user) => {
-  const { tenant, owner } = resolveHydratedIdentity(user)
-  return Boolean(tenant && owner)
+  const { owner } = resolveHydratedIdentity(user)
+  return Boolean(owner)
 }
 
 export const createHydratedIdentityScope = (user, clientId) => {
-  const { tenant, owner } = resolveHydratedIdentity(user)
+  const { owner } = resolveHydratedIdentity(user)
   const client = normalizeIdentityPart(clientId)
-  return tenant && client && owner ? [tenant, client, owner].join('\u0000') : ''
+  return client && owner ? [client, owner].join('\u0000') : ''
 }

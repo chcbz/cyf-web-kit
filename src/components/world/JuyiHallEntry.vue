@@ -23,7 +23,7 @@ import { guestDemoTemplates } from '@/constants/publicBetaDemo'
 import JuyiHall from './JuyiHall.vue'
 import HallOnboarding from '@/components/juyiting/HallOnboarding.vue'
 import { useApiStore } from '@/stores/api'
-import { browserBusinessNamespace } from '@/utils/tenantBusinessNamespace'
+import { browserBusinessNamespace } from '@/utils/businessNamespace'
 import {
   consumeGuestDemoTemplateQuery,
   createHallOnboarding,
@@ -42,9 +42,6 @@ let onboarding = null
 
 const currentSubject = computed(() => {
   const subject = hallOnboardingSubject(globalStore)
-  const mode = import.meta.env.VITE_TENANT_SELECTION_MODE
-  if (mode == null || mode === '') return subject
-  if (!['fixed', 'selectable'].includes(mode)) return null
   const namespace = browserBusinessNamespace(apiStore, globalStore)
   return namespace && subject != null ? namespace : null
 })

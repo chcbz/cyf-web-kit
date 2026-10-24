@@ -1,3 +1,4 @@
+import { browserBusinessNamespace } from '../src/utils/businessNamespace.js'
 import { useHallSelectedOutputReview } from '../src/composables/juyiting/useHallSelectedOutputReview.js'
 import { selectionKey } from '../src/composables/juyiting/hallSelectedOutputs.js'
 import { assignedTaskTarget } from '../src/composables/juyiting/hallAssigneeCandidates.js'
@@ -68,12 +69,7 @@ const loadActualHallForIntegration = (mocks, id) => {
     assignedTaskTarget,
     useHallSkillCapabilities,
     currentBountyAssignmentRevision,
-    browserBusinessNamespace: (apiStore, globalStore) => {
-      const owner = String(globalStore?.user?.id || globalStore?.user?.openid || globalStore?.getUserId || globalStore?.getOpenid || '').trim()
-      const tenant = String(globalStore?.user?.tenantId || globalStore?.user?.tenantCode || globalStore?.user?.tenant || '').trim()
-      const client = String(apiStore?.oauthClientId || '').trim()
-      return owner && client ? [tenant, client, owner].filter(Boolean).join('\u0000') : ''
-    },
+    browserBusinessNamespace,
     useHallHomeMode: () => ({ homeMode: Vue.ref('map'), isOverviewHome: Vue.ref(false), setHomeMode: () => {} }),
     ...mocks
   }

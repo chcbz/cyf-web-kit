@@ -1,4 +1,4 @@
-export const OAUTH_TRANSACTION_STORAGE_KEY = 'cyf.oauth.pending.v2'
+export const OAUTH_TRANSACTION_STORAGE_KEY = 'cyf.oauth.pending.v3'
 export const OAUTH_TRANSACTION_TTL_MS = 10 * 60 * 1000
 export const OAUTH_RETURN_PATH_MAX_UTF8_BYTES = 2048
 export const OAUTH_RETURN_PATH_MAX_DECODE_PASSES = 32
@@ -11,7 +11,6 @@ const TRANSACTION_FIELDS = Object.freeze([
   'clientId',
   'codeVerifier',
   'createdAt',
-  'expectedTenant',
   'expiresAt',
   'redirectUri',
   'returnTo',
@@ -87,20 +86,11 @@ function requiredExactString (value) {
   return value
 }
 
-function canonicalTenantId (value) {
-  if (value == null || value === '') return null
-  if (typeof value !== 'string' || !/^(?:0|[1-9][0-9]{0,49})$/.test(value)) {
-    throw new OAuthTransactionError('invalid_runtime_configuration', 'OAuth tenant configuration is invalid')
-  }
-  return value
-}
-
-function runtimeConfiguration ({ clientId, redirectUri, authorizationServer, expectedTenant }) {
+function runtimeConfiguration ({ clientId, redirectUri, authorizationServer }) {
   return Object.freeze({
     clientId: requiredExactString(clientId),
     redirectUri: requiredExactString(redirectUri),
-    authorizationServer: requiredExactString(authorizationServer),
-    expectedTenant: canonicalTenantId(expectedTenant)
+    authorizationServer: requiredExactString(authorizationServer)
   })
 }
 
@@ -175,18 +165,17 @@ export async function createOAuthTransaction ({
   clientId,
   redirectUri,
   authorizationServer,
-  expectedTenant = null,
   storage = browserStorage(),
   cryptoImpl = browserCrypto(),
   now = Date.now()
 } = {}) {
-  const config = runtimeConfiguration({ clientId, redirectUri, authorizationServer, expectedTenant })
+  const config = runtimeConfiguration({ clientId, redirectUri, authorizationServer })
   if (!isEpochMilliseconds(now) || !Number.isSafeInteger(now + OAUTH_TRANSACTION_TTL_MS)) {
     throw new OAuthTransactionError('invalid_clock', 'OAuth transaction clock is invalid')
   }
 
   const transaction = {
-    version: 2,
+    version: 3,
     state: randomBase64Url(STATE_BYTES, cryptoImpl),
     codeVerifier: randomBase64Url(VERIFIER_BYTES, cryptoImpl),
     returnTo: safeAppRelativePath(returnTo),
@@ -194,8 +183,7 @@ export async function createOAuthTransaction ({
     expiresAt: now + OAUTH_TRANSACTION_TTL_MS,
     clientId: config.clientId,
     redirectUri: config.redirectUri,
-    authorizationServer: config.authorizationServer,
-    expectedTenant: config.expectedTenant
+    authorizationServer: config.authorizationServer
   }
   storage.setItem(OAUTH_TRANSACTION_STORAGE_KEY, JSON.stringify(transaction))
   return Object.freeze(transaction)
@@ -213,9 +201,7 @@ export function consumeOAuthTransaction (receivedState, {
   clientId,
   redirectUri,
   authorizationServer,
-  expectedTenant = null,
   storage = browserStorage(),
-  allowUnspecifiedTenant = false,
   now = Date.now()
 } = {}) {
   const serialized = storage.getItem(OAUTH_TRANSACTION_STORAGE_KEY)
@@ -225,7 +211,7 @@ export function consumeOAuthTransaction (receivedState, {
     throw new OAuthTransactionError('missing_transaction', 'OAuth transaction was not found')
   }
 
-  const config = runtimeConfiguration({ clientId, redirectUri, authorizationServer, expectedTenant })
+  const config = runtimeConfiguration({ clientId, redirectUri, authorizationServer })
   let transaction
   try {
     transaction = JSON.parse(serialized)
@@ -234,7 +220,7 @@ export function consumeOAuthTransaction (receivedState, {
   }
 
   if (!hasExactTransactionFields(transaction) ||
-      transaction.version !== 2 ||
+      transaction.version !== 3 ||
       !isExpectedRandomValue(transaction.state, STATE_BYTES) ||
       !isExpectedRandomValue(transaction.codeVerifier, VERIFIER_BYTES) ||
       !isEpochMilliseconds(transaction.createdAt) ||
@@ -245,8 +231,7 @@ export function consumeOAuthTransaction (receivedState, {
       safeAppRelativePath(transaction.returnTo, '') !== transaction.returnTo ||
       typeof transaction.clientId !== 'string' || transaction.clientId.trim() === '' ||
       typeof transaction.redirectUri !== 'string' || transaction.redirectUri.trim() === '' ||
-      typeof transaction.authorizationServer !== 'string' || transaction.authorizationServer.trim() === '' ||
-      canonicalTenantId(transaction.expectedTenant) !== transaction.expectedTenant) {
+      typeof transaction.authorizationServer !== 'string' || transaction.authorizationServer.trim() === '') {
     throw new OAuthTransactionError('invalid_transaction', 'OAuth transaction is invalid')
   }
   if (now >= transaction.expiresAt) {
@@ -257,19 +242,15 @@ export function consumeOAuthTransaction (receivedState, {
   }
   if (!timingSafeEqual(config.clientId, transaction.clientId) ||
       !timingSafeEqual(config.redirectUri, transaction.redirectUri) ||
-      !timingSafeEqual(config.authorizationServer, transaction.authorizationServer) ||
-      (config.expectedTenant !== transaction.expectedTenant &&
-        !(allowUnspecifiedTenant === true && transaction.expectedTenant === null))) {
+      !timingSafeEqual(config.authorizationServer, transaction.authorizationServer)) {
     throw new OAuthTransactionError('configuration_mismatch', 'OAuth runtime configuration does not match')
   }
 
   return Object.freeze({
-    state: transaction.state,
     codeVerifier: transaction.codeVerifier,
     returnTo: transaction.returnTo,
     clientId: transaction.clientId,
     redirectUri: transaction.redirectUri,
-    authorizationServer: transaction.authorizationServer,
-    expectedTenant: transaction.expectedTenant
+    authorizationServer: transaction.authorizationServer
   })
 }

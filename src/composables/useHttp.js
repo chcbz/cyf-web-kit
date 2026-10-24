@@ -190,7 +190,7 @@ export function useHttp (options = {}) {
         if (authorizationGeneration !== requestAuthStore.authorizationGeneration) {
           throw new DOMException('Identity changed', 'AbortError')
         }
-        await requestAuthStore.assertTenantTokenCurrent?.(token)
+        await requestAuthStore.assertTokenCurrent?.(token)
         throwIfAborted(requestSignal.signal)
         if (authorizationGeneration !== requestAuthStore.authorizationGeneration) {
           throw new DOMException('Identity changed', 'AbortError')

@@ -1,18 +1,19 @@
 import { expect } from 'chai'
-import 'fake-indexeddb/auto'
 import { readFileSync } from 'node:fs'
 import { createPinia, setActivePinia } from 'pinia'
-import { tenantSelectionEnabled, useApiStore, validTenantIdentity, validTenantProfile, verifyPersistedTenantSession, visibleTenantIdentity, visibleTenantSessionCurrent } from '../../src/stores/api.js'
-import { useGlobalStore } from '../../src/stores/global.js'
-import { useUtilStore } from '../../src/stores/util.js'
+import { useApiStore } from '../../src/stores/api.js'
 import { initiateReauthentication } from '../../src/utils/reauthentication.js'
+import { useUtilStore } from '../../src/stores/util.js'
 import { OAUTH_TRANSACTION_STORAGE_KEY } from '../../src/utils/oauthTransaction.js'
-import { beginTenantAuthorization, commitTenantAuthorization, readTenantSession } from '../../src/utils/tenantAuthLedger.js'
+import { useGlobalStore } from '../../src/stores/global.js'
+import { useHttp } from '../../src/composables/useHttp.js'
+import { browserBusinessNamespace } from '../../src/utils/businessNamespace.js'
+import { fetchChatConversationEvents } from '../../src/utils/authenticatedSse.js'
+import { useAccountSecuritySession } from '../../src/composables/useAccountSecuritySession.js'
 
 Object.defineProperty(global, 'location', { value: window.location, writable: true, configurable: true })
 Object.defineProperty(global, 'localStorage', { value: window.localStorage, writable: true, configurable: true })
 Object.defineProperty(global, 'sessionStorage', { value: window.sessionStorage, writable: true, configurable: true })
-Object.defineProperty(globalThis, 'indexedDB', { value: window.indexedDB, configurable: true })
 
 const transaction = Object.freeze({
   codeVerifier: 'A'.repeat(86),
@@ -22,198 +23,7 @@ const transaction = Object.freeze({
   authorizationServer: 'https://api.example'
 })
 
-const envelopeResponse = (data, options = {}) => {
-  const requestId = new Headers(options.headers).get('X-Request-Id')
-  return new Response(JSON.stringify({ protocolVersion: 1, requestId, code: 'E0', msg: 'ok', data }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId }
-  })
-}
-
 describe('OAuth API store token exchange', () => {
-  it('displays an area only for an active verified session in the current tab', () => {
-    const area = Object.freeze({ tenantId: '1', tenantName: '华南测试区', tenantKind: 'TEST' })
-    expect(visibleTenantIdentity(area, '1', true)).to.equal(area)
-    expect(visibleTenantIdentity(area, '0', true)).to.equal(null)
-    expect(visibleTenantIdentity(area, '1', false)).to.equal(null)
-    expect(visibleTenantIdentity({ ...area, tenantKind: 'UNKNOWN' }, '1', true)).to.equal(null)
-    expect(visibleTenantIdentity(null, '1', true)).to.equal(null)
-  })
-
-  it('hides an expired or cross-window-revoked tenant display on the next ledger check', () => {
-    const identity = { tenantId: '1', tenantName: '华南测试区', tenantKind: 'TEST' }
-    const verified = { tenantId: '1', authRevision: '4', viewRevision: '9',
-      expiresAt: 200, accessToken: 'verified-token' }
-    const snapshot = { authRevision: '4', viewRevision: '9',
-      session: { accessToken: 'verified-token' } }
-    expect(visibleTenantSessionCurrent(identity, '1', verified, snapshot, 100)).to.equal(true)
-    expect(visibleTenantSessionCurrent(identity, '1', verified, snapshot, 200)).to.equal(false)
-    expect(visibleTenantSessionCurrent(identity, '1', verified, null, 100)).to.equal(false)
-    expect(visibleTenantSessionCurrent(identity, '1', verified,
-      { ...snapshot, authRevision: '5' }, 100)).to.equal(false)
-    expect(visibleTenantSessionCurrent(identity, '0', verified, snapshot, 100)).to.equal(false)
-  })
-
-  it('forgets an earlier area display whenever the identity is cleared', () => {
-    setActivePinia(createPinia())
-    const store = useApiStore()
-    store.tenantIdentity = { tenantId: '1', tenantName: '华南测试区', tenantKind: 'TEST' }
-    store.clearIdentity()
-    expect(store.tenantIdentity).to.equal(null)
-  })
-
-  it('clears the old subject and aborts old work when a cross-tab identity becomes stale', async () => {
-    setActivePinia(createPinia())
-    const store = useApiStore()
-    const globalStore = useGlobalStore()
-    const utilStore = useUtilStore()
-    const until = Date.now() + 60_000
-    globalStore.setUser({ id: 123, jiacn: 'account-A' })
-    utilStore.setLocalStorage('jiacn', 'account-A', until)
-    utilStore.setLocalStorage('openid', 'old-openid', until)
-    utilStore.setLocalStorage('wxToken', 'old-wx-token', until)
-    store.tenantIdentity = { tenantId: '1', tenantName: '华南测试区', tenantKind: 'TEST' }
-    const before = store.authorizationGeneration
-    await store.refreshTenantDisplay()
-    expect(store.tenantIdentity).to.equal(null)
-    expect(store.authorizationGeneration).to.equal(before + 1)
-    expect(globalStore.user.id).to.equal(null)
-    expect(globalStore.getJiacn).to.equal(null)
-    for (const key of ['userId', 'jiacn', 'openid', 'wxToken']) {
-      expect(window.localStorage.getItem(key)).to.equal(null)
-    }
-  })
-
-  it('requires the restored user profile to match the verified tenant owner', () => {
-    const identity = { jiacn: 'owner-A' }
-    expect(validTenantProfile({ id: 123, jiacn: 'owner-A' }, identity)).to.equal(true)
-    expect(validTenantProfile({ id: '123', jiacn: 'owner-A' }, identity)).to.equal(true)
-    expect(validTenantProfile({ id: 0, jiacn: 'owner-A' }, identity)).to.equal(false)
-    expect(validTenantProfile({ id: 123, jiacn: 'owner-B' }, identity)).to.equal(false)
-    expect(validTenantProfile({ id: 123, jiacn: 'owner-A' }, {})).to.equal(false)
-    expect(validTenantProfile(null, identity)).to.equal(false)
-  })
-
-  it('hydrates a restored tenant session only from a matching live user profile', async () => {
-    const ctx = { issuer: 'https://api.example', origin: window.location.origin,
-      clientId: 'public-web', tabId: crypto.randomUUID(), state: crypto.randomUUID(), expectedTenant: '1' }
-    const identity = { issuer: ctx.issuer, subject: 'alice', clientId: ctx.clientId,
-      tenantId: '1', dataDomainId: 'cyf', tenantName: '华南测试区', tenantKind: 'TEST',
-      tenantSessionEpoch: '1', membershipRevision: '1', clientTenantGrantRevision: '1',
-      jiacn: 'owner-A', scopes: ['openid'] }
-    const record = { accessToken: 'restored-token', expiresAt: Date.now() + 60_000, identity }
-    await beginTenantAuthorization(ctx)
-    await commitTenantAuthorization({ ...ctx, verifiedTenant: '1', session: record })
-    setActivePinia(createPinia())
-    const store = useApiStore()
-    store.baseUrl = ctx.issuer
-    store.oauthClientId = ctx.clientId
-    const oldFetch = global.fetch
-    try {
-      global.fetch = async (url, options) => envelopeResponse(url.endsWith('/resource')
-        ? identity : { id: 123, jiacn: 'owner-A' }, options)
-      const snapshot = await readTenantSession({ ...ctx, tenantId: '1' })
-      expect(await store.verifyTenantSnapshot(snapshot, ctx, '1')).to.equal('restored-token')
-      const user = useGlobalStore()
-      expect(user.getUserId).to.equal(123)
-      expect(user.getJiacn).to.equal('owner-A')
-      expect(store.tenantIdentity?.tenantId).to.equal('1')
-      expect(store.tenantIdentity?.issuer).to.equal(ctx.issuer)
-      expect(store.tenantIdentity?.jiacn).to.equal('owner-A')
-      expect(store.tenantIdentity?.dataDomainId).to.equal('cyf')
-      expect(store.tenantIdentity?.membershipRevision).to.equal('1')
-      expect(store.tenantIdentity?.scopes).to.deep.equal(['openid'])
-    } finally {
-      global.fetch = oldFetch
-    }
-  })
-
-  it('fails closed on an unrecognized configured tenant selection mode', () => {
-    expect(tenantSelectionEnabled('fixed')).to.equal(true)
-    expect(tenantSelectionEnabled('selectable')).to.equal(true)
-    expect(tenantSelectionEnabled(undefined)).to.equal(false)
-    expect(() => tenantSelectionEnabled('selectabe')).to.throw('Tenant selection mode is invalid')
-  })
-
-  it('requires the exact application data domain before accepting a tenant identity', () => {
-    const identity = {
-      issuer: 'https://api.example',
-      subject: 'alice',
-      clientId: 'public-web',
-      tenantId: '1',
-      dataDomainId: 'cyf',
-      tenantName: '华南测试区',
-      tenantKind: 'TEST',
-      tenantSessionEpoch: '3',
-      membershipRevision: '8',
-      clientTenantGrantRevision: '4',
-      jiacn: 'owner-alice',
-      scopes: ['openid', 'write']
-    }
-    const boundTransaction = { ...transaction, expectedTenant: '1' }
-    expect(validTenantIdentity(identity, boundTransaction)).to.equal(true)
-    expect(validTenantIdentity({ ...identity, dataDomainId: 'another-product' }, boundTransaction)).to.equal(false)
-    expect(validTenantIdentity({ ...identity, dataDomainId: undefined }, boundTransaction)).to.equal(false)
-    expect(validTenantIdentity({ ...identity, subject: '' }, boundTransaction)).to.equal(false)
-    expect(validTenantIdentity({ ...identity, jiacn: '' }, boundTransaction)).to.equal(false)
-    expect(validTenantIdentity({ ...identity, jiacn: 'owner\uD800' }, boundTransaction)).to.equal(false)
-    expect(validTenantIdentity({ ...identity, scopes: 'openid' }, boundTransaction)).to.equal(false)
-    expect(validTenantIdentity({ ...identity, scopes: ['openid', 'bad\nclaim'] }, boundTransaction)).to.equal(false)
-    expect(validTenantIdentity({ ...identity, scopes: ['openid', '\uDFFF'] }, boundTransaction)).to.equal(false)
-    expect(validTenantIdentity({ ...identity, issuer: '' }, boundTransaction)).to.equal(false)
-    expect(validTenantIdentity({ ...identity, issuer: 'https://attacker.example' }, boundTransaction)).to.equal(false)
-    expect(validTenantIdentity(identity, { clientId: 'public-web', expectedTenant: '1' })).to.equal(false)
-    expect(validTenantIdentity({ ...identity, tenantId: '0' }, boundTransaction)).to.equal(false)
-    expect(validTenantIdentity({ ...identity, membershipRevision: '9223372036854775808' }, boundTransaction)).to.equal(false)
-  })
-
-  it('revalidates a persisted candidate and rejects a changed permission fingerprint', async () => {
-    const identity = {
-      issuer: 'https://api.example',
-      subject: 'alice',
-      clientId: 'public-web',
-      tenantId: '1',
-      dataDomainId: 'cyf',
-      tenantName: '华南测试区',
-      tenantKind: 'TEST',
-      tenantSessionEpoch: '3',
-      membershipRevision: '8',
-      clientTenantGrantRevision: '4',
-      jiacn: 'owner-alice',
-      scopes: ['openid', 'write']
-    }
-    const record = { accessToken: 'candidate-token', identity }
-    const earlierFetch = global.fetch
-    const seen = []
-    try {
-      global.fetch = async (url, options) => {
-        seen.push({ url, options })
-        return envelopeResponse(identity, options)
-      }
-      expect(await verifyPersistedTenantSession(record, { ...transaction, expectedTenant: '1' })).to.equal(true)
-      expect(seen[0].url).to.equal('https://api.example/resource')
-      expect(seen[0].options.headers.Authorization).to.equal('Bearer candidate-token')
-      global.fetch = async (_url, options) => envelopeResponse({ ...identity, scopes: ['openid'] }, options)
-      expect(await verifyPersistedTenantSession(record, { ...transaction, expectedTenant: '1' })).to.equal(false)
-      global.fetch = async (_url, options) => {
-        const requestId = new Headers(options.headers).get('X-Request-Id')
-        return new Response(JSON.stringify(identity), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId }
-        })
-      }
-      let protocolFailure
-      try {
-        await verifyPersistedTenantSession(record, { ...transaction, expectedTenant: '1' })
-      } catch (error) {
-        protocolFailure = error
-      }
-      expect(protocolFailure?.code).to.equal('PROTOCOL_INVALID_RESPONSE')
-    } finally {
-      global.fetch = earlierFetch
-    }
-  })
-
   let originalFetch
 
   beforeEach(() => {
@@ -226,6 +36,126 @@ describe('OAuth API store token exchange', () => {
   afterEach(() => {
     global.fetch = originalFetch
     window.localStorage.clear()
+  })
+
+  for (const phase of ['before request', 'during response']) {
+    it(`preserves a replacement account when revoking sessions ${phase}`, async () => {
+      const store = useApiStore()
+      const util = useUtilStore()
+      util.setLocalStorage('api_token', 'account-A', Date.now() + 60_000)
+      global.fetch = async (_url, options) => {
+        const requestId = options.headers['X-Request-Id']
+        return new Response(JSON.stringify({ protocolVersion: 1, requestId, code: 'E0', msg: 'ok', data: { id: 42 } }), {
+          headers: { 'X-Request-Id': requestId }
+        })
+      }
+      await store.getUserInfo()
+      let writes = 0
+      const replaceToken = () => util.setLocalStorage('api_token', 'account-B', Date.now() + 60_000)
+      if (phase === 'before request') replaceToken()
+      global.fetch = async () => {
+        writes++
+        replaceToken()
+        return new Response(null, { status: 204 })
+      }
+      const session = useAccountSecuritySession({ apiStore: store, router: { replace: async () => {} } })
+      expect(await session.signOutAllDevices()).to.equal(false)
+      expect(writes).to.equal(phase === 'before request' ? 0 : 1)
+      expect(util.getLocalStorage('api_token')).to.equal('account-B')
+    })
+  }
+
+  it('uses an opaque stored bearer without a frontend tenant identity', async () => {
+    const store = useApiStore()
+    store.oauthClientId = 'public-web'
+    store.baseUrl = 'https://api.example'
+    const util = useUtilStore()
+    util.setLocalStorage('api_token', 'opaque-bearer', Date.now() + 60_000)
+    expect(await store.token()).to.equal('opaque-bearer')
+    expect(store.hasActiveToken()).to.equal(true)
+    expect(store.oauthRuntimeConfig()).not.to.have.property('expectedTenant')
+    store.assertTokenCurrent('opaque-bearer')
+    util.setLocalStorage('api_token', 'new-account-bearer', Date.now() + 60_000)
+    expect(() => store.assertTokenCurrent('opaque-bearer')).to.throw('Identity changed')
+    // A late request must not erase the newly logged-in account's bearer.
+    expect(await store.token()).to.equal('new-account-bearer')
+    store.clearIdentity()
+    expect(store.hasActiveToken()).to.equal(false)
+  })
+
+  it('loads an account without tenant fields and rejects a late profile after token replacement', async () => {
+    const store = useApiStore()
+    store.baseUrl = 'https://api.example'
+    const util = useUtilStore()
+    util.setLocalStorage('api_token', 'account-token', Date.now() + 60_000)
+    const profile = { id: 42, jiacn: 'owner-42' }
+    const reply = options => {
+      const requestId = new Headers(options.headers).get('X-Request-Id')
+      return new Response(JSON.stringify({ protocolVersion: 1, requestId, code: 'E0', msg: 'ok', data: profile }), {
+        headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId }
+      })
+    }
+    global.fetch = async (_url, options) => reply(options)
+    expect(await store.getUserInfo()).to.deep.equal(profile)
+    global.fetch = async (_url, options) => {
+      util.setLocalStorage('api_token', 'new-account-token', Date.now() + 60_000)
+      return reply(options)
+    }
+    let failure
+    try { await store.getUserInfo() } catch (error) { failure = error }
+    expect(failure?.name).to.equal('AbortError')
+    expect(await store.token()).to.equal('new-account-token')
+  })
+
+  it('blocks old account input before sending a replacement account bearer', async () => {
+    const store = useApiStore()
+    store.oauthClientId = 'web'
+    const util = useUtilStore()
+    const profileStore = useGlobalStore()
+    util.setLocalStorage('api_token', 'account-A', Date.now() + 60_000)
+    global.fetch = async (_url, options) => {
+      const requestId = options.headers['X-Request-Id']
+      return new Response(JSON.stringify({ protocolVersion: 1, requestId, code: 'E0', msg: 'ok', data: { id: 42 } }), {
+        headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId }
+      })
+    }
+    await store.getUserInfo()
+    expect(browserBusinessNamespace(store, profileStore)).to.equal('web\u000042')
+    const generation = store.authorizationGeneration
+    util.setLocalStorage('api_token', 'account-B', Date.now() + 60_000)
+    expect(browserBusinessNamespace(store, profileStore)).to.equal('')
+    let writes = 0
+    global.fetch = async () => { writes++; throw new Error('Old input must not be sent') }
+    let failure
+    try { await useHttp().post('/protected', { oldDraft: 'account-A-input' }, { authStore: store }) } catch (error) { failure = error }
+    expect(failure).to.be.instanceOf(Error)
+    expect(writes).to.equal(0)
+    expect(profileStore.user.id).to.equal(null)
+    expect(store.authorizationGeneration).to.equal(generation + 1)
+    expect(util.getLocalStorage('api_token')).to.equal('account-B')
+  })
+
+  it('does not let a late SSE 401 delete the replacement login', async () => {
+    const store = useApiStore()
+    const util = useUtilStore()
+    util.setLocalStorage('api_token', 'account-A', Date.now() + 60_000)
+    let finishFetch
+    let started
+    const ready = new Promise(resolve => { started = resolve })
+    let reauth = 0
+    store.beginAuthorization = async () => { reauth++; return true }
+    const pending = fetchChatConversationEvents({ apiStore: store, url: '/events', fetchImpl: async () => {
+      started()
+      return new Promise(resolve => { finishFetch = resolve })
+    } })
+    await ready
+    util.setLocalStorage('api_token', 'account-B', Date.now() + 60_000)
+    finishFetch(new Response('', { status: 401 }))
+    let failure
+    try { await pending } catch (error) { failure = error }
+    expect(failure?.name).to.equal('AbortError')
+    expect(util.getLocalStorage('api_token')).to.equal('account-B')
+    expect(reauth).to.equal(0)
   })
 
   it('uses the consumed verifier and commits a valid bearer token only after validation', async () => {
@@ -247,6 +177,7 @@ describe('OAuth API store token exchange', () => {
     expect(request.config.body.get('code_verifier')).to.equal(transaction.codeVerifier)
     expect(request.config.body.get('code')).to.equal('authorization-code')
     expect(request.config.body.get('client_id')).to.equal(transaction.clientId)
+    expect(request.config.body.has('tenant_id')).to.equal(false)
     expect(request.config.body.get('redirect_uri')).to.equal(transaction.redirectUri)
     expect(JSON.parse(window.localStorage.getItem('api_token')).data).to.equal('access-token')
   })

@@ -93,7 +93,7 @@ async function fetchAuthenticatedSse ({
     if (authorizationGeneration !== apiStore.authorizationGeneration) {
       throw new DOMException('Identity changed', 'AbortError')
     }
-    await apiStore.assertTenantTokenCurrent?.(token)
+    await apiStore.assertTokenCurrent?.(token)
     throwIfAborted(combined.signal)
   }
   try {
@@ -108,6 +108,7 @@ async function fetchAuthenticatedSse ({
       headers: Object.fromEntries(requestHeaders.entries()),
       signal: combined.signal
     })
+    await assertCurrentIdentity()
     if (response.status === 401) {
       throwIfAborted(combined.signal)
       if (authorizationGeneration === apiStore.authorizationGeneration) {
@@ -123,7 +124,6 @@ async function fetchAuthenticatedSse ({
       cleanup()
       return null
     }
-    await assertCurrentIdentity()
     if (response.ok && (response.headers.get('X-Request-Id') !== requestId ||
         !/^text\/event-stream(?:;|$)/i.test(response.headers.get('Content-Type') || ''))) {
       await response.body?.cancel(); throw protocolError('PROTOCOL_INVALID_RESPONSE')

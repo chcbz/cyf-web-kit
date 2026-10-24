@@ -16,14 +16,6 @@
         />
       </template>
       <template #right>
-        <span
-          v-if="activeTenantBadge"
-          class="tenant-badge"
-          :class="{ 'tenant-badge--test': activeTenantBadge.tenantKind === 'TEST' }"
-          :aria-label="`当前区域：${activeTenantBadge.tenantName || `区域 ${activeTenantBadge.tenantId}`}${activeTenantBadge.tenantKind === 'TEST' ? '，测试数据' : ''}`"
-        >
-          {{ activeTenantBadge.tenantName || `区域 ${activeTenantBadge.tenantId}` }}<span v-if="activeTenantBadge.tenantKind === 'TEST'"> · 测试数据</span>
-        </span>
         <button
           v-if="isInstallable"
           class="pwa-action"
@@ -88,15 +80,13 @@
 </template>
 
 <script setup>
-import { computed, defineAsyncComponent, onMounted, onUnmounted, watch } from 'vue'
+import { computed, defineAsyncComponent, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useGlobalStore } from '@/stores/global'
-import { useApiStore, visibleTenantIdentity } from '@/stores/api'
 import { applyAppUpdate, dismissOfflineReady, promptInstall, usePwaState } from '@/utils/pwa'
 
 const SideMenu = defineAsyncComponent(() => import('@/components/SideMenu'))
 const globalStore = useGlobalStore()
-const apiStore = useApiStore()
 const route = useRoute()
 const { hasUpdate, isInstallable, isOfflineReady } = usePwaState()
 
@@ -120,29 +110,6 @@ const showSideMenu = computed({
 const showMore = computed(() => globalStore.showMore)
 const showAppBar = computed(() => globalStore.showAppBar)
 const isPublicEntry = computed(() => route.meta?.publicEntry === true)
-const activeTenantBadge = computed(() => {
-  const identity = apiStore.tenantIdentity
-  if (!identity) return null
-  try {
-    return visibleTenantIdentity(identity, apiStore.activeTenantId(), apiStore.hasActiveToken())
-  } catch {
-    return null
-  }
-})
-
-const refreshTenantBadge = () => { void apiStore.refreshTenantDisplay() }
-let tenantBadgeTimer
-onMounted(() => {
-  refreshTenantBadge()
-  window.addEventListener('focus', refreshTenantBadge)
-  document.addEventListener('visibilitychange', refreshTenantBadge)
-  tenantBadgeTimer = window.setInterval(refreshTenantBadge, 2000)
-})
-onUnmounted(() => {
-  window.clearInterval(tenantBadgeTimer)
-  window.removeEventListener('focus', refreshTenantBadge)
-  document.removeEventListener('visibilitychange', refreshTenantBadge)
-})
 
 const handleMoreClick = () => {
   // 同时更新右侧边栏状态
@@ -221,26 +188,6 @@ html, body {
   margin-left: 12px;
   cursor: pointer;
   transition: transform 0.2s ease;
-}
-
-.tenant-badge {
-  display: inline-flex;
-  align-items: center;
-  max-width: min(42vw, 220px);
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  padding: 5px 8px;
-  border-radius: 999px;
-  background: rgba(39, 88, 68, 0.12);
-  color: #24573f;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.tenant-badge--test {
-  background: rgba(158, 84, 15, 0.15);
-  color: #834010;
 }
 
 .pwa-action {

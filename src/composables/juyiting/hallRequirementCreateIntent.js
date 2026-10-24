@@ -9,7 +9,7 @@ const object = value => value && typeof value === 'object' && !Array.isArray(val
 const exactKeys = (value, keys) => object(value) && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key))
 
 // A principal namespace is not a resource ID. Actual Hall scope uses NUL-delimited
-// tenant/client/owner components; encoding it does not create backend authority.
+// client/owner components; encoding it does not create backend authority.
 export const requirementCreateScope = exactPointAndStartScope
 
 export const requirementReferenceInputs = list => {

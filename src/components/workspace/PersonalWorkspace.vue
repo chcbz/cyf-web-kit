@@ -208,7 +208,7 @@ import { savePersonalWorkspaceBlob, usePersonalWorkspace } from '@/composables/u
 import { usePersonalWorkspaceExecution } from '@/composables/usePersonalWorkspaceExecution'
 import { workspaceByteText, validMaterialVersion } from '@/utils/personalWorkspaceProtocol'
 import { deliveryTypeText } from '@/utils/executionFormats'
-import { browserBusinessNamespace } from '@/utils/tenantBusinessNamespace'
+import { browserBusinessNamespace } from '@/utils/businessNamespace'
 
 const { embedded, detailAllowed, compact } = defineProps({
   compact: { type: Boolean, default: false },
