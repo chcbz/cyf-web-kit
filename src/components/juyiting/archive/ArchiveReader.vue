@@ -184,19 +184,12 @@
               <textarea
                 v-model="noteText"
                 aria-label="当前段落私人手札"
-                aria-describedby="note-byte-hint"
                 placeholder="记录此处所思；仅自己可见。"
               ></textarea>
-              <p
-                id="note-byte-hint"
-                :class="{ 'archive-error': noteBytes > 20000 }"
-              >
-                {{ noteBytes }} / 20,000 UTF-8 bytes
-              </p>
               <button
                 type="button"
                 class="note-save"
-                :disabled="!noteText.trim() || !reader.currentLocation || noteBytes > 20000 || reader.notePending"
+                :disabled="!noteText.trim() || !reader.currentLocation || reader.notePending"
                 @click="saveNote"
               >
                 {{ reader.notePending ? '保存中…' : '保存手札' }}
@@ -376,7 +369,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, proxyRefs, ref, watch } from 'vue'
-import { useArchiveReader, utf8ByteLength } from '@/composables/juyiting/useArchiveReader'
+import { useArchiveReader } from '@/composables/juyiting/useArchiveReader'
 import { nativeOrientationFromLocation } from '@/composables/juyiting/miniProgramOrientation.js'
 import { registerIdentityCleanup } from '@/utils/identityLifecycle.js'
 
@@ -413,7 +406,6 @@ const editingNote = ref(null)
 const bookDrafts = new Map()
 const actionMessage = ref('')
 const NEW_NOTE_TARGET = Symbol('new-note-target')
-const noteBytes = computed(() => utf8ByteLength(noteText.value))
 // Explicit paragraph snapshot only: never read or share the private note editor.
 const citationParagraph = computed(() => reader.chapter?.paragraphs?.find(paragraph =>
   paragraph.paragraphId === reader.currentLocation?.paragraphId) || null)
@@ -629,7 +621,6 @@ const askSelectedText = async () => {
 const retryQuestion = () => runAction(reader.retryQuestion, '案卷书吏重试失败。')
 
 const saveNote = async () => {
-  if (noteBytes.value > 20_000) return
   const note = editingNote.value
   const submittedTarget = note?.noteId || NEW_NOTE_TARGET
   const submittedRevision = editorRevision

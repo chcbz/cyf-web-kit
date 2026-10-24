@@ -274,8 +274,8 @@ const loadArchiveReaderSfc = (archiveModule) => {
   const body = script
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace(
-      /^import\s+\{\s*useArchiveReader,\s*utf8ByteLength\s*\}\s+from\s+['"]@\/composables\/juyiting\/useArchiveReader['"];?\s*$/gm,
-      'var { useArchiveReader, utf8ByteLength } = archiveModule'
+      /^import\s+\{\s*useArchiveReader\s*\}\s+from\s+['"]@\/composables\/juyiting\/useArchiveReader['"];?\s*$/gm,
+      'var { useArchiveReader } = archiveModule'
     )
     .replace(
       /^import\s+\{\s*registerIdentityCleanup\s*\}\s+from\s+['"]@\/utils\/identityLifecycle\.js['"];?\s*$/gm,
@@ -964,9 +964,8 @@ describe('archive reader contract behavior', () => {
     wrapper.unmount()
   })
 
-  it('anchors and reloads the real 9708-byte multibyte paragraph with a valid bounded slice', async () => {
-    expect(chapterEightyOne.paragraphs[0].utf8ByteLength).to.equal(9708)
-    const target = point(chapterEightyOne, chapterEightyOne.paragraphs[0])
+  it('anchors and reloads a paragraph with its complete UTF-8 bytes and digest', async () => {
+    const target = point(chapterOne, chapterOne.paragraphs[0])
     const notesByBlock = {}
     const api = makeApi({
       notesByBlock,
@@ -987,33 +986,31 @@ describe('archive reader contract behavior', () => {
       }
     })
     const wrapper = mountArchiveReader(api)
-    await waitFor(() => wrapper.findAll('.reader-paragraph').length === 1)
-    await wrapper.get('textarea').setValue('长段手札')
+    await waitFor(() => wrapper.findAll('.reader-paragraph').length === chapterOne.paragraphs.length)
+    await wrapper.get('textarea').setValue('段落手札')
     await wrapper.get('.note-save').trigger('click')
     await waitFor(() => api.calls.some(call => call.path.startsWith('/me/notes/')))
 
     const noteCall = api.calls.find(call => call.path.startsWith('/me/notes/'))
     const anchor = noteCall.body.anchor
     const segment = anchor.segments[0]
-    const selectionBytes = new TextEncoder().encode(longText).slice(segment.startByte, segment.endByte)
+    const selectionBytes = new TextEncoder().encode(chapterOne.paragraphs[0].text).slice(segment.startByte, segment.endByte)
     expect(anchor).not.to.equal(null)
-    expect(anchor.blockId).to.equal(chapterEightyOne.blockId)
-    expect(segment.paragraphId).to.equal(chapterEightyOne.paragraphs[0].paragraphId)
-    expect(segment.paragraphSha256).to.equal(chapterEightyOne.paragraphs[0].sha256)
-    expect(segment.endByte).to.equal(8190)
-    expect(segment.endByte).to.be.at.most(8192)
+    expect(anchor.blockId).to.equal(chapterOne.blockId)
+    expect(segment.paragraphId).to.equal(chapterOne.paragraphs[0].paragraphId)
+    expect(segment.paragraphSha256).to.equal(chapterOne.paragraphs[0].sha256)
+    expect(segment.endByte).to.equal(chapterOne.paragraphs[0].utf8ByteLength)
     expect(() => new TextDecoder('utf-8', { fatal: true }).decode(selectionBytes)).not.to.throw()
     expect(anchor.selectionSha256).to.equal(createHash('sha256').update(selectionBytes).digest('hex'))
-    expect(wrapper.text()).to.include('长段前缀选文锚点')
 
-    notesByBlock[chapterEightyOne.blockId][0].text = '服务端重载长段手札'
+    notesByBlock[chapterOne.blockId][0].text = '服务端重载段落手札'
     const noteGetsBeforeReload = api.calls.filter(call => call.path === '/me/notes').length
     await wrapper.get('.reader-header-actions .reader-header-button').trigger('click')
     const chapterButton = wrapper.findAll('.reader-catalog button')
-      .find(button => button.text().includes('第81回'))
+      .find(button => button.text().includes('第1回'))
     await chapterButton.trigger('click')
     await waitFor(() => api.calls.filter(call => call.path === '/me/notes').length > noteGetsBeforeReload)
-    await waitFor(() => wrapper.text().includes('服务端重载长段手札'))
+    await waitFor(() => wrapper.text().includes('服务端重载段落手札'))
     wrapper.unmount()
   })
 
@@ -2541,60 +2538,7 @@ describe('archive reader contract behavior', () => {
     recovering.wrapper.unmount()
   })
 
-  it('enforces anchor segment and selected-byte limits before PUT', async () => {
-    const api = makeQuestionApi()
-    const mounted = mountReader(api)
-    const manyParagraphs = {
-      ...chapterOne,
-      blockId: `${editionId}-c001-many`,
-      paragraphs: Array.from({ length: 17 }, (_, index) => paragraph(`${editionId}-c001-many`, index + 1, `段${index + 1}`, 'f'))
-    }
-    primeReader(mounted.reader, manyParagraphs)
-    await mounted.reader.createQuestion({
-      question: '过多段落',
-      selection: { startParagraphId: manyParagraphs.paragraphs[0].paragraphId, startOffset: 0, endParagraphId: manyParagraphs.paragraphs[16].paragraphId, endOffset: 1 }
-    }).catch(error => error)
-    expect(api.calls.some(call => call.method === 'put' && call.path.startsWith('/me/questions/'))).to.equal(false)
 
-    primeReader(mounted.reader, chapterEightyOne)
-    await mounted.reader.createQuestion({
-      question: '过长选文',
-      selection: { startParagraphId: chapterEightyOne.paragraphs[0].paragraphId, startOffset: 0, endParagraphId: chapterEightyOne.paragraphs[0].paragraphId, endOffset: chapterEightyOne.paragraphs[0].text.length }
-    }).catch(error => error)
-    expect(api.calls.some(call => call.method === 'put' && call.path.startsWith('/me/questions/'))).to.equal(false)
-    mounted.wrapper.unmount()
-  })
-
-  it('accepts exactly 16 segments and exactly 8192 UTF-8 selected bytes', async () => {
-    const block = {
-      ...chapterOne,
-      blockId: `${editionId}-c001-exact-limits`,
-      paragraphs: Array.from({ length: 16 }, (_, index) => paragraph(
-        `${editionId}-c001-exact-limits`,
-        index + 1,
-        'x'.repeat(index === 15 ? 512 : 510),
-        'e'
-      ))
-    }
-    const selectedText = block.paragraphs.map(item => item.text).join('\n\n')
-    expect(utf8ByteLength(selectedText)).to.equal(8192)
-    const api = makeQuestionApi({ createSelectedText: selectedText })
-    const mounted = mountReader(api)
-    primeReader(mounted.reader, block)
-    await mounted.reader.createQuestion({
-      question: '边界选文',
-      selection: {
-        startParagraphId: block.paragraphs[0].paragraphId,
-        startOffset: 0,
-        endParagraphId: block.paragraphs.at(-1).paragraphId,
-        endOffset: block.paragraphs.at(-1).text.length
-      }
-    })
-    const call = api.calls.find(item => item.method === 'put' && item.path.startsWith('/me/questions/'))
-    expect(call.body.anchor.segments).to.have.length(16)
-    expect(call.body.anchor.segments.reduce((total, segment) => total + segment.endByte - segment.startByte, 30)).to.equal(8192)
-    mounted.wrapper.unmount()
-  })
 
   it('requires persisted SSE name/id parity, ignores heartbeat comments, and rejects IDs on resync', async () => {
     const api = makeQuestionApi({ snapshots: [questionSnapshot(), questionSnapshot(), questionSnapshot()] })
@@ -2667,7 +2611,6 @@ describe('archive reader contract behavior', () => {
         ...snapshot,
         anchor: { ...snapshot.anchor, segments: [{ ...snapshot.anchor.segments[0], endByte: 0 }] }
       }),
-      snapshot => ({ ...snapshot, question: 'x'.repeat(8193) }),
       snapshot => ({ ...snapshot, agentId: 'forbidden-extra-field' }),
       snapshot => ({ ...snapshot, updatedAt: 'not-an-instant' }),
       snapshot => ({ ...snapshot, completedAt: '2026-08-23T00:00:02Z', lastErrorCode: 'QUESTION_PROVIDER_UNAVAILABLE', status: 'FAILED_RETRYABLE' }),

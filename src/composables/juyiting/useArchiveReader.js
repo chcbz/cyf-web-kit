@@ -5,16 +5,11 @@ import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
 
 const DECIMAL = /^(?:0|[1-9][0-9]{0,18})$/
 const MAX_DECIMAL = '9223372036854775807'
-const NOTE_BYTE_LIMIT = 20_000
-const ANCHOR_BYTE_LIMIT = 8192
 const QUESTION_STATUSES = new Set(['QUEUED', 'RUNNING', 'SUCCEEDED', 'FAILED_RETRYABLE', 'FAILED_FINAL'])
 const QUESTION_TERMINAL = new Set(['SUCCEEDED', 'FAILED_FINAL'])
 const QUESTION_STREAMING = new Set(['QUEUED', 'RUNNING'])
 const SHA256_HEX = /^[0-9a-f]{64}$/
 const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/
-const QUESTION_BYTE_LIMIT = 8192
-const ANSWER_BYTE_LIMIT = 131072
-const QUESTION_SEGMENT_LIMIT = 16
 const RESPONDER = Object.freeze({ id: 'archive-clerk-v1', displayName: '案卷书吏', mode: 'fallback' })
 
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key)
@@ -53,14 +48,6 @@ const sha256Bytes = async (bytes) => {
   return [...new Uint8Array(digest)]
     .map(byte => byte.toString(16).padStart(2, '0'))
     .join('')
-}
-
-const boundedUtf8Prefix = (value, byteLimit) => {
-  const bytes = new TextEncoder().encode(String(value ?? ''))
-  if (bytes.byteLength <= byteLimit) return bytes
-  let endByte = byteLimit
-  while (endByte > 0 && (bytes[endByte] & 0xc0) === 0x80) endByte -= 1
-  return bytes.slice(0, endByte)
 }
 
 const replayAmbiguousMutation = async (send) => {
@@ -304,10 +291,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     if (!paragraph || paragraph.sha256 !== location.paragraphSha256) {
       throw new Error('当前段落无法构造权威手札锚点')
     }
-    const selectionBytes = boundedUtf8Prefix(paragraph.text, ANCHOR_BYTE_LIMIT)
-    if (paragraph.utf8ByteLength > ANCHOR_BYTE_LIMIT) {
-      noteAnchorNotice.value = '当前段落超过 8192 bytes，手札将使用合法的长段前缀选文锚点。'
-    }
+    const selectionBytes = new TextEncoder().encode(paragraph.text)
     return {
       editionManifestSha256: location.editionManifestSha256,
       blockType: location.blockType,
@@ -609,7 +593,6 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
 
   const buildNoteOperation = async ({ noteId, text, anchor, version }) => {
     requireVersion(version, 'note')
-    if (utf8ByteLength(text) > NOTE_BYTE_LIMIT) throw new Error('手札不能超过 20,000 UTF-8 bytes')
     const requestEditionId = edition.value?.editionId
     if (!requestEditionId) throw new Error('手札 editionId 缺失')
     const sourceLocation = anchor === undefined && currentLocation.value
@@ -850,7 +833,6 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       }
       const slice = bytes.slice(segment.startByte, segment.endByte)
       total += slice.byteLength + (index ? 2 : 0)
-      if (total > QUESTION_BYTE_LIMIT) throw new Error('案卷问答选文超过限制')
       slices.push(slice)
       previousIndex = paragraphIndex
     }
@@ -868,7 +850,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     if (!exactKeys(value, ['editionManifestSha256', 'blockType', 'blockId', 'segments', 'selectionSha256']) ||
       !SHA256_HEX.test(value.editionManifestSha256) || !['PREFACE', 'CHAPTER'].includes(value.blockType) ||
       typeof value.blockId !== 'string' || !value.blockId || utf8ByteLength(value.blockId) > 128 ||
-      !Array.isArray(value.segments) || value.segments.length < 1 || value.segments.length > QUESTION_SEGMENT_LIMIT ||
+      !Array.isArray(value.segments) || value.segments.length < 1 ||
       !SHA256_HEX.test(value.selectionSha256)) {
       throw new Error('案卷问答锚点响应无效')
     }
@@ -883,7 +865,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       ids.add(segment.paragraphId)
     })
     const selectedBytes = utf8Bytes(selectedText)
-    if (!selectedBytes.byteLength || selectedBytes.byteLength > QUESTION_BYTE_LIMIT ||
+    if (!selectedBytes.byteLength ||
       await sha256Bytes(selectedBytes) !== value.selectionSha256) {
       throw new Error('案卷问答选文摘要无效')
     }
@@ -900,9 +882,9 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       !isLowerUuid(value.questionId) || (expectedId && value.questionId !== expectedId) ||
       !isCanonicalDecimal(value.version) || !isCanonicalDecimal(value.currentSequence) ||
       value.version === '0' || value.currentSequence === '0' || !QUESTION_STATUSES.has(value.status) ||
-      typeof value.question !== 'string' || !value.question.trim() || utf8ByteLength(value.question) > QUESTION_BYTE_LIMIT ||
-      typeof value.selectedText !== 'string' || !value.selectedText || utf8ByteLength(value.selectedText) > QUESTION_BYTE_LIMIT ||
-      typeof value.answer !== 'string' || utf8ByteLength(value.answer) > ANSWER_BYTE_LIMIT ||
+      typeof value.question !== 'string' || !value.question.trim() ||
+      typeof value.selectedText !== 'string' || !value.selectedText ||
+      typeof value.answer !== 'string' ||
       !Number.isInteger(value.retryCount) || value.retryCount < 0 || value.retryCount > 2 ||
       !isIsoInstant(value.createdAt) || !isIsoInstant(value.updatedAt) || Date.parse(value.updatedAt) < Date.parse(value.createdAt)) {
       throw new Error('案卷问答快照响应无效')
@@ -1054,7 +1036,6 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       next.status = 'RUNNING'; next.retryCount = payload.retryCount; next.lastErrorCode = null; next.answer = ''; next.completedAt = null
     } else if (event.type === 'ANSWER_DELTA') {
       next.answer = `${next.answer}${payload.delta}`
-      if (utf8ByteLength(next.answer) > ANSWER_BYTE_LIMIT) { recoverQuestion(questionId, generation); return }
     } else if (event.type === 'QUESTION_SUCCEEDED') {
       next.status = 'SUCCEEDED'; next.lastErrorCode = null
     } else {
@@ -1173,8 +1154,8 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     }
     const startIndex = current.paragraphs.findIndex(item => item.paragraphId === startParagraphId)
     const endIndex = current.paragraphs.findIndex(item => item.paragraphId === endParagraphId)
-    if (startIndex < 0 || endIndex < startIndex || endIndex - startIndex + 1 > QUESTION_SEGMENT_LIMIT) {
-      throw new Error('选文必须位于当前章回至多 16 个连续段落')
+    if (startIndex < 0 || endIndex < startIndex) {
+      throw new Error('选文必须位于当前章回的连续段落')
     }
     const boundary = (text, offset) => offset >= 0 && offset <= text.length && !(offset > 0 && offset < text.length &&
       /[\uD800-\uDBFF]/.test(text[offset - 1]) && /[\uDC00-\uDFFF]/.test(text[offset]))
@@ -1199,7 +1180,6 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       if (endByte <= startByte) throw new Error('选文不能为空')
       const slice = bytes.slice(startByte, endByte)
       total += slice.byteLength + (selected.length ? 2 : 0)
-      if (total > QUESTION_BYTE_LIMIT) throw new Error('选文不能超过 8192 UTF-8 bytes')
       segments.push({ paragraphId: paragraph.paragraphId, startByte, endByte, paragraphSha256: paragraph.sha256 })
       selected.push(slice)
     }
@@ -1237,8 +1217,8 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     let mutationCompleted = false
     const promise = (async () => {
       if (!operation) {
-        if (typeof text !== 'string' || !text.trim() || utf8ByteLength(text) > QUESTION_BYTE_LIMIT) {
-          throw new Error('问题需为 1..8192 UTF-8 bytes')
+        if (typeof text !== 'string' || !text.trim()) {
+          throw new Error('问题不能为空')
         }
         const selectionValue = await buildQuestionAnchor(selection)
         if (!isQuestionGeneration(generation) || controller.signal.aborted) return null
