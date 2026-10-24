@@ -96,7 +96,12 @@
               >重查设置</button>
             </div>
             <section class="profile-section" aria-label="技能">
-              <div class="profile-heading"><h3>技能</h3><small v-if="profile?.skills.status === 'AVAILABLE'">已核验安装 {{ installedCount }} 项</small></div>
+              <div class="profile-heading"><h3>技能</h3><button
+                v-if="canManagePolicy"
+                class="skill-manage-entry"
+                type="button"
+                @click="skillManagementOpen = true"
+              >管理技能</button><small v-if="profile?.skills.status === 'AVAILABLE'">已核验安装 {{ installedCount }} 项</small></div>
               <p v-if="!canReadProfile" role="status">仅拥有者可查看技能</p>
               <p v-else-if="profileCapabilitiesLoading" role="status">正在核对技能…</p>
               <p v-else-if="profileCapabilitiesError" class="profile-error" role="status">{{ profileCapabilitiesError }}</p>
@@ -147,15 +152,26 @@
         <p v-else>点一位厅中好汉，查看动静、本领与所领榜文。</p>
       </div>
     </div>
+    <SkillManagement
+      v-if="canManagePolicy"
+      v-model:show="skillManagementOpen"
+      :target-agent="selectedAgent"
+      :actor-scope-key="actorScopeKey"
+      :identity-key="identityKey"
+      :enabled="active && canManagePolicy"
+      @changed="$emit('refresh-profile-capabilities')"
+    />
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import SkillManagement from '../economy/SkillManagement.vue'
 
 const props = defineProps({
   active: { type: Boolean, default: true },
   identityKey: { type: String, default: '' },
+  actorScopeKey: { type: String, default: '' },
   panelSessionKey: { type: Number, default: 0 },
   externalPolicy: { type: Object, default: null },
   externalPolicyStatus: { type: String, default: 'IDLE' },
@@ -189,6 +205,7 @@ const emit = defineEmits(['set-agent-filter', 'select-agent', 'start-conversatio
 const media = typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 720px)') : null
 const isCompactRoster = ref(media?.matches || false)
 const mobileDetailOpen = ref(false)
+const skillManagementOpen = ref(false)
 const listRef = ref(null)
 const detailTitleRef = ref(null)
 let listScrollTop = 0
@@ -229,6 +246,7 @@ const back = () => {
 }
 watch(() => [props.identityKey, props.panelSessionKey], () => { mobileDetailOpen.value = false; listScrollTop = 0; focusAgentId = null }, { flush: 'sync' })
 watch(() => props.selectedAgent?.agentId, id => { if (!id) mobileDetailOpen.value = false }, { flush: 'sync' })
+watch([() => props.identityKey, () => props.selectedAgent?.agentId, () => props.active, canManagePolicy], () => { skillManagementOpen.value = false }, { flush: 'sync' })
 const updateMedia = event => { isCompactRoster.value = event.matches }
 onMounted(() => media?.addEventListener('change', updateMedia))
 onUnmounted(() => media?.removeEventListener('change', updateMedia))
@@ -236,6 +254,8 @@ defineExpose({ canGoBack, back, windowTitle, profileVisible })
 </script>
 
 <style scoped>
+.skill-manage-entry { min-height: 44px; padding: 4px 10px; border: 1px solid var(--hall-border, #e3e5dc); border-radius: 7px; color: var(--hall-brand, #923f30); background: var(--hall-surface, #fffefa); font-size: 13px; }
+.skill-manage-entry:focus-visible { outline: 3px solid var(--hall-focus-ring, #923f3052); outline-offset: 2px; }
 .agent-panel {
   display: flex;
   flex: 1;

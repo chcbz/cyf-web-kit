@@ -1,428 +1,121 @@
-import { currentHttpResponse } from './fixtures/current-http-response.js'
-import * as skillCostContract from '../src/composables/juyiting/hallSkillCapabilities.js'
 import { expect } from 'chai'
-import { readFileSync } from 'node:fs'
-import { compileScript, parse } from '@vue/compiler-sfc'
+import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { readFileSync } from 'node:fs'
+import { createApi } from '../src/composables/useHttp.js'
+import { stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
+import { effectScope, ref } from 'vue'
+import { useSkillMarket } from '../src/composables/useSkillMarket.js'
+import { skillComponents, button, until, settle } from './helpers/skill-management-components.js'
+import { apiFixture, fixture, locks, requestData, wireResponse } from './fixtures/skill-management/helpers.js'
 
-let Vue
-let mount
-let flushPromises
-let marketModule
-let pinia
-let useApiStore
-const wrappers = []
-const domDescriptors = {}
-const storageKey = 'cyf.skill-market.purchase-journal.v3.' + 'a'.repeat(64)
-const locks = { request: async (_name, _options, callback) => callback({}) }
-
-const compile = (file, id, imports) => {
-  const filename = new URL(file, import.meta.url)
-  const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename: filename.pathname })
-  const code = compileScript(descriptor, { id, inlineTemplate: true }).content
-    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_m, names, path) => `const { ${names.split(',').map(x => x.trim().replace(/\s+as\s+/, ': ')).join(', ')} } = imports[${JSON.stringify(path)}]`)
-    .replace(/^import\s+([^\s]+)\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_m, name, path) => `const ${name} = imports[${JSON.stringify(path)}]`)
-    .replace('export default', 'return')
-  return new Function('imports', code)(imports)
-}
-
-const response = (options, data, status = 200) => currentHttpResponse(options, { code: 'E0', data }, { status })
-
-// Keep the actual capability utility in the Route chain while injecting its one
-// aliased dependency for Node's SFC Function harness.
-const loadEconomyPreviewCapability = async () => {
-  const source = readFileSync(new URL('../src/utils/economyPreviewCapability.js', import.meta.url), 'utf8')
-  const { economyApi } = await import('../src/composables/useHttp.js')
-  const body = source
-    .replace(/^import\s+\{\s*economyApi\s*\}\s+from\s+['"]@\/composables\/useHttp['"];?\s*$/gm, 'const economyApi = imports.economyApi')
-    .replace(/^export\s+const\s+/gm, 'const ')
-  return new Function('imports', `${body}\nreturn { readEconomyCapability, isEconomyPreviewCapability, isSkillMarketplaceCapability, loadEconomyPreviewCapability }`)({ economyApi })
-}
-
-const installDom = () => {
-  for (const key of ['SVGElement', 'Element', 'Node', 'localStorage', 'location']) {
-    domDescriptors[key] = Object.getOwnPropertyDescriptor(globalThis, key)
-    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value: globalThis.window?.[key] })
-  }
-  domDescriptors.locks = Object.getOwnPropertyDescriptor(globalThis.navigator, 'locks')
-  Object.defineProperty(globalThis.navigator, 'locks', { configurable: true, value: locks })
-}
-
-const restoreDom = () => {
-  for (const key of ['SVGElement', 'Element', 'Node', 'localStorage', 'location']) {
-    const descriptor = domDescriptors[key]
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor)
-    else delete globalThis[key]
-  }
-  if (domDescriptors.locks) Object.defineProperty(globalThis.navigator, 'locks', domDescriptors.locks)
-  else delete globalThis.navigator.locks
-}
-
-const settle = async () => {
-  await flushPromises()
-  await Vue.nextTick()
-  await flushPromises()
-}
-
-const waitForUi = async (wrapper, predicate) => {
-  for (let turn = 0; turn < 100; turn++) {
-    await settle()
-    if (predicate()) return
-    await new Promise(resolve => window.setTimeout(resolve, 5))
-  }
-  expect(predicate(), wrapper.html()).to.equal(true)
-}
-
-const trackedFetch = (handler) => {
-  let pending = 0
-  return {
-    fetch: async (...args) => {
-      pending += 1
-      try { return await handler(...args) } finally { pending -= 1 }
-    },
-    pending: () => pending
-  }
-}
-
-const settleOwnedTransport = async (transport) => {
-  for (let turn = 0; turn < 100; turn++) {
-    await settle()
-    if (transport.pending() === 0) return
-    await new Promise(resolve => window.setTimeout(resolve, 5))
-  }
-  expect(transport.pending(), 'fixture-owned HTTP did not settle before cleanup').to.equal(0)
-}
-
-const waitForRosterRefresh = async (wrapper, requests, transport, expectedCount) => {
-  await waitForUi(wrapper, () => transport.pending() === 0 && requests.filter(request => request.path === '/agent/roster').length === expectedCount)
-  expect(requests.filter(request => request.path === '/agent/roster')).to.have.length(expectedCount)
-}
-
-const unmountOwned = async (wrapper, transport) => {
-  await settleOwnedTransport(transport)
-  wrapper.unmount()
-  const index = wrappers.indexOf(wrapper)
-  if (index >= 0) wrappers.splice(index, 1)
-  await settleOwnedTransport(transport)
-}
-
-const cleanupOwned = async (transport) => {
-  await settleOwnedTransport(transport)
-  for (const wrapper of wrappers.splice(0)) wrapper.unmount()
-  await settleOwnedTransport(transport)
-}
-
-const installToken = () => {
-  window.localStorage.setItem('api_token', JSON.stringify({ data: 'test-token', expTime: Date.now() + 60_000 }))
-}
-
-const varlet = () => {
-  const VarButton = Vue.defineComponent({
-    inheritAttrs: false,
-    setup (_props, { attrs, slots }) { return () => Vue.h('button', attrs, slots.default?.()) }
-  })
-  const VarDialog = Vue.defineComponent({
-    props: { show: Boolean },
-    emits: ['update:show'],
-    setup (props, { slots }) { return () => props.show ? Vue.h('section', { class: 'var-dialog' }, slots.default?.()) : null }
-  })
-  return {
-    components: {
-      'var-button': VarButton,
-      'var-dialog': VarDialog,
-      'var-loading': Vue.defineComponent({ render: () => Vue.h('span') }),
-      'var-empty': Vue.defineComponent({ render: () => Vue.h('span') })
-    }
-  }
-}
-
-const components = async (id) => {
-  const Card = compile('../src/components/economy/SkillProductCard.vue', `${id}-card`, { vue: Vue, '@/composables/useSkillMarket.js': marketModule, '@/composables/juyiting/hallSkillCapabilities.js': skillCostContract })
-  const Dialog = compile('../src/components/economy/SkillPurchaseDialog.vue', `${id}-dialog`, { vue: Vue, '@/composables/useSkillMarket.js': marketModule, '@/composables/juyiting/hallSkillCapabilities.js': skillCostContract })
-  const Market = compile('../src/components/economy/SkillMarket.vue', `${id}-market`, {
-    vue: Vue,
-    './SkillProductCard.vue': Card,
-    './SkillPurchaseDialog.vue': Dialog,
-    '@/composables/useSkillMarket.js': marketModule
-  })
-  const roster = await import('../src/utils/skillMarketRoster.js')
-  const amounts = await import('../src/utils/silverAmount.js')
-  const capability = await loadEconomyPreviewCapability()
-  return compile('../src/components/economy/SkillMarketRoute.vue', `${id}-route`, {
-    vue: Vue,
-    './SkillMarket.vue': Market,
-    '@/utils/skillMarketRoster.js': roster,
-    '@/utils/silverAmount': amounts,
-    '@/utils/economyPreviewCapability': capability
-  })
-}
-
-const mountRoute = async (id) => {
-  const Route = await components(id)
-  const wrapper = mount(Route, { attachTo: document.body, global: { ...varlet(), plugins: [pinia] } })
-  wrappers.push(wrapper)
-  // useHttp dynamically imports the auth store; two flushPromises turns are not
-  // a readiness contract. Wait for the real capability/roster mount to finish.
-  await waitForUi(wrapper, () => !wrapper.text().includes('正在核对服务端预览能力'))
-  expect(wrapper.text()).not.to.include('正在核对服务端预览能力')
-  expect(wrapper.find('[role="alert"]').exists(), wrapper.html()).to.equal(false)
-  return wrapper
-}
-
-const productButton = (wrapper, skillKey) => {
-  const card = wrapper.findAll('.skill-product-card').find(item => item.text().includes(skillKey))
-  expect(card, `missing product ${skillKey}`).to.exist
-  return card.find('button')
-}
-
-const dialogButton = (wrapper, text) => {
-  const dialog = wrapper.find('.purchase-dialog')
-  expect(dialog.exists(), 'purchase dialog is visible').to.equal(true)
-  const button = dialog.findAll('button').find(item => item.text().includes(text))
-  expect(button, `missing dialog action ${text}`).to.exist
-  return button
-}
-
-const selectAgent = async (wrapper, agentId) => {
-  expect(wrapper.find('select').exists(), wrapper.html()).to.equal(true)
-  await wrapper.find('select').setValue(agentId)
-  await waitForUi(wrapper, () => wrapper.find('.skill-product-card').exists())
-}
-
-const openProduct = async (wrapper, skillKey) => {
-  await productButton(wrapper, skillKey).trigger('click')
-  await waitForUi(wrapper, () => wrapper.find('.purchase-dialog').exists())
-}
-
-const quote = async wrapper => {
-  await dialogButton(wrapper, '获取报价').trigger('click')
-  await waitForUi(wrapper, () => wrapper.find('.quote-note').exists())
-}
-
-const purchase = async wrapper => {
-  await dialogButton(wrapper, '确认购买').trigger('click')
-  await waitForUi(wrapper, () => !wrapper.find('.purchase-dialog').exists() || wrapper.find('.skill-market .error').exists())
-}
-
-const closeDialog = async wrapper => {
-  await dialogButton(wrapper, '取消').trigger('click')
-  await settle()
-  expect(wrapper.find('.purchase-dialog').exists()).to.equal(false)
-}
-
-const product = (id, skillKey) => ({
-  productId: id,
-  productVersionId: `pv-${id}`,
-  skillKey,
-  skillVersion: '1',
-  price: { amountMinor: '1', currency: 'SILVER' },
-  permissions: [],
-  canPurchase: true
-})
-
-// This suite compiles and mounts the actual Route -> Market -> Card -> Dialog path.
-// It substitutes only browser plumbing, HTTP transport, and Varlet's visual shell.
-describe('R6 actual skill-market route purchase chain', () => {
-  before(async () => {
-    installDom()
-    Vue = await import('vue')
-    ;({ mount, flushPromises } = await import('@vue/test-utils'))
-    marketModule = await import('../src/composables/useSkillMarket.js')
-    ;({ useApiStore } = await import('../src/stores/api.js'))
-  })
-
-  beforeEach(async () => {
-    pinia = createPinia()
-    setActivePinia(pinia)
+// These are production Web consumers over a synthetic HTTP transport, not Java/DB/Runtime acceptance.
+describe('SM-C1 mounted consumers through actual useHttp + public envelope', () => {
+  let originalFetch; let oldLocks; let wrappers; let scopes; let requests; let mock; let useApiStore; let pinia
+  before(async () => { ({ useApiStore } = await import('../src/stores/api.js')) })
+  beforeEach(() => {
+    pinia = createPinia(); setActivePinia(pinia); useApiStore(pinia).token = async () => 'isolated-test-token'
+    wrappers = []; scopes = []; requests = []; mock = apiFixture()
     window.localStorage.clear()
-    installToken()
-    expect(await useApiStore(pinia).token()).to.equal('test-token')
+    oldLocks = Object.getOwnPropertyDescriptor(navigator, 'locks'); Object.defineProperty(navigator, 'locks', { configurable: true, value: locks })
+    originalFetch = globalThis.fetch
+    globalThis.fetch = async (url, options) => {
+      const path = new URL(url, 'http://localhost').pathname; const data = requestData(options)
+      requests.push({ path, data, method: options.method, options })
+      if (options.method === 'GET') {
+        if (path === '/economy/capabilities') return wireResponse(options, { economyPreviewEnabled: true, skillMarketplaceEnabled: true, principalScopeSha256: 'a'.repeat(64) })
+        if (path.endsWith('/skills')) return wireResponse(options, mock.list)
+        if (path.endsWith('/skill-changes')) return wireResponse(options, { agentId: 'agt_demo', items: [] })
+        return wireResponse(options, mock.accepted)
+      }
+      if (path === '/agent/roster') return wireResponse(options, { items: [{ agentId: 'agt_demo', name: '自己的好汉', version: mock.list.agentVersion, boundToMe: true, canOperate: true }] })
+      if (path.endsWith('/quotes')) return wireResponse(options, { ...fixture('quote-install-response').data, expiresAt: Date.now() + 60000 })
+      if (path === '/agent/agt_demo/skill-changes') {
+        mock.list.items[0].latestChange = mock.accepted; mock.list.items[0].skillRevision = '1'; mock.list.items[0].allowedActions = ['VIEW', 'RECONCILE']
+        return wireResponse(options, mock.accepted, 202)
+      }
+      throw new Error('unexpected route ' + path)
+    }
   })
-
   afterEach(async () => {
-    for (const wrapper of wrappers.splice(0)) wrapper.unmount()
-    await Promise.resolve()
+    for (const wrapper of wrappers) wrapper.unmount()
+    for (const scope of scopes) scope.stop()
+    await settle(); globalThis.fetch = originalFetch
+    if (oldLocks) Object.defineProperty(navigator, 'locks', oldLocks); else delete navigator.locks
     window.localStorage.clear()
   })
-
-  after(() => restoreDom())
-
-  it('uses actual quote/dialog/purchase handlers for v7, refreshes roster, then uses v8 for a distinct product', async () => {
-    const requests = []
-    const products = [product('one', 'one'), product('two', 'two')]
-    let rosterVersion = '7'
-    let createdOrders = 0
-    const originalFetch = globalThis.fetch
-    const transport = trackedFetch(async (url, options = {}) => {
-      const path = new URL(String(url), 'http://localhost').pathname
-      const body = options.body ? JSON.parse(options.body).data : null
-      requests.push({ path, method: options.method, body, key: options.headers?.['Idempotency-Key'] })
-      if (path === '/economy/capabilities') return response(options, { economyPreviewEnabled: true, skillMarketplaceEnabled: true, principalScopeSha256: 'a'.repeat(64) })
-      if (path === '/agent/roster') return response(options, { items: [{ agentId: 'agent-a', name: 'Agent A', version: rosterVersion, boundToMe: true, canOperate: true }] })
-      if (path === '/agent/skill-products') return response(options, products)
-      if (path.startsWith('/agent/skill-products/')) return response(options, products.find(item => path.endsWith(item.productId)))
-      if (path === '/agent/skill-orders/quotes') return response(options, { quoteId: `quote-${body.productVersionId}`, productVersionId: body.productVersionId, targetAgentId: body.targetAgentId, expectedAgentVersion: body.expectedAgentVersion, price: { amountMinor: '1', currency: 'SILVER' }, expiresAt: Date.now() + 60_000 })
-      if (path === '/agent/skill-orders' && options.method === 'POST') {
-        createdOrders += 1
-        rosterVersion = '8'
-        return response(options, { orderId: `order-${createdOrders}`, productVersionId: body.productVersionId, targetAgentId: body.targetAgentId, expectedAgentVersion: body.expectedAgentVersion, status: 'ACTIVE' })
-      }
-      if (path.endsWith('/skill-entitlements')) return response(options, [])
-      throw new Error(`unexpected HTTP ${options.method} ${path}`)
-    })
-    globalThis.fetch = transport.fetch
-    try {
-      const wrapper = await mountRoute('r6-sequential')
-      await selectAgent(wrapper, 'agent-a')
-      await openProduct(wrapper, 'one')
-      await quote(wrapper)
-      await purchase(wrapper)
-      await waitForUi(wrapper, () => wrapper.find('option[value="agent-a"]').text().includes('v8'))
-      await waitForRosterRefresh(wrapper, requests, transport, 2)
-      await openProduct(wrapper, 'two')
-      await quote(wrapper)
-      await purchase(wrapper)
-      await waitForRosterRefresh(wrapper, requests, transport, 3)
-
-      const orderRequests = requests.filter(item => item.path === '/agent/skill-orders' && item.body?.quoteId)
-      expect(orderRequests.map(item => [item.body.productVersionId, item.body.targetAgentId, item.body.expectedAgentVersion]))
-        .to.deep.equal([['pv-one', 'agent-a', '7'], ['pv-two', 'agent-a', '8']])
-      expect(createdOrders).to.equal(2)
-    } finally {
-      try {
-        await cleanupOwned(transport)
-      } finally {
-        globalThis.fetch = originalFetch
-      }
-    }
+  const mountManagement = (component, props = {}) => {
+    const wrapper = mount(component, { attachTo: document.body, props: { targetAgent: { agentId: 'agt_demo', name: '测试好汉' }, actorScopeKey: 'actor-test', ...props }, global: { plugins: [pinia], stubs: { teleport: true } } })
+    wrappers.push(wrapper); return wrapper
+  }
+  it('existing market consumer renders the single list and sends exact SM-C1 INSTALL, never legacy POST', async () => {
+    const wrapper = mountManagement(skillComponents().Market, { previewEnabled: true })
+    await until(() => wrapper.find('[data-skill-row="image-edit"]').exists())
+    await button(wrapper, '安装').trigger('click')
+    for (const box of wrapper.findAll('input')) await box.setValue(true)
+    await button(wrapper, '获取报价').trigger('click')
+    await until(() => button(wrapper, '确认安装'))
+    await button(wrapper, '确认安装').trigger('click')
+    await until(() => wrapper.text().includes('原操作已接纳'))
+    const write = requests.find(r => r.path === '/agent/agt_demo/skill-changes' && r.method === 'POST')
+    expect(write.data).to.deep.equal(fixture('create-install').data)
+    const envelope = JSON.parse(write.options.body)
+    expect(envelope.protocolVersion).to.equal(1); expect(envelope.requestId).to.equal(write.options.headers['X-Request-Id'])
+    expect(write.options.headers['Idempotency-Key']).to.be.a('string')
+    expect(wrapper.text()).to.include('等待连接')
+    expect(requests.some(r => r.path === '/agent/skill-orders')).to.equal(false)
+    expect(wrapper.findAll('.skill-unified-list')).to.have.length(1)
   })
-
-  it('generates a QUOTE through UI for A, remounts route on B, and recovers/dialog-submits frozen A identity and version', async () => {
-    const requests = []
-    const savedProduct = product('a', 'alpha')
-    let roster = [{ agentId: 'agent-a', name: 'Agent A', version: '7', boundToMe: true, canOperate: true }]
-    const originalFetch = globalThis.fetch
-    const transport = trackedFetch(async (url, options = {}) => {
-      const path = new URL(String(url), 'http://localhost').pathname
-      const body = options.body ? JSON.parse(options.body).data : null
-      requests.push({ path, method: options.method, body, key: options.headers?.['Idempotency-Key'] })
-      if (path === '/economy/capabilities') return response(options, { economyPreviewEnabled: true, skillMarketplaceEnabled: true, principalScopeSha256: 'a'.repeat(64) })
-      if (path === '/agent/roster') return response(options, { items: roster })
-      if (path === '/agent/skill-products') return response(options, [savedProduct])
-      if (path === '/agent/skill-products/a') return response(options, savedProduct)
-      if (path === '/agent/skill-orders/quotes') return response(options, { quoteId: 'quote-a', productVersionId: body.productVersionId, targetAgentId: body.targetAgentId, expectedAgentVersion: body.expectedAgentVersion, price: { amountMinor: '1', currency: 'SILVER' }, expiresAt: Date.now() + 60_000 })
-      if (path === '/agent/skill-orders' && options.method === 'POST') return response(options, { orderId: 'order-a', productVersionId: body.productVersionId, targetAgentId: body.targetAgentId, expectedAgentVersion: body.expectedAgentVersion, status: 'FUNDS_HELD' })
-      if (path.endsWith('/skill-entitlements')) return response(options, [])
-      throw new Error(`unexpected HTTP ${options.method} ${path}`)
-    })
-    globalThis.fetch = transport.fetch
-    try {
-      const first = await mountRoute('r6-recovery-a')
-      await selectAgent(first, 'agent-a')
-      await openProduct(first, 'alpha')
-      await quote(first)
-      const generatedJournal = JSON.parse(window.localStorage.getItem(storageKey))
-      expect(generatedJournal.records).to.have.length(1)
-      expect(generatedJournal.records[0]).to.include({ phase: 'QUOTE', targetAgentId: 'agent-a', expectedAgentVersion: '7' })
-      await unmountOwned(first, transport)
-
-      roster = [{ agentId: 'agent-b', name: 'Agent B', version: '9', boundToMe: true, canOperate: true }]
-      const second = await mountRoute('r6-recovery-b')
-      await selectAgent(second, 'agent-b')
-      const recovery = second.findAll('.recovery-item button').find(item => item.text().includes('恢复操作'))
-      expect(recovery).to.exist
-      await recovery.trigger('click')
-      await waitForUi(second, () => second.find('.purchase-dialog').exists())
-      expect(second.find('.purchase-dialog').text()).to.include('目标 Agent：agent-a')
-      await purchase(second)
-      await waitForRosterRefresh(second, requests, transport, 3)
-
-      const orderRequest = requests.find(item => item.path === '/agent/skill-orders' && item.body?.quoteId)
-      expect(orderRequest.body).to.include({ targetAgentId: 'agent-a', expectedAgentVersion: '7', productVersionId: 'pv-a' })
-    } finally {
-      try {
-        await cleanupOwned(transport)
-      } finally {
-        globalThis.fetch = originalFetch
-      }
-    }
+  it('existing route → roster selection → actual management → public write → roster refresh remains wired', async () => {
+    const wrapper = mount(skillComponents({ useApiStore }).Route, { attachTo: document.body, global: { plugins: [pinia], stubs: { teleport: false } } }); wrappers.push(wrapper)
+    await until(() => wrapper.find('select option[value="agt_demo"]').exists())
+    await wrapper.get('select').setValue('agt_demo'); await until(() => button(wrapper, '安装'))
+    await button(wrapper, '安装').trigger('click'); for (const box of wrapper.findAll('input')) await box.setValue(true)
+    await button(wrapper, '获取报价').trigger('click'); await until(() => button(wrapper, '确认安装'))
+    await button(wrapper, '确认安装').trigger('click')
+    await until(() => requests.filter(r => r.path === '/agent/roster').length === 2)
+    expect(wrapper.get('select').element.value).to.equal('agt_demo')
+    expect(requests.filter(r => r.path === '/agent/agt_demo/skill-changes' && r.method === 'POST')).to.have.length(1)
+    expect(wrapper.findAll('.skill-unified-list')).to.have.length(1)
   })
-
-  it('closes a known QUOTE by UI but retains an ambiguous ORDER exact key/body through close, remount, and same-request recovery', async () => {
-    const requests = []
-    const item = product('one', 'one')
-    const orderReceiptsByKey = new Map()
-    let firstOrderResponseIsLost = true
-    let chargeCount = 0
-    const originalFetch = globalThis.fetch
-    const transport = trackedFetch(async (url, options = {}) => {
-      const path = new URL(String(url), 'http://localhost').pathname
-      const body = options.body ? JSON.parse(options.body).data : null
-      const key = options.headers?.['Idempotency-Key']
-      requests.push({ path, method: options.method, body, key })
-      if (path === '/economy/capabilities') return response(options, { economyPreviewEnabled: true, skillMarketplaceEnabled: true, principalScopeSha256: 'a'.repeat(64) })
-      if (path === '/agent/roster') return response(options, { items: [{ agentId: 'agent-a', name: 'Agent A', version: '7', boundToMe: true, canOperate: true }] })
-      if (path === '/agent/skill-products') return response(options, [item])
-      if (path === '/agent/skill-products/one') return response(options, item)
-      if (path === '/agent/skill-orders/quotes') return response(options, { quoteId: `quote-${requests.filter(request => request.path === path).length}`, productVersionId: body.productVersionId, targetAgentId: body.targetAgentId, expectedAgentVersion: body.expectedAgentVersion, price: { amountMinor: '1', currency: 'SILVER' }, expiresAt: Date.now() + 60_000 })
-      if (path === '/agent/skill-orders' && options.method === 'POST') {
-        if (!orderReceiptsByKey.has(key)) {
-          chargeCount += 1
-          orderReceiptsByKey.set(key, { orderId: 'order-one', productVersionId: body.productVersionId, targetAgentId: body.targetAgentId, expectedAgentVersion: body.expectedAgentVersion, status: 'FUNDS_HELD' })
-        }
-        if (firstOrderResponseIsLost) {
-          firstOrderResponseIsLost = false
-          throw new TypeError('connection lost after server accepted the order')
-        }
-        return response(options, orderReceiptsByKey.get(key))
-      }
-      if (path.endsWith('/skill-entitlements')) return response(options, [])
-      throw new Error(`unexpected HTTP ${options.method} ${path}`)
-    })
-    globalThis.fetch = transport.fetch
-    try {
-      const first = await mountRoute('r6-order-unknown-first')
-      await selectAgent(first, 'agent-a')
-      await openProduct(first, 'one')
-      await quote(first)
-      expect(window.localStorage.getItem(storageKey)).to.not.equal(null)
-      await closeDialog(first)
-      expect(window.localStorage.getItem(storageKey)).to.equal(null)
-
-      await openProduct(first, 'one')
-      await quote(first)
-      await purchase(first)
-      await closeDialog(first)
-      const retainedRaw = window.localStorage.getItem(storageKey)
-      const retained = JSON.parse(retainedRaw)
-      expect(retained.records).to.have.length(1)
-      expect(retained.records[0].phase).to.equal('ORDER')
-      const retainedKey = retained.records[0].orderIdempotencyKey
-      const retainedBody = retained.records[0].purchaseRequest
-      await unmountOwned(first, transport)
-
-      const second = await mountRoute('r6-order-unknown-second')
-      await selectAgent(second, 'agent-a')
-      expect(window.localStorage.getItem(storageKey)).to.equal(retainedRaw)
-      const recovery = second.findAll('.recovery-item button').find(button => button.text().includes('恢复操作'))
-      expect(recovery).to.exist
-      await recovery.trigger('click')
-      await waitForUi(second, () => second.find('.order-status').exists())
-      // Recovery emits an async roster refresh after exposing the order. Keep
-      // the transport installed until that real request has also completed.
-      await waitForRosterRefresh(second, requests, transport, 3)
-
-      const orderRequests = requests.filter(request => request.path === '/agent/skill-orders' && request.body?.quoteId)
-      expect(orderRequests).to.have.length(2)
-      expect(orderRequests.map(request => request.key)).to.deep.equal([retainedKey, retainedKey])
-      expect(orderRequests.map(request => request.body)).to.deep.equal([retainedBody, retainedBody])
-      expect(chargeCount).to.equal(1)
-    } finally {
-      try {
-        await cleanupOwned(transport)
-      } finally {
-        globalThis.fetch = originalFetch
-      }
+  it('actual route drops capability/selection on identity removal and does not restart the old actor observer', async () => {
+    const wrapper = mount(skillComponents({ useApiStore }).Route, { attachTo: document.body, global: { plugins: [pinia] } }); wrappers.push(wrapper)
+    await until(() => wrapper.find('select option[value="agt_demo"]').exists())
+    await wrapper.get('select').setValue('agt_demo'); await until(() => button(wrapper, '安装'))
+    useApiStore(pinia).authorizationGeneration++; stopIdentityBoundWork(); await settle()
+    const before = requests.length
+    expect(wrapper.find('select').exists()).to.equal(false); expect(wrapper.find('.skill-unified-list').exists()).to.equal(false)
+    await settle(); expect(requests.length).to.equal(before)
+  })
+  it('actual AgentPanel owner entry mounts real management; another owner has no entry', async () => {
+    const { AgentPanel } = skillComponents()
+    const wrapper = mount(AgentPanel, { attachTo: document.body, props: { selectedAgent: { agentId: 'agt_demo', name: '自己的好汉', boundToMe: true, canOperate: true }, identityKey: 'actor-test:0', actorScopeKey: 'actor-test', abilityText: () => '', portraitName: () => '', portraitStyle: () => ({}), statusClass: () => '', statusText: () => '' }, global: { plugins: [pinia], stubs: { teleport: false } } })
+    wrappers.push(wrapper)
+    await button(wrapper, '管理技能').trigger('click')
+    await until(() => document.querySelector('dialog[open] [data-skill-row]'))
+    expect(document.querySelector('dialog').textContent).to.include('自己的好汉')
+    await wrapper.setProps({ selectedAgent: { agentId: 'other', boundToMe: false, canOperate: false } })
+    expect(button(wrapper, '管理技能')).to.equal(undefined)
+    expect(document.querySelector('dialog')).to.equal(null)
+  })
+  it('strict raw numeric and response-status errors reach real useHttp consumers, not a permissive adapter', async () => {
+    const scope = effectScope(); scopes.push(scope)
+    const market = scope.run(() => useSkillMarket({ agentApi: createApi('/agent'), targetAgent: ref({ agentId: 'agt_demo' }), actorScopeKey: 'test', operationLocks: locks }))
+    globalThis.fetch = async (_url, options) => {
+      const response = wireResponse(options, mock.list)
+      const raw = (await response.text()).replace('"protocolVersion":1', '"protocolVersion":1.0')
+      return new Response(raw, { status: 200, headers: response.headers })
     }
+    await market.refresh()
+    expect(market.catalog.value).to.equal(null); expect(market.error.value).to.include('PROTOCOL_INVALID_RESPONSE')
+    globalThis.fetch = async (_url, options) => wireResponse(options, mock.list, 202)
+    await market.refresh(); expect(market.error.value).to.include('PROTOCOL_SKILL_HTTP_STATUS')
+  })
+  it('has no legacy purchase call in production code and uses the same management consumer', () => {
+    const source = readFileSync(new URL('../src/composables/useSkillMarket.js', import.meta.url), 'utf8')
+    expect(source).not.to.match(/\.post\(['"]\/skill-orders['"]/)
+    const consumer = readFileSync(new URL('../src/components/economy/SkillMarket.vue', import.meta.url), 'utf8')
+    expect(consumer).to.include('<SkillManagement')
+    expect(consumer).not.to.include('SkillPurchaseDialog')
   })
 })

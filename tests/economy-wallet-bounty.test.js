@@ -214,7 +214,7 @@ describe('funded bounty remediation', () => {
     expect(profileSource).not.to.include("economyApi.get('/wallet'")
     expect(routerSource).to.include("path: '/skill-market'")
     expect(routerSource).to.include("import('@/components/economy/SkillMarketRoute.vue')")
-    expect(skillMarketRouteSource).to.include('await loadSkillMarketRoster()')
+    expect(skillMarketRouteSource).to.include('await loadSkillMarketRoster({ signal: controller.signal })')
     expect(skillMarketRouteSource).to.include('principalScopeSha256')
     expect(skillMarketRouteSource).to.include('agent?.boundToMe === true && agent?.canOperate === true')
     expect(skillMarketRouteSource).to.include('isCanonicalDecimalString(agent?.version)')
