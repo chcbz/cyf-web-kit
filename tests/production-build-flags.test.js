@@ -29,13 +29,13 @@ const withFlags = (overrides, verify) => {
   }
 }
 
-test('production defaults reflect checked-in published flags and leave multimedia/follow-up/typed UI candidate-only', () => {
+test('production defaults preserve the published multimedia, follow-up and typed discussion flow', () => {
   withFlags({}, flags => {
     assert.equal(flags.VITE_ECONOMY_PREVIEW_ENABLED, 'true')
     assert.equal(flags.VITE_JUYITING_VOICE_ENABLED, 'true')
-    assert.equal(flags.VITE_JUYITING_MULTIMEDIA_DELIBERATION_V2_UI, undefined)
-    assert.equal(flags.VITE_JUYITING_FOLLOWUP_EXECUTE_V3_UI, undefined)
-    assert.equal(flags.VITE_JUYITING_TYPED_DELIBERATION_UI, undefined)
+    assert.equal(flags.VITE_JUYITING_MULTIMEDIA_DELIBERATION_V2_UI, 'true')
+    assert.equal(flags.VITE_JUYITING_FOLLOWUP_EXECUTE_V3_UI, 'true')
+    assert.equal(flags.VITE_JUYITING_TYPED_DELIBERATION_UI, 'true')
   })
 })
 
