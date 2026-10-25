@@ -10,7 +10,7 @@
       >重新读取成果</button>
     </header>
     <p v-if="error" role="alert">{{ error }} <button type="button" @click="refreshFromUser">重新读取</button></p>
-    <p v-else-if="!displayItems.length" role="status">{{ loading ? '正在读取已提交成果…' : deliveryMessage || '结果完成后会显示在这里。' }}</p>
+    <p v-else-if="!displayItems.length && (loading || !effectiveTaskCompleted)" role="status">{{ loading ? '正在读取已提交成果…' : deliveryMessage || '结果完成后会显示在这里。' }}</p>
     <p v-if="skillResults.error.value" role="alert">{{ skillResults.error.value }} <button type="button" @click="skillResults.refresh">重新读取</button></p>
     <article v-for="result in skillResults.results.value" :key="result.executionId" class="bounty-output">
       <strong>技能结果</strong><span>{{ result.complete ? '已归档' : result.phase === 'ARCHIVING' ? '正在归档（尚未完成）' : result.phase }}</span>

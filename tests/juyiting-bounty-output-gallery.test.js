@@ -521,6 +521,9 @@ describe('bounty output gallery live owner scope', () => {
       await flushPromises(); expect(wrapper.find('.finalize-button').exists()).to.equal(false)
       await wrapper.setProps({ request: { requestId: 'request-1', conversationId: 'conversation-1' } }); await flushPromises()
       expect(wrapper.text()).to.include('本次交付范围尚不明确')
+      await wrapper.setProps({ taskCompleted: true }); await flushPromises()
+      expect(wrapper.text()).not.to.include('本次交付范围尚不明确')
+      expect(wrapper.text()).to.include('事项已完成，此处仅供查看成果。')
       expect(wrapper.find('.finalize-button').exists()).to.equal(false)
       expect(wrapper.findAll('.bounty-output')).to.have.length(0)
     } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
