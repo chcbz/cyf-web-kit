@@ -7,6 +7,14 @@ const unwrap = response => response
 const clone = value => JSON.parse(JSON.stringify(value))
 const storagePrefix = 'cyf:hall:typed-deliberation:v3'
 const recordPurpose = record => record?.purpose === 'INSPECT' ? 'INSPECT' : 'CHAT'
+// Authoritative empty cancellation is history, not an unread delivery or an unknown execution.
+const cancelledWithoutOutput = entry => {
+  const request = entry?.request
+  return request?.state === 'CANCELLED' && Array.isArray(request.steps) && request.steps.length === 0 &&
+    Array.isArray(request.turns) && request.turns.length > 0 && request.turns.every(turn =>
+      turn.state === 'CANCELLED' && turn.finalMessageId === null && String(turn.lastDeltaSeq) === '0')
+}
+
 const secureKey = () => {
   try {
     if (typeof globalThis.crypto?.randomUUID === 'function') {
@@ -71,6 +79,9 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   })
   const failedReads = new Set()
   const ordinaryChatRequests = new Set()
+  const emptyCancellation = entry => cancelledWithoutOutput(entry) &&
+    !projections.value.some(value => value.requestId === entry.request.requestId && value.state === 'READY')
+
   let generation = 0; let disposed = false; let queued = false; let refreshFlight = null
   const capture = () => Object.freeze({ generation, scope: scope.value,
     authorization: unref(typeof authorizationGeneration === 'function' ? authorizationGeneration() : authorizationGeneration),
@@ -117,6 +128,10 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   }
   const readOne = async (requestId, captured = capture(), requestedPurpose = '', visited = new Set()) => {
     if (!typedId(requestId) || !current(captured) || visited.has(requestId)) return null
+    if ((getCatalogEntries?.() || []).some(entry => entry?.request?.requestId === requestId && emptyCancellation(entry))) {
+      failedReads.delete(requestId)
+      return null
+    }
     visited.add(requestId)
     const record = readRecords(storage, captured.scope, captured.context).find(item => item.receipt?.requestId === requestId)
     const purpose = requestedPurpose || recordPurpose(record)
@@ -207,7 +222,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     }
     let deliveryParent = null
     const catalog = clone(getCatalogEntries?.() || [])
-    const unresolved = catalog.some(entry => !ordinaryChatRequests.has(entry?.request?.requestId) && !entry?.request?.turns?.some(turn => turn.route === 'INSPECT') &&
+    const unresolved = catalog.some(entry => !emptyCancellation(entry) && !ordinaryChatRequests.has(entry?.request?.requestId) && !entry?.request?.turns?.some(turn => turn.route === 'INSPECT') &&
       !(entry?.request?.steps?.some(step => step.kind === 'EXECUTE') && !entry?.request?.turns?.some(turn => turn.route === 'CHAT')) &&
       !projections.value.some(value => value.requestId === entry?.request?.requestId && value.state === 'READY'))
     if (!pending && purpose === 'CHAT') {

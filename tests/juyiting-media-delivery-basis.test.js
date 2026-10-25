@@ -57,6 +57,32 @@ describe('current v5 media follow-up basis', () => {
       expect(mediaDeliveryChoices(values, entries, context)).to.deep.equal([])
     }
   })
+  it('allows media follow-up after confirmed empty cancellation, but not unknown or nonempty history', async () => {
+    for (const mode of ['cancelled', 'unknown', 'partial', 'final', 'execution', 'missing']) {
+      const { values, entries } = fixture(); values.splice(1); entries.splice(2)
+      const old = { requestId: 'old-cancelled', state: 'RUNNING', steps: [],
+        turns: [{ route: 'CHAT', state: 'RUNNING', lastDeltaSeq: '0', finalMessageId: null }] }
+      entries.unshift({ request: old }); const calls = []
+      const lane = useHallTypedDeliberation({ chatApi: {
+        get: async path => values.find(v => path.includes(`/requests/${v.requestId}/`)),
+        create: async (_path, body) => { calls.push(body); throw new Error('unknown ACK') }
+      }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context,
+      getContextGeneration: () => 1, getCatalogEntries: () => entries,
+      storage: { getItem: () => null, setItem: () => {} }, enabled: () => true })
+      try {
+        expect(await lane.refresh()).to.equal(false) // A previous failed read must not poison a confirmed cancellation.
+        old.state = 'CANCELLED'; old.turns[0].state = 'CANCELLED'
+        if (mode === 'unknown') old.state = 'UNKNOWN'
+        if (mode === 'partial') old.turns[0].lastDeltaSeq = '1'
+        if (mode === 'final') old.turns[0].finalMessageId = '999'
+        if (mode === 'execution') old.steps = [{ kind: 'EXECUTE' }]
+        if (mode === 'missing') delete old.turns[0].lastDeltaSeq
+        await lane.refresh(); await lane.submit({ content: '识别刚才生成的图片' })
+        expect(calls.length, mode).to.equal(mode === 'cancelled' ? 1 : 0)
+        if (calls.length) expect(calls[0].parentOutcomeId).to.equal(values[0].outcome.outcomeId)
+      } finally { lane.dispose() }
+    }
+  })
   it('requires explicit choice, freezes unknown POST and fences changed authorization', async () => {
     const { values, entries } = fixture(); const calls = []; const gets = []; const identity = ref('owner'); const auth = ref(1)
     entries.push({ request: { requestId: 'ordinary-chat', turns: [{ route: 'CHAT', state: 'PUBLISHED' }], steps: [] } })
