@@ -597,8 +597,9 @@ describe('bounty output gallery live owner scope', () => {
     const child = children[1]
     const outputs = group.manifests.flatMap(manifest => manifest.outputs.map(output => ({ ...output, requestId: manifest.requestId, stepId: manifest.stepId })))
     let addLate = false; const late = { ...child, requestId: 'unlinked-mixed-late' }
-    const snapshots = [...values.map(request), ...children]; const reads = []; const writes = []
+    const snapshots = [{ requestId: 'ordinary-chat', conversationId: '42', turns: [{ route: 'CHAT', state: 'PUBLISHED' }], steps: [] }, ...values.map(request), ...children]; const reads = []; const writes = []
     const api = { get: async path => { reads.push(path)
+      if (path.includes('/requests/ordinary-chat/typed-outcome')) throw { response: { status: 404 } }
       if (path.endsWith('/typed-outcome')) return ((values.find(value => path.includes(`/requests/${value.requestId}/`))))
       if (path.endsWith('/outputs')) {
         const manifest = group.manifests.find(value => path.includes(`/requests/${value.requestId}/`)) || group.manifests[1]

@@ -141,8 +141,15 @@ const list = async () => {
     if (props.taskId) for (const request of snapshots) {
       for (const turn of request.turns || []) {
         if (turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state)) continue
-        const response = await api.get(`/conversations/${encodeURIComponent(props.conversationId)}/requests/${encodeURIComponent(request.requestId)}/typed-outcome`, {},
-          { autoLoading: false, needAuth: true, signal: controller.signal })
+        let response
+        try {
+          response = await api.get(`/conversations/${encodeURIComponent(props.conversationId)}/requests/${encodeURIComponent(request.requestId)}/typed-outcome`, {},
+            { autoLoading: false, needAuth: true, signal: controller.signal })
+        } catch (cause) {
+          // Authenticated catalog CHAT can predate typed outcomes; it is not a deliverable.
+          if ((cause?.status ?? cause?.response?.status) === 404 && !props.typedOutcomes.some(item => item.requestId === request.requestId)) continue
+          throw cause
+        }
         const outcome = response
         const text = await completedTextItem(outcome, request, turn, props.taskId)
         if (controller.signal.aborted || generation !== epoch) return

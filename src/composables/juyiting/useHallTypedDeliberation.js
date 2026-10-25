@@ -70,6 +70,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       deliveryChoices.value.some(item => item.outcomeId === selected.outcomeId && item.finalSha256 === selected.finalSha256) ? selected.outcomeId : ''
   })
   const failedReads = new Set()
+  const ordinaryChatRequests = new Set()
   let generation = 0; let disposed = false; let queued = false; let refreshFlight = null
   const capture = () => Object.freeze({ generation, scope: scope.value,
     authorization: unref(typeof authorizationGeneration === 'function' ? authorizationGeneration() : authorizationGeneration),
@@ -131,13 +132,17 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
         return null
       }
       failedReads.delete(requestId)
+      ordinaryChatRequests.delete(requestId)
       const child = projection.reviewProgress?.state === 'COMMITTED' ? projection.reviewProgress.childRequestId : null
       if (child && child !== requestId) await readOne(child, captured, 'CHAT', visited)
       return projection
     } catch (cause) {
       // 404 means this catalog request is ordinary durable CHAT; it is not a typed UI failure.
       if (current(captured)) {
-        if (cause?.status === 404) failedReads.delete(requestId)
+        if ((cause?.status ?? cause?.response?.status) === 404) {
+          failedReads.delete(requestId)
+          if (purpose === 'CHAT' && !projections.value.some(item => item.requestId === requestId) && !record?.receipt) ordinaryChatRequests.add(requestId)
+        }
         else { failedReads.add(requestId); error.value = '暂时无法读取答复，请刷新状态。' }
       }
       return null
@@ -202,7 +207,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     }
     let deliveryParent = null
     const catalog = clone(getCatalogEntries?.() || [])
-    const unresolved = catalog.some(entry => !entry?.request?.turns?.some(turn => turn.route === 'INSPECT') &&
+    const unresolved = catalog.some(entry => !ordinaryChatRequests.has(entry?.request?.requestId) && !entry?.request?.turns?.some(turn => turn.route === 'INSPECT') &&
       !(entry?.request?.steps?.some(step => step.kind === 'EXECUTE') && !entry?.request?.turns?.some(turn => turn.route === 'CHAT')) &&
       !projections.value.some(value => value.requestId === entry?.request?.requestId && value.state === 'READY'))
     if (!pending && purpose === 'CHAT') {
@@ -286,7 +291,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     return readRecords(storage, scope.value, getContext?.() || {}).some(record => recordPurpose(record) === 'INSPECT' && record.status === 'ACCEPTED' && !ready.has(record.receipt?.requestId))
       ? '等待查阅资料…' : ''
   })
-  const invalidate = () => { generation++; failedReads.clear(); busy.value = false; projections.value = []; selectedPending.value = null; selectedDelivery.value = null; error.value = '' }
+  const invalidate = () => { generation++; failedReads.clear(); ordinaryChatRequests.clear(); busy.value = false; projections.value = []; selectedPending.value = null; selectedDelivery.value = null; error.value = '' }
   const stopScope = watch(scope, invalidate, { flush: 'sync' })
   const stopCatalog = typeof getCatalogEntries === 'function' ? watch(getCatalogEntries, () => { void refresh(); void recover() }, { deep: true }) : () => {}
   const recoveryAvailable = computed(() => { storageRevision.value; return readRecords(storage, scope.value, getContext?.() || {}).some(record => record.status === 'UNKNOWN') })

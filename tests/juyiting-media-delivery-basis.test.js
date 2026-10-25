@@ -59,13 +59,14 @@ describe('current v5 media follow-up basis', () => {
   })
   it('requires explicit choice, freezes unknown POST and fences changed authorization', async () => {
     const { values, entries } = fixture(); const calls = []; const gets = []; const identity = ref('owner'); const auth = ref(1)
+    entries.push({ request: { requestId: 'ordinary-chat', turns: [{ route: 'CHAT', state: 'PUBLISHED' }], steps: [] } })
     const memory = new Map(); const storage = { getItem: key => memory.get(key) || null, setItem: (key, value) => memory.set(key, value) }
-    const lane = useHallTypedDeliberation({ chatApi: { get: async path => { gets.push(path); return values.find(v => path.includes(`/requests/${v.requestId}/`)) },
+    const lane = useHallTypedDeliberation({ chatApi: { get: async path => { gets.push(path); if (path.includes('/requests/ordinary-chat/')) throw { response: { status: 404 } }; return values.find(v => path.includes(`/requests/${v.requestId}/`)) },
       create: async (_path, body, options) => { calls.push(structuredClone({ body, key: options.headers['Idempotency-Key'] })); throw new Error('unknown ACK') } },
     actorScopeKey: identity, authorizationGeneration: auth, getContext: () => context, getContextGeneration: () => 1,
     getCatalogEntries: () => entries, storage, enabled: () => true })
     try {
-      expect(await lane.refresh()).to.equal(true); expect(gets).to.have.length(2)
+      expect(await lane.refresh()).to.equal(true); expect(gets).to.have.length(3)
       await lane.submit({ content: '提交这一份成果' }); expect(calls).to.have.length(0); expect(lane.error.value).to.include('先选择')
       lane.chooseDelivery(values[0].outcome.outcomeId); await lane.submit({ content: '提交这一份成果' })
       expect(calls).to.have.length(1); expect(calls[0].body.parentOutcomeId).to.equal(values[0].outcome.outcomeId)
