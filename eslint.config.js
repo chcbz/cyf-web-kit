@@ -161,5 +161,16 @@ export default [
         multiline: 'always'
       }]
     }
+  },
+  {
+    files: ['src/composables/juyiting/hallRequestReadbackScheduler.js'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: ['*'] }],
+      'no-restricted-globals': ['error', 'window', 'document', 'localStorage', 'sessionStorage', 'fetch'],
+      'no-restricted-syntax': ['error',
+        { selector: 'ImportExpression', message: 'The readback scheduler must remain dependency-free.' },
+        { selector: 'Identifier[name="globalThis"]', message: 'Inject I/O and lifecycle capabilities; do not reach global APIs.' }
+      ]
+    }
   }
 ]

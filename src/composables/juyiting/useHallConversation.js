@@ -1,3 +1,4 @@
+import { createHallRequestReadbackScheduler } from './hallRequestReadbackScheduler.js'
 import { createChatStreamDecoder } from '../../utils/chatStreamWire.js'
 import { computed, reactive, ref, unref, watch } from 'vue'
 import {
@@ -100,8 +101,15 @@ export const useHallConversation = ({
   let streamFinalCandidate = null
   const eventCursors = new Map()
   const turnStates = new Map()
-  const requestReadbackJobs = new Map()
-  const requestReadbackInflight = new Map()
+  const requestReadback = createHallRequestReadbackScheduler({
+    read: (id, guard) => readUnknownRequestOnce(id, guard),
+    captureGuard: () => captureGuard(),
+    isCurrent: guard => guardCurrent(guard),
+    isActiveRequest: id => activeRequest.value?.requestId === id,
+    setTimeout: (callback, delay) => window.setTimeout(callback, delay),
+    clearTimeout: timer => window.clearTimeout(timer),
+    debounceMs: HALL_REQUEST_READBACK_DEBOUNCE_MS
+  })
   const cancellationJobs = reactive(new Map())
   // This tab-scoped marker is a read-only recovery hint, never cancellation authority.
   const cancellationStorage = () => {
@@ -785,11 +793,7 @@ export const useHallConversation = ({
     cancellationJobs.clear()
     turnStates.clear()
     eventCursors.clear()
-    for (const job of requestReadbackJobs.values()) {
-      if (job.timer != null) window.clearTimeout(job.timer)
-    }
-    requestReadbackJobs.clear()
-    requestReadbackInflight.clear()
+    requestReadback.reset()
     authoritativeResyncPromise = null
     activeSendToken = null
     activeSendSession = null
@@ -891,6 +895,7 @@ export const useHallConversation = ({
     cancellationJobs.clear()
     if (disposed) return
     disposed = true
+    requestReadback.dispose()
     browserDocument()?.removeEventListener?.('visibilitychange', handleHallEventVisibility)
     browserWindow()?.removeEventListener?.('focus', handleHallEventFocus)
     stopScopeWatch()
@@ -1654,7 +1659,7 @@ export const useHallConversation = ({
           publishStreamFinals()
           syncDurablePresentation()
           // A final event has already arranged this GET (including its trailing rerun).
-          if (session.roundCloseout && (!session.terminalReadbackHint || !requestReadbackInflight.has(requestId))) {
+          if (session.roundCloseout && (!session.terminalReadbackHint || !requestReadback.hasInFlight(requestId))) {
             scheduleAuthoritativeRequestReadback(requestId, { immediate: true })
           }
           if (isAwaitingReply.value && conversationId.value) startHallReplyPolling(conversationId.value)
@@ -1950,107 +1955,44 @@ export const useHallConversation = ({
     }
   }
 
-  const recoverUnknownRequest = async (requestId, guard = captureGuard()) => {
-    const existing = requestReadbackInflight.get(requestId)
-    if (existing) return existing
+  const readUnknownRequestOnce = async (requestId, guard) => {
     const expected = activeRequest.value
     const sameBinding = value => value && expected && ['requestId', 'requestRevision', 'conversationId', 'conversationGeneration']
       .every(key => expected[key] == null || value[key] === expected[key])
-    const promise = (async () => {
-      try {
-        abortIfStale(guard)
-        const response = await chatApi.get(`/requests/${encodeURIComponent(requestId)}`, {}, { autoLoading: false, signal: lifecycleController.signal })
-        abortIfStale(guard)
-        if (activeRequest.value?.requestId !== requestId || !sameBinding(activeRequest.value)) return false
-        let requestView = apiData(response)
-        if (!sameBinding(requestView)) return false
-        // The aggregate version and each turn belong to this exact request generation.
-        const currentVersion = canonicalWireString(activeRequest.value.stateVersion, { allowZero: true })
-        const nextVersion = canonicalWireString(requestView?.stateVersion, { allowZero: true })
-        if (currentVersion && (!nextVersion || BigInt(nextVersion) < BigInt(currentVersion))) return false
-        if (!deliberationBusy(activeRequest.value, activeTurns.value) && deliberationBusy(requestView, requestView.turns)) return false
-        if (!Array.isArray(requestView.turns) || requestView.turns.some(turn => !sameBinding(turn))) return false
-        if (adoptedBootstrap?.initialRequestId === requestId) {
-          if (!bountyBootstrapContextMatches(chatContext?.value, selectedTask?.value, selectedAgent?.value, adoptedBootstrap)) return false
-          requestView = validateBountyBootstrapRequest(requestView, adoptedBootstrap)
-          if (!requestView || !bootstrapReadbackIsCurrent(activeRequest.value, requestView)) return false
-        }
-        if (!applyRequestView(requestView, requestId, { authoritative: true })) return false
-        // Final-reply observers can synchronously switch identity or start another round.
-        if (!guardCurrent(guard) || activeRequest.value?.requestId !== requestId) return false
-        const id = typeof requestView?.conversationId === 'string' ? requestView.conversationId : conversationId.value
-        if (id) conversationId.value = id
-        if (!hasPendingSendSession.value && !deliberationBusy(activeRequest.value, activeTurns.value)) stopHallReplyPolling()
-        return true
-      } catch (error) {
-        if (error?.name === 'AbortError' || !guardCurrent(guard)) return false
-        deliberationStatus.value = '需要恢复核对'
-        return false
-      }
-    })()
-    requestReadbackInflight.set(requestId, promise)
     try {
-      return await promise
-    } finally {
-      if (requestReadbackInflight.get(requestId) === promise) requestReadbackInflight.delete(requestId)
-    }
-  }
-
-  const runScheduledRequestReadback = (requestId, job) => {
-    if (requestReadbackJobs.get(requestId) !== job || !guardCurrent(job.guard) || activeRequest.value?.requestId !== requestId) {
-      requestReadbackJobs.delete(requestId)
-      return
-    }
-    if (job.inFlight) return
-    job.timer = null
-    job.deltaDirty = false
-    const inFlight = recoverUnknownRequest(requestId, job.guard)
-    job.inFlight = inFlight
-    const settle = () => {
-      if (requestReadbackJobs.get(requestId) !== job || job.inFlight !== inFlight) return
-      job.inFlight = null
-      const forceTrailingImmediate = job.forceTrailingImmediate
-      const deltaDirty = job.deltaDirty
-      job.forceTrailingImmediate = false
-      job.deltaDirty = false
-      if (!guardCurrent(job.guard) || activeRequest.value?.requestId !== requestId) {
-        requestReadbackJobs.delete(requestId)
-        return
+      abortIfStale(guard)
+      const response = await chatApi.get(`/requests/${encodeURIComponent(requestId)}`, {}, { autoLoading: false, signal: lifecycleController.signal })
+      abortIfStale(guard)
+      if (activeRequest.value?.requestId !== requestId || !sameBinding(activeRequest.value)) return false
+      let requestView = apiData(response)
+      if (!sameBinding(requestView)) return false
+      // The aggregate version and each turn belong to this exact request generation.
+      const currentVersion = canonicalWireString(activeRequest.value.stateVersion, { allowZero: true })
+      const nextVersion = canonicalWireString(requestView?.stateVersion, { allowZero: true })
+      if (currentVersion && (!nextVersion || BigInt(nextVersion) < BigInt(currentVersion))) return false
+      if (!deliberationBusy(activeRequest.value, activeTurns.value) && deliberationBusy(requestView, requestView.turns)) return false
+      if (!Array.isArray(requestView.turns) || requestView.turns.some(turn => !sameBinding(turn))) return false
+      if (adoptedBootstrap?.initialRequestId === requestId) {
+        if (!bountyBootstrapContextMatches(chatContext?.value, selectedTask?.value, selectedAgent?.value, adoptedBootstrap)) return false
+        requestView = validateBountyBootstrapRequest(requestView, adoptedBootstrap)
+        if (!requestView || !bootstrapReadbackIsCurrent(activeRequest.value, requestView)) return false
       }
-      if (forceTrailingImmediate) {
-        Promise.resolve().then(() => runScheduledRequestReadback(requestId, job))
-      } else if (deltaDirty) {
-        job.timer = window.setTimeout(() => runScheduledRequestReadback(requestId, job), HALL_REQUEST_READBACK_DEBOUNCE_MS)
-      } else {
-        requestReadbackJobs.delete(requestId)
-      }
-    }
-    void inFlight.then(settle, settle)
-  }
-
-  const scheduleAuthoritativeRequestReadback = (requestId, { immediate = false } = {}) => {
-    if (disposed || typeof requestId !== 'string' || !requestId || activeRequest.value?.requestId !== requestId) return false
-    let job = requestReadbackJobs.get(requestId)
-    if (!job) {
-      job = { timer: null, inFlight: null, forceTrailingImmediate: false, deltaDirty: false, guard: captureGuard() }
-      requestReadbackJobs.set(requestId, job)
-    } else {
-      job.guard = captureGuard()
-    }
-    if (immediate) {
-      if (job.timer != null) window.clearTimeout(job.timer)
-      job.timer = null
-      job.deltaDirty = false
-      if (job.inFlight || requestReadbackInflight.has(requestId)) job.forceTrailingImmediate = true
-      if (!job.inFlight) runScheduledRequestReadback(requestId, job)
+      if (!applyRequestView(requestView, requestId, { authoritative: true })) return false
+      // Final-reply observers can synchronously switch identity or start another round.
+      if (!guardCurrent(guard) || activeRequest.value?.requestId !== requestId) return false
+      const id = typeof requestView?.conversationId === 'string' ? requestView.conversationId : conversationId.value
+      if (id) conversationId.value = id
+      if (!hasPendingSendSession.value && !deliberationBusy(activeRequest.value, activeTurns.value)) stopHallReplyPolling()
       return true
+    } catch (error) {
+      if (error?.name === 'AbortError' || !guardCurrent(guard)) return false
+      deliberationStatus.value = '需要恢复核对'
+      return false
     }
-    job.deltaDirty = true
-    if (job.inFlight) return true
-    if (job.timer != null) window.clearTimeout(job.timer)
-    job.timer = window.setTimeout(() => runScheduledRequestReadback(requestId, job), HALL_REQUEST_READBACK_DEBOUNCE_MS)
-    return true
   }
+
+  const recoverUnknownRequest = (requestId, guard = captureGuard()) => requestReadback.readNow(requestId, guard)
+  const scheduleAuthoritativeRequestReadback = (requestId, options) => requestReadback.schedule(requestId, options)
 
   const authoritativeResync = (id = conversationId.value, reason = 'resync_required', { restartStream = true, clearCursor = true } = {}) => {
     const exactId = exactRuntimeId(id)

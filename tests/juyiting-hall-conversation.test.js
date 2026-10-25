@@ -1,3 +1,4 @@
+import { createHallRequestReadbackScheduler } from '../src/composables/juyiting/hallRequestReadbackScheduler.js'
 import { getHallCapabilities } from './fixtures/hall-current-protocol.js'
 import { expect } from 'chai'
 import { ref } from 'vue'
@@ -1751,5 +1752,73 @@ describe('Hall stream transport failure read-only recovery', () => {
     } finally {
       conversation.disposeHallConversation()
     }
+  })
+})
+
+
+describe('Hall request readback scheduling lifecycle', () => {
+  const setupScheduler = () => {
+    let generation = 0
+    let timerId = 0
+    const timers = new Map()
+    const reads = []
+    const scheduler = createHallRequestReadbackScheduler({
+      read: (id, guard) => { const result = deferred(); reads.push({ id, guard, ...result }); return result.promise },
+      captureGuard: () => generation,
+      isCurrent: guard => guard === generation,
+      isActiveRequest: id => id === 'request',
+      setTimeout: (callback, delay) => { expect(delay).to.equal(250); timers.set(++timerId, callback); return timerId },
+      clearTimeout: id => timers.delete(id),
+      debounceMs: 250
+    })
+    return { scheduler, reads, timers, nextIdentity: () => { generation += 1; scheduler.reset() } }
+  }
+  const flushPromises = async () => { for (let i = 0; i < 8; i += 1) await Promise.resolve() }
+
+  it('coalesces direct reads and performs the final event read arriving during a pending read', async () => {
+    const { scheduler, reads } = setupScheduler()
+    const first = scheduler.readNow('request')
+    expect(scheduler.readNow('request')).to.equal(first)
+    scheduler.schedule('request', { immediate: true })
+    expect(reads).to.have.length(1)
+    reads[0].resolve(true)
+    await flushPromises()
+    expect(reads).to.have.length(2)
+    reads[1].resolve(true)
+    await flushPromises()
+    expect(scheduler.hasInFlight('request')).to.equal(false)
+    scheduler.dispose()
+  })
+
+  it('debounces deltas and schedules one trailing read when more arrive during a read', async () => {
+    const { scheduler, reads, timers } = setupScheduler()
+    scheduler.schedule('request'); scheduler.schedule('request')
+    expect(timers.size).to.equal(1)
+    const callback = [...timers.values()][0]; timers.clear(); callback()
+    scheduler.schedule('request'); scheduler.schedule('request')
+    expect(reads).to.have.length(1)
+    reads[0].resolve(true); await flushPromises()
+    expect(timers.size).to.equal(1)
+    const trailing = [...timers.values()][0]; timers.clear(); trailing()
+    expect(reads).to.have.length(2)
+    reads[1].resolve(true); await flushPromises()
+    scheduler.dispose()
+  })
+
+  it('old completion cannot clear a new identity read and disposal leaves no timer or new read', async () => {
+    const { scheduler, reads, nextIdentity, timers } = setupScheduler()
+    scheduler.readNow('request')
+    nextIdentity()
+    const current = scheduler.readNow('request')
+    reads[0].resolve(true); await flushPromises()
+    expect(scheduler.hasInFlight('request')).to.equal(true)
+    expect(scheduler.readNow('request')).to.equal(current)
+    scheduler.schedule('request')
+    scheduler.dispose()
+    expect(timers.size).to.equal(0)
+    expect(scheduler.schedule('request', { immediate: true })).to.equal(false)
+    expect(await scheduler.readNow('request')).to.equal(false)
+    reads[1].resolve(true); await flushPromises()
+    expect(reads).to.have.length(2)
   })
 })
