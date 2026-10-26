@@ -166,7 +166,7 @@
                     ref="confirmRef"
                     class="primary"
                     type="button"
-                    :disabled="blocked(row) || market.loading || !!market.error"
+                    :disabled="blocked(row) || !!market.error"
                     @click="submit(row)"
                   >{{ market.busy[row.skillKey] ? '正在提交…' : mode === 'INSTALL' ? '确认安装' : '确认升级' }}</button>
                 </footer>
@@ -177,7 +177,7 @@
                 <footer class="skill-inline-footer">
                   <span>{{ agentName }} · {{ row.name }} · {{ row.installed?.version.skillVersion }}</span>
                   <button type="button" :disabled="blocked(row)" @click="expand(row, 'detail')">取消</button>
-                  <button class="primary" type="button" :disabled="blocked(row) || market.loading || !!market.error" @click="submit(row)">{{ market.busy[row.skillKey] ? '正在提交…' : '确认卸载' }}</button>
+                  <button class="primary" type="button" :disabled="blocked(row) || !!market.error" @click="submit(row)">{{ market.busy[row.skillKey] ? '正在提交…' : '确认卸载' }}</button>
                 </footer>
               </template>
               <template v-else-if="mode === 'ENABLE' || mode === 'DISABLE'">
@@ -186,7 +186,7 @@
                 <footer class="skill-inline-footer"><span>{{ agentName }} · {{ row.name }} · {{ row.installed?.version.skillVersion }}</span><button
                   class="primary"
                   type="button"
-                  :disabled="blocked(row) || market.loading || !!market.error"
+                  :disabled="blocked(row) || !!market.error"
                   @click="submit(row)"
                 >{{ market.busy[row.skillKey] ? '正在提交…' : mode === 'DISABLE' ? '确认停用' : '确认启用' }}</button></footer>
               </template>

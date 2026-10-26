@@ -23,6 +23,23 @@ describe('SM-C1 actual management component lifecycle (no composable stub)', () 
     await button(wrapper, '确认安装').trigger('click'); await until(() => mock.requests.some(r => r.method === 'POST' && r.path === '/agt_demo/skill-changes'))
     expect(mock.requests.find(r => r.method === 'POST' && r.path === '/agt_demo/skill-changes').data).to.deep.equal(fixture('create-install').data)
   })
+  it('does not disable a prepared confirmation during background catalog polling', async () => {
+    await open()
+    await button(wrapper, '获取报价').trigger('click'); await until(() => button(wrapper, '确认安装'))
+    const response = deferred(); const entered = deferred(); const get = mock.api.get
+    let holdNextRead = true
+    mock.api.get = (path, ...args) => {
+      if (path.endsWith('/skills') && holdNextRead) { holdNextRead = false; entered.resolve(); return response.promise }
+      return get(path, ...args)
+    }
+    try {
+      await entered.promise; await settle()
+      expect(button(wrapper, '确认安装').element.disabled).to.equal(false)
+      await button(wrapper, '确认安装').trigger('click')
+      await until(() => mock.requests.some(r => r.method === 'POST' && r.path === '/agt_demo/skill-changes'))
+      expect(mock.requests.filter(r => r.method === 'POST' && r.path === '/agt_demo/skill-changes')).to.have.length(1)
+    } finally { response.resolve(structuredClone(mock.list)) }
+  })
   it('unknown permission keys remain literal escaped text, including inherited object names', async () => {
     const permissions = ['__proto__', 'constructor', '<img src=x onerror="alert(1)">']
     mock.list.items[0].candidate.requiredPermissions = permissions

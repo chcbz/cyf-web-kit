@@ -70,6 +70,25 @@ describe('SM-C1 locked fixtures → actual Web parser', () => {
 
 describe('SM-C1 useSkillMarket lifecycle and exactly-once intent', () => {
   afterEach(() => { for (const scope of scopes.splice(0)) scope.stop() })
+  it('keeps an accepted confirmation when background refresh starts during operation-lock acquisition', async () => {
+    let onLock = () => {}
+    const { market, mock } = make({ operationLocks: { request: async (_name, _options, callback) => { onLock(); return callback() } } })
+    const key = await prepareInstall(market)
+    const response = deferred(); let refreshing
+    const originalGet = mock.api.get
+    let holdNextRead = true
+    mock.api.get = (path, ...args) => {
+      if (path.endsWith('/skills') && holdNextRead) { holdNextRead = false; return response.promise }
+      return originalGet(path, ...args)
+    }
+    onLock = () => { onLock = () => {}; refreshing = market.refresh() }
+    try {
+      const result = await market.submit(key)
+      expect(result?.skillChangeId).to.equal(mock.accepted.skillChangeId)
+      expect(mock.requests.filter(r => r.method === 'POST' && r.path.endsWith('/skill-changes'))).to.have.length(1)
+    } finally { response.resolve(structuredClone(mock.list)); await refreshing }
+  })
+
   it('list → explicit permissions → real quote → INSTALL at sole new write route; 202 is not success', async () => {
     const { market, mock } = make(); const key = await prepareInstall(market)
     expect(market.drafts.value[key].quote).not.to.equal(null)

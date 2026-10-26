@@ -319,7 +319,10 @@ export function useSkillMarket ({ agentApi = defaultAgentApi, enabled = true, ac
   const submit = skillKey => perform(skillKey, async () => {
     if (pending.value[skillKey]) { queryUnknown.value = { ...queryUnknown.value, [skillKey]: '已有原操作，请先查询或原键重放。' }; return null }
     const row = rowFor(skillKey); const draft = drafts.value[skillKey]
-    if (!row || !draft || !row.allowedActions.includes(draft.action) || draft.context !== contextFingerprint(row) || loading.value || error.value) return null
+    // A polling read may start while the accepted click waits for the cross-tab lock.
+    // Keep the validated snapshot and its server-enforced expected revisions; a read
+    // in flight alone must not silently discard this confirmed intent.
+    if (!row || !draft || !row.allowedActions.includes(draft.action) || draft.context !== contextFingerprint(row) || error.value) return null
     const data = { action: draft.action, skillKey, sourceSkillInstallationId: row.installed?.skillInstallationId || null, expectedAgentVersion: catalog.value.agentVersion, expectedSkillRevision: row.skillRevision }
     if (['INSTALL', 'UPGRADE'].includes(draft.action)) {
       if (!draft.quote || draft.quote.expiresAt <= now()) { invalidateDraft(skillKey, '报价已过期，请重新获取并确认。'); return null }
