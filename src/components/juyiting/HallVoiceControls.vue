@@ -46,7 +46,7 @@
           type="button"
           class="is-recording"
           aria-label="停止录音并转写"
-          @click="voice.stopRecording()"
+          @click="stopRecording"
         >
           <svg
             width="18"
@@ -169,7 +169,7 @@ let voiceSettingsSequence = 0
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 const props = defineProps({ recordingTarget: { type: Object, default: null }, settingsVisible: { type: Boolean, default: true }, draftOnly: { type: Boolean, default: false }, disabled: { type: Boolean, default: false }, compact: { type: Boolean, default: false }, voice: { type: Object, default: null } })
-const emit = defineEmits(['apply'])
+const emit = defineEmits(['apply', 'activate-input'])
 const settingsOpen = ref(false)
 const controlsRef = ref(null)
 const settingsButtonRef = ref(null)
@@ -192,8 +192,14 @@ const reviewTitle = computed(() => {
 })
 const startRecording = () => {
   settingsOpen.value = false
+  emit('activate-input')
   if (props.draftOnly) void props.voice.startRecording({ draftOnly: true })
   else void props.voice.startRecording()
+}
+const stopRecording = () => {
+  settingsOpen.value = false
+  emit('activate-input')
+  return props.voice.stopRecording()
 }
 watch(() => props.voice?.state, state => {
   if (props.draftOnly && !props.disabled && state === 'review' && props.voice?.transcript && !props.voice?.detached) emit('apply', 'append')
@@ -203,6 +209,7 @@ const closeSettings = ({ restoreFocus = false } = {}) => {
   settingsOpen.value = false
   if (restoreFocus) nextTick(() => settingsButtonRef.value?.focus())
 }
+defineExpose({ closeSettings })
 const handleDocumentPointerdown = event => {
   if (settingsOpen.value && !controlsRef.value?.contains(event.target)) closeSettings()
 }

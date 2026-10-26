@@ -17,14 +17,18 @@ const History = compile('HallConversationHistory')
 const Composer = compile('HallChatComposer', { HallVoiceControls: { template: '<button class="voice-control">录音状态</button>' } })
 const directory = () => ({ items: Vue.ref([]), links: Vue.ref([]), pendingWrites: Vue.ref([]), loading: Vue.ref(false), error: Vue.ref(''),
   actionState: Vue.ref('idle'), writeNotice: Vue.ref(''), refresh: async () => true, load: async () => true, dispose: () => {} })
-const Chat = compile('ChatPanel', {
+const chatDeps = {
   HallConversationHistory: History, HallChatComposer: Composer,
   HallMessageParts: { render: () => null }, HallMaterialPicker: { render: () => null }, BountyTextSelectionArchive: { render: () => null },
   BountyTypedOutcomeCard: { render: () => null }, WorkspaceWriteRecovery: { render: () => null },
   marked: Object.assign(value => value, { setOptions: () => {} }), DOMPurify: { sanitize: value => value },
   usePersonalWorkspace: directory, usePersonalWorkspaceConversationLinks: directory, usePersonalWorkspaceTaskLinks: directory
-})
-const createChat = () => mount(Chat, { attachTo: document.body, props: { mentionLabel: () => '', senderText: () => '', draft: '草稿保留', conversationId: 'c1',
+}
+const Chat = compile('ChatPanel', chatDeps)
+const Voice = compile('HallVoiceControls')
+const RealComposer = compile('HallChatComposer', { HallVoiceControls: Voice })
+const RealChat = compile('ChatPanel', { ...chatDeps, HallChatComposer: RealComposer })
+const createChat = (component = Chat) => mount(component, { attachTo: document.body, props: { mentionLabel: () => '', senderText: () => '', draft: '草稿保留', conversationId: 'c1',
   conversationHistory: [{ id: 'c1', title: '旧话头' }] }, global: { stubs: { 'var-dialog': true, 'var-icon': true } } })
 const pointer = async target => { target.dispatchEvent(new window.Event('pointerdown', { bubbles: true })); await Vue.nextTick() }
 const escape = async (target = document) => { target.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await Vue.nextTick() }
@@ -186,5 +190,133 @@ describe('discussion transient tools dismissal', () => {
       await pointer(document.body); await escape()
       expect(escaped).to.deep.equal([false])
     } finally { document.removeEventListener('keydown', observer) }
+  })
+})
+
+
+describe('discussion input switching with real voice controls', () => {
+  const createVoice = () => {
+    const calls = { start: [], stop: 0, cancel: 0 }
+    const voice = Vue.reactive({ supported: true, state: 'idle', canRecord: true,
+      startRecording: options => { calls.start.push(options) },
+      stopRecording: () => { calls.stop++ }, cancel: () => { calls.cancel++ }
+    })
+    return { voice, calls }
+  }
+  const unchanged = (w, calls) => {
+    expect(w.get('textarea').element.value).to.equal('草稿保留')
+    for (const event of ['send-message', 'delete-conversation', 'update:draft', 'voice-apply', 'remove-attachment']) {
+      expect(w.emitted(event), event).to.equal(undefined)
+    }
+    expect(calls.cancel).to.equal(0)
+  }
+  for (const tool of ['history', 'more', 'materials']) {
+    it(`focus without pointerdown dismisses ${tool} and keeps focus/draft/recording`, async () => {
+      const w = createChat(RealChat); const { voice, calls } = createVoice()
+      try {
+        await w.setProps({ voice })
+        if (tool === 'history') await historyButton(w).trigger('click')
+        if (tool === 'more') {
+          await moreButton(w).trigger('click')
+          await w.get('.voice-settings-trigger').trigger('click')
+          expect(w.find('.voice-settings').exists()).to.equal(true)
+        }
+        if (tool === 'materials') await w.get('.composer-add-materials').trigger('click')
+        w.get('textarea').element.focus(); await Vue.nextTick()
+        expect(document.activeElement).to.equal(w.get('textarea').element)
+        expect(w.findComponent(History).exists()).to.equal(false)
+        expect(moreButton(w).attributes('aria-expanded')).to.equal('false')
+        expect(w.find('.material-reference-picker').exists()).to.equal(false)
+        expect(w.find('.voice-settings').exists()).to.equal(false)
+        await moreButton(w).trigger('click')
+        expect(w.get('.voice-settings-trigger').attributes('aria-expanded')).to.equal('false')
+        unchanged(w, calls)
+        expect(calls.start).to.deep.equal([])
+        expect(calls.stop).to.equal(0)
+      } finally { w.unmount() }
+    })
+    for (const withPointer of [false, true]) {
+      it(`voice activation closes ${tool}, pointer=${withPointer}, starts draft-only exactly once`, async () => {
+        const w = createChat(RealChat); const { voice, calls } = createVoice()
+        try {
+          await w.setProps({ voice }); await Vue.nextTick()
+          if (tool === 'history') await historyButton(w).trigger('click')
+          if (tool === 'more') {
+            await moreButton(w).trigger('click')
+            await w.get('.voice-settings-trigger').trigger('click')
+          }
+          if (tool === 'materials') await w.get('.composer-add-materials').trigger('click')
+          const button = w.get('.composer-inline-voice .voice-start')
+          if (withPointer) await pointer(button.element)
+          await button.trigger('click')
+          expect(w.findComponent(History).exists()).to.equal(false)
+          expect(moreButton(w).attributes('aria-expanded')).to.equal('false')
+          expect(w.find('.material-reference-picker').exists()).to.equal(false)
+          expect(w.find('.voice-settings').exists()).to.equal(false)
+          expect(calls.start).to.deep.equal([{ draftOnly: true }])
+          expect(calls.stop).to.equal(0)
+          unchanged(w, calls)
+        } finally { w.unmount() }
+      })
+    }
+  }
+  it('stops/transcribes exactly once and keeps recording controls reachable on text focus', async () => {
+    const w = createChat(RealChat); const { voice, calls } = createVoice()
+    try {
+      voice.state = 'recording'
+      await w.setProps({ voice })
+      await moreButton(w).trigger('click')
+      w.get('textarea').element.focus(); await Vue.nextTick()
+      expect(w.get('.composer-more-panel').element.style.display).not.to.equal('none')
+      expect(w.find('.voice-cancel').exists()).to.equal(true)
+      expect(calls.stop).to.equal(0)
+      await historyButton(w).trigger('click')
+      await w.get('.composer-inline-voice .is-recording').trigger('click')
+      expect(w.findComponent(History).exists()).to.equal(false)
+      expect(calls.stop).to.equal(1)
+      expect(calls.start).to.deep.equal([])
+      unchanged(w, calls)
+    } finally { w.unmount() }
+  })
+  it('disabled or unsupported voice does not activate input', async () => {
+    const w = createChat(RealChat); const { voice, calls } = createVoice()
+    try {
+      voice.canRecord = false
+      await w.setProps({ voice })
+      await historyButton(w).trigger('click')
+      await w.get('.voice-start').trigger('click')
+      expect(w.findComponent(History).exists()).to.equal(true)
+      expect(calls.start).to.deep.equal([])
+      voice.supported = false; await Vue.nextTick()
+      expect(w.find('.voice-start').exists()).to.equal(false)
+      unchanged(w, calls)
+    } finally { w.unmount() }
+  })
+  it('preserves delete confirmation and child modal when input receives focus', async () => {
+    const w = createChat(RealChat); let modal
+    try {
+      await historyButton(w).trigger('click')
+      await w.get('.history-delete').trigger('click')
+      w.get('textarea').element.focus(); await Vue.nextTick()
+      expect(w.findComponent(History).exists()).to.equal(true)
+      expect(w.getComponent(History).findComponent({ name: 'var-dialog' }).attributes('show')).to.equal('true')
+      w.getComponent(History).findComponent({ name: 'var-dialog' }).vm.$emit('update:show', false)
+      await Vue.nextTick()
+      await moreButton(w).trigger('click')
+      modal = visibleModal()
+      w.get('textarea').element.blur(); w.get('textarea').element.focus(); await Vue.nextTick()
+      expect(moreButton(w).attributes('aria-expanded')).to.equal('true')
+      expect(w.emitted('delete-conversation')).to.equal(undefined)
+    } finally { modal?.remove(); w.unmount() }
+  })
+  it('input activation is scoped to its discussion instance', async () => {
+    const a = createChat(RealChat); const b = createChat(RealChat)
+    try {
+      const { voice } = createVoice(); await b.setProps({ voice })
+      await historyButton(a).trigger('click'); await historyButton(b).trigger('click')
+      await b.get('.voice-start').trigger('click')
+      expect(a.findComponent(History).exists()).to.equal(true)
+      expect(b.findComponent(History).exists()).to.equal(false)
+    } finally { a.unmount(); b.unmount() }
   })
 })

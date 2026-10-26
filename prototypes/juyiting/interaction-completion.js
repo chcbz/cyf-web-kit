@@ -307,6 +307,14 @@ function closeDiscussionTools(target=null,restoreFocus=false){
  }
  if(restoreFocus)focus?.focus();return closed;
 }
+// INPUT-SWITCH-20261026: focus (including Tab) and voice activation select an input tool.
+document.addEventListener('focusin',event=>{
+ if(event.target.matches('.composer-textarea'))closeDiscussionTools(null);
+});
+document.addEventListener('click',event=>{
+ const voice=event.target.closest('[data-action="complete-voice"],[data-action="complete-voice-stop"],[data-action="voice-record"],.composer-inline-voice button');
+ if(voice&&!voice.disabled)closeDiscussionTools(null);
+},true);
 document.addEventListener('pointerdown',event=>closeDiscussionTools(event.target));
 // Keyboard-activated tool buttons must switch panels just like pointer activation.
 document.addEventListener('click',event=>closeDiscussionTools(event.target),true);
