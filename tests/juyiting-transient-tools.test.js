@@ -1,7 +1,8 @@
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
-import { mount } from '@vue/test-utils'
+import { DOMWrapper, mount } from '@vue/test-utils'
+import { validMaterialVersion } from '../src/composables/juyiting/materialVersion.js'
 import * as Vue from 'vue'
 
 const compile = (name, deps = {}) => {
@@ -319,4 +320,142 @@ describe('discussion input switching with real voice controls', () => {
       expect(b.findComponent(History).exists()).to.equal(false)
     } finally { a.unmount(); b.unmount() }
   })
+})
+
+
+describe('task discussion material picker prototype parity', () => {
+  const flush = async () => { for (let i = 0; i < 12; i++) { await Promise.resolve(); await Vue.nextTick() } }
+  const fixture = ({ failAttach = false } = {}) => {
+    const calls = { attach: [], preview: [] }
+    const files = [{ fileId: 'old', displayName: '原任务资料.pdf', latestVersion: '9' },
+      { fileId: 'new', displayName: '本次资料.txt', latestVersion: '2' }]
+    const workspace = () => {
+      const state = { items: Vue.ref(files), links: Vue.ref([]), detail: Vue.ref(null), listState: Vue.ref('idle'),
+        loading: Vue.ref(false), actionState: Vue.ref('idle'), error: Vue.ref(''), pendingWrites: Vue.ref([]),
+        preview: Vue.ref({ kind: 'none' }), nextCursor: Vue.ref(null), hasMoreVersions: Vue.ref(false),
+        refresh: async () => true, dispose: () => {}, reset: () => {},
+        closeDetail: () => { state.detail.value = null }, revokePreview: () => { state.preview.value = { kind: 'none' } },
+        select: async id => {
+          state.detail.value = { file: { ...files.find(f => f.fileId === id), state: 'ACTIVE' },
+            latestVersion: { version: id === 'new' ? '2' : '9' }, versions: [{ version: '1' }, { version: id === 'new' ? '2' : '9' }] }
+          return state.detail.value
+        },
+        previewVersion: async version => { calls.preview.push(version); state.preview.value = { kind: 'text', text: '真实预览夹具' }; return true }
+      }
+      return state
+    }
+    const taskLinks = { ...directory(), attach: async value => {
+      calls.attach.push(value)
+      if (failAttach) { taskLinks.error.value = '关联结果待核对'; return null }
+      const link = { ...value, relationId: 'new-link', state: 'ACTIVE' }
+      taskLinks.links.value.push(link); return link
+    } }
+    taskLinks.links.value = [{ fileId: 'old', version: '1', role: 'INPUT', state: 'ACTIVE', relationId: 'old-link' }]
+    const Picker = compile('HallMaterialPicker', { usePersonalWorkspace: workspace, validMaterialVersion,
+      PdfDocumentPreview: { render: () => null } })
+    const ChatWithPicker = compile('ChatPanel', { ...chatDeps, HallChatComposer: RealComposer,
+      HallMaterialPicker: Picker, usePersonalWorkspace: workspace, usePersonalWorkspaceTaskLinks: () => taskLinks })
+    const w = mount(ChatWithPicker, { attachTo: document.body, props: { mentionLabel: () => '', senderText: () => '',
+      draft: '草稿保留', conversationId: 'c1', identityScope: 'tenant-owner', identityEpoch: 1,
+      discussionVariant: 'bounty', selectedTask: { id: 'task-1', status: 'running' }, typedEnabled: true },
+      global: { stubs: { 'var-dialog': true, 'var-icon': true } } })
+    const dialog = () => new DOMWrapper(document.querySelector('dialog.quick-material-picker'))
+    const open = async () => { w.get('.composer-add-materials').element.focus(); await w.get('.composer-add-materials').trigger('click'); await flush(); return dialog() }
+    const select = async () => { await dialog().get('[data-file-id="new"]').trigger('click'); await flush(); await dialog().get('.quick-material-version-actions .primary').trigger('click'); await flush() }
+    return { w, calls, taskLinks, dialog, open, select, Picker }
+  }
+  it('paperclip opens C08 directly without the inline intermediate panel, closing other tools', async () => {
+    const h = fixture()
+    try {
+      await moreButton(h.w).trigger('click')
+      await h.open()
+      expect(h.w.find('.material-reference-picker').exists()).to.equal(false)
+      expect(h.w.find('.quick-material-open').exists()).to.equal(false)
+      expect(h.dialog().attributes()).to.have.property('open')
+      expect(h.dialog().find('.quick-material-list-pane').exists()).to.equal(true)
+      expect(h.dialog().find('.quick-material-detail-pane').exists()).to.equal(true)
+      expect(h.dialog().get('input[type="file"]').attributes()).to.have.property('multiple')
+      expect(h.dialog().get('.quick-material-confirm').text()).to.equal('完成（0）')
+      expect(h.dialog().get('.material-use-settings').attributes()).not.to.have.property('open')
+      expect(moreButton(h.w).attributes('aria-expanded')).to.equal('false')
+      expect(h.calls.attach).to.deep.equal([])
+      expect(h.w.emitted('send-message')).to.equal(undefined)
+      await pointer(h.w.get('textarea').element)
+      expect(h.dialog().exists()).to.equal(true)
+    } finally { h.w.unmount() }
+  })
+  it('selection only stages; cancel restores focus without adding/removing existing task references', async () => {
+    const h = fixture()
+    try {
+      await h.open(); await h.select()
+      expect(h.dialog().get('.quick-material-confirm').text()).to.equal('完成（1）')
+      expect(h.calls.attach).to.deep.equal([])
+      expect(h.calls.preview).to.include('2')
+      await h.dialog().get('.quick-material-footer-actions button').trigger('click'); await flush()
+      expect(document.querySelector('dialog.quick-material-picker')).to.equal(null)
+      expect(document.activeElement).to.equal(h.w.get('.composer-add-materials').element)
+      expect(h.taskLinks.links.value.map(l => l.fileId)).to.deep.equal(['old'])
+      await h.open()
+      expect(h.dialog().get('.quick-material-confirm').text()).to.equal('完成（0）')
+      expect(h.w.get('textarea').element.value).to.equal('草稿保留')
+      expect(h.w.emitted('send-message')).to.equal(undefined)
+    } finally { h.w.unmount() }
+  })
+  it('completion associates the selected immutable version exactly once without sending', async () => {
+    const h = fixture()
+    try {
+      await h.open(); await h.select()
+      await h.dialog().get('.quick-material-confirm').trigger('click'); await flush()
+      expect(h.calls.attach).to.deep.equal([{ fileId: 'new', version: '2', role: 'REFERENCE' }])
+      expect(h.taskLinks.links.value.map(l => l.fileId)).to.deep.equal(['old', 'new'])
+      expect(h.w.emitted('send-message')).to.equal(undefined)
+      expect(h.w.emitted('update:draft')).to.equal(undefined)
+      await h.open()
+      expect(h.dialog().get('.quick-material-confirm').text()).to.equal('完成（0）')
+      expect(h.dialog().get('.material-use-settings').text()).to.include('2 份')
+      expect(h.dialog().get('.material-use-settings').text()).to.include('原任务资料.pdf · v1')
+    } finally { h.w.unmount() }
+  })
+  it('cancel discards scope edits; completion retains explicit fixed-version source selectors', async () => {
+    const h = fixture()
+    try {
+      await h.open()
+      await h.dialog().get('select[aria-label="资料范围"]').setValue('NONE')
+      await h.dialog().get('.quick-material-footer-actions button').trigger('click'); await flush()
+      await h.open()
+      expect(h.dialog().get('select').element.value).to.equal('TASK_DEFAULT')
+      await h.dialog().get('select').setValue('EXPLICIT')
+      await h.dialog().get('.material-use-list input').setValue(true)
+      await h.dialog().get('.quick-material-confirm').trigger('click'); await flush()
+      h.w.getComponent(RealComposer).vm.$emit('send-message'); await flush()
+      expect(h.w.emitted('send-message').at(-1)[0]).to.deep.equal({ materialScope: 'EXPLICIT',
+        sourceSelectors: [{ kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'old', version: '1', purpose: 'INPUT' }] })
+      expect(h.calls.attach).to.deep.equal([])
+    } finally { h.w.unmount() }
+  })
+  it('failed association keeps a visible recovery entry and the pending fixed selection', async () => {
+    const h = fixture({ failAttach: true })
+    try {
+      await h.open(); await h.select()
+      await h.dialog().get('.quick-material-confirm').trigger('click'); await flush()
+      expect(h.w.get('.material-link-status').text()).to.include('部分资料尚未关联')
+      await h.w.get('.material-link-status button').trigger('click'); await flush()
+      expect(h.dialog().get('.quick-material-confirm').text()).to.equal('完成（1）')
+      expect(h.dialog().text()).to.include('关联结果待核对')
+      expect(h.calls.attach).to.have.length(1)
+      expect(h.w.emitted('send-message')).to.equal(undefined)
+    } finally { h.w.unmount() }
+  })
+  for (const change of [{ identityEpoch: 2 }, { selectedTask: { id: 'task-2', status: 'running' } }, { selectedTask: { id: 'task-1', status: 'completed' } }]) {
+    it(`closes/discards picker on context change ${JSON.stringify(change)}`, async () => {
+      const h = fixture()
+      try {
+        await h.open(); await h.select()
+        await h.w.setProps(change); await flush()
+        expect(document.querySelector('dialog.quick-material-picker')).to.equal(null)
+        expect(h.calls.attach).to.deep.equal([])
+        expect(h.w.emitted('send-message')).to.equal(undefined)
+      } finally { h.w.unmount() }
+    })
+  }
 })

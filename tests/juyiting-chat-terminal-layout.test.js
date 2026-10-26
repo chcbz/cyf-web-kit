@@ -22,7 +22,14 @@ const Composer = Vue.defineComponent({
     Vue.h('button', { onClick: () => emit('open-materials') }, '资料'), slots.materials?.()
   ])
 })
-const Picker = Vue.defineComponent({ name: 'PickerProbe', props: ['modelValue', 'disabled'], emits: ['update:modelValue'], render: () => null })
+const Picker = Vue.defineComponent({
+  name: 'PickerProbe', props: { modelValue: Array, disabled: Boolean, dialogOnly: Boolean, identityScope: String }, emits: ['update:modelValue'],
+  setup: (_props, { expose }) => {
+    const opened = Vue.ref(false)
+    expose({ open: () => { opened.value = true } })
+    return () => Vue.h('section', { class: 'picker-probe', 'data-open': opened.value })
+  }
+})
 let taskDirectory
 const Card = Vue.defineComponent({ props: ['readOnly', 'projection'], emits: ['reply'], render() { return Vue.h('button', { disabled: this.readOnly, onClick: () => this.$emit('reply', this.projection) }, '回答此问') } })
 const Panel = new Function('Vue', 'deps', script)(Vue, {
@@ -81,7 +88,8 @@ describe('formal discussion terminal resource and toolbar layout', () => {
       try {
         expect(wrapper.findComponent(Composer).props('compact')).to.equal(true)
         await wrapper.get('.composer-probe button').trigger('click')
-        expect(wrapper.find('.material-reference-picker').exists()).to.equal(true)
+        expect(wrapper.get('.picker-probe').attributes('data-open')).to.equal('true')
+        expect(wrapper.getComponent(Picker).props('dialogOnly')).to.equal(true)
         await wrapper.setProps({ selectedTask: { id: 'task-a', status } })
         expect(wrapper.findComponent(Composer).exists()).to.equal(false)
         expect(wrapper.find('.material-reference-picker').exists()).to.equal(false)
@@ -156,7 +164,8 @@ describe('formal discussion terminal resource and toolbar layout', () => {
       await wrapper.setProps({ selectedTask: { id: 'other', status: 'running' } })
       finish(); await new Promise(resolve => setTimeout(resolve, 0))
       expect(calls).to.equal(1)
-      expect(wrapper.findComponent(Picker).exists()).to.equal(false)
+      expect(wrapper.getComponent(Picker).props('modelValue')).to.deep.equal([])
+      expect(wrapper.getComponent(Picker).props('identityScope')).to.include('other')
       await wrapper.get('.composer-probe button').trigger('click')
       expect(wrapper.getComponent(Picker).props('modelValue')).to.deep.equal([])
     } finally { wrapper.unmount() }

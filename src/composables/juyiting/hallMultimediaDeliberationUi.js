@@ -26,7 +26,7 @@ const hasReadyMedia = messages => Array.isArray(messages) && messages.some(messa
   )
 )
 const mediaNotice = messages => hasReadyMedia(messages)
-  ? '收到的内容可在会话中预览、下载。'
+  ? '收到的内容会显示在会话中。'
   : '结果会显示在会话中。'
 
 /**

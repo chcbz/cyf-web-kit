@@ -7,7 +7,7 @@
     </template>
     <template v-else-if="mediaKind === 'image'"><span>{{ loading ? '正在读取图片…' : '图片暂不可预览，请打开预览后重试。' }}</span></template>
     <template v-if="mediaKind === 'audio'">
-      <audio v-if="previewUrl" :src="previewUrl" controls preload="none" aria-label="会话音频" />
+      <audio v-if="previewUrl" :src="previewUrl" controls controlslist="nodownload" preload="none" aria-label="会话音频" />
       <button v-else type="button" :disabled="loading" @click="loadPreview">{{ loading ? '正在读取音频…' : '播放音频' }}</button>
     </template>
     <div class="media-actions" role="group" aria-label="成果操作">
@@ -18,10 +18,10 @@
       <dialog v-if="expanded" ref="previewDialog" class="image-overlay" aria-label="会话资料预览" @cancel.prevent="expanded = false" @click="closeOnBackdrop">
         <header><strong>{{ part.filename || '资料预览' }}</strong><button type="button" class="media-preview-close" aria-label="关闭预览" title="关闭预览" @click="expanded = false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button></header>
         <img v-if="previewUrl && mediaKind === 'image'" :src="previewUrl" :alt="part.filename || '会话图片'" />
-        <audio v-else-if="previewUrl && mediaKind === 'audio'" :src="previewUrl" controls preload="none" aria-label="音频预览" />
-        <p v-else>{{ loading ? '正在读取…' : '暂不支持在线预览，可下载原文件查看。' }}</p>
+        <audio v-else-if="previewUrl && mediaKind === 'audio'" :src="previewUrl" controls controlslist="nodownload" preload="none" aria-label="音频预览" />
+        <p v-else>{{ loading ? '正在读取…' : '此格式暂不支持在线预览。' }}</p>
         <p v-if="error" role="alert">{{ error }}</p>
-        <footer><button v-if="!previewUrl && mediaKind !== 'file'" type="button" :disabled="loading" @click="loadPreview">重试预览</button><button type="button" class="media-preview-download" :disabled="loading" @click="download">下载文件</button></footer>
+        <footer v-if="!previewUrl && mediaKind !== 'file'"><button type="button" :disabled="loading" @click="loadPreview">重试预览</button></footer>
       </dialog>
     </Teleport>
   </div>
@@ -30,7 +30,6 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { createApi } from '../../composables/useHttp.js'
 import { conversationAssetContentPath, safeMediaKind } from '../../composables/juyiting/hallMessageParts.js'
-import { saveOutputBlob } from '../../utils/outputDownload.js'
 
 const props = defineProps({
   part: { type: Object, required: true },
@@ -99,23 +98,6 @@ const loadPreview = async () => {
     if (generation === requestGeneration) { loading.value = false; controller = null }
   }
 }
-const download = async () => {
-  if (loading.value) return
-  const generation = ++requestGeneration
-  const pending = new AbortController()
-  controller = pending
-  loading.value = true
-  error.value = ''
-  try {
-    const blob = await getBlob(pending.signal)
-    if (pending.signal.aborted || generation !== requestGeneration) return
-    saveOutputBlob({ blob, item: { name: props.part.filename || `${props.part.partId}` } })
-  } catch (cause) {
-    if (!pending.signal.aborted && generation === requestGeneration) error.value = cause?.message || '下载失败，请重试。'
-  } finally {
-    if (generation === requestGeneration) { loading.value = false; controller = null }
-  }
-}
 watch(() => `${props.identityKey}\u0000${props.conversationId}\u0000${props.part.partId}\u0000${props.part.revision}\u0000${props.part.assetId}`, () => {
   discard()
   if (mediaKind.value === 'image' && props.part.assetId) void loadPreview()
@@ -140,7 +122,6 @@ onBeforeUnmount(discard)
 .image-overlay audio { max-width:100%; }
 .image-overlay footer { display:flex; justify-content:flex-end; width:100%; gap:8px; }
 .image-overlay footer button { min-height:40px; padding:6px 14px; border:1px solid #d8d8ce; border-radius:7px; background:#fffefa; color:#242e2b; cursor:pointer; }
-.image-overlay footer .media-preview-download { background:#923f30; color:#fffefa; border-color:#923f30; }
 .image-overlay button:focus-visible { outline:2px solid #923f30; outline-offset:2px; }
 .media-asset audio { max-width: 100%; }
 </style>

@@ -195,86 +195,105 @@
       @open-materials="toggleMaterialPicker"
     >
       <template #materials>
-        <section v-if="materialPickerOpen && !serverTaskCompleted" class="material-reference-picker" aria-label="引用议事资料">
+        <HallMaterialPicker
+          v-if="isTaskDiscussion && !serverTaskCompleted"
+          ref="taskMaterialPickerRef"
+          dialog-only
+          :model-value="pendingTaskMaterials"
+          :identity-epoch="identityEpoch"
+          :identity-scope="`${identityScope}\u0000${taskId}\u0000${conversationId}`"
+          :enabled="hasMaterialScope && !serverTaskCompleted"
+          :disabled="materialSelectionBusy || materialActionBusy || conversationBusy || serverTaskCompleted"
+          @update:model-value="completeTaskMaterials"
+        >
+          <template #context>
+            <WorkspaceWriteRecovery :pending="selectedMaterialDirectory.pendingWrites.value" @retry="selectedMaterialDirectory.retryWrite" />
+            <p v-if="selectedMaterialDirectory.writeNotice.value" role="status">{{ selectedMaterialDirectory.writeNotice.value }}</p>
+            <p v-if="materialError" class="material-reference-error" role="alert">{{ materialError }}</p>
+            <details class="material-use-settings">
+              <summary>本任务资料与使用范围<span v-if="activeMaterialLinks.length"> · {{ activeMaterialLinks.length }} 份</span></summary>
+              <label v-if="typedEnabled" class="typed-material-scope">资料范围
+                <select v-model="draftMaterialScope" aria-label="资料范围">
+                  <option value="TASK_DEFAULT">本任务资料</option>
+                  <option value="EXPLICIT">仅本条消息</option>
+                  <option value="NONE">不带资料</option>
+                </select>
+              </label>
+              <p v-if="!activeMaterialLinks.length" class="material-reference-state">暂未关联资料，可在下方选择或上传。</p>
+              <ul v-else class="material-use-list">
+                <li v-for="link in activeMaterialLinks" :key="link.relationId || `${link.fileId}:${link.version}`">
+                  <label v-if="typedEnabled && draftMaterialScope === 'EXPLICIT'">
+                    <input type="checkbox" :checked="draftSourceIds.has(`${link.fileId}\u0000${link.version}`)" @change="toggleDraftSource(link, $event.target.checked)" />
+                    {{ materialName(link) }} · v{{ link.version }}
+                  </label>
+                  <span v-else>{{ materialName(link) }} · v{{ link.version }}</span>
+                </li>
+              </ul>
+              <p class="material-reference-notice">完成后应用本次选择；取消不改变原有资料与使用范围。</p>
+            </details>
+          </template>
+        </HallMaterialPicker>
+        <div v-if="isTaskDiscussion && (materialSelectionBusy || pendingTaskMaterials.length)" class="material-link-status" role="status">
+          <span v-if="materialSelectionBusy">正在关联所选资料…</span>
+          <template v-else>
+            <span>部分资料尚未关联，已有选择保留。</span>
+            <button type="button" @click="toggleMaterialPicker">查看并继续</button>
+          </template>
+        </div>
+        <p v-if="isTaskDiscussion && materialPickerOpen && !hasMaterialScope" class="material-reference-notice" role="status">未确认当前事项标识，不能读取或展示资料。</p>
+        <section v-if="!isTaskDiscussion && materialPickerOpen && !serverTaskCompleted" class="material-reference-picker" aria-label="引用议事资料">
           <div class="material-reference-heading">
             <div>
-              <strong>{{ isTaskDiscussion ? '本次需求的资料' : '引用资料' }}</strong>
-              <small>{{ isTaskDiscussion ? '默认使用本任务有效资料；也可选择仅本条消息或不带资料。' : '引用固定到当前话头及所选版本；不会把资料内容或假摘要写入消息。' }}</small>
+              <strong>引用资料</strong>
+              <small>引用固定到当前话头及所选版本；不会把资料内容或假摘要写入消息。</small>
             </div>
             <button type="button" aria-label="收起引用资料" @click="materialPickerOpen = false">
               <var-icon name="close" />
             </button>
           </div>
           <p v-if="!hasMaterialScope" class="material-reference-notice">
-            {{ isTaskDiscussion ? '未确认当前事项标识，不能读取或展示资料。' : '请先发送一条消息建立话头，再从百宝箱引用资料。' }}
+            请先发送一条消息建立话头，再从百宝箱引用资料。
           </p>
           <template v-else>
             <WorkspaceWriteRecovery :pending="selectedMaterialDirectory.pendingWrites.value" @retry="selectedMaterialDirectory.retryWrite" />
             <p v-if="selectedMaterialDirectory.writeNotice.value" role="status">{{ selectedMaterialDirectory.writeNotice.value }}</p>
             <p v-if="materialError" class="material-reference-error" role="alert">{{ materialError }}</p>
             <div v-if="materialLoading" class="material-reference-state">正在查找百宝箱资料…</div>
-            <div v-if="isTaskDiscussion" class="task-material-directory">
-              <HallMaterialPicker
-                :model-value="pendingTaskMaterials"
-                :identity-epoch="identityEpoch"
-                :identity-scope="`${identityScope}\u0000${taskId}\u0000${conversationId}`"
-                :enabled="hasMaterialScope && !serverTaskCompleted"
-                :disabled="materialSelectionBusy || materialActionBusy || conversationBusy || serverTaskCompleted"
-                @update:model-value="attachTaskMaterials"
-              />
-              <p v-if="materialSelectionBusy" role="status">正在关联所选固定版本，请稍候…</p>
-              <label v-if="typedEnabled" class="typed-material-scope">资料范围
-                <select v-model="typedMaterialScope" aria-label="资料范围">
-                  <option value="TASK_DEFAULT">本任务资料</option>
-                  <option value="EXPLICIT">仅本条消息</option>
-                  <option value="NONE">不带资料</option>
-                </select>
-              </label>
-              <p v-if="!activeMaterialLinks.length" class="material-reference-state">暂未添加资料，不影响继续讨论。</p>
-              <article v-for="link in activeMaterialLinks" :key="link.relationId" class="task-material-reference">
-                <div><strong>{{ materialName(link) }}</strong><small>v{{ link.version }} · {{ link.role === 'INPUT' ? '用于办理' : '参考资料' }}</small></div>
-                <p>本任务资料默认有效；临时勾选只用于所选消息范围。</p>
-                <label v-if="typedEnabled" class="typed-source-selector"><input type="checkbox" :checked="typedSelectedSourceIds.has(`${link.fileId}\u0000${link.version}`)" @change="toggleTypedSource(link, $event.target.checked)" /> 随本条消息发送</label>
-              </article>
-              <p class="material-reference-notice">资料可选；直接描述你想要的结果即可。</p>
+            <div v-if="!workspace.items.value?.length" class="material-reference-state">
+              百宝箱暂无可引用资料。
+              <button type="button" @click="$emit('open-workspace')">去百宝箱添加</button>
             </div>
-            <template v-else>
-              <div v-if="!workspace.items.value?.length" class="material-reference-state">
-                百宝箱暂无可引用资料。
-                <button type="button" @click="$emit('open-workspace')">去百宝箱添加</button>
-              </div>
-              <ul v-else class="material-reference-list">
-                <li v-for="file in workspace.items.value" :key="file.fileId">
-                  <div class="material-reference-file">
-                    <strong :title="file.displayName">{{ file.displayName }}</strong>
-                    <small>版本 {{ file.latestVersion }}</small>
-                  </div>
-                  <button
-                    v-if="linkedFileIds.has(`${file.fileId}:${file.latestVersion}`)"
-                    type="button"
-                    class="material-reference-linked"
-                    :disabled="materialActionBusy"
-                    @click="removeMaterialReference(linkFor(file))"
-                  >移除引用</button>
-                  <button
-                    v-else
-                    type="button"
-                    :disabled="materialActionBusy"
-                    @click="addMaterialReference(file)"
-                  >引用</button>
-                </li>
-              </ul>
-              <div v-if="activeMaterialLinks.length" class="active-material-references">
-                <span>本话头已引用：</span>
+            <ul v-else class="material-reference-list">
+              <li v-for="file in workspace.items.value" :key="file.fileId">
+                <div class="material-reference-file">
+                  <strong :title="file.displayName">{{ file.displayName }}</strong>
+                  <small>版本 {{ file.latestVersion }}</small>
+                </div>
                 <button
-                  v-for="link in activeMaterialLinks"
-                  :key="link.relationId"
+                  v-if="linkedFileIds.has(`${file.fileId}:${file.latestVersion}`)"
+                  type="button"
+                  class="material-reference-linked"
+                  :disabled="materialActionBusy"
+                  @click="removeMaterialReference(linkFor(file))"
+                >移除引用</button>
+                <button
+                  v-else
                   type="button"
                   :disabled="materialActionBusy"
-                  @click="removeMaterialReference(link)"
-                >{{ materialName(link) }} · v{{ link.version }} <var-icon name="close" /></button>
-              </div>
-            </template>
+                  @click="addMaterialReference(file)"
+                >引用</button>
+              </li>
+            </ul>
+            <div v-if="activeMaterialLinks.length" class="active-material-references">
+              <span>本话头已引用：</span>
+              <button
+                v-for="link in activeMaterialLinks"
+                :key="link.relationId"
+                type="button"
+                :disabled="materialActionBusy"
+                @click="removeMaterialReference(link)"
+              >{{ materialName(link) }} · v{{ link.version }} <var-icon name="close" /></button>
+            </div>
           </template>
         </section>
       </template>
@@ -423,6 +442,9 @@ const taskMaterialLinks = usePersonalWorkspaceTaskLinks({
 })
 const materialNames = ref({})
 const pendingTaskMaterials = ref([])
+const taskMaterialPickerRef = ref(null)
+const draftMaterialScope = ref('TASK_DEFAULT')
+const draftSourceIds = ref(new Set())
 const materialSelectionBusy = ref(false)
 let materialSelectionGeneration = 0
 const typedSelectedSourceIds = ref(new Set())
@@ -438,11 +460,11 @@ const linkFor = file => activeMaterialLinks.value.find(link => link.fileId === f
 const materialName = link => materialNames.value[link.fileId] || workspace.items.value.find(file => file.fileId === link.fileId)?.displayName || `资料 ${link.fileId}`
 const typedMaterialScope = ref('TASK_DEFAULT')
 const typedSourceSelectors = computed(() => (typedMaterialScope.value === 'NONE' ? [] : activeMaterialLinks.value).filter(link => typedSelectedSourceIds.value.has(`${link.fileId}\u0000${link.version}`) ).map(link => ({ kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: link.fileId, version: String(link.version), purpose: link.role })))
-const toggleTypedSource = (link, selected) => {
+const toggleDraftSource = (link, selected) => {
   if (!props.typedEnabled || !link || !['INPUT', 'REFERENCE'].includes(link.role)) return
-  const next = new Set(typedSelectedSourceIds.value); const key = `${link.fileId}\u0000${link.version}`
+  const next = new Set(draftSourceIds.value); const key = `${link.fileId}\u0000${link.version}`
   if (selected) next.add(key); else next.delete(key)
-  typedSelectedSourceIds.value = next
+  draftSourceIds.value = next
 }
 const resolveMaterialNames = async operationKey => {
   for (const link of activeMaterialLinks.value) {
@@ -464,8 +486,22 @@ const refreshMaterialReferences = async () => {
 }
 const toggleMaterialPicker = async () => {
   if (serverTaskCompleted.value) { materialPickerOpen.value = false; return }
+  if (isTaskDiscussion.value) {
+    if (!hasMaterialScope.value) { materialPickerOpen.value = true; return }
+    draftMaterialScope.value = typedMaterialScope.value
+    draftSourceIds.value = new Set(typedSelectedSourceIds.value)
+    void refreshMaterialReferences()
+    await taskMaterialPickerRef.value?.open?.()
+    return
+  }
   materialPickerOpen.value = !materialPickerOpen.value
   if (materialPickerOpen.value) await refreshMaterialReferences()
+}
+const completeTaskMaterials = materials => {
+  if (serverTaskCompleted.value || materialSelectionBusy.value || !hasMaterialScope.value) return
+  typedMaterialScope.value = draftMaterialScope.value
+  typedSelectedSourceIds.value = new Set(draftSourceIds.value)
+  void attachTaskMaterials(materials)
 }
 const attachTaskMaterials = async materials => {
   if (!isTaskDiscussion.value || serverTaskCompleted.value || materialSelectionBusy.value || !hasMaterialScope.value) return
@@ -540,6 +576,8 @@ watch(() => `${materialIdentityKey.value}\u0000${taskId.value}\u0000${props.conv
   pendingTaskMaterials.value = []
   typedSelectedSourceIds.value = new Set()
   typedMaterialScope.value = 'TASK_DEFAULT'
+  draftMaterialScope.value = 'TASK_DEFAULT'
+  draftSourceIds.value = new Set()
 }, { flush: 'sync' })
 watch(serverTaskCompleted, (terminal, previous) => {
   if (!terminal) return
@@ -683,6 +721,12 @@ button:disabled {
 .material-reference-entry span {
   white-space: nowrap;
 }
+
+.material-link-status { display: flex; gap: 8px; padding: 6px 10px; font-size: 12px; color: #806441; }
+.material-link-status button { color: #7f4a22; text-decoration: underline; }
+.material-use-settings summary { cursor: pointer; color: #654122; }
+.material-use-list { margin: 8px 0; padding-left: 18px; font-size: 13px; }
+.material-use-list li + li { margin-top: 6px; }
 
 .material-reference-picker {
   flex: 0 0 auto;

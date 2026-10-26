@@ -56,14 +56,14 @@ describe('Juyi Hall multimedia deliberation v2 presentation', () => {
     expect(hasVerifiedConversationImage(missingAsset)).to.equal(false)
     expect(present({ request: executePlanningRequest(), turns: [], messages: missingAsset }).mediaNotice).to.equal('结果会显示在会话中。')
     expect(hasVerifiedConversationImage(actualAsset)).to.equal(true)
-    expect(present({ request: executePlanningRequest(), turns: [], messages: actualAsset }).mediaNotice).to.equal('收到的内容可在会话中预览、下载。')
+    expect(present({ request: executePlanningRequest(), turns: [], messages: actualAsset }).mediaNotice).to.equal('收到的内容会显示在会话中。')
   })
 
   it('uses the same concise availability message for audio and files without claiming completion', () => {
     for (const [kind, mime] of [['audio', 'audio/wav'], ['file', 'application/pdf']]) {
       const messages = [{ parts: [{ kind, mime, state: 'ready', assetId: 'asset-mixed' }] }]
       const presentation = present({ request: executePlanningRequest(), turns: [], messages })
-      expect(presentation.mediaNotice).to.equal('收到的内容可在会话中预览、下载。')
+      expect(presentation.mediaNotice).to.equal('收到的内容会显示在会话中。')
       expect(presentation.state).to.equal('PLANNING')
       expect(presentation.mediaNotice).not.to.match(/图片|完成|验收/)
     }
