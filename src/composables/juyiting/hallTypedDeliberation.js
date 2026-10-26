@@ -99,7 +99,7 @@ const validOutcome = value => {
       !['APPEND', 'REPLACE', 'RESET', 'SUBMIT'].includes(r.mode) || !typedId(r.parentOutcomeId) || !digest(r.parentFinalSha256) || r.parentOutcomeId === value.outcomeId) return false
     if (r.targetOutcomeId === null ? r.targetFinalSha256 !== null :
       (r.mode !== 'REPLACE' || !typedId(r.targetOutcomeId) || !digest(r.targetFinalSha256) || r.targetOutcomeId === value.outcomeId)) return false
-    if (value.kind === 'ACTION_REQUEST' && (!['APPEND', 'RESET'].includes(r.mode) || r.targetOutcomeId !== null)) return false
+    if (value.kind === 'ACTION_REQUEST' && !(r.mode === 'REPLACE' ? r.targetOutcomeId !== null : ['APPEND', 'RESET'].includes(r.mode) && r.targetOutcomeId === null)) return false
   }
   if (r?.mode === 'SUBMIT' && value.kind !== 'SUBMISSION_REQUEST') return false
   if (value.kind === 'SUBMISSION_REQUEST') return value.outcomeContractVersion === 5 && value.deliverable === false &&
@@ -208,10 +208,10 @@ export const reviewProgressAdvances = (before, after) => {
 }
 export const actionOutcomeProjection = (value, context = {}, route = 'CHAT') => {
   if (!exactKeys(value, projectionFields) || value.schemaVersion !== 6 || value.route !== route || !['CHAT', 'INSPECT'].includes(route) ||
-    !typedId(value.conversationId) || !typedLong(value.conversationGeneration) || !typedId(value.requestId) || !typedLong(value.requestRevision) || !typedId(value.turnId) || !['PENDING', 'READY'].includes(value.state)) return null
+    !typedId(value.conversationId) || !typedLong(value.conversationGeneration) || !typedId(value.requestId) || !typedLong(value.requestRevision) || !typedId(value.turnId) || !['PENDING', 'READY', 'FAILED', 'CANCELLED'].includes(value.state)) return null
   for (const key of ['conversationId', 'conversationGeneration', 'requestId', 'requestRevision', 'turnId']) if (context[key] && value[key] !== context[key]) return null
   if (value.inspection !== null ? !validInspection(value.inspection, value.state) : route === 'INSPECT') return null
-  if (value.state === 'PENDING') return value.outcome === null && value.actionProgress === null && value.submissionProgress === null && value.reviewProgress === null ? freeze({ ...value, purpose: route }) : null
+  if (value.state !== 'READY') return value.outcome === null && value.actionProgress === null && value.submissionProgress === null && value.reviewProgress === null ? freeze({ ...value, purpose: route }) : null
   if (!validOutcome(value.outcome) || (context.taskId && value.outcome.taskId !== context.taskId) ||
     (context.assignmentRevision && value.outcome.assignmentRevision !== context.assignmentRevision) ||
     ([4, 5].includes(value.outcome.outcomeContractVersion) && route !== 'CHAT') || (!validProgress(value.actionProgress, value.outcome) || !validSubmission(value.submissionProgress, value.outcome, route) || !validReview(value.reviewProgress, value))) return null

@@ -84,7 +84,7 @@ describe('explicit text to execution batch delivery', () => {
     const edited = { ...outputs[0], replaces: { requestId: 'old', stepId: 's', outputId: 'o', sha256: 'a'.repeat(64) } }
     expect(() => currentOutputDelivery([initial, edited, outputs[1]], [action])).to.throw('尚未明确')
   })
-  it('strictly parses batch intent but never accepts REPLACE, target fields, CLARIFY or deliverable action prose', () => {
+  it('rejects untargeted media replacement, APPEND target fields and deliverable action prose', () => {
     const raw = groups[0].completed
     for (const change of [value => { value.outcome.deliverable = true }, value => { value.outcome.deliveryRelation.mode = 'REPLACE' },
       value => { value.outcome.deliveryRelation.targetOutcomeId = 'earlier'; value.outcome.deliveryRelation.targetFinalSha256 = `${'a'.repeat(64)}` }]) {
@@ -116,6 +116,18 @@ describe('actual API completed media causal basis and retained mixed delivery', 
       expect(current.basis).to.deep.equal({ outcomeId: mixed.updated.outcome.outcomeId, finalSha256: mixed.updated.outcome.finalSha256 })
     }
     expect(currentDeliveryProjection([original, ...mixedOutputs, appended, updated], mixedActions).items).to.deep.equal([updated, ...mixedOutputs, appended])
+  })
+  it('replaces the exact earlier media batch while retaining text and independent media', async () => {
+    const original = await text(mixed.initial)
+    const old = mixedActions[0]; const parent = mixedActions[1]
+    const green = { ...mixedOutputs[0], requestId: 'green-request', stepId: 'green-step', outputId: 'green', sha256: 'e'.repeat(64) }
+    const action = { ...old, outcomeId: 'green-outcome', finalSha256: 'f'.repeat(64), requestId: green.requestId, stepId: green.stepId,
+      deliveryRelation: { mode: 'REPLACE', parentOutcomeId: parent.outcomeId, parentFinalSha256: parent.finalSha256,
+        targetOutcomeId: old.outcomeId, targetFinalSha256: old.finalSha256 } }
+    const projected = currentDeliveryProjection([original, ...mixedOutputs, green], [...mixedActions, action])
+    expect(projected.items).to.deep.equal([original, green, ...mixedOutputs.filter(item => item.requestId !== old.requestId)])
+    expect(() => currentDeliveryProjection([original, ...mixedOutputs, green], [...mixedActions,
+      { ...action, deliveryRelation: { ...action.deliveryRelation, targetFinalSha256: '0'.repeat(64) } }])).to.throw()
   })
   it('never substitutes media as a text target or accepts missing, independent or stale causal sources', async () => {
     const original = await text(mixed.initial); const updated = await text(mixed.updated)

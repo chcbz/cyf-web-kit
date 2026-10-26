@@ -105,7 +105,10 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   const apply = (projection, captured) => {
     if (!current(captured)) return false
     const previous = projections.value.find(item => item.requestId === projection.requestId)
-    if (previous && previous.state === 'READY' && projection.state === 'PENDING') return false
+    // A delayed read cannot downgrade an authoritative final or create a false read failure.
+    if (previous && previous.state !== 'PENDING' && projection.state === 'PENDING' &&
+      previous.turnId === projection.turnId && previous.requestRevision === projection.requestRevision) return true
+    if (previous && previous.state !== 'PENDING' && projection.state !== previous.state) return false
     if (previous?.state === 'READY' && projection.state === 'READY' && !sameFinalBinding(previous, projection)) return false
     if (previous?.state === 'READY' && projection.state === 'READY' && projection.outcome?.kind !== 'CLARIFY' &&
       JSON.stringify(previous.outcome) !== JSON.stringify(projection.outcome)) return false
@@ -224,7 +227,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     const catalog = clone(getCatalogEntries?.() || [])
     const unresolved = catalog.some(entry => !emptyCancellation(entry) && !ordinaryChatRequests.has(entry?.request?.requestId) && !entry?.request?.turns?.some(turn => turn.route === 'INSPECT') &&
       !(entry?.request?.steps?.some(step => step.kind === 'EXECUTE') && !entry?.request?.turns?.some(turn => turn.route === 'CHAT')) &&
-      !projections.value.some(value => value.requestId === entry?.request?.requestId && value.state === 'READY'))
+      !projections.value.some(value => value.requestId === entry?.request?.requestId && ['READY', 'FAILED', 'CANCELLED'].includes(value.state)))
     if (!pending && purpose === 'CHAT') {
       try {
         const choices = mediaDeliveryChoices(projections.value, catalog, context)

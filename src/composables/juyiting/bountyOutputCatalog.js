@@ -256,7 +256,7 @@ function explicitExecutionDelivery (catalog, executionDeliveries) {
   for (const action of executionDeliveries) {
     if (!action?.stepId) throw new Error('本次媒体成果尚未完成，完成后可验收。')
     const relation = action.deliveryRelation
-    if ((relation && (!['APPEND', 'RESET'].includes(relation.mode) || Object.keys(relation).length !== 5 || relation.targetOutcomeId !== null || relation.targetFinalSha256 !== null)) ||
+    if ((relation && (Object.keys(relation).length !== 5 || !(relation.mode === 'REPLACE' ? exactOutputId(relation.targetOutcomeId) && HASH.test(relation.targetFinalSha256) : ['APPEND', 'RESET'].includes(relation.mode) && relation.targetOutcomeId === null && relation.targetFinalSha256 === null))) ||
       ![action.requestId, action.stepId].every(exactOutputId)) throw new Error('媒体交付意图不明确。')
     const batch = catalog.filter(item => !item.messageSource && item.requestId === action.requestId && item.stepId === action.stepId)
     if (!batch.length || batch.some(item => (item.replaces != null && (!replacementValid(item.replaces) || item.replaces.requestId === action.requestId)) || !exactOutputId(item.outputId) || !HASH.test(item.sha256) || assigned.has(outputItemKey(item)))) throw new Error('本次媒体清单尚未明确。')
@@ -302,9 +302,15 @@ function explicitExecutionDelivery (catalog, executionDeliveries) {
       const target = relation.targetOutcomeId ?? current.outcomeId
       const digest = relation.targetFinalSha256 ?? current.finalSha256
       if ((relation.targetOutcomeId !== null) !== (relation.targetFinalSha256 !== null)) throw new Error('交付改稿对象不匹配。')
-      const index = retained.findIndex(node => node.outcomeId === target && node.finalSha256 === digest)
-      if (index < 0 || retained[index].items.length !== 1 || !retained[index].items[0].messageSource || next.items.length !== 1 || !next.items[0].messageSource) throw new Error('交付改稿对象已变化。')
-      retained[index] = next
+      const targets = retained.filter(node => node.outcomeId === target && node.finalSha256 === digest)
+      const media = !next.items[0].messageSource
+      if (!targets.length || targets.some(node => Boolean(node.items[0].messageSource) === media) ||
+        next.items.some(item => Boolean(item.messageSource) === media) || (!media && (targets.length !== 1 || next.items.length !== 1))) throw new Error('交付改稿对象已变化。')
+      for (const item of next.items) if (item.replaces && !targets.some(node =>
+        outputItemKey(node.items[0]) === outputItemKey(item.replaces) && node.items[0].sha256 === item.replaces.sha256)) throw new Error('交付改稿来源不匹配。')
+      const index = retained.indexOf(targets[0])
+      retained = retained.filter(node => !targets.includes(node))
+      retained.splice(index, 0, ...parts(next))
     }
     current = next
   }

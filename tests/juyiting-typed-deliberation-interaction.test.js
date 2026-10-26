@@ -291,6 +291,25 @@ describe('explicit text follow-up admission basis', () => {
       await lane.resumeUnknown(); expect(calls[1]).to.deep.equal(calls[0])
     } finally { lane.dispose() }
   })
+  it('does not let empty failed planning or a late PENDING hide the retained parent', async () => {
+    const initial = value('one')
+    const failed = { ...value('failed'), state: 'FAILED', outcome: null }
+    const values = [initial, failed]; const calls = []
+    const lane = useHallTypedDeliberation({ chatApi: { get: async path => values.find(v => path.includes(`/requests/${v.requestId}/`)),
+      create: async (_path, body) => { calls.push(body); throw new Error('unknown ACK') } },
+    actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContextGeneration: () => 1,
+    getContext: () => ({ conversationId: '42', conversationGeneration: '1', taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' }),
+    getCatalogEntries: () => values.map(v => ({ request: { requestId: v.requestId, steps: [] } })), storage: store(), enabled: () => true })
+    try {
+      expect(await lane.refresh()).to.equal(true)
+      values[1] = { ...failed, state: 'PENDING' }
+      await lane.refresh()
+      expect(lane.projections.value.find(v => v.requestId === 'failed').state).to.equal('FAILED')
+      await lane.submit({ content: '继续改稿' })
+      expect(calls).to.have.length(1)
+      expect(calls[0].parentOutcomeId).to.equal(initial.outcome.outcomeId)
+    } finally { lane.dispose() }
+  })
   it('does not choose a parent from independent roots, incomplete reads or a media catalog', async () => {
     for (const mode of ['roots', 'unresolved', 'media']) {
       const values = [value('one'), value('two')]; const calls = []
