@@ -2,13 +2,13 @@
 (() => {
   if (new URLSearchParams(location.search).get('scenario') !== 'matter-status') return;
   let status = 'ADMITTED';
-  const labels = { ADMITTED:'已发送', ATTACHED:'已进入议事', PREPARING:'准备中', UNKNOWN:'结果未知', FAILED:'发送失败', HISTORICAL:'历史指派' };
-  const hints = { PREPARING:'正在准备议事…需求已保存，无需重复提交。', UNKNOWN:'发送结果暂未确认，请先查询，避免重复提交。', FAILED:'需求未能发送。原需求和资料已保留。' };
+  const labels = { SENDING:'发送中', CONFIRMED:'回执已收到', COST_CONSENT_PENDING:'待费用确认', ADMITTED:'已发送', ATTACHED:'已进入议事', PREPARING:'准备中', UNKNOWN:'结果未知', FAILED:'发送失败', HISTORICAL:'历史指派' };
+  const hints = { SENDING:'正在发送需求…请勿重复提交。', CONFIRMED:'已收到发送回执，正在核对议事状态，无需重复提交。', COST_CONSENT_PENDING:'此历史请求涉及费用确认，请使用原费用确认流程；不会通过此处重发。', PREPARING:'正在准备议事…需求已保存，无需重复提交。', UNKNOWN:'发送结果暂未确认，请先查询，避免重复提交。', FAILED:'需求未能发送。原需求和资料已保留。' };
   const previous = renderDetail;
   renderDetail = function() {
     previous();
     const card = $('.matter-advice-card'); if (!card) return;
-    card.querySelector('dl').insertAdjacentHTML('afterend', `<div class="matter-send-status ${status.toLowerCase()}">${hints[status]?`<p role="status">${hints[status]}</p>`:''}${status==='FAILED'?'<p role="alert">失败原因：会话准备失败（离线示例）</p>':''}${['PREPARING','UNKNOWN','FAILED'].includes(status)?button('查询发送结果','matter-status-check'):''}${status==='UNKNOWN'?button('继续原请求','matter-status-resume'):''}<details><summary>${status==='HISTORICAL'?'历史指派信息':'技术详情'}</summary><p>承办好汉：林冲</p><p>本次资料：1 份 · 原始图片.png</p><p>需求修订：1</p><p>好汉编号：demo-agent；资料编号：demo-file v1</p><p>发送状态：${labels[status]}</p></details></div>`);
+    card.querySelector('dl').insertAdjacentHTML('afterend', `<div class="matter-send-status ${status.toLowerCase()}">${hints[status]?`<p role="status">${hints[status]}</p>`:''}${status==='FAILED'?'<p role="alert">失败原因：会话准备失败（离线示例）</p>':''}${['PREPARING','CONFIRMED','COST_CONSENT_PENDING','UNKNOWN','FAILED'].includes(status)?button('查询发送结果','matter-status-check'):''}${status==='UNKNOWN'?button('继续原请求','matter-status-resume'):''}<details><summary>${status==='HISTORICAL'?'历史指派信息':'技术详情'}</summary><p>承办好汉：林冲</p><p>本次资料：1 份 · 原始图片.png</p><p>需求修订：1</p><p>好汉编号：demo-agent；资料编号：demo-file v1</p><p>发送状态：${labels[status]}</p></details></div>`);
     card.insertAdjacentHTML('afterend', `<details class="matter-status-demo"><summary>切换演示状态（离线）</summary>${Object.entries(labels).map(([key,label])=>button(label,'matter-status-stage',`data-stage="${key}" aria-pressed="${key===status}"`)).join('')}</details>`);
   };
   document.addEventListener('click', e => {

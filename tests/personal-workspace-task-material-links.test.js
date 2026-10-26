@@ -242,7 +242,7 @@ describe('W06 workspace bounty material links', () => {
     // Standalone formal-task PDF controls remain. Embedded matters use the
     // ordinary discussion route, without a second manual execution entry.
     assert.match(bounty, /v-if="formalTaskExecutionScope && !embeddedHall && canActOnTask\(detailTask\)"/)
-    assert.match(bounty, /v-if="embeddedHall" class="matter-advice-card"/)
+    assert.match(bounty, /v-if="embeddedHall \|\| \(pointAndStartForDetail && !isTerminalMatter\(detailTask\)\)" class="matter-advice-card"/)
     assert.match(bounty, /hasTaskAction\(detailTask, 'DISCUSS'\) && assignedAgentForTask\(detailTask\)/)
     assert.match(bounty, /workspace-shortcut/)
     assert.match(bounty, /open-workspace/)

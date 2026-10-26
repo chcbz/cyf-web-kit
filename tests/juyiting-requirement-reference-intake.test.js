@@ -304,7 +304,9 @@ describe('mounted Bounty read/manage surface and original recovery', () => {
       pointAndStartState: { status: 'UNKNOWN', error: 'Controlled image bridge request unavailable', intent: bridgeIntent } })
     failed.vm.openTask({ id: 'existing-task', title: '画一只鸟', status: 'assigned' })
     await nextTick()
-    expect(failed.find('.point-and-start-error').text()).to.include('Controlled image bridge request unavailable')
+    expect(failed.get('.matter-send-details').element.open).to.equal(false)
+    expect(failed.get('.matter-send-details').text()).to.include('Controlled image bridge request unavailable')
+    expect(failed.get('.matter-send-status').classes()).to.include('is-warning')
 
     const ordinary = panel({ embeddedHall: true, formalTaskExecutionContext })
     ordinary.vm.openTask({ id: 'existing-task', title: '既有正式任务', status: 'assigned' })

@@ -322,11 +322,11 @@ describe('matter detail send status presentation (original recovery semantics)',
       expect(wrapper.emitted('resume-point-and-start')).to.equal(undefined)
     } finally { wrapper.unmount() }
   })
-  for (const status of ['PREPARING', 'UNKNOWN', 'FAILED', 'FUTURE_STATE']) it(`${status} exposes only original scoped actions`, async () => {
+  for (const status of ['PREPARING', 'CONFIRMED', 'UNKNOWN', 'FAILED', 'COST_CONSENT_PENDING', 'FUTURE_STATE']) it(`${status} exposes only original scoped actions`, async () => {
     const task = panelTask(); const wrapper = await openPanel(task, { pointAndStartState: state(status, { error: 'original failure <script>bad()</script>' }) })
     try {
       const section = wrapper.get('.matter-send-status')
-      expect(section.classes().includes('is-warning')).to.equal(['UNKNOWN', 'FUTURE_STATE'].includes(status))
+      expect(section.classes().includes('is-warning')).to.equal(['UNKNOWN', 'COST_CONSENT_PENDING', 'FUTURE_STATE'].includes(status))
       expect(section.classes().includes('is-failed')).to.equal(status === 'FAILED')
       expect(section.find('script').exists()).to.equal(false)
       expect(wrapper.emitted('resume-point-and-start')).to.equal(undefined)
@@ -367,5 +367,16 @@ describe('matter detail send status presentation (original recovery semantics)',
   it('preserves recovery outside the embedded hall without duplicating the card', async () => {
     const wrapper = await openPanel(panelTask(), { embeddedHall: false, pointAndStartState: state('UNKNOWN') })
     try { expect(wrapper.findAll('.matter-send-status')).to.have.length(1); expect(wrapper.get('.matter-send-actions').text()).to.include('查询发送结果') } finally { wrapper.unmount() }
+  })
+})
+
+describe('matter request sending intermediate state', () => {
+  it('keeps in-flight sending neutral without a retry action', async () => {
+    const wrapper = await openPanel(panelTask(), { pointAndStartState: { status: 'SENDING', intent: { taskId: 'a', body: { targetAgentId: 'old-agent', requirementRevision: '1' } } }, pointAndStartBusy: true })
+    try {
+      expect(wrapper.get('.matter-send-status').classes()).not.to.include('is-warning')
+      expect(wrapper.get('.matter-send-status [role="status"]').text()).to.include('正在发送需求')
+      expect(wrapper.find('.matter-send-actions').exists()).to.equal(false)
+    } finally { wrapper.unmount() }
   })
 })

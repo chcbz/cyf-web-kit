@@ -178,9 +178,9 @@
                   :class="{ 'is-warning': pointAndStartNeedsCheck && pointAndStartForDetail.status !== 'FAILED', 'is-failed': pointAndStartForDetail.status === 'FAILED' }"
                   aria-label="需求发送状态"
                 >
-                  <p v-if="pointAndStartNeedsCheck || pointAndStartForDetail.status === 'PREPARING'" role="status">{{ pointAndStartRecoveryHint }}</p>
+                  <p v-if="pointAndStartNeedsCheck || pointAndStartPreparing" role="status">{{ pointAndStartRecoveryHint }}</p>
                   <p v-if="pointAndStartForDetail.status === 'FAILED' && pointAndStartForDetail.error" role="alert">失败原因：{{ pointAndStartForDetail.error }}</p>
-                  <div v-if="pointAndStartNeedsCheck || pointAndStartForDetail.status === 'PREPARING'" class="matter-send-actions">
+                  <div v-if="pointAndStartNeedsCheck || ['PREPARING', 'CONFIRMED'].includes(pointAndStartForDetail.status)" class="matter-send-actions">
                     <button type="button" :disabled="pointAndStartBusy" @click="$emit('check-point-and-start', detailTask)">查询发送结果</button>
                     <button
                       v-if="pointAndStartForDetail.status === 'UNKNOWN'"
@@ -677,14 +677,20 @@ const pointAndStartForDetail = computed(() => {
   return state?.intent?.taskId === detailTask.value?.id && state.intent?.body ? state : null
 })
 const pointAndStartRecoveryTitle = computed(() => ({
+  SENDING: '正在发送需求',
+  CONFIRMED: '发送回执已收到',
+  COST_CONSENT_PENDING: '历史请求待费用确认',
   UNKNOWN: '发送结果待确认',
   PREPARING: '正在准备会话',
   ADMITTED: '需求已发送',
   ATTACHED: '已进入悬赏议事',
   HISTORICAL: '历史指派',
   FAILED: '需求未能发送'
-}[pointAndStartForDetail.value?.status] || '正在确认点将结果'))
+}[pointAndStartForDetail.value?.status] || '发送状态待核对'))
 const pointAndStartRecoveryHint = computed(() => ({
+  SENDING: '正在发送需求…请勿重复提交。',
+  CONFIRMED: '已收到发送回执，正在核对议事状态，无需重复提交。',
+  COST_CONSENT_PENDING: '此历史请求涉及费用确认，请使用原费用确认流程；不会通过此处重发。',
   UNKNOWN: '发送结果暂未确认，请先查询，避免重复提交。',
   PREPARING: '正在准备议事…需求已保存，无需重复提交。',
   ADMITTED: '需求已发送，可从事项操作进入原议事。',
@@ -692,7 +698,8 @@ const pointAndStartRecoveryHint = computed(() => ({
   HISTORICAL: '本次指派已结束，可查看历史记录。',
   FAILED: '需求未能发送。原需求和资料已保留，请查询发送结果核对详情。'
 }[pointAndStartForDetail.value?.status] || '发送状态暂无法识别，请查询发送结果，不要重复提交。'))
-const pointAndStartNeedsCheck = computed(() => !['ADMITTED', 'ATTACHED', 'PREPARING', 'HISTORICAL'].includes(pointAndStartForDetail.value?.status))
+const pointAndStartPreparing = computed(() => ['SENDING', 'PREPARING', 'CONFIRMED'].includes(pointAndStartForDetail.value?.status))
+const pointAndStartNeedsCheck = computed(() => !['ADMITTED', 'ATTACHED', 'PREPARING', 'HISTORICAL', 'SENDING', 'CONFIRMED'].includes(pointAndStartForDetail.value?.status))
 const pointAndStartAgentName = computed(() => {
   const body = pointAndStartForDetail.value?.intent?.body
   const id = body?.targetAgentId || body?.agentId
