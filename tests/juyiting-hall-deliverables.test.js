@@ -153,7 +153,7 @@ describe('1.13.2 Babao-box workspace entry', () => {
     expect(source).to.include('usePersonalWorkspaceConversationLinks')
     expect(source).to.include('usePersonalWorkspaceTaskLinks')
     expect(source).to.include("role: 'REFERENCE'")
-    expect(source).to.include('不会把资料内容或假摘要写入消息')
+    expect(source).to.include('引用当前选择的资料版本，关联到当前议事。')
     expect(source).to.not.include('参看资料：')
     expect(source).to.not.include('<FormalDeliveryList')
     expect(source).to.not.match(/storageUri|leaseToken|runtimeCredential/)

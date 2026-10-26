@@ -93,7 +93,7 @@ describe('prototype-conformance draft flow', () => {
       expect(wrapper.find('.quick-material-summary').exists()).to.equal(false)
       await wrapper.get('.quick-material-open').trigger('click'); await tick()
       await wrapper.get('.quick-material-files button').trigger('click'); await tick()
-      expect(wrapper.get('.quick-material-version').text()).to.include('v3')
+      expect(wrapper.get('.quick-material-version').text()).to.include('使用版本 3')
       expect(wrapper.vm.windowTitle).to.equal('提出需求')
       expect(wrapper.vm.navigationDepth).to.equal(1)
       expect(wrapper.vm.canGoBack).to.equal(false)
