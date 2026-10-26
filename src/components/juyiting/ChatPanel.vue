@@ -98,7 +98,33 @@
           :conversation-id="conversationId"
           :identity-key="materialIdentityKey"
           :identity-scope="identityScope"
-        />
+        >
+          <template #output-actions="{ part }">
+            <button
+              v-if="canReviewMessageOutputs && outputForPart(message, part)"
+              type="button"
+              class="message-output-accept"
+              :disabled="outputReviewBusy || conversationBusy || voice?.voiceInteractionLocked"
+              @click="reviewMessageOutput(outputForPart(message, part))"
+            >验收此版</button>
+          </template>
+        </HallMessageParts>
+        <div
+          v-for="output in textOutputsFor(message)"
+          :key="`${output.requestId}:${output.messageSource.turnId}:${output.messageSource.messageId}`"
+          class="message-output-actions"
+          role="group"
+          aria-label="文字成果操作"
+        >
+          <button type="button" @click="textOutputPreview = output">预览</button>
+          <button
+            v-if="canReviewMessageOutputs"
+            type="button"
+            class="message-output-accept"
+            :disabled="outputReviewBusy || conversationBusy || voice?.voiceInteractionLocked"
+            @click="reviewMessageOutput(output)"
+          >验收此版</button>
+        </div>
         <BountyTypedOutcomeCard
           v-for="projection in typedForMessage(message)"
           :key="projection.key"
@@ -119,6 +145,19 @@
 
     </div>
 
+    <Teleport to="body">
+      <dialog
+        v-if="textOutputPreview"
+        ref="textOutputDialog"
+        class="message-output-preview"
+        aria-label="文字成果预览"
+        @cancel.prevent="textOutputPreview = null"
+        @click="closeTextOutputPreview"
+      >
+        <header><strong>文字成果预览</strong><button type="button" aria-label="关闭预览" @click="textOutputPreview = null">×</button></header>
+        <pre>{{ textOutputPreview.text }}</pre>
+      </dialog>
+    </Teleport>
     <HallChatComposer
       v-if="!serverTaskCompleted"
       :compact="discussionVariant === 'bounty'"
@@ -292,6 +331,9 @@ const props = defineProps({
   title: { type: String, default: '议事' },
   targetText: { type: String, default: '众好汉' },
   voice: { type: Object, default: null },
+  outputCandidates: { type: Array, default: () => [] },
+  outputReviewEnabled: { type: Boolean, default: false },
+  outputReviewBusy: { type: Boolean, default: false },
   typedOutcomes: { type: Array, default: () => [] },
   typedPendingQuestion: { type: Object, default: null },
   typedEnabled: { type: Boolean, default: false }
@@ -313,6 +355,7 @@ const emit = defineEmits([
   'update:draft',
   'voice-apply',
   'typed-reply',
+  'accept-output',
 ])
 
 const messageBoxRef = ref(null)
@@ -327,6 +370,37 @@ const typedForMessage = message => props.typedOutcomes.filter(projection =>
   projection?.outcome?.assistantMessageId === String(message?.localId || ''))
 
 const isTaskDiscussion = computed(() => props.discussionVariant === 'bounty')
+const canReviewMessageOutputs = computed(() => isTaskDiscussion.value && props.outputReviewEnabled && !serverTaskCompleted.value)
+const isAgentMessage = message => ['AGENT', 'ASSISTANT'].includes(message?.sender)
+const outputForPart = (message, part) => {
+  if (!isTaskDiscussion.value || !isAgentMessage(message) || part?.state !== 'ready' || !part.assetId) return null
+  const matches = props.outputCandidates.filter(item => item.assetRef?.assetId === part.assetId && item.assetRef.revision === String(part.revision))
+  // No newest/title fallback: ambiguous references stay in the explicit selection dialog.
+  return matches.length === 1 ? matches[0] : null
+}
+const textOutputsFor = message => !isTaskDiscussion.value || !isAgentMessage(message) ? [] : props.outputCandidates.filter(item =>
+  item.messageSource?.messageId === String(message.localId || '') && item.taskId === taskId.value)
+const reviewMessageOutput = item => {
+  if (canReviewMessageOutputs.value && !props.outputReviewBusy && !props.conversationBusy && !props.voice?.voiceInteractionLocked && props.outputCandidates.includes(item)) emit('accept-output', item)
+}
+const textOutputPreview = ref(null)
+const textOutputDialog = ref(null)
+let textPreviewReturnFocus = null
+const closeTextOutputPreview = event => { if (event.target === textOutputDialog.value) textOutputPreview.value = null }
+watch(textOutputPreview, async item => {
+  if (item) {
+    textPreviewReturnFocus = document.activeElement
+    await nextTick()
+    if (!textOutputPreview.value) return
+    textOutputDialog.value?.showModal?.()
+    textOutputDialog.value?.querySelector('button')?.focus()
+  } else {
+    await nextTick()
+    if (textPreviewReturnFocus?.isConnected) textPreviewReturnFocus.focus()
+  }
+})
+watch(() => `${materialIdentityKey.value}\u0000${taskId.value}\u0000${props.conversationId}`, () => { textOutputPreview.value = null }, { flush: 'sync' })
+
 const workspace = usePersonalWorkspace({ identityEpoch: materialIdentityKey })
 const conversationMaterialLinks = usePersonalWorkspaceConversationLinks({
   conversationId: () => props.conversationId,
@@ -940,4 +1014,16 @@ button:disabled {
 
 <style scoped>
 .task-material-directory{display:grid;gap:8px}.task-material-reference{display:grid;gap:5px;padding:10px 12px;border:1px solid #d8ded8;border-radius:8px;background:#f6faf7}.task-material-reference>div{display:flex;align-items:baseline;justify-content:space-between;gap:8px}.task-material-reference strong,.task-material-reference small{overflow-wrap:anywhere}.task-material-reference small{color:#5f746b;font-size:11px}.task-material-reference p{margin:0;color:#5b6963;font-size:12px;line-height:1.55}.material-reference-notice{line-height:1.55}
+</style>
+
+<style scoped>
+.message-output-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.message-output-actions button, .message-output-accept { min-height: 40px; padding: 6px 12px; border: 1px solid var(--hall-border, #e3e5dc); border-radius: 7px; font: inherit; cursor: pointer; }
+.message-output-accept { background: var(--hall-brand, #923f30); color: var(--hall-surface, #fffefa); }
+.message-output-accept:disabled { opacity: .65; cursor: not-allowed; }
+.message-output-preview { width: min(800px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); box-sizing: border-box; border: 1px solid var(--hall-border, #e3e5dc); border-radius: 12px; padding: 16px; background: var(--hall-surface, #fffefa); color: var(--hall-text, #242e2b); }
+.message-output-preview::backdrop { background: #242e2baa; }
+.message-output-preview header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.message-output-preview header button { min-width: 40px; min-height: 40px; border: 0; background: transparent; color: inherit; font-size: 24px; cursor: pointer; }
+.message-output-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
 </style>

@@ -16,19 +16,23 @@
       @click="$emit('typed-resume')"
     >刷新处理状态</button>
     <ChatPanel
-      @update:draft="$emit('update:draft', $event)"
       discussion-variant="bounty"
       empty-text="此榜文尚无议事记录，先说清险处、分工与下一步。"
       placeholder="就当前榜文发起议事"
       :subtitle="bountySubtitle"
       title="榜文议事"
       v-bind="chatProps"
+      :output-candidates="messageOutputs"
+      :output-review-enabled="deliberationV2Enabled && !taskCompleted"
+      :output-review-busy="reviewBusy || Boolean(outputGallery?.loading)"
+      @update:draft="$emit('update:draft', $event)"
+      @accept-output="$emit('accept-output', $event)"
       @cancel-deliberation="$emit('cancel-deliberation', $event)"
       @clear-target="$emit('clear-target', $event)"
       @delete-conversation="$emit('delete-conversation', $event)"
       @load-history="$emit('load-history')"
       @load-more-history="$emit('load-more-history')"
-      @load-messages="$emit('load-messages')"
+      @load-messages="refreshMessages"
       @mention-agent="$emit('mention-agent', $event)"
       @new-conversation="$emit('new-conversation')"
       @open-workspace="$emit('open-workspace')"
@@ -68,9 +72,7 @@
         <BountyExecutionOutputs
           ref="outputGallery"
           :review-busy="reviewBusy || conversationBusy"
-          @outputs-change="$emit('outputs-change', $event)"
-          @accept-output="$emit('accept-output', $event)"
-          @preview-ready="$emit('preview-ready', $event)"
+          :inline="true"
           :enabled="deliberationV2Enabled"
           :task-completed="taskCompleted"
           :request="activeRequest"
@@ -81,6 +83,9 @@
           :conversation-id="conversationId"
           :identity-key="`${identityEpoch}\u0000${identityScope}`"
           :task-version="selectedTask?.taskVersion ?? selectedTask?.version"
+          @outputs-change="updateMessageOutputs"
+          @accept-output="$emit('accept-output', $event)"
+          @preview-ready="$emit('preview-ready', $event)"
         />
       </template>
     </ChatPanel>
@@ -88,7 +93,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import ChatPanel from './ChatPanel.vue'
 import TaskSkillCapabilities from './TaskSkillCapabilities.vue'
 import { discussionPanelProps, discussionPanelEmits } from './discussionPanelContract.js'
@@ -118,9 +123,19 @@ const props = defineProps({
   identityScope: { type: String, default: '' },
 })
 
-defineEmits([...discussionPanelEmits, 'execution-settled', 'review-delivery', 'typed-reply', 'typed-resume', 'skill-directory-refresh', 'choose-delivery', 'outputs-change', 'accept-output', 'preview-ready'])
+const emit = defineEmits([...discussionPanelEmits, 'execution-settled', 'review-delivery', 'typed-reply', 'typed-resume', 'skill-directory-refresh', 'choose-delivery', 'outputs-change', 'accept-output', 'preview-ready'])
 
+const messageOutputs = ref([])
+const updateMessageOutputs = items => {
+  messageOutputs.value = items
+  emit('outputs-change', items)
+}
+watch(() => `${props.identityEpoch}\u0000${props.identityScope}\u0000${props.conversationId}\u0000${props.selectedTask?.id || ''}`, () => { messageOutputs.value = [] }, { flush: 'sync' })
 const outputGallery = ref(null)
+const refreshMessages = () => {
+  outputGallery.value?.refresh()
+  emit('load-messages')
+}
 defineExpose({ previewSelected: item => outputGallery.value?.previewSelected(item) })
 
 const v2Presentation = computed(() => bountyDeliberationPresentation({

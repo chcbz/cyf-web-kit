@@ -1,5 +1,14 @@
 <template>
-  <section v-if="enabled && (acceptance || allItems.length || scopedSteps.length || skillResults.results.value.length || skillResults.error.value)" class="bounty-output-gallery" aria-label="悬赏议事成果">
+  <template v-if="enabled && inline">
+    <p v-if="error" role="alert">{{ error }} <button type="button" :disabled="loading" @click="refreshFromUser">重新读取成果</button></p>
+    <p v-if="skillResults.error.value" role="alert">{{ skillResults.error.value }} <button type="button" @click="skillResults.refresh">重新读取</button></p>
+    <article v-for="result in skillResults.results.value.filter(value => value.data !== null || !value.complete)" :key="result.executionId" class="message-skill-result">
+      <strong>技能结果</strong><span>{{ result.complete ? '已归档' : result.phase === 'ARCHIVING' ? '正在归档（尚未完成）' : result.phase }}</span>
+      <pre v-if="result.complete && result.data !== null">{{ skillResultDataText(result.data) }}</pre>
+      <small v-if="result.complete && result.data !== null">数据结果不制造文件资产，不表示任务已验收。</small>
+    </article>
+  </template>
+  <section v-else-if="enabled && (acceptance || allItems.length || scopedSteps.length || skillResults.results.value.length || skillResults.error.value)" class="bounty-output-gallery" aria-label="悬赏议事成果">
     <header class="output-gallery-heading">
       <strong>议事成果</strong>
       <button
@@ -69,6 +78,7 @@ import { skillResultDataText } from '../../composables/juyiting/hallSkillResults
 const emit = defineEmits(['catalog-refresh-needed', 'outputs-change', 'accept-output', 'preview-ready'])
 const props = defineProps({
   acceptance: { type: Boolean, default: false },
+  inline: { type: Boolean, default: false },
   reviewBusy: { type: Boolean, default: false },
   taskCompleted: { type: Boolean, default: false },
   enabled: { type: Boolean, default: false }, request: { type: Object, default: null },
@@ -235,10 +245,12 @@ const previewSelected = async item => {
   const key = outputItemKey(current)
   emit('preview-ready', { item: current, url: previewUrls.value[key] || '', text: current.text || textPreviews.value[key] || '', error: itemErrors.value[key] || '' })
 }
-defineExpose({ previewSelected })
+defineExpose({ previewSelected, loading, refresh: refreshFromUser })
 onBeforeUnmount(() => { cleanup(); skillResults.dispose(); emit('outputs-change', []) })
 </script>
 <style scoped>
+.message-skill-result { min-width: 0; padding: 8px 12px; overflow-wrap: anywhere; }
+.message-skill-result pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .bounty-output-gallery { display: grid; gap: 8px; padding: 10px; background: #f7fbf7; }
 .bounty-output { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border: 1px solid #c9d9d2; border-radius: 7px; padding: 8px; }
 .bounty-output img { display: block; max-width: min(100%, 400px); max-height: 360px; object-fit: contain; }

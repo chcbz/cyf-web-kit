@@ -12,7 +12,9 @@
         <span v-if="part.state === 'processing'">正在准备内容…</span>
         <span v-else-if="part.state === 'failed'" role="alert">这份内容未能生成，请在会话中继续说明。</span>
         <template v-else-if="part.state === 'ready'">
-          <HallMessageMedia :part="part" :conversation-id="conversationId" :identity-key="identityKey" />
+          <HallMessageMedia :part="part" :conversation-id="conversationId" :identity-key="identityKey">
+            <template #actions><slot name="output-actions" :part="part"></slot></template>
+          </HallMessageMedia>
         </template>
       </template>
       <div v-if="canSaveToWorkspace(part)" class="part-archive">

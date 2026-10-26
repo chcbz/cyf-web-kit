@@ -2,66 +2,200 @@ import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { compileScript, compileTemplate, parse } from '@vue/compiler-sfc'
 import * as Vue from 'vue'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
+import * as outputCatalog from '../src/composables/juyiting/bountyOutputCatalog.js'
+import * as discussionContract from '../src/components/juyiting/discussionPanelContract.js'
+import { bountyDeliberationPresentation } from '../src/composables/juyiting/hallMultimediaDeliberationUi.js'
+import { useHallSkillResults } from '../src/composables/juyiting/useHallSkillResults.js'
+import { skillResultDataText } from '../src/composables/juyiting/hallSkillResults.js'
+import { revisionProgressPending } from '../src/composables/juyiting/hallTypedDeliberation.js'
+import { conversationAssetContentPath, safeMediaKind, revisionOf } from '../src/composables/juyiting/hallMessageParts.js'
 
 const source = name => readFileSync(new URL(`../src/components/juyiting/${name}.vue`, import.meta.url), 'utf8')
+const load = (name, deps) => {
+  const filename = `src/components/juyiting/${name}.vue`
+  const { descriptor } = parse(source(name), { filename })
+  const code = compileScript(descriptor, { id: name, inlineTemplate: true }).content
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"][^'"]+['"];?\s*$/gm, (_, names) => `var { ${names} } = deps`)
+    .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_, name) => `var ${name} = deps.${name}`)
+    .replace('export default', 'return')
+  return new Function('Vue', 'deps', code)(Vue, deps)
+}
+const noRender = { render: () => null }
+const directory = () => ({ items: Vue.ref([]), links: Vue.ref([]), pendingWrites: Vue.ref([]), loading: Vue.ref(false), error: Vue.ref(''),
+  actionState: Vue.ref('idle'), writeNotice: Vue.ref(''), refresh: async () => true, load: async () => true,
+  dispose: () => {}, retryWrite: () => {} })
+const createComponents = api => {
+  const deps = { ...outputCatalog, ...discussionContract, bountyDeliberationPresentation, useHallSkillResults, skillResultDataText,
+    revisionProgressPending, conversationAssetContentPath, safeMediaKind, revisionOf, createApi: () => api, saveOutputBlob: () => {},
+    useHallConversationArchive: () => ({ statusFor: () => ({}), save: () => {}, check: () => {} }),
+    marked: Object.assign(value => value, { setOptions: () => {} }), DOMPurify: { sanitize: value => value },
+    usePersonalWorkspace: directory, usePersonalWorkspaceConversationLinks: directory, usePersonalWorkspaceTaskLinks: directory,
+    BountyTextSelectionArchive: noRender, BountyTypedOutcomeCard: noRender, HallConversationHistory: noRender,
+    WorkspaceWriteRecovery: noRender, HallChatComposer: noRender, HallMaterialPicker: noRender,
+    TaskSkillCapabilities: noRender, BountyDeliberationStatus: noRender, BountyExecutionTermination: noRender }
+  for (const name of ['HallMessageMedia', 'HallMessageParts', 'BountyExecutionOutputs', 'ChatPanel', 'BountyDiscussionPanel']) deps[name] = load(name, deps)
+  return deps
+}
+const part = (n, changes = {}) => ({ partId: `part-${n}`, kind: 'image', state: 'ready', assetId: `asset-${n}`, revision: '1', filename: `版本${n}.png`, mime: 'image/png', ...changes })
+const message = (n, changes = {}) => ({ localId: `message-${n}`, sender: 'AGENT', content: `第${n}稿`, parts: [part(n)], ...changes })
+const output = (n, changes = {}) => {
+  const url = `/chat/requests/request-${n}/steps/step-1/outputs/output-1`
+  return { outputId: 'output-1', contentMimeType: 'image/png', sha256: String(n).repeat(64), byteLength: '3', previewUrl: url,
+    downloadUrl: `${url}?download=true`, assetRef: { assetId: `asset-${n}`, revision: '1' }, ...changes }
+}
+const request = n => ({ requestId: `request-${n}`, conversationId: 'conversation-1', state: 'COMPLETED',
+  steps: [{ stepId: 'step-1', kind: 'EXECUTE', executionId: `execution-${n}`, executionState: 'OUTPUT_COMMITTED' }] })
+const props = { deliberationV2Enabled: true, selectedTask: { id: 'task-1', status: 'running', taskVersion: '1' },
+  conversationId: 'conversation-1', identityScope: 'owner-a', identityEpoch: 1,
+  requestCatalog: [1, 2].map(n => ({ request: request(n) })), messages: [message(1), message(2)], mentionLabel: () => '', senderText: () => 'Agent' }
+const settle = async () => { await flushPromises(); await Vue.nextTick() }
+const setup = (outputs = [output(1), output(2)]) => {
+  const calls = []
+  let failure = false
+  let gate = null
+  const api = { get: async path => {
+    calls.push({ path, method: 'GET' })
+    if (gate) await gate
+    if (failure) throw new Error('读取失败')
+    const n = Number(path.match(/request-(\d+)/)?.[1])
+    return path.endsWith('/outputs') ? [outputs[n - 1]] : request(n)
+  }, execute: async options => { calls.push(options); return new Blob(['png'], { type: 'image/png' }) } }
+  const components = createComponents(api)
+  const wrapper = mount(components.BountyDiscussionPanel, { props, global: { stubs: { 'var-icon': true } } })
+  return { wrapper, calls, components, fail: value => { failure = value }, pause: () => {
+    let release; gate = new Promise(resolve => { release = resolve })
+    return () => { gate = null; release() }
+  } }
+}
 
-describe('scoped bounty media belongs to the conversation transcript', () => {
-  it('renders owner-scoped execution results inside the shared chat scroll region and not above the transcript', () => {
-    const chat = source('ChatPanel')
-    const bounty = source('BountyDiscussionPanel')
-    const messages = chat.indexOf('<div ref="messageBoxRef" class="hall-messages">')
-    const composer = chat.indexOf('<HallChatComposer', messages)
-    const results = chat.search(/<slot\b[^>]*\bname="bounty-results"/)
-    expect(messages).to.be.greaterThan(-1)
-    expect(results).to.be.greaterThan(messages)
-    expect(results).to.be.lessThan(composer)
-    expect(bounty.indexOf('<BountyExecutionOutputs')).to.be.greaterThan(bounty.indexOf('<template #bounty-results>'))
-    expect(bounty.indexOf('<template #bounty-results>')).to.be.greaterThan(bounty.indexOf('<ChatPanel'))
-    expect(bounty.indexOf('<BountyExecutionOutputs')).to.be.lessThan(bounty.indexOf('</ChatPanel>'))
-    for (const contract of [':enabled="deliberationV2Enabled"', ':request="activeRequest"',
-      ':conversation-id="conversationId"', ':identity-key="`${identityEpoch}\\u0000${identityScope}`"']) {
-      expect(bounty).to.include(contract)
-    }
+describe('scoped bounty output actions live on the actual message cards', () => {
+  let oldCreate; let oldRevoke
+  before(() => {
+    oldCreate = URL.createObjectURL; oldRevoke = URL.revokeObjectURL
+    URL.createObjectURL = () => 'blob:inline-test'; URL.revokeObjectURL = () => {}
   })
-  it('mounts the real transcript section with inline results after the last message', () => {
-    const chat = source('ChatPanel')
-    const begin = chat.indexOf('<div ref="messageBoxRef" class="hall-messages">')
-    const end = chat.indexOf('<HallChatComposer', begin)
-    expect(begin).to.be.greaterThan(-1)
-    expect(end).to.be.greaterThan(begin)
-    const template = chat.slice(begin, end).trim()
-    const transcript = { render: Vue.compile(template), setup: () => ({
-      messages: [{ localId: 'first', sender: 'AGENT', content: '第一稿', parts: [] }],
-      senderText: () => 'Agent', renderMarkdown: text => text,
-      deliberationStatus: '', isAwaitingReply: false, emptyText: '暂无',
-      conversationId: 'conversation-1', materialIdentityKey: 'owner-a', identityScope: 'tenant\u0000client\u0000owner-a',
-      isTaskDiscussion: true, taskId: 'task-1', materialName: () => '资料', typedForMessage: () => []
-    }) }
-    const globals = ['Element', 'HTMLElement', 'SVGElement', 'Node']
-    const installed = globals.filter(name => !globalThis[name])
-    for (const name of installed) globalThis[name] = window[name]
-    let wrapper
+  after(() => { URL.createObjectURL = oldCreate; URL.revokeObjectURL = oldRevoke })
+  it('renders preview then accept on each message version, without a second gallery or writes', async () => {
+    const f = setup()
     try {
-      wrapper = mount(transcript, { slots: { 'bounty-results': '<section class="bounty-output-gallery">第二稿：图片</section>' },
-        global: { stubs: { HallMessageParts: true, BountyTextSelectionArchive: true, BountyTypedOutcomeCard: true } } })
-      const scroll = wrapper.find('.hall-messages')
-      expect(scroll.exists()).to.equal(true)
-      expect(scroll.findAll('.hall-message')).to.have.length(1)
-      expect(scroll.find('.bounty-output-gallery').text()).to.include('图片')
-      expect(scroll.find('.hall-message').element.compareDocumentPosition(scroll.find('.bounty-output-gallery').element)
-        & Node.DOCUMENT_POSITION_FOLLOWING).to.be.greaterThan(0)
-    } finally {
-      wrapper?.unmount()
-      for (const name of installed) delete globalThis[name]
+      await settle()
+      expect(f.wrapper.find('.bounty-output-gallery').exists()).to.equal(false)
+      expect(f.wrapper.text()).not.to.include('议事成果')
+      const rows = f.wrapper.findAll('.hall-message')
+      expect(rows).to.have.length(2)
+      for (const row of rows) expect(row.findAll('.media-actions button').map(button => button.text())).to.deep.equal(['预览', '验收此版'])
+      await rows[0].get('.message-output-accept').trigger('click')
+      const selected = f.wrapper.emitted('accept-output')[0][0]
+      expect(selected).to.include({ requestId: 'request-1', stepId: 'step-1', outputId: 'output-1', sha256: '1'.repeat(64) })
+      expect(selected.assetRef).to.deep.equal({ assetId: 'asset-1', revision: '1' })
+      await rows[1].get('.message-output-accept').trigger('click')
+      expect(f.wrapper.emitted('accept-output')[1][0].requestId).to.equal('request-2')
+      expect(f.calls.every(call => call.method === 'GET')).to.equal(true)
+      await f.wrapper.get('[aria-label="统一验收"]').trigger('click')
+      expect(f.wrapper.emitted('review-delivery')).to.deep.equal([[]])
+      expect(f.wrapper.emitted('outputs-change').at(-1)[0]).to.have.length(2)
+    } finally { f.wrapper.unmount() }
+  })
+  it('keeps busy/voice/terminal guards and previews when the task becomes read-only', async () => {
+    const f = setup()
+    try {
+      await settle(); await f.wrapper.setProps({ reviewBusy: true })
+      expect(f.wrapper.findAll('.message-output-accept').every(button => button.attributes('disabled') === '')).to.equal(true)
+      await f.wrapper.get('.message-output-accept').trigger('click'); expect(f.wrapper.emitted('accept-output')).to.equal(undefined)
+      await f.wrapper.setProps({ reviewBusy: false, voice: { voiceInteractionLocked: true } })
+      expect(f.wrapper.get('.message-output-accept').attributes('disabled')).to.equal('')
+      await f.wrapper.setProps({ voice: null, selectedTask: { ...props.selectedTask, status: 'completed' } })
+      expect(f.wrapper.find('.message-output-accept').exists()).to.equal(false)
+      expect(f.wrapper.find('[aria-label="统一验收"]').exists()).to.equal(false)
+      expect(f.wrapper.findAll('.media-actions button').map(button => button.text())).to.deep.equal(['预览', '预览'])
+      await f.wrapper.findAll('.media-actions button')[0].trigger('click'); await settle()
+      expect(document.querySelector('[aria-label="会话资料预览"]')).not.to.equal(null)
+    } finally { f.wrapper.unmount() }
+  })
+  it('disables card acceptance during an authoritative catalog refresh', async () => {
+    const f = setup(); let release
+    try {
+      await settle(); release = f.pause()
+      await f.wrapper.get('[aria-label="重取回话"]').trigger('click')
+      expect(f.wrapper.emitted('load-messages')).to.deep.equal([[]])
+      await settle()
+      expect(f.wrapper.findAll('.message-output-accept')).to.have.length(2)
+      expect(f.wrapper.findAll('.message-output-accept').every(button => button.attributes('disabled') === '')).to.equal(true)
+      await f.wrapper.get('.message-output-accept').trigger('click')
+      expect(f.wrapper.emitted('accept-output')).to.equal(undefined)
+      release(); await settle()
+      expect(f.wrapper.get('.message-output-accept').attributes('disabled')).to.equal(undefined)
+    } finally { release?.(); f.wrapper.unmount() }
+  })
+  it('uses the same inline preview/accept row for audio and file results', async () => {
+    for (const [kind, mime] of [['audio', 'audio/mpeg'], ['file', 'application/pdf']]) {
+      const f = setup([output(1, { contentMimeType: mime, ...(kind === 'file' ? { previewUrl: null } : {}) }), output(2)])
+      try {
+        await f.wrapper.setProps({ messages: [message(1, { parts: [part(1, { kind, mime })] })] }); await settle()
+        expect(f.wrapper.findAll('.media-actions button').map(button => button.text())).to.deep.equal(['预览', '验收此版'])
+        await f.wrapper.get('.message-output-accept').trigger('click')
+        expect(f.wrapper.emitted('accept-output')[0][0].contentMimeType).to.equal(mime)
+        expect(f.calls.every(call => call.method === 'GET')).to.equal(true)
+      } finally { f.wrapper.unmount() }
     }
   })
-  it('compiles both Vue templates and scripts with the optional slot', () => {
-    for (const name of ['ChatPanel', 'BountyDiscussionPanel']) {
+  it('does not guess an ambiguous/missing asset reference or authorize user/input/processing parts', async () => {
+    for (const pair of [[output(1), output(2, { assetRef: { assetId: 'asset-1', revision: '1' } })],
+      [output(1, { assetRef: null }), output(2, { assetRef: { assetId: 'asset-2', revision: '2' } })]]) {
+      const f = setup(pair)
+      try {
+        await settle()
+        expect(f.wrapper.find('.message-output-accept').exists()).to.equal(false)
+        expect(f.wrapper.emitted('outputs-change').at(-1)[0]).to.have.length(2)
+      } finally { f.wrapper.unmount() }
+    }
+    const f = setup()
+    try {
+      await settle(); await f.wrapper.setProps({ messages: [message(1, { sender: 'USER' }), message(2, { parts: [part(2, { state: 'processing' })] })] })
+      expect(f.wrapper.find('.message-output-accept').exists()).to.equal(false)
+    } finally { f.wrapper.unmount() }
+  })
+  it('drops old candidates on identity change and shows read errors/retry without restoring a gallery', async () => {
+    const f = setup()
+    try {
+      await settle(); f.fail(true); await f.wrapper.setProps({ identityScope: 'owner-b', identityEpoch: 2 }); await settle()
+      expect(f.wrapper.find('.message-output-accept').exists()).to.equal(false)
+      expect(f.wrapper.find('[role="alert"]').text()).to.include('读取失败')
+      expect(f.wrapper.find('.bounty-output-gallery').exists()).to.equal(false)
+      f.fail(false); await f.wrapper.findAll('button').find(button => button.text() === '重新读取成果').trigger('click'); await settle()
+      expect(f.wrapper.findAll('.message-output-accept')).to.have.length(2)
+    } finally { f.wrapper.unmount() }
+  })
+  it('keeps completed text previews/version acceptance scoped to the exact assistant message and task', async () => {
+    const components = createComponents({ execute: async () => { throw new Error('no write') } })
+    const candidates = [1, 2].map(n => ({ taskId: 'task-1', requestId: `request-${n}`, text: `固定文字${n}`, sha256: String(n).repeat(64),
+      messageSource: { messageId: `message-${n}` } }))
+    const wrapper = mount(components.ChatPanel, { props: { ...props, discussionVariant: 'bounty', outputReviewEnabled: true,
+      outputCandidates: candidates, messages: [message(1, { parts: [] }), message(2, { parts: [] })] }, global: { stubs: { 'var-icon': true } } })
+    try {
+      await settle()
+      const rows = wrapper.findAll('.hall-message')
+      expect(rows[0].findAll('.message-output-actions button').map(button => button.text())).to.deep.equal(['预览', '验收此版'])
+      await rows[0].get('.message-output-actions button').trigger('click'); await settle()
+      expect(document.querySelector('[aria-label="文字成果预览"] pre').textContent).to.equal('固定文字1')
+      document.querySelector('[aria-label="关闭预览"]').click(); await settle()
+      expect(wrapper.emitted('accept-output')).to.equal(undefined)
+      await rows[0].get('.message-output-accept').trigger('click')
+      expect(wrapper.emitted('accept-output')[0][0]).to.deep.equal(candidates[0])
+      await rows[1].get('.message-output-actions button').trigger('click'); await settle()
+      await wrapper.setProps({ identityScope: 'owner-b' }); await settle()
+      expect(document.querySelector('[aria-label="文字成果预览"]')).to.equal(null)
+      await wrapper.setProps({ discussionVariant: 'private' })
+      expect(wrapper.find('.message-output-actions').exists()).to.equal(false)
+    } finally { wrapper.unmount() }
+  })
+  it('compiles the provider, message slots and shared discussion shell', () => {
+    for (const name of ['ChatPanel', 'BountyDiscussionPanel', 'BountyExecutionOutputs', 'HallMessageParts', 'HallMessageMedia']) {
       const filename = `src/components/juyiting/${name}.vue`
       const { descriptor, errors } = parse(source(name), { filename })
-      expect(errors, filename).to.deep.equal([])
-      compileScript(descriptor, { id: name })
+      expect(errors, filename).to.deep.equal([]); compileScript(descriptor, { id: name })
       expect(compileTemplate({ source: descriptor.template.content, filename, id: name }).errors, filename).to.deep.equal([])
     }
   })

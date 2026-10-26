@@ -10,7 +10,10 @@
       <audio v-if="previewUrl" :src="previewUrl" controls preload="none" aria-label="会话音频" />
       <button v-else type="button" :disabled="loading" @click="loadPreview">{{ loading ? '正在读取音频…' : '播放音频' }}</button>
     </template>
-    <button type="button" :disabled="loading" @click="expanded = true">预览</button>
+    <div class="media-actions" role="group" aria-label="成果操作">
+      <button type="button" :disabled="loading" @click="expanded = true">预览</button>
+      <slot name="actions"></slot>
+    </div>
     <Teleport to="body">
       <dialog v-if="expanded" ref="previewDialog" class="image-overlay" aria-label="会话资料预览" @cancel.prevent="expanded = false" @click="closeOnBackdrop">
         <header><strong>{{ part.filename || '资料预览' }}</strong><button type="button" class="media-preview-close" aria-label="关闭预览" title="关闭预览" @click="expanded = false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button></header>
@@ -121,6 +124,8 @@ onBeforeUnmount(discard)
 </script>
 <style scoped>
 .media-asset { display: flex; flex-direction: column; gap: 8px; max-width: min(100%, 380px); }
+.media-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.media-actions > button { min-height: 40px; padding: 6px 12px; border: 1px solid var(--hall-border, #e3e5dc); border-radius: 7px; background: var(--hall-surface, #fffefa); color: var(--hall-text, #242e2b); font: inherit; cursor: pointer; }
 .media-asset p { color: #a14132; margin: 0; }
 .image-button { display: block; max-width: 100%; padding: 0; background: transparent; cursor: zoom-in; }
 .image-button img { display: block; max-width: min(100%, 280px); max-height: 230px; object-fit: contain; }
