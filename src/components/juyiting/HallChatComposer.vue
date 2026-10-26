@@ -135,7 +135,7 @@
 
       <div class="composer-meta">
         <span>{{ draftLength }}/{{ maxLength }}</span>
-        <span v-if="isStreaming || isAwaitingReply">候回话</span>
+        <span v-if="isStreaming || isAwaitingReply">等待回复…</span>
         <span v-else>{{ hintText }}</span>
       </div>
     </form>
@@ -297,15 +297,15 @@ const targetChips = computed(() => {
 const hideFixedContext = computed(() => props.compact && props.discussionVariant === 'bounty' && targetChips.value.length === 1)
 
 const contextLabel = computed(() => {
-  if (props.discussionVariant === 'bounty') return props.targetText || '榜文议事'
+  if (props.discussionVariant === 'bounty') return props.targetText || '事项议事'
   if (props.discussionVariant === 'private') return props.targetText || '当前好汉'
-  return targetChips.value.length ? '点名回话' : '厅前公议'
+  return targetChips.value.length ? '指定好汉回复' : '厅前公议'
 })
 
 const hintText = computed(() => {
   if (props.discussionVariant === 'bounty') return '只点本榜领令人'
-  if (props.discussionVariant === 'private') return '密议对象已定'
-  return '输入 @ 可点名回话'
+  if (props.discussionVariant === 'private') return '私聊对象已选定'
+  return '输入 @ 可指定好汉回复'
 })
 
 const resizeTextarea = () => {

@@ -88,7 +88,7 @@ export const useHallAgentProfileCapabilities = ({ api, getAgent, identityKey, en
       projection.value = value
       return true
     } catch (cause) {
-      if (current()) error.value = cause?.status === 401 ? '请重新登录后查看' : cause?.status === 404 ? '当前Agent不可访问，请刷新点将册' : '技能与本领读取失败，请重试'
+      if (current()) error.value = cause?.status === 401 ? '请重新登录后查看' : cause?.status === 404 ? '当前Agent不可访问，请刷新好汉名册' : '技能与本领读取失败，请重试'
       return false
     } finally {
       if (current()) { loading.value = false; controller = null }

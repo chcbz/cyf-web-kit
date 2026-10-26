@@ -48,7 +48,7 @@
           <div class="archive-book-info">
             <p class="reader-kicker">已收录典籍</p>
             <h4>{{ book.title }}</h4>
-            <p>共 {{ book.chapterCount }} 章正文，可记录阅读进度、书签及私人手札。</p>
+            <p>共 {{ book.chapterCount }} 章正文，可记录阅读进度、书签及私人阅读笔记。</p>
             <button
               type="button"
               class="archive-book-open"
@@ -112,7 +112,7 @@
                 aria-controls="archive-reader-notes"
                 @click="toggleNotes"
               >
-                手札
+                阅读笔记
               </button>
             </div>
           </header>
@@ -178,12 +178,12 @@
             <aside
               id="archive-reader-notes"
               class="reader-notes"
-              aria-label="私人手札与书签"
+              aria-label="私人阅读笔记与书签"
             >
-              <h4>私人手札</h4>
+              <h4>私人阅读笔记</h4>
               <textarea
                 v-model="noteText"
-                aria-label="当前段落私人手札"
+                aria-label="当前段落私人阅读笔记"
                 aria-describedby="note-byte-hint"
                 placeholder="记录此处所思；仅自己可见。"
               ></textarea>
@@ -199,7 +199,7 @@
                 :disabled="!noteText.trim() || !reader.currentLocation || noteBytes > 20000 || reader.notePending"
                 @click="saveNote"
               >
-                {{ reader.notePending ? '保存中…' : '保存手札' }}
+                {{ reader.notePending ? '保存中…' : '保存笔记' }}
               </button>
               <p
                 v-if="reader.noteAnchorNotice"
@@ -566,7 +566,7 @@ const removeNote = (note) => {
   if (reader.notePending) return Promise.resolve(null)
   return runAction(
     () => reader.deleteNote(note),
-    '手札暂未删除。'
+    '阅读笔记暂未删除。'
   )
 }
 
@@ -641,7 +641,7 @@ const saveNote = async () => {
       anchor: note?.anchor,
       version: note?.version || '0'
     }),
-    '手札暂未保存。'
+    '阅读笔记暂未保存。'
   )
   if (!saved) return
   const currentTarget = editingNote.value?.noteId || NEW_NOTE_TARGET

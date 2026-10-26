@@ -12,9 +12,9 @@
         </button>
       </div>
       <button type="button" @click="$emit('open-catalog')">招贤令</button>
-      <span>簿上 {{ agents.length }} / 厅中 {{ mapAgents.length }}</span>
+      <span>名册 {{ agents.length }} 位 · 场景中 {{ mapAgents.length }} 位</span>
     </div>
-    <p v-if="loading" class="panel-data-state" role="status">点将册读取中…</p>
+    <p v-if="loading" class="panel-data-state" role="status">正在加载好汉名册…</p>
     <p v-else-if="errorMessage" class="panel-data-state is-error" role="alert">{{ errorMessage }}</p>
 
     <div class="agent-panel-body">
@@ -67,7 +67,7 @@
             </div>
             <div v-if="canManagePolicy" class="external-policy" aria-label="接外单设置">
               <div class="external-policy-row">
-                <span>允许其他用户委派任务</span>
+                <span>接受平台其他用户的委派</span>
                 <button
                   v-if="externalPolicy"
                   type="button"
@@ -86,7 +86,7 @@
               <p v-if="externalPolicyStatus === 'UNKNOWN'" role="status">原修改结果未知，暂不能另开修改。</p>
               <div v-if="externalPolicyStatus === 'UNKNOWN'" class="external-policy-recovery">
                 <button type="button" :disabled="externalPolicyBusy" @click="$emit('check-external-policy')">查询原操作</button>
-                <button type="button" :disabled="externalPolicyBusy" @click="$emit('resume-external-policy')">以原键继续</button>
+                <button type="button" :disabled="externalPolicyBusy" @click="$emit('resume-external-policy')">继续原操作</button>
               </div>
               <button
                 v-else-if="externalPolicyStatus === 'UNAVAILABLE'"
@@ -123,9 +123,9 @@
               <div class="profile-heading"><h3>本领</h3><small>{{ profile ? '最近读取记录' : '上次记录' }}</small></div>
               <div class="ability-tags">
                 <span v-for="ability in displayedAbilities" :key="ability">{{ ability }}</span>
-                <span v-if="!displayedAbilities.length">未录本领</span>
+                <span v-if="!displayedAbilities.length">暂无能力介绍</span>
               </div>
-              <p class="profile-note">本领记录，不等同于已安装技能。</p>
+              <p class="profile-note">能力介绍仅供参考，可用技能请查看上方技能列表。</p>
             </section>
             <div v-if="canReadProfile" class="profile-refresh">
               <button type="button" :disabled="profileCapabilitiesLoading" @click="$emit('refresh-profile-capabilities')">{{ profileCapabilitiesLoading ? '正在刷新…' : '刷新技能与本领' }}</button>
@@ -214,7 +214,7 @@ const canGoBack = computed(() => props.active && isCompactRoster.value && mobile
 const profileVisible = computed(() => props.active && Boolean(props.selectedAgent?.agentId) && (!isCompactRoster.value || mobileDetailOpen.value))
 const listVisible = computed(() => props.active && (!isCompactRoster.value || !mobileDetailOpen.value))
 const detailVisible = computed(() => props.active && (!isCompactRoster.value || mobileDetailOpen.value))
-const windowTitle = computed(() => canGoBack.value ? '好汉详情' : '点将册')
+const windowTitle = computed(() => canGoBack.value ? '好汉详情' : '好汉名册')
 const canManagePolicy = computed(() => props.selectedAgent?.boundToMe === true && props.selectedAgent?.canOperate === true && !props.selectedAgent?.systemAgent)
 const canReadProfile = computed(() => props.selectedAgent?.boundToMe === true && props.selectedAgent?.systemAgent !== true)
 const profile = computed(() => !props.profileCapabilitiesLoading && !props.profileCapabilitiesError && canReadProfile.value && props.profileCapabilities?.agentId === props.selectedAgent?.agentId ? props.profileCapabilities : null)

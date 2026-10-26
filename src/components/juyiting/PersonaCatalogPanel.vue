@@ -4,7 +4,7 @@
       <span>{{ personas.length }} 位待请豪杰</span>
       <span>{{ boundToMeCount }} 位已入伙</span>
     </div>
-    <p v-if="hostedPointFlow" class="catalog-flow-note" role="status">先为原榜文请一位山寨安顿的好汉；安顿确认后仍须等点将册显示本人可操作且在线，才会回到原榜文供你明确点将。</p>
+    <p v-if="hostedPointFlow" class="catalog-flow-note" role="status">先为原榜文请一位平台托管的好汉；安顿确认后仍须等点将册显示本人可操作且在线，才会回到原榜文供你明确点将。</p>
     <p v-if="loading" class="catalog-data-state" role="status">招贤令读取中…</p>
     <p v-else-if="errorMessage" class="catalog-data-state is-error" role="alert">{{ errorMessage }}</p>
 
@@ -16,7 +16,7 @@
         </button>
       </div>
       <template v-if="isLocalSetup">
-        <p>Runtime {{ runtimeSetup.runtimeProtocolVersion }} 自家接应；安装授权不代表 Runtime 在线或事项可办理。</p>
+        <p>Runtime {{ runtimeSetup.runtimeProtocolVersion }} 自行部署；安装授权不代表 Runtime 在线或事项可办理。</p>
         <dl class="runtime-scope">
           <div><dt>Tenant</dt><dd>{{ runtimeSetup.tenantId }}</dd></div>
           <div><dt>Client</dt><dd>{{ runtimeSetup.clientId }}</dd></div>
@@ -26,7 +26,7 @@
         <div class="setup-note">
           <div class="runtime-guide-head">
             <strong>Runtime 指引</strong>
-            <button type="button" class="setup-copy" @click="copyRuntimeGuide">{{ runtimeCopied ? '已复制文书' : '复制非秘密文书' }}</button>
+            <button type="button" class="setup-copy" @click="copyRuntimeGuide">{{ runtimeCopied ? '已复制文书' : '复制接入说明' }}</button>
           </div>
           <a :href="runtimeSetup.guideUrl" target="_blank" rel="noopener noreferrer">打开自托管 Runtime v1 指引</a>
           <p class="runtime-layout">统一目录：程序放 apps/cyf-agent-runtime-v1，配置与策略放 conf/cyf-agent-runtime-v1，各角色 HOME 放 state/cyf-agent-runtime-v1/INSTANCE/agents/SUBJECT/codex-home；路径基目录使用目标机本人获授权的位置。</p>
@@ -83,7 +83,7 @@
           <small>{{ portraitName(persona) }} / {{ persona.starName || '星号未载' }}</small>
           <div class="ability-tags">
             <span v-for="ability in (persona.abilities || []).slice(0, 3)" :key="ability">{{ ability }}</span>
-            <span v-if="!(persona.abilities || []).length">未录本领</span>
+            <span v-if="!(persona.abilities || []).length">暂无能力介绍</span>
           </div>
         </div>
         <div
@@ -105,7 +105,7 @@
               type="button"
               @click="selectAccess(persona, 'server')"
             >
-              山寨安顿
+              平台托管
             </button>
             <button
               v-if="!hostedPointFlow"
@@ -113,14 +113,14 @@
               type="button"
               @click="selectAccess(persona, 'local')"
             >
-              自家接应
+              自行部署
             </button>
             <button
               class="catalog-action subtle"
               type="button"
               @click="activePersonaCode = null"
             >
-              且待
+              暂不选择
             </button>
           </template>
           <button
@@ -130,7 +130,7 @@
             :disabled="unbindBusy"
             @click="$emit('request-unbind-persona', persona)"
           >
-            除名下山
+            移除好汉
           </button>
         </div>
         <span v-else class="catalog-state">{{ stateText(persona) }}</span>
@@ -158,7 +158,7 @@ const hostingPersonaCode = ref(null)
 const hostingPersona = computed(() => props.personas.find(persona => persona.personaCode === hostingPersonaCode.value) || null)
 const resolveHostingPersona = persona => props.personas.find(item => item.personaCode === persona.personaCode) || null
 const boundToMeCount = computed(() => props.personas.filter(persona => persona.boundToMe).length)
-const setupTitle = computed(() => props.setupResult?.mode === 'server' ? '山寨安顿文书已备' : '自家接应文书已备')
+const setupTitle = computed(() => props.setupResult?.mode === 'server' ? '平台托管文书已备' : '自行部署文书已备')
 const isLocalSetup = computed(() => props.setupResult?.mode === 'local' && Boolean(props.setupResult?.runtimeSetup))
 const runtimeSetup = computed(() => props.setupResult?.runtimeSetup || {})
 const importedHandoff = ref(null)
@@ -175,7 +175,7 @@ const scopeKeys = ['tenantId', 'clientId', 'canonicalAgentId']
 const shellQuote = value => `'${String(value).replaceAll("'", "'\\''")}'`
 const prepareCommand = computed(() => `"$ARTIFACT/node/bin/node" "$REPO/shell/cyf_runtime_enrollment_prepare.mjs" --tenant-id ${shellQuote(runtimeSetup.value.tenantId || '')} --client-id ${shellQuote(runtimeSetup.value.clientId || '')} --agent-id ${shellQuote(runtimeSetup.value.canonicalAgentId || '')} --output ABS_NEW_DIR --expires-at EPOCH_MS`)
 const runtimeCopyText = computed(() => [
-  'Runtime v1 自家接应文书',
+  'Runtime v1 自行部署文书',
   '统一目录：apps/cyf-agent-runtime-v1；conf/cyf-agent-runtime-v1；state/cyf-agent-runtime-v1/INSTANCE/agents/SUBJECT/codex-home（使用目标机本人获授权的基目录）。',
   '已有统一 Runtime 升级/迁移：保留身份、授权和完整会话，按指引第9节迁移路径索引，不重复登记或 enroll；下面 prepare 仅用于首次接入。',
   `Tenant: ${runtimeSetup.value.tenantId || ''}`, `Client: ${runtimeSetup.value.clientId || ''}`,

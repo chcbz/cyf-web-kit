@@ -77,8 +77,8 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'later', 'skip', 'complete'])
 
 const REQUIREMENT_STEPS = Object.freeze([
-  { title: '描述需求', description: '在办事首页写下想办成的事，也可以添加资料。开始办事后需求会保存为待点将事项。' },
-  { title: '确认承办Agent', description: '系统推荐承办好汉，你可以确认或另选。确认承办后才开始办理，不在首页提前选人。' },
+  { title: '描述需求', description: '在办事首页写下想办成的事，也可以添加资料。开始办事后需求会保存为待确认承办事项。' },
+  { title: '确认承办好汉', description: '系统推荐承办好汉，你可以确认或另选。确认承办后才交给好汉办理，提交成功不代表已经开工。' },
   { title: '在议事中协作与验收', description: '澄清、查看结果和提出修改都在同一议事中完成。成果提交后，通过验收入口查看并确认验收。' },
   { title: '找回事项与资料', description: '从事项页继续办理或查看已完成成果；从资料页管理和复用固定版本资料。' }
 ])

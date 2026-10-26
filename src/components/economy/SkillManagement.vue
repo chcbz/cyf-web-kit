@@ -114,7 +114,7 @@
                   <dt>权限范围</dt><dd>{{ details(row)?.requiredPermissions.map(formatSkillPermission).join('；') || '无所需权限' }}</dd>
                   <dt>运行依赖</dt><dd>{{ details(row)?.requirements.join('；') || '无额外依赖声明' }}</dd>
                   <dt>运行状态</dt><dd>{{ runtimeLabels[row.runtime.state] }}<template v-if="row.runtime.reasonCode"> · {{ reasonLabels[row.runtime.reasonCode] }}</template></dd>
-                  <dt>新调用</dt><dd>{{ row.admissionEnabled ? '已开放，仍需逐任务授权' : '未开放' }}<template v-if="change(row)?.status === 'SUCCEEDED' && !change(row).runtimeSynced"> · Runtime策略待同步</template></dd>
+                  <dt>新调用</dt><dd>{{ row.admissionEnabled ? '可接受新调用；每项任务仍需授权' : '未开放' }}<template v-if="change(row)?.status === 'SUCCEEDED' && !change(row).runtimeSynced"> · 运行端设置待同步</template></dd>
                 </dl>
                 <section class="skill-section">
                   <h4>使用控制</h4><p>只影响新调用，不中断已获授权任务，不删除成果与历史。</p>
@@ -134,7 +134,7 @@
                 </section>
               </template>
               <template v-else-if="mode === 'INSTALL' || mode === 'UPGRADE'">
-                <p v-if="mode === 'INSTALL' && row.runtime.state === 'OFFLINE'" class="skill-note">Agent当前离线；合法接纳后等待连接，沿原操作继续，不重复购买。</p>
+                <p v-if="mode === 'INSTALL' && row.runtime.state === 'OFFLINE'" class="skill-note">好汉当前离线；操作受理后将在恢复连接时继续，请勿重复购买。</p>
                 <div v-if="mode === 'UPGRADE'" class="skill-version-compare">
                   <div><small>当前版本</small><strong>{{ row.installed?.version.skillVersion }}</strong></div><span aria-hidden="true">→</span><div><small>本次目标</small><strong>{{ row.candidate?.skillVersion }}</strong></div>
                 </div>
@@ -151,7 +151,7 @@
                   <template v-if="draft(row)?.quote">本次报价 {{ money(draft(row).quote.price) }} · {{ draft(row).quote.coverage === 'ENTITLEMENT' ? '现有权益覆盖' : '本次购买' }} · 有效至 {{ dateTime(draft(row).quote.expiresAt) }}</template>
                   <template v-else>获取报价后安装或升级。</template>
                 </p>
-                <details class="skill-deferred"><summary>技能详情与费用</summary><p class="skill-permission-details"><span v-for="permission in row.candidate?.requiredPermissions || []" :key="permission">{{ formatSkillPermission(permission) }}；</span></p><p>输入：{{ row.candidate?.inputMimeTypes.join('、') || '未声明' }}</p><p>依赖：{{ row.candidate?.requirements.join('；') || '无额外声明' }}</p><p>{{ row.candidate?.executionCostDescription || '执行服务费用未提供说明，不据此认定免费。' }}</p><p>购买费用与执行服务费用分开；安装不自动执行任务。</p></details>
+                <details class="skill-deferred"><summary>技能详情与费用</summary><p class="skill-permission-details"><span v-for="permission in row.candidate?.requiredPermissions || []" :key="permission">{{ formatSkillPermission(permission) }}；</span></p><p>输入：{{ row.candidate?.inputMimeTypes.join('、') || '未声明' }}</p><p>依赖：{{ row.candidate?.requirements.join('；') || '无额外声明' }}</p><p>{{ row.candidate?.executionCostDescription || '暂无执行费用说明，不能据此认定免费。' }}</p><p>购买费用与执行服务费用分开；安装不自动执行任务。</p></details>
                 <footer class="skill-inline-footer">
                   <span>{{ agentName }} · {{ row.name }} · {{ row.candidate?.skillVersion }}</span>
                   <button
@@ -198,7 +198,7 @@
                 <p v-if="change(row)?.status === 'WAITING_AGENT'" class="skill-note">{{ change(row).action === 'UNINSTALL' ? '已停止新调用，等待Agent连接后继续原卸载操作；无需重复提交。' : '原操作已接纳，等待Agent连接后继续；无需再次安装或购买。' }}</p>
                 <p v-else-if="change(row)?.status === 'FAILED_RETRYABLE'" class="skill-note">{{ change(row).action === 'UNINSTALL' ? '已确认卸载未完成；新调用保持关闭，可重试原操作。' : '已确认本次未生效，可重试原操作，不重新报价、不重复购买。' }}</p>
                 <p v-else-if="change(row)?.status === 'RECOVERY_REQUIRED'" class="skill-note">{{ change(row).action === 'UNINSTALL' ? '尚不能确认卸载结果，保留最近确认的安装信息；只核对原操作。' : '尚不能确认切换结果，不据此退款或判定失败；只核对原记录。' }}</p>
-                <p v-else-if="change(row)?.status === 'SUCCEEDED'" class="skill-note">{{ change(row).action === 'UNINSTALL' ? '已卸载；历史、成果和已购权益保留，可重新安装。' : change(row).runtimeSynced ? '该动作已完成；实际运行状态另行核验。' : '已关闭新调用，Runtime策略仍待同步。' }}</p>
+                <p v-else-if="change(row)?.status === 'SUCCEEDED'" class="skill-note">{{ change(row).action === 'UNINSTALL' ? '已卸载；历史、成果和已购权益保留，可重新安装。' : change(row).runtimeSynced ? '该动作已完成；实际运行状态另行核验。' : '已关闭新调用，运行端设置仍待同步。' }}</p>
                 <p v-if="market.queryUnknown[row.skillKey]" class="skill-error" role="alert">{{ market.queryUnknown[row.skillKey] }}</p>
                 <details v-if="change(row)"><summary>原操作详情</summary><p>{{ change(row).skillChangeId }} · 第{{ change(row).attempt }}次尝试</p><p>{{ change(row).source?.skillVersion || '首次安装' }} → {{ change(row).target.skillVersion }}</p><p>资金：{{ fundingLabel(change(row).fundingStatus) }}<template v-if="change(row).price"> · {{ money(change(row).price) }}</template></p></details>
                 <footer class="skill-inline-footer">
@@ -214,7 +214,7 @@
                     type="button"
                     :disabled="blocked(row)"
                     @click="resume(row.skillKey)"
-                  >以原键重放</button>
+                  >继续原操作</button>
                   <button
                     v-if="market.pending[row.skillKey]?.kind === 'QUOTE'"
                     type="button"
@@ -252,11 +252,11 @@
             type="button"
             :disabled="market.busy[record.skillKey]"
             @click="resume(record.skillKey)"
-          >以原键重放</button>
+          >继续原操作</button>
         </section>
         <details class="skill-records" @toggle="recordsToggled"><summary>操作记录<span v-if="market.changes.length"> · {{ market.changes.length }}</span></summary>
           <p v-if="market.recordsError" role="alert">{{ market.recordsError }}<button type="button" @click="market.refreshChanges">重读记录</button></p>
-          <p v-else-if="!market.changes.length">暂无管理操作；不伪造历史记录。</p>
+          <p v-else-if="!market.changes.length">暂无操作记录。</p>
           <ol><li v-for="record in market.changes" :key="record.skillChangeId"><div><strong>{{ record.skillKey }} · {{ actionLabels[record.action] }} · {{ changeLabels[record.status] }}</strong><small>{{ dateTime(record.createdAt) }} · {{ record.actorLabel }}</small></div><p>{{ record.source?.skillVersion || '首次安装' }} → {{ record.target.skillVersion }}<template v-if="record.reasonCode"> · {{ reasonLabels[record.reasonCode] }}</template></p><small>{{ record.skillChangeId }}</small></li></ol>
         </details>
       </div>

@@ -1,6 +1,6 @@
 'use strict';
 // Latest UI stays authoritative. This file only completes OFFLINE, local interactions.
-const prototypePages=[['办事','home'],['事项','tasks'],['提出需求','create'],['点将册','agents'],['事项详情','detail'],['榜文议事','chat'],['密议','private'],['厅前公议','public'],['资料','workspace'],['资料详情','file'],['我的','mine'],['典籍阁','library'],['阅读器','reader'],['消息','messages'],['招贤令','catalog'],['厅中实景','map'],['使用帮助','help'],['个人中心入口','account'],['正式成果','results']];
+const prototypePages=[['办事','home'],['事项','tasks'],['提出需求','create'],['好汉名册','agents'],['事项详情','detail'],['事项议事','chat'],['密议','private'],['厅前公议','public'],['资料','workspace'],['资料详情','file'],['我的','mine'],['典籍阁','library'],['阅读器','reader'],['消息','messages'],['招贤令','catalog'],['厅中实景','map'],['使用帮助','help'],['个人中心入口','account'],['正式成果','results']];
 function seedBaseline(){
  if(state.initializedScenario){if(page==='private'&&!state.privateChats[state.privateAgentId]){state.privateAgentId='0';state.privateChats['0']={agent:{id:'0',name:'宋江'},messages:[],outputs:[],delivery:[],chatDraft:'',chatFiles:[],quote:null,pending:false};}return;}
  const scenario=selectedScenario;state.baselineScenario=scenario;state.initializedScenario=true;
@@ -38,9 +38,9 @@ syncCurrentComposer=function(panel){optimizedComposer(panel);const ctx=conversat
  $('.composer-send',panel).innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg>';
  const form=$('.composer-submit',panel);
  $$('.composer-context,.composer-meta,.composer-actions [data-draft-count]',panel).forEach(e=>e.remove());
- const contextLabel=page==='private'?'密议':page==='public'?'厅前公议':'榜文议事 / '+taskTitle();
+ const contextLabel=page==='private'?'密议':page==='public'?'厅前公议':'事项议事 / '+taskTitle();
  form.insertAdjacentHTML('afterbegin',`<div class="composer-context ${page==='private'?'is-private':'is-bounty'}"><span class="composer-context-label" title="${esc(contextLabel)}">${esc(contextLabel)}</span>${ctx.agent?`<span class="composer-target-chip" aria-label="传话对象">@${esc(ctx.agent.name)}</span>`:''}</div>`);
- form.insertAdjacentHTML('beforeend',`<div class="composer-meta"><span data-draft-count>${ctx.chatDraft.length}/1200</span><span>${ctx.pending?'候回话':page==='public'?'公共议事':page==='private'?'只与当前好汉交流':'只与当前承办交流'}</span></div>`);
+ form.insertAdjacentHTML('beforeend',`<div class="composer-meta"><span data-draft-count>${ctx.chatDraft.length}/1200</span><span>${ctx.pending?'等待回复…':page==='public'?'公共议事':page==='private'?'只与当前好汉交流':'只与当前承办交流'}</span></div>`);
  if(page==='chat'){
   $('.composer-context',panel)?.remove();
   const count=$('[data-draft-count]',panel);if(count)actions.insertBefore(count,$('.composer-inline-voice',actions));
@@ -48,12 +48,12 @@ syncCurrentComposer=function(panel){optimizedComposer(panel);const ctx=conversat
  }
  $('.composer-textarea',panel).maxLength=1200;
  const summary=$('.context-summary small',panel);if(summary)summary.title=summary.textContent;
- $$('.toolbar-actions button',panel).forEach(b=>{const terminal=!!(ctx.task?.complete||ctx.task?.cancelled);b.hidden=terminal&&['另起话头','查看并验收'].includes(b.getAttribute('aria-label'));b.disabled=!!(ctx.pending||ctx.historyDeletingId||$('.inline-voice-status',panel));});
+ $$('.toolbar-actions button',panel).forEach(b=>{const terminal=!!(ctx.task?.complete||ctx.task?.cancelled);b.hidden=terminal&&['新对话','查看并验收'].includes(b.getAttribute('aria-label'));b.disabled=!!(ctx.pending||ctx.historyDeletingId||$('.inline-voice-status',panel));});
  if(ctx.task?.complete){const status=$('.context-summary em',panel);if(status)status.textContent='事项已完成';}
  if(['waiting','streaming'].includes(state.baselineScenario)&&!ctx.pending){$$('.is-pending',panel).forEach(e=>e.remove());}
  const menu=$('.composer-more',panel);menu?.setAttribute('aria-expanded','false');
  // Preserve actions and state, while the compact CSS positions toolbar right and voice before send.
- $('[aria-label="话头记录"]',panel)?.setAttribute('aria-expanded',String(!!ctx.historyOpen));
+ $('[aria-label="议事记录"]',panel)?.setAttribute('aria-expanded',String(!!ctx.historyOpen));
  const mapping={'ui-refresh':'complete-refresh','ui-history':'complete-history','ui-new':'complete-new','ui-voice':'complete-voice','ui-voice-stop':'complete-voice-stop','ui-voice-cancel':'complete-voice-cancel','ui-voice-append':'complete-voice-append','ui-voice-replace':'complete-voice-replace'};
  for(const [old,next] of Object.entries(mapping))$$(`[data-action="${old}"]`,panel).forEach(e=>e.dataset.action=next);
  if(ctx.historyOpen)renderConversationHistory();
@@ -81,14 +81,14 @@ renderSupplement=function(){optimizedSupplement();document.title=labels[page]+' 
  if(['chat','private','public'].includes(page)&&conversation().historyOpen)renderConversationHistory();
 };
 // Presentation groups only: never mutate the underlying task or acceptance state.
-const taskStatusNames=['待你补充','需核对','正在处理','已有结果','待点将','筹划中','议事中','办理中','待验收','受阻','已完成','失败','已取消','已归档'];
+const taskStatusNames=['待你补充','需核对','正在处理','已有结果','待确认承办','筹划中','议事中','办理中','待验收','受阻','已完成','失败','已取消','已归档'];
 const taskGroups=['全部','待我处理','进行中','已结束'];
-function taskBucket(){return state.task?listedMatterStatus(state):'待点将';}
+function taskBucket(){return state.task?listedMatterStatus(state):'待确认承办';}
 function taskInGroup(group,bucket=taskBucket()){
  if(!state.task)return false;
  if(group==='全部')return true;
  if(group==='已结束')return ['已完成','失败','已取消','已归档','成果已归档'].includes(bucket);
- if(group==='待我处理')return (['待点将','待验收'].includes(bucket)||!!matterAttentionReason(state))&&!state.pending&&state.operation?.stage!=='pending';
+ if(group==='待我处理')return (['待确认承办','待验收'].includes(bucket)||!!matterAttentionReason(state))&&!state.pending&&state.operation?.stage!=='pending';
  return !['已完成','失败','已取消','已归档','成果已归档'].includes(bucket);
 }
 function productionTaskStatus(){return listedMatterStatus(state);}
@@ -132,11 +132,11 @@ function listedMatters(){
  return [...(state.task?[{key:current,ctx:state,current:true}]:[]),...Object.entries(state.matterLibrary).filter(([key])=>key!==current).map(([key,ctx])=>({key,ctx,current:false}))];
 }
 // User-facing stages; execution/clarification/archive details are not extra lifecycle tabs.
-const visibleMatterStatuses=['待点将','进行中','待验收','已完成'];
+const visibleMatterStatuses=['待确认承办','进行中','待验收','已完成'];
 function listedMatterStatus(ctx){
  const t=ctx.task||{};
  if(t.cancelled)return '已取消';if(t.complete)return '已完成';
- if(!ctx.agent)return '待点将';
+ if(!ctx.agent)return '待确认承办';
  // An unresolved acceptance keeps its last business stage, never pretends completion.
  if(ctx.operation&&ctx.operation.stage!=='completed')return '待验收';
  if(ctx.pending||ctx.error||['待你补充','需核对','失败','受阻','正在处理','办理中'].includes(t.phase))return '进行中';
@@ -152,7 +152,7 @@ function matterAttentionReason(ctx){
  if(ctx.task?.phase==='失败')return '本次处理失败，请查看原因';
  return ctx.task?.phase==='受阻'?'办理受阻，请查看原因':'';
 }
-function listedMatterClass(ctx){return 'task-state-'+({'待点将':'open','进行中':'running','待验收':'reviewing','已完成':'done','已取消':'cancelled'}[listedMatterStatus(ctx)]||'unknown');}
+function listedMatterClass(ctx){return 'task-state-'+({'待确认承办':'open','进行中':'running','待验收':'reviewing','已完成':'done','已取消':'cancelled'}[listedMatterStatus(ctx)]||'unknown');}
 function openListedMatter(key){
  ensureMatterLibrary();
  if(state.task&&key===currentMatterKey()){go('detail');return;}
@@ -173,23 +173,23 @@ function applyTaskFilters(){
 }
 function simplifyHome(){
  $$('.workbench-create-action').forEach(e=>{e.dataset.prototypePage='create';});
- const aside=$('.overview-aside-card');if(aside)aside.innerHTML='<h3>需要你看一眼</h3><p>查看需要补充或核对的事项。</p>'+button('查看待处理列表','complete-go','data-page=tasks');
+ const aside=$('.overview-aside-card');if(aside)aside.innerHTML='<h3>待我处理</h3><p>查看需要补充或核对的事项。</p>'+button('查看待处理列表','complete-go','data-page=tasks');
  if(aside)scoped(aside,'data-v-d13db084');
  const map=$('.overview-map-link');if(map)map.dataset.prototypePage='map';
  const heading=$('.overview-list-heading h3');if(heading)heading.textContent='接着上次办';
- const title=$('.overview-start-copy h2,.overview-start-copy h3');if(title)title.textContent='说一句你想办成的事';
+ const title=$('.overview-start-copy h2,.overview-start-copy h3');if(title)title.textContent='你想办成什么事？';
  const next=$('.overview-quick-request button.primary');if(next)next.textContent='开始办事';
 
- const intro=$('.overview-start-copy>p');if(intro)intro.textContent='提需求 → 指定 Agent → 在议事中交互 → 验收完成。补充信息、查看成果和修改都不用离开议事。';
- const all=$('.overview-list-heading [data-prototype-page="tasks"]');if(all)all.textContent='悬赏榜';
+ const intro=$('.overview-start-copy>p');if(intro)intro.textContent='点击“开始办事”先保存需求，确认承办后再交给好汉。补充要求、查看成果和验收都在议事中完成。';
+ const all=$('.overview-list-heading [data-prototype-page="tasks"]');if(all)all.textContent='查看全部事项';
  const refresh=$$('.overview-list-heading button').find(b=>b.textContent==='刷新');if(refresh)refresh.dataset.action='complete-task-refresh';
  const tab=state.overviewTab||0;
- $$('.overview-tabs button').forEach((b,i)=>{b.textContent=['最近事项','需要我处理','案卷'][i];});
+ $$('.overview-tabs button').forEach((b,i)=>{b.textContent=['最近事项','待我处理','已归档'][i];});
  // Match the home projection: select the newest five, then reverse only needs-action.
- const rows=listedMatters().filter(({ctx})=>tab===0||tab===2&&ctx.task.archived||tab===1&&!ctx.task.archived&&!ctx.pending&&ctx.operation?.stage!=='pending'&&(['待点将','待验收'].includes(listedMatterStatus(ctx))||!!matterAttentionReason(ctx)))
+ const rows=listedMatters().filter(({ctx})=>tab===0||tab===2&&ctx.task.archived||tab===1&&!ctx.task.archived&&!ctx.pending&&ctx.operation?.stage!=='pending'&&(['待确认承办','待验收'].includes(listedMatterStatus(ctx))||!!matterAttentionReason(ctx)))
   .sort((a,b)=>(b.ctx.task.updatedAt||0)-(a.ctx.task.updatedAt||0)).slice(0,5);
  if(tab===1)rows.reverse();
- const section=$('.overview-section');if(section){section.innerHTML=rows.map(({key,ctx})=>`<article class="overview-item"><div class="overview-item-copy"><strong>${esc(ctx.task.title)}</strong><p>事项 · ${esc(ctx.agent?.name||'待安排')}</p><span class="overview-status">${esc(listedMatterStatus(ctx))}</span></div>${button('查看事项','complete-open-matter',`data-matter-key="${esc(key)}"`)}</article>`).join('')||`<p class="simplify-home-empty" role="status">${tab===1?'暂时没有需要你处理的事项。':tab===2?'暂无已归档案卷。':'还没有事项，从上方提出第一个需求。'}</p>`;scoped(section,'data-v-d13db084');}
+ const section=$('.overview-section');if(section){section.innerHTML=rows.map(({key,ctx})=>`<article class="overview-item"><div class="overview-item-copy"><strong>${esc(ctx.task.title)}</strong><p>事项 · ${esc(ctx.agent?.name||'待安排')}</p><span class="overview-status">${esc(listedMatterStatus(ctx))}</span></div>${button('查看事项','complete-open-matter',`data-matter-key="${esc(key)}"`)}</article>`).join('')||`<p class="simplify-home-empty" role="status">${tab===1?'暂时没有需要你处理的事项。':tab===2?'暂无已归档事项。':'还没有事项，从上方提出第一个需求。'}</p>`;scoped(section,'data-v-d13db084');}
 }
 function renderInteractiveList(){
  if(page==='home'){simplifyHome();return;}
@@ -259,7 +259,7 @@ function renderFileDetail(){
  const root=$('.baseline-page'),a=asset(state.fileId||'ref-brief');if(!root||!a)return;const meta=state.fileMeta[a.id]||{};
  const selected=meta.demoVersion||String(meta.versions?.length?meta.versions.length+1:1),versionAsset=asset(meta.versions?.find(v=>String(v.version)===selected)?.id)||a,versions=meta.demoHistory?(meta.demoHistoryLoaded?Array.from({length:102},(_,i)=>String(102-i)):Array.from({length:100},(_,i)=>String(102-i))):meta.versions?[...meta.versions.map(v=>String(v.version)).reverse(),'1']:['1'];
  root.classList.add('all-file-detail','personal-workspace','is-hall-treasure');
- root.innerHTML=`<div class="treasure-content"><div class="treasure-file-heading"><div><h2>${esc(a.name)}</h2><p>${state.saved.includes(a.id)?'成果':'资料'} · ${meta.recycled?'已回收':'仅自己可见'} · 离线示例</p></div>${button(state.fileManage?'返回预览':'更多管理','complete-file-manage')}</div><div class="file-preview-body" ${state.fileManage?'hidden':''}><div class="treasure-preview-tools treasure-version-tools"><label>版本 <select aria-label="文件版本" data-workspace-version>${versions.map(v=>`<option value="${v}" ${selected===v?'selected':''}>v${v} · ${esc(a.name)}</option>`).join('')}</select></label>${button('下载','download',`data-id="${versionAsset.id}"`)}</div>${meta.demoHistory&&!meta.demoHistoryLoaded?button('读取更早版本','complete-workspace-history-more'):''}<p class="treasure-note">本次使用固定的 v${selected}；已有事项中的资料引用不会随新版本替换。</p>${meta.demoPartial?'<p class="treasure-note" role="status">预览内容不完整；请下载原文件查看。（离线状态示例）</p>':''}${meta.demoDetailError?`<p class="treasure-note" role="status">上传已保存，但详情读取失败；请重读详情，不要重复提交。（离线状态示例） ${button('重读详情','complete-workspace-detail-retry')}</p>`:''}<section class="treasure-preview" aria-label="文件预览">${media(versionAsset)}</section><div class="treasure-actions">${!meta.recycled?button('用于新委托','complete-use-file','class="treasure-primary"'):''}${button('预览','preview',`data-id="${versionAsset.id}"`)}</div><details class="treasure-note"><summary>离线修复状态演示</summary><p>以下历史分页为布局示例，历史102版使用同一份示例内容；自行选择的新文件另存本地字节，不代表服务端写入。</p><div class="treasure-actions">${button('演示历史分页','complete-workspace-history-demo')}${button('演示部分预览','complete-workspace-partial-demo')}${button('演示保存后详情失败','complete-workspace-detail-demo')}${button('演示提交结果未知','complete-workspace-unknown-demo')}</div></details></div><section class="treasure-management ${state.fileManage?'is-open':''}" ${state.fileManage?'':'hidden'} aria-label="文件管理"><h3>文件管理</h3><p>旧版本及已有事项引用保留。本原型只修改示例文件，不上传到服务器。</p><div class="treasure-form"><label>上传新版本<input type="file" data-file-new-version aria-label="选择新版本文件"></label><small data-version-status role="status">${esc(meta.versionStatus||'尚未选择新文件；旧版本和事项引用保持不变。')}</small>${button('上传为新版本','complete-file-version-submit','disabled class="mmd-primary"')}<label><input type="checkbox" data-version-fail>演示保存失败（不写入）</label></div>${button('重命名','complete-rename')}${button(meta.recycled?'恢复':'移到回收站','complete-recycle')}</section></div>`;
+ root.innerHTML=`<div class="treasure-content"><div class="treasure-file-heading"><div><h2>${esc(a.name)}</h2><p>${state.saved.includes(a.id)?'成果':'资料'} · ${meta.recycled?'已回收':'资料由你管理'} · 离线示例</p></div>${button(state.fileManage?'返回预览':'更多管理','complete-file-manage')}</div><div class="file-preview-body" ${state.fileManage?'hidden':''}><div class="treasure-preview-tools treasure-version-tools"><label>版本 <select aria-label="文件版本" data-workspace-version>${versions.map(v=>`<option value="${v}" ${selected===v?'selected':''}>v${v} · ${esc(a.name)}</option>`).join('')}</select></label>${button('下载','download',`data-id="${versionAsset.id}"`)}</div>${meta.demoHistory&&!meta.demoHistoryLoaded?button('读取更早版本','complete-workspace-history-more'):''}<p class="treasure-note">当前查看版本 ${selected}；已有事项中的资料引用不会随新版本替换。</p>${meta.demoPartial?'<p class="treasure-note" role="status">预览内容不完整；请下载原文件查看。（离线状态示例）</p>':''}${meta.demoDetailError?`<p class="treasure-note" role="status">上传已保存，但详情读取失败；请重读详情，不要重复提交。（离线状态示例） ${button('重读详情','complete-workspace-detail-retry')}</p>`:''}<section class="treasure-preview" aria-label="文件预览">${media(versionAsset)}</section><div class="treasure-actions">${!meta.recycled?button('用此资料提需求','complete-use-file','class="treasure-primary"'):''}${button('预览','preview',`data-id="${versionAsset.id}"`)}</div><details class="treasure-note"><summary>离线修复状态演示</summary><p>以下历史分页为布局示例，历史102版使用同一份示例内容；自行选择的新文件另存本地字节，不代表服务端写入。</p><div class="treasure-actions">${button('演示历史分页','complete-workspace-history-demo')}${button('演示部分预览','complete-workspace-partial-demo')}${button('演示保存后详情失败','complete-workspace-detail-demo')}${button('演示提交结果未知','complete-workspace-unknown-demo')}</div></details></div><section class="treasure-management ${state.fileManage?'is-open':''}" ${state.fileManage?'':'hidden'} aria-label="文件管理"><h3>文件管理</h3><p>旧版本及已有事项引用保留。本原型只修改示例文件，不上传到服务器。</p><div class="treasure-form"><label>上传新版本<input type="file" data-file-new-version aria-label="选择新版本文件"></label><small data-version-status role="status">${esc(meta.versionStatus||'尚未选择新文件；旧版本和事项引用保持不变。')}</small>${button('上传为新版本','complete-file-version-submit','disabled class="mmd-primary"')}<label><input type="checkbox" data-version-fail>演示保存失败（不写入）</label></div>${button('重命名','complete-rename')}${button(meta.recycled?'恢复':'移到回收站','complete-recycle')}</section></div>`;
  scoped(root,'data-v-a1bd66a6');
 }
 function renderLibrary(){
@@ -277,11 +277,11 @@ function renderReader(){
 }
 function renderMessages(){
  const root=$('.baseline-page');if(!root)return;root.classList.add('all-messages');
- const rows=listedMatters().filter(({ctx})=>!ctx.task.complete&&!ctx.task.cancelled&&(['待点将','待验收'].includes(listedMatterStatus(ctx))||!!matterAttentionReason(ctx)));
- root.innerHTML=`<section class="hall-overview is-messages"><div class="overview-list-heading"><h3>需要我处理</h3>${button('刷新','complete-task-refresh')}</div><div class="overview-list">${rows.map(({key,ctx})=>`<article class="overview-item" data-message-matter="${esc(key)}"><div class="overview-item-copy"><strong>${esc(ctx.task.title)}</strong><p>事项 · ${esc(ctx.agent?.name||'待安排')}</p><span class="overview-status">${esc(listedMatterStatus(ctx))}</span>${matterAttentionReason(ctx)?`<p>${esc(matterAttentionReason(ctx))}</p>`:''}</div>${button(listedMatterStatus(ctx)==='待验收'?'查看待验收成果':!ctx.agent?'确认承办':'查看原因','complete-open-matter',`data-matter-key="${esc(key)}"`)}</article>`).join('')||'<div class="all-empty" role="status"><h3>暂时没有需要处理的事项</h3><p>需要补充或核对结果时，会集中出现在这里。</p></div>'}${state.draft.trim()?`<article class="overview-item" data-message-draft><div><strong>未提交的需求草稿</strong><p>${esc(state.draft)}</p></div>${button('继续填写','complete-go','data-page="create"')}</article>`:''}</div><p class="all-boundary-note">本页聚合本地示例事项和草稿，不模拟服务器推送。</p></section>`;scoped(root,'data-v-d13db084');
+ const rows=listedMatters().filter(({ctx})=>!ctx.task.complete&&!ctx.task.cancelled&&(['待确认承办','待验收'].includes(listedMatterStatus(ctx))||!!matterAttentionReason(ctx)));
+ root.innerHTML=`<section class="hall-overview is-messages"><div class="overview-list-heading"><h3>待我处理</h3>${button('刷新','complete-task-refresh')}</div><div class="overview-list">${rows.map(({key,ctx})=>`<article class="overview-item" data-message-matter="${esc(key)}"><div class="overview-item-copy"><strong>${esc(ctx.task.title)}</strong><p>事项 · ${esc(ctx.agent?.name||'待安排')}</p><span class="overview-status">${esc(listedMatterStatus(ctx))}</span>${matterAttentionReason(ctx)?`<p>${esc(matterAttentionReason(ctx))}</p>`:''}</div>${button(listedMatterStatus(ctx)==='待验收'?'查看待验收成果':!ctx.agent?'确认承办':'查看原因','complete-open-matter',`data-matter-key="${esc(key)}"`)}</article>`).join('')||'<div class="all-empty" role="status"><h3>暂时没有待我处理的事项</h3><p>需要补充或核对结果时，会集中出现在这里。</p></div>'}${state.draft.trim()?`<article class="overview-item" data-message-draft><div><strong>未提交的需求草稿</strong><p>${esc(state.draft)}</p></div>${button('继续填写','complete-go','data-page="create"')}</article>`:''}</div><p class="all-boundary-note">本页聚合本地示例事项和草稿，不模拟服务器推送。</p></section>`;scoped(root,'data-v-d13db084');
 }
 
-function historyTitle(ctx){return ctx.topicTitle||ctx.messages.find(m=>m.role==='USER'&&m.text?.trim())?.text.trim().slice(0,48)||ctx.chatDraft?.trim().slice(0,48)||'未题话头';}
+function historyTitle(ctx){return ctx.topicTitle||ctx.messages.find(m=>m.role==='USER'&&m.text?.trim())?.text.trim().slice(0,48)||ctx.chatDraft?.trim().slice(0,48)||'未命名议事';}
 function historyTime(value){if(!value||Number.isNaN(new Date(value).getTime()))return '时间未记';return new Intl.DateTimeFormat('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date(value));}
 function hasCurrentTopic(ctx){return !!(ctx.topicId||ctx.messages.length||ctx.chatDraft?.trim()||ctx.chatFiles?.length);}
 function historySnapshot(ctx){
@@ -297,8 +297,8 @@ function renderConversationHistory(){
  if(!ctx.historyOpen)return;
  const rows=historyRows(ctx),limit=ctx.historyPageLimit||100,locked=ctx.pending||!!ctx.historyDeletingId||!!$('.inline-voice-status',panel);
  const trash='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 10v7m4-7v7"/></svg>';
- let content=ctx.historyLoading?'<div class="history-state" role="status">正在翻检话头…</div>':ctx.topicHistoryError?`<div class="history-state is-error" role="alert">${esc(ctx.topicHistoryError)}</div>`:!rows.length?'<div class="history-state">此处暂无旧话头。</div>':`<ul class="history-list">${rows.slice(0,limit).map(h=>{const current=h.id===ctx.topicId,deleting=h.id===ctx.historyDeletingId;return `<li class="history-row">${button(`<strong>${esc(h.title||'未题话头')}</strong><small>${esc(historyTime(h.updateTime))}</small>`,current?'complete-select-current':'complete-select-history',`class="history-item${current?' selected':''}" data-history="${esc(h.id)}" ${current?'aria-current="page"':''} ${locked?'disabled':''}`)}${button(deleting?'<span role="status" aria-live="polite">删除中</span>':trash,current?'complete-delete-current':'complete-delete-history',`class="history-delete" data-history="${current?'current':esc(h.id)}" title="删除话头：${esc(h.title)}" aria-label="${deleting?'正在删除':'删除'}话头：${esc(h.title)}" ${locked||ctx.task?.cancelled||ctx.task?.complete?'disabled':''}`)}</li>`;}).join('')}</ul>${rows.length>limit?button('再取旧话头','complete-history-more',`class="history-load-more" ${locked?'disabled':''}`):''}`;
- $('.panel-toolbar',panel).insertAdjacentHTML('afterend',`<section id="prototype-topic-history" class="hall-conversation-history baseline-history" aria-label="话头记录">${content}</section>`);
+ let content=ctx.historyLoading?'<div class="history-state" role="status">正在加载议事记录…</div>':ctx.topicHistoryError?`<div class="history-state is-error" role="alert">${esc(ctx.topicHistoryError)}</div>`:!rows.length?'<div class="history-state">还没有议事记录。</div>':`<ul class="history-list">${rows.slice(0,limit).map(h=>{const current=h.id===ctx.topicId,deleting=h.id===ctx.historyDeletingId;return `<li class="history-row">${button(`<strong>${esc(h.title||'未命名议事')}</strong><small>${esc(historyTime(h.updateTime))}</small>`,current?'complete-select-current':'complete-select-history',`class="history-item${current?' selected':''}" data-history="${esc(h.id)}" ${current?'aria-current="page"':''} ${locked?'disabled':''}`)}${button(deleting?'<span role="status" aria-live="polite">删除中</span>':trash,current?'complete-delete-current':'complete-delete-history',`class="history-delete" data-history="${current?'current':esc(h.id)}" title="删除议事记录：${esc(h.title)}" aria-label="${deleting?'正在删除':'删除'}话头：${esc(h.title)}" ${locked||ctx.task?.cancelled||ctx.task?.complete?'disabled':''}`)}</li>`;}).join('')}</ul>${rows.length>limit?button('加载更多记录','complete-history-more',`class="history-load-more" ${locked?'disabled':''}`):''}`;
+ $('.panel-toolbar',panel).insertAdjacentHTML('afterend',`<section id="prototype-topic-history" class="hall-conversation-history baseline-history" aria-label="议事记录">${content}</section>`);
 }
 
 function openEntries(){dialog('全部入口',`<div class="mmd-more-menu">${prototypePages.map(([label,next])=>button(label,'complete-go',`data-page="${next}"`)).join('')}</div>`);}
@@ -366,10 +366,10 @@ document.addEventListener('click',event=>{
  if(action==='complete-history'){if($('.inline-voice-status')||ctx.historyDeletingId)return;ctx.historyOpen=!ctx.historyOpen;renderConversationHistory();persist();return;}
  if(action==='complete-history-more'){ctx.historyPageLimit=(ctx.historyPageLimit||100)+100;renderConversationHistory();persist();return;}
  if(action==='complete-select-current'){return;}
- if(action==='complete-new'){if(ctx.pending||(ctx.task?.complete||ctx.task?.cancelled))return;dialog('另起话头','<p>当前消息、草稿和资料会留在话头记录中。另起话头不创建事项，也不重复点将。</p>',button('取消','close-dialog')+button('另起话头','complete-new-confirm'));}
+ if(action==='complete-new'){if(ctx.pending||(ctx.task?.complete||ctx.task?.cancelled))return;dialog('新对话','<p>当前消息、草稿和资料会留在议事记录中。新对话不创建事项，也不重复点将。</p>',button('取消','close-dialog')+button('新对话','complete-new-confirm'));}
  if(action==='complete-new-confirm'){if(ctx.pending)return;ctx.histories=ctx.histories||[];if(hasCurrentTopic(ctx)){const snapshot=historySnapshot(ctx);ctx.histories=ctx.histories.filter(h=>h.id!==snapshot.id);ctx.histories.push(snapshot);}ctx.topicId='demo-topic-'+(++serial);ctx.topicTitle='';ctx.topicUpdatedAt=new Date().toISOString();ctx.messages=[];ctx.chatDraft='';ctx.chatFiles=[];ctx.quote=null;ctx.pending=false;ctx.historyOpen=false;t.closest('dialog').close();render();}
  if(action==='complete-select-history'){if(ctx.pending||ctx.historyDeletingId||$('.inline-voice-status'))return;const h=ctx.histories?.find(h=>h.id===t.dataset.history);if(!h)return;const active=hasCurrentTopic(ctx)?historySnapshot(ctx):null;ctx.histories=ctx.histories.filter(x=>x.id!==h.id&&x.id!==active?.id);if(active)ctx.histories.push(active);Object.assign(ctx,{topicId:h.id,topicTitle:h.title,topicUpdatedAt:h.updateTime||null,messages:structuredClone(h.messages),outputs:structuredClone(h.outputs),delivery:[...h.delivery],chatDraft:h.chatDraft,chatFiles:[...h.chatFiles],quote:h.quote,historyOpen:true});render();}
- if(action==='complete-delete-current'||action==='complete-delete-history'){if(ctx.task?.complete||ctx.task?.cancelled||ctx.pending||ctx.historyDeletingId)return;const h=action==='complete-delete-current'?{title:historyTitle(ctx)}:ctx.histories?.find(h=>h.id===t.dataset.history);if(!h)return;dialog('删除话头',`<p>确认删除“${esc(h.title||'未题话头')}”吗？删除后无法恢复。</p><small>仅删除本原型的话头，不删除事项、冻结成果或真实记录。</small>`,button('取消','close-dialog')+button('删除','complete-delete-confirm',`data-history="${action==='complete-delete-current'?'current':esc(t.dataset.history)}"`));}
+ if(action==='complete-delete-current'||action==='complete-delete-history'){if(ctx.task?.complete||ctx.task?.cancelled||ctx.pending||ctx.historyDeletingId)return;const h=action==='complete-delete-current'?{title:historyTitle(ctx)}:ctx.histories?.find(h=>h.id===t.dataset.history);if(!h)return;dialog('删除议事记录',`<p>确认删除“${esc(h.title||'未命名议事')}”吗？删除后无法恢复。</p><small>仅删除本原型的话头，不删除事项、冻结成果或真实记录。</small>`,button('取消','close-dialog')+button('删除','complete-delete-confirm',`data-history="${action==='complete-delete-current'?'current':esc(t.dataset.history)}"`));}
  if(action==='complete-delete-confirm'){if(ctx.task?.complete||ctx.task?.cancelled||ctx.pending||ctx.historyDeletingId)return;if(t.dataset.history==='current'){ctx.messages=[];ctx.chatDraft='';ctx.chatFiles=[];ctx.quote=null;ctx.topicId=null;ctx.topicTitle='';ctx.topicUpdatedAt=null;}else ctx.histories=(ctx.histories||[]).filter(h=>h.id!==t.dataset.history);t.closest('dialog').close();render();}
  if(action==='complete-voice'){showVoiceStatus('recording');mapVoiceActions();}
  if(action==='complete-voice-stop'){showVoiceStatus('review');mapVoiceActions();}
@@ -487,7 +487,7 @@ function unifiedTask(){return !!state.task?.unified;}
 function awaitingAssignment(){return !!state.task&&!state.agent&&!state.task.complete&&!state.task.cancelled;}
 function ensureUnifiedTask(){
  saveMatterContext();
- state.task={id:'demo-matter-'+(++serial),unified:true,title:state.title.trim()||state.draft.trim().slice(0,36)||'资料处理',description:state.draft,files:[...state.draftFiles],phase:'待点将',notStarted:true,complete:false,executions:[],turns:0};
+ state.task={id:'demo-matter-'+(++serial),unified:true,title:state.title.trim()||state.draft.trim().slice(0,36)||'资料处理',description:state.draft,files:[...state.draftFiles],phase:'待确认承办',notStarted:true,complete:false,executions:[],turns:0};
  state.matterSelectionKey=state.task.id;
  Object.assign(state,{agent:null,selectedAgent:null,recommendation:null,messages:[],outputs:[],delivery:[],final:[],pending:false,error:null,operation:null,cancellation:{writes:0,status:'ready'},chatDraft:'',chatFiles:[],quote:null,histories:[],historyOpen:false,topicId:null,topicTitle:'',topicUpdatedAt:null,historyPageLimit:100,baselineScenario:'ready'});
  taskRecommendation();
@@ -507,7 +507,7 @@ function taskRecommendation(){
 function assignmentSection(){
  const recommendation=taskRecommendation(),candidate=state.task.assignmentCandidate;
  const name=demoAgents.find(([id])=>id===recommendation.id)?.[1]||'待选择';
- return `<section class="matter-assignment" aria-label="确认承办"><h4>建议承办 · ${esc(name)}</h4><p class="matter-fee-note">${esc(recommendation.reason)}</p><details class="recommendation-alternative"><summary><span>另选承办 Agent</span><small>当前：${esc(demoAgents.find(([id])=>id===candidate)?.[1]||name)}</small></summary><p>选择仅保存候选；确认后才安排承办，不会新建事项。</p><div class="recommendation-options" role="group" aria-label="承办候选">${demoAgents.map(([id,n])=>button(`<span class="recommendation-avatar">${n.slice(0,1)}</span><span><strong>${n}</strong><small>${id==='wuyong'?'梳理需求与方案':id==='0'?'统筹事项与协作':'整理资料与内容'}${id===recommendation.id?' · 系统推荐':''}</small></span><span class="recommendation-check" aria-hidden="true">${candidate===id?'✓':''}</span>`,'complete-recommend-agent',`data-agent="${id}" aria-pressed="${candidate===id}"`)).join('')}</div></details></section>`;
+ return `<section class="matter-assignment" aria-label="确认承办"><h4>建议承办 · ${esc(name)}</h4><p class="matter-fee-note">${esc(recommendation.reason)}</p><details class="recommendation-alternative"><summary><span>另选承办好汉</span><small>当前：${esc(demoAgents.find(([id])=>id===candidate)?.[1]||name)}</small></summary><p>选择仅保存候选；确认后才安排承办，不会新建事项。</p><div class="recommendation-options" role="group" aria-label="承办候选">${demoAgents.map(([id,n])=>button(`<span class="recommendation-avatar">${n.slice(0,1)}</span><span><strong>${n}</strong><small>${id==='wuyong'?'梳理需求与方案':id==='0'?'统筹事项与协作':'整理资料与内容'}${id===recommendation.id?' · 系统推荐':''}</small></span><span class="recommendation-check" aria-hidden="true">${candidate===id?'✓':''}</span>`,'complete-recommend-agent',`data-agent="${id}" aria-pressed="${candidate===id}"`)).join('')}</div></details></section>`;
 }
 function confirmMatterAgent(){
  if(!awaitingAssignment()||state.pending)return;
@@ -516,7 +516,7 @@ function confirmMatterAgent(){
  const selected={id:candidate[0],name:candidate[1]};
  if(!unifiedTask()){state.selectedAgent=selected;assign();return;}
  const task=state.task;state.agent=selected;state.selectedAgent={...selected};task.notStarted=false;task.phase='进行中';
- if(!persist()){state.agent=null;state.selectedAgent=null;task.notStarted=true;task.phase='待点将';feedback('未能保存承办确认，请检查浏览器存储后重试；尚未开始处理。');return;}
+ if(!persist()){state.agent=null;state.selectedAgent=null;task.notStarted=true;task.phase='待确认承办';feedback('未能保存承办确认，请检查浏览器存储后重试；尚未开始处理。');return;}
  go('chat');sendUnifiedMessage(task.description,[...task.files],null);
 }
 function syncProductionNavigation(){
@@ -615,7 +615,7 @@ function renderDraftPage(){
  const root=document.createElement('section');root.className='hall-draft-editor hall-draft-editor--draft';root.setAttribute('aria-label','提出需求');old.replaceWith(root);
  const panel=root.closest('.floating-panel'),overlay=panel?.parentElement;if(panel){panel.className='floating-panel panel-draft layout-center-modal authenticated-draft-panel';const heading=$('.panel-title',panel);if(heading)heading.remove();}if(overlay){overlay.className='panel-overlay theme-workbench authenticated-draft-overlay';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-label','提出需求');}
  const chips=state.draftFiles.length?state.draftFiles.map(id=>`<span>${esc(asset(id)?.name)} · v1（示例）</span>`).join(''):'<span class="muted">资料可稍后在议事中补充</span>';
- root.innerHTML=`<p class="draft-intro">说说你想办成的事，结果和后续修改都在同一段议事里。</p><form class="task-create-form"><label><span>需求描述</span><textarea name="taskDescription" placeholder="例如：把活动说明整理成一页简报，列出结论和待办。">${esc(state.draft)}</textarea></label><section class="draft-strip draft-materials"><div><h4>参考资料 <small>可选</small></h4><div class="draft-chips">${chips}</div></div>${button('添加资料','materials','data-context="draft"')}</section><details class="unified-optional"><summary>事项名称（可选）</summary><label><input name="taskTitle" aria-label="事项名称" placeholder="不填写时，按需求自动命名" value="${esc(state.title)}"></label></details><p class="draft-hint">点击开始办事即保存为待点将，在事项详情确认或另选系统推荐的承办 Agent；信息不足会在议事中询问。</p><div class="draft-actions"><span data-draft-save-status class="muted">${demoDraftSaved()?'草稿已保存。':'离线原型，不调用模型、不扣费。'}</span>${button('保存草稿','complete-draft-save')}${button('开始办事','complete-draft-next','class="primary"')}</div></form>`;
+ root.innerHTML=`<p class="draft-intro">说说你想办成的事，结果和后续修改都在同一段议事里。</p><form class="task-create-form"><label><span>需求描述</span><textarea name="taskDescription" placeholder="例如：把活动说明整理成一页简报，列出结论和待办。">${esc(state.draft)}</textarea></label><section class="draft-strip draft-materials"><div><h4>参考资料 <small>可选</small></h4><div class="draft-chips">${chips}</div></div>${button('添加资料','materials','data-context="draft"')}</section><details class="unified-optional"><summary>事项名称（可选）</summary><label><input name="taskTitle" aria-label="事项名称" placeholder="不填写时，按需求自动命名" value="${esc(state.title)}"></label></details><p class="draft-hint">点击开始办事即保存为待确认承办，在事项详情确认或另选系统推荐的承办好汉；信息不足会在议事中询问。</p><div class="draft-actions"><span data-draft-save-status class="muted">${demoDraftSaved()?'草稿已保存。':'离线原型，不调用模型、不扣费。'}</span>${button('保存草稿','complete-draft-save')}${button('开始办事','complete-draft-next','class="primary"')}</div></form>`;
  $('.task-create-form',root).addEventListener('submit',e=>{e.preventDefault();startUnifiedConversation();});
 }
 function handleDraftAction(action,t){
@@ -642,7 +642,7 @@ function renderMatterOverview(card,unified){
  const v=matterDetailPresentation(),t=state.task||{};card.classList.add('matter-state-card','mmd');card.dataset.matterState=v.label;
  if(awaitingAssignment()){
   card.dataset.agentRecommendation='';
-  card.innerHTML=`<div class="matter-advice-heading"><span>事项进展</span><strong class="matter-state-badge tone-warning">待点将</strong></div><h3>${esc(t.title||taskTitle())}</h3><p class="matter-request">${esc(t.description||taskTitle())}</p><dl><div><dt>承办 Agent</dt><dd>待确认</dd></div><div><dt>资料 / 结果</dt><dd>${t.files?.length||0} 份资料 · ${state.outputs.length} 份结果</dd></div></dl><p class="matter-state-guidance">事项已保存，尚未安排承办、未开始处理。返回或刷新后可继续确认。</p>${assignmentSection()}<div class="matter-primary-actions">${button('确认承办，进入议事','complete-agent-confirm','class="matter-primary-action mmd-primary"')}</div><p class="draft-hint">离线原型：仅保存到当前浏览器会话，不调用真实 Agent、不扣费。</p>`;
+  card.innerHTML=`<div class="matter-advice-heading"><span>事项进展</span><strong class="matter-state-badge tone-warning">待确认承办</strong></div><h3>${esc(t.title||taskTitle())}</h3><p class="matter-request">${esc(t.description||taskTitle())}</p><dl><div><dt>承办好汉</dt><dd>待确认</dd></div><div><dt>资料 / 结果</dt><dd>${t.files?.length||0} 份资料 · ${state.outputs.length} 份结果</dd></div></dl><p class="matter-state-guidance">事项已保存，尚未安排承办、未开始处理。返回或刷新后可继续确认。</p>${assignmentSection()}<div class="matter-primary-actions">${button('确认承办，进入议事','complete-agent-confirm','class="matter-primary-action mmd-primary"')}</div><p class="draft-hint">离线原型：仅保存到当前浏览器会话，不调用真实 Agent、不扣费。</p>`;
   return;
  }
  delete card.dataset.agentRecommendation;
@@ -686,7 +686,7 @@ function refreshAllPageSurfaces(){
   const mine=$('.hall-mine-page');if(mine){mine.querySelectorAll('.baseline-extra').forEach(e=>e.remove());const grid=$('.mine-grid',mine);if(grid){const entries=[['agents','好汉名册','查看好汉本领与在线状态','account-circle-outline'],['library','典籍阁','阅读典籍、案卷与个人进度','notebook'],['messages','消息','查看需要你处理的事项','bell-outline'],['map','厅中实景','进入梁山场景与地图','map-marker-outline'],['account','个人中心','返回首页后进入个人中心','account-circle-outline']];grid.innerHTML=entries.map(([to,title,desc,icon])=>`<button type="button" data-action="complete-go" data-page="${to}" ${to==='account'?'disabled aria-disabled="true"':''}><i class="var-icon var-icon--set var-icon-${icon}" aria-hidden="true"></i><span><strong>${title}</strong><small>${desc}</small></span></button>`).join('');}scoped(mine,'data-v-2ccfdada');mine.insertAdjacentHTML('beforeend',`<footer class="all-mine-links">${button('使用帮助','complete-go','data-page="help"')}${button('全部页面索引','complete-index')}</footer>`);}
  }
  if(page==='help'&&root){
-  const steps=[['从办事页开始','描述你想办成的事，按需添加资料。首页不用预先选择好汉。'],['由系统推荐承办','点击开始办事，在事项详情查看推荐承办 Agent，再确认或另选。'],['在同一议事里继续','需要澄清时直接补充，结果在原话头展示，不满意可继续修改。'],['查看成果、确认验收','查看本批成果，满意后点击“查看并验收”并明确确认，事项才完成。需要修改直接在原议事说明；“可以、不错”不会自动验收。返回不会丢失进展和资料。']];const n=Math.min(state.helpStep||0,steps.length-1);
+  const steps=[['从办事页开始','描述你想办成的事，按需添加资料。首页不用预先选择好汉。'],['由系统推荐承办','点击开始办事，在事项详情查看推荐承办好汉，再确认或另选。'],['在同一议事里继续','需要澄清时直接补充，结果在原话头展示，不满意可继续修改。'],['查看成果、确认验收','查看本批成果，满意后点击“查看并验收”并明确确认，事项才完成。需要修改直接在原议事说明；“可以、不错”不会自动验收。返回不会丢失进展和资料。']];const n=Math.min(state.helpStep||0,steps.length-1);
   root.classList.add('all-help');root.innerHTML=`<section class="onboarding-dialog all-help-dialog"><div class="dialog-heading"><div><p class="eyebrow">聚义厅 · 办事引导</p><h1 id="hall-onboarding-title">${steps[n][0]}</h1></div></div><p class="intro">${steps[n][1]}</p><div class="all-guide-track" aria-label="引导进度">${steps.map((_,i)=>`<span class="${i<=n?'active':''}"></span>`).join('')}</div><p class="step-progress">第 ${n+1} 步，共 ${steps.length} 步</p><p class="all-boundary-note">步骤按本次连续议事提案更新；所有操作均为离线示例。</p><div class="dialog-actions">${button('稍后','complete-page-back',`data-page="${state.returnPages?.help||'home'}"`)}${n?button('上一步','complete-help-step',`data-step="${n-1}"`):''}${n<steps.length-1?button('下一步','complete-help-step',`data-step="${n+1}" class="complete-button"`):button('开始体验','complete-go','data-page="home" class="complete-button"')}</div></section>`;
  }
  if(page==='account'&&root){root.classList.add('all-account');root.innerHTML=`<section class="all-account-card"><span class="all-persona-avatar" aria-hidden="true">我</span><h2>个人中心</h2><p>这是聚义厅外的账户模块入口。</p><p role="status">生产源码支持从首页进入个人中心；面板打开或语音交互锁定时暂不可进入。真实设置页面尚待核验。</p><div class="all-account-options">${['账户信息','授权管理','隐私设置'].map(x=>`<button disabled>${x}<small>原型暂未展示</small></button>`).join('')}</div><p class="all-boundary-note">此处仅说明入口边界，不代表生产账户功能不可用；不模拟未经核验的设置，也不读取或修改凭据。</p>${button('返回我的','complete-go','data-page="mine"')}</section>`;}

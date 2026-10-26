@@ -31,7 +31,7 @@ function syncCurrentComposer(panel) {
   let actions = $('.toolbar-actions',toolbar);
   if (!actions) { actions = document.createElement('div'); actions.className='toolbar-actions'; toolbar.append(actions); }
   const locked = ['waiting','streaming','recording'].includes(state.baselineScenario);
-  actions.innerHTML = [['重取回话','ui-refresh','refresh'],['话头记录','ui-history','history'],['另起话头','ui-new','plus']].map(([label,action,icon])=>`<button type="button" class="icon-button" data-action="${action}" title="${label}" aria-label="${label}" ${locked?'disabled':''}>${uiIcon(icon)}</button>`).join('');
+  actions.innerHTML = [['刷新议事记录','ui-refresh','refresh'],['议事记录','ui-history','history'],['新对话','ui-new','plus']].map(([label,action,icon])=>`<button type="button" class="icon-button" data-action="${action}" title="${label}" aria-label="${label}" ${locked?'disabled':''}>${uiIcon(icon)}</button>`).join('');
   const body = $('.composer-body',panel), input = $('.composer-input-area',panel), actionRow=$('.composer-actions',panel);
   input.append(actionRow);
   $$('.composer-inline-voice',panel).forEach(node=>node.remove());
@@ -40,7 +40,7 @@ function syncCurrentComposer(panel) {
   body.classList.add('has-supported-voice');
   for (const [selector,key] of [['.chat-panel','chat'],['.hall-chat-composer','composer'],['.panel-toolbar','chat'],['.composer-input-area','composer'],['.composer-actions','composer'],['.composer-inline-voice','composer']]) $$(selector,panel).forEach(node=>scoped(node,'data-v-baseline-'+key));
   if (locked) { $('.composer-textarea',panel).disabled=true;sendButton.disabled=true;$('.voice-start',panel).disabled=true; }
-  if (['waiting','streaming'].includes(state.baselineScenario)) $('.hall-messages',panel).insertAdjacentHTML('beforeend',`<div class="hall-message SYSTEM is-pending" role="status">${state.baselineScenario==='streaming'?'宋江 · 回话未尽：正在整理活动方案…':'聚义厅 · 正在整理回报…'}</div>`);
+  if (['waiting','streaming'].includes(state.baselineScenario)) $('.hall-messages',panel).insertAdjacentHTML('beforeend',`<div class="hall-message SYSTEM is-pending" role="status">${state.baselineScenario==='streaming'?'宋江 · 正在回复…：正在整理活动方案…':'聚义厅 · 正在整理回报…'}</div>`);
   if(state.baselineScenario==='error') toolbar.insertAdjacentHTML('afterend',`<div class="conversation-load-error" role="alert">话头读取失败（演示） ${button('重试','ui-refresh')}</div>`);
   if(state.baselineScenario==='recording') showVoiceStatus('recording');
   if(state.baselineScenario==='voice-review') showVoiceStatus('review');
@@ -76,7 +76,7 @@ function renderSupplement() {
     const root=supplementalRoot();if(!root)return;
     root.innerHTML=`<header><h2>${labels[page]}</h2><p class="mmd-muted">离线示例 · 不执行真实业务</p></header>`;
     if(page==='library')root.innerHTML+=`<div class="baseline-tabs">${button('典籍阅读','ui-library-reader')}${button('案卷检索','ui-library-search')}</div><div data-library-content>${card('水浒传','示例书架 · 阅读进度、目录、书签和手札入口','reader')}${card('自然观察活动案卷','示例个人案卷，不包含真实账号资料','detail')}</div>`;
-    if(page==='messages')root.innerHTML+=`<h3>需要处理</h3>${state.baselineScenario==='empty'?'<p role="status">暂时没有需要处理的事项。</p>':card('自然观察活动资料','正式事项 · 待验收 · 查看进展','detail')+card('未交办草稿','尚未交办 · 继续填写','create')}`;
+    if(page==='messages')root.innerHTML+=`<h3>待我处理</h3>${state.baselineScenario==='empty'?'<p role="status">暂时没有待我处理的事项。</p>':card('自然观察活动资料','正式事项 · 待验收 · 查看进展','detail')+card('未交办草稿','尚未交办 · 继续填写','create')}`;
     if(page==='catalog')root.innerHTML+=`<p>2 位待请豪杰 · 1 位已入伙</p>${card('公孙胜 · 入云龙','图像与资料协作 · 当前仅展示接入/山寨安顿入口','agents')}<div class="baseline-card"><h3>林冲 · 豹子头</h3><p>本地接入 / 山寨安顿</p>${button('查看接入说明','ui-hosting')}</div><p class="mmd-muted">原型不绑定 Agent，不生成接应密钥，不付款。</p>`;
     if(page==='map')root.innerHTML+=`<div class="baseline-map"><img src="shared/static/liangshan-hall-physical-bg-v1-ZLsp6lX5.png" alt="当前项目梁山厅堂静态美术；非实时地图"><div class="baseline-map-actions">${button('点将册','ui-go','data-page="agents"')}${button('悬赏榜','ui-go','data-page="tasks"')}${button('厅前公议','ui-go','data-page="public"')}${button('典籍阁','ui-go','data-page="library"')}</div></div><p class="mmd-muted">地图仅冻结现有美术与功能入口；不运行 melonJS，不模拟实时坐标、物理遮挡或联网 Agent。</p>`;
     if(page==='file'){const a=asset(state.fileId||'ref-brief');root.innerHTML+=`<h3>${esc(a?.name)}</h3><div class="baseline-tabs">${button('预览','preview',`data-id="${a?.id}"`)}${button('下载','download',`data-id="${a?.id}"`)}${button('返回资料','ui-go','data-page="workspace"')}</div><p>版本 1 · 当前示例版本</p><div class="baseline-card">${button('重命名','ui-rename')}${button(state.fileRecycled?'恢复':'移到回收站','ui-recycle')}</div>`;}
@@ -105,10 +105,10 @@ document.addEventListener('click',event=>{
   if(action==='ui-voice-cancel'){$('.baseline-voice-status')?.remove();return;}
   if(action==='ui-voice-append'||action==='ui-voice-replace'){const text=$('.baseline-voice-status textarea').value;const ctx=conversation();ctx.chatDraft=action==='ui-voice-replace'?text:[ctx.chatDraft,text].filter(Boolean).join('\n');$('.baseline-voice-status')?.remove();renderChat();return;}
   if(action==='ui-refresh'){state.baselineScenario='ready';render();feedback('已重取离线话头示例；未发送网络请求。');return;}
-  if(action==='ui-history'){const existing=$('.baseline-history');if(existing){existing.remove();return;}$('.panel-toolbar').insertAdjacentHTML('afterend',`<section class="baseline-history hall-conversation-history mmd"><h3>话头记录</h3>${button('自然观察活动资料','ui-select-history')}${button('删除话头','ui-delete-history')}</section>`);return;}
+  if(action==='ui-history'){const existing=$('.baseline-history');if(existing){existing.remove();return;}$('.panel-toolbar').insertAdjacentHTML('afterend',`<section class="baseline-history hall-conversation-history mmd"><h3>议事记录</h3>${button('自然观察活动资料','ui-select-history')}${button('删除议事记录','ui-delete-history')}</section>`);return;}
   if(action==='ui-new'){conversation().messages=[];conversation().chatDraft='';render();feedback('已另起演示话头；原型会话不影响真实记录。');return;}
-  if(action==='ui-select-history'){conversation().messages=[{role:'AGENT',text:'已打开离线话头记录。'}];render();return;}
-  if(action==='ui-delete-history'){dialog('删除话头','<p>删除的只是本原型演示记录，不调用真实删除接口。</p>',button('取消','close-dialog')+button('删除','ui-delete-confirm'));return;}
+  if(action==='ui-select-history'){conversation().messages=[{role:'AGENT',text:'已打开离线议事记录。'}];render();return;}
+  if(action==='ui-delete-history'){dialog('删除议事记录','<p>删除的只是本原型演示记录，不调用真实删除接口。</p>',button('取消','close-dialog')+button('删除','ui-delete-confirm'));return;}
   if(action==='ui-delete-confirm'){target.closest('dialog').close();$('.baseline-history')?.remove();feedback('演示话头已删除');return;}
   if(action==='ui-library-search'){$('[data-library-content]').innerHTML=`<form class="baseline-search"><input placeholder="查项目案卷、议事旧录、往日回报" aria-label="案卷检索关键词"><select aria-label="案卷来源"><option>全部案卷</option><option>项目案卷</option><option>议事旧录</option><option>长记</option></select>${button('查卷','ui-search')}</form><div data-search-results></div>`;return;}
   if(action==='ui-library-reader'){render();return;}

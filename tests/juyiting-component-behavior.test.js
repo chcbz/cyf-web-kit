@@ -1287,18 +1287,18 @@ describe('JuyiHall component behavior', () => {
     expect(catalog.text()).to.include('吴用')
     expect(catalog.text()).to.include('请上梁山')
     expect(catalog.text()).to.include('林冲')
-    expect(catalog.text()).to.include('除名下山')
+    expect(catalog.text()).to.include('移除好汉')
 
     await catalog.find('.catalog-action.primary').trigger('click')
     expect(catalog.text()).to.include('择个接应去处')
-    expect(catalog.text()).to.include('山寨安顿')
-    expect(catalog.text()).to.include('自家接应')
+    expect(catalog.text()).to.include('平台托管')
+    expect(catalog.text()).to.include('自行部署')
 
     await catalog.find('.catalog-action.primary').trigger('click')
     expect(catalog.emitted('bind-persona')).to.equal(undefined)
     expect(catalog.find('.hosting-rent-stub').exists()).to.equal(true)
     await catalog.find('.catalog-action.primary').trigger('click')
-    await catalog.findAll('button').find(button => button.text() === '自家接应').trigger('click')
+    await catalog.findAll('button').find(button => button.text() === '自行部署').trigger('click')
     expect(catalog.emitted('bind-persona')[0]).to.deep.equal([personas[1], 'local'])
     catalog.unmount()
   })
@@ -1638,8 +1638,8 @@ describe('JuyiHall component behavior', () => {
       embeddedHall: true, tasks: [task], selectedTask: task, recommendedAgents: agents, operableAgents: agents,
       abilityText: () => '', canAssign: (task, agent) => Boolean(task && agent), formatTime: v => v,
       portraitName: a => a.name, portraitStyle: () => ({}), taskAgentMatchScore: () => 90,
-      taskStateClass: () => '', taskStatusText: () => '待点将', taskStatusCount: () => 1,
-      taskStatusFilters: [{ label: '待点将', value: 'PENDING_ASSIGNMENT' }, { label: '历史', value: 'HISTORY' }, { label: '待核对', value: 'UNKNOWN' }]
+      taskStateClass: () => '', taskStatusText: () => '待确认承办', taskStatusCount: () => 1,
+      taskStatusFilters: [{ label: '待确认承办', value: 'PENDING_ASSIGNMENT' }, { label: '历史', value: 'HISTORY' }, { label: '待核对', value: 'UNKNOWN' }]
     } })
     try {
       expect(wrapper.findAll('.task-status-tabs button')).to.have.length(2)
@@ -1964,7 +1964,7 @@ describe('JuyiHall component behavior', () => {
 
     await wrapper.setProps({ tasks: [{ ...selectedTask, status: 'archived' }], selectedTask: { ...selectedTask, status: 'archived' } })
     expect(wrapper.find('.matter-archive-action').exists()).to.equal(false)
-    expect(wrapper.find('.matter-archive-note').text()).to.include('办事 → 案卷')
+    expect(wrapper.find('.matter-archive-note').text()).to.include('办事 → 已归档')
   })
 
   it('keeps discussion disabled for unassigned bounty tasks with a readable hint', async () => {
@@ -2039,16 +2039,16 @@ describe('JuyiHall component behavior', () => {
         expect(button.get('svg').attributes('stroke-width')).to.equal('1.8')
         expect(button.attributes('title')).to.equal(button.attributes('aria-label'))
       }
-      await toolbar.get('[aria-label="重取回话"]').trigger('click')
+      await toolbar.get('[aria-label="刷新议事记录"]').trigger('click')
       expect(wrapper.emitted('load-messages')).to.have.length(1)
-      await toolbar.get('[aria-label="另起话头"]').trigger('click')
+      await toolbar.get('[aria-label="新对话"]').trigger('click')
       expect(wrapper.emitted('new-conversation')).to.have.length(1)
-      await toolbar.get('[aria-label="话头记录"]').trigger('click')
-      expect(toolbar.get('[aria-label="话头记录"]').attributes('aria-expanded')).to.equal('true')
-      expect(wrapper.get('.hall-chat-composer').find('[aria-label="重取回话"]').exists()).to.equal(false)
+      await toolbar.get('[aria-label="议事记录"]').trigger('click')
+      expect(toolbar.get('[aria-label="议事记录"]').attributes('aria-expanded')).to.equal('true')
+      expect(wrapper.get('.hall-chat-composer').find('[aria-label="刷新议事记录"]').exists()).to.equal(false)
       await wrapper.setProps({ conversationBusy: true })
-      expect(toolbar.get('[aria-label="重取回话"]').attributes('disabled')).to.equal('')
-      expect(toolbar.get('[aria-label="另起话头"]').attributes('disabled')).to.equal('')
+      expect(toolbar.get('[aria-label="刷新议事记录"]').attributes('disabled')).to.equal('')
+      expect(toolbar.get('[aria-label="新对话"]').attributes('disabled')).to.equal('')
     } finally { wrapper.unmount() }
   })
 
@@ -2150,7 +2150,7 @@ describe('JuyiHall component behavior', () => {
       await wrapper.get('[aria-label="添加资料"]').trigger('click')
       await Vue.nextTick()
       const picker = wrapper.get('.material-reference-picker')
-      const workspaceButton = picker.findAll('button').find(button => button.text() === '去百宝箱添加')
+      const workspaceButton = picker.findAll('button').find(button => button.text() === '去添加资料')
       expect(workspaceButton, 'workspace action is reachable in the picker').not.to.equal(undefined)
       await workspaceButton.trigger('click')
       expect(wrapper.emitted('open-workspace')).to.deep.equal([[]])
@@ -2174,7 +2174,7 @@ describe('JuyiHall component behavior', () => {
     for (let node = picker; node; node = node.parentElement) {
       expect(node.style.display).not.to.equal('none')
     }
-    expect(wrapper.text()).to.include('请先发送一条消息建立话头，再从百宝箱引用资料。')
+    expect(wrapper.text()).to.include('请先发送一条消息建立议事，再从资料中选择引用。')
   })
 
   it('integrates mentions and the more menu into the ChatPanel composer', async () => {
@@ -2366,7 +2366,7 @@ describe('JuyiHall component behavior', () => {
       }
     })
 
-    expect(wrapper.text()).to.include('正在续上传令')
+    expect(wrapper.text()).to.include('正在恢复连接')
   })
 
   it('emits SongJiang management commands from CommandPanel', async () => {
@@ -2436,7 +2436,7 @@ describe('JuyiHall component behavior', () => {
     await wrapper.find('form').trigger('submit')
     await wrapper.find('.result-card button').trigger('click')
 
-    expect(wrapper.text()).to.include('藏书查卷')
+    expect(wrapper.text()).to.include('案卷搜索')
     expect(wrapper.emitted('search-library')).to.have.length(1)
     expect(wrapper.emitted('cite-library')[0][0].content).to.equal('Deployment notes')
   })
@@ -2816,7 +2816,7 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
     resolveAccountDisplayName, createHydratedIdentityScope, hasHydratedIdentity,
     isEconomyPreviewBuildEnabled: () => Boolean(economyCapability), isEconomyPreviewCapability: capability => Boolean(capability && capability.principalScopeFingerprint === economyCapability?.principalScopeFingerprint), loadEconomyPreviewCapability: async () => economyCapability,
     projectHallTask: taskPresentation.projectHallTask,
-    roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [{ value: 'open', label: '待点将', className: 'task-state-open' }],
+    roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [{ value: 'open', label: '待确认承办', className: 'task-state-open' }],
     useHallData: ({ selectedAgent, selectedTask }) => { counters.owners.data += 1; selectedAgent.value = { agentId: 'agent-o04', name: 'sentinel-agent' }; selectedTask.value = counters.initialSelectedTask || { id: 'task-o04', title: 'sentinel-task' }; return hallData },
     useHallHomeMode: () => ({ homeMode: Vue.ref('map'), isOverviewHome: Vue.ref(false), setHomeMode: noop }),
     useHallExperienceMode: () => ({ experienceMode: mode, isMobileCoarse: Vue.ref(true), orientationHint: scalar, orientationRequestPending: Vue.ref(false), requestLandscape: asyncNoop, requestPortrait: asyncNoop }),
@@ -3263,7 +3263,7 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
       await Vue.nextTick()
       expect(state.panelFrames).to.deep.equal(['tasks'])
       expect(wrapper.find('.bounty-panel').exists()).to.equal(true)
-      expect(wrapper.find('.bounty-panel').text()).to.include('待点将')
+      expect(wrapper.find('.bounty-panel').text()).to.include('待确认承办')
       expect(state.panelDepth).to.equal(2)
       expect(state.openPanel('agents')).to.equal(true)
       await Vue.nextTick()

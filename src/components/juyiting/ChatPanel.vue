@@ -10,8 +10,8 @@
         <button
           class="icon-button"
           type="button"
-          title="重取回话"
-          aria-label="重取回话"
+          title="刷新议事记录"
+          aria-label="刷新议事记录"
           :disabled="conversationBusy || voice?.voiceInteractionLocked"
           @click="$emit('load-messages')"
         >
@@ -21,8 +21,8 @@
           ref="historyButtonRef"
           class="icon-button"
           type="button"
-          title="话头记录"
-          aria-label="话头记录"
+          title="议事记录"
+          aria-label="议事记录"
           :aria-expanded="historyOpen ? 'true' : 'false'"
           :disabled="Boolean(conversationHistoryDeletingId) || voice?.voiceInteractionLocked"
           @click="toggleHistory"
@@ -33,8 +33,8 @@
           v-if="!serverTaskCompleted"
           class="icon-button primary"
           type="button"
-          title="另起话头"
-          aria-label="另起话头"
+          title="新对话"
+          aria-label="新对话"
           :disabled="conversationBusy || voice?.voiceInteractionLocked"
           @click="$emit('new-conversation')"
         >
@@ -80,7 +80,7 @@
       >
         <div class="message-head">
           <strong>{{ senderText(message) }}</strong>
-          <span v-if="message.streaming" class="message-state">回话未尽</span>
+          <span v-if="message.streaming" class="message-state">正在回复…</span>
         </div>
         <div
           v-if="message.turnProjections?.length"
@@ -229,12 +229,12 @@
             <p v-if="selectedMaterialDirectory.writeNotice.value" role="status">{{ selectedMaterialDirectory.writeNotice.value }}</p>
             <p v-if="materialError" class="material-reference-error" role="alert">{{ materialError }}</p>
             <details class="material-use-settings">
-              <summary>本任务资料与使用范围<span v-if="activeMaterialLinks.length"> · {{ activeMaterialLinks.length }} 份</span></summary>
+              <summary>本事项资料与使用范围<span v-if="activeMaterialLinks.length"> · {{ activeMaterialLinks.length }} 份</span></summary>
               <label v-if="typedEnabled" class="typed-material-scope">资料范围
                 <select v-model="draftMaterialScope" aria-label="资料范围">
-                  <option value="TASK_DEFAULT">本任务资料</option>
+                  <option value="TASK_DEFAULT">本事项资料</option>
                   <option value="EXPLICIT">仅本条消息</option>
-                  <option value="NONE">不带资料</option>
+                  <option value="NONE">本条消息不附带资料</option>
                 </select>
               </label>
               <p v-if="!activeMaterialLinks.length" class="material-reference-state">暂未关联资料，可在下方选择或上传。</p>
@@ -263,23 +263,23 @@
           <div class="material-reference-heading">
             <div>
               <strong>引用资料</strong>
-              <small>引用固定到当前话头及所选版本；不会把资料内容或假摘要写入消息。</small>
+              <small>引用当前选择的资料版本，关联到当前议事。</small>
             </div>
             <button type="button" aria-label="收起引用资料" @click="materialPickerOpen = false">
               <var-icon name="close" />
             </button>
           </div>
           <p v-if="!hasMaterialScope" class="material-reference-notice">
-            请先发送一条消息建立话头，再从百宝箱引用资料。
+            请先发送一条消息建立议事，再从资料中选择引用。
           </p>
           <template v-else>
             <WorkspaceWriteRecovery :pending="selectedMaterialDirectory.pendingWrites.value" @retry="selectedMaterialDirectory.retryWrite" />
             <p v-if="selectedMaterialDirectory.writeNotice.value" role="status">{{ selectedMaterialDirectory.writeNotice.value }}</p>
             <p v-if="materialError" class="material-reference-error" role="alert">{{ materialError }}</p>
-            <div v-if="materialLoading" class="material-reference-state">正在查找百宝箱资料…</div>
+            <div v-if="materialLoading" class="material-reference-state">正在查找资料…</div>
             <div v-if="!workspace.items.value?.length" class="material-reference-state">
-              百宝箱暂无可引用资料。
-              <button type="button" @click="$emit('open-workspace')">去百宝箱添加</button>
+              暂无可引用资料。
+              <button type="button" @click="$emit('open-workspace')">去添加资料</button>
             </div>
             <ul v-else class="material-reference-list">
               <li v-for="file in workspace.items.value" :key="file.fileId">
@@ -303,7 +303,7 @@
               </li>
             </ul>
             <div v-if="activeMaterialLinks.length" class="active-material-references">
-              <span>本话头已引用：</span>
+              <span>本次议事已引用：</span>
               <button
                 v-for="link in activeMaterialLinks"
                 :key="link.relationId"
@@ -359,7 +359,7 @@ const props = defineProps({
   discussionVariant: { type: String, default: 'public' },
   matterReadOnly: { type: Boolean, default: false },
   draft: { type: String, default: '' },
-  emptyText: { type: String, default: '厅中暂无话头，可先传一句。' },
+  emptyText: { type: String, default: '还没有议事记录，可以先提问。' },
   eventStreamRecovering: { type: Boolean, default: false },
   isAwaitingReply: { type: Boolean, default: false },
   isStreaming: { type: Boolean, default: false },
@@ -568,15 +568,15 @@ const resolvedSubtitle = computed(() => {
   if (props.discussionVariant === 'private') return props.targetText
   if (props.selectedTask) return taskText.value
   if (props.selectedAgent) return props.targetText
-  return props.scopeHint === 'public' ? '未 @ 时由宋江分拨' : props.scopeHint
+  return props.scopeHint === 'public' ? '未指定好汉时，由宋江安排回复。' : props.scopeHint
 })
 const displayStatus = computed(() => {
   if (serverTaskCompleted.value) return ({ completed: '事项已完成', cancelled: '事项已取消', failed: '事项未完成', archived: '事项已归档' })[props.selectedTask?.status] || props.connectionStatus || '事项只读'
-  if (props.eventStreamRecovering) return '正在续上传令'
-  return props.connectionStatus || (props.isAwaitingReply ? pendingLabel.value : '传令畅通')
+  if (props.eventStreamRecovering) return '正在恢复连接'
+  return props.connectionStatus || (props.isAwaitingReply ? pendingLabel.value : '连接正常')
 })
 const pendingLabel = computed(() => {
-  if (props.pendingAgentName) return `${props.pendingAgentName} 正在回话...`
+  if (props.pendingAgentName) return `${props.pendingAgentName} 正在回复…`
   return '正在整理回报...'
 })
 const renderMarkdown = (content = '') => DOMPurify.sanitize(marked(String(content || '')))

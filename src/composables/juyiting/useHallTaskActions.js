@@ -430,7 +430,7 @@ export const useHallTaskActions = ({
       tasks.value = tasks.value.map(item => item.id === task.id ? archived : item)
       selectedTask.value = archived
       playSuccess()
-      showToast('榜文已收入案卷')
+      showToast('事项已归档')
       return true
     } catch (error) {
       log.warn('archive bounty task failed:', error)

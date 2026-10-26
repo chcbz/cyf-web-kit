@@ -1,19 +1,19 @@
 <template>
   <section class="hall-draft-editor" :class="`hall-draft-editor--${activeView}`" :aria-label="windowTitle">
     <p v-if="sourceReadState === 'loading'" role="status">正在核对原事项…</p>
-    <p v-else-if="sourceReadState === 'error'" class="draft-error" role="alert">原事项未能读取，不会另建事项代替，未用其他草稿代替。请重试。</p>
+    <p v-else-if="sourceReadState === 'error'" class="draft-error" role="alert">暂时无法加载原事项，请重试。</p>
 
     <template v-else-if="activeView === 'draft'">
-      <div v-if="!initialRef || drafts.summaries.value.length" class="draft-recovery"><button v-if="!initialRef" type="button" :disabled="busy" @click="loadRecoverable">恢复草稿</button><button v-for="item in drafts.summaries.value" :key="item.draftId" type="button" :disabled="busy" @click="openDraft(item.draftId)">{{ item.title || '未命名草稿' }} · r{{ item.revision }}</button><button v-if="drafts.nextCursor.value" type="button" :disabled="busy" @click="drafts.loadMore">读取更多</button></div><p class="draft-intro">先说明想得到什么。资料可选；开始办事后再确认承办Agent。</p>
+      <div v-if="!initialRef || drafts.summaries.value.length" class="draft-recovery"><button v-if="!initialRef" type="button" :disabled="busy" @click="loadRecoverable">恢复草稿</button><button v-for="item in drafts.summaries.value" :key="item.draftId" type="button" :disabled="busy" @click="openDraft(item.draftId)">{{ item.title || '未命名草稿' }} · r{{ item.revision }}</button><button v-if="drafts.nextCursor.value" type="button" :disabled="busy" @click="drafts.loadMore">读取更多</button></div><p class="draft-intro">先说明想得到什么。资料可选；开始办事后再确认承办好汉。</p>
       <form @submit.prevent="persist">
         <label v-if="!isTaskCreate"><span>事项名称</span><input v-model="form.title" :maxlength="isTaskCreate ? 200 : null" :placeholder="isTaskCreate ? '给这件事起个名字，最多200字' : '给这件事起个名字'" /></label>
         <label><span>需求描述</span><textarea v-model="form.instruction" :maxlength="isTaskCreate ? 20000 : null" :placeholder="isTaskCreate ? '描述目标与要求；最多20000字' : '例如：把会议纪要整理成一页简报，列出结论和待办。'"></textarea></label>
-        <p v-if="!isTaskCreate" class="draft-hint">交办名目最多200字，具体交代最多20000字；超出时保留原文，不会截短保存。</p><p v-if="drafts.draft.value?.state === 'EDITING'" class="draft-hint">草稿 {{ drafts.draft.value.draftId }} 已保存为 r{{ drafts.draft.value.revision }}；尚未交办。</p>
+        <p v-if="!isTaskCreate" class="draft-hint">事项名称最多200字，需求描述最多20000字；超出时保留原文，不会截短保存。</p><p v-if="drafts.draft.value?.state === 'EDITING'" class="draft-hint">草稿 {{ drafts.draft.value.draftId }} 已保存为 r{{ drafts.draft.value.revision }}；尚未交办。</p>
 
         <template v-if="isTaskCreate">
-          <p>此入口不收取悬赏金额，也不启动执行；开始办事会保存为待点将事项，再由你确认承办Agent。</p>
+          <p>保存需求不会启动办理；确认承办后，再将需求交给好汉。</p>
           <p v-if="formalValidationError" class="draft-error" role="alert">{{ formalValidationError }}</p>
-          <section v-if="hasUnsupportedFormalFields" class="draft-note" aria-label="原有内容保留"><p>原稿包含此入口不支持的选人或格式，已原样保留，尚不能确认提交。</p><p v-if="form.targetAgentId">原受托好汉：{{ form.targetAgentId }}</p><p v-if="form.outputMime">原期望格式：{{ form.outputMime }}</p><button type="button" :disabled="busy" @click="removeUnsupportedFormalFields">明确移除原选人和格式</button></section>
+          <section v-if="hasUnsupportedFormalFields" class="draft-note" aria-label="原有内容保留"><p>原稿包含此入口不支持的选人或格式，已原样保留，尚不能确认提交。</p><p v-if="form.targetAgentId">原受托好汉：{{ form.targetAgentId }}</p><p v-if="form.outputMime">原期望格式：{{ form.outputMime }}</p><button type="button" :disabled="busy" @click="removeUnsupportedFormalFields">移除原承办人和格式设置</button></section>
           <p v-if="hasUnsupportedFormalSource" class="draft-error" role="alert">原稿关联了资料来源或议事会话，此处不能改变该关联。请回原正式入口处理。</p>
         </template>
         <div class="draft-material-section">
@@ -108,7 +108,7 @@ const editableSession = computed(() => !displayedRef.value || Boolean(revisionSo
 const needsSave = computed(() => editableSession.value && !isCurrentDraftSaved.value && Boolean(revisionSource.value || form.title || form.instruction || form.targetAgentId || form.outputMime || form.inputs.length || drafts.draft.value))
 const hasUnsupportedFormalFields = computed(() => Boolean(form.targetAgentId || form.outputMime))
 const hasUnsupportedFormalSource = computed(() => Boolean(drafts.draft.value?.sourceSummary?.sourceRef || drafts.draft.value?.sourceSummary?.conversationId))
-const formalValidationError = computed(() => !isTaskCreate.value ? '' : form.title.length > 200 || form.instruction.length > 20000 ? '任务名目最多200字、需求描述最多20000字；原文仍保留，请修改后再开始办事。' : '')
+const formalValidationError = computed(() => !isTaskCreate.value ? '' : form.title.length > 200 || form.instruction.length > 20000 ? '事项名称最多200字、需求描述最多20000字；原文仍保留，请修改后再开始办事。' : '')
 const defaultOutputMime = computed(() => {
   if (drafts.capabilityState.value !== 'ready') return ''
   return drafts.allowedMimeTypes.value.includes('text/plain') ? 'text/plain' : drafts.allowedMimeTypes.value[0] || ''

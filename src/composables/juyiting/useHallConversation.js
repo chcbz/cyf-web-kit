@@ -286,11 +286,11 @@ export const useHallConversation = ({
 
   const chatConnectionStatus = computed(() => {
     if (isSubmitting.value) return '正在提交，等待受理'
-    if (eventStreamRecovering.value) return '正在续上传令'
+    if (eventStreamRecovering.value) return '正在恢复连接'
     if (deliberationStatus.value) return deliberationStatus.value
-    if (isStreaming.value) return '传令中'
-    if (isAwaitingReply.value) return pendingAgentName.value ? `${pendingAgentName.value} 回话中` : '等待回报'
-    return '传令畅通'
+    if (isStreaming.value) return '正在回复…'
+    if (isAwaitingReply.value) return pendingAgentName.value ? `${pendingAgentName.value} 正在回复…` : '等待回复…'
+    return '连接正常'
   })
 
   const senderText = (message) => {
@@ -1709,7 +1709,7 @@ export const useHallConversation = ({
         sender: 'SYSTEM',
         content: exactId && stillBusy
           ? '传令连接中断，正在原话头核对回话；请勿重复发送。'
-          : exactId ? '传令连接中断，但原请求已核对为终态。' : '传令连接中断，结果未知；请从话头记录核对，勿直接重发。',
+          : exactId ? '传令连接中断，但原请求已核对为终态。' : '传令连接中断，结果未知；请从议事记录核对，勿直接重发。',
         timestamp: Date.now(),
         streaming: false
       })

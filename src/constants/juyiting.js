@@ -18,7 +18,7 @@ export const statusFilters = [
 
 // Four user-visible stages; history and reconciliation are secondary filters.
 export const taskStatusFilters = [
-  { label: '待点将', value: 'PENDING_ASSIGNMENT', className: 'task-state-open' },
+  { label: '待确认承办', value: 'PENDING_ASSIGNMENT', className: 'task-state-open' },
   { label: '进行中', value: 'IN_PROGRESS', className: 'task-state-running' },
   { label: '待验收', value: 'PENDING_ACCEPTANCE', className: 'task-state-reviewing' },
   { label: '已完成', value: 'COMPLETED', className: 'task-state-done' },

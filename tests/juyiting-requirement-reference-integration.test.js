@@ -112,7 +112,7 @@ describe('shared neutral picker + v2 atomic controller integration and read-only
     for (let index = 0; index < files.length; index++) {
       await f.wrapper.findAll('.quick-material-files button')[index].trigger('click'); await flush()
       assert.equal(f.wrapper.find('.quick-material-fields select').exists(), false)
-      assert.match(f.wrapper.get('.quick-material-version').text(), /已固定 v3/)
+      assert.match(f.wrapper.get('.quick-material-version').text(), /使用版本 3/)
       assert.equal(f.wrapper.find('.quick-material-preview-toggle').exists(), false)
       await flush()
       if (index === 0) assert.equal(f.wrapper.get('.quick-material-preview img').attributes('src'), 'blob:exact-image/png')

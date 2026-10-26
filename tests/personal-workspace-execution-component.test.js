@@ -194,7 +194,7 @@ describe('personal workspace execution receipt presentation', () => {
       assert.equal(wrapper.text().includes('办事笺'), false)
       workspace.detail.value.versions.push({ version: '2', originalFilename: '新版本.txt', contentMimeType: 'text/plain' })
       workspace.detail.value.file.latestVersion = 2
-      await wrapper.findAll('button').find(button => button.text() === '用于新委托').trigger('click')
+      await wrapper.findAll('button').find(button => button.text() === '用此资料提需求').trigger('click')
       assert.deepEqual(wrapper.emitted('start-draft')[0][0], {
         originRef: 'juyiting:file', sourceRef: { sourceType: 'FILE', sourceId: 'file_1', version: '1' },
         inputs: [{ fileId: 'file_1', version: '1' }]
@@ -233,7 +233,7 @@ describe('personal workspace execution receipt presentation', () => {
       await click('移入回收站'); assert.match(wrapper.text(), /任务引用 1 条；议事引用 0 条；现存输入授权 0 条/)
       assert.equal(calls.length, 1)
       await click('取消'); assert.equal(calls.length, 1)
-      await click('移入回收站'); await click('确认回收'); assert.equal(calls.length, 2)
+      await click('移入回收站'); await click('移入回收站'); assert.equal(calls.length, 2)
       assert.equal(wrapper.find('.treasure-content').attributes('data-view'), 'list')
     } finally { wrapper.unmount() }
   })

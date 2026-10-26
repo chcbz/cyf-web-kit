@@ -341,7 +341,7 @@ export const useHallData = ({
       if (derive) deriveRosterProjections()
     } catch (error) {
       log.warn('load roster agents failed:', error)
-      rosterError.value = error?.message || '点将册暂无法读取'
+      rosterError.value = error?.message || '好汉名册暂无法读取'
       allRosterAgents.value = []
       if (derive) deriveRosterProjections()
     } finally {

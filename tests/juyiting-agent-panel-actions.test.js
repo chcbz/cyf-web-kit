@@ -66,7 +66,7 @@ describe('AgentPanel D4 profile and mobile layers', () => {
     const wrapper = mount(AgentPanel, { props: { ...props, selectedAgent: target, profileCapabilities: ready() } })
     try {
       expect(wrapper.get('[aria-label="技能"]').text()).to.include('图片修改').and.include('1.0.0').and.include('已核验安装 1 项').and.include('运行就绪')
-      expect(wrapper.get('[aria-label="本领"]').text()).to.include('未录本领').and.not.include('旧本领')
+      expect(wrapper.get('[aria-label="本领"]').text()).to.include('暂无能力介绍').and.not.include('旧本领')
       expect(target.abilities).to.deep.equal(['旧本领'])
     } finally { wrapper.unmount() }
   })
@@ -131,7 +131,7 @@ describe('AgentPanel visual alignment follow-up', () => {
     try {
       expect(calls.length).to.be.greaterThan(0)
       expect(calls.every(args => args.length === 1)).to.equal(true)
-      expect(wrapper.get('[aria-label="本领"]').text()).to.include('真实本领').and.include('不等同于已安装技能')
+      expect(wrapper.get('[aria-label="本领"]').text()).to.include('真实本领').and.include('可用技能请查看上方技能列表')
       expect(wrapper.get('.profile-refresh small').text()).to.match(/^最近读取 \d{2}:\d{2}$/)
       expect(wrapper.text()).not.to.include('正在厅中候令')
       await wrapper.setProps({ selectedAgent: { ...target, errorMessage: '实际错误', currentTaskTitle: '实际任务' } })

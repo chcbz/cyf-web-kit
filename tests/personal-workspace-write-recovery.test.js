@@ -17,8 +17,8 @@ describe('workspace write recovery presentation', () => {
     const wrapper = mount(component, { props: { pending: [{ target: 'original', label: '重命名', state: 'UNKNOWN' }] } })
     try {
       assert.match(wrapper.text(), /提交结果尚未确认/)
-      assert.match(wrapper.text(), /刷新或关闭页面后无法在此继续重试/)
-      assert.equal(wrapper.get('button').text(), '重试原操作')
+      assert.match(wrapper.text(), /刷新后将无法在此继续恢复/)
+      assert.equal(wrapper.get('button').text(), '继续原操作')
       await wrapper.get('button').trigger('click')
       assert.deepEqual(wrapper.emitted('retry'), [['original']])
       await wrapper.setProps({ pending: [{ target: 'original', label: '重命名', state: 'SENDING' }] })

@@ -33,7 +33,7 @@ describe('Bounty task toolbar', () => {
       expect(toolbar.text()).not.to.include('提出需求')
       expect(toolbar.find('.task-draft-actions').exists()).to.equal(false)
       expect(wrapper.find('.task-create-form').exists()).to.equal(false)
-      expect(toolbar.get('input').attributes('aria-label')).to.equal('查榜号')
+      expect(toolbar.get('input').attributes('aria-label')).to.equal('搜索事项名称或编号')
       expect(toolbar.get('select').attributes('aria-label')).to.equal('筛选所需本领')
       await toolbar.get('input').setValue(' 434 ')
       expect(wrapper.emitted('update:taskKeyword').at(-1)).to.deep.equal(['434'])

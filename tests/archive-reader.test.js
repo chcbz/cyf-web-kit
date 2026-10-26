@@ -2838,7 +2838,7 @@ describe('W04 explicit reading citation continuity', () => {
     try {
       await waitFor(() => wrapper.readerState.chapter.value?.blockId === preface.blockId)
       const reader = wrapper.readerState
-      const note = wrapper.get('textarea[aria-label="当前段落私人手札"]')
+      const note = wrapper.get('textarea[aria-label="当前段落私人阅读笔记"]')
       await note.setValue('私密手札，不得自动分享')
       await wrapper.findAll('.reader-paragraph')[1].trigger('click')
       const location = { ...reader.currentLocation.value }

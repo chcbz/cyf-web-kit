@@ -11,8 +11,8 @@
           <input
             :value="taskKeyword"
             type="search"
-            aria-label="查榜号"
-            placeholder="查榜号"
+            aria-label="搜索事项名称或编号"
+            placeholder="搜索事项名称或编号"
             @input="$emit('update:taskKeyword', $event.target.value.trim())"
             @keyup.enter="$emit('load-tasks')"
           />
@@ -21,25 +21,25 @@
             aria-label="筛选所需本领"
             @change="$emit('update:taskAbilityFilter', $event.target.value); $emit('load-tasks')"
           >
-            <option value="">不拘本领</option>
+            <option value="">全部能力</option>
             <option v-for="ability in taskAbilityOptions" :key="ability" :value="ability">{{ ability }}</option>
           </select>
         </div>
         <button class="task-refresh" type="button" aria-label="刷新事项" title="刷新事项" @click="$emit('load-tasks')">
           <BountyActionIcon name="refresh" />
-          <span class="toolbar-label">重查</span>
+          <span class="toolbar-label">刷新</span>
         </button>
       </div>
 
       <section v-if="requirementCreateState && requirementCreateState.status !== 'IDLE'" class="requirement-create-recovery" role="status">
-        <strong>原张榜操作待核对</strong>
+        <strong>需求保存结果待确认</strong>
         <template v-if="requirementCreateState.intent">
-          <p>原榜文：{{ requirementCreateState.intent.body.title }}</p>
+          <p>原事项：{{ requirementCreateState.intent.body.title }}</p>
           <p>原需求：{{ requirementCreateState.intent.body.description || '未填写' }}</p>
           <p>精确资料：{{ requirementCreateInputSummary }}</p>
           <p>当前编辑稿不会替换原需求；核对不会再次创建或启动 Agent。</p>
-          <button type="button" :disabled="requirementCreateBusy" @click="$emit('check-requirement-create')">核对原张榜</button>
-          <button v-if="!requirementCreateState.intent.receipt" type="button" :disabled="requirementCreateBusy" @click="$emit('resume-requirement-create')">确认继续原张榜</button>
+          <button type="button" :disabled="requirementCreateBusy" @click="$emit('check-requirement-create')">查询保存结果</button>
+          <button v-if="!requirementCreateState.intent.receipt" type="button" :disabled="requirementCreateBusy" @click="$emit('resume-requirement-create')">继续原保存操作</button>
         </template>
         <p v-if="requirementCreateState.error">{{ requirementCreateState.error }}</p>
       </section>
@@ -79,11 +79,11 @@
           :aria-pressed="secondaryStatusActive"
           :aria-expanded="secondaryStatusActive"
           @click="openSecondaryStatus"
-        >异常/历史</button>
+        >其他状态</button>
       </div>
 
       <div v-if="secondaryStatusActive" class="task-secondary-filters" aria-label="异常与历史分类">
-        <span>异常/历史</span>
+        <span>其他状态</span>
         <button
           v-for="item in secondaryStatusFilters"
           :key="item.value"
@@ -114,10 +114,10 @@
             <p v-if="isFundedTask(task)" class="funding-summary">已托管：{{ formatMoney(task.funding.remainingMicro || task.funding.grossBountyAmountMicro) }}</p>
             <div class="ability-tags">
               <span v-for="ability in task.requiredAbilities || []" :key="ability">{{ ability }}</span>
-              <span v-if="!(task.requiredAbilities || []).length">不拘本领</span>
+              <span v-if="!(task.requiredAbilities || []).length">未指定能力要求</span>
             </div>
           </article>
-          <div v-if="!loading && !errorMessage && !tasks.length" class="empty-list">{{ taskKeyword || taskAbilityFilter || (taskStatusFilter && taskStatusFilter !== 'all') ? '没有符合当前筛选条件的事项，请调整筛选后重查。' : '还没有事项，先提出一个需求吧。' }}</div>
+          <div v-if="!loading && !errorMessage && !tasks.length" class="empty-list">{{ taskKeyword || taskAbilityFilter || (taskStatusFilter && taskStatusFilter !== 'all') ? '没有符合当前筛选条件的事项，请调整筛选后刷新。' : '还没有事项，先提出一个需求吧。' }}</div>
         </div>
       </div>
 
@@ -167,7 +167,7 @@
                   <p class="matter-request">{{ detailTask.description }}</p>
                   <dl>
                     <div><dt>{{ hasTaskAction(detailTask, 'ASSIGN') ? '承办候选' : '承办好汉' }}</dt><dd>{{ matterAgent ? agentDisplayName(matterAgent) : (detailTask.assignedAgentName || (taskAssigneeIds(detailTask).length ? '承办信息待核对' : '尚未确认')) }}</dd></div>
-                    <div v-if="matterAgent"><dt>所属用户 / 运行</dt><dd>{{ assigneeProviderText(matterAgent) }} · {{ assigneeAvailabilityText(matterAgent) }}</dd></div>
+                    <div v-if="matterAgent"><dt>所属用户 / 当前状态</dt><dd>{{ assigneeProviderText(matterAgent) }} · {{ assigneeAvailabilityText(matterAgent) }}</dd></div>
                     <div><dt>资料 / 成果</dt><dd>{{ matterResourceSummary?.taskId === String(detailTask.id) ? `${matterResourceSummary.materials} 份资料 · ${matterResultCount ?? matterResourceSummary.outputs} 份${matterResultCount == null ? '成果引用' : '成果'}` : '见下方资料与成果' }}</dd></div>
                   </dl>
                 </template>
@@ -203,14 +203,14 @@
                 <template v-if="embeddedHall">
                   <template v-if="hasTaskAction(detailTask, 'ASSIGN')">
                     <p v-if="matterAgent?.recommendationReason" class="matter-fee-note">推荐参考：{{ matterAgent.recommendationReason }}</p>
-                    <p class="matter-fee-note">确认后将任务内容和所列资料发送给该Agent开始办理；资料由该Agent运行环境及所使用的模型服务处理。离线或忙碌可委派，提交成功不代表模型已运行。</p>
+                    <p class="matter-fee-note">确认后，将需求和所选资料交给这位好汉；其运行环境及模型服务会处理这些内容。好汉离线或忙碌时，提交成功不代表已经开始办理。</p>
                     <button
                       type="button"
                       class="matter-agent-toggle"
                       :aria-expanded="showMatterCandidates"
                       :disabled="pointAndStartBusy || Boolean(pointAndStartForDetail)"
                       @click="showMatterCandidates = !showMatterCandidates"
-                    >另选承办Agent</button>
+                    >更换承办好汉</button>
                     <div v-if="showMatterCandidates" class="matter-candidates" aria-label="承办候选">
                       <button
                         v-for="agent in matterCandidates"
@@ -220,7 +220,7 @@
                         :disabled="pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, agent)"
                         @click="matterCandidateId = agent.agentId"
                       ><span>{{ agentDisplayName(agent) }}</span><small>{{ assigneeProviderText(agent) }} · {{ assigneeAvailabilityText(agent) }}</small><small v-if="agent.recommendationReason">{{ agent.recommendationReason }}</small></button>
-                      <p v-if="!matterCandidates.length && !candidatesLoading && !candidatesError" role="status">暂无可承办候选。</p>
+                      <p v-if="!matterCandidates.length && !candidatesLoading && !candidatesError" role="status">暂无可承办的好汉。</p>
                       <button
                         v-if="candidatesNextAfterAgentId"
                         type="button"
@@ -271,7 +271,7 @@
                     class="matter-archive-action"
                     @click="$emit('archive-task', detailTask)"
                   >收入案卷</button>
-                  <p v-else-if="detailTask.status === 'archived'" class="matter-archive-note">已收入案卷，可在“办事 → 案卷”中查看。</p>
+                  <p v-else-if="detailTask.status === 'archived'" class="matter-archive-note">已归档，可在“办事 → 已归档”中查看。</p>
                 </template>
               </section>
               <p v-if="taskPresentation(detailTask).readOnly && !isTerminalMatter(detailTask)" role="status">{{ taskPresentation(detailTask).reason }}；暂仅可查看，刷新核对后再操作。</p>
@@ -312,7 +312,7 @@
                 class="ordinary-cancellation"
                 aria-label="普通事项取消"
               >
-                <p>仅取消无资金事实、未实际开始的普通事项；已点将未开工也可申请，最终以服务端核验为准。历史指派与成果保留。</p>
+                <p>仅支持取消尚未开工、且不涉及资金的事项；最终以系统核验为准。取消后保留历史指派记录与成果。</p>
                 <button
                   type="button"
                   class="ordinary-cancel-action"
@@ -361,7 +361,7 @@
 
               <div v-if="!embeddedHall" class="ability-tags">
                 <span v-for="ability in detailTask.requiredAbilities || []" :key="ability">{{ ability }}</span>
-                <span v-if="!(detailTask.requiredAbilities || []).length">不拘本领</span>
+                <span v-if="!(detailTask.requiredAbilities || []).length">未指定能力要求</span>
               </div>
 
               <div v-if="!embeddedHall && canActOnTask(detailTask)" class="task-operation-grid">
@@ -777,7 +777,7 @@ const formalTaskExecutionScope = computed(() => {
     targetAgentId: '',
     conversationConfirmed: false,
     formalExecutionAuthorized: false,
-    authorizationReason: '当前榜文的正式议事与必需工作项尚未核对；请先进入本榜文议事并明确选择已指派好汉。'
+    authorizationReason: '当前榜文的正式议事与必需工作项尚未核对；请先进入本事项议事并明确选择已指派好汉。'
   }
 })
 const fundedRecoveryAbilities = computed(() => {

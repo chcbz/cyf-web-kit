@@ -145,7 +145,7 @@ describe('five fixes cancellation thin confirmation layer', () => {
       expect(calls).to.deep.equal(['POST', 'GET', 'GET'])
     } finally { wrapper?.unmount(); actions.dispose() }
   })
-  for (const [status, label] of [['failed', '失败'], ['blocked', '进行中'], ['cancelled', '已取消']]) it(`distinguishes ${status} in the actual detail advice DOM`, async () => {
+  for (const [status, label] of [['failed', '办理未完成'], ['blocked', '进行中'], ['cancelled', '已取消']]) it(`distinguishes ${status} in the actual detail advice DOM`, async () => {
     const wrapper = await openPanel(panelTask({ status }))
     try { expect(wrapper.get('.matter-advice-heading').text()).to.include(label) } finally { wrapper.unmount() }
   })

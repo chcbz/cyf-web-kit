@@ -6,8 +6,8 @@ const clone = value => JSON.parse(JSON.stringify(value))
 const unwrap = result => result
 const initial = () => ({ status: 'IDLE', intent: null, error: null })
 const storageError = state => state === 'CORRUPT'
-  ? '原张榜恢复记录损坏；未创建另一份榜文，请核对原请求。'
-  : '原张榜恢复记录不可用；未创建另一份榜文。'
+  ? '原需求保存操作恢复记录损坏；未创建另一份事项，请核对原请求。'
+  : '原需求保存操作恢复记录不可用；未创建另一份事项。'
 
 /** Creates a task and its references through the atomic owner endpoint, never
  * independent /tasks + link POSTs. Mount/identity refresh only reconcile GET. */
@@ -38,7 +38,7 @@ export const useHallRequirementCreate = ({ agentApi, actorScopeKey, identityEpoc
   const adopt = async (value, intent, c) => {
     if (!current(c)) return false
     const receipt = requirementReceiptForIntent(unwrap(value), intent)
-    if (!receipt) throw new Error('张榜回执与原需求或精确资料不一致；请核对原操作，未另行创建。')
+    if (!receipt) throw new Error('需求保存回执与原需求或精确资料不一致；请核对原操作，未另行创建。')
     const confirmed = persist({ ...intent, receipt }, c)
     if (!current(c)) return false
     state.value = { status: 'COMMITTED', intent: confirmed, error: null }
@@ -69,9 +69,9 @@ export const useHallRequirementCreate = ({ agentApi, actorScopeKey, identityEpoc
       if (current(c)) {
         const retained = storeFor(c.scope).read().record || intent
         state.value = { status: retained.receipt ? 'COMMITTED' : 'UNKNOWN', intent: retained,
-          error: error?.status === 404 ? '原操作尚未查到；不代表没有受理。请核对原需求，再明确继续原张榜。'
+          error: error?.status === 404 ? '原操作尚未查到；不代表没有受理。请核对原需求，再明确继续原需求保存操作。'
             : error?.code === 'IDEMPOTENCY_CONFLICT' ? '原键与服务端需求不一致；请核对原请求，未使用新键重试。'
-              : '原张榜结果未完成核对；请检查原请求，不要创建另一份榜文。' }
+              : '原需求保存操作结果未完成核对；请检查原请求，不要创建另一份事项。' }
       }
       return false
     } finally { if (current(c)) busy.value = false }
@@ -79,7 +79,7 @@ export const useHallRequirementCreate = ({ agentApi, actorScopeKey, identityEpoc
   const create = payload => run('POST', c => {
     const read = readOriginal()
     if (read.state === 'PRESENT') {
-      state.value = { ...state.value, error: '已有原张榜待核对；当前编辑稿未提交。' }
+      state.value = { ...state.value, error: '已有原需求保存操作待核对；当前编辑稿未提交。' }
       return null
     }
     if (read.state !== 'ABSENT') return null

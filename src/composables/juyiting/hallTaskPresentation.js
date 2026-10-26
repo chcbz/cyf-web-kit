@@ -6,7 +6,7 @@ const rawPhases = Object.freeze({
 })
 export const hallTaskPhases = Object.freeze(['PENDING_ASSIGNMENT', 'IN_PROGRESS', 'PENDING_ACCEPTANCE', 'COMPLETED', 'HISTORY', 'UNKNOWN'])
 const meta = Object.freeze({
-  PENDING_ASSIGNMENT: ['待点将', 'neutral', 'task-state-open'],
+  PENDING_ASSIGNMENT: ['待确认承办', 'neutral', 'task-state-open'],
   IN_PROGRESS: ['进行中', 'info', 'task-state-running'],
   PENDING_ACCEPTANCE: ['待验收', 'warning', 'task-state-reviewing'],
   COMPLETED: ['已完成', 'positive', 'task-state-done'],
@@ -47,7 +47,7 @@ export const projectHallTask = ({ task, reviewContext = null, pendingOperation =
     if (phase === 'PENDING_ACCEPTANCE' && !needsReconcile && reviewContext.currentDelivery.allowedActions?.includes('ACCEPT')) actions.push('ACCEPT')
   }
   const [baseLabel, tone, className] = meta[phase]
-  const label = phase === 'HISTORY' ? ({ failed: '失败', cancelled: '已取消', archived: '已归档' })[rawStatus] || baseLabel : baseLabel
+  const label = phase === 'HISTORY' ? ({ failed: '办理未完成', cancelled: '已取消', archived: '已归档' })[rawStatus] || baseLabel : baseLabel
   return Object.freeze({ phase, label, tone, className, reason, readOnly, actions: Object.freeze(actions), rawStatus, needsReconcile })
 }
 

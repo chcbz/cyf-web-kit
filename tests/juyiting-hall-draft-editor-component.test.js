@@ -274,7 +274,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
     const wrapper = mount(component, { props: { ...base, initialRef: { sourceType: 'DRAFT', sourceId: 'draft-missing' } } })
     try {
       await settle()
-      expect(wrapper.text()).to.include('不会另建事项代替')
+      expect(wrapper.text()).to.include('暂时无法加载原事项')
       expect(wrapper.find('button[type="submit"]').exists()).to.equal(false)
       expect(wrapper.find('textarea').exists()).to.equal(false)
       expect(calls).to.have.length(1)
@@ -289,14 +289,14 @@ describe('JYT-UX-W05 real editor source restoration', () => {
       await settle()
       expect(wrapper.find('textarea').exists()).to.equal(false)
       expect(wrapper.text()).not.to.include('另一事项正文')
-      expect(wrapper.text()).to.include('未用其他草稿代替')
+      expect(wrapper.text()).to.include('暂时无法加载原事项')
       expect(calls).to.have.length(1)
     } finally { wrapper.unmount() }
   })
 
   const formalSaved = (fields = {}, overrides = {}) => ({
     draftId: 'formal-draft', revision: '1', state: 'EDITING', savedAt: 100, kind: 'TASK_CREATE',
-    editableFields: { title: '任务名目', instruction: '任务简述', targetAgentId: null, outputMime: null, inputs: [], ...fields },
+    editableFields: { title: '事项名称', instruction: '任务简述', targetAgentId: null, outputMime: null, inputs: [], ...fields },
     sourceSummary: { originRef: 'juyiting', sourceRef: null, conversationId: null }, submissionRef: null, ...overrides
   })
   const formalReceipt = { ref: { sourceType: 'TASK', sourceId: 'task-created' }, execution: null,
@@ -311,7 +311,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
     try {
       await settle()
       expect(button(wrapper, '开始办事').element.disabled).to.equal(true)
-      expect(wrapper.text()).not.to.include('请填写任务名目')
+      expect(wrapper.text()).not.to.include('请填写事项名称')
       expect(wrapper.get('.quick-material-open').element.closest('template')).to.equal(null)
       const instruction = '需求内容'.repeat(40)
       await wrapper.get('textarea').setValue(instruction)
@@ -356,7 +356,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
       await settle()
       expect(wrapper.text()).to.include('事项名称（可选）')
       expect(wrapper.text()).to.include('需求描述')
-      expect(wrapper.text()).to.include('不收取悬赏金额，也不启动执行')
+      expect(wrapper.text()).to.include('保存需求不会启动办理')
       expect(wrapper.find('select').exists()).to.equal(false)
       expect(wrapper.find('.draft-materials').exists()).to.equal(true)
       expect(wrapper.findAll('input')).to.have.length(1)
@@ -431,7 +431,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
       await settle()
       expect(calls.at(-1).data).to.include({ targetAgentId: 'old-agent', outputMime: 'application/pdf' })
       expect(calls.at(-1).data.inputs).to.deep.equal(existing.inputs)
-      await button(wrapper, '明确移除原选人和格式').trigger('click')
+      await button(wrapper, '移除原承办人和格式设置').trigger('click')
       expect(wrapper.find('input[type="checkbox"]').exists()).to.equal(false)
       await wrapper.find('form').trigger('submit')
       await settle()

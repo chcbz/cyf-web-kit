@@ -5,7 +5,7 @@
       <h2 id="hall-review-title">{{ selectionMode ? '选择成果并验收' : '查看成果并验收' }}</h2>
     </header>
     <section v-if="selectionMode" class="review-content">
-      <p>请选择需要验收的成果（已选 {{ selectedKeys.length }} 项）。可使用历史版本，不要求选最新稿。</p>
+      <p>选择要验收的成果（已选 {{ selectedKeys.length }} 项），也可以选择历史版本。</p>
       <p v-if="!choices.length" role="status">暂无可验收成果，请关闭后重新读取成果。</p>
       <ul><li v-for="(item, index) in choices" :key="item.key">
         <label><input type="checkbox" :checked="selectedKeys.includes(item.key)" :disabled="pending || selectionLocked" @change="$emit('toggle', item.key)" />
@@ -29,7 +29,7 @@
           <slot name="selection-preview" :item="item" :index="index"></slot>
         </section>
       </li></ul>
-      <p class="review-help">仅验收所选成果，不重新生成。确认后事项完成；关闭窗口不提交、不验收。</p>
+      <p class="review-help">确认后，仅验收所选 {{ selectedKeys.length }} 项成果，事项随即完成，不再继续办理。此操作不会重新生成成果；关闭窗口不提交、不验收。</p>
       <p v-if="error" class="review-error" role="status">{{ error }}</p>
     </section>
     <section v-else-if="frozenBatch" class="review-content">
@@ -43,7 +43,7 @@
         </li>
       </ul>
       <slot name="preview" />
-      <p class="review-help">需要调整？返回议事，直接告诉 Agent 修改要求。</p>
+      <p class="review-help">需要修改？返回议事，告诉好汉具体要求。</p>
       <p v-if="error" class="review-error" role="alert">{{ error }}</p>
     </section>
     <footer>

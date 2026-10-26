@@ -1176,7 +1176,7 @@ describe('Juyi Hall voice sending escape', () => {
       expect(voice.state).to.equal('sending')
       expect(voice.voiceInteractionLocked).to.equal(true)
       expect(wrapper.find('.voice-stop-waiting').exists()).to.equal(true)
-      expect(wrapper.get('.voice-sending span').element.textContent).to.contain('可能已经送达')
+      expect(wrapper.get('.voice-sending span').element.textContent).to.contain('消息可能已经发出')
       await wrapper.get('.voice-stop-waiting').trigger('click')
       expect(voice.state).to.equal('idle')
       expect(voice.voiceInteractionLocked).to.equal(false)

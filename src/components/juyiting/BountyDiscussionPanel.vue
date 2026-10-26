@@ -10,10 +10,10 @@
     >刷新处理状态</button>
     <ChatPanel
       discussion-variant="bounty"
-      empty-text="此榜文尚无议事记录，先说清险处、分工与下一步。"
-      placeholder="就当前榜文发起议事"
+      empty-text="可以补充要求、添加资料，或向好汉提问。"
+      placeholder="补充要求、提问，或说明需要怎样修改…"
       :subtitle="bountySubtitle"
-      title="榜文议事"
+      title="事项议事"
       v-bind="chatProps"
       :output-candidates="messageOutputs"
       :output-review-enabled="deliberationV2Enabled && !taskCompleted"

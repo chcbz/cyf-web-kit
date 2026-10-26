@@ -35,7 +35,7 @@ const createChat = (component = Chat) => mount(component, { attachTo: document.b
   conversationHistory: [{ id: 'c1', title: '旧话头' }] }, global: { stubs: { 'var-dialog': true, 'var-icon': true } } })
 const pointer = async target => { target.dispatchEvent(new window.Event('pointerdown', { bubbles: true })); await Vue.nextTick() }
 const escape = async (target = document) => { target.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await Vue.nextTick() }
-const historyButton = w => w.get('button[aria-label="话头记录"]')
+const historyButton = w => w.get('button[aria-label="议事记录"]')
 const moreButton = w => w.get('.composer-more')
 const visibleModal = () => { const node = document.createElement('section'); node.setAttribute('role', 'dialog'); node.setAttribute('aria-modal', 'true'); document.body.append(node); return node }
 

@@ -14,7 +14,7 @@ export const normalizeHallConversationHistory = (conversation, scope) => {
 
   return Object.freeze({
     id,
-    title: typeof conversation.title === 'string' && conversation.title.trim() ? conversation.title.trim() : '未题话头',
+    title: typeof conversation.title === 'string' && conversation.title.trim() ? conversation.title.trim() : '未命名议事',
     updateTime: conversation.updateTime ?? conversation.createTime ?? null
   })
 }

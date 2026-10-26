@@ -3,8 +3,8 @@
     <ChatPanel
       @update:draft="$emit('update:draft', $event)"
       discussion-variant="private"
-      empty-text="尚无密议记录，可先问一声眼下动静。"
-      placeholder="向当前好汉传一句话"
+      empty-text="可以向这位好汉提问或讨论想法。"
+      placeholder="向这位好汉提问或讨论想法…"
       :show-target-picker="false"
       :subtitle="privateSubtitle"
       title="密议"

@@ -4,7 +4,7 @@
     <p v-if="loading" role="status">正在读取成果与验收记录…</p>
     <p v-else-if="error" role="alert">{{ error }} <button type="button" @click="retry">重试</button></p>
     <template v-else>
-      <p v-if="!records.complete" role="status">验收成果记录尚不完整，不能仅凭事项已完成推断已验收版本。<button type="button" @click="retry">重新核对</button></p>
+      <p v-if="!records.complete" role="status">验收记录暂未完整加载，请重新核对。<button type="button" @click="retry">重新核对</button></p>
       <section aria-label="已验收成果">
         <h4>已验收成果（{{ records.accepted.length }}）</h4>
         <p v-if="!records.accepted.length" class="muted">尚未核对到已验收的固定成果。</p>
@@ -23,7 +23,7 @@
                   @click="togglePreview(row)"
                 >{{ expandedKey === row.key ? '收起预览' : '预览' }}</button>
               </div>
-              <p v-if="row.item.unavailableReason" role="status">原成果来源暂不可用，验收记录仍保留。</p>
+              <p v-if="row.item.unavailableReason" role="status">该成果暂时无法预览，验收记录仍保留。</p>
               <section
                 v-if="expandedKey === row.key"
                 :id="previewId(row)"

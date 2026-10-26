@@ -4,15 +4,15 @@
       <header class="overview-hero">
         <p class="overview-eyebrow">聚义厅 · 轻量工作台</p>
         <h2>今天，想办成什么事？</h2>
-        <p>不必独自忙碌，让合适的好汉与你一起。</p>
+        <p>说说你的目标，让好汉协助你完成。</p>
       </header>
-      <form class="overview-start-card overview-quick-request" aria-label="一句话提出需求" @submit.prevent="submitQuickRequest">
+      <form class="overview-start-card overview-quick-request" aria-label="描述需求" @submit.prevent="submitQuickRequest">
         <span class="overview-start-mark" aria-hidden="true">事</span>
         <div class="overview-start-copy">
-          <h3>说一句你想办成的事</h3>
-          <p>资料不是必选。发送只建立事项，不会自动调用 Agent 或产生办理费用。</p>
+          <h3>你想办成什么事？</h3>
+          <p>可添加参考资料。点击“开始办事”先保存需求，确认承办后再交给好汉。</p>
           <label class="quick-request-field">
-            <span class="visually-hidden">一句话需求</span>
+            <span class="visually-hidden">需求描述</span>
             <span class="quick-request-input">
               <textarea v-model="quickRequest" maxlength="200" rows="3" placeholder="例如：整理一份明天活动的执行方案，要能直接发给团队。" :disabled="quickPending"></textarea>
               <small>{{ [...quickRequest].length }}/200</small>
@@ -25,43 +25,43 @@
             :enabled="enabled"
             :disabled="quickPending"
           >
-            <button class="primary" type="submit" :disabled="quickPending || (!quickRequest.trim() && !selectedMaterials.length)"><var-icon name="send" aria-hidden="true" />{{ quickPending ? '正在建立事项…' : '开始办事' }}</button>
+            <button class="primary" type="submit" :disabled="quickPending || (!quickRequest.trim() && !selectedMaterials.length)"><var-icon name="send" aria-hidden="true" />{{ quickPending ? '正在保存需求…' : '开始办事' }}</button>
           </HallMaterialPicker>
           <p v-if="quickMessage" class="quick-request-error" role="status">{{ quickMessage }}</p>
         </div>
       </form>
     </template>
-    <p v-else class="overview-intro">只列出需要你处理的事项。打开不代表已读、验收或归档。</p>
+    <p v-else class="overview-intro">这里汇总需要你处理的事项。打开查看不会自动验收或归档。</p>
     <div class="overview-columns"><div class="overview-main">
-    <div class="overview-list-heading"><h3>{{ messagesOnly ? '需要我处理' : archiveView ? '案卷' : selectedView === 'needsAction' ? '需要我处理' : '接着上次办' }}</h3><div><button v-if="!messagesOnly" type="button" @click="emit('open-board')">悬赏榜</button><button type="button" :disabled="!enabled || model.state.value === 'loading'" @click="refresh">刷新</button></div></div>
+    <div class="overview-list-heading"><h3>{{ messagesOnly ? '待我处理' : archiveView ? '已归档' : selectedView === 'needsAction' ? '待我处理' : '接着上次办' }}</h3><div><button v-if="!messagesOnly" type="button" @click="emit('open-board')">查看全部事项</button><button type="button" :disabled="!enabled || model.state.value === 'loading'" @click="refresh">刷新</button></div></div>
     <nav v-if="!messagesOnly" class="overview-tabs" aria-label="事项范围">
       <button type="button" :aria-pressed="!archiveView && selectedView === 'recent'" @click="openView('recent')">最近事项</button>
-      <button type="button" :aria-pressed="!archiveView && selectedView === 'needsAction'" @click="openView('needsAction')">需要我处理</button>
-      <button type="button" :aria-pressed="archiveView" @click="showArchive">案卷</button>
+      <button type="button" :aria-pressed="!archiveView && selectedView === 'needsAction'" @click="openView('needsAction')">待我处理</button>
+      <button type="button" :aria-pressed="archiveView" @click="showArchive">已归档</button>
     </nav>
-    <p v-if="!enabled" role="status">身份确认后读取你的事项。</p><p v-if="model.openError.value" role="alert">{{ model.openError.value }}</p>
+    <p v-if="!enabled" role="status">确认身份后可查看你的事项。</p><p v-if="model.openError.value" role="alert">{{ model.openError.value }}</p>
     <section v-for="view in views" :key="view" class="overview-section" :aria-label="viewLabels[view]">
       <p v-if="model.state.value === 'loading'" role="status">正在读取事项…</p>
       <div v-for="source in issuesFor(view)" :key="source" class="overview-source-error" role="alert"><span>{{ sourceLabels[source] }}：{{ model.sections.value[view].partitions[source].readError || sourceError(model.sections.value[view].partitions[source].errorCode) }}</span><button type="button" :disabled="model.sections.value[view].partitions[source].loading" @click="model.loadPartition(view, source)">重试此来源</button></div>
       <article v-for="item in rowsFor(view)" :key="`${item.ref.sourceType}:${item.ref.sourceId}`" class="overview-item">
         <div class="overview-item-copy"><div class="overview-item-title"><strong>{{ item.title || '未命名事项' }}</strong><span class="overview-status">{{ statusText(item) }}</span></div>
-          <p>{{ typeLabels[item.ref.sourceType] }} · {{ agentLabel(item) }}<span v-if="item.personalMark?.archived"> · 已收入案卷</span></p>
+          <p>{{ typeLabels[item.ref.sourceType] }} · {{ agentLabel(item) }}<span v-if="item.personalMark?.archived"> · 已归档</span></p>
           <details class="overview-technical"><summary>事项信息</summary><small>状态核对于 {{ formatTime(item.status.observedAt) }}</small><small v-if="item.targetAgent">好汉标识：{{ item.targetAgent.agentId }}</small></details>
         </div>
-        <button v-if="canOpenHallItem(item)" type="button" :disabled="Boolean(model.openingRef.value)" @click="openItem(item)">{{ nextLabel(item) }}</button><span v-else>当前无可用办理入口</span>
+        <button v-if="canOpenHallItem(item)" type="button" :disabled="Boolean(model.openingRef.value)" @click="openItem(item)">{{ nextLabel(item) }}</button><span v-else>暂时无法打开此事项</span>
       </article>
-      <p v-if="enabled && isComplete(view) && !rowsFor(view).length" class="overview-empty">{{ hasMore(view) ? '这一页没有事项，可继续读取。' : view === 'archive' ? '暂时没有收入案卷的事项。' : view === 'needsAction' ? '暂时没有需要你处理的事项。' : '还没有开始的事项，先提出一个需求吧。' }}</p>
+      <p v-if="enabled && isComplete(view) && !rowsFor(view).length" class="overview-empty">{{ hasMore(view) ? '这一页没有事项，可继续读取。' : view === 'archive' ? '暂时没有归档的事项。' : view === 'needsAction' ? '暂时没有需要你处理的事项。' : '还没有开始的事项，先提出一个需求吧。' }}</p>
       <button v-if="messagesOnly && hasMore(view)" type="button" @click="loadMore(view)">读取更多事项</button>
     </section>
-    <section v-if="!messagesOnly" class="overview-resource" aria-label="资料入口"><var-icon class="overview-resource-icon" name="file-document-outline" aria-hidden="true" /><div><strong>资料留在这里，下次不用重找</strong><p>引用已有资料，查看固定版本的成果。</p></div><button type="button" @click="emit('open-workspace')">打开百宝箱 →</button></section>
+    <section v-if="!messagesOnly" class="overview-resource" aria-label="资料入口"><var-icon class="overview-resource-icon" name="file-document-outline" aria-hidden="true" /><div><strong>资料留在这里，下次不用重找</strong><p>引用已有资料，查看固定版本的成果。</p></div><button type="button" @click="emit('open-workspace')">查看资料 →</button></section>
     </div><aside v-if="!messagesOnly" class="overview-aside" aria-label="快捷入口">
       <button class="overview-map-link" type="button" @click="emit('set-home-mode', 'map')"><span aria-hidden="true">聚义厅</span>厅中实景 · 去梁山走一走 →</button>
-      <section class="overview-aside-card"><h3>需要你看一眼</h3><p v-if="model.state.value === 'loading'">正在核对待处理事项…</p><p v-else-if="model.sections.value.needsAction.status !== 'complete'">待处理列表可能不完整，请在事项页核对。</p>
+      <section class="overview-aside-card"><h3>待我处理</h3><p v-if="model.state.value === 'loading'">正在核对待处理事项…</p><p v-else-if="model.sections.value.needsAction.status !== 'complete'">待处理列表可能不完整，请在事项页核对。</p>
         <p v-if="!attentionItems.length">{{ model.sections.value.needsAction.status === 'complete' ? '当前没有需要处理的事项。' : '当前没有已确认的待处理项。' }}</p>
         <button v-for="item in attentionItems" :key="`${item.ref.sourceType}:${item.ref.sourceId}`" type="button" :disabled="!canOpenHallItem(item) || Boolean(model.openingRef.value)" @click="openItem(item)"><span>{{ item.title || '未命名事项' }}<small>{{ statusText(item) }}</small></span>→</button>
         <button class="overview-aside-link" type="button" @click="openView('needsAction')">查看待处理列表 →</button>
       </section>
-      <section class="overview-aside-card"><h3>找位好汉</h3><p>通过点将册核对实际本领和可用状态。</p><button type="button" @click="emit('open-agents')">打开点将册 →</button></section>
+      <section class="overview-aside-card"><h3>找位好汉</h3><p>查看好汉的技能与当前状态。</p><button type="button" @click="emit('open-agents')">查看好汉名册 →</button></section>
     </aside></div>
   </section>
 </template>
@@ -120,7 +120,7 @@ const archiveView = ref(false)
 const selectedView = ref('recent')
 const views = computed(() => props.messagesOnly ? ['needsAction'] : archiveView.value ? ['archive'] : [selectedView.value])
 const sourcesFor = view => view === 'archive' ? ['private', 'task'] : HALL_SOURCES
-const viewLabels = { recent: '最近事项', needsAction: '需要处理', archive: '案卷' }
+const viewLabels = { recent: '最近事项', needsAction: '待我处理', archive: '已归档' }
 const sourceLabels = { private: '私人交办', task: '正式悬赏', draft: '未交办草稿' }
 const typeLabels = { PRIVATE_CASE: '私人事项', LEGACY_EXECUTION: '原私人交办', TASK: '正式事项', DRAFT: '草稿' }
 const actionLabels = { OPEN_CASE: '查看事项', OPEN_EXECUTION: '查看原交办', OPEN_TASK: '打开原悬赏', EDIT_DRAFT: '继续草稿' }
@@ -157,7 +157,7 @@ const formatTime = value => new Date(value).toLocaleString('zh-CN')
 const sourceError = code => ({
   VIEWED_RESULT_NOT_TRACKED: '成果查看记录尚未纳入，已查看的成果仍可能列在这里。',
   TASK_REVIEW_NOT_PROJECTED: '正式成果的待验收情况尚未完整纳入，请到原悬赏核对。',
-  HALL_DRAFT_ARCHIVE_UNAVAILABLE: '草稿不支持案卷筛选，请回最近事项继续填写。',
+  HALL_DRAFT_ARCHIVE_UNAVAILABLE: '草稿不支持归档筛选，请回最近事项继续填写。',
   FORMAL_REVIEW_UNAVAILABLE: '当前暂不能读取正式待验收情况，请进入正式事项核对。',
   ACCESS_UNAVAILABLE: '当前身份无法访问，请重新授权后刷新。'
 })[code] || '此来源暂未完整读取，请重试；不能视为空列表。'

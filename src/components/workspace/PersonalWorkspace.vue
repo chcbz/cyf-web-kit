@@ -7,7 +7,7 @@
 
     <section v-if="embedded" class="treasure-content" :data-view="treasureView">
       <template v-if="treasureView === 'list'">
-        <div class="treasure-intro"><div><h2>这一箱，都是可继续用的资料</h2><p>独立管理文件；办事中选完资料，仍回到原事项。</p></div><button class="treasure-primary" type="button" @click="treasureView = 'upload'">上传资料</button></div>
+        <div class="treasure-intro"><div><h2>管理和复用你的资料</h2><p>上传、查找和管理资料，也可以选入事项中使用。</p></div><button class="treasure-primary" type="button" @click="treasureView = 'upload'">上传资料</button></div>
         <nav class="treasure-tabs" aria-label="百宝箱分类"><button v-for="tab in treasureTabs" :key="tab.key" type="button" :aria-pressed="treasureTab === tab.key" @click="changeTreasureTab(tab.key)">{{ tab.label }}</button></nav>
         <form class="treasure-search" @submit.prevent="refresh"><label><span class="sr-only">搜索文件名称</span><input v-model="query" maxlength="100" placeholder="搜索文件名称" /></label><button type="submit" :disabled="workspace.loading.value">搜索</button></form>
         <p v-if="workspace.listState.value === 'loading'" role="status">正在翻看资料…</p>
@@ -15,7 +15,7 @@
           <div v-for="file in treasureFiles" :key="file.fileId" class="treasure-file-row"><div><strong>{{ file.displayName }}</strong><p>{{ originText(file.originKind) }} · {{ familyText(file.mediaFamily) }} · v{{ file.latestVersion }}</p></div><button type="button" :data-file-id="file.fileId" :disabled="!detailAllowed || workspace.actionState.value === 'loading-detail'" @click="openTreasureFile(file.fileId)">查看</button></div>
         </div>
         <p v-if="!workspace.loading.value && workspace.listState.value !== 'error' && !treasureFiles.length" class="treasure-empty">{{ workspace.nextCursor.value ? '已读取的文件中暂无此分类；可继续读取更多。' : treasureTab === 'trash' ? '回收站为空。' : query.trim() ? '没有找到匹配的文件。' : '这里还没有文件，可上传资料或到事项中查看成果。' }}</p>
-        <p v-if="workspace.listState.value === 'error'" role="alert">文件暂未完整读取，不能据此判断为空。<button type="button" @click="refresh">重新读取</button></p>
+        <p v-if="workspace.listState.value === 'error'" role="alert">部分资料未能加载，请重新加载。<button type="button" @click="refresh">重新读取</button></p>
         <button v-if="workspace.nextCursor.value" type="button" :disabled="workspace.loading.value" @click="loadMore">读取更多文件</button>
       </template>
       <form v-else-if="treasureView === 'upload'" class="treasure-form" @submit.prevent="uploadTreasure">
@@ -26,24 +26,24 @@
         <div class="treasure-actions"><button type="button" @click="back">取消</button><button class="treasure-primary" type="submit" :disabled="!uploadFile || workspace.actionState.value === 'uploading'">{{ workspace.actionState.value === 'uploading' ? '正在上传…' : '确认上传' }}</button></div>
       </form>
       <template v-else-if="workspace.detail.value">
-        <div class="treasure-file-heading"><div><h2 ref="detailTitleRef" tabindex="-1">{{ workspace.detail.value.file.displayName }}</h2><p>{{ originText(workspace.detail.value.file.originKind) }} · {{ workspace.detail.value.file.state === 'TRASHED' ? '已回收' : '仅自己可见' }}</p></div><button v-if="treasureView === 'preview'" type="button" @click="treasureView = 'manage'">更多管理</button></div>
+        <div class="treasure-file-heading"><div><h2 ref="detailTitleRef" tabindex="-1">{{ workspace.detail.value.file.displayName }}</h2><p>{{ originText(workspace.detail.value.file.originKind) }} · {{ workspace.detail.value.file.state === 'TRASHED' ? '已回收' : '资料由你管理' }}</p></div><button v-if="treasureView === 'preview'" type="button" @click="treasureView = 'manage'">更多管理</button></div>
         <template v-if="treasureView === 'preview'">
           <div class="treasure-preview-tools treasure-version-tools"><label><span class="treasure-version-label">版本</span><select v-model="selectedVersion" @change="preview(selectedVersion)"><option v-for="version in workspace.detail.value.versions" :key="version.version" :value="version.version">v{{ version.version }} · {{ version.originalFilename }}</option></select></label><button type="button" @click="download(selectedVersion)">下载</button></div>
           <template v-if="workspace.hasMoreVersions.value"><button type="button" :disabled="workspace.versionsState.value === 'loading'" @click="workspace.loadMoreVersions">{{ workspace.versionsState.value === 'loading' ? '正在读取历史版本…' : '读取更早版本' }}</button></template><p v-if="workspace.versionsError.value" role="alert">{{ workspace.versionsError.value }}</p>
-          <p class="treasure-note">本次使用固定的 v{{ selectedVersion }}；以后上传新版本，不会替换已交办的资料。</p>
+          <p class="treasure-note">当前查看版本 {{ selectedVersion }}；上传新版本不会替换已提交事项中的资料。</p>
           <p v-if="workspace.preview.value.message && ['parts', 'text', 'audio', 'image', 'pdf'].includes(workspace.preview.value.kind)" class="treasure-note" role="status">{{ workspace.preview.value.message }}</p>
           <section class="treasure-preview" aria-label="文件预览" aria-live="polite">
             <p v-if="workspace.actionState.value === 'loading-preview'">正在读取预览…</p>
             <template v-else-if="workspace.preview.value.kind === 'parts'"><div class="treasure-preview-tools"><button type="button" :disabled="workspace.preview.value.selectedIndex === 0" @click="workspace.selectPreviewPart(workspace.preview.value.selectedIndex - 1)">上一页</button><span>第 {{ workspace.preview.value.selectedIndex + 1 }} / {{ workspace.preview.value.parts.length }} 页</span><button type="button" :disabled="workspace.preview.value.selectedIndex >= workspace.preview.value.parts.length - 1" @click="workspace.selectPreviewPart(workspace.preview.value.selectedIndex + 1)">下一页</button></div><PdfDocumentPreview v-if="selectedPreviewPart?.kind === 'pdf'" :blob="selectedPreviewPart.blob" /><audio v-else-if="selectedPreviewPart?.kind === 'audio'" :src="selectedPreviewPart.url" v-bind="{ controls: true, preload: 'none', 'aria-label': '文件固定版本音频预览' }"></audio><pre v-else-if="selectedPreviewPart?.kind === 'text'" v-text="selectedPreviewPart.text"></pre><img v-else-if="selectedPreviewPart?.kind === 'image'" :src="selectedPreviewPart.url" alt="文件固定版本预览" /></template>
             <PdfDocumentPreview v-else-if="workspace.preview.value.kind === 'pdf'" :blob="workspace.preview.value.blob" /><audio v-else-if="workspace.preview.value.kind === 'audio'" :src="workspace.preview.value.url" v-bind="{ controls: true, preload: 'none', 'aria-label': '文件固定版本音频预览' }"></audio><pre v-else-if="workspace.preview.value.kind === 'text'" v-text="workspace.preview.value.text"></pre><img v-else-if="workspace.preview.value.kind === 'image'" :src="workspace.preview.value.url" alt="文件固定版本预览" /><p v-else>{{ workspace.preview.value.message || '可下载查看完整文件。' }}</p>
           </section>
-          <div class="treasure-actions"><button v-if="workspace.detail.value.file.state === 'ACTIVE'" class="treasure-primary" type="button" @click="useForDraft">用于新委托</button><button v-else type="button" @click="treasureView = 'manage'">恢复文件</button></div>
+          <div class="treasure-actions"><button v-if="workspace.detail.value.file.state === 'ACTIVE'" class="treasure-primary" type="button" @click="useForDraft">用此资料提需求</button><button v-else type="button" @click="treasureView = 'manage'">恢复文件</button></div>
         </template>
         <section v-else class="treasure-management">
           <template v-if="workspace.detail.value.file.state === 'ACTIVE'">
             <form class="treasure-form" @submit.prevent="rename"><label><span>文件名称</span><input v-model="renameValue" maxlength="255" /></label><button type="submit" :disabled="workspace.actionState.value === 'saving'">保存名称</button></form>
             <div class="treasure-form"><label><span>上传新版本</span><input type="file" :accept="acceptTypes" @change="onVersionFile" /></label><p>旧版本及已有事项的资料引用会保留。</p><p v-if="!nextVersion" role="status">已达到文件版本上限。</p><button type="button" :disabled="!versionFile || !nextVersion || workspace.actionState.value === 'appending-version'" @click="appendVersion">上传为新版本</button></div>
-            <div class="treasure-manage-danger"><button v-if="!trashUsage" type="button" @click="prepareTrash">移入回收站</button><div v-else role="group" aria-label="回收确认"><p>{{ trashConfirmationText(trashUsage) }}</p><div class="treasure-actions"><button type="button" @click="trashUsage = null">取消</button><button type="button" :disabled="workspace.actionState.value === 'saving'" @click="confirmTrash">确认回收</button></div></div></div>
+            <div class="treasure-manage-danger"><button v-if="!trashUsage" type="button" @click="prepareTrash">移入回收站</button><div v-else role="group" aria-label="回收确认"><p>{{ trashConfirmationText(trashUsage) }}</p><div class="treasure-actions"><button type="button" @click="trashUsage = null">取消</button><button type="button" :disabled="workspace.actionState.value === 'saving'" @click="confirmTrash">移入回收站</button></div></div></div>
           </template>
           <template v-else><p>恢复后可继续在资料列表中使用。本版不提供永久删除。</p><button class="treasure-primary" type="button" @click="restoreTreasure">恢复文件</button></template>
         </section>
@@ -428,7 +428,7 @@ const restoreTreasure = async () => {
 }
 const canGoBack = computed(() => embedded ? treasureView.value !== 'list' : activeModal.value === 'detail')
 const logicalDepth = computed(() => !embedded || treasureView.value === 'list' ? 1 : treasureView.value === 'manage' ? 3 : 2)
-const windowTitle = computed(() => !embedded ? '' : ({ list: '百宝箱', upload: '上传资料', preview: '资料详情', manage: '文件管理' })[treasureView.value])
+const windowTitle = computed(() => !embedded ? '' : ({ list: '资料', upload: '上传资料', preview: '资料详情', manage: '文件管理' })[treasureView.value])
 const back = () => {
   if (!canGoBack.value) return false
   if (embedded && treasureView.value === 'manage') { treasureView.value = 'preview'; trashUsage.value = null; return true }

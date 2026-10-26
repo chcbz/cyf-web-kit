@@ -318,7 +318,7 @@ describe('mounted Bounty read/manage surface and original recovery', () => {
   it('shows immutable unknown original refs and emits explicit check/resume instead of resubmitting current draft', async () => {
     const wrapper = panel({ requirementCreateState: { status: 'UNKNOWN', intent: intent(), error: '结果未知' } })
     expect(wrapper.find('.requirement-create-recovery').text()).to.include('pwf_image v2')
-    await action(wrapper, '核对原张榜').trigger('click'); await action(wrapper, '确认继续原张榜').trigger('click')
+    await action(wrapper, '查询保存结果').trigger('click'); await action(wrapper, '继续原保存操作').trigger('click')
     expect(wrapper.emitted('check-requirement-create')).to.have.length(1)
     expect(wrapper.emitted('resume-requirement-create')).to.have.length(1)
     expect(wrapper.emitted('create-task')).to.equal(undefined)

@@ -1,8 +1,8 @@
 <template>
-  <section ref="historyRef" class="hall-conversation-history" aria-label="话头记录">
-    <div v-if="loading" class="history-state" role="status">正在翻检话头…</div>
+  <section ref="historyRef" class="hall-conversation-history" aria-label="议事记录">
+    <div v-if="loading" class="history-state" role="status">正在加载议事记录…</div>
     <div v-else-if="error" class="history-state is-error" role="alert">{{ error }}</div>
-    <div v-else-if="!conversations.length" class="history-state">此处暂无旧话头。</div>
+    <div v-else-if="!conversations.length" class="history-state">还没有议事记录。</div>
     <template v-else>
       <ul class="history-list">
         <li v-for="conversation in conversations" :key="conversation.id" class="history-row">
@@ -21,8 +21,8 @@
             type="button"
             v-if="!readOnly"
             class="history-delete"
-            :title="`删除话头：${conversation.title}`"
-            :aria-label="conversation.id === deletingId ? `正在删除话头：${conversation.title}` : `删除话头：${conversation.title}`"
+            :title="`删除议事记录：${conversation.title}`"
+            :aria-label="conversation.id === deletingId ? `正在删除议事记录：${conversation.title}` : `删除议事记录：${conversation.title}`"
             :disabled="disabled || loading || Boolean(deletingId)"
             @click.stop="requestDelete(conversation)"
           >
@@ -38,13 +38,13 @@
         :disabled="disabled || loading"
         @click="$emit('load-more')"
       >
-        {{ loading ? '正在翻检…' : '再取旧话头' }}
+        {{ loading ? '正在翻检…' : '加载更多记录' }}
       </button>
     </template>
 
     <var-dialog
       v-model:show="showDeleteDialog"
-      title="删除话头"
+      title="删除议事记录"
       :message="deleteDialogMessage"
       confirm-button
       confirm-button-text="删除"
@@ -104,7 +104,7 @@ onBeforeUnmount(() => {
 })
 defineExpose({ dismissBlocked })
 const deleteCandidate = ref(null)
-const deleteDialogMessage = computed(() => `确认删除“${deleteCandidate.value?.title || '未题话头'}”吗？删除后无法恢复。`)
+const deleteDialogMessage = computed(() => `确认删除“${deleteCandidate.value?.title || '未命名议事'}”吗？删除后无法恢复。`)
 
 const requestDelete = conversation => {
   if (props.readOnly || props.disabled || props.loading || props.deletingId || !conversation?.id) return

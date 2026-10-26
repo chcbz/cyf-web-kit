@@ -142,7 +142,7 @@ describe('scoped bounty output actions live on the actual message cards', () => 
     const f = setup(); let release
     try {
       await settle(); release = f.pause()
-      await f.wrapper.get('[aria-label="重取回话"]').trigger('click')
+      await f.wrapper.get('[aria-label="刷新议事记录"]').trigger('click')
       expect(f.wrapper.emitted('load-messages')).to.deep.equal([[]])
       await settle()
       expect(f.wrapper.findAll('.message-output-accept')).to.have.length(2)
@@ -271,5 +271,30 @@ describe('scoped bounty output actions live on the actual message cards', () => 
       expect(errors, filename).to.deep.equal([]); compileScript(descriptor, { id: name })
       expect(compileTemplate({ source: descriptor.template.content, filename, id: name }).errors, filename).to.deep.equal([])
     }
+  })
+})
+
+
+describe('large text preview copy on the real outputs component', () => {
+  it('verifies bytes then gives an honest preview limit without a nonexistent download action', async () => {
+    const { createHash } = await import('node:crypto')
+    const content = 'x'.repeat(2 * 1024 * 1024 + 1)
+    const blob = new Blob([content], { type: 'text/plain' })
+    const item = output(1, { contentMimeType: 'text/plain', byteLength: String(blob.size), sha256: createHash('sha256').update(content).digest('hex') })
+    const calls = []
+    const api = { get: async path => { calls.push(path); return path.endsWith('/outputs') ? [item] : request(1) }, execute: async options => { calls.push(options.method); return blob } }
+    const component = createComponents(api).BountyExecutionOutputs
+    const wrapper = mount(component, { props: { enabled: true, request: request(1), conversationId: 'conversation-1', taskId: 'task-1', identityKey: 'owner-a' } })
+    try {
+      await settle()
+      const preview = wrapper.findAll('button').find(button => button.text() === '预览')
+      expect(Boolean(preview)).to.equal(true)
+      await preview.trigger('click')
+      for (let i = 0; i < 100 && !wrapper.text().includes('文本较大'); i++) { await new Promise(resolve => setTimeout(resolve, 5)); await settle() }
+      expect(wrapper.text()).to.include('文本较大，暂不支持在议事中预览')
+      expect(wrapper.text()).not.to.include('请下载查看')
+      expect(wrapper.findAll('button').some(button => button.text() === '下载')).to.equal(false)
+      expect(calls.every(call => call !== 'POST')).to.equal(true)
+    } finally { wrapper.unmount() }
   })
 })

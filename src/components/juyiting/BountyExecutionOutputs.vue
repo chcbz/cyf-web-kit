@@ -5,7 +5,7 @@
     <article v-for="result in skillResults.results.value.filter(value => value.data !== null || !value.complete)" :key="result.executionId" class="message-skill-result">
       <strong>技能结果</strong><span>{{ result.complete ? '已归档' : result.phase === 'ARCHIVING' ? '正在归档（尚未完成）' : result.phase }}</span>
       <pre v-if="result.complete && result.data !== null">{{ skillResultDataText(result.data) }}</pre>
-      <small v-if="result.complete && result.data !== null">数据结果不制造文件资产，不表示任务已验收。</small>
+      <small v-if="result.complete && result.data !== null">结果已记录；事项是否完成，请以验收状态为准。</small>
     </article>
   </template>
   <section v-else-if="enabled && (acceptance || allItems.length || scopedSteps.length || skillResults.results.value.length || skillResults.error.value)" class="bounty-output-gallery" aria-label="悬赏议事成果">
@@ -24,7 +24,7 @@
     <article v-for="result in skillResults.results.value" :key="result.executionId" class="bounty-output">
       <strong>技能结果</strong><span>{{ result.complete ? '已归档' : result.phase === 'ARCHIVING' ? '正在归档（尚未完成）' : result.phase }}</span>
       <pre v-if="result.complete && result.data !== null" class="bounty-output-text">{{ skillResultDataText(result.data) }}</pre>
-      <small v-if="result.complete && result.data !== null">数据结果不制造文件资产，不表示任务已验收。</small>
+      <small v-if="result.complete && result.data !== null">结果已记录；事项是否完成，请以验收状态为准。</small>
     </article>
     <div v-for="item in displayItems" :key="outputItemKey(item)" class="bounty-output">
       <strong>{{ previewKind(item.contentMimeType) === 'image' ? '图片' : previewKind(item.contentMimeType) === 'audio' ? '音频' : previewKind(item.contentMimeType) === 'text' ? '文本' : '文件' }}</strong>
@@ -47,7 +47,7 @@
           preload="none"
           aria-label="议事生成音频"
         ></audio>
-        <span v-else>此格式请下载查看。</span>
+        <span v-else>此内容暂不支持在议事中预览。</span>
       </template>
       <button v-if="!effectiveTaskCompleted" type="button" class="hall-output-action primary" :disabled="reviewBusy || loading" @click="$emit('accept-output', item)">验收此版</button>
       <small v-if="item.replaces">改稿关联：{{ item.replaces.outputId }}（原稿仍保留）</small>
@@ -215,7 +215,7 @@ const loadPreview = async item => {
   const generation = epoch
   try {
     const blob = await bytes(item); if (!blob) return
-    if (previewKind(item.contentMimeType) === 'text') { if (blob.size > 2 * 1024 * 1024) throw new Error('文本较大，请下载查看'); const text = await blob.text(); if (generation === epoch) patchMap(textPreviews, key, text); return }
+    if (previewKind(item.contentMimeType) === 'text') { if (blob.size > 2 * 1024 * 1024) throw new Error('文本较大，暂不支持在议事中预览'); const text = await blob.text(); if (generation === epoch) patchMap(textPreviews, key, text); return }
     if (generation === epoch && previewKind(item.contentMimeType) !== 'file') patchMap(previewUrls, key, URL.createObjectURL(blob))
     patchMap(itemErrors, key, '')
   } catch (cause) { if (generation === epoch) patchMap(itemErrors, key, cause?.message || '预览失败') }

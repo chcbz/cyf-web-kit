@@ -101,17 +101,17 @@
           <option value="">全部案卷</option>
           <option value="project">项目案卷</option>
           <option value="meeting">议事旧录</option>
-          <option value="memory">长记</option>
+          <option value="memory">长期记录</option>
         </select>
         <button :disabled="loading || !keyword.trim()">
           <var-icon name="magnify" />
-          <span>查卷</span>
+          <span>搜索</span>
         </button>
       </form>
 
       <div class="library-hint">
-        <span>藏书查卷</span>
-        <span>得 {{ results.length }} 条</span>
+        <span>案卷搜索</span>
+        <span>找到 {{ results.length }} 条</span>
       </div>
 
       <div class="result-list">
@@ -134,7 +134,7 @@
             type="button"
             @click="$emit('cite-library', item)"
           >
-            引入传令
+            用于新需求
           </button>
         </article>
         <div
@@ -216,7 +216,7 @@ const sourceText = (type = '') => {
   if (type === 'daily_summary') return '日录'
   if (type === 'weekly_summary') return '周录'
   if (type === 'monthly_summary') return '月录'
-  return '长记'
+  return '长期记录'
 }
 
 const scoreText = (score) => {

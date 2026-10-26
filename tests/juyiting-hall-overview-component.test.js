@@ -65,6 +65,22 @@ const settle = async () => { await flushPromises(); await Vue.nextTick() }
 const props = { enabled: true, identityScope: 'tenant\u0000client\u0000owner-a', identityEpoch: 1 }
 
 describe('JYT-UX-W05 mounted overview and message projection', () => {
+  it('explains save-before-delegation without inventing a beta or free-use promise', async () => {
+    const writes = []
+    const wrapper = mount(load({ execute: async request => { writes.push(request); return response() } }), { props })
+    try {
+      await settle()
+      expect(wrapper.get('.overview-start-copy > p').text()).to.equal('可添加参考资料。点击“开始办事”先保存需求，确认承办后再交给好汉。')
+      expect(wrapper.text()).not.to.include('免费')
+      expect(wrapper.text()).not.to.include('聚义厅 · 内测')
+      const all = wrapper.findAll('.overview-list-heading button').find(button => button.text() === '查看全部事项')
+      await all.trigger('click')
+      expect(wrapper.emitted('open-board')).to.have.length(1)
+      expect(wrapper.emitted('quick-request')).to.equal(undefined)
+      expect(writes.every(request => request.method !== 'POST')).to.equal(true)
+    } finally { wrapper.unmount() }
+  })
+
   const manyItems = () => {
     const data = response()
     for (const [source, type, action, times] of [
@@ -146,7 +162,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       await settle()
       const row = code => wrapper.findAll('.overview-item').find(item => item.text().includes(code))
       expect(row('cancelled').get('.overview-status').text()).to.equal('已取消')
-      expect(row('failed').get('.overview-status').text()).to.equal('失败')
+      expect(row('failed').get('.overview-status').text()).to.equal('办理未完成')
       expect(row('blocked').get('.overview-status').text()).to.equal('进行中')
       expect(row('private-failure').get('.overview-status').text()).to.equal('执行未完成')
     } finally { wrapper.unmount() }
@@ -172,7 +188,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       await settle()
       expect(wrapper.findAll('.overview-section')).to.have.length(1)
       expect(wrapper.text()).not.to.include('最近事项')
-      expect(wrapper.text()).to.include('打开不代表已读、验收或归档')
+      expect(wrapper.text()).to.include('打开查看不会自动验收或归档')
       expect(wrapper.text()).to.include('正式成果的待验收情况尚未完整纳入')
       expect(wrapper.findAll('.overview-empty')).to.have.length(0)
       await wrapper.findAll('.overview-item').find(row => row.text().includes('case-a')).find('button').trigger('click')
@@ -201,7 +217,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       expect(overviewSource).to.include('padding:13px 14px 34px')
       expect(overviewSource).to.include('resize:none')
       expect(overviewSource).to.include('.overview-tabs button:hover')
-      expect(wrapper.text()).to.include('资料不是必选')
+      expect(wrapper.text()).to.include('可添加参考资料')
       const request = wrapper.find('.overview-quick-request textarea')
       const create = wrapper.findAll('button').find(button => button.text() === '开始办事')
       expect(create.attributes('disabled')).to.equal('')
@@ -282,14 +298,14 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       expect(wrapper.find('.quick-reference-open').exists()).to.equal(false)
       expect(wrapper.text()).not.to.include('资料用途')
       expect(wrapper.get('.quick-material-picker h3').text()).to.equal('选择资料')
-      expect(wrapper.get('.quick-material-picker header p').text()).to.equal('从工作空间选择或上传资料，完成后带入。')
+      expect(wrapper.get('.quick-material-picker header p').text()).to.equal('选择或上传资料，点击“完成”带入当前需求或议事。')
       expect(wrapper.get('.quick-material-confirm').text()).to.equal('完成（0）')
       expect(wrapper.text()).not.to.include('受控请求')
       expect(wrapper.emitted('open-workspace')).to.equal(undefined)
       await wrapper.get('.quick-material-files button').trigger('click')
       await settle()
       expect(wrapper.findAll('.quick-material-fields select')).to.have.length(0)
-      expect(wrapper.get('.quick-material-version').text()).to.include('已固定 v2')
+      expect(wrapper.get('.quick-material-version').text()).to.include('使用版本 2')
       await wrapper.get('.quick-material-version-actions .primary').trigger('click')
       await wrapper.get('.quick-material-confirm').trigger('click')
       expect(wrapper.get('.quick-material-summary').text()).not.to.include('image/png')
@@ -301,7 +317,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       await wrapper.get('.quick-material-open').trigger('click')
       await wrapper.findAll('.quick-material-files button')[1].trigger('click')
       await settle()
-      expect(wrapper.get('.quick-material-version').text()).to.include('已固定 v3')
+      expect(wrapper.get('.quick-material-version').text()).to.include('使用版本 3')
       await wrapper.get('.quick-material-version-actions .primary').trigger('click')
       await wrapper.get('.quick-material-footer-actions button:first-child').trigger('click')
       expect(wrapper.get('.quick-material-summary').text()).to.include('v2')
@@ -336,7 +352,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       await wrapper.get('.quick-material-files button').trigger('click')
       await settle()
       expect(wrapper.findAll('.quick-material-fields select')).to.have.length(0)
-      expect(wrapper.get('.quick-material-version').text()).to.include('已固定 v3')
+      expect(wrapper.get('.quick-material-version').text()).to.include('使用版本 3')
       await wrapper.get('.quick-material-version-actions .primary').trigger('click')
       await wrapper.get('.quick-material-confirm').trigger('click')
       expect(wrapper.get('.quick-material-summary').text()).to.include('执行说明')
@@ -369,7 +385,7 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
       for (let index = 0; index < types.length; index += 1) {
         await wrapper.findAll('.quick-material-files button')[index].trigger('click'); await settle()
         expect(wrapper.find('.quick-material-fields select').exists()).to.equal(false)
-        expect(wrapper.get('.quick-material-version').text()).to.include('已固定 v2')
+        expect(wrapper.get('.quick-material-version').text()).to.include('使用版本 2')
         expect(wrapper.find('.quick-material-preview-toggle').exists()).to.equal(false)
         // Desktop previews the pinned version without a redundant toggle.
         const preview = wrapper.get('.quick-material-preview')
@@ -468,13 +484,13 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
     } }), { props })
     try {
       await settle()
-      await wrapper.findAll('button').find(button => button.text() === '案卷').trigger('click')
+      await wrapper.findAll('button').find(button => button.text() === '已归档').trigger('click')
       await settle()
       expect(wrapper.findAll('.overview-item').map(row => row.find('strong').text())).to.deep.equal(['private-archived', 'task-archived'])
       expect(calls.slice(1).map(call => call.params)).to.deep.equal([
         { kind: 'private', view: 'archive', q: '' }, { kind: 'task', view: 'archive', q: '' }
       ])
-      expect(wrapper.text()).to.include('已收入案卷')
+      expect(wrapper.text()).to.include('已归档')
       expect(wrapper.text()).not.to.include('未交办草稿')
       expect(wrapper.findAll('[data-count]')).to.have.length(0)
     } finally { wrapper.unmount() }

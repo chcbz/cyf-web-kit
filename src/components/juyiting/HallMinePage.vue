@@ -1,12 +1,12 @@
 <template>
   <section class="hall-mine-page" aria-label="我的">
-    <header><p>聚义厅 · 我的</p><h2>常用入口与设置</h2><span>名册、典籍和消息统一放在这里，不打断当前事项。</span></header>
+    <header><p>聚义厅 · 我的</p><h2>常用入口与设置</h2><span>查看好汉、典籍和常用入口。</span></header>
     <div class="mine-grid">
-      <button type="button" @click="$emit('open', 'agents')"><var-icon name="account-circle-outline" /><span><strong>好汉名册</strong><small>查看吴用、林冲等 Agent 的能力与在线状态</small></span></button>
+      <button type="button" @click="$emit('open', 'agents')"><var-icon name="account-circle-outline" /><span><strong>好汉名册</strong><small>查看好汉的能力与当前状态</small></span></button>
       <button type="button" @click="$emit('open', 'library')"><var-icon name="notebook" /><span><strong>典籍阁</strong><small>阅读典籍、案卷与个人进度</small></span></button>
-      <button type="button" @click="$emit('open', 'messages')"><var-icon name="bell-outline" /><span><strong>消息</strong><small>查看需要你处理的事项</small></span></button>
+      <button type="button" @click="$emit('open', 'messages')"><var-icon name="bell-outline" /><span><strong>待办提醒</strong><small>查看需要你处理的事项</small></span></button>
       <button type="button" @click="$emit('map')"><var-icon name="map-marker-outline" /><span><strong>厅中实景</strong><small>进入梁山场景与地图</small></span></button>
-      <button type="button" :disabled="accountEntryDisabled" @click="$emit('profile')"><var-icon name="account-circle-outline" /><span><strong>个人中心</strong><small>账户、授权与隐私设置</small></span></button>
+      <button type="button" :disabled="accountEntryDisabled" @click="$emit('profile')"><var-icon name="account-circle-outline" /><span><strong>个人中心</strong><small>查看个人中心</small></span></button>
     </div>
     <nav class="mine-help"><button type="button" @click="$emit('help', $event.currentTarget)">使用帮助</button></nav>
   </section>

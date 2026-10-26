@@ -34,11 +34,11 @@
       >
         <header>
           <button type="button" class="quick-material-back" @click="backFromPicker"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m14 6-6 6 6 6" /></svg>返回</button>
-          <div><h3 id="hall-material-picker-title">选择资料</h3><p>从工作空间选择或上传资料，完成后带入。</p></div>
+          <div><h3 id="hall-material-picker-title">选择资料</h3><p>选择或上传资料，点击“完成”带入当前需求或议事。</p></div>
         </header>
         <div v-if="$slots.context" class="quick-material-context"><slot name="context"></slot></div>
         <div class="quick-material-picker-body">
-          <section class="quick-material-list-pane" aria-label="工作空间资料">
+          <section class="quick-material-list-pane" aria-label="可选资料列表">
             <p v-if="workspace.listState.value === 'loading'" role="status">正在读取你的资料…</p>
             <p v-else-if="workspace.listState.value === 'empty' && !pickerFiles.length">暂无资料，也可以直接提需求。</p>
             <div v-if="pickerFiles.length" class="quick-material-files" aria-label="可选资料">
@@ -51,7 +51,7 @@
           </section>
           <section class="quick-material-detail-pane" aria-label="固定版本与预览">
             <div v-if="pickerDetail" class="quick-material-fields">
-              <div class="quick-material-selected-file"><strong>{{ pickerDetail.file.displayName }}</strong><span class="quick-material-version">已固定 v{{ pickerVersion }} · 版本管理在工作空间</span></div>
+              <div class="quick-material-selected-file"><strong>{{ pickerDetail.file.displayName }}</strong><span class="quick-material-version">使用版本 {{ pickerVersion }}；新版本不会替换本次引用。</span></div>
 
             </div>
             <p v-if="workspace.error.value" class="quick-request-error" role="alert">{{ workspace.error.value }}</p>

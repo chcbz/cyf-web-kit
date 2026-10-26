@@ -1236,11 +1236,11 @@ const activePanelTitle = computed(() => {
   if (renderedPanel.value === 'formalDraft') return '提出需求'
   if (renderedPanel.value === 'messages') return '消息'
   if (renderedPanel.value === 'item') return overviewItemRef.value?.sourceType === 'DRAFT' ? '继续草稿' : '事项进展'
-  if (renderedPanel.value === 'agents') return '点将册'
+  if (renderedPanel.value === 'agents') return '好汉名册'
   if (renderedPanel.value === 'catalog') return '招贤令'
   if (renderedPanel.value === 'tasks') return isOverviewHome.value ? '我的事项' : '悬赏榜'
   if (renderedPanel.value === 'workspace') return '协作工作台'
-  if (renderedPanel.value === 'treasure') return '百宝箱'
+  if (renderedPanel.value === 'treasure') return '资料'
   if (renderedPanel.value === 'chat') return '厅内议事'
   if (renderedPanel.value === 'library') return '典籍阁'
   return ''
@@ -1970,7 +1970,7 @@ const continueBountyModification = async (task, source) => {
     return restored
   }
   if (conversationHistory.value.length === 1 && !conversationHistoryHasMore.value) return selectHallConversation(conversationHistory.value[0].id)
-  showToast('请从话头记录返回原议事；未猜选最新会话。')
+  showToast('请从议事记录返回原议事。')
   return false
 }
 const openTaskWorkspace = () => {
@@ -2212,7 +2212,7 @@ const {
     selectedTask.value = receipt.task
     markTaskCreated(receipt.task)
     playSuccess()
-    showToast('需求已保存为待点将事项；确认承办后才开始办理。')
+    showToast('需求已保存，待确认承办；确认后才交给好汉办理。')
     void openPendingTaskDetail(receipt.task)
     return true
   }

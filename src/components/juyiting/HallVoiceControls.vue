@@ -108,7 +108,7 @@
           type="checkbox"
           :disabled="voice.recording"
           @change="voice.setAutoSendEnabled($event.target.checked)"
-        /> 自动发送
+        /> 转写后自动发送
       </label>
       <div class="voice-reply-setting">
         <label class="voice-toggle">
@@ -141,7 +141,7 @@
       <button type="button" :disabled="disabled" @click="voice.sendTranscript()">立即发送</button>
     </div>
     <div v-if="['sending', 'waiting_reply'].includes(voice.state)" class="voice-sending" role="status">
-      <span>传令可能已经送达；停止等待不会撤回文字发送。</span>
+      <span>消息可能已经发出，停止等待不会撤回消息。</span>
       <button type="button" class="voice-stop-waiting" @click="voice.stopWaiting()">停止等待</button>
     </div>
     <div v-if="['review', 'conflict', 'error'].includes(voice.state)" class="voice-review" role="status">
@@ -156,10 +156,10 @@
           aria-label="确认发送语音转写"
           @click="voice.sendTranscript()"
         >确认发送</button>
-        <button type="button" :disabled="disabled" @click="$emit('apply', 'append')">追加</button>
-        <button type="button" :disabled="disabled" @click="$emit('apply', 'replace')">替换</button>
+        <button type="button" :disabled="disabled" @click="$emit('apply', 'append')">追加到输入框</button>
+        <button type="button" :disabled="disabled" @click="$emit('apply', 'replace')">替换输入框文字</button>
       </div>
-      <button type="button" :disabled="disabled" @click="voice.discard()">丢弃</button>
+      <button type="button" :disabled="disabled" @click="voice.discard()">丢弃本次录音或转写</button>
     </div>
   </div>
 </template>

@@ -3,8 +3,8 @@
     <ChatPanel
       @update:draft="$emit('update:draft', $event)"
       discussion-variant="public"
-      empty-text="厅前暂无话头，先发一句请众好汉接话。"
-      placeholder="向众好汉传话，或 @某位好汉"
+      empty-text="向好汉提问，或用 @ 指定回复对象。"
+      placeholder="向好汉提问，或 @ 指定回复对象…"
       subtitle="厅前公议"
       title="厅前公议"
       v-bind="props"

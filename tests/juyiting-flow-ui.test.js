@@ -120,7 +120,7 @@ describe('flow gap actual UI consumers', () => {
     const persona = { personaCode: 'gss', agentId: 'old-agent', boundToMe: true, name: '公孙胜' }
     const wrapper = mount(Catalog, { props: { personas: [persona], portraitName: () => '', portraitStyle: () => ({}) }, global: { stubs: { 'var-icon': true } } })
     try {
-      const button = wrapper.findAll('button').find(item => item.text() === '除名下山')
+      const button = wrapper.findAll('button').find(item => item.text() === '移除好汉')
       await button.trigger('click'); expect(wrapper.emitted('request-unbind-persona')).to.have.length(1)
       expect(wrapper.emitted('unbind-persona')).to.equal(undefined)
       await wrapper.setProps({ unbindBusy: true }); await button.trigger('click')

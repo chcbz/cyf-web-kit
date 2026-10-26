@@ -126,14 +126,14 @@ describe('formal discussion terminal resource and toolbar layout', () => {
       typedOutcomes: [{ key: 'p', outcome: { assistantMessageId: 'm' } }] } })
     try {
       expect(wrapper.get('.context-summary em').text()).to.equal('事项已完成')
-      expect(wrapper.find('[aria-label="另起话头"]').exists()).to.equal(false)
+      expect(wrapper.find('[aria-label="新对话"]').exists()).to.equal(false)
       expect(wrapper.find('.deliberation-status').exists()).to.equal(false)
       expect(wrapper.findComponent(Card).props('readOnly')).to.equal(true)
       wrapper.findComponent(Card).vm.$emit('reply', {})
       expect(wrapper.emitted('typed-reply')).to.equal(undefined)
-      expect(wrapper.find('[aria-label="话头记录"]').exists()).to.equal(true)
+      expect(wrapper.find('[aria-label="议事记录"]').exists()).to.equal(true)
       await wrapper.setProps({ selectedTask: { id: 'u', status: 'running' }, eventStreamRecovering: false })
-      expect(wrapper.find('[aria-label="另起话头"]').exists()).to.equal(true)
+      expect(wrapper.find('[aria-label="新对话"]').exists()).to.equal(true)
       expect(wrapper.findComponent(Card).props('readOnly')).to.equal(false)
     } finally { wrapper.unmount() }
   })

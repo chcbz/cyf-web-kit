@@ -37,7 +37,7 @@ describe('unified generic point detail replaces drawing-specific confirmation', 
       expect(wrapper.find('.controlled-image-consent').exists()).to.equal(false)
       expect(wrapper.find('input[type="checkbox"]').exists()).to.equal(false)
       expect(wrapper.text()).not.to.include('受控图像外部账户确认')
-      expect(wrapper.text()).to.include('资料由该Agent运行环境及所使用的模型服务处理')
+      expect(wrapper.text()).to.include('其运行环境及模型服务会处理这些内容')
       const button = wrapper.findAll('button').find(item => item.text() === '确认承办，进入议事')
       expect(Boolean(button)).to.equal(true); await button.trigger('click')
       expect(wrapper.emitted('assign-task')[0][1].agentId).to.equal('agent-a')
