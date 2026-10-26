@@ -97,7 +97,14 @@ describe('completed matter records display over fixed acceptance facts', () => {
   })
   it('reads remaining existing catalogue pages for missing metadata without replaying commands', async () => {
     const { wrapper, outputs, more } = harness({}, [])
-    try { outputs.nextCursor.value = 'page-2'; await flushPromises(); expect(more()).to.equal(1); outputs.nextCursor.value = 'page-2'; await flushPromises(); expect(more()).to.equal(1) }
+    try {
+      outputs.nextCursor.value = 'page-2'; await flushPromises(); expect(more()).to.equal(1)
+      outputs.nextCursor.value = 'page-2'; await flushPromises(); expect(more()).to.equal(1)
+      await wrapper.findAll('.completed-result-heading button')[0].trigger('click')
+      await wrapper.findAll('button').find(b => b.text() === '重试预览').trigger('click')
+      outputs.nextCursor.value = null; await flushPromises(); outputs.nextCursor.value = 'page-2'; await flushPromises()
+      expect(more()).to.equal(2)
+    }
     finally { wrapper.unmount() }
   })
 })

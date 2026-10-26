@@ -39,7 +39,7 @@
                   :load="outputs.preview"
                   :context-key="outputs.cacheKey.value"
                 />
-                <p v-else role="status">{{ outputs.message.value && ['error', 'forbidden', 'unavailable'].includes(outputs.state.value) ? outputs.message.value : '此固定成果暂不可预览，不会换用其他版本。' }} <button type="button" @click="outputs.refresh">重试预览</button></p>
+                <p v-else role="status">{{ outputs.message.value && ['error', 'forbidden', 'unavailable'].includes(outputs.state.value) ? outputs.message.value : '此固定成果暂不可预览，不会换用其他版本。' }} <button type="button" @click="retryPreview">重试预览</button></p>
               </section>
             </article>
             <p v-if="group.history && !group.rows.length" class="muted">没有其他正式交付历史成果。</p>
@@ -79,6 +79,7 @@ const retry = () => { expandedKey.value = ''; emit('refresh') }
 // Follow the existing output cursor only while fixed records lack their exact metadata.
 // A repeated cursor must not create an automatic read loop; errors remain explicit retry.
 const seenCursors = new Set()
+const retryPreview = () => { seenCursors.clear(); void outputs.refresh() }
 watch(() => [props.taskId, props.identityKey, props.taskVersion, props.context], () => { expandedKey.value = ''; seenCursors.clear() }, { flush: 'sync' })
 watch(() => [outputs.loading.value, outputs.nextCursor.value, records.value], () => {
   const cursor = outputs.nextCursor.value
