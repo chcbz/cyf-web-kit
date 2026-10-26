@@ -10,10 +10,10 @@ describe('Juyi Hall conversation material references', () => {
   it('shows task-scoped fixed versions from the real task directory without turning them into chat text', () => {
     assert.match(source, /usePersonalWorkspaceConversationLinks/)
     assert.match(source, /usePersonalWorkspaceTaskLinks/)
-    assert.match(source, /本次需求的资料/)
+    assert.match(source, /本任务资料与使用范围/)
     assert.match(source, /\['INPUT', 'REFERENCE'\]/)
-    assert.match(source, /默认使用本任务有效资料/)
-    assert.match(source, /class="typed-source-selector"/)
+    assert.match(source, /option value="TASK_DEFAULT">本任务资料/)
+    assert.match(source, /class="material-use-list"/)
     assert.match(source, /sourceSelectors: typedSourceSelectors/)
     assert.doesNotMatch(source, /参看资料：/)
     assert.doesNotMatch(source, /execution-directory/)

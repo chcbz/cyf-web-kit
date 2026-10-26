@@ -106,12 +106,14 @@
         aria-label="语音设置与状态"
       >
         <HallVoiceControls
+          ref="voiceControlsRef"
           class="composer-voice-controls"
           :recording-target="voiceActionRef"
           :settings-visible="moreOpen"
           :draft-only="true"
           :disabled="actionsDisabled"
           :voice="voice"
+          @activate-input="activateInput"
           @apply="$emit('voice-apply', $event)"
         />
       </section>
@@ -185,11 +187,13 @@ const moreButtonRef = ref(null)
 const moreOpen = ref(false)
 const moreId = `hall-composer-more-${useId()}`
 const voiceActionRef = ref(null)
+const voiceControlsRef = ref(null)
 const textareaRef = ref(null)
 const morePanelRef = ref(null)
 const materialsRef = ref(null)
 const materialsButtonRef = ref(null)
 const closeMore = (restoreFocus = false) => {
+  voiceControlsRef.value?.closeSettings?.()
   if (!moreOpen.value) return
   moreOpen.value = false
   if (restoreFocus) nextTick(() => moreButtonRef.value?.focus())
@@ -204,10 +208,16 @@ const openMaterials = () => {
   closeMore()
   emit('open-materials')
 }
-defineExpose({ closeTools: () => {
+const closeTools = () => {
   closeMore()
   if (props.materialsOpen) emit('close-materials')
-} })
+}
+defineExpose({ closeTools })
+const activateInput = () => {
+  if (hasChildDialog()) return
+  emit('open-tools')
+  closeTools()
+}
 const hasChildDialog = () => [...document.querySelectorAll('dialog[open], [role="dialog"][aria-modal="true"]')]
   .some(dialog => !dialog.contains(composerRef.value) && !dialog.closest('[hidden]') && window.getComputedStyle(dialog).display !== 'none')
 const handleOutside = event => {
@@ -311,6 +321,7 @@ const resizeTextarea = () => {
 
 const handleFocus = () => {
   isFocused.value = true
+  activateInput()
 }
 
 const handleInput = (event) => {

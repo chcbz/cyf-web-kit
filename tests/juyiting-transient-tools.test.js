@@ -1,7 +1,8 @@
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
-import { mount } from '@vue/test-utils'
+import { DOMWrapper, mount } from '@vue/test-utils'
+import { validMaterialVersion } from '../src/composables/juyiting/materialVersion.js'
 import * as Vue from 'vue'
 
 const compile = (name, deps = {}) => {
@@ -17,14 +18,18 @@ const History = compile('HallConversationHistory')
 const Composer = compile('HallChatComposer', { HallVoiceControls: { template: '<button class="voice-control">录音状态</button>' } })
 const directory = () => ({ items: Vue.ref([]), links: Vue.ref([]), pendingWrites: Vue.ref([]), loading: Vue.ref(false), error: Vue.ref(''),
   actionState: Vue.ref('idle'), writeNotice: Vue.ref(''), refresh: async () => true, load: async () => true, dispose: () => {} })
-const Chat = compile('ChatPanel', {
+const chatDeps = {
   HallConversationHistory: History, HallChatComposer: Composer,
   HallMessageParts: { render: () => null }, HallMaterialPicker: { render: () => null }, BountyTextSelectionArchive: { render: () => null },
   BountyTypedOutcomeCard: { render: () => null }, WorkspaceWriteRecovery: { render: () => null },
   marked: Object.assign(value => value, { setOptions: () => {} }), DOMPurify: { sanitize: value => value },
   usePersonalWorkspace: directory, usePersonalWorkspaceConversationLinks: directory, usePersonalWorkspaceTaskLinks: directory
-})
-const createChat = () => mount(Chat, { attachTo: document.body, props: { mentionLabel: () => '', senderText: () => '', draft: '草稿保留', conversationId: 'c1',
+}
+const Chat = compile('ChatPanel', chatDeps)
+const Voice = compile('HallVoiceControls')
+const RealComposer = compile('HallChatComposer', { HallVoiceControls: Voice })
+const RealChat = compile('ChatPanel', { ...chatDeps, HallChatComposer: RealComposer })
+const createChat = (component = Chat) => mount(component, { attachTo: document.body, props: { mentionLabel: () => '', senderText: () => '', draft: '草稿保留', conversationId: 'c1',
   conversationHistory: [{ id: 'c1', title: '旧话头' }] }, global: { stubs: { 'var-dialog': true, 'var-icon': true } } })
 const pointer = async target => { target.dispatchEvent(new window.Event('pointerdown', { bubbles: true })); await Vue.nextTick() }
 const escape = async (target = document) => { target.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); await Vue.nextTick() }
@@ -187,4 +192,270 @@ describe('discussion transient tools dismissal', () => {
       expect(escaped).to.deep.equal([false])
     } finally { document.removeEventListener('keydown', observer) }
   })
+})
+
+
+describe('discussion input switching with real voice controls', () => {
+  const createVoice = () => {
+    const calls = { start: [], stop: 0, cancel: 0 }
+    const voice = Vue.reactive({ supported: true, state: 'idle', canRecord: true,
+      startRecording: options => { calls.start.push(options) },
+      stopRecording: () => { calls.stop++ }, cancel: () => { calls.cancel++ }
+    })
+    return { voice, calls }
+  }
+  const unchanged = (w, calls) => {
+    expect(w.get('textarea').element.value).to.equal('草稿保留')
+    for (const event of ['send-message', 'delete-conversation', 'update:draft', 'voice-apply', 'remove-attachment']) {
+      expect(w.emitted(event), event).to.equal(undefined)
+    }
+    expect(calls.cancel).to.equal(0)
+  }
+  for (const tool of ['history', 'more', 'materials']) {
+    it(`focus without pointerdown dismisses ${tool} and keeps focus/draft/recording`, async () => {
+      const w = createChat(RealChat); const { voice, calls } = createVoice()
+      try {
+        await w.setProps({ voice })
+        if (tool === 'history') await historyButton(w).trigger('click')
+        if (tool === 'more') {
+          await moreButton(w).trigger('click')
+          await w.get('.voice-settings-trigger').trigger('click')
+          expect(w.find('.voice-settings').exists()).to.equal(true)
+        }
+        if (tool === 'materials') await w.get('.composer-add-materials').trigger('click')
+        w.get('textarea').element.focus(); await Vue.nextTick()
+        expect(document.activeElement).to.equal(w.get('textarea').element)
+        expect(w.findComponent(History).exists()).to.equal(false)
+        expect(moreButton(w).attributes('aria-expanded')).to.equal('false')
+        expect(w.find('.material-reference-picker').exists()).to.equal(false)
+        expect(w.find('.voice-settings').exists()).to.equal(false)
+        await moreButton(w).trigger('click')
+        expect(w.get('.voice-settings-trigger').attributes('aria-expanded')).to.equal('false')
+        unchanged(w, calls)
+        expect(calls.start).to.deep.equal([])
+        expect(calls.stop).to.equal(0)
+      } finally { w.unmount() }
+    })
+    for (const withPointer of [false, true]) {
+      it(`voice activation closes ${tool}, pointer=${withPointer}, starts draft-only exactly once`, async () => {
+        const w = createChat(RealChat); const { voice, calls } = createVoice()
+        try {
+          await w.setProps({ voice }); await Vue.nextTick()
+          if (tool === 'history') await historyButton(w).trigger('click')
+          if (tool === 'more') {
+            await moreButton(w).trigger('click')
+            await w.get('.voice-settings-trigger').trigger('click')
+          }
+          if (tool === 'materials') await w.get('.composer-add-materials').trigger('click')
+          const button = w.get('.composer-inline-voice .voice-start')
+          if (withPointer) await pointer(button.element)
+          await button.trigger('click')
+          expect(w.findComponent(History).exists()).to.equal(false)
+          expect(moreButton(w).attributes('aria-expanded')).to.equal('false')
+          expect(w.find('.material-reference-picker').exists()).to.equal(false)
+          expect(w.find('.voice-settings').exists()).to.equal(false)
+          expect(calls.start).to.deep.equal([{ draftOnly: true }])
+          expect(calls.stop).to.equal(0)
+          unchanged(w, calls)
+        } finally { w.unmount() }
+      })
+    }
+  }
+  it('stops/transcribes exactly once and keeps recording controls reachable on text focus', async () => {
+    const w = createChat(RealChat); const { voice, calls } = createVoice()
+    try {
+      voice.state = 'recording'
+      await w.setProps({ voice })
+      await moreButton(w).trigger('click')
+      w.get('textarea').element.focus(); await Vue.nextTick()
+      expect(w.get('.composer-more-panel').element.style.display).not.to.equal('none')
+      expect(w.find('.voice-cancel').exists()).to.equal(true)
+      expect(calls.stop).to.equal(0)
+      await historyButton(w).trigger('click')
+      await w.get('.composer-inline-voice .is-recording').trigger('click')
+      expect(w.findComponent(History).exists()).to.equal(false)
+      expect(calls.stop).to.equal(1)
+      expect(calls.start).to.deep.equal([])
+      unchanged(w, calls)
+    } finally { w.unmount() }
+  })
+  it('disabled or unsupported voice does not activate input', async () => {
+    const w = createChat(RealChat); const { voice, calls } = createVoice()
+    try {
+      voice.canRecord = false
+      await w.setProps({ voice })
+      await historyButton(w).trigger('click')
+      await w.get('.voice-start').trigger('click')
+      expect(w.findComponent(History).exists()).to.equal(true)
+      expect(calls.start).to.deep.equal([])
+      voice.supported = false; await Vue.nextTick()
+      expect(w.find('.voice-start').exists()).to.equal(false)
+      unchanged(w, calls)
+    } finally { w.unmount() }
+  })
+  it('preserves delete confirmation and child modal when input receives focus', async () => {
+    const w = createChat(RealChat); let modal
+    try {
+      await historyButton(w).trigger('click')
+      await w.get('.history-delete').trigger('click')
+      w.get('textarea').element.focus(); await Vue.nextTick()
+      expect(w.findComponent(History).exists()).to.equal(true)
+      expect(w.getComponent(History).findComponent({ name: 'var-dialog' }).attributes('show')).to.equal('true')
+      w.getComponent(History).findComponent({ name: 'var-dialog' }).vm.$emit('update:show', false)
+      await Vue.nextTick()
+      await moreButton(w).trigger('click')
+      modal = visibleModal()
+      w.get('textarea').element.blur(); w.get('textarea').element.focus(); await Vue.nextTick()
+      expect(moreButton(w).attributes('aria-expanded')).to.equal('true')
+      expect(w.emitted('delete-conversation')).to.equal(undefined)
+    } finally { modal?.remove(); w.unmount() }
+  })
+  it('input activation is scoped to its discussion instance', async () => {
+    const a = createChat(RealChat); const b = createChat(RealChat)
+    try {
+      const { voice } = createVoice(); await b.setProps({ voice })
+      await historyButton(a).trigger('click'); await historyButton(b).trigger('click')
+      await b.get('.voice-start').trigger('click')
+      expect(a.findComponent(History).exists()).to.equal(true)
+      expect(b.findComponent(History).exists()).to.equal(false)
+    } finally { a.unmount(); b.unmount() }
+  })
+})
+
+
+describe('task discussion material picker prototype parity', () => {
+  const flush = async () => { for (let i = 0; i < 12; i++) { await Promise.resolve(); await Vue.nextTick() } }
+  const fixture = ({ failAttach = false } = {}) => {
+    const calls = { attach: [], preview: [] }
+    const files = [{ fileId: 'old', displayName: '原任务资料.pdf', latestVersion: '9' },
+      { fileId: 'new', displayName: '本次资料.txt', latestVersion: '2' }]
+    const workspace = () => {
+      const state = { items: Vue.ref(files), links: Vue.ref([]), detail: Vue.ref(null), listState: Vue.ref('idle'),
+        loading: Vue.ref(false), actionState: Vue.ref('idle'), error: Vue.ref(''), pendingWrites: Vue.ref([]),
+        preview: Vue.ref({ kind: 'none' }), nextCursor: Vue.ref(null), hasMoreVersions: Vue.ref(false),
+        refresh: async () => true, dispose: () => {}, reset: () => {},
+        closeDetail: () => { state.detail.value = null }, revokePreview: () => { state.preview.value = { kind: 'none' } },
+        select: async id => {
+          state.detail.value = { file: { ...files.find(f => f.fileId === id), state: 'ACTIVE' },
+            latestVersion: { version: id === 'new' ? '2' : '9' }, versions: [{ version: '1' }, { version: id === 'new' ? '2' : '9' }] }
+          return state.detail.value
+        },
+        previewVersion: async version => { calls.preview.push(version); state.preview.value = { kind: 'text', text: '真实预览夹具' }; return true }
+      }
+      return state
+    }
+    const taskLinks = { ...directory(), attach: async value => {
+      calls.attach.push(value)
+      if (failAttach) { taskLinks.error.value = '关联结果待核对'; return null }
+      const link = { ...value, relationId: 'new-link', state: 'ACTIVE' }
+      taskLinks.links.value.push(link); return link
+    } }
+    taskLinks.links.value = [{ fileId: 'old', version: '1', role: 'INPUT', state: 'ACTIVE', relationId: 'old-link' }]
+    const Picker = compile('HallMaterialPicker', { usePersonalWorkspace: workspace, validMaterialVersion,
+      PdfDocumentPreview: { render: () => null } })
+    const ChatWithPicker = compile('ChatPanel', { ...chatDeps, HallChatComposer: RealComposer,
+      HallMaterialPicker: Picker, usePersonalWorkspace: workspace, usePersonalWorkspaceTaskLinks: () => taskLinks })
+    const w = mount(ChatWithPicker, { attachTo: document.body, props: { mentionLabel: () => '', senderText: () => '',
+      draft: '草稿保留', conversationId: 'c1', identityScope: 'tenant-owner', identityEpoch: 1,
+      discussionVariant: 'bounty', selectedTask: { id: 'task-1', status: 'running' }, typedEnabled: true },
+      global: { stubs: { 'var-dialog': true, 'var-icon': true } } })
+    const dialog = () => new DOMWrapper(document.querySelector('dialog.quick-material-picker'))
+    const open = async () => { w.get('.composer-add-materials').element.focus(); await w.get('.composer-add-materials').trigger('click'); await flush(); return dialog() }
+    const select = async () => { await dialog().get('[data-file-id="new"]').trigger('click'); await flush(); await dialog().get('.quick-material-version-actions .primary').trigger('click'); await flush() }
+    return { w, calls, taskLinks, dialog, open, select, Picker }
+  }
+  it('paperclip opens C08 directly without the inline intermediate panel, closing other tools', async () => {
+    const h = fixture()
+    try {
+      await moreButton(h.w).trigger('click')
+      await h.open()
+      expect(h.w.find('.material-reference-picker').exists()).to.equal(false)
+      expect(h.w.find('.quick-material-open').exists()).to.equal(false)
+      expect(h.dialog().attributes()).to.have.property('open')
+      expect(h.dialog().find('.quick-material-list-pane').exists()).to.equal(true)
+      expect(h.dialog().find('.quick-material-detail-pane').exists()).to.equal(true)
+      expect(h.dialog().get('input[type="file"]').attributes()).to.have.property('multiple')
+      expect(h.dialog().get('.quick-material-confirm').text()).to.equal('完成（0）')
+      expect(h.dialog().get('.material-use-settings').attributes()).not.to.have.property('open')
+      expect(moreButton(h.w).attributes('aria-expanded')).to.equal('false')
+      expect(h.calls.attach).to.deep.equal([])
+      expect(h.w.emitted('send-message')).to.equal(undefined)
+      await pointer(h.w.get('textarea').element)
+      expect(h.dialog().exists()).to.equal(true)
+    } finally { h.w.unmount() }
+  })
+  it('selection only stages; cancel restores focus without adding/removing existing task references', async () => {
+    const h = fixture()
+    try {
+      await h.open(); await h.select()
+      expect(h.dialog().get('.quick-material-confirm').text()).to.equal('完成（1）')
+      expect(h.calls.attach).to.deep.equal([])
+      expect(h.calls.preview).to.include('2')
+      await h.dialog().get('.quick-material-footer-actions button').trigger('click'); await flush()
+      expect(document.querySelector('dialog.quick-material-picker')).to.equal(null)
+      expect(document.activeElement).to.equal(h.w.get('.composer-add-materials').element)
+      expect(h.taskLinks.links.value.map(l => l.fileId)).to.deep.equal(['old'])
+      await h.open()
+      expect(h.dialog().get('.quick-material-confirm').text()).to.equal('完成（0）')
+      expect(h.w.get('textarea').element.value).to.equal('草稿保留')
+      expect(h.w.emitted('send-message')).to.equal(undefined)
+    } finally { h.w.unmount() }
+  })
+  it('completion associates the selected immutable version exactly once without sending', async () => {
+    const h = fixture()
+    try {
+      await h.open(); await h.select()
+      await h.dialog().get('.quick-material-confirm').trigger('click'); await flush()
+      expect(h.calls.attach).to.deep.equal([{ fileId: 'new', version: '2', role: 'REFERENCE' }])
+      expect(h.taskLinks.links.value.map(l => l.fileId)).to.deep.equal(['old', 'new'])
+      expect(h.w.emitted('send-message')).to.equal(undefined)
+      expect(h.w.emitted('update:draft')).to.equal(undefined)
+      await h.open()
+      expect(h.dialog().get('.quick-material-confirm').text()).to.equal('完成（0）')
+      expect(h.dialog().get('.material-use-settings').text()).to.include('2 份')
+      expect(h.dialog().get('.material-use-settings').text()).to.include('原任务资料.pdf · v1')
+    } finally { h.w.unmount() }
+  })
+  it('cancel discards scope edits; completion retains explicit fixed-version source selectors', async () => {
+    const h = fixture()
+    try {
+      await h.open()
+      await h.dialog().get('select[aria-label="资料范围"]').setValue('NONE')
+      await h.dialog().get('.quick-material-footer-actions button').trigger('click'); await flush()
+      await h.open()
+      expect(h.dialog().get('select').element.value).to.equal('TASK_DEFAULT')
+      await h.dialog().get('select').setValue('EXPLICIT')
+      await h.dialog().get('.material-use-list input').setValue(true)
+      await h.dialog().get('.quick-material-confirm').trigger('click'); await flush()
+      h.w.getComponent(RealComposer).vm.$emit('send-message'); await flush()
+      expect(h.w.emitted('send-message').at(-1)[0]).to.deep.equal({ materialScope: 'EXPLICIT',
+        sourceSelectors: [{ kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'old', version: '1', purpose: 'INPUT' }] })
+      expect(h.calls.attach).to.deep.equal([])
+    } finally { h.w.unmount() }
+  })
+  it('failed association keeps a visible recovery entry and the pending fixed selection', async () => {
+    const h = fixture({ failAttach: true })
+    try {
+      await h.open(); await h.select()
+      await h.dialog().get('.quick-material-confirm').trigger('click'); await flush()
+      expect(h.w.get('.material-link-status').text()).to.include('部分资料尚未关联')
+      await h.w.get('.material-link-status button').trigger('click'); await flush()
+      expect(h.dialog().get('.quick-material-confirm').text()).to.equal('完成（1）')
+      expect(h.dialog().text()).to.include('关联结果待核对')
+      expect(h.calls.attach).to.have.length(1)
+      expect(h.w.emitted('send-message')).to.equal(undefined)
+    } finally { h.w.unmount() }
+  })
+  for (const change of [{ identityEpoch: 2 }, { selectedTask: { id: 'task-2', status: 'running' } }, { selectedTask: { id: 'task-1', status: 'completed' } }]) {
+    it(`closes/discards picker on context change ${JSON.stringify(change)}`, async () => {
+      const h = fixture()
+      try {
+        await h.open(); await h.select()
+        await h.w.setProps(change); await flush()
+        expect(document.querySelector('dialog.quick-material-picker')).to.equal(null)
+        expect(h.calls.attach).to.deep.equal([])
+        expect(h.w.emitted('send-message')).to.equal(undefined)
+      } finally { h.w.unmount() }
+    })
+  }
 })

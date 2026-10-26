@@ -191,6 +191,55 @@ describe('scoped bounty output actions live on the actual message cards', () => 
       expect(wrapper.find('.message-output-actions').exists()).to.equal(false)
     } finally { wrapper.unmount() }
   })
+  for (const [kind, mime] of [['image', 'image/png'], ['audio', 'audio/wav'], ['file', 'application/octet-stream']]) {
+    it(`discussion ${kind} preview has no download action or misleading download guidance`, async () => {
+      const calls = []
+      const components = createComponents({ execute: async request => { calls.push(request); return new Blob(['content'], { type: mime }) } })
+      const wrapper = mount(components.HallMessageMedia, { attachTo: document.body,
+        props: { part: part(1, { kind, mime }), conversationId: 'conversation-1', identityKey: 'owner-a' } })
+      try {
+        await settle()
+        const trigger = wrapper.get('.media-actions button'); trigger.element.focus()
+        await trigger.trigger('click'); await settle()
+        const dialog = document.querySelector('[aria-label="会话资料预览"]')
+        expect(dialog).not.to.equal(null)
+        expect(dialog.textContent).not.to.include('下载')
+        expect(dialog.querySelector('.media-preview-download, a[download]')).to.equal(null)
+        expect(dialog.querySelector('footer')).to.equal(null)
+        if (kind === 'image') expect(dialog.querySelector('img').src).to.include('blob:inline-test')
+        if (kind === 'audio') expect(dialog.querySelector('audio').getAttribute('controlslist')).to.equal('nodownload')
+        if (kind === 'file') {
+          expect(dialog.textContent).to.include('此格式暂不支持在线预览')
+          expect(calls).to.deep.equal([])
+        }
+        expect(calls.every(request => request.method === 'GET' && request.needAuth === true)).to.equal(true)
+        dialog.querySelector('[aria-label="关闭预览"]').click(); await settle()
+        expect(document.querySelector('[aria-label="会话资料预览"]')).to.equal(null)
+        expect(document.activeElement).to.equal(trigger.element)
+      } finally { wrapper.unmount() }
+    })
+  }
+  it('preview still exposes real errors/retry and discards old media on identity change', async () => {
+    let fail = true
+    const components = createComponents({ execute: async () => {
+      if (fail) throw new Error('媒体读取失败')
+      return new Blob(['audio'], { type: 'audio/wav' })
+    } })
+    const wrapper = mount(components.HallMessageMedia, { props: { part: part(1, { kind: 'audio', mime: 'audio/wav' }),
+      conversationId: 'conversation-1', identityKey: 'owner-a' } })
+    try {
+      await wrapper.get('.media-actions button').trigger('click'); await settle()
+      const dialog = document.querySelector('[aria-label="会话资料预览"]')
+      expect(dialog.querySelector('[role="alert"]').textContent).to.include('媒体读取失败')
+      expect(dialog.querySelector('footer').textContent).to.equal('重试预览')
+      fail = false; dialog.querySelector('footer button').click(); await settle()
+      expect(dialog.querySelector('audio')).not.to.equal(null)
+      expect(dialog.querySelector('footer')).to.equal(null)
+      await wrapper.setProps({ identityKey: 'owner-b' }); await settle()
+      expect(document.querySelector('[aria-label="会话资料预览"]')).to.equal(null)
+      expect(wrapper.find('audio').exists()).to.equal(false)
+    } finally { wrapper.unmount() }
+  })
   it('compiles the provider, message slots and shared discussion shell', () => {
     for (const name of ['ChatPanel', 'BountyDiscussionPanel', 'BountyExecutionOutputs', 'HallMessageParts', 'HallMessageMedia']) {
       const filename = `src/components/juyiting/${name}.vue`

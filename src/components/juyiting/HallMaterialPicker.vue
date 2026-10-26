@@ -1,6 +1,6 @@
 <template>
   <section class="hall-material-picker" :aria-label="readOnly ? '关联资料' : '需求资料'">
-    <div v-if="!readOnly" class="quick-request-actions">
+    <div v-if="!readOnly && !dialogOnly" class="quick-request-actions">
       <button
         type="button"
         class="quick-material-open"
@@ -9,7 +9,7 @@
       ><var-icon name="paperclip" aria-hidden="true" />添加资料（可选）<span v-if="selectedMaterials.length">{{ selectedMaterials.length }}</span></button>
       <slot></slot>
     </div>
-    <ul v-if="selectedMaterials.length" class="quick-material-summary" aria-label="已选资料">
+    <ul v-if="selectedMaterials.length && !dialogOnly" class="quick-material-summary" aria-label="已选资料">
       <li v-for="material in selectedMaterials" :key="materialKey(material)">
         <span><strong>{{ material.displayName }}</strong><small>v{{ material.version }}</small></span>
         <button type="button" :disabled="disabled" @click="previewSelectedMaterial(material)">预览</button>
@@ -36,6 +36,7 @@
           <button type="button" class="quick-material-back" @click="backFromPicker"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m14 6-6 6 6 6" /></svg>返回</button>
           <div><h3 id="hall-material-picker-title">选择资料</h3><p>从工作空间选择或上传资料，完成后带入。</p></div>
         </header>
+        <div v-if="$slots.context" class="quick-material-context"><slot name="context"></slot></div>
         <div class="quick-material-picker-body">
           <section class="quick-material-list-pane" aria-label="工作空间资料">
             <p v-if="workspace.listState.value === 'loading'" role="status">正在读取你的资料…</p>
@@ -133,6 +134,7 @@ import { usePersonalWorkspace, savePersonalWorkspaceBlob } from '@/composables/u
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
   readOnly: { type: Boolean, default: false },
+  dialogOnly: { type: Boolean, default: false },
   identityScope: { type: String, default: '' },
   identityEpoch: { type: [Number, String], default: 0 },
   enabled: { type: Boolean, default: true },
@@ -267,6 +269,7 @@ const openQuickMaterialPicker = async () => {
   materialPickerOpen.value = true
   await workspace.refresh({ state: 'ACTIVE' })
 }
+defineExpose({ open: openQuickMaterialPicker })
 const cancelQuickMaterialPicker = () => { materialPickerOpen.value = false; draftMaterials.value = []; resetMaterialPicker() }
 const loadMoreQuickMaterials = () => workspace.loadMore({ state: 'ACTIVE' })
 const selectQuickMaterialFile = async (fileId, fixedVersion = null) => {
@@ -365,6 +368,7 @@ onBeforeUnmount(() => { pickerGeneration += 1; mobileQuery?.removeEventListener?
 </script>
 
 <style scoped>
+.quick-material-context { flex: 0 0 auto; max-height: 28vh; overflow-y: auto; padding: 8px 14px; border-bottom: 1px solid #e4d6c0; }
 .hall-material-picker { min-width: 0; }
 .quick-request-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; }
 .quick-material-open { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--hall-line, #d8d8ce); border-radius: 8px; background: var(--hall-paper, #fffefa); color: var(--hall-ink, #242e2b); font: inherit; cursor: pointer; }

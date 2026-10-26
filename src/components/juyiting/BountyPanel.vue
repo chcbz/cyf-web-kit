@@ -265,7 +265,7 @@
               <section v-if="!embeddedHall" class="workspace-shortcut" aria-label="榜文百宝箱入口">
                 <div>
                   <strong>资料与交付</strong>
-                  <p>资料和成果可在议事中预览、下载；需要保留时存入工作空间，在事项详情核对本次成果并验收。</p>
+                  <p>资料和成果可在议事中查看与预览，在事项详情核对本次成果并验收。</p>
                 </div>
                 <button type="button" @click="$emit('open-workspace')">打开百宝箱</button>
               </section>
