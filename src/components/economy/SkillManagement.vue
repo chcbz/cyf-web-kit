@@ -191,13 +191,13 @@
                 >{{ market.busy[row.skillKey] ? '正在提交…' : mode === 'DISABLE' ? '确认停用' : '确认启用' }}</button></footer>
               </template>
               <template v-else-if="mode === 'progress'">
-                <div role="status"><p>{{ market.pending[row.skillKey]?.kind === 'QUOTE' ? '报价结果待核对；原键重放只恢复报价，不会自动安装。' : unknown(row) ? '结果尚未确认，只核对原操作，不重新购买。' : change(row) ? changeLabels[change(row).status] : '尚未收到操作标识，请原键核对。' }}</p><p v-if="change(row)?.reasonCode">{{ reasonLabels[change(row).reasonCode] }}</p></div>
+                <div role="status"><p>{{ market.pending[row.skillKey]?.kind === 'QUOTE' ? '报价结果待核对；原键重放只恢复报价，不会自动安装。' : unknown(row) ? '结果尚未确认，只核对原操作，不重复提交。' : change(row) ? changeLabels[change(row).status] : '尚未收到操作标识，请原键核对。' }}</p><p v-if="change(row)?.reasonCode">{{ reasonLabels[change(row).reasonCode] }}</p></div>
                 <ol v-if="change(row)" class="skill-progress" aria-label="当前操作阶段">
-                  <li v-for="(step, index) in progressSteps" :key="step" :class="{ current: progressIndex(row) === index, done: progressIndex(row) > index }"><span>{{ index + 1 }}</span><strong>{{ step }}</strong></li>
+                  <li v-for="(step, index) in progressSteps(row)" :key="step" :class="{ current: progressIndex(row) === index, done: progressIndex(row) > index }"><span>{{ index + 1 }}</span><strong>{{ step }}</strong></li>
                 </ol>
-                <p v-if="change(row)?.status === 'WAITING_AGENT'" class="skill-note">原操作已接纳，等待Agent连接后继续；无需再次安装或购买。</p>
-                <p v-else-if="change(row)?.status === 'FAILED_RETRYABLE'" class="skill-note">已确认本次未生效，可重试原操作，不重新报价、不重复购买。</p>
-                <p v-else-if="change(row)?.status === 'RECOVERY_REQUIRED'" class="skill-note">尚不能确认切换结果，不据此退款或判定失败；只核对原记录。</p>
+                <p v-if="change(row)?.status === 'WAITING_AGENT'" class="skill-note">{{ change(row).action === 'UNINSTALL' ? '已停止新调用，等待Agent连接后继续原卸载操作；无需重复提交。' : '原操作已接纳，等待Agent连接后继续；无需再次安装或购买。' }}</p>
+                <p v-else-if="change(row)?.status === 'FAILED_RETRYABLE'" class="skill-note">{{ change(row).action === 'UNINSTALL' ? '已确认卸载未完成；新调用保持关闭，可重试原操作。' : '已确认本次未生效，可重试原操作，不重新报价、不重复购买。' }}</p>
+                <p v-else-if="change(row)?.status === 'RECOVERY_REQUIRED'" class="skill-note">{{ change(row).action === 'UNINSTALL' ? '尚不能确认卸载结果，保留最近确认的安装信息；只核对原操作。' : '尚不能确认切换结果，不据此退款或判定失败；只核对原记录。' }}</p>
                 <p v-else-if="change(row)?.status === 'SUCCEEDED'" class="skill-note">{{ change(row).action === 'UNINSTALL' ? '已卸载；历史、成果和已购权益保留，可重新安装。' : change(row).runtimeSynced ? '该动作已完成；实际运行状态另行核验。' : '已关闭新调用，Runtime策略仍待同步。' }}</p>
                 <p v-if="market.queryUnknown[row.skillKey]" class="skill-error" role="alert">{{ market.queryUnknown[row.skillKey] }}</p>
                 <details v-if="change(row)"><summary>原操作详情</summary><p>{{ change(row).skillChangeId }} · 第{{ change(row).attempt }}次尝试</p><p>{{ change(row).source?.skillVersion || '首次安装' }} → {{ change(row).target.skillVersion }}</p><p>资金：{{ fundingLabel(change(row).fundingStatus) }}<template v-if="change(row).price"> · {{ money(change(row).price) }}</template></p></details>
@@ -276,8 +276,8 @@ const agentName = computed(() => props.targetAgent?.name || props.targetAgent?.p
 const actionLabels = { INSTALL: '安装', UPGRADE: '升级', ENABLE: '启用', DISABLE: '停用', UNINSTALL: '卸载', RETRY: '重试', RECONCILE: '核对' }
 const modeTitle = computed(() => ({ detail: '技能详情', progress: '操作进度', INSTALL: '确认安装', UPGRADE: '确认升级', ENABLE: '启用新调用', DISABLE: '停用新调用', UNINSTALL: '卸载技能' })[mode.value])
 const changeLabels = SKILL_CHANGE_LABELS; const reasonLabels = SKILL_REASON_LABELS; const runtimeLabels = SKILL_RUNTIME_LABELS; const money = formatSkillMoney
-const progressSteps = ['后台接纳', '下载与校验', '安全切换', '回执与运行核验']
-const progressIndex = row => ({ ACCEPTED: 0, WAITING_AGENT: 0, PREPARING: 1, PREPARED: 1, ACTIVATING: 2, VERIFYING: 3, SUCCEEDED: 4 })[change(row)?.status] ?? -1
+const progressSteps = row => change(row)?.action === 'UNINSTALL' ? ['停止新调用', '移除技能入口', '核对卸载结果'] : ['后台接纳', '下载与校验', '安全切换', '回执与运行核验']
+const progressIndex = row => change(row)?.action === 'UNINSTALL' ? ({ ACCEPTED: 0, WAITING_AGENT: 1, ACTIVATING: 1, VERIFYING: 2, SUCCEEDED: 3 })[change(row)?.status] ?? -1 : ({ ACCEPTED: 0, WAITING_AGENT: 0, PREPARING: 1, PREPARED: 1, ACTIVATING: 2, VERIFYING: 3, SUCCEEDED: 4 })[change(row)?.status] ?? -1
 const dateTime = at => new Date(at).toLocaleString('zh-CN', { hour12: false })
 const fundingLabel = status => ({ NONE: '无资金冻结', HELD: '资金保留', CAPTURED: '已结算', REFUNDED: '已退款' })[status]
 const draft = row => market.drafts[row.skillKey]

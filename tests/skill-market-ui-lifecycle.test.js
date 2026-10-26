@@ -166,6 +166,7 @@ describe('SM-C1 actual management component lifecycle (no composable stub)', () 
     expect(writes).to.have.length(1); expect(writes[0].path).to.equal('/agt_demo/skill-changes')
     expect(writes[0].data).to.deep.equal({ action: 'UNINSTALL', skillKey: row.skillKey, sourceSkillInstallationId: row.installed.skillInstallationId, expectedAgentVersion: mock.list.agentVersion, expectedSkillRevision: row.skillRevision })
     expect(wrapper.text()).not.to.include('已卸载；')
+    expect(wrapper.find('.skill-progress').text()).to.include('移除技能入口').and.not.include('下载')
     mock.accepted = { ...mock.accepted, status: 'SUCCEEDED', runtimeSynced: true, reasonCode: null, changeRevision: '3' }
     row.installed = null; row.allowedActions = ['VIEW', 'INSTALL']; row.latestChange = mock.accepted
     await button(wrapper, '查询原操作').trigger('click'); await until(() => wrapper.text().includes('已卸载；'))
