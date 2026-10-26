@@ -4,6 +4,14 @@ const prototypePages=[['办事','home'],['事项','tasks'],['提出需求','crea
 function seedBaseline(){
  if(state.initializedScenario){if(page==='private'&&!state.privateChats[state.privateAgentId]){state.privateAgentId='0';state.privateChats['0']={agent:{id:'0',name:'宋江'},messages:[],outputs:[],delivery:[],chatDraft:'',chatFiles:[],quote:null,pending:false};}return;}
  const scenario=selectedScenario;state.baselineScenario=scenario;state.initializedScenario=true;
+  if (scenario === 'completed-review') {
+    state.task={title:'方块改色与修改说明',description:'将蓝色方块改为红色，保留形状和画布尺寸，并附一份修改说明。',files:['ref-brief'],complete:true};
+    state.agent={id:'4',name:'吴用'};state.selectedAgent={...state.agent};state.operation=null;state.error=null;
+    state.outputs=[{id:'completed-image',name:'红色方块.svg',version:2,type:'image',url:'assets/delivery-red-v2.svg'}, {id:'completed-note',name:'修改说明.txt',version:1,type:'text',text:'已将方块改为红色，保留原形状和画布尺寸。此文本为离线原型示例。'}, {id:'completed-draft',name:'红色方块.svg',version:1,type:'image',url:'assets/delivery-red.svg'}];
+    state.final=['completed-image','completed-note'];state.delivery=[...state.final];
+    state.messages=[{role:'USER',text:state.task.description},{role:'AGENT',text:'已完成改色并补充修改说明。',outputs:[...state.final]}];return;
+  }
+
  if(scenario==='library-unavailable'){state.libraryTab='search';state.librarySearched=true;state.libraryQuery='自然活动';state.libraryError=true;}
  const formal=['chat','detail','results'].includes(page),privatePage=page==='private';
  if(formal){state.task={title:'自然观察活动资料',description:'画一只鸟，并整理一份活动方案。',files:['ref-brief'],complete:false};state.agent={id:'0',name:'宋江'};state.selectedAgent={...state.agent};state.messages=[{role:'USER',text:state.task.description,files:['ref-brief']},{role:'AGENT',text:'你期望什么风格？可以在同一话头继续补充。'}];}
@@ -326,6 +334,11 @@ document.addEventListener('click',event=>{
  if(!action?.startsWith('complete-'))return;event.preventDefault();event.stopImmediatePropagation();
  const ctx=conversation();
  if(handleAllPageAction(action,t))return;
+ if(action==='complete-record-preview'){state.completedPreview=state.completedPreview===t.dataset.id?null:t.dataset.id;renderFormalResults();return;}
+ if(action==='complete-record-state'){state.completedReadState=t.dataset.state;state.completedPreview=null;renderFormalResults();return;}
+ if(action==='complete-record-reload'){state.completedReadState='loading';renderFormalResults();setTimeout(()=>{if(!state.task?.complete)return;state.completedReadState='ready';if(page==='results')renderFormalResults();},500);return;}
+ if(action==='complete-record-archive'){dialog('收入案卷','<p>仅将本事项收入个人案卷，不改变已完成状态、成果或验收记录。</p>',button('确认收入案卷','complete-record-archive-confirm','class="mmd-primary"'));return;}
+ if(action==='complete-record-archive-confirm'){state.task.archived=true;$('dialog[open]')?.close();persist();render();feedback('已收入案卷（仅离线演示）');return;}
  if(action==='complete-page-back'){go(t.dataset.page);return;}
  if(action==='complete-recommend-agent'){if(!awaitingAssignment()||!demoAgents.some(([id])=>id===t.dataset.agent))return;state.task.assignmentCandidate=t.dataset.agent;renderDetail();$('.recommendation-alternative').open=true;$(`[data-action=complete-recommend-agent][data-agent="${state.task.assignmentCandidate}"]`)?.focus();persist();return;}
  if(action==='complete-acceptance-review'){reviewAcceptance();return;}
@@ -415,6 +428,7 @@ function renderFormalResults(){
  // This page belongs to the matter flow, not to the borrowed 'mine' shell.
  $$('[data-workbench-tab]').forEach(tab=>{if(tab.dataset.workbenchTab==='tasks')tab.setAttribute('aria-current','page');else tab.removeAttribute('aria-current');});
  $$('.panel-workspace-link').forEach(entry=>entry.remove());
+ if(state.task?.complete){renderCompletedMatterResults(root);return;}
  if(unifiedTask()){renderUnifiedResults(root);return;}
  root.innerHTML=`<header><h2>正式成果</h2><p>同一事项的固定版本成果 · 离线示例，不是实际查询</p></header>${button('返回事项详情','complete-go','data-page="detail"')}`;
  if(!state.task){root.insertAdjacentHTML('beforeend','<p>请先提出需求。</p>');return;}
@@ -820,3 +834,22 @@ document.addEventListener('submit',e=>{
  if(e.target.matches('.composer-submit')&&page==='chat'&&new URLSearchParams(location.search).get('scenario')==='media-basis'&&!state.mediaBasisChoice){e.preventDefault();e.stopImmediatePropagation();feedback('存在多份独立成果，请先选择本轮成果。');}
 },true);
 
+
+// Completed matters share one read-only detail/results surface; no new write protocol.
+function renderCompletedMatterDetail(){
+ const card=$('.matter-advice-card');if(!card)return;renderMatterOverview(card,false);
+ $('.matter-state-guidance',card).textContent='事项已完成，可查看已验收成果和历史议事；不能继续修改或重复验收。';
+ $('.matter-primary-actions',card).innerHTML=button('查看议事记录','complete-go','data-page="chat"')+(state.task.archived?'<p class="mmd-muted">已收入个人案卷</p>':button('收入案卷','complete-record-archive'));
+ const materials=$('.task-material-links');if(materials)materials.innerHTML=`<div class="mmd"><h4>事项资料</h4>${files(state.task.files||[],'task',false)}<p class="mmd-muted">已验收 ${state.final.length} 份成果，成果与其他历史版本在下方统一查看。</p></div>`;
+ const b=$('.matter-results-action');if(b){b.hidden=false;b.textContent='查看成果与验收记录';b.dataset.action='accept';b.dataset.mainAction='true';}
+ $$('.baseline-cancellation,.matter-acceptance-strip').forEach(e=>e.remove());
+}
+function renderCompletedMatterResults(root){
+ const finalIds=new Set(state.final),accepted=state.outputs.filter(a=>finalIds.has(a.id)),history=state.outputs.filter(a=>!finalIds.has(a.id));
+ const mode=state.completedReadState||'ready';
+ labels.results='成果与验收记录';document.title='成果与验收记录 · 离线原型';
+ const title=$('#juyiting-floating-panel-title');if(title)title.textContent='成果与验收记录';
+ const row=(a,i,final)=>`<article class="completed-result"><div class="completed-result-heading"><div><strong>${esc(a.name)}</strong><p class="mmd-muted">${final?'已验收成果':'其他历史成果'} ${i+1} · 版本 ${esc(a.version||1)}</p></div>${button(state.completedPreview===a.id?'收起预览':'预览','complete-record-preview',`data-id="${esc(a.id)}" aria-expanded="${state.completedPreview===a.id}" aria-controls="preview-${esc(a.id)}"`)}</div>${state.completedPreview===a.id?`<section id="preview-${esc(a.id)}" class="completed-inline-preview" aria-label="${esc(a.name)}预览"><p>正在预览：${esc(a.name)} · 版本 ${esc(a.version||1)}</p>${media(a,true)}</section>`:''}</article>`;
+ root.classList.add('completed-records');
+ root.innerHTML=`<header><h2>成果与验收记录</h2><p class="completed-readonly">已完成 · 只读</p><p>${esc(taskTitle())}</p><p class="mmd-muted">已验收的版本固定保留。其他历史成果不代表已验收。</p></header>${['error','empty'].includes(mode)?`<div class="completed-record-tools">${button(mode==='error'?'重试':'重新核对','complete-record-reload')}</div>`:''}${mode==='loading'?'<p role="status">正在读取成果与验收记录…</p>':mode==='error'?'<p role="alert">成果与验收记录读取失败，请重新读取；不会重新提交验收。</p>':mode==='empty'?'<p role="status">尚未读取到验收成果记录，不能仅凭“已完成”推断哪些版本已验收。请重新读取或查看历史议事。</p>':`<section><h3>已验收成果 <small>（${accepted.length}）</small></h3>${accepted.length?accepted.map((a,i)=>row(a,i,true)).join(''):'<p>验收成果关联待核对，不将其他成果推定为已验收。</p>'}</section><details class="completed-history" ${history.some(a=>a.id===state.completedPreview)?'open':''}><summary>其他历史成果（${history.length}）</summary><p class="mmd-muted">仅供查阅，不属于上方已验收的固定版本。</p>${history.length?history.map((a,i)=>row(a,i,false)).join(''):'<p>没有其他历史成果。</p>'}</details><details class="completed-receipt"><summary>验收记录</summary><p>验收状态：已通过</p><p>本次确认：${accepted.length} 份固定成果</p><p class="mmd-muted">离线示例；正式页面只展示服务端实际返回的时间、操作者与版本，不猜测缺失字段。</p></details>`}${selectedScenario==='completed-review'?`<details class="completed-demo"><summary>演示读取状态（仅原型）</summary><div class="completed-record-tools">${[['ready','正常'],['loading','加载中'],['error','读取失败'],['empty','记录缺失']].map(([key,label])=>button(label,'complete-record-state',`data-state="${key}" aria-pressed="${mode===key}"`)).join('')}</div></details>`:''}`;
+}

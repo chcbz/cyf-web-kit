@@ -126,7 +126,7 @@ function refreshAgentProfile(){
  setTimeout(()=>{if(page!=='agents'||state.selectedAgent?.id!==id||agentProfileRead.generation!==generation)return;agentProfileRead.loading=false;agentProfileRead.refreshed=!['error','failed','noauth'].includes(agentSkillExample(state.selectedAgent.name));renderAgents();},650);
 }
 
-function renderDetail(){if(unifiedTask()){renderUnifiedDetail();return;}const card=$('.matter-advice-card');if(card){renderMatterOverview(card,false);}
+function renderDetail(){if(state.task?.complete){renderCompletedMatterDetail();return;}if(unifiedTask()){renderUnifiedDetail();return;}const card=$('.matter-advice-card');if(card){renderMatterOverview(card,false);}
  const materials=$('.task-material-links');if(materials){materials.innerHTML=`<div class="mmd"><h4>资料与成果</h4>${files(state.task?.files||[],'task',false)}<p class="mmd-muted">${state.outputs.length?`已有 ${state.outputs.length} 份成果，可在议事中查看。`:'尚无成果，可在议事中继续补充需求和资料。'}</p></div>`;}
  renderCancellation();
  const b=$('.matter-results-action'),primary=$('.matter-primary-action');

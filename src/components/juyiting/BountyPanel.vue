@@ -244,7 +244,14 @@
                     >确认承办，进入议事</button>
                   </template>
                   <template v-else>
-                    <p class="matter-fee-note">补充要求、查看结果和提出修改，都在原议事中继续。</p>
+                    <p v-if="detailTask.status === 'completed'" class="matter-fee-note">事项已完成，可查看已验收成果和历史议事；不能继续修改或重复验收。</p>
+                    <p v-else-if="!isTerminalMatter(detailTask)" class="matter-fee-note">补充要求、查看结果和提出修改，都在原议事中继续。</p>
+                    <button
+                      v-if="detailTask.status === 'completed'"
+                      type="button"
+                      class="matter-secondary-action"
+                      @click="$emit('view-discussion-history', detailTask)"
+                    >查看议事记录</button>
                     <button
                       v-if="taskPresentation(detailTask).phase === 'PENDING_ACCEPTANCE' && hasTaskAction(detailTask, 'DISCUSS')"
                       type="button"
@@ -337,11 +344,18 @@
               />
 
               <p v-if="detailTask.status === 'cancelled'" role="status">事项已取消；历史指派与成果保留，不再继续办理。</p>
-              <HallTaskResources v-if="embeddedHall && resourcesActive" :key="`${identityScope}:${authorizationGeneration}:${detailTask.id}`"
-                :task-id="String(detailTask.id)" :identity-scope="identityScope" :identity-epoch="authorizationGeneration" :result-count="matterResultCount"
-                @summary="matterResourceSummary = $event" />
+              <HallTaskResources
+                v-if="embeddedHall && resourcesActive"
+                :key="`${identityScope}:${authorizationGeneration}:${detailTask.id}`"
+                :task-id="String(detailTask.id)"
+                :identity-scope="identityScope"
+                :identity-epoch="authorizationGeneration"
+                :result-count="matterResultCount"
+                :completed="detailTask.status === 'completed'"
+                @summary="matterResourceSummary = $event"
+              />
               <section v-if="!embeddedHall || taskPresentation(detailTask).readOnly || taskPresentation(detailTask).phase === 'COMPLETED'" class="matter-resources" aria-label="资料与成果">
-                <button type="button" class="matter-results-action" @click="$emit('open-formal-results', detailTask)">{{ embeddedHall || taskPresentation(detailTask).readOnly ? '查看历史成果' : '查看正式成果与验收' }}</button>
+                <button type="button" class="matter-results-action" @click="$emit('open-formal-results', detailTask)">{{ detailTask.status === 'completed' ? '查看成果与验收记录' : embeddedHall || taskPresentation(detailTask).readOnly ? '查看历史成果' : '查看正式成果与验收' }}</button>
               </section>
               <WorkItemPlanPanel v-if="!embeddedHall && canActOnTask(detailTask)" :task="detailTask" :enabled="workItemPlanEnabled" :authorization-generation="authorizationGeneration" />
 
@@ -599,6 +613,7 @@ const emit = defineEmits([
   'resume-point-and-start',
   'cancel-funded-create-recovery',
   'discuss-task',
+  'view-discussion-history',
   'load-settlement',
   'open-workspace',
   'formal-execution-created',

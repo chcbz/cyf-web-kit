@@ -401,6 +401,7 @@
             @formal-execution-created="hallReadRevision += 1"
             @formal-execution-recovered="hallReadRevision += 1"
             @discuss-task="discussTask"
+            @view-discussion-history="continueBountyModification($event)"
             @load-tasks="loadTasks"
             @select-agent="selectAgent"
             @select-task="selectTask"
@@ -438,6 +439,18 @@
               <pre v-text="item.text"></pre>
             </article>
           </section>
+          <HallCompletedRecords
+            v-else-if="renderedPanel === 'tasks' && formalTaskRef?.status === 'completed' && hallIdentityScope"
+            :key="`${apiStore.authorizationGeneration}:${hallIdentityScope}:${formalTaskRef.id}`"
+            :task-id="String(formalTaskRef.id)"
+            :task-version="formalTaskRef.taskVersion ?? formalTaskRef.version"
+            :identity-key="`${apiStore.authorizationGeneration}\u0000${hallIdentityScope}`"
+            :title="formalTaskRef.title"
+            :context="deliveryReview.context.value"
+            :loading="deliveryReview.loading.value"
+            :error="deliveryReview.error.value"
+            @refresh="deliveryReview.refresh"
+          />
           <BountyAcceptancePanel
             v-else-if="renderedPanel === 'tasks' && formalTaskRef && hallIdentityScope"
             :key="formalTaskRef.id"
@@ -878,6 +891,7 @@ import { portraitName, portraitRole, portraitShortName, portraitStyle, roleClass
 import AgentPanel from '@/components/juyiting/AgentPanel.vue'
 import BountyDiscussionPanel from '@/components/juyiting/BountyDiscussionPanel.vue'
 import BountyAcceptancePanel from '@/components/juyiting/BountyAcceptancePanel.vue'
+import HallCompletedRecords from '@/components/juyiting/HallCompletedRecords.vue'
 import HallDeliveryReviewDialog from '@/components/juyiting/HallDeliveryReviewDialog.vue'
 import { useHallSelectedOutputReview } from '@/composables/juyiting/useHallSelectedOutputReview.js'
 import { selectionKey } from '@/composables/juyiting/hallSelectedOutputs.js'
@@ -1218,7 +1232,7 @@ const activePanelTitle = computed(() => {
   const childTitle = (renderedPanel.value === 'agents' && agentPanelRef.value?.windowTitle) || activeDraftEditor()?.windowTitle || (renderedPanel.value === 'treasure' && treasurePanelRef.value?.windowTitle)
   if (childTitle) return childTitle
   if (renderedPanel.value === 'draft') return '提出需求'
-  if (renderedPanel.value === 'tasks' && formalTaskRef.value) return '正式成果与验收'
+  if (renderedPanel.value === 'tasks' && formalTaskRef.value) return formalTaskRef.value.status === 'completed' ? '成果与验收记录' : '正式成果与验收'
   if (renderedPanel.value === 'formalDraft') return '提出需求'
   if (renderedPanel.value === 'messages') return '消息'
   if (renderedPanel.value === 'item') return overviewItemRef.value?.sourceType === 'DRAFT' ? '继续草稿' : '事项进展'
@@ -2248,8 +2262,18 @@ const autoAssignTask = async (task) => {
   markTaskAutoAssigned(currentTask, assignedAgents)
 }
 
+const archiveConfirmationPending = ref(false)
 const archiveTask = async (task) => {
-  await runArchiveTask(task)
+  if (!task?.id || archiveConfirmationPending.value) return false
+  const identity = `${apiStore.authorizationGeneration}\u0000${hallIdentityScope.value}`
+  const version = task.taskVersion ?? task.version
+  archiveConfirmationPending.value = true
+  try {
+    const action = await Dialog({ title: '收入案卷', message: '仅收入个人案卷，不改变已验收成果。', confirmButtonText: '确认收入案卷', cancelButtonText: '取消' })
+    if (action !== 'confirm' || identity !== `${apiStore.authorizationGeneration}\u0000${hallIdentityScope.value}` ||
+        selectedTask.value?.id !== task.id || (selectedTask.value.taskVersion ?? selectedTask.value.version) !== version || selectedTask.value.status !== task.status) return false
+    await runArchiveTask(task)
+  } finally { archiveConfirmationPending.value = false }
   if (selectedTask.value?.status === 'archived') {
     markTaskArchived(selectedTask.value)
   }
@@ -2775,7 +2799,7 @@ watch(() => [reviewTaskId.value, conversationId.value, apiStore.authorizationGen
   selectedOutputCandidates.value = []; selectedOutputPreview.value = null
 }, { flush: 'sync' })
 const reviewPreviewItem = ref(null); const reviewPreviewError = ref('')
-const reviewOutputs = useOutputs({ source: () => reviewTaskId.value && (deliveryReview.dialogOpen.value || formalTaskRef.value)
+const reviewOutputs = useOutputs({ source: () => reviewTaskId.value && (deliveryReview.dialogOpen.value || (formalTaskRef.value && formalTaskRef.value.status !== 'completed'))
   ? { type: 'task', id: reviewTaskId.value } : null,
   identityFingerprint: () => `${apiStore.authorizationGeneration}\u0000${hallIdentityScope.value}`, pageSize: 100 })
 const reviewInteractionLocked = () => Boolean(hallVoice?.voiceInteractionLocked || (chatMode.value === 'bounty' && conversationTask.value?.id === reviewTaskId.value && isConversationBusy.value))

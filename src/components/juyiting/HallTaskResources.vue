@@ -1,14 +1,15 @@
 <template>
-  <section class="hall-task-resources" aria-label="资料与成果">
-    <h4>资料与成果</h4>
+  <section class="hall-task-resources" :aria-label="completed ? '事项资料' : '资料与成果'">
+    <h4>{{ completed ? '事项资料' : '资料与成果' }}</h4>
     <p v-if="loading" role="status">正在读取资料与成果…</p>
     <div v-else-if="error" role="alert"><p>{{ error }}</p><button type="button" @click="load">重试</button></div>
     <template v-else>
       <HallMaterialPicker :model-value="materials" read-only :identity-scope="identityScope" :identity-epoch="identityEpoch" />
       <p v-if="!materials.length">暂无关联资料。</p>
-      <p v-if="resultCount != null">{{ resultCount ? `本轮已有 ${resultCount} 份成果，可在议事中查看。` : '当前尚无正式成果。' }}</p>
+      <p v-if="completed">成果及验收情况请在“查看成果与验收记录”中核对。</p>
+      <p v-else-if="resultCount != null">{{ resultCount ? `本轮已有 ${resultCount} 份成果，可在议事中查看。` : '当前尚无正式成果。' }}</p>
       <p v-else>{{ outputCount ? `已有 ${outputCount} 份成果引用，可在议事中查看。` : '尚无成果引用；正式成果数量待核对。' }}</p>
-      <p v-if="outputCount" class="resource-note">正式提交与验收状态以验收页面为准。</p>
+      <p v-if="outputCount && !completed" class="resource-note">正式提交与验收状态以验收页面为准。</p>
     </template>
   </section>
 </template>
@@ -18,7 +19,7 @@ import { usePersonalWorkspaceTaskLinks } from '@/composables/usePersonalWorkspac
 import { usePersonalWorkspace } from '@/composables/usePersonalWorkspace'
 import HallMaterialPicker from './HallMaterialPicker.vue'
 
-const props = defineProps({ resultCount: { type: Number, default: null }, taskId: { type: String, required: true }, identityScope: { type: String, default: '' }, identityEpoch: { type: [Number, String], default: 0 } })
+const props = defineProps({ completed: { type: Boolean, default: false }, resultCount: { type: Number, default: null }, taskId: { type: String, required: true }, identityScope: { type: String, default: '' }, identityEpoch: { type: [Number, String], default: 0 } })
 const emit = defineEmits(['summary'])
 const identity = computed(() => `${props.identityScope}\u0000${props.identityEpoch}`)
 const links = usePersonalWorkspaceTaskLinks({ taskId: () => props.taskId, identityEpoch: identity })

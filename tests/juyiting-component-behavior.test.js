@@ -2846,6 +2846,7 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
     useHallPointAndStart: () => ({ state: Vue.ref({ intent: null, status: 'IDLE' }), busy: Vue.ref(false), start: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, observeOriginal: asyncNoop, stopObservation: noop, dispose: noop }),
     useTaskWorkspace: () => null, createDisabledTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop, dispose: noop }), isTaskWorkspaceBuildEnabled: () => false, useTaskWorkspaceView: () => ({ subject: Vue.ref(null), workspace: Vue.ref(null), connectionState: scalar, error: Vue.ref(null), retry: noop }), useTaskWorkspaceBinding: () => ({ selectExplicitActor: noop, clearExplicitActor: noop }),
     portraitName: () => '', portraitRole: () => ({ slug: 'default' }), portraitShortName: () => '', portraitStyle: () => ({}), roleClass: () => '',
+    HallCompletedRecords: Vue.defineComponent({ name: 'HallCompletedRecords', props: ['taskId', 'identityKey', 'taskVersion', 'title', 'context'], setup: () => () => Vue.h('section', { class: 'completed-records-probe' }) }),
     BountyAcceptancePanel: Vue.defineComponent({ name: 'BountyAcceptancePanel', props: ['taskId', 'identityKey', 'taskVersion', 'conversationId'],
       emits: ['review-delivery', 'continue-modification'], setup: (_props, { slots }) => () => Vue.h('section', { class: 'acceptance-probe' }, slots.preview?.()) }),
     FormalTaskDeliveryPanel: Vue.defineComponent({ name: 'FormalTaskDeliveryPanel', props: ['taskId', 'identityFingerprint', 'focusDeliveryId', 'executionContext', 'selectedAgentId'], setup: () => () => Vue.h('section', { class: 'formal-delivery-probe' }) }),
@@ -3341,8 +3342,13 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
       // The duplicate acceptance CTA is gone; read-only history keeps its original route.
       await state.openOverviewTask({ id: 'task-a', title: '已完成事项', status: 'completed' })
       await Vue.nextTick()
-      await wrapper.findAll('button').find(button => button.text() === '查看历史成果').trigger('click')
-      expect(wrapper.findComponent({ name: 'BountyAcceptancePanel' }).props('taskId')).to.equal('task-a')
+      expect(wrapper.find('.bounty-modal').text()).to.include('不能继续修改或重复验收')
+      expect(wrapper.find('.bounty-modal').text()).not.to.include('补充要求、查看结果和提出修改')
+      expect(wrapper.findAll('button').some(button => button.text() === '查看议事记录')).to.equal(true)
+      await wrapper.findAll('button').find(button => button.text() === '查看成果与验收记录').trigger('click')
+      expect(wrapper.findComponent({ name: 'HallCompletedRecords' }).props('taskId')).to.equal('task-a')
+      expect(wrapper.findComponent({ name: 'BountyAcceptancePanel' }).exists()).to.equal(false)
+      expect(wrapper.text()).to.include('成果与验收记录')
       expect(wrapper.find('.hall-private-mark').exists()).to.equal(false)
       state.closePanel()
       state.openPanel('tasks')
