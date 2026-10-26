@@ -1,3 +1,4 @@
+import * as discussionTurnHelpers from '../src/composables/juyiting/hallDiscussionTurns.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
@@ -19,6 +20,7 @@ const Composer = compile('HallChatComposer', { HallVoiceControls: { template: '<
 const directory = () => ({ items: Vue.ref([]), links: Vue.ref([]), pendingWrites: Vue.ref([]), loading: Vue.ref(false), error: Vue.ref(''),
   actionState: Vue.ref('idle'), writeNotice: Vue.ref(''), refresh: async () => true, load: async () => true, dispose: () => {} })
 const chatDeps = {
+  ...discussionTurnHelpers,
   HallConversationHistory: History, HallChatComposer: Composer,
   HallMessageParts: { render: () => null }, HallMaterialPicker: { render: () => null }, BountyTextSelectionArchive: { render: () => null },
   BountyTypedOutcomeCard: { render: () => null }, WorkspaceWriteRecovery: { render: () => null },

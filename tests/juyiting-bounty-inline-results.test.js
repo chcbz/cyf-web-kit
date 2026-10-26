@@ -1,3 +1,5 @@
+import * as discussionTurnHelpers from '../src/composables/juyiting/hallDiscussionTurns.js'
+import { useHallExecutionAbandonment } from '../src/composables/juyiting/useHallExecutionAbandonment.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { compileScript, compileTemplate, parse } from '@vue/compiler-sfc'
@@ -27,7 +29,7 @@ const directory = () => ({ items: Vue.ref([]), links: Vue.ref([]), pendingWrites
   actionState: Vue.ref('idle'), writeNotice: Vue.ref(''), refresh: async () => true, load: async () => true,
   dispose: () => {}, retryWrite: () => {} })
 const createComponents = api => {
-  const deps = { ...outputCatalog, ...discussionContract, bountyDeliberationPresentation, useHallSkillResults, skillResultDataText,
+  const deps = { ...discussionTurnHelpers, useHallExecutionAbandonment, ...outputCatalog, ...discussionContract, bountyDeliberationPresentation, useHallSkillResults, skillResultDataText,
     revisionProgressPending, conversationAssetContentPath, safeMediaKind, revisionOf, createApi: () => api, saveOutputBlob: () => {},
     useHallConversationArchive: () => ({ statusFor: () => ({}), save: () => {}, check: () => {} }),
     marked: Object.assign(value => value, { setOptions: () => {} }), DOMPurify: { sanitize: value => value },
@@ -96,6 +98,28 @@ describe('scoped bounty output actions live on the actual message cards', () => 
       await f.wrapper.get('[aria-label="统一验收"]').trigger('click')
       expect(f.wrapper.emitted('review-delivery')).to.deep.equal([[]])
       expect(f.wrapper.emitted('outputs-change').at(-1)[0]).to.have.length(2)
+    } finally { f.wrapper.unmount() }
+  })
+  it('merged reply retains the exact child asset preview and acceptance identity', async () => {
+    const f = setup()
+    try {
+      const original = { localId: 'parent-1', sender: 'AGENT', content: '正在修改图片', parts: [] }
+      const projection = { key: 'action-1', conversationId: 'conversation-1', outcome: { taskId: 'task-1', kind: 'ACTION_REQUEST', assistantMessageId: 'parent-1' },
+        actionProgress: { childRequestId: 'request-1', state: 'COMPLETED' } }
+      await f.wrapper.setProps({ messages: [original, message(1, { requestId: 'request-1', content: '已生成成果；可预览或下载。' })], typedOutcomes: [projection] })
+      await settle()
+      const rows = f.wrapper.findAll('.hall-message')
+      expect(rows).to.have.length(1)
+      expect(rows[0].text()).to.include('正在修改图片').and.include('本轮完成')
+      expect(rows[0].text()).not.to.include('可预览或下载')
+      expect(rows[0].findAll('.media-actions button').map(button => button.text())).to.deep.equal(['预览', '验收此版'])
+      await rows[0].get('.media-actions button').trigger('click'); await settle()
+      expect(document.querySelector('[aria-label="会话资料预览"] img').src).to.include('blob:inline-test')
+      document.querySelector('[aria-label="关闭预览"]').click(); await settle()
+      await rows[0].get('.message-output-accept').trigger('click')
+      expect(f.wrapper.emitted('accept-output')[0][0]).to.include({ requestId: 'request-1', stepId: 'step-1', outputId: 'output-1', sha256: '1'.repeat(64) })
+      expect(original.parts).to.deep.equal([])
+      expect(f.calls.every(call => call.method === 'GET')).to.equal(true)
     } finally { f.wrapper.unmount() }
   })
   it('keeps busy/voice/terminal guards and previews when the task becomes read-only', async () => {

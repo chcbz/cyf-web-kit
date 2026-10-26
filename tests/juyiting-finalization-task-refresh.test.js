@@ -1,3 +1,5 @@
+import { discussionTurns } from '../src/composables/juyiting/hallDiscussionTurns.js'
+import { useHallExecutionAbandonment } from '../src/composables/juyiting/useHallExecutionAbandonment.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import * as Vue from 'vue'
@@ -23,7 +25,7 @@ describe('submission does not complete the root; explicit review owns completion
     const Gallery = Vue.defineComponent({ emits: ['task-completed'], setup: (_, { emit }) => () => Vue.h('button', { class: 'old-submission', onClick: () => emit('task-completed', { state: 'COMPLETED', stage: 'SUBMITTED' }) }, '提交回执') })
     const Chat = Vue.defineComponent({ setup: (_, { slots }) => () => Vue.h('div', {}, [Vue.h('header', { class: 'toolbar' }, slots['matter-actions']?.()), Vue.h('main', { class: 'messages' }, slots['bounty-results']?.())]) })
     const noRender = { render: () => null }
-    const Component = new Function('Vue', 'deps', script)(Vue, { ...discussionContract, bountyDeliberationPresentation, ChatPanel: Chat,
+    const Component = new Function('Vue', 'deps', script)(Vue, { ...discussionContract, discussionTurns, useHallExecutionAbandonment, bountyDeliberationPresentation, ChatPanel: Chat,
       BountyExecutionOutputs: Gallery, TaskSkillCapabilities: noRender, BountyDeliberationStatus: noRender, BountyExecutionTermination: noRender })
     const task = { id: 'task-1', status: 'reviewing', taskVersion: '7' }
     const wrapper = mount(Component, { props: { deliberationV2Enabled: true, selectedTask: task, reviewContext: { currentDelivery: { allowedActions: ['VIEW', 'ACCEPT'] } }, mentionLabel: () => '', senderText: () => '' } })
