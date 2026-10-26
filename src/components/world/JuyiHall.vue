@@ -638,7 +638,7 @@
             ref="bountyDiscussionRef"
             @outputs-change="selectedOutputCandidates = $event"
             @accept-output="openSelectedOutputReview($event)"
-            @preview-ready="selectedOutputPreview = $event"
+            @preview-ready="acceptSelectedOutputPreview"
             v-if="panelFrames.includes('chat') && chatMode === 'bounty'"
             v-show="renderedPanel === 'chat'"
             :inert="renderedPanel !== 'chat' ? '' : null"
@@ -796,11 +796,17 @@
       :frozen-batch="deliveryReview.frozenContext.value?.currentDelivery || null"
       :pending="deliveryReview.operation.value.busy || selectedOutputReview.busy.value" :error="selectedOutputReview.open.value ? selectedOutputReview.message.value : deliveryReview.error.value || (deliveryReview.operation.value.intent ? deliveryReview.operation.value.message : reviewPreviewError)"
       @confirm="selectedOutputReview.open.value ? selectedOutputReview.confirm() : confirmDeliveryReview()" @back="selectedOutputReview.open.value ? selectedOutputReview.close() : deliveryReview.close()" @preview="previewReviewOutput"
-    ><template #selection-preview>
-      <div v-if="selectedOutputPreview" class="selected-output-preview">
-        <p v-if="selectedOutputPreview.error" role="alert">{{ selectedOutputPreview.error }}</p>
-        <img v-else-if="selectedOutputPreview.url && selectedOutputPreview.item.contentMimeType.startsWith('image/')" :src="selectedOutputPreview.url" alt="所选版本成果预览" />
-        <audio v-else-if="selectedOutputPreview.url && selectedOutputPreview.item.contentMimeType.startsWith('audio/')" :src="selectedOutputPreview.url" controls />
+    ><template #selection-preview="{ item }">
+      <div v-if="selectedOutputPreview && selectionKey(selectedOutputPreview.item) === item.key && selectedOutputPreview.item.sha256 === item.sha256" class="selected-output-preview">
+        <p v-if="selectedOutputPreview.loading" role="status">正在读取此成果预览…</p>
+        <p v-else-if="selectedOutputPreview.error" role="alert">{{ selectedOutputPreview.error }}</p>
+        <img v-else-if="selectedOutputPreview.url && (selectedOutputPreview.item.contentMimeType || '').startsWith('image/')" :src="selectedOutputPreview.url" :alt="`成果预览：${item.title || item.outputId || '文字成果'}`" />
+        <audio
+          v-else-if="selectedOutputPreview.url && (selectedOutputPreview.item.contentMimeType || '').startsWith('audio/')"
+          :src="selectedOutputPreview.url"
+          controls
+          controlslist="nodownload"
+        />
         <pre v-else-if="selectedOutputPreview.text">{{ selectedOutputPreview.text }}</pre><p v-else>此格式暂不支持内嵌预览。</p>
       </div>
     </template><template #preview><OutputPreview v-if="reviewPreviewItem" :item="reviewPreviewItem" :load="reviewOutputs.preview" :context-key="reviewOutputs.cacheKey.value" /></template></HallDeliveryReviewDialog>
@@ -2744,7 +2750,27 @@ const openSelectedOutputReview = async item => {
   selectedOutputPreview.value = null
   await selectedOutputReview.show(item)
 }
-const previewSelectedOutput = item => { selectedOutputPreview.value = null; return bountyDiscussionRef.value?.previewSelected(item) }
+const acceptSelectedOutputPreview = preview => {
+  const current = selectedOutputPreview.value
+  if (!selectedOutputReview.open.value || !current || !preview?.item ||
+    selectionKey(current.item) !== selectionKey(preview.item) || current.item.sha256 !== preview.item.sha256) return
+  selectedOutputPreview.value = preview
+}
+const previewSelectedOutput = async item => {
+  selectedOutputPreview.value = item ? { item, loading: true } : null
+  if (!item) return
+  const pendingPreview = selectedOutputPreview.value
+  try {
+    await bountyDiscussionRef.value?.previewSelected(item)
+  } catch {
+    // The original preview loader supplies specific errors when available.
+  } finally {
+    if (selectedOutputPreview.value === pendingPreview) selectedOutputPreview.value = {
+      item, loading: false, error: '此成果暂不可预览，请收起后重试；不会换用其他版本。'
+    }
+  }
+}
+watch(() => selectedOutputReview.open.value, open => { if (!open) selectedOutputPreview.value = null }, { flush: 'sync' })
 watch(() => [reviewTaskId.value, conversationId.value, apiStore.authorizationGeneration, hallIdentityScope.value], () => {
   selectedOutputCandidates.value = []; selectedOutputPreview.value = null
 }, { flush: 'sync' })

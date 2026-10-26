@@ -1,13 +1,14 @@
 'use strict';
 // Offline only: no API, model invocation, or production task writes.
 (() => {
-  if (!['delivery-entry', 'image-turn'].includes(selectedScenario)) return;
-  let timer;
+  if (!['delivery-entry', 'image-turn', 'review-preview'].includes(selectedScenario)) return;
+  let timer; let previewId=null;
   const d=()=>state.deliveryEntry;
   function seed(){
     state.task={title:'将图片改成红色',description:'将图片改成红色',files:[],complete:false};
     state.agent={id:'4',name:'吴用'};state.selectedAgent={...state.agent};
     state.outputs=[{id:'delivery-demo-red-v1',name:'红色图片-第1稿.svg',type:'image',url:'assets/delivery-red.svg',note:'第 1 稿 · 原型示意'}];
+    if(selectedScenario==='review-preview')state.outputs.push({id:'delivery-demo-red-v2',name:'红色图片-第2稿.svg',type:'image',url:'assets/delivery-red-v2.svg',note:'第 2 稿 · 原型示意'});
     state.messages=[{role:'USER',text:'将图片改成红色。'},{role:'AGENT',text:'图片已生成。可以继续修改，也可以验收任意一稿。',outputs:[state.outputs[0].id]}];
     state.delivery=[];state.final=[];state.operation=null;state.pending=false;state.error=null;state.chatDraft='';state.chatFiles=[];
     state.deliveryEntry={stage:'ready',selected:[],mode:'ok',submissionWrites:0,acceptanceWrites:0,operationId:null};persist();
@@ -51,7 +52,7 @@
   function review(){
     closeOwn();const locked=frozen();
     const items=locked?state.outputs.filter(a=>d().selected.includes(a.id)):state.outputs;
-    const content=items.map(a=>`<section class="delivery-choice"><label><input type="checkbox" data-delivery-select="${esc(a.id)}" ${d().selected.includes(a.id)?'checked':''} ${locked?'disabled':''}><strong>${esc(a.name)}</strong></label>${media(a)}<small>${esc(a.note||'已有成果')}</small></section>`).join('');
+    const content=items.map((a,index)=>`<section class="delivery-choice" data-choice="${esc(a.id)}"><div class="delivery-choice-row"><label><input type="checkbox" data-delivery-select="${esc(a.id)}" ${d().selected.includes(a.id)?'checked':''} ${locked?'disabled':''}><span><strong>${esc(a.name)}</strong><small>成果 ${index+1}</small></span></label>${button(previewId===a.id?'收起预览':'预览','delivery-preview',`data-id="${esc(a.id)}" aria-expanded="${previewId===a.id}" aria-controls="delivery-preview-${index}"`)}</div>${previewId===a.id?`<section id="delivery-preview-${index}" class="delivery-inline-preview" aria-label="成果 ${index+1} 预览"><strong>正在预览：成果 ${index+1} · ${esc(a.name)}</strong>${media(a)}<small>${esc(a.note||'已有成果')}</small></section>`:''}</section>`).join('');
     const actionLabel=({failed:'重试原提交',unknown:'核对原提交','accept-unknown':'核对原验收'})[d().stage]||(busy()?'处理中…':'确认验收');
     const footer=complete()?button('关闭','close-dialog'):(locked?'':button('继续修改','delivery-modify'))+button(actionLabel,'delivery-accept',`class="delivery-primary" ${busy()||!d().selected.length?'disabled':''}`);
     const modal=dialog(complete()?'已验收成果':'选择成果并验收',`<div class="delivery-review-body"><p class="delivery-review-status" role="status">${captions[d().stage]}</p><p>将图片改成红色 · <span data-selection-count>已选 ${d().selected.length} 份</span></p><p class="delivery-review-note">可选择一份或多份，包括历史版本。仅验收勾选成果，不要求使用最新稿。</p>${content||'<p>暂无可验收成果</p>'}<p class="delivery-review-note">${locked?'本次操作的成果已固定；核对原操作不会重复提交。':'点击“确认验收”后，提交所选已有成果并完成事项。关闭窗口不提交、不验收，不重新生成。'}</p></div>`,footer);modal.classList.add('delivery-entry-dialog');
@@ -67,10 +68,12 @@
     const t=e.target.closest('[data-action]');if(!t||!t.dataset.action.startsWith('delivery-'))return;e.preventDefault();e.stopImmediatePropagation();
     const action=t.dataset.action;
     if(action==='delivery-all'||action==='delivery-open'){
+      previewId=null;
       if(!frozen())d().selected=action==='delivery-open'?[t.dataset.id]:[];
       else if(action==='delivery-open'&&!d().selected.includes(t.dataset.id)){feedback('请先核对当前未完成的验收操作，不能替换其中成果。');}
       persist();review();
     }
+    if(action==='delivery-preview'){previewId=previewId===t.dataset.id?null:t.dataset.id;review();const trigger=document.querySelector(`dialog[open] [data-action="delivery-preview"][data-id="${t.dataset.id}"]`);trigger?.focus();trigger?.scrollIntoView({block:'nearest'});}
     if(action==='delivery-accept'&&!busy()&&d().selected.length){
       if(['ready','failed'].includes(d().stage))submit();
       else if(['unknown','submitted'].includes(d().stage)){state.delivery=[...d().selected];accept();}

@@ -10,9 +10,25 @@
       <ul><li v-for="(item, index) in choices" :key="item.key">
         <label><input type="checkbox" :checked="selectedKeys.includes(item.key)" :disabled="pending || selectionLocked" @change="$emit('toggle', item.key)" />
           <strong>{{ item.title || item.outputId || '文字成果' }}</strong><small>成果 {{ index + 1 }}</small></label>
-        <button type="button" :disabled="pending" @click="$emit('preview-selection', item)">预览</button>
+        <button
+          type="button"
+          class="review-selection-preview"
+          :disabled="pending"
+          :aria-expanded="activeSelectionKey === item.key"
+          :aria-controls="`review-selection-preview-${index}`"
+          :aria-label="`${activeSelectionKey === item.key ? '收起' : '预览'}成果 ${index + 1}：${item.title || item.outputId || '文字成果'}`"
+          @click="toggleSelectionPreview(item)"
+        >{{ activeSelectionKey === item.key ? '收起预览' : '预览' }}</button>
+        <section
+          v-if="activeSelectionKey === item.key"
+          :id="`review-selection-preview-${index}`"
+          class="review-inline-preview"
+          :aria-label="`成果 ${index + 1} 预览`"
+        >
+          <h3>正在预览：成果 {{ index + 1 }} · {{ item.title || item.outputId || '文字成果' }}</h3>
+          <slot name="selection-preview" :item="item" :index="index"></slot>
+        </section>
       </li></ul>
-      <slot name="selection-preview" />
       <p class="review-help">仅验收所选成果，不重新生成。确认后事项完成；关闭窗口不提交、不验收。</p>
       <p v-if="error" class="review-error" role="status">{{ error }}</p>
     </section>
@@ -43,9 +59,26 @@ const props = defineProps({ open: { type: Boolean, default: false }, context: { 
   frozenBatch: { type: Object, default: null }, pending: { type: Boolean, default: false }, error: { type: String, default: '' } })
 const emit = defineEmits(['confirm', 'preview', 'back', 'toggle', 'preview-selection'])
 const dialog = ref(null)
+const activeSelectionKey = ref(null)
+const resetSelectionPreview = () => {
+  if (activeSelectionKey.value === null) return
+  activeSelectionKey.value = null
+  emit('preview-selection', null)
+}
+const toggleSelectionPreview = item => {
+  if (props.pending) return
+  if (activeSelectionKey.value === item.key) return resetSelectionPreview()
+  activeSelectionKey.value = item.key
+  emit('preview-selection', item)
+}
+watch(() => [props.open, props.selectionMode, props.context], resetSelectionPreview, { flush: 'sync' })
+watch(() => props.choices.map(item => item.key), keys => {
+  if (!keys.includes(activeSelectionKey.value)) resetSelectionPreview()
+}, { flush: 'sync' })
 const resultCount = computed(() => props.frozenBatch?.items.filter(item => item.displayRole === 'RESULT').length || 0)
 let previousFocus = null
 const restoreFocus = () => {
+  resetSelectionPreview()
   const target = previousFocus?.isConnected ? previousFocus : document.querySelector('.panel-toolbar button:not(:disabled)')
   target?.focus(); previousFocus = null
 }
@@ -94,6 +127,9 @@ li > div { flex: 1; min-width: 0; }
 li strong, li small { display: block; }
 small, .review-help { color: var(--hall-text-muted, #68716b); font-size: 13px; }
 li p { flex-basis: 100%; }
+.review-inline-preview { flex: 0 0 100%; min-width: 0; box-sizing: border-box; padding: 12px; border: 1px solid var(--hall-border, #e3e5dc); border-radius: 8px; background: var(--hall-surface-subtle, #f3f3ed); }
+.review-inline-preview h3 { margin: 0 0 8px; font-size: 13px; overflow-wrap: anywhere; }
+.review-selection-preview[aria-expanded="true"] { color: var(--hall-brand, #923f30); border-color: currentColor; }
 .review-error { color: var(--hall-danger, #a13f35); }
 @media (max-width: 600px) { .hall-review-dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); } .review-confirm { width: 100%; } }
 </style>

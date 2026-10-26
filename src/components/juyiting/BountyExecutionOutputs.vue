@@ -236,12 +236,14 @@ watch(effectiveTaskCompleted, completed => {
   if (timer != null) clearTimeout(timer); timer = null
   if (!completed && validRootRequest()) refresh()
 })
+let selectedPreviewGeneration = 0
 const previewSelected = async item => {
+  const selectedGeneration = ++selectedPreviewGeneration
   const current = allItems.value.find(value => outputItemKey(value) === outputItemKey(item) && value.sha256 === item.sha256)
   if (!current) return
   const generation = epoch
   if (!current.messageSource) await loadPreview(current)
-  if (generation !== epoch) return
+  if (generation !== epoch || selectedGeneration !== selectedPreviewGeneration) return
   const key = outputItemKey(current)
   emit('preview-ready', { item: current, url: previewUrls.value[key] || '', text: current.text || textPreviews.value[key] || '', error: itemErrors.value[key] || '' })
 }

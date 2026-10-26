@@ -61,6 +61,47 @@ describe('shared delivery review modal interaction', () => {
       expect(wrapper.text()).not.to.include('下载')
     } finally { wrapper.unmount() }
   })
+  it('anchors one preview under its exact row, marks the active button and never toggles selection', async () => {
+    const choices = [{ key: 'request-1:old', title: 'output_1' }, { key: 'request-2:new', title: 'output_1' }]
+    const wrapper = mount(Dialog, { props: { open: true, selectionMode: true, choices, selectedKeys: ['request-1:old'] },
+      slots: { 'selection-preview': ({ item }) => Vue.h('p', { class: 'preview-content' }, item.key) }, attachTo: document.body })
+    try {
+      await flushPromises()
+      const rows = wrapper.findAll('li'); const buttons = wrapper.findAll('.review-selection-preview')
+      expect(wrapper.find('.review-inline-preview').exists()).to.equal(false)
+      await buttons[0].trigger('click')
+      expect(rows[0].get('.preview-content').text()).to.equal(choices[0].key)
+      expect(rows[0].get('h3').text()).to.include('成果 1 · output_1')
+      expect(buttons[0].attributes('aria-expanded')).to.equal('true')
+      expect(buttons[0].attributes('aria-controls')).to.equal(rows[0].get('.review-inline-preview').attributes('id'))
+      expect(buttons[0].text()).to.equal('收起预览')
+      await buttons[1].trigger('click')
+      expect(rows[0].find('.review-inline-preview').exists()).to.equal(false)
+      expect(rows[1].get('.preview-content').text()).to.equal(choices[1].key)
+      expect(rows[1].get('h3').text()).to.include('成果 2')
+      expect(wrapper.findAll('.review-inline-preview')).to.have.length(1)
+      expect(wrapper.emitted('toggle')).to.equal(undefined)
+      expect(wrapper.emitted('confirm')).to.equal(undefined)
+      expect(wrapper.findAll('input').map(input => input.element.checked)).to.deep.equal([true, false])
+      await buttons[1].trigger('click')
+      expect(wrapper.find('.review-inline-preview').exists()).to.equal(false)
+      expect(wrapper.emitted('preview-selection').at(-1)).to.deep.equal([null])
+    } finally { wrapper.unmount() }
+  })
+  for (const change of ['closed', 'context', 'removed', 'mode']) it(`clears active preview when ${change}`, async () => {
+    const wrapper = mount(Dialog, { props: { open: true, selectionMode: true, choices: [{ key: 'a', title: '旧稿' }] }, attachTo: document.body })
+    try {
+      await flushPromises(); await wrapper.get('.review-selection-preview').trigger('click')
+      if (change === 'closed') await wrapper.setProps({ open: false })
+      if (change === 'context') await wrapper.setProps({ context: { taskId: 'new-task' } })
+      if (change === 'removed') await wrapper.setProps({ choices: [] })
+      if (change === 'mode') await wrapper.setProps({ selectionMode: false })
+      await flushPromises()
+      expect(wrapper.find('.review-inline-preview').exists()).to.equal(false)
+      expect(wrapper.emitted('preview-selection').at(-1)).to.deep.equal([null])
+      if (change === 'closed') { await wrapper.setProps({ open: true }); await flushPromises(); expect(wrapper.find('.review-inline-preview').exists()).to.equal(false) }
+    } finally { wrapper.unmount() }
+  })
   it('traps forward and reverse Tab and restores the opening control when closed', async () => {
     const trigger = document.createElement('button'); document.body.append(trigger); trigger.focus()
     const wrapper = mount(Dialog, { props: { open: true, frozenBatch: batch }, attachTo: document.body })
