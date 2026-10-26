@@ -270,3 +270,7 @@ PROTOTYPE_FOCUS=unified PROTOTYPE_ORIGIN=http://127.0.0.1:18786 PROTOTYPE_EVIDEN
 生产重新登录核对（2026-10-17）：`/home/isp/wsps/cyf/specs/juyiting-ui-baseline-20261006/optimization/production-recheck.md`。17页双端实页与2页边界分开记录，变更方案已据此校正；只读核对不替代写链路验收。
 
 授权生产完整主链与最新develop核对：`/home/isp/wsps/cyf/specs/juyiting-ui-baseline-20261006/optimization/full-flow-recheck.md`。正式文本事项已验收完成，顶部PRIVATE路径未闭环；不等于所有媒体/异常路径通过。
+
+## 2026-10-26 本会话响应展示与规格收口（原型待确认）
+
+同一入口 `index.html?scenario=image-turn#chat` 查看一条回复交付图片，页内折叠“切换演示状态”体验处理中→登记中→交付、失败/未知；处理中“本轮操作”提供显式放弃确认。无页顶常驻黄色提示，无正文/typed卡/交付通知/图片四块重复。复用原资料选择、预览及验收，议事预览无下载；输入focus/语音/切换工具收起保持。最新规则见规格C07/C09与“本会话原型与规格统一核对”，覆盖历史相反描述。不修改产品程序；此前本聊天1.16.54发布范围与本次原型目标分开记录。
