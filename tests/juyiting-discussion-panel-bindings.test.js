@@ -1,3 +1,5 @@
+import { discussionTurns } from '../src/composables/juyiting/hallDiscussionTurns.js'
+import { useHallExecutionAbandonment } from '../src/composables/juyiting/useHallExecutionAbandonment.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import * as Vue from 'vue'
@@ -21,7 +23,7 @@ const loadPanel = (name, refresh = () => {}) => {
     .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_, name) => `var ${name} = deps.${name}`)
     .replace('export default', 'return')
   return new Function('Vue', 'deps', script)(Vue, {
-    ...discussionContract, bountyDeliberationPresentation, ChatPanel: ChatProbe,
+    ...discussionContract, discussionTurns, useHallExecutionAbandonment, bountyDeliberationPresentation, ChatPanel: ChatProbe,
     BountyDeliberationStatus: { render: () => null },
     BountyExecutionTermination: { render: () => null },
     BountyExecutionOutputs: { setup: (_props, { expose }) => {

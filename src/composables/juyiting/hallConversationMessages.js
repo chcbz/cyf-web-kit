@@ -47,6 +47,7 @@ export const normalizeHallMessage = (item, identity) => {
     sender,
     senderName: isSelf ? '你' : fallbackSenderName(sender, normalizeSenderName(item.senderName) || normalizeSenderName(metadata.senderName)),
     agentId: metadata.agentId,
+    requestId: typedId(metadata.requestId),
     jiacn: item.jiacn,
     ownerJiacn: item.ownerJiacn,
     isSelf,
@@ -181,6 +182,7 @@ export const appendHallEventMessage = (state, event, identity) => {
     if (!existing.streaming && (!streamingMessage || streamingMessage === existing)) {
       // A replayed final can carry newly projected asset parts. Do not replay its
       // text/final notification; accept only newer, validated part revisions.
+      existing.requestId = typedId(event.requestId) || existing.requestId
       const merged = mergeMessageParts(existing.parts, Array.isArray(event.parts) ? event.parts : [])
       const hasNewParts = merged.some(part => !existing.parts?.some(previous =>
         previous.partId === part.partId && previous.revision === part.revision))
@@ -191,6 +193,7 @@ export const appendHallEventMessage = (state, event, identity) => {
     if (streamingMessage && streamingMessage !== existing) {
       state.messages.splice(state.messages.indexOf(streamingMessage), 1)
     }
+    existing.requestId = typedId(event.requestId) || existing.requestId
     existing.content = event.content || existing.content
     existing.parts = mergeMessageParts(existing.parts, Array.isArray(event.parts) ? event.parts : [])
     existing.timestamp = event.timestamp || existing.timestamp
@@ -203,6 +206,7 @@ export const appendHallEventMessage = (state, event, identity) => {
     return { type: 'final', message: existing, shouldStopPolling: true, toastName: senderName }
   }
   if (streamingMessage && event.senderType === 'agent') {
+    streamingMessage.requestId = typedId(event.requestId) || streamingMessage.requestId
     streamingMessage.localId = localId
     streamingMessage.content = event.content || streamingMessage.content
     streamingMessage.parts = mergeMessageParts(streamingMessage.parts, Array.isArray(event.parts) ? event.parts : [])
@@ -221,6 +225,7 @@ export const appendHallEventMessage = (state, event, identity) => {
     sender,
     senderName,
     agentId: event.agentId,
+    requestId: typedId(event.requestId),
     jiacn: event.jiacn,
     ownerJiacn: event.ownerJiacn,
     isSelf,
@@ -260,6 +265,7 @@ const appendStreamAgentFinal = (state, event) => {
     sender: 'AGENT',
     senderName,
     agentId: event.agentId,
+    requestId: typedId(event.requestId),
     jiacn: event.jiacn,
     ownerJiacn: event.ownerJiacn,
     turnId: finalTurnId,
@@ -271,6 +277,7 @@ const appendStreamAgentFinal = (state, event) => {
   if (existing && streamingMessage && streamingMessage !== existing) {
     state.messages.splice(state.messages.indexOf(streamingMessage), 1)
   }
+  message.requestId = typedId(event.requestId) || message.requestId
   message.localId = event.messageId
   message.sender = 'AGENT'
   message.senderName = senderName || message.senderName

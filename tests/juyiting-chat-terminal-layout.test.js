@@ -1,3 +1,4 @@
+import * as discussionTurnHelpers from '../src/composables/juyiting/hallDiscussionTurns.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
@@ -33,6 +34,7 @@ const Picker = Vue.defineComponent({
 let taskDirectory
 const Card = Vue.defineComponent({ props: ['readOnly', 'projection'], emits: ['reply'], render() { return Vue.h('button', { disabled: this.readOnly, onClick: () => this.$emit('reply', this.projection) }, '回答此问') } })
 const Panel = new Function('Vue', 'deps', script)(Vue, {
+  ...discussionTurnHelpers,
   usePersonalWorkspace: directory, usePersonalWorkspaceTaskLinks: () => (taskDirectory = directory()), usePersonalWorkspaceConversationLinks: directory,
   marked: Object.assign(value => value, { setOptions: () => {} }), DOMPurify: { sanitize: value => value }, HallChatComposer: Composer, HallMaterialPicker: Picker,
   HallMessageParts: { render: () => null }, BountyTextSelectionArchive: { render: () => null },
@@ -179,6 +181,36 @@ describe('formal discussion terminal resource and toolbar layout', () => {
       expect(wrapper.find('.hall-messages .matter-action').exists()).to.equal(false)
       expect(wrapper.find('.composer-probe .matter-action').exists()).to.equal(false)
       expect(descriptor.styles[0].content).to.include('.toolbar-actions :deep(.matter-action)')
+    } finally { wrapper.unmount() }
+  })
+})
+
+
+describe('discussion single reply rendering', () => {
+  it('updates one reply through running, archiving and delivery without duplicate typed or delivery rows', async () => {
+    const original = { localId: 'reply-1', sender: 'AGENT', agentId: 'agent-1', content: '为你修改图片', statusText: '回话已毕', parts: [] }
+    const projection = { key: 'p1', conversationId: '42', outcome: { kind: 'ACTION_REQUEST', assistantMessageId: 'reply-1', taskId: 'task-1' }, actionProgress: { childRequestId: 'child-1', state: 'RUNNING' } }
+    const wrapper = mount(Panel, { props: { discussionVariant: 'bounty', selectedTask: { id: 'task-1' }, conversationId: '42',
+      mentionLabel: () => '', senderText: () => '吴用', messages: [original], typedOutcomes: [projection] },
+      slots: { 'turn-actions': ({ requestIds }) => Vue.h('span', { class: 'turn-action-probe' }, requestIds.join(',')) },
+      global: { stubs: { 'var-icon': true } } })
+    try {
+      expect(wrapper.findAll('.hall-message')).to.have.length(1)
+      expect(wrapper.get('.discussion-turn-progress').text()).to.equal('正在处理')
+      expect(wrapper.findComponent(Card).exists()).to.equal(false)
+      expect(wrapper.find('.message-status').exists()).to.equal(false)
+      expect(wrapper.get('.turn-action-probe').text()).to.equal('child-1')
+      await wrapper.setProps({ typedOutcomes: [{ ...projection, actionProgress: { ...projection.actionProgress, state: 'ARCHIVING' } }] })
+      expect(wrapper.get('.discussion-turn-progress').text()).to.equal('已生成，登记中')
+      const delivery = { localId: 'delivery-1', requestId: 'child-1', sender: 'AGENT', agentId: 'agent-1', content: '已生成成果；可预览或下载。', parts: [{ partId: 'part-1', assetId: 'asset-1', revision: '1', kind: 'image', state: 'ready', mime: 'image/png' }] }
+      await wrapper.setProps({ messages: [original, delivery], typedOutcomes: [{ ...projection, actionProgress: { ...projection.actionProgress, state: 'COMPLETED' } }] })
+      expect(wrapper.findAll('.hall-message')).to.have.length(1)
+      expect(wrapper.get('.discussion-turn-progress').text()).to.equal('本轮完成')
+      expect(wrapper.text()).not.to.include('可预览或下载')
+      expect(original.parts).to.deep.equal([])
+      await wrapper.setProps({ conversationId: '43', messages: [], typedOutcomes: [] })
+      expect(wrapper.findAll('.hall-message')).to.have.length(0)
+      expect(wrapper.find('.turn-action-probe').exists()).to.equal(false)
     } finally { wrapper.unmount() }
   })
 })

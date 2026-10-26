@@ -73,7 +73,7 @@
 
     <div ref="messageBoxRef" class="hall-messages">
       <div
-        v-for="message in messages"
+        v-for="message in displayedMessages"
         :key="message.localId || message.timestamp"
         class="hall-message"
         :class="[message.sender, { 'is-streaming': message.streaming }]"
@@ -81,6 +81,14 @@
         <div class="message-head">
           <strong>{{ senderText(message) }}</strong>
           <span v-if="message.streaming" class="message-state">回话未尽</span>
+        </div>
+        <div
+          v-if="message.turnProjections?.length"
+          class="discussion-turn-progress"
+          role="status"
+          aria-live="polite"
+        >
+          <span v-for="projection in message.turnProjections" :key="projection.key || projection.outcome.outcomeId">{{ discussionTurnStatus(projection) }}</span>
         </div>
         <div v-if="message.content" class="message-content" v-html="renderMarkdown(message.content)"></div>
         <div v-if="isTaskDiscussion && message.typedTaskId === taskId && message.typedSourceSelectors?.length" class="message-parts" aria-label="本条消息资料">
@@ -95,8 +103,17 @@
           v-if="isTaskDiscussion"
           :conversation-id="conversationId"
           :identity-key="materialIdentityKey"
-          :message="message"
+          :message="message.turnOriginal || message"
         />
+        <template v-for="delivery in message.turnDeliveries || []" :key="delivery.localId">
+          <div v-if="discussionDeliveryText(delivery)" class="message-content" v-html="renderMarkdown(discussionDeliveryText(delivery))"></div>
+          <BountyTextSelectionArchive
+            v-if="discussionDeliveryText(delivery)"
+            :conversation-id="conversationId"
+            :identity-key="materialIdentityKey"
+            :message="delivery"
+          />
+        </template>
         <HallMessageParts
           :parts="message.parts"
           :conversation-id="conversationId"
@@ -136,7 +153,8 @@
           :read-only="serverTaskCompleted"
           @reply="!serverTaskCompleted && $emit('typed-reply', $event)"
         />
-        <small v-if="message.statusText" class="message-status">{{ message.statusText }}</small>
+        <slot name="turn-actions" :request-ids="message.turnRequestIds || []"></slot>
+        <small v-if="message.statusText && !message.turnProjections?.length" class="message-status">{{ message.statusText }}</small>
       </div>
       <slot name="bounty-results"></slot>
       <p v-if="deliberationStatus && !serverTaskCompleted" class="deliberation-status" :role="deliberationStatus.startsWith('停止失败') ? 'alert' : 'status'">{{ deliberationStatus }}</p>
@@ -311,6 +329,7 @@ import HallChatComposer from './HallChatComposer.vue'
 import HallMaterialPicker from './HallMaterialPicker.vue'
 import HallConversationHistory from './HallConversationHistory.vue'
 import BountyTypedOutcomeCard from './BountyTypedOutcomeCard.vue'
+import { discussionTurns, discussionDeliveryText, discussionTurnStatus } from '../../composables/juyiting/hallDiscussionTurns.js'
 import WorkspaceWriteRecovery from '../personal-workspace/WorkspaceWriteRecovery.vue'
 import { usePersonalWorkspace } from '../../composables/usePersonalWorkspace.js'
 import { usePersonalWorkspaceConversationLinks } from '../../composables/usePersonalWorkspaceConversationLinks.js'
@@ -397,9 +416,12 @@ const taskId = computed(() => String(props.selectedTask?.id || '').trim())
 const serverTaskCompleted = computed(() => props.discussionVariant === 'bounty' &&
   (props.matterReadOnly || ['completed', 'failed', 'cancelled', 'archived'].includes(props.selectedTask?.status)))
 const typedForMessage = message => props.typedOutcomes.filter(projection =>
-  projection?.outcome?.assistantMessageId === String(message?.localId || ''))
+  projection?.outcome?.assistantMessageId === String(message?.localId || '') && !message.turnProjections?.includes(projection))
 
 const isTaskDiscussion = computed(() => props.discussionVariant === 'bounty')
+const displayedMessages = computed(() => !isTaskDiscussion.value ? props.messages : discussionTurns({
+  messages: props.messages, projections: props.typedOutcomes, conversationId: props.conversationId, taskId: taskId.value
+}))
 const canReviewMessageOutputs = computed(() => isTaskDiscussion.value && props.outputReviewEnabled && !serverTaskCompleted.value)
 const isAgentMessage = message => ['AGENT', 'ASSISTANT'].includes(message?.sender)
 const outputForPart = (message, part) => {
@@ -1089,4 +1111,8 @@ button:disabled {
 .message-output-preview header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .message-output-preview header button { min-width: 40px; min-height: 40px; border: 0; background: transparent; color: inherit; font-size: 24px; cursor: pointer; }
 .message-output-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+</style>
+
+<style scoped>
+.discussion-turn-progress { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; color: var(--hall-text-muted, #68716b); font-size: 12px; }
 </style>

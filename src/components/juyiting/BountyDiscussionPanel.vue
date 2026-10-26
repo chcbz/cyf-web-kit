@@ -1,13 +1,6 @@
 <template>
   <section class="bounty-discussion-panel discussion-panel">
     <BountyDeliberationStatus v-if="!taskCompleted" :presentation="v2Presentation" />
-    <BountyExecutionTermination
-      :enabled="deliberationV2Enabled && !taskCompleted"
-      :requests="requestCatalog.length ? requestCatalog.map(entry => entry.request) : activeRequest ? [activeRequest] : []"
-      :conversation-id="conversationId"
-      :identity-key="`${identityEpoch}\u0000${identityScope}`"
-      @settled="$emit('execution-settled', $event)"
-    />
     <p v-if="typedInspectionStatus" class="typed-inspection-status" role="status">{{ typedInspectionStatus }}</p>
     <button
       v-if="typedRecoveryAvailable && !taskCompleted"
@@ -68,7 +61,28 @@
           @click="$emit('review-delivery')"
         ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5h10M9 12h10M9 19h10M3 5l1 1 2-2M3 12l1 1 2-2M3 19l1 1 2-2" /></svg></button>
       </template>
+      <template #turn-actions="{ requestIds }">
+        <BountyExecutionTermination
+          v-if="requestIds.length"
+          :enabled="deliberationV2Enabled && !taskCompleted"
+          :controller="abandonment"
+          :requests="executionRequests"
+          :request-ids="requestIds"
+          :conversation-id="conversationId"
+          :identity-key="`${identityEpoch}\u0000${identityScope}`"
+          @settled="$emit('execution-settled', $event)"
+        />
+      </template>
       <template #bounty-results>
+        <BountyExecutionTermination
+          :enabled="deliberationV2Enabled && !taskCompleted"
+          :controller="abandonment"
+          :requests="executionRequests"
+          :excluded-request-ids="boundRequestIds"
+          :conversation-id="conversationId"
+          :identity-key="`${identityEpoch}\u0000${identityScope}`"
+          @settled="$emit('execution-settled', $event)"
+        />
         <BountyExecutionOutputs
           ref="outputGallery"
           :review-busy="reviewBusy || conversationBusy"
@@ -94,6 +108,8 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
+import { discussionTurns } from '../../composables/juyiting/hallDiscussionTurns.js'
+import { useHallExecutionAbandonment } from '../../composables/juyiting/useHallExecutionAbandonment.js'
 import ChatPanel from './ChatPanel.vue'
 import TaskSkillCapabilities from './TaskSkillCapabilities.vue'
 import { discussionPanelProps, discussionPanelEmits } from './discussionPanelContract.js'
@@ -154,6 +170,14 @@ const bountySubtitle = computed(() => {
 
 const taskCompleted = computed(() => props.selectedTask?.status === 'completed' ||
   Boolean(props.selectedTask?.id && props.reviewContext?.taskId === props.selectedTask.id && props.reviewContext.taskState === 'COMPLETED'))
+
+const executionRequests = computed(() => props.requestCatalog.length ? props.requestCatalog.map(entry => entry.request) : props.activeRequest ? [props.activeRequest] : [])
+const boundRequestIds = computed(() => discussionTurns({ messages: props.messages, projections: props.typedOutcomes,
+  conversationId: props.conversationId, taskId: String(props.selectedTask?.id || '') }).flatMap(message => message.turnRequestIds))
+const abandonment = useHallExecutionAbandonment({
+  conversationId: () => props.deliberationV2Enabled && !taskCompleted.value ? props.conversationId : null,
+  identityKey: () => `${props.identityEpoch}\u0000${props.identityScope}`
+})
 
 const chatProps = computed(() => {
   const {

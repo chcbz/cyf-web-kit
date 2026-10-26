@@ -31,15 +31,73 @@ const mountPanel = (execute = async () => receipt(), props = {}) => {
   return { wrapper, calls, store, original }
 }
 const button = (wrapper, text) => wrapper.findAll('button').find(node => node.text() === text)
+const confirm = async wrapper => {
+  await button(wrapper, '放弃本轮未交付结果').trigger('click')
+  await Vue.nextTick()
+  const node = [...document.querySelectorAll('dialog button')].find(node => node.textContent === '确认放弃')
+  node.click()
+  await Vue.nextTick()
+}
 
 describe('real execution abandonment SFC DOM with original-intent composable', () => {
+  it('does not submit before explicit confirmation; cancel, Escape and identity changes keep the request untouched', async () => {
+    const { wrapper, calls } = mountPanel()
+    try {
+      await button(wrapper, '放弃本轮未交付结果').trigger('click')
+      expect(calls).to.have.length(0)
+      document.querySelector('dialog button').click()
+      await Vue.nextTick()
+      expect(document.querySelector('dialog')).to.equal(null)
+      await button(wrapper, '放弃本轮未交付结果').trigger('click')
+      document.querySelector('dialog').dispatchEvent(new window.Event('cancel', { cancelable: true }))
+      await Vue.nextTick()
+      expect(document.querySelector('dialog')).to.equal(null)
+      await button(wrapper, '放弃本轮未交付结果').trigger('click')
+      await wrapper.setProps({ identityKey: 'owner-b', requests: [] })
+      expect(document.querySelector('dialog')).to.equal(null)
+      expect(calls).to.have.length(0)
+    } finally { wrapper.unmount() }
+  })
+  it('rechecks the current candidate after confirmation instead of submitting a stale request', async () => {
+    const { wrapper, calls } = mountPanel()
+    try {
+      await button(wrapper, '放弃本轮未交付结果').trigger('click')
+      const staleButton = [...document.querySelectorAll('dialog button')].find(node => node.textContent === '确认放弃')
+      await wrapper.setProps({ requests: [{ ...request(), state: 'COMPLETED' }] })
+      staleButton.click()
+      await Vue.nextTick()
+      expect(calls).to.have.length(0)
+    } finally { wrapper.unmount() }
+  })
+  it('shares one recovered intent while showing recovery only under its owning reply', async () => {
+    const status = Vue.ref({ state: 'unknown', busy: false, message: '结果待核实', intent: { requestId: 'request-1' }, receipt: null })
+    const controller = { status, submit: () => {}, check: () => {}, resume: () => {} }
+    const owner = mountPanel(undefined, { controller, requestIds: ['request-1'] }).wrapper
+    const other = mountPanel(undefined, { controller, requestIds: ['request-2'] }).wrapper
+    const fallback = mountPanel(undefined, { controller, excludedRequestIds: ['request-1', 'request-2'] }).wrapper
+    try {
+      expect(button(owner, '查询原操作结果')).not.to.equal(undefined)
+      expect(other.find('aside').exists()).to.equal(false)
+      expect(fallback.find('aside').exists()).to.equal(false)
+      status.value = { ...status.value, state: 'completed', receipt: receipt() }
+      await Vue.nextTick()
+      expect(owner.emitted('settled')).to.deep.equal([[receipt()]])
+      expect(other.emitted('settled')).to.equal(undefined)
+      expect(fallback.emitted('settled')).to.equal(undefined)
+    } finally { owner.unmount(); other.unmount(); fallback.unmount() }
+  })
+
   it('shows explicit paid/Provider warning, submits exact command and emits only a receipt hint without mutating a request', async () => {
     const { wrapper, calls, original } = mountPanel()
     try {
       expect(wrapper.get('aside').attributes('aria-label')).to.equal('未交付执行处理')
-      expect(wrapper.text()).to.include('不会撤销已发生的生成费用').and.include('也不表示服务商已停止执行')
+      expect(wrapper.get('details').attributes('open')).to.equal(undefined)
+      await button(wrapper, '放弃本轮未交付结果').trigger('click')
+      expect(document.querySelector('dialog').textContent).to.include('不会撤销已发生的生成费用').and.include('也不表示服务商已停止执行')
+      document.querySelector('dialog button').click()
+      await Vue.nextTick()
       expect(calls).to.deep.equal([])
-      await button(wrapper, '放弃本轮未交付结果').trigger('click'); await flushPromises()
+      await confirm(wrapper); await flushPromises()
       expect(calls.length).to.equal(1); expect(calls[0].data).to.deep.equal(abandonmentCommand(original, '42'))
       expect(wrapper.emitted('settled')).to.deep.equal([[receipt()]])
       expect(original).to.deep.equal(request())
@@ -50,7 +108,7 @@ describe('real execution abandonment SFC DOM with original-intent composable', (
   it('blocks repeat writes while pending and exposes recovery actions after an unknown response', async () => {
     const pending = deferred(); const { wrapper, calls } = mountPanel(() => pending.promise)
     try {
-      await button(wrapper, '放弃本轮未交付结果').trigger('click')
+      await confirm(wrapper)
       expect(wrapper.findAll('button').every(node => node.element.disabled)).to.equal(true)
       expect(calls.length).to.equal(1)
       pending.resolve({ invalid: true }); await flushPromises()
@@ -67,7 +125,7 @@ describe('real execution abandonment SFC DOM with original-intent composable', (
       return receipt()
     })
     try {
-      await button(wrapper, '放弃本轮未交付结果').trigger('click'); await flushPromises()
+      await confirm(wrapper); await flushPromises()
       await button(wrapper, '查询原操作结果').trigger('click'); await flushPromises()
       expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET'])
       expect(calls[1].headers).to.deep.equal(calls[0].headers)
@@ -81,7 +139,7 @@ describe('real execution abandonment SFC DOM with original-intent composable', (
       return receipt()
     })
     try {
-      await button(wrapper, '放弃本轮未交付结果').trigger('click'); await flushPromises()
+      await confirm(wrapper); await flushPromises()
       await button(wrapper, '继续原放弃操作').trigger('click'); await flushPromises()
       expect(calls.map(call => call.method)).to.deep.equal(['POST', 'POST'])
       expect(calls[1].headers).to.deep.equal(calls[0].headers); expect(calls[1].data).to.equal(calls[0].data)
@@ -92,7 +150,7 @@ describe('real execution abandonment SFC DOM with original-intent composable', (
     it(`ignores a late receipt when component scope changes: ${JSON.stringify(props)}`, async () => {
       const pending = deferred(); const { wrapper, calls } = mountPanel(() => pending.promise)
       try {
-        await button(wrapper, '放弃本轮未交付结果').trigger('click')
+        await confirm(wrapper)
         await wrapper.setProps(props)
         expect(calls[0].signal.aborted).to.equal(true)
         pending.resolve(receipt()); await flushPromises()
