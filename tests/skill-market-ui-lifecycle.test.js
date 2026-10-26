@@ -16,8 +16,8 @@ describe('SM-C1 actual management component lifecycle (no composable stub)', () 
   }
   it('Chinese permission labels submit original enum keys through quote and installation', async () => {
     await open()
-    expect(wrapper.findAll('.skill-install-permissions label span').map(label => label.text())).to.deep.equal(['读取本次授权的输入', '生成结果并写回当前任务'])
-    for (const input of wrapper.findAll('input')) await input.setValue(true)
+    expect(wrapper.findAll('.skill-permission-details span').map(label => label.text().replace(/；$/, ""))).to.deep.equal(['读取本次授权的输入', '生成结果并写回当前任务'])
+    expect(wrapper.findAll('input[type=checkbox]')).to.have.length(0)
     await button(wrapper, '获取报价').trigger('click'); await until(() => button(wrapper, '确认安装'))
     expect(mock.requests.find(r => r.method === 'POST' && r.path === '/skill-orders/quotes').data).to.deep.equal(fixture('quote-install-request').data)
     await button(wrapper, '确认安装').trigger('click'); await until(() => mock.requests.some(r => r.method === 'POST' && r.path === '/agt_demo/skill-changes'))
@@ -27,9 +27,9 @@ describe('SM-C1 actual management component lifecycle (no composable stub)', () 
     const permissions = ['__proto__', 'constructor', '<img src=x onerror="alert(1)">']
     mock.list.items[0].candidate.requiredPermissions = permissions
     await open()
-    expect(wrapper.findAll('.skill-install-permissions label span').map(label => label.text())).to.deep.equal(permissions)
-    expect(wrapper.find('.skill-install-permissions img').exists()).to.equal(false)
-    for (const input of wrapper.findAll('input')) await input.setValue(true)
+    expect(wrapper.findAll('.skill-permission-details span').map(label => label.text().replace(/；$/, ""))).to.deep.equal(permissions)
+    expect(wrapper.find('.skill-permission-details img').exists()).to.equal(false)
+    expect(wrapper.findAll('input[type=checkbox]')).to.have.length(0)
     expect(button(wrapper, '获取报价').element.disabled).to.equal(false)
     await wrapper.find('dialog').trigger('keydown', { key: 'Escape' })
     mock.list.items[0].allowedActions = ['VIEW']
@@ -41,7 +41,7 @@ describe('SM-C1 actual management component lifecycle (no composable stub)', () 
   })
   it('collapse/Esc preserves permission draft and valid quote; quote focus moves near target; close emits only dismissal', async () => {
     await open()
-    for (const input of wrapper.findAll('input')) await input.setValue(true)
+    expect(wrapper.findAll('input[type=checkbox]')).to.have.length(0)
     await button(wrapper, '获取报价').trigger('click'); await until(() => button(wrapper, '确认安装'))
     expect(document.activeElement.textContent).to.equal('确认安装')
     expect(wrapper.find('.skill-inline-footer').text()).to.include('测试好汉 · 图片修改 · 1.1.0')
@@ -125,13 +125,13 @@ describe('SM-C1 actual management component lifecycle (no composable stub)', () 
     } finally { trigger.remove() }
   })
 
-  it('actual UPGRADE flow shows old/target versions, requires permissions and submits its exact covered quote', async () => {
+  it('actual UPGRADE flow shows old/target versions, authorizes declared permissions and submits its exact covered quote', async () => {
     mock.list = fixture('skill-list').data; mock.accepted = fixture('accepted-upgrade').data
     wrapper = mount(skillComponents().Management, { attachTo: document.body, props: { embedded: true, targetAgent: { agentId: 'agt_demo', name: '测试好汉' }, actorScopeKey: 'actor-a', agentApi: mock.api } })
     await until(() => button(wrapper, '升级')); await button(wrapper, '升级').trigger('click')
     expect(wrapper.find('.skill-version-compare').text()).to.include('1.0.0').and.include('1.1.0')
-    expect(button(wrapper, '获取报价').element.disabled).to.equal(true)
-    for (const input of wrapper.findAll('input')) await input.setValue(true)
+    expect(button(wrapper, '获取报价').element.disabled).to.equal(false)
+    expect(wrapper.findAll('input[type=checkbox]')).to.have.length(0)
     await button(wrapper, '获取报价').trigger('click'); await until(() => button(wrapper, '确认升级'))
     expect(wrapper.find('.skill-install-quote').text()).to.include('现有权益覆盖')
     await button(wrapper, '确认升级').trigger('click'); await until(() => wrapper.text().includes('下载与校验'))

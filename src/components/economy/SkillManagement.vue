@@ -133,19 +133,6 @@
                 </div>
                 <p v-if="mode === 'UPGRADE'">{{ row.candidate?.changeSummary }}</p>
                 <p v-if="mode === 'UPGRADE'" class="skill-note">准备失败保留旧版；旧任务继续原版本，不自动重发旧消息。升级保留当前启停期望。</p>
-                <section class="skill-install-permissions">
-                  <h4>确认权限范围</h4>
-                  <label v-for="permission in row.candidate?.requiredPermissions || []" :key="permission">
-                    <input
-                      type="checkbox"
-                      :checked="draft(row)?.permissions.includes(permission)"
-                      :disabled="blocked(row)"
-                      @change="togglePermission(row, permission, $event.target.checked)"
-                    />
-                    <span>{{ formatSkillPermission(permission) }}</span>
-                  </label>
-                  <p v-if="!row.candidate?.requiredPermissions.length">此版本未请求额外权限。</p>
-                </section>
                 <button
                   v-if="market.pending[row.skillKey]?.kind === 'QUOTE'"
                   type="button"
@@ -155,9 +142,9 @@
                 <p v-if="draft(row)?.message" class="skill-error" role="alert">{{ draft(row).message }}</p>
                 <p class="skill-install-quote" role="status">
                   <template v-if="draft(row)?.quote">本次报价 {{ money(draft(row).quote.price) }} · {{ draft(row).quote.coverage === 'ENTITLEMENT' ? '现有权益覆盖' : '本次购买' }} · 有效至 {{ dateTime(draft(row).quote.expiresAt) }}</template>
-                  <template v-else>批准完整权限后获取报价，再明确确认。</template>
+                  <template v-else>获取报价后安装或升级。</template>
                 </p>
-                <details class="skill-deferred"><summary>输入、运行条件与费用说明</summary><p>输入：{{ row.candidate?.inputMimeTypes.join('、') || '未声明' }}</p><p>依赖：{{ row.candidate?.requirements.join('；') || '无额外声明' }}</p><p>{{ row.candidate?.executionCostDescription || '执行服务费用未提供说明，不据此认定免费。' }}</p><p>购买费用与执行服务费用分开；安装不自动执行任务。</p></details>
+                <details class="skill-deferred"><summary>技能详情与费用</summary><p class="skill-permission-details"><span v-for="permission in row.candidate?.requiredPermissions || []" :key="permission">{{ formatSkillPermission(permission) }}；</span></p><p>输入：{{ row.candidate?.inputMimeTypes.join('、') || '未声明' }}</p><p>依赖：{{ row.candidate?.requirements.join('；') || '无额外声明' }}</p><p>{{ row.candidate?.executionCostDescription || '执行服务费用未提供说明，不据此认定免费。' }}</p><p>购买费用与执行服务费用分开；安装不自动执行任务。</p></details>
                 <footer class="skill-inline-footer">
                   <span>{{ agentName }} · {{ row.name }} · {{ row.candidate?.skillVersion }}</span>
                   <button
@@ -292,7 +279,12 @@ const first = value => Array.isArray(value) ? value[0] : value
 const focusHeading = () => nextTick(() => first(inlineTitleRef.value)?.focus({ preventScroll: true }))
 const expand = (row, nextMode, event) => {
   rowTrigger = event?.currentTarget || document.activeElement
-  if (['INSTALL', 'UPGRADE'].includes(nextMode) && !market.prepare(row, nextMode)) return
+  if (['INSTALL', 'UPGRADE'].includes(nextMode)) {
+    if (!market.prepare(row, nextMode)) return
+    // Choosing the fixed candidate authorizes its declared permissions. A valid
+    // existing quote is retained; no separate permission checkbox/confirmation.
+    if (!draft(row)?.quote) market.setApprovedPermissions(row.skillKey, row.candidate?.requiredPermissions || [])
+  }
   expanded.value = row.skillKey; mode.value = nextMode; void focusHeading()
 }
 const collapse = () => {
@@ -321,7 +313,6 @@ const onKeydown = event => {
   const current = document.activeElement
   if (targets.length && (!targets.includes(current) || (event.shiftKey ? current === targets[0] : current === targets.at(-1)))) { event.preventDefault(); (event.shiftKey ? targets.at(-1) : targets[0]).focus() }
 }
-const togglePermission = (row, permission, checked) => { const values = new Set(draft(row)?.permissions || []); if (checked) values.add(permission); else values.delete(permission); market.setApprovedPermissions(row.skillKey, [...values]) }
 const quote = async row => {
   const result = await market.requestQuote(row.skillKey)
   if (result && expanded.value === row.skillKey && ['INSTALL', 'UPGRADE'].includes(mode.value) && (props.show || props.embedded)) await nextTick(() => { first(confirmRef.value)?.focus(); first(confirmRef.value)?.scrollIntoView?.({ block: 'nearest' }) })
