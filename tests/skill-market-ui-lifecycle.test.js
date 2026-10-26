@@ -149,4 +149,27 @@ describe('SM-C1 actual management component lifecycle (no composable stub)', () 
     expect(wrapper.text()).not.to.include('该动作已完成')
   })
 
+  it('UNINSTALL stays in the detail row, cancel sends nothing, exact submit waits for removal evidence', async () => {
+    mock.list = fixture('skill-list').data
+    const row = mock.list.items[0]; row.allowedActions.push('UNINSTALL')
+    const source = { ...fixture('disabled-api-admission-closed').data.target, skillInstallationId: row.installed.skillInstallationId }
+    mock.accepted = { ...fixture('disabled-api-admission-closed').data, action: 'UNINSTALL', source, target: source, status: 'WAITING_AGENT', runtimeSynced: false, reasonCode: 'AGENT_OFFLINE' }
+    wrapper = mount(skillComponents().Management, { attachTo: document.body, props: { embedded: true, targetAgent: { agentId: 'agt_demo', name: '测试好汉' }, actorScopeKey: 'actor-a', agentApi: mock.api } })
+    await until(() => button(wrapper, '详情')); await button(wrapper, '详情').trigger('click')
+    await button(wrapper, '卸载技能').trigger('click')
+    expect(wrapper.find('.skill-inline-panel').text()).to.include('不删除成果、历史和已购权益')
+    await button(wrapper, '取消').trigger('click')
+    expect(mock.requests.filter(r => r.method === 'POST')).to.have.length(0)
+    await button(wrapper, '卸载技能').trigger('click'); await button(wrapper, '确认卸载').trigger('click')
+    await until(() => wrapper.text().includes('等待连接'))
+    const writes = mock.requests.filter(r => r.method === 'POST')
+    expect(writes).to.have.length(1); expect(writes[0].path).to.equal('/agt_demo/skill-changes')
+    expect(writes[0].data).to.deep.equal({ action: 'UNINSTALL', skillKey: row.skillKey, sourceSkillInstallationId: row.installed.skillInstallationId, expectedAgentVersion: mock.list.agentVersion, expectedSkillRevision: row.skillRevision })
+    expect(wrapper.text()).not.to.include('已卸载；')
+    mock.accepted = { ...mock.accepted, status: 'SUCCEEDED', runtimeSynced: true, reasonCode: null, changeRevision: '3' }
+    row.installed = null; row.allowedActions = ['VIEW', 'INSTALL']; row.latestChange = mock.accepted
+    await button(wrapper, '查询原操作').trigger('click'); await until(() => wrapper.text().includes('已卸载；'))
+    await button(wrapper, '收起').trigger('click'); expect(button(wrapper, '安装')).not.to.equal(undefined)
+  })
+
 })

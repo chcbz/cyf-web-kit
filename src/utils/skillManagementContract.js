@@ -26,8 +26,8 @@ export const utf8Compare = (a, b) => {
 export const sortSkillPermissions = values => [...values].sort(utf8Compare)
 const permissions = unique(v => text(v) && v.length > 0)
 const money = shape({ amountMinor: skillRevision, currency: one(['SILVER']) })
-const action = one(['INSTALL', 'UPGRADE', 'ENABLE', 'DISABLE'])
-const allowedAction = one(['VIEW', 'INSTALL', 'UPGRADE', 'ENABLE', 'DISABLE', 'RETRY', 'RECONCILE'])
+const action = one(['INSTALL', 'UPGRADE', 'ENABLE', 'DISABLE', 'UNINSTALL'])
+const allowedAction = one(['VIEW', 'INSTALL', 'UPGRADE', 'ENABLE', 'DISABLE', 'UNINSTALL', 'RETRY', 'RECONCILE'])
 // Display labels only: approval, digest and wire data retain the original permission keys.
 const permissionLabels = Object.freeze({ READ_AUTHORIZED_INPUT: '读取本次授权的输入', WRITE_TASK_RESULT: '生成结果并写回当前任务' })
 export const formatSkillPermission = permission => Object.hasOwn(permissionLabels, permission) ? permissionLabels[permission] : permission
@@ -51,7 +51,8 @@ const change = v => {
   price: nullable(money), actorLabel: text, createdAt: time, updatedAt: time })(v) &&
   (v.action === 'INSTALL' ? v.source === null && (position || money(v.price) && skillId(v.orderId)) : packageRef(v.source)) &&
   (!position || (v.price === null && v.orderId === null && v.fundingStatus === 'NONE')) &&
-  (!['ENABLE', 'DISABLE'].includes(v.action) || (v.price === null && v.orderId === null && v.fundingStatus === 'NONE')) &&
+  (!['ENABLE', 'DISABLE', 'UNINSTALL'].includes(v.action) || (v.price === null && v.orderId === null && v.fundingStatus === 'NONE')) &&
+  (v.action !== 'UNINSTALL' || !v.desiredEnabled) &&
   (v.retryAllowed === (v.status === 'FAILED_RETRYABLE')) &&
   (!v.retryAllowed || ['NONE', 'HELD'].includes(v.fundingStatus)) &&
   (!(v.status === 'SUCCEEDED' && v.action !== 'DISABLE') || v.runtimeSynced)
@@ -64,15 +65,16 @@ const quote = v => shape({ quoteId: skillId, action: one(['INSTALL', 'UPGRADE'])
   sourceSkillInstallationId: nullable(skillId), targetProductVersionId: skillId, targetSkillVersion: version, targetPackageSha256: sha,
   expectedAgentVersion: positive, expectedSkillRevision: skillRevision, approvedPermissionsSha256: sha, price: money,
   coverage: one(['PURCHASE', 'ENTITLEMENT']), entitlementId: nullable(skillId), expiresAt: time })(v) &&
-  (v.action === 'INSTALL' ? v.sourceSkillInstallationId === null && v.coverage === 'PURCHASE' && v.entitlementId === null : skillId(v.sourceSkillInstallationId)) &&
-  (v.coverage !== 'ENTITLEMENT' || (v.action === 'UPGRADE' && skillId(v.entitlementId) && v.price.amountMinor === '0'))
+  (v.action === 'INSTALL' ? v.sourceSkillInstallationId === null : skillId(v.sourceSkillInstallationId)) &&
+  (v.coverage !== 'PURCHASE' || v.entitlementId === null) &&
+  (v.coverage !== 'ENTITLEMENT' || (skillId(v.entitlementId) && v.price.amountMinor === '0'))
 const quoteInputFields = { action: one(['INSTALL', 'UPGRADE']), agentId: skillId, skillKey: key, sourceSkillInstallationId: nullable(skillId), targetProductVersionId: skillId, expectedAgentVersion: positive, expectedSkillRevision: skillRevision, approvedPermissions: permissions }
 const sourceMatches = v => v.action === 'INSTALL' ? v.sourceSkillInstallationId === null : skillId(v.sourceSkillInstallationId)
 const quoteInput = v => shape(quoteInputFields)(v) && sourceMatches(v)
 const createFields = Object.fromEntries(Object.entries(quoteInputFields).filter(([name]) => name !== 'agentId'))
 const create = v => ['INSTALL', 'UPGRADE'].includes(v?.action)
   ? shape({ ...createFields, quoteId: skillId, expectedPrice: money })(v) && sourceMatches(v)
-  : shape({ action: one(['ENABLE', 'DISABLE']), skillKey: key, sourceSkillInstallationId: skillId, expectedAgentVersion: positive, expectedSkillRevision: skillRevision })(v)
+  : shape({ action: one(['ENABLE', 'DISABLE', 'UNINSTALL']), skillKey: key, sourceSkillInstallationId: skillId, expectedAgentVersion: positive, expectedSkillRevision: skillRevision })(v)
 const checks = { SkillList: shape({ agentId: skillId, agentVersion: positive, items: list(row) }), SkillChange: change,
   ChangeList: shape({ agentId: skillId, items: list(change) }), Quote: quote, QuoteRequestData: quoteInput, CreateChangeData: create,
   ChangeActionData: shape({ expectedChangeRevision: positive }), Id: skillId }

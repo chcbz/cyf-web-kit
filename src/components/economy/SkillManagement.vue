@@ -124,6 +124,13 @@
                     :disabled="blocked(row)"
                     @click="prepareToggle(row)"
                   >{{ row.desiredEnabled ? '停用新调用' : '启用新调用' }}</button>
+                  <button
+                    v-if="row.allowedActions.includes('UNINSTALL')"
+                    class="skill-secondary-action"
+                    type="button"
+                    :disabled="blocked(row)"
+                    @click="prepareUninstall(row)"
+                  >卸载技能</button>
                 </section>
               </template>
               <template v-else-if="mode === 'INSTALL' || mode === 'UPGRADE'">
@@ -164,6 +171,15 @@
                   >{{ market.busy[row.skillKey] ? '正在提交…' : mode === 'INSTALL' ? '确认安装' : '确认升级' }}</button>
                 </footer>
               </template>
+              <template v-else-if="mode === 'UNINSTALL'">
+                <p>卸载 {{ row.name }}？将停止新调用并移出已安装列表。</p>
+                <p class="skill-note">不中断在途任务，不删除成果、历史和已购权益；不自动退款。需要时可重新安装。</p>
+                <footer class="skill-inline-footer">
+                  <span>{{ agentName }} · {{ row.name }} · {{ row.installed?.version.skillVersion }}</span>
+                  <button type="button" :disabled="blocked(row)" @click="expand(row, 'detail')">取消</button>
+                  <button class="primary" type="button" :disabled="blocked(row) || market.loading || !!market.error" @click="submit(row)">{{ market.busy[row.skillKey] ? '正在提交…' : '确认卸载' }}</button>
+                </footer>
+              </template>
               <template v-else-if="mode === 'ENABLE' || mode === 'DISABLE'">
                 <p>{{ mode === 'DISABLE' ? '停用' : '启用' }} {{ row.name }} 的新调用？不会中断已授权任务，也不删除成果或历史。</p>
                 <p v-if="mode === 'ENABLE'" class="skill-note">需要真实安装、策略及当前目录核验后才开放新调用。</p>
@@ -182,7 +198,7 @@
                 <p v-if="change(row)?.status === 'WAITING_AGENT'" class="skill-note">原操作已接纳，等待Agent连接后继续；无需再次安装或购买。</p>
                 <p v-else-if="change(row)?.status === 'FAILED_RETRYABLE'" class="skill-note">已确认本次未生效，可重试原操作，不重新报价、不重复购买。</p>
                 <p v-else-if="change(row)?.status === 'RECOVERY_REQUIRED'" class="skill-note">尚不能确认切换结果，不据此退款或判定失败；只核对原记录。</p>
-                <p v-else-if="change(row)?.status === 'SUCCEEDED'" class="skill-note">{{ change(row).runtimeSynced ? '该动作已完成；实际运行状态另行核验。' : '已关闭新调用，Runtime策略仍待同步。' }}</p>
+                <p v-else-if="change(row)?.status === 'SUCCEEDED'" class="skill-note">{{ change(row).action === 'UNINSTALL' ? '已卸载；历史、成果和已购权益保留，可重新安装。' : change(row).runtimeSynced ? '该动作已完成；实际运行状态另行核验。' : '已关闭新调用，Runtime策略仍待同步。' }}</p>
                 <p v-if="market.queryUnknown[row.skillKey]" class="skill-error" role="alert">{{ market.queryUnknown[row.skillKey] }}</p>
                 <details v-if="change(row)"><summary>原操作详情</summary><p>{{ change(row).skillChangeId }} · 第{{ change(row).attempt }}次尝试</p><p>{{ change(row).source?.skillVersion || '首次安装' }} → {{ change(row).target.skillVersion }}</p><p>资金：{{ fundingLabel(change(row).fundingStatus) }}<template v-if="change(row).price"> · {{ money(change(row).price) }}</template></p></details>
                 <footer class="skill-inline-footer">
@@ -257,8 +273,8 @@ const emit = defineEmits(['update:show', 'changed'])
 const market = proxyRefs(useSkillMarket({ agentApi: props.agentApi || undefined, enabled: () => props.enabled, actorScopeKey: () => props.actorScopeKey, identityKey: () => props.identityKey, targetAgent: () => props.targetAgent, onChanged: change => emit('changed', change) }))
 const dialogRef = ref(null); const inlineTitleRef = ref(null); const confirmRef = ref(null); const expanded = ref(''); const mode = ref('detail')
 const agentName = computed(() => props.targetAgent?.name || props.targetAgent?.personaName || props.targetAgent?.agentId || '')
-const actionLabels = { INSTALL: '安装', UPGRADE: '升级', ENABLE: '启用', DISABLE: '停用', RETRY: '重试', RECONCILE: '核对' }
-const modeTitle = computed(() => ({ detail: '技能详情', progress: '操作进度', INSTALL: '确认安装', UPGRADE: '确认升级', ENABLE: '启用新调用', DISABLE: '停用新调用' })[mode.value])
+const actionLabels = { INSTALL: '安装', UPGRADE: '升级', ENABLE: '启用', DISABLE: '停用', UNINSTALL: '卸载', RETRY: '重试', RECONCILE: '核对' }
+const modeTitle = computed(() => ({ detail: '技能详情', progress: '操作进度', INSTALL: '确认安装', UPGRADE: '确认升级', ENABLE: '启用新调用', DISABLE: '停用新调用', UNINSTALL: '卸载技能' })[mode.value])
 const changeLabels = SKILL_CHANGE_LABELS; const reasonLabels = SKILL_REASON_LABELS; const runtimeLabels = SKILL_RUNTIME_LABELS; const money = formatSkillMoney
 const progressSteps = ['后台接纳', '下载与校验', '安全切换', '回执与运行核验']
 const progressIndex = row => ({ ACCEPTED: 0, WAITING_AGENT: 0, PREPARING: 1, PREPARED: 1, ACTIVATING: 2, VERIFYING: 3, SUCCEEDED: 4 })[change(row)?.status] ?? -1
@@ -323,6 +339,7 @@ const resume = async key => {
   if (quote?.quoteId && expanded.value === key) { mode.value = quote.action; await nextTick(() => first(confirmRef.value)?.focus()) }
 }
 const abandon = async row => { if (await market.abandonQuote(row.skillKey)) { mode.value = draft(row)?.action || 'detail'; void focusHeading() } }
+const prepareUninstall = row => { if (market.prepare(row, 'UNINSTALL')) { mode.value = 'UNINSTALL'; void focusHeading() } }
 const prepareToggle = row => { const action = row.desiredEnabled ? 'DISABLE' : 'ENABLE'; if (market.prepare(row, action)) { mode.value = action; void focusHeading() } }
 const refresh = async () => { await market.refresh(); await market.refreshChanges() }
 const recordsToggled = event => { if (event.target.open) void market.refreshChanges() }

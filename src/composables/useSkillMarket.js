@@ -284,7 +284,7 @@ export function useSkillMarket ({ agentApi = defaultAgentApi, enabled = true, ac
           (record.kind === 'CREATE' && (change.action !== record.data.action || (record.data.targetProductVersionId && change.target.productVersionId !== record.data.targetProductVersionId)))) throw protocolError('PROTOCOL_SKILL_IDENTITY_MISMATCH')
       if (record.kind === 'CREATE') {
         if (record.data.sourceSkillInstallationId !== (change.source?.skillInstallationId || null)) throw protocolError('PROTOCOL_SKILL_SOURCE_MISMATCH')
-        if (['ENABLE', 'DISABLE'].includes(record.data.action) && canonical(change.target) !== canonical(change.source)) throw protocolError('PROTOCOL_SKILL_TARGET_CONFLICT')
+        if (['ENABLE', 'DISABLE', 'UNINSTALL'].includes(record.data.action) && canonical(change.target) !== canonical(change.source)) throw protocolError('PROTOCOL_SKILL_TARGET_CONFLICT')
         const candidate = rowFor(skillKey)?.candidate
         if (['INSTALL', 'UPGRADE'].includes(record.data.action) && candidate?.productVersionId === record.data.targetProductVersionId) for (const field of ['packageSha256', 'manifestSha256', 'byteLength', 'kind']) if (change.target[field] !== candidate[field]) throw protocolError('PROTOCOL_SKILL_TARGET_CONFLICT')
         if (record.data.expectedPrice && canonical(change.price) !== canonical(record.data.expectedPrice)) throw protocolError('PROTOCOL_SKILL_PRICE_MISMATCH')
