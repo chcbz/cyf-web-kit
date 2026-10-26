@@ -159,98 +159,113 @@
               <span v-if="fundedClaimState.refreshPending">榜文刷新待完成，请重查；勿重复领令。<button type="button" @click="$emit('refresh-funded-claim', detailTask)">重查已确认榜文</button></span>
             </p>
             <p v-else-if="fundedClaimState?.taskId === detailTask.id && fundedClaimState.status === 'unresolved'" role="status">原领令结果未知，请由原好汉核对，不要重新取价。</p>
-            <section v-if="pointAndStartForDetail && !isTerminalMatter(detailTask)" class="point-and-start-recovery" role="status">
-              <strong>{{ pointAndStartRecoveryTitle }}</strong>
-              <p>原点将目标：{{ pointAndStartForDetail.intent.body.targetAgentId || pointAndStartForDetail.intent.body.agentId }}；需求修订：{{ pointAndStartForDetail.intent.body.requirementRevision }}。</p>
-              <p>任务资料：{{ pointAndStartInputSummary }}。</p>
-              <p>{{ pointAndStartRecoveryHint }}</p>
-              <p v-if="pointAndStartForDetail.error" class="point-and-start-error" role="alert">原点将返回：{{ pointAndStartForDetail.error }}</p>
-              <button
-                type="button"
-                :disabled="pointAndStartBusy"
-                @click="$emit('check-point-and-start', detailTask)"
-              >核对原点将</button>
-              <button
-                v-if="pointAndStartForDetail.status === 'UNKNOWN'"
-                type="button"
-                :disabled="pointAndStartBusy"
-                @click="$emit('resume-point-and-start', detailTask)"
-              >继续原点将</button>
-            </section>
             <div class="modal-task-info">
-              <section v-if="embeddedHall" class="matter-advice-card" aria-label="事项进展">
-                <div class="matter-advice-heading"><span>事项进展</span><strong>{{ simpleMatterStatus(detailTask) }}</strong></div>
-                <h3>{{ detailTask.title }}</h3>
-                <p class="matter-request">{{ detailTask.description }}</p>
-                <dl>
-                  <div><dt>{{ hasTaskAction(detailTask, 'ASSIGN') ? '承办候选' : '承办好汉' }}</dt><dd>{{ matterAgent ? agentDisplayName(matterAgent) : (detailTask.assignedAgentName || (taskAssigneeIds(detailTask).length ? '承办信息待核对' : '尚未确认')) }}</dd></div>
-                  <div v-if="matterAgent"><dt>所属用户 / 运行</dt><dd>{{ assigneeProviderText(matterAgent) }} · {{ assigneeAvailabilityText(matterAgent) }}</dd></div>
-                  <div><dt>资料 / 成果</dt><dd>{{ matterResourceSummary?.taskId === String(detailTask.id) ? `${matterResourceSummary.materials} 份资料 · ${matterResultCount ?? matterResourceSummary.outputs} 份${matterResultCount == null ? '成果引用' : '成果'}` : '见下方资料与成果' }}</dd></div>
-                </dl>
-                <template v-if="hasTaskAction(detailTask, 'ASSIGN')">
-                  <p v-if="matterAgent?.recommendationReason" class="matter-fee-note">推荐参考：{{ matterAgent.recommendationReason }}</p>
-                  <p class="matter-fee-note">确认后将任务内容和所列资料发送给该Agent开始办理；资料由该Agent运行环境及所使用的模型服务处理。离线或忙碌可委派，提交成功不代表模型已运行。</p>
-                  <button
-                    type="button"
-                    class="matter-agent-toggle"
-                    :aria-expanded="showMatterCandidates"
-                    :disabled="pointAndStartBusy || Boolean(pointAndStartForDetail)"
-                    @click="showMatterCandidates = !showMatterCandidates"
-                  >另选承办Agent</button>
-                  <div v-if="showMatterCandidates" class="matter-candidates" aria-label="承办候选">
+              <section v-if="embeddedHall || (pointAndStartForDetail && !isTerminalMatter(detailTask))" class="matter-advice-card" aria-label="事项进展">
+                <template v-if="embeddedHall">
+                  <div class="matter-advice-heading"><span>事项进展</span><strong>{{ simpleMatterStatus(detailTask) }}</strong></div>
+                  <h3>{{ detailTask.title }}</h3>
+                  <p class="matter-request">{{ detailTask.description }}</p>
+                  <dl>
+                    <div><dt>{{ hasTaskAction(detailTask, 'ASSIGN') ? '承办候选' : '承办好汉' }}</dt><dd>{{ matterAgent ? agentDisplayName(matterAgent) : (detailTask.assignedAgentName || (taskAssigneeIds(detailTask).length ? '承办信息待核对' : '尚未确认')) }}</dd></div>
+                    <div v-if="matterAgent"><dt>所属用户 / 运行</dt><dd>{{ assigneeProviderText(matterAgent) }} · {{ assigneeAvailabilityText(matterAgent) }}</dd></div>
+                    <div><dt>资料 / 成果</dt><dd>{{ matterResourceSummary?.taskId === String(detailTask.id) ? `${matterResourceSummary.materials} 份资料 · ${matterResultCount ?? matterResourceSummary.outputs} 份${matterResultCount == null ? '成果引用' : '成果'}` : '见下方资料与成果' }}</dd></div>
+                  </dl>
+                </template>
+                <section
+                  v-if="pointAndStartForDetail && !isTerminalMatter(detailTask)"
+                  :key="`${identityScope}:${authorizationGeneration}:${detailTask.id}:${pointAndStartForDetail.status}`"
+                  class="matter-send-status"
+                  :class="{ 'is-warning': pointAndStartNeedsCheck && pointAndStartForDetail.status !== 'FAILED', 'is-failed': pointAndStartForDetail.status === 'FAILED' }"
+                  aria-label="需求发送状态"
+                >
+                  <p v-if="pointAndStartNeedsCheck || pointAndStartForDetail.status === 'PREPARING'" role="status">{{ pointAndStartRecoveryHint }}</p>
+                  <p v-if="pointAndStartForDetail.status === 'FAILED' && pointAndStartForDetail.error" role="alert">失败原因：{{ pointAndStartForDetail.error }}</p>
+                  <div v-if="pointAndStartNeedsCheck || pointAndStartForDetail.status === 'PREPARING'" class="matter-send-actions">
+                    <button type="button" :disabled="pointAndStartBusy" @click="$emit('check-point-and-start', detailTask)">查询发送结果</button>
                     <button
-                      v-for="agent in matterCandidates"
-                      :key="agent.agentId"
+                      v-if="pointAndStartForDetail.status === 'UNKNOWN'"
                       type="button"
-                      :aria-pressed="matterAgent?.agentId === agent.agentId"
-                      :disabled="pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, agent)"
-                      @click="matterCandidateId = agent.agentId"
-                    ><span>{{ agentDisplayName(agent) }}</span><small>{{ assigneeProviderText(agent) }} · {{ assigneeAvailabilityText(agent) }}</small><small v-if="agent.recommendationReason">{{ agent.recommendationReason }}</small></button>
-                    <p v-if="!matterCandidates.length && !candidatesLoading && !candidatesError" role="status">暂无可承办候选。</p>
-                    <button
-                      v-if="candidatesNextAfterAgentId"
-                      type="button"
-                      :disabled="candidatesLoading"
-                      @click="$emit('more-candidates')"
-                    >加载更多候选</button>
+                      :disabled="pointAndStartBusy"
+                      @click="$emit('resume-point-and-start', detailTask)"
+                    >继续原请求</button>
                   </div>
-                  <p v-if="candidatesLoading" role="status">正在读取承办候选…</p>
-                  <p v-if="candidatesError" role="alert">{{ candidatesError }}</p>
+                  <p v-if="pointAndStartForDetail.status === 'UNKNOWN'" class="matter-send-note">继续原请求将沿用原提交信息恢复，不创建新的需求。</p>
+                  <details class="matter-send-details">
+                    <summary>{{ pointAndStartForDetail.status === 'HISTORICAL' ? '历史指派信息' : '技术详情' }}</summary>
+                    <p>发送状态：{{ pointAndStartRecoveryTitle }}</p>
+                    <p>承办好汉：{{ pointAndStartAgentName }}</p>
+                    <p>本次资料：{{ pointAndStartInputCount }}。</p>
+                    <p>好汉编号：{{ pointAndStartForDetail.intent.body.targetAgentId || pointAndStartForDetail.intent.body.agentId }}；需求修订：{{ pointAndStartForDetail.intent.body.requirementRevision }}。</p>
+                    <p>资料编号与固定版本：{{ pointAndStartInputSummary }}。</p>
+                    <p v-if="pointAndStartForDetail.error && pointAndStartForDetail.status !== 'FAILED'">查询说明：{{ pointAndStartForDetail.error }}</p>
+                  </details>
+                </section>
+                <template v-if="embeddedHall">
+                  <template v-if="hasTaskAction(detailTask, 'ASSIGN')">
+                    <p v-if="matterAgent?.recommendationReason" class="matter-fee-note">推荐参考：{{ matterAgent.recommendationReason }}</p>
+                    <p class="matter-fee-note">确认后将任务内容和所列资料发送给该Agent开始办理；资料由该Agent运行环境及所使用的模型服务处理。离线或忙碌可委派，提交成功不代表模型已运行。</p>
+                    <button
+                      type="button"
+                      class="matter-agent-toggle"
+                      :aria-expanded="showMatterCandidates"
+                      :disabled="pointAndStartBusy || Boolean(pointAndStartForDetail)"
+                      @click="showMatterCandidates = !showMatterCandidates"
+                    >另选承办Agent</button>
+                    <div v-if="showMatterCandidates" class="matter-candidates" aria-label="承办候选">
+                      <button
+                        v-for="agent in matterCandidates"
+                        :key="agent.agentId"
+                        type="button"
+                        :aria-pressed="matterAgent?.agentId === agent.agentId"
+                        :disabled="pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, agent)"
+                        @click="matterCandidateId = agent.agentId"
+                      ><span>{{ agentDisplayName(agent) }}</span><small>{{ assigneeProviderText(agent) }} · {{ assigneeAvailabilityText(agent) }}</small><small v-if="agent.recommendationReason">{{ agent.recommendationReason }}</small></button>
+                      <p v-if="!matterCandidates.length && !candidatesLoading && !candidatesError" role="status">暂无可承办候选。</p>
+                      <button
+                        v-if="candidatesNextAfterAgentId"
+                        type="button"
+                        :disabled="candidatesLoading"
+                        @click="$emit('more-candidates')"
+                      >加载更多候选</button>
+                    </div>
+                    <p v-if="candidatesLoading" role="status">正在读取承办候选…</p>
+                    <p v-if="candidatesError" role="alert">{{ candidatesError }}</p>
+                    <button
+                      type="button"
+                      class="matter-agent-toggle"
+                      :disabled="candidatesLoading || pointAndStartBusy || Boolean(pointAndStartForDetail)"
+                      @click="$emit('refresh-candidates')"
+                    >刷新候选</button>
+                    <button
+                      type="button"
+                      class="matter-primary-action"
+                      :disabled="!matterAgent || pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, matterAgent)"
+                      @click="confirmMatterAgent"
+                    >确认承办，进入议事</button>
+                  </template>
+                  <template v-else>
+                    <p class="matter-fee-note">补充要求、查看结果和提出修改，都在原议事中继续。</p>
+                    <button
+                      v-if="taskPresentation(detailTask).phase === 'PENDING_ACCEPTANCE' && hasTaskAction(detailTask, 'DISCUSS')"
+                      type="button"
+                      class="matter-primary-action"
+                      @click="$emit('review-delivery', detailTask)"
+                    >查看成果并验收</button>
+                    <button
+                      v-if="hasTaskAction(detailTask, 'DISCUSS') && assignedAgentForTask(detailTask)"
+                      type="button"
+                      :class="taskPresentation(detailTask).phase === 'PENDING_ACCEPTANCE' ? 'matter-secondary-action' : 'matter-primary-action'"
+                      @click="$emit('discuss-task', detailTask, assignedAgentForTask(detailTask))"
+                    >继续议事</button>
+                  </template>
                   <button
+                    v-if="detailTask.status === 'completed' && taskPresentation(detailTask).phase === 'COMPLETED'"
                     type="button"
-                    class="matter-agent-toggle"
-                    :disabled="candidatesLoading || pointAndStartBusy || Boolean(pointAndStartForDetail)"
-                    @click="$emit('refresh-candidates')"
-                  >刷新候选</button>
-                  <button
-                    type="button"
-                    class="matter-primary-action"
-                    :disabled="!matterAgent || pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, matterAgent)"
-                    @click="confirmMatterAgent"
-                  >确认承办，进入议事</button>
+                    class="matter-archive-action"
+                    @click="$emit('archive-task', detailTask)"
+                  >收入案卷</button>
+                  <p v-else-if="detailTask.status === 'archived'" class="matter-archive-note">已收入案卷，可在“办事 → 案卷”中查看。</p>
                 </template>
-                <template v-else>
-                  <p class="matter-fee-note">补充要求、查看结果和提出修改，都在原议事中继续。</p>
-                  <button
-                    v-if="taskPresentation(detailTask).phase === 'PENDING_ACCEPTANCE' && hasTaskAction(detailTask, 'DISCUSS')"
-                    type="button"
-                    class="matter-primary-action"
-                    @click="$emit('review-delivery', detailTask)"
-                  >查看成果并验收</button>
-                  <button
-                    v-if="hasTaskAction(detailTask, 'DISCUSS') && assignedAgentForTask(detailTask)"
-                    type="button"
-                    :class="taskPresentation(detailTask).phase === 'PENDING_ACCEPTANCE' ? 'matter-secondary-action' : 'matter-primary-action'"
-                    @click="$emit('discuss-task', detailTask, assignedAgentForTask(detailTask))"
-                  >继续议事</button>
-                </template>
-                <button
-                  v-if="detailTask.status === 'completed' && taskPresentation(detailTask).phase === 'COMPLETED'"
-                  type="button"
-                  class="matter-archive-action"
-                  @click="$emit('archive-task', detailTask)"
-                >收入案卷</button>
-                <p v-else-if="detailTask.status === 'archived'" class="matter-archive-note">已收入案卷，可在“办事 → 案卷”中查看。</p>
               </section>
               <p v-if="taskPresentation(detailTask).readOnly && !isTerminalMatter(detailTask)" role="status">{{ taskPresentation(detailTask).reason }}；暂仅可查看，刷新核对后再操作。</p>
               <div v-if="!embeddedHall" class="task-detail-head">
@@ -662,21 +677,33 @@ const pointAndStartForDetail = computed(() => {
   return state?.intent?.taskId === detailTask.value?.id && state.intent?.body ? state : null
 })
 const pointAndStartRecoveryTitle = computed(() => ({
-  UNKNOWN: '正在确认点将结果',
+  UNKNOWN: '发送结果待确认',
   PREPARING: '正在准备会话',
   ADMITTED: '需求已发送',
   ATTACHED: '已进入悬赏议事',
   HISTORICAL: '历史指派',
-  FAILED: '点将未完成'
+  FAILED: '需求未能发送'
 }[pointAndStartForDetail.value?.status] || '正在确认点将结果'))
 const pointAndStartRecoveryHint = computed(() => ({
-  UNKNOWN: '请刷新状态查看进度。',
-  PREPARING: '准备完成后即可继续交流。',
+  UNKNOWN: '发送结果暂未确认，请先查询，避免重复提交。',
+  PREPARING: '正在准备议事…需求已保存，无需重复提交。',
   ADMITTED: '需求已发送，可从事项操作进入原议事。',
   ATTACHED: '可在会话中查看答复或继续修改。',
   HISTORICAL: '本次指派已结束，可查看历史记录。',
-  FAILED: '请刷新状态查看详情。'
-}[pointAndStartForDetail.value?.status] || '正在确认点将结果。'))
+  FAILED: '需求未能发送。原需求和资料已保留，请查询发送结果核对详情。'
+}[pointAndStartForDetail.value?.status] || '发送状态暂无法识别，请查询发送结果，不要重复提交。'))
+const pointAndStartNeedsCheck = computed(() => !['ADMITTED', 'ATTACHED', 'PREPARING', 'HISTORICAL'].includes(pointAndStartForDetail.value?.status))
+const pointAndStartAgentName = computed(() => {
+  const body = pointAndStartForDetail.value?.intent?.body
+  const id = body?.targetAgentId || body?.agentId
+  const agent = [...props.operableAgents, ...props.recommendedAgents, ...props.assigneeCandidates].find(item => item.agentId === id)
+  return agent ? agentDisplayName(agent) : id || '待核对'
+})
+const pointAndStartInputCount = computed(() => {
+  const state = pointAndStartForDetail.value
+  const refs = state?.projection?.inputs || state?.intent?.projection?.inputs || state?.intent?.body?.inputRefs
+  return Array.isArray(refs) ? `${refs.length} 份资料` : '资料信息待核对'
+})
 const pointAndStartInputSummary = computed(() => {
   const state = pointAndStartForDetail.value
   const refs = state?.projection?.inputs || state?.intent?.projection?.inputs || state?.intent?.body?.inputRefs
@@ -1655,9 +1682,17 @@ button:disabled {
   max-height: 100%;
   box-shadow: none;
 }
-.point-and-start-recovery { margin: 12px 0; padding: 12px; border: 1px solid #d6bb7f; border-radius: 8px; background: #fff9e9; color: #624a20; }
-.point-and-start-recovery p { margin: 6px 0; }
-.point-and-start-recovery button + button { margin-left: 8px; }
+.matter-send-status { margin: 12px 0; min-width: 0; font-size: 13px; color: var(--hall-text-muted, #68716b); overflow-wrap: anywhere; }
+.matter-send-status p { margin: 6px 0; }
+.matter-send-status.is-warning { padding: 12px; border: 1px solid #d6bb7f; border-radius: 8px; background: #fff9e9; color: var(--hall-warning, #87551c); }
+.matter-send-status.is-failed { color: var(--hall-danger, #a13f35); }
+.matter-send-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.matter-send-actions button { min-height: 44px; max-width: 100%; padding: 8px 12px; border: 1px solid var(--hall-border, #e3e5dc); border-radius: 7px; background: var(--hall-surface, #fffefa); color: inherit; font: inherit; cursor: pointer; }
+.matter-send-actions button:disabled { cursor: wait; opacity: .6; }
+.matter-send-details { margin-top: 10px; color: var(--hall-text-muted, #68716b); }
+.matter-send-details summary { cursor: pointer; min-height: 32px; }
+.matter-send-details summary:focus-visible, .matter-send-actions button:focus-visible { outline: 2px solid var(--hall-brand, #923f30); outline-offset: 2px; }
+.matter-send-note { font-size: 12px; }
 .matter-candidates,.task-secondary-filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}.matter-candidates button,.task-secondary-filters button,.matter-agent-toggle,.matter-secondary-action{min-height:44px;padding:8px 12px;border:1px solid var(--hall-border,#e3e5dc);border-radius:8px;background:var(--hall-surface,#fffefa);color:var(--hall-text,#242e2b)}.matter-candidates button[aria-pressed="true"],.task-secondary-filters button[aria-pressed="true"]{border-color:var(--hall-brand,#923f30);color:var(--hall-brand,#923f30)}.matter-agent-toggle{margin-bottom:10px}.matter-secondary-action{width:100%;margin-top:8px}.matter-advice-card h3{margin:12px 0;overflow-wrap:anywhere}
 .matter-resources h4{margin:12px 0 6px}.matter-resources p{color:var(--hall-text-muted,#68716b);font-size:13px;line-height:1.5}
 .matter-candidates button { min-width: 0; max-width: 100%; text-align: left; overflow-wrap: anywhere; }

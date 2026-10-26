@@ -305,3 +305,67 @@ describe('mine help entry', () => {
     } finally { wrapper.unmount() }
   })
 })
+
+describe('matter detail send status presentation (original recovery semantics)', () => {
+  const state = (status, extra = {}) => ({ status, intent: { taskId: 'a', body: { targetAgentId: 'old-agent', requirementRevision: '3' } },
+    projection: { inputs: [{ fileId: 'source-file', version: '2' }] }, ...extra })
+  for (const status of ['ADMITTED', 'ATTACHED', 'HISTORICAL']) it(`${status} is neutral, folded and has no redundant recovery buttons`, async () => {
+    const wrapper = await openPanel(panelTask(), { pointAndStartState: state(status) })
+    try {
+      expect(wrapper.find('.point-and-start-recovery').exists()).to.equal(false)
+      expect(wrapper.get('.matter-advice-card .matter-send-status').classes()).not.to.include('is-warning')
+      expect(wrapper.find('.matter-send-actions').exists()).to.equal(false)
+      expect(wrapper.get('.matter-send-details').element.open).to.equal(false)
+      expect(wrapper.get('.matter-send-details summary').text()).to.equal(status === 'HISTORICAL' ? '历史指派信息' : '技术详情')
+      expect(wrapper.get('.matter-send-details').text()).to.include('1 份资料').and.include('source-file v2')
+      expect(wrapper.emitted('check-point-and-start')).to.equal(undefined)
+      expect(wrapper.emitted('resume-point-and-start')).to.equal(undefined)
+    } finally { wrapper.unmount() }
+  })
+  for (const status of ['PREPARING', 'UNKNOWN', 'FAILED', 'FUTURE_STATE']) it(`${status} exposes only original scoped actions`, async () => {
+    const task = panelTask(); const wrapper = await openPanel(task, { pointAndStartState: state(status, { error: 'original failure <script>bad()</script>' }) })
+    try {
+      const section = wrapper.get('.matter-send-status')
+      expect(section.classes().includes('is-warning')).to.equal(['UNKNOWN', 'FUTURE_STATE'].includes(status))
+      expect(section.classes().includes('is-failed')).to.equal(status === 'FAILED')
+      expect(section.find('script').exists()).to.equal(false)
+      expect(wrapper.emitted('resume-point-and-start')).to.equal(undefined)
+      const buttons = section.findAll('button')
+      expect(buttons).to.have.length(status === 'UNKNOWN' ? 2 : 1)
+      await buttons[0].trigger('click')
+      expect(wrapper.emitted('check-point-and-start')).to.have.length(1)
+      expect(wrapper.emitted('check-point-and-start')[0][0].id).to.equal('a')
+      expect(wrapper.emitted('resume-point-and-start')).to.equal(undefined)
+      if (status === 'UNKNOWN') {
+        await buttons[1].trigger('click'); expect(wrapper.emitted('resume-point-and-start')[0][0].id).to.equal('a')
+      }
+      await wrapper.setProps({ pointAndStartBusy: true })
+      expect(section.findAll('button').every(b => b.element.disabled)).to.equal(true)
+      if (status === 'FAILED') expect(section.get('[role="alert"]').text()).to.include('original failure')
+    } finally { wrapper.unmount() }
+  })
+  it('uses only the matching agent name and resets folded details across identities/statuses/tasks', async () => {
+    const wrapper = await openPanel(panelTask(), { pointAndStartState: state('UNKNOWN'), operableAgents: [{ agentId: 'other', displayName: '不应借用' }, { agentId: 'old-agent', displayName: '林冲' }] })
+    try {
+      expect(wrapper.get('.matter-send-details').text()).to.include('林冲').and.not.include('不应借用')
+      wrapper.get('details.matter-send-details').element.open = true
+      await wrapper.setProps({ identityScope: 'owner-other' })
+      expect(wrapper.find('.matter-send-details').exists()).to.equal(false)
+      wrapper.vm.openTask(panelTask()); await Vue.nextTick()
+      expect(wrapper.get('details.matter-send-details').element.open).to.equal(false)
+      wrapper.get('details.matter-send-details').element.open = true
+      await wrapper.setProps({ pointAndStartState: state('ADMITTED') })
+      expect(wrapper.get('details.matter-send-details').element.open).to.equal(false)
+      await wrapper.setProps({ pointAndStartState: { ...state('UNKNOWN'), intent: { taskId: 'other-task', body: {} } } })
+      expect(wrapper.find('.matter-send-status').exists()).to.equal(false)
+    } finally { wrapper.unmount() }
+  })
+  for (const status of ['completed', 'archived', 'cancelled']) it(`does not revive recovery for ${status} tasks`, async () => {
+    const wrapper = await openPanel(panelTask({ status }), { pointAndStartState: state('UNKNOWN') })
+    try { expect(wrapper.find('.matter-send-status').exists()).to.equal(false) } finally { wrapper.unmount() }
+  })
+  it('preserves recovery outside the embedded hall without duplicating the card', async () => {
+    const wrapper = await openPanel(panelTask(), { embeddedHall: false, pointAndStartState: state('UNKNOWN') })
+    try { expect(wrapper.findAll('.matter-send-status')).to.have.length(1); expect(wrapper.get('.matter-send-actions').text()).to.include('查询发送结果') } finally { wrapper.unmount() }
+  })
+})

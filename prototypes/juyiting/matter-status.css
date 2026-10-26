@@ -1,0 +1,8 @@
+.matter-send-status { margin:12px 0; min-width:0; color:var(--hall-text-muted,#68716b); font-size:13px; overflow-wrap:anywhere; }
+.matter-send-status p { margin:6px 0; }
+.matter-send-status.unknown { padding:12px; border:1px solid #d6bb7f; border-radius:8px; background:#fff9e9; color:var(--hall-warning,#87551c); }
+.matter-send-status.failed { color:var(--hall-danger,#a13f35); }
+.matter-send-status details { margin-top:10px; }
+.matter-send-status summary,.matter-status-demo summary { cursor:pointer; min-height:32px; }
+.matter-send-status button,.matter-status-demo button { min-height:44px; margin:4px; max-width:100%; }
+.matter-status-demo { margin:12px; font-size:13px; }

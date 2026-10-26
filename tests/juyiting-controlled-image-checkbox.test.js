@@ -51,10 +51,11 @@ describe('unified generic point detail replaces drawing-specific confirmation', 
     const wrapper = mount(Panel, { props: { ...props(), pointAndStartState: state } })
     try {
       wrapper.vm.openTask(task('task-a')); await Vue.nextTick()
-      const text = wrapper.find('.point-and-start-recovery').text()
+      expect(wrapper.get('.matter-send-details').element.open).to.equal(false)
+      const text = wrapper.find('.matter-send-status').text()
       for (const file of ['image', 'document', 'audio', 'text']) expect(text).to.include(`${file} v2`)
       expect(text).to.include('agent-a'); expect(text).not.to.include('INPUT'); expect(text).not.to.include('GENERATE_IMAGE')
-      await wrapper.find('.point-and-start-recovery button').trigger('click')
+      await wrapper.find('.matter-send-actions button').trigger('click')
       expect(wrapper.emitted('check-point-and-start')[0][0].id).to.equal('task-a')
     } finally { wrapper.unmount() }
   })
