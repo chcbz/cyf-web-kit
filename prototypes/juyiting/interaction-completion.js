@@ -177,10 +177,11 @@ function simplifyHome(){
  const refresh=$$('.overview-list-heading button').find(b=>b.textContent==='刷新');if(refresh)refresh.dataset.action='complete-task-refresh';
  const tab=state.overviewTab||0;
  $$('.overview-tabs button').forEach((b,i)=>{b.textContent=['最近事项','需要我处理','案卷'][i];});
- $$('.overview-item').slice(1).forEach(e=>e.remove());
- const card=$('.overview-item'),visible=!!state.task&&(tab===0||tab===1&&taskInGroup('待我处理')||tab===2&&!!state.task.archived);
- if(card){card.hidden=!visible;card.style.display=visible?'':'none';$$('.overview-technical',card).forEach(e=>e.remove());for(const b of $$('button',card)){b.dataset.prototypePage=unifiedTask()&&!awaitingAssignment()?'chat':'detail';b.textContent=awaitingAssignment()?'确认承办':unifiedTask()?'继续议事':state.task?.complete||state.task?.cancelled?'查看记录':'查看事项';}}
- const section=$('.overview-section');if(section){$$(':scope > button',section).forEach(e=>e.remove());if(!visible)section.insertAdjacentHTML('beforeend',`<p class="simplify-home-empty" role="status">${!state.task?'还没有事项，从上方提出第一个需求。':tab===1?'暂时没有需要你处理的事项。':'暂无已归档案卷。'}</p>`);}
+ // Match the home projection: select the newest five, then reverse only needs-action.
+ const rows=listedMatters().filter(({ctx})=>tab===0||tab===2&&ctx.task.archived||tab===1&&!ctx.task.archived&&!ctx.pending&&ctx.operation?.stage!=='pending'&&(['待点将','待验收'].includes(listedMatterStatus(ctx))||!!matterAttentionReason(ctx)))
+  .sort((a,b)=>(b.ctx.task.updatedAt||0)-(a.ctx.task.updatedAt||0)).slice(0,5);
+ if(tab===1)rows.reverse();
+ const section=$('.overview-section');if(section){section.innerHTML=rows.map(({key,ctx})=>`<article class="overview-item"><div class="overview-item-copy"><strong>${esc(ctx.task.title)}</strong><p>事项 · ${esc(ctx.agent?.name||'待安排')}</p><span class="overview-status">${esc(listedMatterStatus(ctx))}</span></div>${button('查看事项','complete-open-matter',`data-matter-key="${esc(key)}"`)}</article>`).join('')||`<p class="simplify-home-empty" role="status">${tab===1?'暂时没有需要你处理的事项。':tab===2?'暂无已归档案卷。':'还没有事项，从上方提出第一个需求。'}</p>`;scoped(section,'data-v-d13db084');}
 }
 function renderInteractiveList(){
  if(page==='home'){simplifyHome();return;}
