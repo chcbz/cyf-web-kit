@@ -294,6 +294,25 @@ function renderConversationHistory(){
 }
 
 function openEntries(){dialog('全部入口',`<div class="mmd-more-menu">${prototypePages.map(([label,next])=>button(label,'complete-go',`data-page="${next}"`)).join('')}</div>`);}
+// DISCUSSION-DISMISS-20261026: outside pointer never restores focus; Escape defers to child dialogs.
+// Dismiss transient tools only, never drafts, references or recording.
+function closeDiscussionTools(target=null,restoreFocus=false){
+ if(!['chat','private','public'].includes(page)||$('dialog[open]'))return false;
+ let closed=false,focus=null;
+ if(conversation().historyOpen&&!target?.closest('.baseline-history,[data-action="complete-history"]')){
+  conversation().historyOpen=false;renderConversationHistory();persist();closed=true;focus=$('[data-action="complete-history"]');
+ }
+ if($('.composer-more-panel')&&!target?.closest('.composer-more-panel,.composer-more')){
+  $('.composer-more-panel').remove();focus=$('.composer-more');focus?.setAttribute('aria-expanded','false');closed=true;
+ }
+ if(restoreFocus)focus?.focus();return closed;
+}
+document.addEventListener('pointerdown',event=>closeDiscussionTools(event.target));
+// Keyboard-activated tool buttons must switch panels just like pointer activation.
+document.addEventListener('click',event=>closeDiscussionTools(event.target),true);
+document.addEventListener('keydown',event=>{
+ if(event.key==='Escape'&&!event.defaultPrevented&&closeDiscussionTools(null,true)){event.preventDefault();event.stopImmediatePropagation();}
+},true);
 document.addEventListener('click',event=>{
  const t=event.target.closest('button,[data-action]');if(!t||t.disabled)return;const action=t.dataset.action;
  if(!action?.startsWith('complete-'))return;event.preventDefault();event.stopImmediatePropagation();

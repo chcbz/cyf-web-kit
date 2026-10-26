@@ -18,6 +18,7 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 11-2l3 3M4 16l3 3a7 7 0 0 0 11-2" /></svg>
         </button>
         <button
+          ref="historyButtonRef"
           class="icon-button"
           type="button"
           title="话头记录"
@@ -49,6 +50,8 @@
     <slot name="after-toolbar"></slot>
     <HallConversationHistory
       v-if="historyOpen"
+      ref="historyRef"
+      :dismiss-trigger="historyButtonRef"
       :conversations="conversationHistory"
       :read-only="serverTaskCompleted"
       :deleting-id="conversationHistoryDeletingId"
@@ -57,6 +60,7 @@
       :has-more="conversationHistoryHasMore"
       :loading="conversationHistoryLoading"
       :selected-id="conversationId"
+      @dismiss="closeHistory"
       @delete="!serverTaskCompleted && $emit('delete-conversation', $event)"
       @load-more="$emit('load-more-history')"
       @select="$emit('select-conversation', $event)"
@@ -160,6 +164,7 @@
     </Teleport>
     <HallChatComposer
       v-if="!serverTaskCompleted"
+      ref="composerRef"
       :compact="discussionVariant === 'bounty'"
       :agents="agents"
       :durable-cancel-target="durableCancelTarget"
@@ -178,12 +183,15 @@
       :typed-pending-question="typedPendingQuestion"
       :context-key="`${materialIdentityKey}\u0000${taskId}\u0000${conversationId}`"
       :voice="voice"
+      :materials-open="materialPickerOpen"
       @cancel-deliberation="$emit('cancel-deliberation', $event)"
       @clear-target="$emit('clear-target', $event)"
       @mention-agent="$emit('mention-agent', $event)"
       @send-message="$emit('send-message', typedEnabled && discussionVariant === 'bounty' ? { sourceSelectors: typedSourceSelectors, materialScope: typedMaterialScope } : undefined)"
       @update:draft="$emit('update:draft', $event)"
       @voice-apply="$emit('voice-apply', $event)"
+      @open-tools="closeHistory"
+      @close-materials="materialPickerOpen = false"
       @open-materials="toggleMaterialPicker"
     >
       <template #materials>
@@ -360,6 +368,9 @@ const emit = defineEmits([
 
 const messageBoxRef = ref(null)
 const historyOpen = ref(false)
+const historyButtonRef = ref(null)
+const historyRef = ref(null)
+const composerRef = ref(null)
 const materialPickerOpen = ref(false)
 const pendingAuthor = '聚义厅'
 const materialIdentityKey = computed(() => `${props.identityEpoch}\u0000${props.identityScope}`)
@@ -481,9 +492,16 @@ const removeMaterialReference = async link => {
   if (!link || isTaskDiscussion.value) return
   await conversationMaterialLinks.detach(link)
 }
+const closeHistory = () => {
+  if (!historyRef.value?.dismissBlocked) historyOpen.value = false
+}
 const toggleHistory = () => {
+  if (historyRef.value?.dismissBlocked) return
   historyOpen.value = !historyOpen.value
-  if (historyOpen.value) emit('load-history')
+  if (historyOpen.value) {
+    composerRef.value?.closeTools?.()
+    emit('load-history')
+  }
 }
 const taskText = computed(() => props.selectedTask?.title || '未选榜文')
 const resolvedSubtitle = computed(() => {
@@ -514,6 +532,7 @@ watch(() => props.messages, () => {
 }, { deep: true })
 
 watch(() => `${materialIdentityKey.value}\u0000${taskId.value}\u0000${props.conversationId}\u0000${serverTaskCompleted.value}`, () => {
+  historyOpen.value = false
   materialPickerOpen.value = false
   materialNames.value = {}
   materialSelectionGeneration++

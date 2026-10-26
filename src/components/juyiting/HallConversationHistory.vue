@@ -1,5 +1,5 @@
 <template>
-  <section class="hall-conversation-history" aria-label="话头记录">
+  <section ref="historyRef" class="hall-conversation-history" aria-label="话头记录">
     <div v-if="loading" class="history-state" role="status">正在翻检话头…</div>
     <div v-else-if="error" class="history-state is-error" role="alert">{{ error }}</div>
     <div v-else-if="!conversations.length" class="history-state">此处暂无旧话头。</div>
@@ -58,9 +58,10 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
 const props = defineProps({
+  dismissTrigger: { type: Object, default: null },
   conversations: { type: Array, default: () => [] },
   deletingId: { type: String, default: '' },
   disabled: { type: Boolean, default: false },
@@ -71,8 +72,37 @@ const props = defineProps({
   selectedId: { type: String, default: '' }
 })
 
-const emit = defineEmits(['delete', 'load-more', 'select'])
+const emit = defineEmits(['delete', 'dismiss', 'load-more', 'select'])
 const showDeleteDialog = ref(false)
+const historyRef = ref(null)
+const dismissBlocked = computed(() => showDeleteDialog.value || Boolean(props.deletingId))
+// A nested/teleported modal owns its dismissal; an enclosing discussion dialog does not.
+const hasChildDialog = () => [...document.querySelectorAll('dialog[open], [role="dialog"][aria-modal="true"]')]
+  .some(dialog => !dialog.contains(historyRef.value) && !dialog.closest('[hidden]') && window.getComputedStyle(dialog).display !== 'none')
+const dismiss = (restoreFocus = false) => {
+  if (dismissBlocked.value || hasChildDialog()) return
+  emit('dismiss')
+  if (restoreFocus) nextTick(() => props.dismissTrigger?.focus())
+}
+const handleOutside = event => {
+  if (!historyRef.value?.contains(event.target) && !props.dismissTrigger?.contains(event.target)) dismiss()
+}
+const handleEscape = event => {
+  const discussion = event.target?.closest?.('.chat-panel')
+  if (discussion && !discussion.contains(historyRef.value)) return
+  if (event.key !== 'Escape' || event.defaultPrevented || dismissBlocked.value || hasChildDialog()) return
+  event.preventDefault()
+  dismiss(true)
+}
+onMounted(() => {
+  document.addEventListener('pointerdown', handleOutside)
+  document.addEventListener('keydown', handleEscape)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleOutside)
+  document.removeEventListener('keydown', handleEscape)
+})
+defineExpose({ dismissBlocked })
 const deleteCandidate = ref(null)
 const deleteDialogMessage = computed(() => `确认删除“${deleteCandidate.value?.title || '未题话头'}”吗？删除后无法恢复。`)
 

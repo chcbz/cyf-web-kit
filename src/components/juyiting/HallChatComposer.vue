@@ -45,17 +45,18 @@
               :aria-expanded="String(moreOpen)"
               :aria-controls="moreId"
               :disabled="actionsDisabled"
-              @click="moreOpen = !moreOpen"
+              @click="toggleMore"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14" /></svg>
             </button>
             <button
+              ref="materialsButtonRef"
               class="composer-add-materials"
               type="button"
               title="添加资料"
               aria-label="添加资料"
               :disabled="inputLocked"
-              @click="$emit('open-materials')"
+              @click="openMaterials"
             ><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m8 12 7-7a3 3 0 0 1 4 4l-9 9a5 5 0 0 1-7-7l9-9M7 14l8-8" /></svg></button>
             <div ref="voiceActionRef" class="composer-inline-voice"></div>
             <button
@@ -100,6 +101,7 @@
       <section
         v-show="moreOpen || voiceHasDetail"
         :id="moreId"
+        ref="morePanelRef"
         class="composer-more-panel"
         aria-label="语音设置与状态"
       >
@@ -114,7 +116,7 @@
         />
       </section>
 
-      <div class="composer-materials"><slot name="materials"></slot></div>
+      <div ref="materialsRef" class="composer-materials"><slot name="materials"></slot></div>
 
       <div v-if="showMentionMenu" class="composer-mention-menu" aria-label="选择要点名的好汉">
         <button
@@ -144,6 +146,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } fro
 import HallVoiceControls from './HallVoiceControls.vue'
 
 const props = defineProps({
+  materialsOpen: { type: Boolean, default: false },
   agents: { type: Array, default: () => [] },
   compact: { type: Boolean, default: false },
   durableCancelTarget: { type: Object, default: null },
@@ -172,6 +175,8 @@ const emit = defineEmits([
   'send-message',
   'update:draft',
   'voice-apply',
+  'open-tools',
+  'close-materials',
   'open-materials'
 ])
 
@@ -181,18 +186,47 @@ const moreOpen = ref(false)
 const moreId = `hall-composer-more-${useId()}`
 const voiceActionRef = ref(null)
 const textareaRef = ref(null)
-const closeMore = () => {
+const morePanelRef = ref(null)
+const materialsRef = ref(null)
+const materialsButtonRef = ref(null)
+const closeMore = (restoreFocus = false) => {
   if (!moreOpen.value) return
   moreOpen.value = false
-  nextTick(() => moreButtonRef.value?.focus())
+  if (restoreFocus) nextTick(() => moreButtonRef.value?.focus())
 }
+const toggleMore = () => {
+  if (!moreOpen.value) emit('open-tools')
+  if (!moreOpen.value && props.materialsOpen) emit('close-materials')
+  moreOpen.value = !moreOpen.value
+}
+const openMaterials = () => {
+  emit('open-tools')
+  closeMore()
+  emit('open-materials')
+}
+defineExpose({ closeTools: () => {
+  closeMore()
+  if (props.materialsOpen) emit('close-materials')
+} })
+const hasChildDialog = () => [...document.querySelectorAll('dialog[open], [role="dialog"][aria-modal="true"]')]
+  .some(dialog => !dialog.contains(composerRef.value) && !dialog.closest('[hidden]') && window.getComputedStyle(dialog).display !== 'none')
 const handleOutside = event => {
-  if (!composerRef.value?.contains(event.target)) closeMore()
+  if ((!moreOpen.value && !props.materialsOpen) || hasChildDialog()) return
+  if (!morePanelRef.value?.contains(event.target) && !moreButtonRef.value?.contains(event.target)) closeMore()
+  if (props.materialsOpen && !materialsRef.value?.contains(event.target) && !materialsButtonRef.value?.contains(event.target)) emit('close-materials')
 }
 const handleEscape = event => {
-  if (event.key !== 'Escape' || !moreOpen.value || event.defaultPrevented) return
-  event.preventDefault()
-  closeMore()
+  const discussion = event.target?.closest?.('.chat-panel')
+  if (discussion && !discussion.contains(composerRef.value)) return
+  if (event.key !== 'Escape' || event.defaultPrevented || hasChildDialog()) return
+  if (props.materialsOpen) {
+    event.preventDefault()
+    emit('close-materials')
+    nextTick(() => materialsButtonRef.value?.focus())
+  } else if (moreOpen.value) {
+    event.preventDefault()
+    closeMore(true)
+  }
 }
 onMounted(() => {
   document.addEventListener('pointerdown', handleOutside)
