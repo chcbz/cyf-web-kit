@@ -12,7 +12,7 @@ const ChatProbe = Vue.defineComponent({
   emits: [...discussionContract.discussionPanelEmits, 'typed-reply'],
   setup: (_props, { slots }) => () => Vue.h('div', {}, slots['bounty-results']?.())
 })
-const loadPanel = name => {
+const loadPanel = (name, refresh = () => {}) => {
   const filename = new URL(`../src/components/juyiting/${name}.vue`, import.meta.url).pathname
   const descriptor = parse(readFileSync(filename, 'utf8'), { filename }).descriptor
   const script = compileScript(descriptor, { id: name, inlineTemplate: true }).content
@@ -23,7 +23,11 @@ const loadPanel = name => {
   return new Function('Vue', 'deps', script)(Vue, {
     ...discussionContract, bountyDeliberationPresentation, ChatPanel: ChatProbe,
     BountyDeliberationStatus: { render: () => null },
-    BountyExecutionTermination: { render: () => null }, BountyExecutionOutputs: { render: () => null }
+    BountyExecutionTermination: { render: () => null },
+    BountyExecutionOutputs: { setup: (_props, { expose }) => {
+      expose({ refresh })
+      return () => null
+    } }
   })
 }
 const functions = { mentionLabel: agent => agent.name, senderText: message => message.sender }
@@ -39,7 +43,8 @@ describe('discussion panel shared bindings', () => {
 
   for (const [name, variant] of [['PublicDiscussionPanel', 'public'], ['PrivateDiscussionPanel', 'private'], ['BountyDiscussionPanel', 'bounty']]) {
     it(`${variant}: preserves defaults, reactive inputs and exact single event forwarding`, async () => {
-      const wrapper = mount(loadPanel(name), { props: functions })
+      const refreshes = []
+      const wrapper = mount(loadPanel(name, () => refreshes.push(true)), { props: functions })
       try {
         const chat = wrapper.findComponent(ChatProbe)
         expect(chat.props('draft')).to.equal('')
@@ -73,6 +78,7 @@ describe('discussion panel shared bindings', () => {
           chat.vm.$emit(event)
           expect(wrapper.emitted(event)).to.deep.equal([[]])
         }
+        expect(refreshes).to.have.length(variant === 'bounty' ? 1 : 0)
         chat.vm.$emit('update:draft', '编辑后')
         expect(wrapper.emitted('update:draft')).to.deep.equal([['编辑后']])
         expect(wrapper.props('draft')).to.equal('保持原草稿')
