@@ -51,7 +51,7 @@
         <button v-if="canOpenHallItem(item)" type="button" :disabled="Boolean(model.openingRef.value)" @click="openItem(item)">{{ nextLabel(item) }}</button><span v-else>当前无可用办理入口</span>
       </article>
       <p v-if="enabled && isComplete(view) && !rowsFor(view).length" class="overview-empty">{{ hasMore(view) ? '这一页没有事项，可继续读取。' : view === 'archive' ? '暂时没有收入案卷的事项。' : view === 'needsAction' ? '暂时没有需要你处理的事项。' : '还没有开始的事项，先提出一个需求吧。' }}</p>
-      <button v-if="hasMore(view)" type="button" @click="loadMore(view)">读取更多事项</button>
+      <button v-if="messagesOnly && hasMore(view)" type="button" @click="loadMore(view)">读取更多事项</button>
     </section>
     <section v-if="!messagesOnly" class="overview-resource" aria-label="资料入口"><var-icon class="overview-resource-icon" name="file-document-outline" aria-hidden="true" /><div><strong>资料留在这里，下次不用重找</strong><p>引用已有资料，查看固定版本的成果。</p></div><button type="button" @click="emit('open-workspace')">打开百宝箱 →</button></section>
     </div><aside v-if="!messagesOnly" class="overview-aside" aria-label="快捷入口">
@@ -131,8 +131,15 @@ const statusText = item => item.ref.sourceType === 'TASK'
     FAILED: '执行未完成', INPUTS_REVOKED: '资料授权已撤销'
   })[item.status.code] || '状态待核对'
 
-const rowsFor = view => sourcesFor(view).flatMap(source => model.sections.value[view].partitions[source].items).sort((a, b) => b.updatedAt - a.updatedAt)
-const attentionItems = computed(() => rowsFor('needsAction').slice(0, 2))
+const sortedRowsFor = view => sourcesFor(view).flatMap(source => model.sections.value[view].partitions[source].items).sort((a, b) => b.updatedAt - a.updatedAt)
+const rowsFor = view => {
+  const rows = sortedRowsFor(view)
+  if (props.messagesOnly) return rows
+  // Select the newest five across sources before changing the display order.
+  const latest = rows.slice(0, 5)
+  return view === 'needsAction' ? latest.reverse() : latest
+}
+const attentionItems = computed(() => sortedRowsFor('needsAction').slice(0, 2))
 const hasMore = view => sourcesFor(view).some(source => model.sections.value[view].partitions[source].nextCursor)
 const isComplete = view => sourcesFor(view).every(source => model.sections.value[view].partitions[source].status === 'complete')
 const issuesFor = view => sourcesFor(view).filter(source => {

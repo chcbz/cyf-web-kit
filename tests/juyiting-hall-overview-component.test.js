@@ -65,6 +65,77 @@ const settle = async () => { await flushPromises(); await Vue.nextTick() }
 const props = { enabled: true, identityScope: 'tenant\u0000client\u0000owner-a', identityEpoch: 1 }
 
 describe('JYT-UX-W05 mounted overview and message projection', () => {
+  const manyItems = () => {
+    const data = response()
+    for (const [source, type, action, times] of [
+      ['private', 'PRIVATE_CASE', 'OPEN_CASE', [2, 9, 5]],
+      ['task', 'TASK', 'OPEN_TASK', [8, 1, 6]],
+      ['draft', 'DRAFT', 'EDIT_DRAFT', [4, 7, 3]]
+    ]) {
+      const part = data.sections.recent.partitions[source]
+      Object.assign(part, { status: 'complete', errorCode: null, nextCursor: 'more', hasMore: true,
+        items: times.map(updatedAt => ({ ...summary(type, `item-${updatedAt}`, action), updatedAt })) })
+      data.sourceStatus.recent[source] = { status: 'complete', errorCode: null }
+    }
+    return data
+  }
+  const rowTitles = wrapper => wrapper.findAll('.overview-section .overview-item strong').map(row => row.text())
+  it('shows the latest five across all sources, descending in recent and ascending in needsAction', async () => {
+    const calls = []
+    const wrapper = mount(load({ execute: async options => { calls.push(options); return manyItems() } }), { props })
+    try {
+      await settle()
+      expect(rowTitles(wrapper)).to.deep.equal([9, 8, 7, 6, 5].map(n => `item-${n}`))
+      expect(wrapper.text()).not.to.include('读取更多事项')
+      await wrapper.findAll('.overview-tabs button')[1].trigger('click')
+      expect(rowTitles(wrapper)).to.deep.equal([5, 6, 7, 8, 9].map(n => `item-${n}`))
+      expect(wrapper.findAll('.overview-aside-card button span').map(row => row.element.firstChild.textContent)).to.deep.equal(['item-9', 'item-8'])
+      expect(wrapper.text()).not.to.include('读取更多事项')
+      await wrapper.findAll('.overview-tabs button')[0].trigger('click')
+      expect(rowTitles(wrapper)).to.deep.equal([9, 8, 7, 6, 5].map(n => `item-${n}`))
+      expect(calls).to.have.length(1)
+    } finally { wrapper.unmount() }
+  })
+  it('shows only the latest five archive rows descending across private and task sources', async () => {
+    const wrapper = mount(load({ execute: async options => {
+      const data = manyItems()
+      if (options.url === '/hall/overview') return data
+      return { schemaVersion: 1, kind: options.params.kind, view: 'archive', q: '',
+        section: data.sections.recent, sourceStatus: data.sourceStatus.recent, asOf: 100 }
+    } }), { props })
+    try {
+      await settle()
+      await wrapper.findAll('.overview-tabs button')[2].trigger('click')
+      await settle()
+      expect(rowTitles(wrapper)).to.deep.equal([9, 8, 6, 5, 2].map(n => `item-${n}`))
+      expect(wrapper.text()).not.to.include('读取更多事项')
+    } finally { wrapper.unmount() }
+  })
+  it('keeps fewer than five rows and the empty state without fabricating entries', async () => {
+    const data = response()
+    const wrapper = mount(load({ execute: async () => data }), { props })
+    try {
+      await settle()
+      expect(rowTitles(wrapper)).to.have.length(4)
+      for (const source of HALL_SOURCES) {
+        Object.assign(data.sections.recent.partitions[source], { items: [], status: 'complete', errorCode: null })
+        data.sourceStatus.recent[source] = { status: 'complete', errorCode: null }
+      }
+      await wrapper.findAll('.overview-list-heading button').find(button => button.text() === '刷新').trigger('click')
+      await settle()
+      expect(rowTitles(wrapper)).to.have.length(0)
+      expect(wrapper.find('.overview-empty').exists()).to.equal(true)
+    } finally { wrapper.unmount() }
+  })
+  it('does not cap or change pagination on the independent messages page', async () => {
+    const wrapper = mount(load({ execute: async () => manyItems() }), { props: { ...props, messagesOnly: true } })
+    try {
+      await settle()
+      expect(rowTitles(wrapper)).to.deep.equal([9, 8, 7, 6, 5, 4, 3, 2, 1].map(n => `item-${n}`))
+      expect(wrapper.text()).to.include('读取更多事项')
+    } finally { wrapper.unmount() }
+  })
+
   beforeEach(() => { try { window.sessionStorage.clear() } catch {} })
   it('renders cancelled/failed/blocked formal statuses accurately without reinterpreting private execution failures', async () => {
     const data = response()
