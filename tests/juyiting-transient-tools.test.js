@@ -62,6 +62,31 @@ describe('discussion transient tools dismissal', () => {
       } finally { w.unmount() }
     })
   }
+  for (const tool of ['history', 'more', 'materials']) {
+    it(`Escape closes only ${tool}, not the enclosing discussion`, async () => {
+      const w = createChat()
+      const navigations = []
+      const parent = document.createElement('section')
+      parent.setAttribute('role', 'dialog'); parent.setAttribute('aria-modal', 'true')
+      document.body.append(parent); parent.append(w.element)
+      parent.addEventListener('keydown', event => {
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); navigations.push('back') }
+      })
+      try {
+        if (tool === 'history') await historyButton(w).trigger('click')
+        else if (tool === 'more') await moreButton(w).trigger('click')
+        else await w.get('.composer-add-materials').trigger('click')
+        await escape(w.get('textarea').element)
+        expect(navigations).to.deep.equal([])
+        expect(w.findComponent(History).exists()).to.equal(false)
+        expect(moreButton(w).attributes('aria-expanded')).to.equal('false')
+        expect(w.find('.material-reference-picker').exists()).to.equal(false)
+        expect(w.get('textarea').element.value).to.equal('草稿保留')
+        await escape(w.get('textarea').element)
+        expect(navigations).to.deep.equal(['back'])
+      } finally { w.unmount(); parent.remove() }
+    })
+  }
   it('switches tools even for keyboard-generated clicks, without selecting or sending', async () => {
     const w = createChat()
     try {

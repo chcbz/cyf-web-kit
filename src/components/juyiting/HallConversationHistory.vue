@@ -92,15 +92,16 @@ const handleEscape = event => {
   if (discussion && !discussion.contains(historyRef.value)) return
   if (event.key !== 'Escape' || event.defaultPrevented || dismissBlocked.value || hasChildDialog()) return
   event.preventDefault()
+  event.stopPropagation()
   dismiss(true)
 }
 onMounted(() => {
   document.addEventListener('pointerdown', handleOutside)
-  document.addEventListener('keydown', handleEscape)
+  document.addEventListener('keydown', handleEscape, true)
 })
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', handleOutside)
-  document.removeEventListener('keydown', handleEscape)
+  document.removeEventListener('keydown', handleEscape, true)
 })
 defineExpose({ dismissBlocked })
 const deleteCandidate = ref(null)

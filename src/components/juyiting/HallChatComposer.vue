@@ -231,20 +231,22 @@ const handleEscape = event => {
   if (event.key !== 'Escape' || event.defaultPrevented || hasChildDialog()) return
   if (props.materialsOpen) {
     event.preventDefault()
+    event.stopPropagation()
     emit('close-materials')
     nextTick(() => materialsButtonRef.value?.focus())
   } else if (moreOpen.value) {
     event.preventDefault()
+    event.stopPropagation()
     closeMore(true)
   }
 }
 onMounted(() => {
   document.addEventListener('pointerdown', handleOutside)
-  document.addEventListener('keydown', handleEscape)
+  document.addEventListener('keydown', handleEscape, true)
 })
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', handleOutside)
-  document.removeEventListener('keydown', handleEscape)
+  document.removeEventListener('keydown', handleEscape, true)
 })
 const isFocused = ref(false)
 
