@@ -179,12 +179,27 @@ const abandonment = useHallExecutionAbandonment({
   identityKey: () => `${props.identityEpoch}\u0000${props.identityScope}`
 })
 
+// A linked skill result is more precise than the legacy request's RUNNING flag.
+// Display only: keep the existing busy fence and never resubmit unknown work.
+const activeExecutionUnknown = computed(() => {
+  const request = props.activeRequest
+  if (!props.typedEnabled || props.isStreaming || !request?.requestId ||
+    request.conversationId !== props.conversationId ||
+    request.conversationGeneration !== props.conversationGeneration || props.activeTurns.length) return false
+  const linked = props.typedOutcomes.filter(card => card.conversationId === props.conversationId &&
+    card.conversationGeneration === props.conversationGeneration &&
+    card.outcome?.taskId === String(props.selectedTask?.id || '') && card.outcome.kind === 'ACTION_REQUEST' &&
+    card.actionProgress?.childRequestId === request.requestId && card.actionProgress.childRoute === 'EXECUTE')
+  return linked.length === 1 && linked[0].actionProgress.state === 'RESULT_UNKNOWN'
+})
+
 const chatProps = computed(() => {
   const {
     deliveryChoices: _deliveryChoices, selectedDeliveryId: _selectedDeliveryId, reviewContext, reviewBusy, activeRequest, requestCatalog, activeTurns, capabilityState, deliberationV2Enabled,
     typedRecoveryAvailable, typedInspectionStatus, ...chat
   } = props
-  return { ...chat, matterReadOnly: chat.matterReadOnly || taskCompleted.value, connectionStatus: taskCompleted.value ? '事项已完成' : chat.connectionStatus }
+  return { ...chat, ...(activeExecutionUnknown.value ? { isAwaitingReply: false, deliberationStatus: '结果待核实' } : {}),
+    matterReadOnly: chat.matterReadOnly || taskCompleted.value, connectionStatus: taskCompleted.value ? '事项已完成' : activeExecutionUnknown.value ? '结果待核实' : chat.connectionStatus }
 })
 </script>
 

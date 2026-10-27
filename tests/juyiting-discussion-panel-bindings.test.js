@@ -96,6 +96,39 @@ describe('discussion panel shared bindings', () => {
     })
   }
 
+  it('shows an exact unknown execution without a replying indicator or unlocking submission', async () => {
+    const request = { requestId: 'child-1', conversationId: '42', conversationGeneration: '1', state: 'RUNNING' }
+    const card = { conversationId: '42', conversationGeneration: '1',
+      outcome: { taskId: 'task-1', kind: 'ACTION_REQUEST' },
+      actionProgress: { childRequestId: 'child-1', childRoute: 'EXECUTE', state: 'RESULT_UNKNOWN' } }
+    const wrapper = mount(loadPanel('BountyDiscussionPanel'), { props: { ...functions,
+      typedEnabled: true, conversationId: '42', conversationGeneration: '1', selectedTask: { id: 'task-1' },
+      activeRequest: request, typedOutcomes: [card], isAwaitingReply: true, conversationBusy: true,
+      deliberationStatus: '等待回话', connectionStatus: '等待回话', draft: '保留草稿' } })
+    try {
+      const chat = wrapper.findComponent(ChatProbe)
+      expect(chat.props('isAwaitingReply')).to.equal(false)
+      expect(chat.props('deliberationStatus')).to.equal('结果待核实')
+      expect(chat.props('connectionStatus')).to.equal('结果待核实')
+      expect(chat.props('conversationBusy')).to.equal(true)
+      expect(chat.props('draft')).to.equal('保留草稿')
+      for (const change of [{ conversationId: 'other' }, { conversationGeneration: '2' },
+        { outcome: { ...card.outcome, taskId: 'other' } },
+        { actionProgress: { ...card.actionProgress, childRequestId: 'other' } },
+        { actionProgress: { ...card.actionProgress, state: 'RUNNING' } }]) {
+        await wrapper.setProps({ typedOutcomes: [{ ...card, ...change }] })
+        expect(chat.props('isAwaitingReply')).to.equal(true)
+      }
+      await wrapper.setProps({ typedOutcomes: [card, card] })
+      expect(chat.props('isAwaitingReply')).to.equal(true)
+      await wrapper.setProps({ typedOutcomes: [card], isStreaming: true })
+      expect(chat.props('isAwaitingReply')).to.equal(true)
+      await wrapper.setProps({ isStreaming: false, activeTurns: [{ state: 'GENERATING' }] })
+      expect(chat.props('isAwaitingReply')).to.equal(true)
+      expect(wrapper.emitted('send-message')).to.equal(undefined)
+    } finally { wrapper.unmount() }
+  })
+
   it('makes an accepted task read-only immediately from its exact review context', async () => {
     const wrapper = mount(loadPanel('BountyDiscussionPanel'), { props: { ...functions,
       selectedTask: { id: 'task-1', status: 'reviewing' }, reviewContext: { taskId: 'task-1', taskState: 'REVIEWING' } } })
