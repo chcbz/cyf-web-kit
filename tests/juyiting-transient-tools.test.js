@@ -40,6 +40,11 @@ const moreButton = w => w.get('.composer-more')
 const visibleModal = () => { const node = document.createElement('section'); node.setAttribute('role', 'dialog'); node.setAttribute('aria-modal', 'true'); document.body.append(node); return node }
 
 // Real shared components, mounted together: no sends/deletes or draft writes on dismissal.
+const createMobileChat = () => {
+  const previous = window.matchMedia
+  window.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} })
+  try { return createChat() } finally { window.matchMedia = previous }
+}
 describe('discussion transient tools dismissal', () => {
   for (const action of ['outside', 'textarea', 'Escape']) {
     it(`closes history via ${action}, preserving draft and restoring focus only for Escape`, async () => {
@@ -64,7 +69,7 @@ describe('discussion transient tools dismissal', () => {
   }
   for (const tool of ['history', 'more', 'materials']) {
     it(`Escape closes only ${tool}, not the enclosing discussion`, async () => {
-      const w = createChat()
+      const w = tool === 'materials' ? createMobileChat() : createChat()
       const navigations = []
       const parent = document.createElement('section')
       parent.setAttribute('role', 'dialog'); parent.setAttribute('aria-modal', 'true')
@@ -80,7 +85,7 @@ describe('discussion transient tools dismissal', () => {
         expect(navigations).to.deep.equal([])
         expect(w.findComponent(History).exists()).to.equal(false)
         expect(moreButton(w).attributes('aria-expanded')).to.equal('false')
-        expect(w.find('.material-reference-picker').exists()).to.equal(false)
+        expect(w.find('.composer-material-actions').exists()).to.equal(false)
         expect(w.get('textarea').element.value).to.equal('草稿保留')
         await escape(w.get('textarea').element)
         expect(navigations).to.deep.equal(['back'])
@@ -88,7 +93,7 @@ describe('discussion transient tools dismissal', () => {
     })
   }
   it('switches tools even for keyboard-generated clicks, without selecting or sending', async () => {
-    const w = createChat()
+    const w = createMobileChat()
     try {
       await historyButton(w).trigger('click')
       await moreButton(w).trigger('click')
@@ -98,24 +103,24 @@ describe('discussion transient tools dismissal', () => {
       expect(moreButton(w).attributes('aria-expanded')).to.equal('false')
       await w.get('.composer-add-materials').trigger('click')
       expect(w.findComponent(History).exists()).to.equal(false)
-      expect(w.find('.material-reference-picker').exists()).to.equal(true)
+      expect(w.find('.composer-material-actions').exists()).to.equal(true)
       await moreButton(w).trigger('click')
-      expect(w.find('.material-reference-picker').exists()).to.equal(false)
+      expect(w.find('.composer-material-actions').exists()).to.equal(false)
       expect(w.emitted('send-message')).to.equal(undefined)
     } finally { w.unmount() }
   })
   for (const action of ['textarea', 'Escape']) {
     it(`dismisses materials via ${action} but keeps internal operations and draft intact`, async () => {
-      const w = createChat()
+      const w = createMobileChat()
       try {
         await w.get('.composer-add-materials').trigger('click')
-        await pointer(w.get('.material-reference-picker').element)
-        expect(w.find('.material-reference-picker').exists()).to.equal(true)
+        await pointer(w.get('.composer-material-actions').element)
+        expect(w.find('.composer-material-actions').exists()).to.equal(true)
         await pointer(w.get('.composer-add-materials').element)
-        expect(w.find('.material-reference-picker').exists()).to.equal(true)
+        expect(w.find('.composer-material-actions').exists()).to.equal(true)
         if (action === 'Escape') await escape()
         else await pointer(w.get('textarea').element)
-        expect(w.find('.material-reference-picker').exists()).to.equal(false)
+        expect(w.find('.composer-material-actions').exists()).to.equal(false)
         if (action === 'Escape') expect(document.activeElement).to.equal(w.get('.composer-add-materials').element)
         expect(w.emitted('update:draft')).to.equal(undefined)
         expect(w.emitted('send-message')).to.equal(undefined)
@@ -402,7 +407,7 @@ describe('task discussion material picker prototype parity', () => {
       expect(h.dialog().find('.quick-material-list-pane').exists()).to.equal(true)
       expect(h.dialog().find('.quick-material-detail-pane').exists()).to.equal(true)
       expect(h.dialog().get('input[type="file"]').attributes()).to.have.property('multiple')
-      expect(h.dialog().get('.quick-material-confirm').text()).to.equal('完成（0）')
+      expect(h.dialog().get('.quick-material-confirm').text()).to.equal('完成（1）')
       expect(h.dialog().get('.material-use-settings').attributes()).not.to.have.property('open')
       expect(moreButton(h.w).attributes('aria-expanded')).to.equal('false')
       expect(h.calls.attach).to.deep.equal([])
@@ -415,7 +420,7 @@ describe('task discussion material picker prototype parity', () => {
     const h = fixture()
     try {
       await h.open(); await h.select()
-      expect(h.dialog().get('.quick-material-confirm').text()).to.equal('完成（1）')
+      expect(h.dialog().get('.quick-material-confirm').text()).to.equal('完成（2）')
       expect(h.calls.attach).to.deep.equal([])
       expect(h.calls.preview).to.include('2')
       await h.dialog().get('.quick-material-footer-actions button').trigger('click'); await flush()
@@ -423,7 +428,7 @@ describe('task discussion material picker prototype parity', () => {
       expect(document.activeElement).to.equal(h.w.get('.composer-add-materials').element)
       expect(h.taskLinks.links.value.map(l => l.fileId)).to.deep.equal(['old'])
       await h.open()
-      expect(h.dialog().get('.quick-material-confirm').text()).to.equal('完成（0）')
+      expect(h.dialog().get('.quick-material-confirm').text()).to.equal('完成（1）')
       expect(h.w.get('textarea').element.value).to.equal('草稿保留')
       expect(h.w.emitted('send-message')).to.equal(undefined)
     } finally { h.w.unmount() }
@@ -438,7 +443,7 @@ describe('task discussion material picker prototype parity', () => {
       expect(h.w.emitted('send-message')).to.equal(undefined)
       expect(h.w.emitted('update:draft')).to.equal(undefined)
       await h.open()
-      expect(h.dialog().get('.quick-material-confirm').text()).to.equal('完成（0）')
+      expect(h.dialog().get('.quick-material-confirm').text()).to.equal('完成（2）')
       expect(h.dialog().get('.material-use-settings').text()).to.include('2 份')
       expect(h.dialog().get('.material-use-settings').text()).to.include('原任务资料.pdf · v1')
     } finally { h.w.unmount() }
@@ -467,7 +472,7 @@ describe('task discussion material picker prototype parity', () => {
       await h.dialog().get('.quick-material-confirm').trigger('click'); await flush()
       expect(h.w.get('.material-link-status').text()).to.include('部分资料尚未关联')
       await h.w.get('.material-link-status button').trigger('click'); await flush()
-      expect(h.dialog().get('.quick-material-confirm').text()).to.equal('完成（1）')
+      expect(h.dialog().get('.quick-material-confirm').text()).to.equal('完成（2）')
       expect(h.dialog().text()).to.include('关联结果待核对')
       expect(h.calls.attach).to.have.length(1)
       expect(h.w.emitted('send-message')).to.equal(undefined)

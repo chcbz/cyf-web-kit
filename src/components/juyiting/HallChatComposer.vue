@@ -424,7 +424,7 @@ watch([stopTarget, inputLocked, () => props.contextKey], ([target, locked, conte
 })
 
 watch(() => props.contextKey, () => { closeTools(); imageContextKey = null })
-watch(inputLocked, locked => { if (locked) closeTools() })
+watch(inputLocked, locked => { if (locked) materialActionsOpen.value = false })
 
 watch([() => props.draft, () => props.compact], () => nextTick(resizeTextarea), { immediate: true })
 </script>
