@@ -620,7 +620,7 @@
             :selected-task="conversationTask"
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
-            :conversation-busy="isConversationBusy"
+            :conversation-busy="isConversationBusy || bountyTopic.busy.value"
             :deliberation-status="deliberationStatus"
             :durable-cancel-target="durableCancelTarget"
             :reply-cancellation-state="replyCancellationState"
@@ -636,7 +636,7 @@
             :scope-hint="chatContext.conversationScopeKey"
             @cancel-deliberation="cancelDeliberation"
             @clear-target="handleClearChatTarget"
-            @delete-conversation="deleteHallConversation"
+            @delete-conversation="handleDeleteHallConversation"
             @load-history="loadHallConversationHistory({ force: true })"
             @load-more-history="loadMoreHallConversationHistory"
             @load-messages="retryHallConversation"
@@ -644,7 +644,7 @@
             @new-conversation="handleNewHallConversation"
             @open-workspace="openBabaoBox"
             @retry-conversation="retryHallConversation"
-            @select-conversation="selectHallConversation"
+            @select-conversation="handleSelectHallConversation"
             @send-message="handleSendHallMessage"
           />
 
@@ -691,7 +691,7 @@
             :selected-task="conversationTask"
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
-            :conversation-busy="isConversationBusy"
+            :conversation-busy="isConversationBusy || bountyTopic.busy.value"
             :deliberation-status="deliberationStatus"
             :durable-cancel-target="durableCancelTarget"
             :reply-cancellation-state="replyCancellationState"
@@ -709,7 +709,7 @@
             @execution-settled="refreshExecutionRequest"
             @cancel-deliberation="cancelDeliberation"
             @clear-target="handleClearChatTarget"
-            @delete-conversation="deleteHallConversation"
+            @delete-conversation="handleDeleteHallConversation"
             @typed-reply="handleTypedReply"
             @typed-resume="handleTypedResume"
             @load-history="loadHallConversationHistory({ force: true })"
@@ -719,7 +719,7 @@
             @new-conversation="handleNewHallConversation"
             @open-workspace="openBabaoBox"
             @retry-conversation="retryHallConversation"
-            @select-conversation="selectHallConversation"
+            @select-conversation="handleSelectHallConversation"
             @send-message="handleSendHallMessage"
           />
 
@@ -743,7 +743,7 @@
             :selected-task="conversationTask"
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
-            :conversation-busy="isConversationBusy"
+            :conversation-busy="isConversationBusy || bountyTopic.busy.value"
             :deliberation-status="deliberationStatus"
             :durable-cancel-target="durableCancelTarget"
             :reply-cancellation-state="replyCancellationState"
@@ -759,7 +759,7 @@
             :scope-hint="chatContext.conversationScopeKey"
             @cancel-deliberation="cancelDeliberation"
             @clear-target="handleClearChatTarget"
-            @delete-conversation="deleteHallConversation"
+            @delete-conversation="handleDeleteHallConversation"
             @load-history="loadHallConversationHistory({ force: true })"
             @load-more-history="loadMoreHallConversationHistory"
             @load-messages="retryHallConversation"
@@ -767,7 +767,7 @@
             @new-conversation="handleNewHallConversation"
             @open-workspace="openBabaoBox"
             @retry-conversation="retryHallConversation"
-            @select-conversation="selectHallConversation"
+            @select-conversation="handleSelectHallConversation"
             @send-message="handleSendHallMessage"
           />
 
@@ -875,6 +875,7 @@ import { createPointAndStartIntentStore } from '@/composables/juyiting/hallPoint
 import { pointAndStartRecoveryLane } from '@/composables/juyiting/hallPointAndStartRecoveryLane'
 import { useHallBountyRequestCatalog } from '@/composables/juyiting/useHallBountyRequestCatalog'
 import { useHallTypedDeliberation } from '@/composables/juyiting/useHallTypedDeliberation'
+import { useHallBountyTopic, createHallBountyTopicAdopter } from '@/composables/juyiting/useHallBountyTopic.js'
 import { useHallAgentProfileCapabilities, agentProfileReasonText } from '@/composables/juyiting/useHallAgentProfileCapabilities'
 import { useHallSkillCapabilities } from '@/composables/juyiting/useHallSkillCapabilities'
 import { typedLong } from '@/composables/juyiting/hallTypedDeliberation'
@@ -2408,6 +2409,19 @@ typedDeliberation = useHallTypedDeliberation({
   }
 })
 
+const bountyTopic = useHallBountyTopic({
+  chatApi, identityScope: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
+  getContext: () => ({ ...typedDeliberationContext(), mode: chatMode.value }), storage: typedDeliberationStorage,
+  adopt: createHallBountyTopicAdopter({
+    loadHistory: () => loadHallConversationHistory({ force: true }),
+    history: conversationHistory, select: selectHallConversation, conversationId,
+    identity: () => `${hallIdentityScope.value}:${apiStore.authorizationGeneration}`,
+    taskId: () => conversationTask.value?.id, mode: chatMode
+  })
+})
+const handleSelectHallConversation = id => bountyTopic.busy.value ? false : selectHallConversation(id)
+const handleDeleteHallConversation = id => bountyTopic.busy.value ? false : deleteHallConversation(id)
+
 // Every user-visible task/target/auth context change fences in-flight original
 // projection reads. The one canonical task replacement performed by a verified
 // admission is marked below, so its own reactive write cannot cancel adoption.
@@ -2949,8 +2963,15 @@ const showRandomAgentBubble = () => {
 }
 
 
-const handleNewHallConversation = () => {
-  if (isConversationBusy.value) return false
+const handleNewHallConversation = async () => {
+  if (isConversationBusy.value || bountyTopic.busy.value) return false
+  if (chatMode.value === 'bounty') {
+    // Never clear a task-bound conversation before durable topic creation/readback.
+    const opened = await bountyTopic.open()
+    if (!opened && bountyTopic.error.value) showToast(bountyTopic.error.value)
+    if (opened) { playPanelOpen(); resetSceneFeedback() }
+    return opened
+  }
   voiceReplyCorrelation.close('new_conversation')
   hallVoice?.cancel()
   playPanelOpen()
@@ -2960,6 +2981,7 @@ const handleNewHallConversation = () => {
 }
 
 const handleSendHallMessage = async (typedInput = {}) => {
+  if (bountyTopic.busy.value) return false
   voiceReplyCorrelation.close('manual_text_send')
   hallVoice?.cancel()
   playSend()
@@ -3156,6 +3178,7 @@ onUnmounted(() => {
   clearPointAndStartCapability()
   disposeRequirementCreate()
   disposePointAndStart()
+  bountyTopic.dispose()
   typedDeliberation?.dispose?.()
   taskSkillDirectory.dispose()
   bountyAssignmentContext.dispose()

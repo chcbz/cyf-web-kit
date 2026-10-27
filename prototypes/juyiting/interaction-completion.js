@@ -291,6 +291,26 @@ function historySnapshot(ctx){
 function historyRows(ctx){
  const rows=[...(ctx.histories||[])];if(hasCurrentTopic(ctx)){const current=historySnapshot(ctx);return [current,...rows.filter(h=>h.id!==current.id)].sort((a,b)=>(Date.parse(b.updateTime)||0)-(Date.parse(a.updateTime)||0));}return rows;
 }
+// BUSINESS-NORMAL-20261027: reuse the existing per-topic snapshots, not a parallel history store.
+function startConversationTopic(ctx) {
+ if(ctx.pending||ctx.historyDeletingId||ctx.task?.complete||ctx.task?.cancelled)return false;
+ ctx.histories=ctx.histories||[];
+ if(hasCurrentTopic(ctx)){const saved=historySnapshot(ctx);ctx.histories=ctx.histories.filter(h=>h.id!==saved.id);ctx.histories.push(saved);}
+ Object.assign(ctx,{topicId:'demo-topic-'+(++serial),topicTitle:'',topicUpdatedAt:new Date().toISOString(),
+  messages:[],outputs:[],delivery:[],chatDraft:'',chatFiles:[],quote:null,pending:false,historyOpen:false});
+ return true;
+}
+function selectConversationTopic(ctx,id) {
+ if(ctx.pending||ctx.historyDeletingId)return false;
+ const selected=ctx.histories?.find(h=>h.id===id);if(!selected)return false;
+ const active=hasCurrentTopic(ctx)?historySnapshot(ctx):null;
+ ctx.histories=ctx.histories.filter(h=>h.id!==id&&h.id!==active?.id);if(active)ctx.histories.push(active);
+ Object.assign(ctx,{topicId:selected.id,topicTitle:selected.title,topicUpdatedAt:selected.updateTime||null,
+  messages:structuredClone(selected.messages),outputs:structuredClone(selected.outputs),delivery:[...selected.delivery],
+  chatDraft:selected.chatDraft,chatFiles:[...selected.chatFiles],quote:selected.quote,historyOpen:false});
+ return true;
+}
+// End topic transition helpers.
 function renderConversationHistory(){
  const panel=$('.chat-panel'),ctx=conversation();if(!panel)return;$('.baseline-history')?.remove();
  const toggle=$('[data-action=complete-history]',panel);toggle?.setAttribute('aria-expanded',String(!!ctx.historyOpen));toggle?.setAttribute('aria-controls','prototype-topic-history');
@@ -367,8 +387,8 @@ document.addEventListener('click',event=>{
  if(action==='complete-history-more'){ctx.historyPageLimit=(ctx.historyPageLimit||100)+100;renderConversationHistory();persist();return;}
  if(action==='complete-select-current'){return;}
  if(action==='complete-new'){if(ctx.pending||(ctx.task?.complete||ctx.task?.cancelled))return;dialog('新对话','<p>当前消息、草稿和资料会留在议事记录中。新对话不创建事项，也不重复点将。</p>',button('取消','close-dialog')+button('新对话','complete-new-confirm'));}
- if(action==='complete-new-confirm'){if(ctx.pending)return;ctx.histories=ctx.histories||[];if(hasCurrentTopic(ctx)){const snapshot=historySnapshot(ctx);ctx.histories=ctx.histories.filter(h=>h.id!==snapshot.id);ctx.histories.push(snapshot);}ctx.topicId='demo-topic-'+(++serial);ctx.topicTitle='';ctx.topicUpdatedAt=new Date().toISOString();ctx.messages=[];ctx.chatDraft='';ctx.chatFiles=[];ctx.quote=null;ctx.pending=false;ctx.historyOpen=false;t.closest('dialog').close();render();}
- if(action==='complete-select-history'){if(ctx.pending||ctx.historyDeletingId||$('.inline-voice-status'))return;const h=ctx.histories?.find(h=>h.id===t.dataset.history);if(!h)return;const active=hasCurrentTopic(ctx)?historySnapshot(ctx):null;ctx.histories=ctx.histories.filter(x=>x.id!==h.id&&x.id!==active?.id);if(active)ctx.histories.push(active);Object.assign(ctx,{topicId:h.id,topicTitle:h.title,topicUpdatedAt:h.updateTime||null,messages:structuredClone(h.messages),outputs:structuredClone(h.outputs),delivery:[...h.delivery],chatDraft:h.chatDraft,chatFiles:[...h.chatFiles],quote:h.quote,historyOpen:true});render();}
+ if(action==='complete-new-confirm'){if(!startConversationTopic(ctx))return;t.closest('dialog').close();render();}
+ if(action==='complete-select-history'){if($('.inline-voice-status'))return;if(selectConversationTopic(ctx,t.dataset.history))render();}
  if(action==='complete-delete-current'||action==='complete-delete-history'){if(ctx.task?.complete||ctx.task?.cancelled||ctx.pending||ctx.historyDeletingId)return;const h=action==='complete-delete-current'?{title:historyTitle(ctx)}:ctx.histories?.find(h=>h.id===t.dataset.history);if(!h)return;dialog('删除议事记录',`<p>确认删除“${esc(h.title||'未命名议事')}”吗？删除后无法恢复。</p><small>仅删除本原型的话头，不删除事项、冻结成果或真实记录。</small>`,button('取消','close-dialog')+button('删除','complete-delete-confirm',`data-history="${action==='complete-delete-current'?'current':esc(t.dataset.history)}"`));}
  if(action==='complete-delete-confirm'){if(ctx.task?.complete||ctx.task?.cancelled||ctx.pending||ctx.historyDeletingId)return;if(t.dataset.history==='current'){ctx.messages=[];ctx.chatDraft='';ctx.chatFiles=[];ctx.quote=null;ctx.topicId=null;ctx.topicTitle='';ctx.topicUpdatedAt=null;}else ctx.histories=(ctx.histories||[]).filter(h=>h.id!==t.dataset.history);t.closest('dialog').close();render();}
  if(action==='complete-voice'){showVoiceStatus('recording');mapVoiceActions();}

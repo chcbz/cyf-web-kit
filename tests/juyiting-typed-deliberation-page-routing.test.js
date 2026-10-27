@@ -39,10 +39,25 @@ const option = (callee, name) => {
 const typedReceipt = (requestId = 'request-typed-1', turnId = 'turn-typed-1') => ({ schemaVersion: 3, intent: 'DISCUSSION', requestId, userMessageId: '100', turnIds: [turnId], state: 'ADMITTED', stateVersion: '0', eventCursor: '1', statusUrl: `/chat/requests/${requestId}`, typedOutcomeUrl: `/chat/conversations/7/requests/${requestId}/typed-outcome`, replay: false, pendingQuestionId: null })
 const typedRequest = (requestId = 'request-typed-1', turnId = 'turn-typed-1', { state = 'RUNNING', stateVersion = '0', turnState = 'RECEIVED', turnStateVersion = '0', finalMessageId = null } = {}) => ({ requestId, requestRevision: '1', stateVersion, conversationId: '7', conversationGeneration: '1', userMessageId: '100', state, turns: [{ turnId, requestId, requestRevision: '1', stateVersion: turnStateVersion, conversationId: '7', conversationGeneration: '1', targetAgentId: 'agent-1', state: turnState, lastDeltaSeq: '0', finalMessageId }] })
 describe('actual JuyiHall typed natural follow-up routing', () => {
+  it('routes bounty new-topic to durable creation without clearing the existing conversation', async () => {
+    const calls = []
+    const env = { isConversationBusy: ref(false), bountyTopic: { busy: ref(false), error: ref(''), open: async () => { calls.push('create-topic'); return true } },
+      chatMode: ref('bounty'), showToast: () => {}, playPanelOpen: () => {}, resetSceneFeedback: () => {},
+      newHallConversation: () => { throw new Error('must not clear task conversation') }, voiceReplyCorrelation: {}, hallVoice: null }
+    const actual = new Function(...Object.keys(env), `return (${handler('handleNewHallConversation')})`)(...Object.values(env))
+    expect(await actual()).to.equal(true); expect(calls).to.deep.equal(['create-topic'])
+    env.bountyTopic.busy.value = true
+    expect(await actual()).to.equal(false); expect(calls).to.deep.equal(['create-topic'])
+  })
+  it('does not send any message while a new topic is being confirmed', async () => {
+    const actual = new Function('bountyTopic', `return (${handler('handleSendHallMessage')})`)({ busy: ref(true) })
+    expect(await actual()).to.equal(false)
+  })
+
   it('routes the one bounty composer through typed DISCUSSION only when the strict default-off flag is enabled', async () => {
     const enabled = ref(true); const draft = ref('画一只鸟'); const calls = []; const typed = { error: ref(''), submit: async body => { calls.push(['typed', body]); return true } }
     const send = async () => { calls.push(['legacy']); return true }
-    const actual = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled', 'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', 'typedAssignmentRevision', 'bountyAssignmentContext', 'refreshCurrentConversationTask', 'conversationTask', `return (${handler('handleSendHallMessage')})`)({ close: () => {} }, { cancel: () => {} }, () => {}, enabled, typed, draft, value => calls.push(['draft', value]), () => {}, send, () => '4', { loading: ref(false), error: ref('') }, async () => true, ref(null))
+    const actual = new Function('bountyTopic', 'voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled', 'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', 'typedAssignmentRevision', 'bountyAssignmentContext', 'refreshCurrentConversationTask', 'conversationTask', `return (${handler('handleSendHallMessage')})`)({ busy: ref(false) }, { close: () => {} }, { cancel: () => {} }, () => {}, enabled, typed, draft, value => calls.push(['draft', value]), () => {}, send, () => '4', { loading: ref(false), error: ref('') }, async () => true, ref(null))
     expect(await actual()).to.equal(true)
     expect(calls).to.deep.equal([['typed', { content: '画一只鸟', sourceSelectors: [], materialScope: 'TASK_DEFAULT' }], ['draft', '']])
     enabled.value = false
@@ -56,11 +71,11 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
     for (const switchIdentity of [false, true]) {
       const calls = []; const identity = ref('owner-a'); const draft = ref('追加文字')
       const task = ref({ id: '423' }); let revision = ''
-      const actual = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled',
+      const actual = new Function('bountyTopic', 'voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled',
         'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', 'typedAssignmentRevision',
         'conversationTask', 'hallIdentityScope', 'apiStore', 'conversationId', 'bountyInteractionTargetId',
         'chatContext', 'bountyAssignmentContext', 'refreshCurrentConversationTask', `return (${handler('handleSendHallMessage')})`)(
-        { close() {} }, { cancel() {} }, () => {}, ref(true),
+        { busy: ref(false) },         { close() {} }, { cancel() {} }, () => {}, ref(true),
         { error: ref(''), submit: async () => { calls.push('POST'); return true } }, draft,
         () => {}, () => {}, () => { throw new Error('legacy lane forbidden') }, () => revision,
         task, identity, { authorizationGeneration: 1 }, ref('7'), () => 'agent-a', ref({}),
@@ -71,11 +86,11 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
   })
   it('does not send or clear the draft when authoritative assignment recovery fails', async () => {
     const calls = []; const draft = ref('识别这张图片')
-    const actual = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled',
+    const actual = new Function('bountyTopic', 'voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled',
       'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', 'typedAssignmentRevision',
       'conversationTask', 'hallIdentityScope', 'apiStore', 'conversationId', 'bountyInteractionTargetId',
       'chatContext', 'bountyAssignmentContext', 'refreshCurrentConversationTask', `return (${handler('handleSendHallMessage')})`)(
-      { close() {} }, { cancel() {} }, () => {}, ref(true),
+        { busy: ref(false) },       { close() {} }, { cancel() {} }, () => {}, ref(true),
       { error: ref(''), submit: async () => calls.push('POST') }, draft,
       () => calls.push('clear'), text => calls.push(text), () => calls.push('legacy'), () => '',
       ref({ id: '450' }), ref('owner'), { authorizationGeneration: 1 }, ref('7'), () => 'wuyong', ref({}),

@@ -1,3 +1,4 @@
+import { useHallBountyTopic, createHallBountyTopicAdopter } from '../src/composables/juyiting/useHallBountyTopic.js'
 import * as discussionTurnHelpers from '../src/composables/juyiting/hallDiscussionTurns.js'
 import { useHallSelectedOutputReview } from '../src/composables/juyiting/useHallSelectedOutputReview.js'
 import { selectionKey } from '../src/composables/juyiting/hallSelectedOutputs.js'
@@ -2806,7 +2807,7 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
   }
   const panelHelpers = counters.panelHelpers || {}
   return {
-    ...panelHelpers, useFormalTaskExecutionScope, ...ordinaryCancellation,
+    ...panelHelpers, useFormalTaskExecutionScope, ...ordinaryCancellation, useHallBountyTopic, createHallBountyTopicAdopter,
     Dialog: async () => 'cancel', saveOutputBlob: noop, completedTextItem: async () => null, OutputPreview: EmptyPanel,
     useOutputs: () => ({ items: Vue.ref([]), loading: Vue.ref(false), message: scalar, cacheKey: scalar, nextCursor: Vue.ref(null), refresh: asyncNoop, loadMore: asyncNoop, download: asyncNoop, preview: asyncNoop, dispose: noop }),
     useHallBountyAcceptance: () => ({ scope: Vue.ref(null), error: scalar, refresh: asyncNoop, catalog: { error: scalar, entries: Vue.ref([]) } }),
