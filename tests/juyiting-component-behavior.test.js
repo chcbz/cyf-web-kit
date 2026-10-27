@@ -2929,22 +2929,31 @@ describe('JuyiHall restored-identity initialization', () => {
 })
 
 describe('lightweight workbench real panel navigation', () => {
-  it('suppresses the focusable workbench dock while the root onboarding modal is visible', async () => {
-    const home = Vue.ref('overview')
-    const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
-    const mocks = createActualHallMocks({ mode: Vue.ref('portrait-command'), mounts: { library: 0, archive: 0 }, counters })
-    mocks.useHallHomeMode = () => ({ homeMode: home, isOverviewHome: Vue.computed(() => home.value === 'overview'), setHomeMode: mode => { home.value = mode } })
-    const wrapper = mount(loadActualJuyiHall(mocks), { props: { onboardingVisible: true }, attachTo: document.body, global: { stubs } })
-    try {
-      await flushPromises()
-      expect(wrapper.vm.$.setupState.showWorkbenchDock).to.equal(false)
-      expect(wrapper.find('.workbench-mobile-nav').attributes('style')).to.include('display: none')
-      await wrapper.setProps({ onboardingVisible: false })
-      await Vue.nextTick()
-      expect(wrapper.vm.$.setupState.showWorkbenchDock).to.equal(true)
-      expect(wrapper.find('.workbench-mobile-nav').attributes('style') || '').not.to.include('display: none')
-    } finally { wrapper.unmount() }
-  })
+  for (const mobile of [true, false]) {
+    it(`keeps real ${mobile ? 'mobile' : 'desktop'} navigation visible but inert during onboarding`, async () => {
+      const home = Vue.ref('overview')
+      const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
+      const mocks = createActualHallMocks({ mode: Vue.ref(mobile ? 'portrait-command' : 'landscape-map'), mounts: { library: 0, archive: 0 }, counters })
+      mocks.useHallHomeMode = () => ({ homeMode: home, isOverviewHome: Vue.computed(() => home.value === 'overview'), setHomeMode: mode => { home.value = mode } })
+      const experience = mocks.useHallExperienceMode
+      mocks.useHallExperienceMode = () => ({ ...experience(), isMobileCoarse: Vue.ref(mobile) })
+      const wrapper = mount(loadActualJuyiHall(mocks), { props: { onboardingVisible: true }, attachTo: document.body, global: { stubs } })
+      try {
+        await flushPromises()
+        expect(wrapper.vm.$.setupState.showWorkbenchDock).to.equal(true)
+        expect(wrapper.find('.workbench-mobile-nav').attributes('style') || '').not.to.include('display: none')
+        expect(wrapper.classes()).to.include('has-workbench-dock')
+        expect(wrapper.find('.workbench-mobile-nav').attributes('inert')).to.equal('')
+        expect(wrapper.find('.hall-workbench-sidebar').attributes('inert')).to.equal('')
+        await wrapper.setProps({ onboardingVisible: false })
+        await Vue.nextTick()
+        expect(wrapper.vm.$.setupState.showWorkbenchDock).to.equal(true)
+        expect(wrapper.find('.workbench-mobile-nav').attributes('style') || '').not.to.include('display: none')
+        expect(wrapper.find('.workbench-mobile-nav').attributes('inert')).to.equal(undefined)
+        expect(wrapper.find('.hall-workbench-sidebar').attributes('inert')).to.equal(undefined)
+      } finally { wrapper.unmount() }
+    })
+  }
   it('keeps overview request drafting root-owned while task drafting remains a nested return', async () => {
     const home = Vue.ref('overview')
     const counters = { panelHelpers: await import('../src/composables/juyiting/useHallPanels.js') }
