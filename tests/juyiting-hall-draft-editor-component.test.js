@@ -181,7 +181,7 @@ describe('JYT-UX-W03 HallDraftEditor boundary', () => {
     editorState.receipt.value = { ref: { sourceType: 'PRIVATE_CASE', sourceId: 'case-1' }, execution: { executionId: 'exec-1', targetAgentId: 'agent-1', state: 'OUTPUT_COMMITTED' }, task: null, submittedAt: 1 }
     editorState.caseView.value = { caseId: 'case-1', executions: [{ revisionNo: '1', execution: { executionId: 'exec-1', targetAgentId: 'agent-1', state: 'OUTPUT_COMMITTED' } }] }
     await Vue.nextTick()
-    expect(wrapper.text()).to.include('可查看已登记的固定版本成果')
+    expect(wrapper.text()).to.include('成果已保存，可以查看')
     await button(wrapper, '查看成果').trigger('click')
     await Vue.nextTick()
     expect(editorState.loadedResults).to.deep.equal(['exec-1'])
@@ -244,7 +244,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
       await settle()
       expect(calls.map(call => [call.method, call.url])).to.deep.equal([['GET', '/hall/drafts/draft-a']])
       expect(wrapper.find('textarea').element.value).to.equal('固定正文')
-      expect(wrapper.text()).to.include('r7')
+      expect(wrapper.text()).to.include('草稿已保存，尚未交办')
       expect(wrapper.find('input[type="checkbox"]').exists()).to.equal(false)
       expect(writes.every(([key]) => key === 'cyf.hall.submission-recovery.v1.browser')).to.equal(true)
       expect(JSON.stringify(entries())).not.to.match(/固定正文|已存名目|case-a|exec-a/)
@@ -281,7 +281,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
       await settle()
       expect(wrapper.find('textarea').exists()).to.equal(false)
       expect(wrapper.text()).to.include('等待执行')
-      expect(wrapper.find('.technical-details').exists()).to.equal(true)
+      expect(wrapper.find('.technical-details').exists()).to.equal(false)
       expect(wrapper.find('button[type="submit"]').exists()).to.equal(false)
       expect(calls.map(call => [call.method, call.url])).to.deep.equal([['GET', '/hall/cases/case-a']])
       expect(writes.every(([key]) => key === 'cyf.hall.submission-recovery.v1.browser')).to.equal(true)
@@ -295,7 +295,7 @@ describe('JYT-UX-W05 real editor source restoration', () => {
     try {
       await settle()
       expect(wrapper.text()).to.include('已有已归档输出')
-      expect(wrapper.text()).to.include('可查看已登记的固定版本成果')
+      expect(wrapper.text()).to.include('成果已保存，可以查看')
       expect(wrapper.find('button[type="submit"]').exists()).to.equal(false)
       expect(calls[0]).to.include({ method: 'GET', url: '/personal-workspace/executions/exec-old' })
       expect(calls[0]).not.to.have.property('params')
@@ -455,7 +455,8 @@ describe('JYT-UX-W05 real editor source restoration', () => {
     const wrapper = mount(component, { props: { ...base, initialRef: { sourceType: 'DRAFT', sourceId: 'formal-draft' } } })
     try {
       await settle()
-      expect(wrapper.text()).to.include('old-agent')
+      expect(wrapper.text()).not.to.include('old-agent')
+      expect(wrapper.text()).to.include('已原样保留')
       expect(wrapper.text()).to.include('application/pdf')
       expect(wrapper.get('.quick-material-summary').text()).to.include('old-filev7')
       expect(wrapper.find('select').exists()).to.equal(false)

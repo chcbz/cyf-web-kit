@@ -38,7 +38,7 @@ export const useHallRequirementCreate = ({ agentApi, actorScopeKey, identityEpoc
   const adopt = async (value, intent, c) => {
     if (!current(c)) return false
     const receipt = requirementReceiptForIntent(unwrap(value), intent)
-    if (!receipt) throw new Error('需求保存回执与原需求或精确资料不一致；请核对原操作，未另行创建。')
+    if (!receipt) throw new Error('暂时无法确认需求是否保存，请查询结果，勿重复创建事项。')
     const confirmed = persist({ ...intent, receipt }, c)
     if (!current(c)) return false
     state.value = { status: 'COMMITTED', intent: confirmed, error: null }
@@ -70,7 +70,7 @@ export const useHallRequirementCreate = ({ agentApi, actorScopeKey, identityEpoc
         const retained = storeFor(c.scope).read().record || intent
         state.value = { status: retained.receipt ? 'COMMITTED' : 'UNKNOWN', intent: retained,
           error: error?.status === 404 ? '原操作尚未查到；不代表没有受理。请核对原需求，再明确继续原需求保存操作。'
-            : error?.code === 'IDEMPOTENCY_CONFLICT' ? '原键与服务端需求不一致；请核对原请求，未使用新键重试。'
+            : error?.code === 'IDEMPOTENCY_CONFLICT' ? '需求内容已变化，请核对上次提交的内容，勿重复创建事项。'
               : '原需求保存操作结果未完成核对；请检查原请求，不要创建另一份事项。' }
       }
       return false

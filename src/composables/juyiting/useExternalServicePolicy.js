@@ -89,7 +89,7 @@ export const useExternalServicePolicy = ({ api, getAgent, identityScope, authori
     if (!current()) return false
     const value = externalPolicyProjection(raw, original.agentId)
     if (!value || value.enabled !== original.body.enabled || BigInt(value.revision) !== BigInt(original.body.expectedRevision) + 1n) {
-      throw new Error('原开关回执未核对；请继续查询原操作')
+      throw new Error('原开关回执未核对；请继续查询结果')
     }
     // Keep the original fixed receipt distinct from a newer current policy.
     receipt.value = value
@@ -129,7 +129,7 @@ export const useExternalServicePolicy = ({ api, getAgent, identityScope, authori
       const raw = await api.get(`${path()}/request`, undefined, options(signal, original))
       return await accept(raw, original, current, signal)
     } catch (cause) {
-      if (cause?.status === 404) throw new Error('原操作尚未查到，结果仍未知；只能继续原操作，不能另开操作')
+      if (cause?.status === 404) throw new Error('原操作尚未查到，结果仍未知；只能继续核对，不能另开操作')
       throw cause
     }
   })

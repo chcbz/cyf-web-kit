@@ -230,7 +230,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     expect(statusDuringPost).not.to.match(/Fast|read-only/i)
     expect(stateDuringPost).to.deep.equal({ submitting: true, streaming: false, awaiting: false, deliveries: 0 })
     expect(deliveries).to.have.length(0)
-    expect(conversation.deliberationStatus.value).to.equal('CHAT · 排队中')
+    expect(conversation.deliberationStatus.value).to.equal('排队中')
     conversation.disposeHallConversation()
   })
 
@@ -743,7 +743,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     conversation.messages.value.push({ sender: 'AGENT', turnId: 'other-turn', content: 'other', streaming: true })
     expect(await conversation.cancelDeliberation({ turnId: 'turn-a' })).to.equal(true)
     expect(posts).to.deep.equal([{ path: '/turns/turn-a/cancel', body: { expectedStateVersion: '0', expectedLastDeltaSeq: '0' } }])
-    expect(conversation.deliberationStatus.value).to.equal('CHAT · 已取消')
+    expect(conversation.deliberationStatus.value).to.equal('已取消')
     expect(conversation.messages.value.find(m => m.turnId === 'turn-a')).to.include({ streaming: false, content: 'partial', statusText: '已停止（未完成）' })
     expect(conversation.messages.value.find(m => m.turnId === 'other-turn').streaming).to.equal(true)
     expect(await conversation.cancelDeliberation({ turnId: 'turn-a' })).to.equal(true)

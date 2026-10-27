@@ -28,7 +28,7 @@ const persistedIntent = (storage, key) => {
     const entry = JSON.parse(storage.getItem(key) || 'null')
     if (!entry || !validIdempotencyKey(entry.idempotencyKey) ||
         (entry.operationId != null && entry.operationId !== '' && !ID(entry.operationId))) return null
-    return { state: 'unknown', message: '已找到先前的保存操作，请查询原操作，不要创建新的保存。',
+    return { state: 'unknown', message: '已找到先前的保存操作，请查询结果，不要创建新的保存。',
       busy: false, idempotencyKey: entry.idempotencyKey, operationId: entry.operationId || '' }
   } catch { return null }
 }
@@ -38,7 +38,7 @@ const storeIntent = (storage, key, intent) => {
 }
 const defaultIdempotencyKey = () => {
   const uuid = globalThis.crypto?.randomUUID?.()
-  if (!uuid) throw new Error('当前环境不能生成安全的幂等键，未发送保存请求。')
+  if (!uuid) throw new Error('当前浏览器暂时无法保存，本次未提交。')
   return `conversation-archive-${uuid}`
 }
 const validIdempotencyKey = value => typeof value === 'string' && /^[A-Za-z0-9._~:/+-]{8,160}$/.test(value)
@@ -67,12 +67,12 @@ const failure = error => {
   if (error?.name === 'AbortError') return ['idle', '']
   if (error?.status === 401 || error?.status === 403) return ['error', '当前身份已无保存权限，未确认保存。']
   // A 404 is deliberately not interpreted as proof that a previous write was not accepted.
-  if (error?.status === 404) return ['unknown', '服务端未返回可确认的保存状态；可能尚未启用或当前身份无权访问，未确认保存。']
-  if (error?.status === 409) return ['error', '保存幂等键或归档状态发生冲突，未自动重试。请刷新确认。']
+  if (error?.status === 404) return ['unknown', '暂时无法查询保存结果，请确认登录状态后重试。']
+  if (error?.status === 409) return ['error', '保存状态已变化，请先查询结果，勿重复保存。']
   if (error?.status === 422) return ['error', '该会话资产暂不支持保存到工作空间。']
   if (error?.status === 400) return ['error', '保存请求被拒绝；资产引用未被确认。']
-  if (error?.status === 503) return ['unknown', '保存服务暂不可用，未确认保存；请稍后查询原操作。']
-  if (error?.requestErrorClass === 'network' || error instanceof TypeError) return ['unknown', '网络结果不明确，未确认保存；请查询原操作，不要创建副本。']
+  if (error?.status === 503) return ['unknown', '保存服务暂不可用，未确认保存；请稍后查询结果。']
+  if (error?.requestErrorClass === 'network' || error instanceof TypeError) return ['unknown', '网络结果不明确，未确认保存；请查询结果，不要创建副本。']
   return ['error', error?.message || '保存未完成，尚不能确认已保存。']
 }
 
@@ -118,7 +118,7 @@ export function useHallConversationArchive ({ api = createApi('/chat'), conversa
       ? `服务端已保存到工作空间：文件 ${receipt.item.fileId} v${receipt.item.version}。`
       : receipt.state === 'partial_failed'
         ? (receipt.item.message || '保存仅部分完成；此项尚未保存。')
-        : '保存请求已受理，正在等待服务端确认。'
+        : '正在保存…'
     const next = { ...entry, state: receipt.state, message, busy: false, operationId: receipt.operationId, revision: receipt.revision, item: receipt.item }
     put(key, next)
     storeIntent(storage, intentKey(receipt.item), next)
@@ -129,12 +129,12 @@ export function useHallConversationArchive ({ api = createApi('/chat'), conversa
     if (!validPart(part) || !current.operationId || current.busy || !scopeKey.value) return null
     const snapshot = { generation, scopeKey: scopeKey.value }
     const key = keyFor(part)
-    const entry = { ...current, state: 'saving', busy: true, message: '正在查询服务端保存状态…' }
+    const entry = { ...current, state: 'saving', busy: true, message: '正在查询保存结果…' }
     put(key, entry)
     try {
       const raw = await request({ url: `/conversations/${encodeURIComponent(currentConversationId.value)}/archive-operations/${encodeURIComponent(current.operationId)}`, method: 'GET' }, snapshot)
       const receipt = operationReceipt(raw, part)
-      if (!receipt) throw new Error('保存状态回执格式无效，尚不能确认已保存。')
+      if (!receipt) throw new Error('暂时无法确认是否保存，请重新查询。')
       return updateFromReceipt(key, entry, receipt)
     } catch (error) {
       if (error?.name === 'AbortError' || snapshot.generation !== generation || snapshot.scopeKey !== scopeKey.value || disposed) return null
@@ -151,12 +151,12 @@ export function useHallConversationArchive ({ api = createApi('/chat'), conversa
     let idempotencyKey = current.idempotencyKey
     if (!idempotencyKey) {
       try { idempotencyKey = idempotencyKeyFactory() } catch (error) {
-        put(key, { ...current, state: 'error', message: error.message || '未生成幂等键，未发送保存请求。', busy: false, operationId: '' })
+        put(key, { ...current, state: 'error', message: error.message || '当前浏览器暂时无法保存，本次未提交。', busy: false, operationId: '' })
         return null
       }
     }
     if (!validIdempotencyKey(idempotencyKey)) {
-      put(key, { ...current, state: 'error', message: '生成的幂等键无效，未发送保存请求。', busy: false, operationId: '' })
+      put(key, { ...current, state: 'error', message: '当前浏览器暂时无法保存，本次未提交。', busy: false, operationId: '' })
       return null
     }
     const snapshot = { generation, scopeKey: scopeKey.value }
@@ -168,7 +168,7 @@ export function useHallConversationArchive ({ api = createApi('/chat'), conversa
     try {
       const raw = await request({ url: `/conversations/${encodeURIComponent(currentConversationId.value)}/archive-operations`, method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, data: body }, snapshot)
       const receipt = operationReceipt(raw, part)
-      if (!receipt) throw new Error('保存回执格式无效，尚不能确认已保存。')
+      if (!receipt) throw new Error('暂时无法确认是否保存，请重新查询。')
       const next = updateFromReceipt(key, entry, receipt)
       return next.state === 'saved' || next.state === 'partial_failed' ? next : check(part)
     } catch (error) {

@@ -8,8 +8,8 @@
         </div>
       </template>
       <div v-if="relevantStatus && status.intent && status.state !== 'completed'" class="termination-recovery">
-        <small>正在核对原请求 {{ status.intent.requestId }}，不会创建新的生成任务。</small>
-        <button type="button" :disabled="status.busy" @click="abandonment.check">查询原操作结果</button>
+        <small>正在核对结果，请勿重复提交。</small>
+        <button type="button" :disabled="status.busy" @click="abandonment.check">查询结果</button>
         <button type="button" :disabled="status.busy || status.state === 'recovery_error'" @click="abandonment.resume">继续原放弃操作</button>
       </div>
       <p v-if="relevantStatus && status.message" :role="status.state === 'completed' || status.busy ? 'status' : 'alert'">{{ status.message }}</p>

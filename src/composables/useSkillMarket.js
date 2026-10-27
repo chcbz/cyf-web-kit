@@ -176,7 +176,7 @@ export function useSkillMarket ({ agentApi = defaultAgentApi, enabled = true, ac
       await refresh()
       if (current(token) && next.status === 'SUCCEEDED') onChanged(next)
       return next
-    } catch { if (current(token)) queryUnknown.value = { ...queryUnknown.value, [skillKey]: '读取结果未确认，请核对原操作，不要再次购买。' }; return null }
+    } catch { if (current(token)) queryUnknown.value = { ...queryUnknown.value, [skillKey]: '读取结果未确认，请核对结果，不要再次购买。' }; return null }
     finally { controllers.delete(token.c) }
   }
   const prepare = (row, actionName) => {

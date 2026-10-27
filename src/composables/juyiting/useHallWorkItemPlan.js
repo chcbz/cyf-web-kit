@@ -121,7 +121,7 @@ export const useHallWorkItemPlan = ({ api = createApi('/agent'), enabled = false
       }))
       if (captured !== generation || taskId !== currentTask.value?.id || capturedActor !== actor.value ||
         capturedIdentityGeneration !== identityGeneration.value) return null
-      if (!matchingConfirmation(result, body, taskId)) throw new Error('服务确认回执与原计划不匹配')
+      if (!matchingConfirmation(result, body, taskId)) throw new Error('暂时无法确认计划是否提交，请查询结果。')
       confirmedItems.value = clone(result.items); state.value = 'confirmed'; message.value = '已确认创建未分配工作项；未自动点将或派发。'
       return result
     } catch (error) {

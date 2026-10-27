@@ -276,7 +276,8 @@ describe('C07 JuyiHall task workspace integration', () => {
       const panel = wrapper.findComponent(TaskWorkspacePanel)
       expect(wrapper.find('.panel-workspace-link').exists()).to.equal(true)
       expect(panel.exists()).to.equal(true)
-      expect(panel.find('dd[title="agent-77"]').text()).to.equal('agent-77')
+      expect(panel.props('actorAgentId')).to.equal('agent-77')
+      expect(panel.find('dd[title="agent-77"]').exists()).to.equal(false)
       expect(panel.find('.task-connection-badge').text()).to.equal('服务暂不可用')
       expect(panel.find('button.task-workspace-retry').exists()).to.equal(true)
 

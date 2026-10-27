@@ -76,7 +76,7 @@ describe('E08 work item board', () => {
   it('integrates the board into the existing read-only workspace and explicitly keeps unsupported actions unavailable', () => {
     expect(panelSource).to.include("import WorkItemBoard from './WorkItemBoard.vue'")
     expect(panelSource).to.include('<WorkItemBoard :workspace="workspace" />')
-    expect(boardSource).to.include('系统负责依赖解锁')
+    expect(boardSource).to.include('前置工作完成后，可继续后续工作')
     expect(boardSource).to.include('当前支持查看进度，协作操作暂未开放')
     expect(panelSource).to.include('<details v-if="workspace.workItems.length" class="task-work-item-details">')
     expect(panelSource).to.include('查看工作项详情（{{ workspace.workItems.length }} 项）')

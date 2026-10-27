@@ -191,16 +191,16 @@
                 >{{ market.busy[row.skillKey] ? '正在提交…' : mode === 'DISABLE' ? '确认停用' : '确认启用' }}</button></footer>
               </template>
               <template v-else-if="mode === 'progress'">
-                <div role="status"><p>{{ market.pending[row.skillKey]?.kind === 'QUOTE' ? '报价结果待核对；原键重放只恢复报价，不会自动安装。' : unknown(row) ? '结果尚未确认，只核对原操作，不重复提交。' : change(row) ? changeLabels[change(row).status] : '尚未收到操作标识，请原键核对。' }}</p><p v-if="change(row)?.reasonCode">{{ reasonLabels[change(row).reasonCode] }}</p></div>
+                <div role="status"><p>{{ market.pending[row.skillKey]?.kind === 'QUOTE' ? '报价结果待确认，请查询结果；不会自动安装。' : unknown(row) ? '结果尚未确认，只核对结果，不重复提交。' : change(row) ? changeLabels[change(row).status] : '结果待确认，请查询结果。' }}</p><p v-if="change(row)?.reasonCode">{{ reasonLabels[change(row).reasonCode] }}</p></div>
                 <ol v-if="change(row)" class="skill-progress" aria-label="当前操作阶段">
                   <li v-for="(step, index) in progressSteps(row)" :key="step" :class="{ current: progressIndex(row) === index, done: progressIndex(row) > index }"><span>{{ index + 1 }}</span><strong>{{ step }}</strong></li>
                 </ol>
                 <p v-if="change(row)?.status === 'WAITING_AGENT'" class="skill-note">{{ change(row).action === 'UNINSTALL' ? '已停止新调用，等待Agent连接后继续原卸载操作；无需重复提交。' : '原操作已接纳，等待Agent连接后继续；无需再次安装或购买。' }}</p>
-                <p v-else-if="change(row)?.status === 'FAILED_RETRYABLE'" class="skill-note">{{ change(row).action === 'UNINSTALL' ? '已确认卸载未完成；新调用保持关闭，可重试原操作。' : '已确认本次未生效，可重试原操作，不重新报价、不重复购买。' }}</p>
-                <p v-else-if="change(row)?.status === 'RECOVERY_REQUIRED'" class="skill-note">{{ change(row).action === 'UNINSTALL' ? '尚不能确认卸载结果，保留最近确认的安装信息；只核对原操作。' : '尚不能确认切换结果，不据此退款或判定失败；只核对原记录。' }}</p>
+                <p v-else-if="change(row)?.status === 'FAILED_RETRYABLE'" class="skill-note">{{ change(row).action === 'UNINSTALL' ? '已确认卸载未完成；新调用保持关闭，可重试。' : '已确认本次未生效，可重试，不重新报价、不重复购买。' }}</p>
+                <p v-else-if="change(row)?.status === 'RECOVERY_REQUIRED'" class="skill-note">{{ change(row).action === 'UNINSTALL' ? '尚不能确认卸载结果，保留最近确认的安装信息；只核对结果。' : '尚不能确认切换结果，不据此退款或判定失败；只核对原记录。' }}</p>
                 <p v-else-if="change(row)?.status === 'SUCCEEDED'" class="skill-note">{{ change(row).action === 'UNINSTALL' ? '已卸载；历史、成果和已购权益保留，可重新安装。' : change(row).runtimeSynced ? '该动作已完成；实际运行状态另行核验。' : '已关闭新调用，运行端设置仍待同步。' }}</p>
                 <p v-if="market.queryUnknown[row.skillKey]" class="skill-error" role="alert">{{ market.queryUnknown[row.skillKey] }}</p>
-                <details v-if="change(row)"><summary>原操作详情</summary><p>{{ change(row).skillChangeId }} · 第{{ change(row).attempt }}次尝试</p><p>{{ change(row).source?.skillVersion || '首次安装' }} → {{ change(row).target.skillVersion }}</p><p>资金：{{ fundingLabel(change(row).fundingStatus) }}<template v-if="change(row).price"> · {{ money(change(row).price) }}</template></p></details>
+                <details v-if="change(row)"><summary>操作详情</summary><p>第{{ change(row).attempt }}次尝试</p><p>{{ change(row).source?.skillVersion || '首次安装' }} → {{ change(row).target.skillVersion }}</p><p>资金：{{ fundingLabel(change(row).fundingStatus) }}<template v-if="change(row).price"> · {{ money(change(row).price) }}</template></p></details>
                 <footer class="skill-inline-footer">
                   <span>{{ agentName }} · {{ row.name }} · {{ change(row)?.target.skillVersion || row.candidate?.skillVersion }}</span>
                   <button
@@ -208,13 +208,13 @@
                     type="button"
                     :disabled="blocked(row)"
                     @click="market.checkOriginal(row.skillKey)"
-                  >查询原操作</button>
+                  >查询结果</button>
                   <button
                     v-if="market.pending[row.skillKey] && !market.pending[row.skillKey].accepted"
                     type="button"
                     :disabled="blocked(row)"
                     @click="resume(row.skillKey)"
-                  >继续原操作</button>
+                  >继续核对</button>
                   <button
                     v-if="market.pending[row.skillKey]?.kind === 'QUOTE'"
                     type="button"
@@ -227,14 +227,14 @@
                     type="button"
                     :disabled="blocked(row)"
                     @click="market.retry(row.skillKey)"
-                  >重试原操作</button>
+                  >重试</button>
                   <button
                     v-else-if="row.allowedActions.includes('RECONCILE')"
                     class="primary"
                     type="button"
                     :disabled="blocked(row)"
                     @click="market.reconcile(row.skillKey)"
-                  >核对原操作</button>
+                  >核对结果</button>
                 </footer>
               </template>
               <p v-for="denial in row.deniedActions" :key="denial.action" class="skill-note">{{ actionLabels[denial.action] }}：{{ reasonLabels[denial.reasonCode] }}</p>
@@ -247,17 +247,17 @@
           class="skill-error"
           role="status"
         >
-          <p>{{ record.skillKey }} 的原操作结果尚未确认。</p><button v-if="record.skillChangeId" type="button" @click="market.checkOriginal(record.skillKey)">查询原操作</button><button
+          <p>{{ record.skillKey }} 的原操作结果尚未确认。</p><button v-if="record.skillChangeId" type="button" @click="market.checkOriginal(record.skillKey)">查询结果</button><button
             v-if="!record.accepted"
             type="button"
             :disabled="market.busy[record.skillKey]"
             @click="resume(record.skillKey)"
-          >继续原操作</button>
+          >继续核对</button>
         </section>
         <details class="skill-records" @toggle="recordsToggled"><summary>操作记录<span v-if="market.changes.length"> · {{ market.changes.length }}</span></summary>
           <p v-if="market.recordsError" role="alert">{{ market.recordsError }}<button type="button" @click="market.refreshChanges">重读记录</button></p>
           <p v-else-if="!market.changes.length">暂无操作记录。</p>
-          <ol><li v-for="record in market.changes" :key="record.skillChangeId"><div><strong>{{ record.skillKey }} · {{ actionLabels[record.action] }} · {{ changeLabels[record.status] }}</strong><small>{{ dateTime(record.createdAt) }} · {{ record.actorLabel }}</small></div><p>{{ record.source?.skillVersion || '首次安装' }} → {{ record.target.skillVersion }}<template v-if="record.reasonCode"> · {{ reasonLabels[record.reasonCode] }}</template></p><small>{{ record.skillChangeId }}</small></li></ol>
+          <ol><li v-for="record in market.changes" :key="record.skillChangeId"><div><strong>{{ record.skillKey }} · {{ actionLabels[record.action] }} · {{ changeLabels[record.status] }}</strong><small>{{ dateTime(record.createdAt) }} · {{ record.actorLabel }}</small></div><p>{{ record.source?.skillVersion || '首次安装' }} → {{ record.target.skillVersion }}<template v-if="record.reasonCode"> · {{ reasonLabels[record.reasonCode] }}</template></p></li></ol>
         </details>
       </div>
     </component>
@@ -276,7 +276,7 @@ const agentName = computed(() => props.targetAgent?.name || props.targetAgent?.p
 const actionLabels = { INSTALL: '安装', UPGRADE: '升级', ENABLE: '启用', DISABLE: '停用', UNINSTALL: '卸载', RETRY: '重试', RECONCILE: '核对' }
 const modeTitle = computed(() => ({ detail: '技能详情', progress: '操作进度', INSTALL: '确认安装', UPGRADE: '确认升级', ENABLE: '启用新调用', DISABLE: '停用新调用', UNINSTALL: '卸载技能' })[mode.value])
 const changeLabels = SKILL_CHANGE_LABELS; const reasonLabels = SKILL_REASON_LABELS; const runtimeLabels = SKILL_RUNTIME_LABELS; const money = formatSkillMoney
-const progressSteps = row => change(row)?.action === 'UNINSTALL' ? ['停止新调用', '移除技能入口', '核对卸载结果'] : ['后台接纳', '下载与校验', '安全切换', '回执与运行核验']
+const progressSteps = row => change(row)?.action === 'UNINSTALL' ? ['停止新调用', '移除技能入口', '核对卸载结果'] : ['后台接纳', '下载与校验', '安全切换', '确认安装结果']
 const progressIndex = row => change(row)?.action === 'UNINSTALL' ? ({ ACCEPTED: 0, WAITING_AGENT: 1, ACTIVATING: 1, VERIFYING: 2, SUCCEEDED: 3 })[change(row)?.status] ?? -1 : ({ ACCEPTED: 0, WAITING_AGENT: 0, PREPARING: 1, PREPARED: 1, ACTIVATING: 2, VERIFYING: 3, SUCCEEDED: 4 })[change(row)?.status] ?? -1
 const dateTime = at => new Date(at).toLocaleString('zh-CN', { hour12: false })
 const fundingLabel = status => ({ NONE: '无资金冻结', HELD: '资金保留', CAPTURED: '已结算', REFUNDED: '已退款' })[status]

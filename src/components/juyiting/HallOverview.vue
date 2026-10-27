@@ -46,7 +46,7 @@
       <article v-for="item in rowsFor(view)" :key="`${item.ref.sourceType}:${item.ref.sourceId}`" class="overview-item">
         <div class="overview-item-copy"><div class="overview-item-title"><strong>{{ item.title || '未命名事项' }}</strong><span class="overview-status">{{ statusText(item) }}</span></div>
           <p>{{ typeLabels[item.ref.sourceType] }} · {{ agentLabel(item) }}<span v-if="item.personalMark?.archived"> · 已归档</span></p>
-          <details class="overview-technical"><summary>事项信息</summary><small>状态核对于 {{ formatTime(item.status.observedAt) }}</small><small v-if="item.targetAgent">好汉标识：{{ item.targetAgent.agentId }}</small></details>
+          <details class="overview-technical"><summary>事项信息</summary><small>状态核对于 {{ formatTime(item.status.observedAt) }}</small></details>
         </div>
         <button v-if="canOpenHallItem(item)" type="button" :disabled="Boolean(model.openingRef.value)" @click="openItem(item)">{{ nextLabel(item) }}</button><span v-else>暂时无法打开此事项</span>
       </article>

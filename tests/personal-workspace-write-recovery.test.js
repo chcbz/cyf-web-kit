@@ -16,9 +16,9 @@ describe('workspace write recovery presentation', () => {
   it('labels retry as a write retry, disables in-flight retry and discloses page lifetime', async () => {
     const wrapper = mount(component, { props: { pending: [{ target: 'original', label: '重命名', state: 'UNKNOWN' }] } })
     try {
-      assert.match(wrapper.text(), /提交结果尚未确认/)
+      assert.match(wrapper.text(), /结果尚未确认/)
       assert.match(wrapper.text(), /刷新后将无法在此继续恢复/)
-      assert.equal(wrapper.get('button').text(), '继续原操作')
+      assert.equal(wrapper.get('button').text(), '继续核对')
       await wrapper.get('button').trigger('click')
       assert.deepEqual(wrapper.emitted('retry'), [['original']])
       await wrapper.setProps({ pending: [{ target: 'original', label: '重命名', state: 'SENDING' }] })

@@ -177,7 +177,9 @@ describe('economy readonly preview UI behavior', () => {
       vue: Vue, '@/stores/global.js': { useGlobalStore: () => ({ setTitle: () => {}, setShowBack: () => {}, setShowMore: () => {} }) }, '@/utils/silverAmount.js': { formatSilverMoney: value => `${value.amountMinor} SILVER` }, '@/composables/useEconomyReadOnlyPreview.js': { useEconomyReadOnlyPreview: () => state }
     })
     const wrapper = mount(Component); wrappers.push(wrapper); await flushPromises()
-    expect(wrapper.text()).to.include('i-1 · read@1 · 已验证安装（ACK）')
+    expect(wrapper.text()).to.include('read@1 · 已验证安装')
+    expect(wrapper.text()).not.to.include('i-1')
+    expect(wrapper.text()).not.to.include('（ACK）')
     expect(wrapper.text()).to.include('未配置参考方案')
     expect(wrapper.text()).to.include('0 SILVER')
   })

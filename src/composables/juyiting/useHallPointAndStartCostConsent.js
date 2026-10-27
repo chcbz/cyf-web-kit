@@ -42,7 +42,7 @@ export const useHallPointAndStartCostConsent = ({ agentApi, actorScopeKey, stora
   const getOriginal = async intent => unwrap(await agentApi.get(requestPath(intent.taskId), undefined, options(intent.providerConsent.issueKey)))
   const accept = (intent, value, firstIssue = false) => {
     const receipt = providerConsentReceipt(value, intent, intent.providerConsent.receipt)
-    if (!receipt || firstIssue && receipt.state !== 'ISSUED') throw new Error('费用同意回执不匹配、越级或版本回退；保留原键核对')
+    if (!receipt || firstIssue && receipt.state !== 'ISSUED') throw new Error('费用状态已变化，请查询结果，勿重复提交。')
     return { ...intent, providerConsent: { ...intent.providerConsent, receipt } }
   }
   const readReceipt = async (intent, captured, epoch, capturedContext) => {

@@ -66,11 +66,11 @@ export function useFormalTaskExecutionScope ({
     else if (!matchingBountyDiscussion) authorizationReason = '请先进入本榜文的正式议事并确认唯一已指派好汉；不会使用其他榜文或私人会话。'
     else if (!confirmedConversationId) authorizationReason = '本榜文正式议事尚未返回已确认 conversationId；请完成议事后重试。'
     else if (!workspaceEnabled) authorizationReason = '协作工作台功能未启用，无法核对本榜文的必需工作项。'
-    else if (!subjectMatches) authorizationReason = '请在本榜文中明确选择已指派好汉并等待该榜文协作工作台快照；不会切换或推定承办人。'
+    else if (!subjectMatches) authorizationReason = '请先选择本事项的承办好汉，并等待事项信息加载完成。'
     else if (!workspaceAvailable) authorizationReason = valueOf(taskWorkspaceError)?.status === 503
       ? '本榜文协作工作台当前返回 503，未核对必需工作项，不能开始正式办理。'
       : '本榜文协作工作台尚未可用，未核对必需工作项，不能开始正式办理。'
-    else if (!workspaceMatches) authorizationReason = '协作工作台快照不属于当前榜文或已指派好汉，不能授权正式执行。'
+    else if (!workspaceMatches) authorizationReason = '事项或承办信息已变化，请重新加载后再办理。'
     else if (readyRequiredItems.length === 0) authorizationReason = '当前榜文没有可由该已指派好汉领取的 ready 必需工作项，不能开始正式办理。'
     else if (readyRequiredItems.length !== 1) authorizationReason = '当前榜文存在多个匹配的 ready 必需工作项，无法任意选择一个开始正式办理。'
 

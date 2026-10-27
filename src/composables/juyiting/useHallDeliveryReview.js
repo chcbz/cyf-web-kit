@@ -75,7 +75,7 @@ export function useHallDeliveryReview ({ api = createApi('/agent'), taskId, iden
       await refresh()
       return current(version, c) ? receipt : null
     } catch (cause) {
-      if (current(version, c)) operation.value = { ...operation.value, state: 'UNKNOWN', message: cause.message || '尚未确认结果；请查询原操作，不要重复创建。' }
+      if (current(version, c)) operation.value = { ...operation.value, state: 'UNKNOWN', message: cause.message || '尚未确认结果；请查询结果，不要重复创建。' }
       return null
     } finally { controllers.delete(c); if (current(version, c)) operation.value = { ...operation.value, busy: false } }
   }

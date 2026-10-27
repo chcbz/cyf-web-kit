@@ -53,8 +53,9 @@ describe('unified generic point detail replaces drawing-specific confirmation', 
       wrapper.vm.openTask(task('task-a')); await Vue.nextTick()
       expect(wrapper.get('.matter-send-details').element.open).to.equal(false)
       const text = wrapper.find('.matter-send-status').text()
-      for (const file of ['image', 'document', 'audio', 'text']) expect(text).to.include(`${file} v2`)
-      expect(text).to.include('agent-a'); expect(text).not.to.include('INPUT'); expect(text).not.to.include('GENERATE_IMAGE')
+      expect(text).to.include('4 份资料')
+      for (const file of ['image', 'document', 'audio', 'text']) expect(text).not.to.include(`${file} v2`)
+      expect(text).to.include('吴用'); expect(text).not.to.include('agent-a'); expect(text).not.to.include('INPUT'); expect(text).not.to.include('GENERATE_IMAGE')
       await wrapper.find('.matter-send-actions button').trigger('click')
       expect(wrapper.emitted('check-point-and-start')[0][0].id).to.equal('task-a')
     } finally { wrapper.unmount() }

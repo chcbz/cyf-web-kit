@@ -3,7 +3,7 @@
     <header>
       <p class="eyebrow">开发预览</p>
       <h2 id="wallet-title">SILVER 钱袋</h2>
-      <p>余额和流水仅在服务端经济预览能力开启后显示。</p>
+      <p>查看余额和收支记录。</p>
     </header>
 
     <section v-if="!previewBuildEnabled" class="wallet-state" role="status">
@@ -69,7 +69,7 @@ const loadWallet = async () => {
   error.value = ''
   try {
     if (!isEconomyPreviewCapability(await loadEconomyPreviewCapability())) {
-      throw new Error('经济预览能力当前未由服务端启用')
+      throw new Error('钱包暂未开放')
     }
     const [walletResult, ledgerResult] = await Promise.all([
       economyApi.get('/wallet', undefined, { autoLoading: false }),

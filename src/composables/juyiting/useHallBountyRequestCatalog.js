@@ -33,7 +33,7 @@ export const useHallBountyRequestCatalog = ({ chatApi, enabled = () => false, id
           if (through != null && page.through !== through) throw new Error('悬赏成果索引分页边界不一致')
           through = page.through; expectedGeneration = page.scope.conversationGeneration
           const nextMerged = mergeCatalogEntries(merged, page)
-          if (!nextMerged) throw new Error('悬赏成果索引回执冲突')
+          if (!nextMerged) throw new Error('成果列表已变化，请重新加载。')
           merged = nextMerged; after = page.nextAfter || page.through; next = page.hasMore
         }
         if (!current(captured)) return false

@@ -176,7 +176,7 @@ const list = async () => {
         const data = response
         const normalized = outputCatalogItems(data, step.requestId, step.stepId)
         if (Array.isArray(data) && normalized.length === data.length) catalog.push(...normalized)
-        else if (Array.isArray(data) && data.length) throw new Error('服务端成果目录格式不可信')
+        else if (Array.isArray(data) && data.length) throw new Error('暂时无法读取成果列表，请重新加载。')
       } catch (cause) { if (controller.signal.aborted) return; if (cause?.response?.status !== 404 && cause?.status !== 404) throw cause }
     }
     if (generation !== epoch || controller.signal.aborted) return
@@ -201,7 +201,7 @@ const bytes = async item => {
   try {
     const response = await api.execute({ url: item.previewUrl.replace(/^\/chat/, ''), method: 'GET', responseType: 'blob', autoLoading: false, needAuth: true, signal: controller.signal })
     if (controller.signal.aborted || generation !== epoch) return null
-    if (!(response instanceof Blob)) throw new Error('服务端未返回可读取的成果字节。')
+    if (!(response instanceof Blob)) throw new Error('暂时无法读取成果内容，请重试。')
     const blob = response
     if (String(blob.size) !== item.byteLength) throw new Error('成果字节长度与清单不一致，已拒绝使用。')
     if (await sha256Blob(blob) !== item.sha256) throw new Error('成果摘要校验失败，已拒绝使用。')

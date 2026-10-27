@@ -127,7 +127,7 @@ describe('E03 manual work item plan client', () => {
     plan.objective.value = '目标'
     await plan.suggest(); await plan.confirm()
     expect(plan.confirmedItems.value).to.deep.equal([])
-    expect(plan.message.value).to.include('回执与原计划不匹配')
+    expect(plan.message.value).to.include('暂时无法确认计划是否提交')
   })
 
   it('clears an old suggestion before a failed refresh so it cannot be confirmed', async () => {

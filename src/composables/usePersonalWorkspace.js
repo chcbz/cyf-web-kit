@@ -56,7 +56,7 @@ const errorMessage = error => {
   if (error?.code === 'FILE_TYPE_UNSUPPORTED' || error?.status === 415) return '文件可保存，但当前操作暂不支持此格式。'
   if (error?.code === 'METADATA_CHANGED' || error?.status === 412) return '文件或关联情况已变化，请查看更新后的信息再确认。'
   if (error?.code === 'FILE_VERSION_CONFLICT' || error?.status === 409) return '文件版本已变化，请刷新后明确选择要追加的版本。'
-  if (error?.code === 'OPERATION_PROCESSING' || error?.status === 202) return '上一次操作仍在处理中，请点击“重试原操作”核对结果，不要重复新建。'
+  if (error?.code === 'OPERATION_PROCESSING' || error?.status === 202) return '上一次操作仍在处理中，请点击“重试”核对结果，不要重复新建。'
   if (error?.status === 503) return '工作空间存储暂不可用，请稍后重试。'
   return error?.message || '工作空间请求未完成，请刷新确认。'
 }
@@ -294,12 +294,12 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     if (!ownsView(snapshot)) return
     const pending = select(fileId)
     const readView = captureView()
-    writeNotice.value = `${label}已保存。`
+    writeNotice.value = ''
     detailRetryFileId.value = fileId
     const result = await pending
     if (!ownsView(readView)) return
     if (result) { detailRetryFileId.value = null; actionState.value = 'ready' }
-    else { writeNotice.value = `${label}已保存，但详情读取失败；请重读详情，不要重复提交。`; actionState.value = 'ready' }
+    else { writeNotice.value = `${label}已保存，但详情读取失败；请重新加载，不要重复提交。`; actionState.value = 'ready' }
   }
   const retryDetail = async () => {
     const fileId = detailRetryFileId.value
@@ -310,8 +310,8 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     writeNotice.value = '文件已保存，正在重新读取详情。'
     const result = await pending
     if (!ownsView(snapshot)) return null
-    if (result) { detailRetryFileId.value = null; writeNotice.value = '已保存，详情已重新读取。' }
-    else writeNotice.value = '文件已保存，但详情读取失败；请重读详情，不要重复提交。'
+    if (result) { detailRetryFileId.value = null; writeNotice.value = '' }
+    else writeNotice.value = '文件已保存，但详情读取失败；请重新加载，不要重复提交。'
     return result
   }
   const normalizedFile = candidate => {
@@ -346,7 +346,7 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
           if (name) body.append('displayName', name)
           const { data } = await request({ url: '/personal-workspace/files', method: 'POST', data: body,
             headers: { 'Idempotency-Key': key } }, snapshot)
-          if (!data?.operation || data.operation.state !== 'COMMITTED' || !validFileView(data.file) || !validVersion(data.version) || data.version.fileId !== data.file.fileId) throw new Error('上传回执无效，尚不能确认保存。')
+          if (!data?.operation || data.operation.state !== 'COMMITTED' || !validFileView(data.file) || !validVersion(data.version) || data.version.fileId !== data.file.fileId) throw new Error('暂时无法确认是否上传成功，请查询结果，勿重复上传。')
           return data
         },
         committed: async data => {
@@ -376,7 +376,7 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
           body.append('expectedPreviousVersion', file.latestVersion)
           const { data } = await request({ url: `/personal-workspace/files/${encodeURIComponent(file.fileId)}/versions`, method: 'POST', data: body,
             headers: { 'Idempotency-Key': key } }, snapshot)
-          if (!data?.operation || data.operation.state !== 'COMMITTED' || !validFileView(data.file) || !validVersion(data.version) || data.file.fileId !== file.fileId || data.version.fileId !== file.fileId || BigInt(data.version.version) !== BigInt(file.latestVersion) + 1n) throw new Error('版本追加回执无效，尚不能确认保存。')
+          if (!data?.operation || data.operation.state !== 'COMMITTED' || !validFileView(data.file) || !validVersion(data.version) || data.file.fileId !== file.fileId || data.version.fileId !== file.fileId || BigInt(data.version.version) !== BigInt(file.latestVersion) + 1n) throw new Error('暂时无法确认新版本是否保存，请查询结果，勿重复上传。')
           return data
         },
         committed: async data => {
@@ -405,7 +405,7 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
           if (ownsView(snapshot)) error.value = ''
           try {
             const { data } = await request({ url: path, method, data: payload, headers: { 'Idempotency-Key': key, 'If-Match': ifMatch } }, snapshot)
-            if (!validFileView(data) || data.fileId !== file.fileId) throw new Error('文件操作回执无效，尚不能确认保存。')
+            if (!validFileView(data) || data.fileId !== file.fileId) throw new Error('暂时无法确认是否保存，请查询结果，勿重复提交。')
             return data
           } catch (cause) {
             if (cause?.status === 412 && ownsView(snapshot)) confirmationStale.value = true
@@ -417,7 +417,7 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
           if (ownsView(snapshot)) {
             detail.value = { ...detail.value, file: data, etag: workspaceRevisionTag(data.fileId, data.metadataRevision) }
             actionState.value = 'ready'
-            writeNotice.value = '原操作已提交，已读取当前文件状态。'
+            writeNotice.value = ''
           }
         }
       })
@@ -573,7 +573,7 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
     const snapshot = { generation, epoch: currentEpoch.value }
     try {
       const { data } = await request({ url: `/personal-workspace/operations/${encodeURIComponent(operationId)}`, method: 'GET' }, snapshot)
-      if (!data || !ID(data.operationId) || !TEXT(data.state, 32)) throw new Error('操作回执返回无效。')
+      if (!data || !ID(data.operationId) || !TEXT(data.state, 32)) throw new Error('暂时无法确认操作结果，请重新查询。')
       lastOperation.value = data
       return data
     } catch (cause) {

@@ -95,7 +95,7 @@ export const useHallBackendSceneState = ({
       onSnapshot(published)
       return published
     } catch (error) {
-      snapshotError.value = error?.message || '聚义厅场景快照暂无法读取'
+      snapshotError.value = error?.message || '暂时无法加载场景，请重试。'
       throw error
     } finally {
       snapshotLoading.value = false

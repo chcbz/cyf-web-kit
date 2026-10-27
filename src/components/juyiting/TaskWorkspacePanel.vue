@@ -3,12 +3,12 @@
     <header class="task-workspace-header">
       <div class="task-workspace-heading">
         <span class="task-workspace-eyebrow">任务协作工作台</span>
-        <h2 id="task-workspace-heading" :title="task?.taskId || '未选择任务'">{{ task?.taskId || '未选择任务' }}</h2>
+        <h2 id="task-workspace-heading" >{{ task?.title || '任务协作' }}</h2>
       </div>
       <span class="task-connection-badge" :class="`is-${connectionState}`">{{ connectionLabel }}</span>
     </header>
 
-    <p class="task-connection-message" role="status" aria-live="polite">{{ connectionMessage }}</p>
+    <p v-if="connectionMessage" class="task-connection-message" role="status" aria-live="polite">{{ connectionMessage }}</p>
     <p v-if="connectionState === 'error'" class="task-workspace-error" role="alert">{{ errorMessage }}</p>
     <button
       v-if="canRetry"
@@ -25,29 +25,23 @@
       <section class="task-workspace-summary" aria-labelledby="task-workspace-summary-heading">
         <div class="task-section-heading">
           <h3 id="task-workspace-summary-heading">任务摘要</h3>
-          <span class="task-status" :title="task.status">{{ task.status }}</span>
+          <span class="task-status">{{ statusText(task.status) }}</span>
         </div>
         <dl class="task-summary-grid">
-          <div>
-            <dt>当前版本</dt>
-            <dd :title="workspace.currentVersion">{{ workspace.currentVersion }}</dd>
-          </div>
+
           <div>
             <dt>协作方式</dt>
-            <dd>{{ task.collaborationMode }}</dd>
+            <dd>{{ ({ solo: '独立办理', team: '团队协作', sequential: '依次办理', parallel: '并行办理' })[String(task.collaborationMode).toLowerCase()] || '待确认' }}</dd>
           </div>
           <div>
             <dt>风险</dt>
-            <dd>{{ task.riskLevel }}</dd>
+            <dd>{{ ({ low: '低', medium: '中', high: '高' })[String(task.riskLevel).toLowerCase()] || '待确认' }}</dd>
           </div>
           <div>
             <dt>最大成员</dt>
             <dd>{{ task.maxAgents }}</dd>
           </div>
-          <div>
-            <dt>当前查看者</dt>
-            <dd :title="actorAgentId || '未明确选择'">{{ actorAgentId || '未明确选择' }}</dd>
-          </div>
+
         </dl>
         <div class="task-abilities" aria-label="所需本领">
           <span v-if="requiredAbilitiesPresentation.kind === 'empty'" class="task-muted">未声明所需本领</span>
@@ -71,11 +65,10 @@
         </div>
         <p v-if="!workspace.members.length" class="task-empty-state">暂未载入成员。</p>
         <ul v-else class="task-data-list" aria-label="协作成员">
-          <li v-for="member in workspace.members" :key="member.agentId" class="task-data-row">
-            <strong :title="member.agentId">{{ member.agentId }}</strong>
-            <span>{{ member.role }}</span>
-            <span>{{ member.status }}</span>
-            <span>{{ member.assignmentSource }}</span>
+          <li v-for="(member, index) in workspace.members" :key="member.agentId" class="task-data-row">
+            <strong>{{ member.name || member.personaName || `成员 ${index + 1}` }}</strong>
+            <span>{{ roleText(member.role) }}</span>
+            <span>{{ statusText(member.status) }}</span>
           </li>
         </ul>
       </section>
@@ -92,12 +85,12 @@
             <li v-for="item in workspace.workItems" :key="item.workItemId" class="task-work-card">
               <div class="task-card-heading">
                 <strong :title="item.title">{{ item.title }}</strong>
-                <span class="task-status" :title="item.status">{{ item.status }}</span>
+                <span class="task-status">{{ statusText(item.status) }}</span>
               </div>
               <p>{{ item.description || '未提供工作项说明。' }}</p>
               <dl class="task-card-meta">
-                <div><dt>类型</dt><dd :title="item.workType">{{ item.workType }}</dd></div>
-                <div><dt>承办</dt><dd :title="item.assigneeAgentId || '未指派'">{{ item.assigneeAgentId || '未指派' }}</dd></div>
+                <div><dt>类型</dt><dd>{{ ({ analysis: '分析', implementation: '制作', verification: '验证', review: '复核', coordination: '协调', documentation: '文档' })[item.workType] || '其他' }}</dd></div>
+                <div><dt>承办</dt><dd>{{ assigneeName(item.assigneeAgentId) }}</dd></div>
                 <div><dt>进度</dt><dd>{{ item.attemptCount }} / {{ item.maxAttempts }}</dd></div>
                 <div><dt>必要</dt><dd>{{ item.requiredItem ? '是' : '否' }}</dd></div>
               </dl>
@@ -116,10 +109,9 @@
           <li v-for="request in workspace.openRequests" :key="request.requestId" class="task-work-card">
             <div class="task-card-heading">
               <strong :title="request.title">{{ request.title }}</strong>
-              <span class="task-status" :title="request.status">{{ request.status }}</span>
+              <span class="task-status">{{ statusText(request.status) }}</span>
             </div>
             <p>{{ request.description || '未提供诉求说明。' }}</p>
-            <span :title="`${request.requestType} · ${request.targetType}:${request.targetId}`">{{ request.requestType }} · {{ request.targetType }}:{{ request.targetId }}</span>
           </li>
         </ul>
       </section>
@@ -133,16 +125,15 @@
         <ul v-else class="task-data-list" aria-label="最近成果">
           <li v-for="artifact in workspace.recentArtifacts" :key="`${artifact.artifactId}:${artifact.artifactVersion}`" class="task-data-row">
             <strong :title="artifact.title">{{ artifact.title }}</strong>
-            <span>{{ artifact.artifactType }}</span>
-            <span>{{ artifact.visibility }}</span>
-            <span :title="artifact.producerAgentId">{{ artifact.producerAgentId }}</span>
+            <span>{{ ({ document: '文档', file: '文件', text: '文字', image: '图片' })[String(artifact.artifactType).toLowerCase()] || '成果' }}</span>
+            <span>{{ ({ public: '公开', private: '私有', team: '团队可见', task: '本事项可见' })[String(artifact.visibility).toLowerCase()] || '可见范围待确认' }}</span>
           </li>
         </ul>
       </section>
 
       <section class="task-workspace-section" aria-labelledby="task-conversation-heading">
         <h3 id="task-conversation-heading">关联会话</h3>
-        <p v-if="workspace.conversationId" class="task-conversation-association" :title="workspace.conversationId">已关联现有会话：{{ workspace.conversationId }}</p>
+        <p v-if="workspace.conversationId" class="task-conversation-association">已关联议事记录</p>
         <p v-else class="task-empty-state">当前任务没有关联会话。</p>
       </section>
 
@@ -243,25 +234,28 @@ const requiredAbilitiesPresentation = computed(() => parseRequiredAbilities(task
 const connectionLabels = {
   idle: '等待选择',
   loading: '正在载入',
-  snapshot_ready: '快照已核对',
+  snapshot_ready: '已加载',
   live: '实时同步',
   reconnecting: '正在恢复',
   degraded: '服务暂不可用',
   resyncing: '正在校准',
   error: '无法访问'
 }
+const statusText = value => ({ pending: '待处理', open: '待办理', ready: '可办理', claimed: '已领取', running: '办理中', active: '参与中', blocked: '暂时受阻', submitted: '待验收', completed: '已完成', failed: '失败', cancelled: '已取消', accepted: '已接受', resolved: '已解决', rejected: '已拒绝', left: '已退出' })[String(value).toLowerCase()] || '状态待确认'
+const roleText = value => ({ coordinator: '协调', producer: '承办', reviewer: '复核', member: '成员' })[String(value).toLowerCase()] || '成员'
+const assigneeName = id => { const i = props.workspace.members.findIndex(member => member.agentId === id); return i < 0 ? (id ? '承办信息待确认' : '未指派') : (props.workspace.members[i].name || props.workspace.members[i].personaName || `成员 ${i + 1}`) }
 const connectionMessages = {
-  idle: '尚未开始读取协作状态。',
-  loading: '正在读取任务协作快照。',
-  snapshot_ready: '已核对当前任务快照，正在等待实时连接；提交操作时仍由服务端核验权限与工作项版本。',
-  live: '协作状态正在实时同步。',
-  reconnecting: '连接中断，正在按既有恢复策略重新连接。',
+  idle: '',
+  loading: '正在加载…',
+  snapshot_ready: '正在连接…',
+  live: '',
+  reconnecting: '连接中断，正在重连…',
   degraded: '协作服务暂不可用，稍后可手动重新载入。',
-  resyncing: '正在重新校准协作快照。',
+  resyncing: '正在更新…',
   error: '当前选择无法读取协作状态。'
 }
 const connectionLabel = computed(() => connectionLabels[props.connectionState] || '状态未知')
-const connectionMessage = computed(() => connectionMessages[props.connectionState] || '协作状态未知。')
+const connectionMessage = computed(() => connectionMessages[props.connectionState] ?? '协作状态未知。')
 const errorMessage = computed(() => props.error?.message || '当前选择无权查看此协作工作台。')
 const canRetry = computed(() => ['degraded', 'error'].includes(props.connectionState))
 </script>

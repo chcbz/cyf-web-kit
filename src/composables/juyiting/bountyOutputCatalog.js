@@ -146,7 +146,7 @@ export async function completedTextItem (raw, request, turn, taskId) {
   const value = typedOutcomeProjection(raw, { conversationId: request.conversationId,
     conversationGeneration: request.conversationGeneration, requestId: request.requestId,
     requestRevision: request.requestRevision, turnId: turn.turnId, taskId })
-  if (!value) throw new Error('文字成果来源回执不匹配。')
+  if (!value) throw new Error('暂时无法确认文字成果，请重新加载。')
   if (value.schemaVersion !== 6 || value.state !== 'READY' || value.outcome?.deliverable !== true) return null
   const source = value.outcome.messageSource
   if (request.state !== 'COMPLETED' || turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state) ||
@@ -154,7 +154,7 @@ export async function completedTextItem (raw, request, turn, taskId) {
     turn.requestId !== request.requestId || turn.requestRevision !== request.requestRevision ||
     turn.conversationId !== request.conversationId || turn.conversationGeneration !== request.conversationGeneration ||
     !exactOutputId(taskId) || value.outcome.taskId !== taskId ||
-    ![request.requestId, source.turnId, source.snapshotId].every(exactOutputId)) throw new Error('文字成果与原消息快照不一致。')
+    ![request.requestId, source.turnId, source.snapshotId].every(exactOutputId)) throw new Error('文字成果与当前消息不一致，请重新加载。')
   const bytes = new TextEncoder().encode(value.outcome.text)
   const sha256 = Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes)), byte => byte.toString(16).padStart(2, '0')).join('')
   return Object.freeze({ requestId: request.requestId, outcomeId: value.outcome.outcomeId,
@@ -212,7 +212,7 @@ export function completedExecutionDelivery (raw, request, turn, snapshots, taskI
   const value = typedOutcomeProjection(raw, { conversationId: request.conversationId,
     conversationGeneration: request.conversationGeneration, requestId: request.requestId,
     requestRevision: request.requestRevision, turnId: turn.turnId, taskId })
-  if (!value) throw new Error('媒体交付来源回执不匹配。')
+  if (!value) throw new Error('暂时无法确认成果，请重新加载。')
   if (value.schemaVersion !== 6 || value.state !== 'READY' || value.outcome?.kind !== 'ACTION_REQUEST') return null
   const outcome = value.outcome; const progress = value.actionProgress
   if (!outcome.deliveryRelation && progress.childRoute !== 'EXECUTE') return null
@@ -220,7 +220,7 @@ export function completedExecutionDelivery (raw, request, turn, snapshots, taskI
     turn.finalMessageId !== outcome.assistantMessageId || !exactOutputId(turn.contextSnapshotId) ||
     turn.requestId !== request.requestId || turn.requestRevision !== request.requestRevision ||
     turn.conversationId !== request.conversationId || turn.conversationGeneration !== request.conversationGeneration ||
-    !exactOutputId(taskId) || outcome.taskId !== taskId) throw new Error('媒体交付与原动作快照不一致。')
+    !exactOutputId(taskId) || outcome.taskId !== taskId) throw new Error('成果与本次办理不一致，请重新加载。')
   // A durable pre-admission failure has no execution or deliverable to wait for.
   // Keep its failure card/history, but do not poison the committed media basis.
   if (progress.state === 'FAILED' && progress.childRequestId === null &&

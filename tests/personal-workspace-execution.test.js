@@ -47,7 +47,7 @@ describe('personal workspace execution adapter', () => {
     const wrong = usePersonalWorkspaceExecution({ identityEpoch: ref('owner-a'), timerApi: timers(), api: { execute: async () => ((executionView({ executionId: 'exec_other', state: 'INPUTS_REVOKED' }))) } })
     assert.equal(await wrong.recoverExecution('exec_1'), null)
     assert.equal(wrong.execution.value, null)
-    assert.match(wrong.error.value, /编号不一致/)
+    assert.match(wrong.error.value, /与本次办理不一致/)
     wrong.dispose()
   })
   it('uses the real roster, submits explicit pinned file versions, polls it, and asks the user to refresh only after completion', async () => {
@@ -86,8 +86,8 @@ describe('personal workspace execution adapter', () => {
     await Promise.resolve()
     await Promise.resolve()
     assert.equal(adapter.execution.value.state, 'OUTPUT_COMMITTED')
-    assert.match(adapter.completionNotice.value, /刷新文件列表领取成果/)
-    assert.match(adapter.completionNotice.value, /文件可用性以本次服务端回执和下载结果为准/)
+    assert.match(adapter.completionNotice.value, /刷新文件列表查看/)
+    assert.match(adapter.completionNotice.value, /成果已保存到资料空间/)
     adapter.dispose()
   })
 
@@ -241,7 +241,7 @@ describe('personal workspace execution receipt and recovery', () => {
     assert.equal(calls.filter(call => call.method === 'POST' && call.url === '/personal-workspace/executions').length, 1)
     assert.equal(calls.filter(call => call.url.endsWith('/request')).length, 1)
     assert.equal(adapter.executionState.value, 'unknown')
-    assert.match(adapter.error.value, /仍可能稍后被服务端确认/)
+    assert.match(adapter.error.value, /暂未查到办理结果.*继续查询.*勿重复提交/)
     assert.equal(await adapter.create({ instruction: '生成海报', outputContentMimeType: 'image/png' }), null)
     assert.equal(calls.filter(call => call.method === 'POST' && call.url === '/personal-workspace/executions').length, 1)
     assert.equal(adapter.prepareNewRequest(), false)

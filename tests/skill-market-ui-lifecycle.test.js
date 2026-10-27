@@ -117,8 +117,8 @@ describe('SM-C1 actual management component lifecycle (no composable stub)', () 
     wrapper.unmount(); mock.api.post = post
     wrapper = mount(skillComponents().Management, { attachTo: document.body, props: { show: true, targetAgent: { agentId: 'agt_demo', name: '测试好汉' }, actorScopeKey: 'actor-a', agentApi: mock.api }, global: { stubs: { teleport: true } } })
     await until(() => button(wrapper, '核对结果')); await button(wrapper, '核对结果').trigger('click')
-    expect(wrapper.text()).to.include('报价结果待核对')
-    await button(wrapper, '继续原操作').trigger('click'); await until(() => button(wrapper, '确认安装'))
+    expect(wrapper.text()).to.include('报价结果待确认')
+    await button(wrapper, '继续核对').trigger('click'); await until(() => button(wrapper, '确认安装'))
     expect(mock.requests.some(r => r.path === '/agt_demo/skill-changes' && r.method === 'POST')).to.equal(false)
     expect(wrapper.find('.skill-inline-footer').text()).to.include('测试好汉 · 图片修改 · 1.1.0')
   })
@@ -186,7 +186,7 @@ describe('SM-C1 actual management component lifecycle (no composable stub)', () 
     expect(wrapper.find('.skill-progress').text()).to.include('移除技能入口').and.not.include('下载')
     mock.accepted = { ...mock.accepted, status: 'SUCCEEDED', runtimeSynced: true, reasonCode: null, changeRevision: '3' }
     row.installed = null; row.allowedActions = ['VIEW', 'INSTALL']; row.latestChange = mock.accepted
-    await button(wrapper, '查询原操作').trigger('click'); await until(() => wrapper.text().includes('已卸载；'))
+    await button(wrapper, '查询结果').trigger('click'); await until(() => wrapper.text().includes('已卸载；'))
     await button(wrapper, '收起').trigger('click'); expect(button(wrapper, '安装')).not.to.equal(undefined)
   })
 

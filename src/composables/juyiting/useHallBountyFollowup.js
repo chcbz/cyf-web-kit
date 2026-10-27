@@ -135,7 +135,7 @@ export const useHallBountyFollowup = ({ chatApi, actorScopeKey, authorizationGen
     state.value = { status: 'PREVIEWING', record: null, preview: null, receipt: null, error: null }
     const preview = previewProjection(unwrap(await chatApi.create(path(projection.conversationId, '/preview'), clone(intent), requestOptions(finalKey))), intent, projection)
     if (!current(captured)) return false
-    if (!preview) throw new Error('服务端预览回执不匹配；未签发同意')
+    if (!preview) throw new Error('暂时无法确认费用信息，本次未授权付款。')
     const record = save(captured, { schemaVersion: 1, finalKey, issueKey, conversationId: projection.conversationId,
       taskId: projection.taskId, targetAgentId: projection.targetAgentId, intent: clone(intent), preview: clone(preview),
       expectedPreview: expectedPreview(preview), providerBinding: clone(preview.providerBinding), authority: null,
@@ -154,7 +154,7 @@ export const useHallBountyFollowup = ({ chatApi, actorScopeKey, authorizationGen
     state.value = { status: 'ISSUING', record, preview: record.preview, receipt: null, error: null }
     const issued = issueReceipt(unwrap(await chatApi.create(path(record.conversationId, '/provider-consents'), issueBody, requestOptions(record.issueKey))), record)
     if (!current(captured)) return false
-    if (!issued) throw new Error('费用同意回执不匹配；保留原键只读核对')
+    if (!issued) throw new Error('暂时无法确认费用授权，请查询结果，勿重复提交。')
     let next = save(captured, { ...record, issueReceipt: clone(issued), authority: { consentId: issued.consentId,
       expectedConsentVersion: issued.consentVersion, operationGrantId: issued.operationGrantId,
       expectedOperationGrantVersion: issued.operationGrantVersion }, status: 'ISSUED' })
@@ -162,7 +162,7 @@ export const useHallBountyFollowup = ({ chatApi, actorScopeKey, authorizationGen
     try {
       const received = finalReceipt(unwrap(await chatApi.create(path(next.conversationId), { ...clone(next.intent), authority: clone(next.authority) }, requestOptions(next.finalKey))), next)
       if (!current(captured)) return false
-      if (!received) throw new Error('最终办理回执不匹配；保留原键只读核对')
+      if (!received) throw new Error('暂时无法确认办理结果，请查询进度，勿重复提交。')
       next = save(captured, { ...next, finalReceipt: clone(received), status: 'ADMITTED' })
       state.value = { status: 'ADMITTED', record: next, preview: next.preview, receipt: received, error: null }
       if (onAdmitted) await onAdmitted({ record: next, receipt: received, isCurrent: () => current(captured) })
@@ -177,7 +177,7 @@ export const useHallBountyFollowup = ({ chatApi, actorScopeKey, authorizationGen
   const readIssue = async (captured, record) => {
     const receipt = issueReceipt(unwrap(await chatApi.get(path(record.conversationId, '/provider-consents/request'), undefined, requestOptions(record.issueKey))), record)
     if (!current(captured)) return null
-    if (!receipt) throw new Error('原费用同意回执不匹配')
+    if (!receipt) throw new Error('暂时无法确认费用授权，请查询结果。')
     return save(captured, { ...record, issueReceipt: clone(receipt), authority: { consentId: receipt.consentId,
       expectedConsentVersion: receipt.consentVersion, operationGrantId: receipt.operationGrantId,
       expectedOperationGrantVersion: receipt.operationGrantVersion }, status: 'ISSUED' })
@@ -185,7 +185,7 @@ export const useHallBountyFollowup = ({ chatApi, actorScopeKey, authorizationGen
   const readFinal = async (captured, record) => {
     const receipt = finalReceipt(unwrap(await chatApi.get(path(record.conversationId, '/request'), undefined, requestOptions(record.finalKey))), record)
     if (!current(captured)) return null
-    if (!receipt) throw new Error('原最终办理回执不匹配')
+    if (!receipt) throw new Error('暂时无法确认办理结果，请查询进度。')
     const next = save(captured, { ...record, finalReceipt: clone(receipt), status: 'ADMITTED' })
     state.value = { status: 'ADMITTED', record: next, preview: next.preview, receipt, error: null }
     if (onAdmitted) await onAdmitted({ record: next, receipt, isCurrent: () => current(captured) })

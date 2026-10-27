@@ -61,7 +61,7 @@ const descendingHistory = items => items.every((item, index) => index === 0 || i
 const abortError = message => new DOMException(message, 'AbortError')
 const errorMessage = error => {
   if (error?.name === 'AbortError') return ''
-  if (error?.status === 404 && error?.code === 'EXECUTION_NOT_FOUND') return '尚未查到原执行请求；它仍可能稍后被服务端确认，请继续查询，勿重复提交。'
+  if (error?.status === 404 && error?.code === 'EXECUTION_NOT_FOUND') return '暂未查到办理结果，请继续查询，勿重复提交。'
   if ([401, 403, 404].includes(error?.status)) return '当前身份、文件或 Agent 已不可访问，请刷新后重新选择。'
   if (error?.code === 'IDEMPOTENCY_CONFLICT') return '本次执行请求与已有请求不一致，请刷新后确认执行记录。'
   if (error?.code === 'CAPABILITY_UNAVAILABLE' || error?.status === 422) return '当前 Agent 连接或受控能力尚不可用；未确认执行成功。'
@@ -184,7 +184,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     if (!validExecution(value)) throw new Error('执行状态返回格式无效，未将其显示为成功。')
     execution.value = value; receipt.value = value; executionState.value = 'ready'
     clearMatchedTerminalIntent(value)
-    if (value.state === 'OUTPUT_COMMITTED') { stopPolling(); completionNotice.value = '交付件已归档到工作空间。请刷新文件列表领取成果；文件可用性以本次服务端回执和下载结果为准。' } else if (value.state === 'INPUTS_REVOKED') { stopPolling(); completionNotice.value = '输入授权已撤销，后续读取和提交将被拒绝；不代表已取消外部调用或免除费用。' } else if (value.state === 'FAILED') { stopPolling(); completionNotice.value = ''; error.value = value.failureMessage } else completionNotice.value = ''
+    if (value.state === 'OUTPUT_COMMITTED') { stopPolling(); completionNotice.value = '成果已保存到资料空间，可刷新文件列表查看。' } else if (value.state === 'INPUTS_REVOKED') { stopPolling(); completionNotice.value = '输入授权已撤销，后续读取和提交将被拒绝；不代表已取消外部调用或免除费用。' } else if (value.state === 'FAILED') { stopPolling(); completionNotice.value = ''; error.value = value.failureMessage } else completionNotice.value = ''
     return value
   }
   const loadCapabilities = async () => {
@@ -226,7 +226,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     try {
       const value = await request({ url: '/personal-workspace/executions/request', method: 'GET', headers: { 'Idempotency-Key': pendingIntent.idempotencyKey } }, snapshot)
       if (!validExecution(value)) throw new Error('执行状态返回格式无效，未将其显示为已确认。')
-      if (!confirmIntent(pendingIntent, value?.executionId)) throw new Error('原执行请求标识无法安全更新，未将其显示为已确认。')
+      if (!confirmIntent(pendingIntent, value?.executionId)) throw new Error('暂时无法确认办理进度，请查询结果。')
       const result = applyExecution(value)
       if (!TERMINAL_EXECUTION_STATES.has(result.state)) void startPolling(result.executionId)
       return result
@@ -256,7 +256,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     try {
       const value = await request({ url: '/personal-workspace/executions', method: 'POST', data: { conversationId, targetAgentId: agent.agentId, taskId, instruction: instruction.trim(), outputContentMimeType, inputs: selections }, headers: { 'Idempotency-Key': idempotencyKey } }, snapshot)
       if (!validExecution(value)) throw new Error('执行状态返回格式无效，未将其显示为已确认。')
-      if (!confirmIntent({ idempotencyKey }, value?.executionId)) throw new Error('执行回执无法安全关联到原请求，未将其显示为已确认。')
+      if (!confirmIntent({ idempotencyKey }, value?.executionId)) throw new Error('暂时无法确认是否提交，请查询进度，勿重复提交。')
       const result = applyExecution(value)
       if (!TERMINAL_EXECUTION_STATES.has(result.state)) void startPolling(result.executionId)
       return result
@@ -282,7 +282,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     try {
       const value = await request({ url: `/personal-workspace/executions/${encodeURIComponent(executionId)}`, method: 'GET' }, snapshot)
       if (sequence !== selectionSequence || snapshot.generation !== generation) return null
-      if (value?.executionId !== executionId) throw new Error('执行恢复回执与请求编号不一致。')
+      if (value?.executionId !== executionId) throw new Error('查询结果与本次办理不一致，请重新查询。')
       const result = applyExecution(value)
       if (!TERMINAL_EXECUTION_STATES.has(result.state)) void startPolling(result.executionId)
       return result

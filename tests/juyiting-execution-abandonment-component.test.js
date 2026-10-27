@@ -76,7 +76,7 @@ describe('real execution abandonment SFC DOM with original-intent composable', (
     const other = mountPanel(undefined, { controller, requestIds: ['request-2'] }).wrapper
     const fallback = mountPanel(undefined, { controller, excludedRequestIds: ['request-1', 'request-2'] }).wrapper
     try {
-      expect(button(owner, '查询原操作结果')).not.to.equal(undefined)
+      expect(button(owner, '查询结果')).not.to.equal(undefined)
       expect(other.find('aside').exists()).to.equal(false)
       expect(fallback.find('aside').exists()).to.equal(false)
       status.value = { ...status.value, state: 'completed', receipt: receipt() }
@@ -113,7 +113,7 @@ describe('real execution abandonment SFC DOM with original-intent composable', (
       expect(calls.length).to.equal(1)
       pending.resolve({ invalid: true }); await flushPromises()
       expect(button(wrapper, '放弃本轮未交付结果')).to.equal(undefined)
-      expect(button(wrapper, '查询原操作结果').element.disabled).to.equal(false)
+      expect(button(wrapper, '查询结果').element.disabled).to.equal(false)
       expect(button(wrapper, '继续原放弃操作').element.disabled).to.equal(false)
       expect(wrapper.emitted('settled')).to.equal(undefined)
       expect(wrapper.find('[role="alert"]').exists()).to.equal(true)
@@ -126,7 +126,7 @@ describe('real execution abandonment SFC DOM with original-intent composable', (
     })
     try {
       await confirm(wrapper); await flushPromises()
-      await button(wrapper, '查询原操作结果').trigger('click'); await flushPromises()
+      await button(wrapper, '查询结果').trigger('click'); await flushPromises()
       expect(calls.map(call => call.method)).to.deep.equal(['POST', 'GET'])
       expect(calls[1].headers).to.deep.equal(calls[0].headers)
       expect(calls[1]).not.to.have.property('data')

@@ -280,7 +280,7 @@ describe('JYT-UX-W03 Hall draft submission and recovery adapter', () => {
     expect(drafts.resultsState.value).to.equal('error')
     expect(drafts.executionResults.value).to.equal(null)
     expect(await drafts.loadResults('exec-1')).to.equal(null)
-    expect(drafts.resultsError.value).to.match(/成果回执无效/)
+    expect(drafts.resultsError.value).to.match(/成果信息不完整/)
     drafts.dispose()
   })
 

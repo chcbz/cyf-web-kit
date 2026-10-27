@@ -33,7 +33,7 @@ const errorPresentation = error => {
 }
 const defaultIdempotencyKey = () => {
   const value = globalThis.crypto?.randomUUID?.()
-  if (!value) throw new Error('当前环境不能生成安全的幂等键，未发送裁决。')
+  if (!value) throw new Error('当前浏览器暂时无法提交验收，本次未提交。')
   return `f06-${value}`
 }
 
@@ -103,7 +103,7 @@ export const useHallArtifactOutcomes = ({ api = createApi('/agent'), subject, wo
       accepted.value = rows; refreshRequired.value = false
       supersededSelections.value = supersededSelections.value.filter(key => keys.has(key))
       acceptedState.value = rows.length ? 'ready' : 'empty'
-      acceptedMessage.value = rows.length ? '以下仅为服务端确认的已接受成果。' : '服务端尚未返回已接受成果。'
+      acceptedMessage.value = rows.length ? '' : '暂无已验收成果。'
       return rows
     } catch (error) {
       if (!current(captured, capturedTask, capturedActor, capturedEpoch, controller) || error?.name === 'AbortError') return null
@@ -146,7 +146,7 @@ export const useHallArtifactOutcomes = ({ api = createApi('/agent'), subject, wo
     }
     let idempotencyKey
     try { idempotencyKey = idempotencyKeyFactory() } catch (error) { submitState.value = 'error'; submitMessage.value = error.message; return null }
-    if (typeof idempotencyKey !== 'string' || !/^[A-Za-z0-9._~:/+-]{8,100}$/.test(idempotencyKey)) { submitState.value = 'error'; submitMessage.value = '生成的幂等键无效，未发送裁决。'; return null }
+    if (typeof idempotencyKey !== 'string' || !/^[A-Za-z0-9._~:/+-]{8,100}$/.test(idempotencyKey)) { submitState.value = 'error'; submitMessage.value = '当前浏览器暂时无法提交验收，本次未提交。'; return null }
     const captured = ++generation
     const capturedTask = taskId.value; const capturedActor = actorAgentId.value; const capturedEpoch = currentEpoch.value
     const controller = new AbortController(); submitController = controller
@@ -155,8 +155,8 @@ export const useHallArtifactOutcomes = ({ api = createApi('/agent'), subject, wo
     try {
       const result = unwrap(await request({ url: `/tasks/${encodeURIComponent(capturedTask)}/artifact-outcomes/accept`, method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, data: body }, controller))
       if (!current(captured, capturedTask, capturedActor, capturedEpoch, controller)) return null
-      if (!acceptedRow(result, capturedTask) || result.artifactId !== acceptedRef.artifactId || result.artifactVersion !== acceptedRef.artifactVersion || result.outcomeVersion !== acceptedRef.expectedOutcomeVersion + 1 || result.decisionId !== idempotencyKey) throw new Error('服务回执与本次精确裁决不匹配，未确认裁决。')
-      receipt.value = result; submitState.value = 'accepted'; submitMessage.value = '服务端已确认该成果为权威接受结果。'
+      if (!acceptedRow(result, capturedTask) || result.artifactId !== acceptedRef.artifactId || result.artifactVersion !== acceptedRef.artifactVersion || result.outcomeVersion !== acceptedRef.expectedOutcomeVersion + 1 || result.decisionId !== idempotencyKey) throw new Error('暂时无法确认验收结果，请查询结果，勿重复提交。')
+      receipt.value = result; submitState.value = 'accepted'; submitMessage.value = '验收已通过。'
       const remainder = accepted.value.filter(row => !superseded.some(item => item.artifactId === row.artifactId && item.artifactVersion === row.artifactVersion))
       accepted.value = [result, ...remainder]
       supersededSelections.value = []; confirmed.value = false

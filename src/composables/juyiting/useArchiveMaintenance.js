@@ -35,7 +35,7 @@ export const useArchiveMaintenance = ({ identityScope, identityEpoch = () => 0,
       const result = await api.get('/operations/request', {}, { headers: { 'Idempotency-Key': saved.key }, signal: controller?.signal, autoLoading: false })
       if (!current(s)) return null
       if (storeFor(s.identity).remove('mutation').state !== 'ABSENT') throw new Error('结果已查到，但恢复引用尚未清除；请再次查询，不要重复提交。')
-      pending.value = null; notice.value = '已恢复原操作的服务端结果。'; return result
+      pending.value = null; notice.value = ''; return result
     } catch (failure) {
       if (!current(s)) return null
       if (failure.status === 404) { notice.value = '暂未查到提交结果。保留原键；可核对原表单并重试，不能创建重复操作。'; return null }
@@ -74,7 +74,7 @@ export const useArchiveMaintenance = ({ identityScope, identityEpoch = () => 0,
       const result = await api.post(path, body, { headers: { 'Idempotency-Key': saved.key }, signal: controller.signal, autoLoading: false })
       if (!current(s)) return null
       if (storeFor(s.identity).remove('mutation').state !== 'ABSENT') throw new Error('操作已受理，但恢复引用尚未清除；请重新查询。')
-      pending.value = null; notice.value = kind === 'job' ? (path.endsWith('/publish') ? '草稿发布已提交；最终状态以服务端结果与版本读回为准。' : '维护任务已创建，等待 Runtime 执行；尚不代表已发布。') : '服务端已受理，技能实际状态以有效安装回执为准。'
+      pending.value = null; notice.value = kind === 'job' ? (path.endsWith('/publish') ? '正在发布，请查看最新状态。' : '维护任务已创建，等待执行；尚不代表已发布。') : '已受理，请查看安装进度。'
       return result
     } catch (failure) {
       if (current(s)) {

@@ -268,7 +268,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     try {
       const receipt = discussionAccepted(unwrap(await chatApi.create(`/conversations/${encodeURIComponent(context.conversationId)}/interactions/${purpose === 'INSPECT' ? 'inspection' : 'discussion'}`, clone(body), apiOptions(record.key))), body, context.conversationId)
       if (!current(captured)) return false
-      if (!receipt) throw new Error('议事受理回执不匹配')
+      if (!receipt) throw new Error('暂时无法确认消息是否受理，请查询记录，勿重复发送。')
       persistRecords(captured, readRecords(storage, captured.scope, context).map(item => item.key === record.key
         ? { ...item, purpose, status: 'ACCEPTED', receipt: clone(receipt) } : item))
       if (body.intent === 'CLARIFICATION_REPLY') selectedPending.value = null

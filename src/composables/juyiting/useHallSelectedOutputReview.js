@@ -47,14 +47,14 @@ export function useHallSelectedOutputReview ({ api, review, taskId, conversation
       if (version !== epoch) return
       // Never accept whichever batch happens to be current after the submission.
       if (!await review.openConfirmation({ deliveryId, selectedOutputs: set, assignmentRevision: initial.assignmentRevision })) {
-        error.value = review.error.value || '交付状态已变化，请核对原操作后再验收。'; return
+        error.value = review.error.value || '交付状态已变化，请核对结果后再验收。'; return
       }
       if (version !== epoch) return
       const receipt = await review.confirmAcceptance()
       if (version !== epoch) return
       if (receipt?.state === 'COMMITTED') open.value = false
       else error.value = review.operation.value.message || review.error.value || '尚未确认验收成功，请核对原验收操作。'
-    } catch (cause) { if (version === epoch) error.value = cause.message || '验收未完成，请核对原操作。' }
+    } catch (cause) { if (version === epoch) error.value = cause.message || '验收未完成，请核对结果。' }
     finally { if (version === epoch) busy.value = false }
   }
   const stop = watch(() => [read(taskId), read(conversationId), read(identityKey), read(authorizationGeneration)], () => {

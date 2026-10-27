@@ -3,7 +3,7 @@
     <div class="task-material-heading">
       <div>
         <h4 id="task-material-links-title">资料与成果</h4>
-        <p>资料关联只固定当前文件版本，不会启动 Agent 执行或改变悬赏交付状态。</p>
+        <p>添加资料不会自动开始办理。</p>
       </div>
       <div class="task-material-heading-actions">
         <button type="button" @click="refresh">刷新</button>
@@ -45,7 +45,7 @@
         <button type="button" class="material-picker-back" @click="closeMaterialPicker">返回</button>
         <div>
           <h5 id="task-material-picker-title">选择资料（可选）</h5>
-          <p>可不选资料直接返回；选择时固定到明确文件版本。</p>
+          <p>将使用所选版本，之后更新文件不会替换本次资料。</p>
         </div>
       </header>
       <div class="material-picker-body">
@@ -85,34 +85,32 @@
 
     <section class="formal-task-execution" aria-labelledby="formal-task-execution-title">
       <div>
-        <h5 id="formal-task-execution-title">明确开始正式办理</h5>
-        <p>资料可选。只会为当前事项、已确认议事和明确承办 Agent 创建 PDF 办理请求；绝不回退为私人交办。</p>
+        <h5 id="formal-task-execution-title">开始办理</h5>
+        <p>为当前事项生成 PDF 成果，可选择附上资料。</p>
       </div>
-      <p class="task-material-note">承办 Agent：{{ targetAgentId || '未确认' }}；成果：正式 PDF；资料：{{ selectedInputs.length }} 份固定版本。</p>
+      <p class="task-material-note">成果：PDF；资料：{{ selectedInputs.length }} 份固定版本。</p>
       <p v-if="formal.readyReason.value" class="task-material-error" role="status">{{ formal.readyReason.value }}</p>
       <template v-else>
         <fieldset class="formal-inputs">
-          <legend>本次交给 Agent 读取的固定版本资料（可选）</legend>
+          <legend>本次使用的资料（可选）</legend>
           <p v-if="!activeExecutionLinks.length" class="task-material-note">当前不使用资料；执行能力允许时可直接开始办理。</p>
           <label v-for="link in activeExecutionLinks" :key="link.relationId">
             <input v-model="selectedInputKeys" type="checkbox" :value="inputKey(link)" :disabled="isOtherVersionSelected(link)">
             <span>{{ materialName(link) }} · v{{ link.version }} · {{ roleText(link.role) }}</span>
           </label>
-          <p v-if="activeExecutionLinks.some(link => link.role === 'REFERENCE')" class="task-material-note">参考资料也只有在这里明确勾选并点击“确认并开始办理”后，才进入 Agent 的 input manifest；议事消息本身不携带文件内容。</p>
+          <p v-if="activeExecutionLinks.some(link => link.role === 'REFERENCE')" class="task-material-note">只有勾选的资料会用于本次办理。</p>
         </fieldset>
         <label class="formal-instruction">
           <span>办理说明</span>
           <textarea v-model="instruction" maxlength="4000" placeholder="说明正式交付要求；附件内容不复制到这里。"></textarea>
         </label>
-        <p class="formal-risk-note">点击确认后，将由上述 Agent 按当前要求开始办理，仅使用已勾选资料，并可能调用产生未知费用的外部 Provider。</p>
+        <p class="formal-risk-note">确认后开始办理，仅使用勾选的资料；可能调用外部服务并产生额外费用，金额尚未确定。</p>
         <button type="button" class="begin-formal-execution" :disabled="!canBegin" @click="beginFormalExecution">确认并开始办理（PDF）</button>
       </template>
       <p v-if="formal.scopeError.value" class="task-material-error" role="alert">{{ formal.scopeError.value }}</p>
       <p class="task-material-note" role="status">{{ formal.stateText.value }}</p>
       <dl v-if="formal.activeExecution.value" class="formal-execution-facts">
-        <div><dt>执行编号</dt><dd>{{ formal.activeExecution.value.executionId }}</dd></div>
-        <div><dt>运行编号</dt><dd>{{ formal.activeExecution.value.runId }}</dd></div>
-        <div><dt>状态</dt><dd>{{ formal.activeExecution.value.state }}</dd></div>
+        <div><dt>状态</dt><dd>{{ executionLabel(formal.activeExecution.value.state) }}</dd></div>
       </dl>
       <label v-if="formal.activeExecution.value?.state === 'QUEUED'" class="formal-confirmation revoke-confirmation">
         <input v-model="revokeConfirmed" type="checkbox" :disabled="formal.revoking.value">
@@ -120,23 +118,23 @@
       </label>
       <div class="formal-execution-actions">
         <button v-if="formal.activeExecution.value?.state === 'QUEUED'" type="button" :disabled="!revokeConfirmed || !formal.canRevoke.value" @click="revokeFormalExecution">撤销本次输入授权</button>
-        <button type="button" :disabled="formal.revoking.value" @click="recoverFormalExecution">恢复原请求</button>
+        <button type="button" :disabled="formal.revoking.value" @click="recoverFormalExecution">查询进度</button>
         <button type="button" :disabled="formal.execution.pending.value" @click="loadFormalHistory">读取本任务执行历史</button>
       </div>
       <p v-if="formal.historyState.value === 'loading'" class="task-material-note" role="status">正在核对执行历史…</p>
       <p v-else-if="formal.historyError.value" class="task-material-error" role="alert">{{ formal.historyError.value }}</p>
       <ul v-else-if="formal.formalHistory.value.length" class="formal-history">
         <li v-for="item in formal.formalHistory.value" :key="item.executionId">
-          <button type="button" @click="formal.selectFormalHistory(item.executionId)">{{ item.executionId }} · {{ item.state }} · PDF</button>
+          <button type="button" @click="formal.selectFormalHistory(item.executionId)">{{ executionLabel(item.state) }} · PDF</button>
         </li>
       </ul>
-      <p class="task-material-note">创建 TASK 执行不等于 Agent 或 Provider 已运行；PDF 是否成为正式 submitted/accepted 交付，仍须以正式交付回执为准。</p>
+      <p class="task-material-note">提交后请查看交付进度。</p>
     </section>
 
     <section class="task-execution-fact" aria-label="执行和成果状态">
       <h5>执行和成果</h5>
       <p>{{ executionFact }}</p>
-      <p class="task-material-note">正式待验收、已验收或要求修改只以正式交付接口回执为准；文件关联本身不表示已执行、已交付或已验收。</p>
+      <p class="task-material-note">添加资料不会自动开始执行或完成验收。</p>
     </section>
   </section>
 </template>
@@ -194,10 +192,11 @@ const canBegin = computed(() => !formal.readyReason.value &&
   instruction.value.trim().length > 0 && !formal.execution.pending.value)
 const executionFact = computed(() => {
   if (links.listState.value === 'error') return '资料关联目录不可用，当前不能确认执行或成果状态。'
-  if (outputLinks.value.length) return `已读取 ${outputLinks.value.length} 条 OUTPUT 关联；它们是执行流程记录的成果引用，正式交付状态仍需以正式交付回执确认。`
+  if (outputLinks.value.length) return `共 ${outputLinks.value.length} 项成果；验收情况请查看交付状态。`
   return '尚未确认本悬赏有正式交付；资料关联本身不表示已执行。'
 })
 
+const executionLabel = state => ({ QUEUED: '等待办理', OUTPUT_COMMITTED: '成果已生成', INPUTS_REVOKED: '资料授权已撤销', FAILED: '办理失败' })[state] || '状态待确认'
 const roleText = role => ({ INPUT: '输入资料', REFERENCE: '参考资料', OUTPUT: '成果引用' })[role] || '未知用途'
 const materialName = link => linkNames.value[link.fileId] || workspace.items.value.find(file => file.fileId === link.fileId)?.displayName || `资料 ${link.fileId}`
 const resolveLinkNames = async operationKey => {
