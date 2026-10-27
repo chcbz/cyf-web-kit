@@ -34,7 +34,7 @@ const createComponents = api => {
     useHallConversationArchive: () => ({ statusFor: () => ({}), save: () => {}, check: () => {} }),
     marked: Object.assign(value => value, { setOptions: () => {} }), DOMPurify: { sanitize: value => value },
     usePersonalWorkspace: directory, usePersonalWorkspaceConversationLinks: directory, usePersonalWorkspaceTaskLinks: directory,
-    BountyTextSelectionArchive: noRender, BountyTypedOutcomeCard: noRender, HallConversationHistory: noRender,
+    BountyTextSelectionArchive: noRender, BountyTypedOutcomeCard: noRender, HallConversationHistory: { props: ['readOnly'], render: () => null },
     WorkspaceWriteRecovery: noRender, HallChatComposer: noRender, HallMaterialPicker: noRender,
     TaskSkillCapabilities: noRender, BountyDeliberationStatus: noRender, BountyExecutionTermination: noRender }
   for (const name of ['HallMessageMedia', 'HallMessageParts', 'BountyExecutionOutputs', 'ChatPanel', 'BountyDiscussionPanel']) deps[name] = load(name, deps)
@@ -297,4 +297,27 @@ describe('large text preview copy on the real outputs component', () => {
       expect(calls.every(call => call !== 'POST')).to.equal(true)
     } finally { wrapper.unmount() }
   })
+})
+
+
+describe('single-conversation task discussion controls', () => {
+  for (const variant of ['bounty', 'private', 'public']) {
+    it(`keeps ${variant} history readable and limits lifecycle controls to ordinary chat`, async () => {
+      const { ChatPanel, HallConversationHistory } = createComponents({ get: async () => ({ items: [] }) })
+      const wrapper = mount(ChatPanel, { props: { discussionVariant: variant, conversationId: '101',
+        conversationHistory: [{ id: '101', title: '原讨论' }], messages: [], mentionLabel: () => '', senderText: () => '' } })
+      try {
+        expect(wrapper.find('[aria-label="新对话"]').exists()).to.equal(variant !== 'bounty')
+        await wrapper.find('[aria-label="议事记录"]').trigger('click')
+        const history = wrapper.findComponent(HallConversationHistory)
+        expect(history.exists()).to.equal(true)
+        // This probe receives the actual rendered props; the real history suite covers its delete controls.
+        expect(history.props('readOnly')).to.equal(variant === 'bounty')
+        history.vm.$emit('delete', '101')
+        expect(Boolean(wrapper.emitted('delete-conversation'))).to.equal(variant !== 'bounty')
+        history.vm.$emit('select', '101')
+        expect(wrapper.emitted('select-conversation')[0]).to.deep.equal(['101'])
+      } finally { wrapper.unmount() }
+    })
+  }
 })

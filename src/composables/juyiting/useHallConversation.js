@@ -1176,6 +1176,7 @@ export const useHallConversation = ({
   const loadMoreHallConversationHistory = () => loadHallConversationHistory({ loadMore: true })
 
   const deleteHallConversation = async (id) => {
+    if (scopeSnapshot()?.type === 'bounty') return false
     if (disposed || isConversationBusy.value || conversationHistoryLoading.value || conversationHistoryDeletingId.value) return false
     const expectedScope = scopeSnapshot()
     const exactId = exactRuntimeId(id)
@@ -1295,6 +1296,8 @@ export const useHallConversation = ({
   }
 
   const newHallConversation = ({ notify = true } = {}) => {
+    // Task discussion reuses its bound conversation; preserve drafts and active work.
+    if (scopeSnapshot()?.type === 'bounty') return false
     saveThreadDraft()
     restoreThreadDraft(null)
     const currentScopeSignature = scopeSignature(scopeSnapshot())

@@ -1207,6 +1207,28 @@ describe('useHallConversation history selection', () => {
     showToast: () => {}
   })
 
+  it('keeps a bounty discussion and draft intact when new/delete is requested', async () => {
+    let deletes = 0
+    const conversation = createConversation({
+      chatContext: ref({ conversationScopeType: 'bounty', conversationScopeKey: 'task:537', mode: 'bounty', targetAgentIds: ['wuyong'] }),
+      chatApi: { delete: async () => { deletes++ } }
+    })
+    conversation.conversationId.value = '1001'
+    conversation.messages.value = [{ localId: 'old-1', content: '保留的讨论' }]
+    conversation.conversationHistory.value = [scopedConversation('1001', { conversationScopeType: 'bounty', conversationScopeKey: 'task:537' })]
+    conversation.setDraft('补充要求，不另开话头')
+    const before = conversation.draft.value
+    try {
+      expect(conversation.newHallConversation()).to.equal(false)
+      expect(await conversation.deleteHallConversation('1001')).to.equal(false)
+      expect(deletes).to.equal(0)
+      expect(conversation.conversationId.value).to.equal('1001')
+      expect(conversation.messages.value[0].content).to.equal('保留的讨论')
+      expect(conversation.draft.value).to.equal(before)
+      expect(conversation.conversationHistory.value).to.have.length(1)
+    } finally { conversation.disposeHallConversation() }
+  })
+
   it('loads only the current scoped Juyi Hall history through the authenticated list endpoint', async () => {
     const calls = []
     const conversation = createConversation({

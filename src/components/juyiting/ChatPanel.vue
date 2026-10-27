@@ -30,7 +30,7 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5v5h5M3 10a9 9 0 1 1 2 8M12 7v5l3 2" /></svg>
         </button>
         <button
-          v-if="!serverTaskCompleted"
+          v-if="!serverTaskCompleted && !isTaskDiscussion"
           class="icon-button primary"
           type="button"
           title="新对话"
@@ -53,7 +53,7 @@
       ref="historyRef"
       :dismiss-trigger="historyButtonRef"
       :conversations="conversationHistory"
-      :read-only="serverTaskCompleted"
+      :read-only="serverTaskCompleted || isTaskDiscussion"
       :deleting-id="conversationHistoryDeletingId"
       :disabled="conversationBusy || voice?.voiceInteractionLocked"
       :error="conversationHistoryError"
@@ -61,7 +61,7 @@
       :loading="conversationHistoryLoading"
       :selected-id="conversationId"
       @dismiss="closeHistory"
-      @delete="!serverTaskCompleted && $emit('delete-conversation', $event)"
+      @delete="!serverTaskCompleted && !isTaskDiscussion && $emit('delete-conversation', $event)"
       @load-more="$emit('load-more-history')"
       @select="$emit('select-conversation', $event)"
     />

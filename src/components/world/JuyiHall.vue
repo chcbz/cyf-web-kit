@@ -2950,7 +2950,7 @@ const showRandomAgentBubble = () => {
 
 
 const handleNewHallConversation = () => {
-  if (isConversationBusy.value) return false
+  if (chatMode.value === 'bounty' || isConversationBusy.value) return false
   voiceReplyCorrelation.close('new_conversation')
   hallVoice?.cancel()
   playPanelOpen()
