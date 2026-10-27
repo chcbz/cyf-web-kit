@@ -920,7 +920,7 @@ import { resolveAccountDisplayName } from '@/utils/displayName'
 import { createHydratedIdentityScope, hasHydratedIdentity } from '@/utils/identityScope'
 import { juyitingGame } from '@/game/index.js'
 
-const emit = defineEmits(['open-onboarding'])
+const emit = defineEmits(['open-onboarding', 'onboarding-auth-ready'])
 const props = defineProps({ onboardingVisible: { type: Boolean, default: false } })
 
 const globalStore = useGlobalStore()
@@ -3130,6 +3130,7 @@ onMounted(async () => {
     try { await apiStore.getUserInfo() } catch (error) { log.warn('hall identity hydration failed:', error) }
   }
   if (!initializationIsCurrent()) return
+  if (hasHydratedIdentity(globalStore.user)) emit('onboarding-auth-ready', initializationGeneration)
   permitStageMount()
   await refreshHall({ silent: true })
   startDialogueBubbles()
