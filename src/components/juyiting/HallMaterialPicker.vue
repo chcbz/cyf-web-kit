@@ -22,6 +22,15 @@
         >移除</button>
       </li>
     </ul>
+    <div v-if="directUpload && (uploading || uploadUnresolved || uploadMessage)" class="quick-material-import-status" role="status">
+      <span>{{ uploading ? '正在保存到个人资料空间…' : (uploadMessage || '上传结果尚未确认，请核对原上传。') }}</span>
+      <button
+        v-if="uploadUnresolved"
+        type="button"
+        :disabled="uploading || disabled"
+        @click="retryQuickUpload"
+      >核对原上传</button>
+    </div>
     <Teleport to="body">
       <dialog
         v-if="materialPickerOpen"
@@ -85,7 +94,7 @@
             <button type="button" class="quick-material-count" :aria-expanded="selectionExpanded" aria-controls="quick-material-staged" @click="selectionExpanded = !selectionExpanded">已选 {{ draftMaterials.length }} 份资料 {{ selectionExpanded ? '⌄' : '⌃' }}</button>
             <label class="quick-material-upload">上传资料<input type="file" multiple aria-label="上传资料" :disabled="uploading || uploadUnresolved" @change="uploadQuickMaterials" /></label>
           </div>
-          <p v-if="uploading || uploadMessage" class="quick-material-upload-status" :role="uploading ? 'status' : 'alert'">{{ uploading ? '正在上传资料…' : uploadMessage }}</p>
+          <p v-if="uploading || uploadMessage" class="quick-material-upload-status" :role="uploading ? 'status' : 'alert'">{{ uploading ? '正在上传资料…' : (uploadMessage || '上传结果尚未确认，请核对原上传。') }}</p>
           <button v-if="uploadUnresolved" type="button" :disabled="uploading" @click="retryQuickUpload">核对原上传</button>
           <section v-if="selectionExpanded" id="quick-material-staged" class="quick-material-selection" aria-label="已选资料">
             <ul class="quick-material-draft">
@@ -140,7 +149,7 @@ const props = defineProps({
   enabled: { type: Boolean, default: true },
   disabled: { type: Boolean, default: false }
 })
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'import-materials', 'upload-busy', 'upload-pending'])
 const materialIdentityKey = computed(() => `${props.identityEpoch}\u0000${props.identityScope}`)
 const workspace = usePersonalWorkspace({ identityEpoch: materialIdentityKey })
 let pickerGeneration = 0
@@ -199,8 +208,11 @@ const selectedMaterials = computed({ get: () => props.modelValue, set: value => 
 const draftMaterials = ref([])
 const selectionExpanded = ref(false)
 const uploading = ref(false)
+const directUpload = ref(false)
 const uploadMessage = ref('')
 const uploadUnresolved = computed(() => workspace.pendingWrites?.value?.some(item => item.target === 'CREATE') === true)
+watch(uploading, busy => emit('upload-busy', busy), { flush: 'sync', immediate: true })
+watch(uploadUnresolved, pending => emit('upload-pending', pending), { flush: 'sync', immediate: true })
 const uploadedFiles = ref([])
 const pickerFiles = computed(() => [...new Map([...uploadedFiles.value, ...workspace.items.value].map(file => [file.fileId, file])).values()])
 const pickerAlreadyAdded = computed(() => draftMaterials.value.some(item => item.fileId === pickerFileId.value && item.version === pickerVersion.value))
@@ -216,18 +228,33 @@ const refreshUploadedList = async current => {
   await workspace.refresh({ state: 'ACTIVE' })
 }
 const runPickerUpload = async (operation, input = null) => {
-  if (uploading.value || props.disabled || !materialPickerOpen.value) return
+  if (uploading.value || props.disabled || !props.enabled || (!materialPickerOpen.value && !directUpload.value)) return
   const generation = pickerGeneration, identity = materialIdentityKey.value
-  const current = () => materialPickerOpen.value && !props.disabled && generation === pickerGeneration && identity === materialIdentityKey.value
+  const current = () => (materialPickerOpen.value || directUpload.value) && props.enabled && !props.disabled && generation === pickerGeneration && identity === materialIdentityKey.value
   uploading.value = true; uploadMessage.value = ''
   try { await operation(current) }
   catch { if (current()) uploadMessage.value = '上传未完成，请核对原上传后再试；已有选择保留。' }
-  finally { uploading.value = false; if (input) input.value = '' }
+  finally {
+    uploading.value = false
+    if (input) input.value = ''
+    if (current() && directUpload.value && draftMaterials.value.length) {
+      const imported = draftMaterials.value.map(material => ({ ...material }))
+      draftMaterials.value = []
+      emit('import-materials', imported)
+    }
+  }
+}
+const importImages = files => {
+  if (props.readOnly || !props.enabled || props.disabled || !props.identityScope || uploading.value || uploadUnresolved.value) return
+  closeSelectedPreview()
+  directUpload.value = true
+  draftMaterials.value = []
+  return uploadQuickMaterials({ target: { files, value: '' } })
 }
 const uploadQuickMaterials = event => {
   const input = event.target, files = [...(input.files || [])]
   if (!files.length) return
-  if (files.length + draftMaterials.value.length > 32) { uploadMessage.value = '最多选择32份资料，请减少本次文件数量。'; input.value = ''; return }
+  if (files.length + (directUpload.value ? selectedMaterials.value.length : draftMaterials.value.length) > 32) { uploadMessage.value = '最多选择32份资料，请减少本次文件数量。'; input.value = ''; return }
   return runPickerUpload(async current => {
     for (const file of files) {
       if (!current()) break
@@ -260,7 +287,8 @@ const pickerDetail = computed(() => {
 const materialKey = material => `${material.fileId}:${material.version}`
 const resetMaterialPicker = () => { selectionExpanded.value = false; uploadMessage.value = ''; mobilePreviewOpen.value = false; pickerGeneration += 1; pickerFileId.value = ''; pickerVersion.value = null; workspace.closeDetail() }
 const openQuickMaterialPicker = async () => {
-  if (props.readOnly || !props.enabled || !props.identityScope || props.disabled) return
+  if (props.readOnly || !props.enabled || !props.identityScope || props.disabled || uploading.value) return
+  directUpload.value = false
   pickerReturnFocus = typeof document !== 'undefined' ? document.activeElement : null
   closeSelectedPreview()
   uploadedFiles.value = []
@@ -269,7 +297,7 @@ const openQuickMaterialPicker = async () => {
   materialPickerOpen.value = true
   await workspace.refresh({ state: 'ACTIVE' })
 }
-defineExpose({ open: openQuickMaterialPicker })
+defineExpose({ open: openQuickMaterialPicker, importImages, preview: material => previewSelectedMaterial(material) })
 const cancelQuickMaterialPicker = () => { materialPickerOpen.value = false; draftMaterials.value = []; resetMaterialPicker() }
 const loadMoreQuickMaterials = () => workspace.loadMore({ state: 'ACTIVE' })
 const selectQuickMaterialFile = async (fileId, fixedVersion = null) => {
@@ -357,7 +385,9 @@ const confirmQuickMaterials = () => {
 const removeSelectedMaterial = material => { if (props.readOnly) return; selectedMaterials.value = selectedMaterials.value.filter(item => materialKey(item) !== materialKey(material)) }
 
 watch(materialIdentityKey, () => {
-  selectedMaterials.value = []
+  directUpload.value = false
+  uploadedFiles.value = []
+  if (!props.dialogOnly) selectedMaterials.value = []
   closeSelectedPreview()
   cancelQuickMaterialPicker()
 }, { flush: 'sync' })

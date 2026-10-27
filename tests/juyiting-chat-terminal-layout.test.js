@@ -2,7 +2,7 @@ import * as discussionTurnHelpers from '../src/composables/juyiting/hallDiscussi
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import * as Vue from 'vue'
 
 const source = readFileSync(new URL('../src/components/juyiting/ChatPanel.vue', import.meta.url), 'utf8')
@@ -90,6 +90,7 @@ describe('formal discussion terminal resource and toolbar layout', () => {
       try {
         expect(wrapper.findComponent(Composer).props('compact')).to.equal(true)
         await wrapper.get('.composer-probe button').trigger('click')
+        await flushPromises()
         expect(wrapper.get('.picker-probe').attributes('data-open')).to.equal('true')
         expect(wrapper.getComponent(Picker).props('dialogOnly')).to.equal(true)
         await wrapper.setProps({ selectedTask: { id: 'task-a', status } })

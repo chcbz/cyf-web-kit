@@ -144,7 +144,7 @@ describe('1.13.2 Babao-box workspace entry', () => {
     }
   })
 
-  it('offers version-pinned workspace references inline while retaining the Babao entry', async () => {
+  it('offers version-pinned workspace references through the shared picker while retaining the Babao entry', async () => {
     const { readFileSync } = await import('node:fs')
     const source = readFileSync(new URL('../src/components/juyiting/ChatPanel.vue', import.meta.url), 'utf8')
     const hall = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
@@ -153,7 +153,9 @@ describe('1.13.2 Babao-box workspace entry', () => {
     expect(source).to.include('usePersonalWorkspaceConversationLinks')
     expect(source).to.include('usePersonalWorkspaceTaskLinks')
     expect(source).to.include("role: 'REFERENCE'")
-    expect(source).to.include('引用当前选择的资料版本，关联到当前议事。')
+    expect(source).to.include('<HallMaterialPicker')
+    expect(source).to.include('composer-attachment-strip')
+    expect(source).to.not.include('class="material-reference-picker"')
     expect(source).to.not.include('参看资料：')
     expect(source).to.not.include('<FormalDeliveryList')
     expect(source).to.not.match(/storageUri|leaseToken|runtimeCredential/)

@@ -22,6 +22,7 @@
 
       <div class="composer-body">
         <div class="composer-input-area">
+          <slot name="attachments"></slot>
           <textarea
             ref="textareaRef"
             class="composer-textarea"
@@ -56,6 +57,7 @@
               title="添加资料"
               aria-label="添加资料"
               :disabled="inputLocked"
+              :aria-expanded="String(materialActionsOpen || materialsOpen)"
               @click="openMaterials"
             ><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m8 12 7-7a3 3 0 0 1 4 4l-9 9a5 5 0 0 1-7-7l9-9M7 14l8-8" /></svg></button>
             <div ref="voiceActionRef" class="composer-inline-voice"></div>
@@ -118,7 +120,32 @@
         />
       </section>
 
-      <div ref="materialsRef" class="composer-materials"><slot name="materials"></slot></div>
+      <div ref="materialsRef" class="composer-materials">
+        <section v-if="materialActionsOpen" class="composer-material-actions" aria-label="添加资料方式">
+          <button type="button" :disabled="inputLocked" @click="chooseImage(cameraInput)">拍照</button>
+          <button type="button" :disabled="inputLocked" @click="chooseImage(albumInput)">相册</button>
+          <button type="button" :disabled="inputLocked" @click="chooseMaterials">资料</button>
+        </section>
+        <input
+          ref="cameraInput"
+          hidden
+          type="file"
+          accept="image/*"
+          capture="environment"
+          aria-label="拍照添加资料"
+          @change="importImages"
+        />
+        <input
+          ref="albumInput"
+          hidden
+          type="file"
+          accept="image/*"
+          multiple
+          aria-label="从相册添加资料"
+          @change="importImages"
+        />
+        <slot name="materials"></slot>
+      </div>
 
       <div v-if="showMentionMenu" class="composer-mention-menu" aria-label="选择要点名的好汉">
         <button
@@ -149,6 +176,7 @@ import HallVoiceControls from './HallVoiceControls.vue'
 
 const props = defineProps({
   materialsOpen: { type: Boolean, default: false },
+  sendBlocked: { type: Boolean, default: false },
   agents: { type: Array, default: () => [] },
   compact: { type: Boolean, default: false },
   durableCancelTarget: { type: Object, default: null },
@@ -179,9 +207,30 @@ const emit = defineEmits([
   'voice-apply',
   'open-tools',
   'close-materials',
-  'open-materials'
+  'open-materials',
+  'import-images'
 ])
 
+const materialActionsOpen = ref(false)
+const cameraInput = ref(null)
+const albumInput = ref(null)
+const mobileQuery = typeof window !== 'undefined' ? window.matchMedia?.('(max-width: 720px)') : null
+const isMobile = ref(mobileQuery?.matches === true)
+const syncViewport = event => { isMobile.value = event.matches; materialActionsOpen.value = false }
+let imageContextKey = null
+const chooseImage = input => {
+  if (inputLocked.value) return
+  imageContextKey = props.contextKey
+  materialActionsOpen.value = false
+  input?.click()
+}
+const importImages = event => {
+  const files = [...(event.target.files || [])]
+  event.target.value = ''
+  if (files.length && imageContextKey === props.contextKey && !inputLocked.value) emit('import-images', files)
+  imageContextKey = null
+}
+const chooseMaterials = () => { materialActionsOpen.value = false; emit('open-materials') }
 const composerRef = ref(null)
 const moreButtonRef = ref(null)
 const moreOpen = ref(false)
@@ -199,6 +248,7 @@ const closeMore = (restoreFocus = false) => {
   if (restoreFocus) nextTick(() => moreButtonRef.value?.focus())
 }
 const toggleMore = () => {
+  materialActionsOpen.value = false
   if (!moreOpen.value) emit('open-tools')
   if (!moreOpen.value && props.materialsOpen) emit('close-materials')
   moreOpen.value = !moreOpen.value
@@ -206,9 +256,11 @@ const toggleMore = () => {
 const openMaterials = () => {
   emit('open-tools')
   closeMore()
-  emit('open-materials')
+  if (isMobile.value) materialActionsOpen.value = !materialActionsOpen.value
+  else chooseMaterials()
 }
 const closeTools = () => {
+  materialActionsOpen.value = false
   closeMore()
   if (props.materialsOpen) emit('close-materials')
 }
@@ -221,15 +273,19 @@ const activateInput = () => {
 const hasChildDialog = () => [...document.querySelectorAll('dialog[open], [role="dialog"][aria-modal="true"]')]
   .some(dialog => !dialog.contains(composerRef.value) && !dialog.closest('[hidden]') && window.getComputedStyle(dialog).display !== 'none')
 const handleOutside = event => {
-  if ((!moreOpen.value && !props.materialsOpen) || hasChildDialog()) return
+  if ((!moreOpen.value && !props.materialsOpen && !materialActionsOpen.value) || hasChildDialog()) return
   if (!morePanelRef.value?.contains(event.target) && !moreButtonRef.value?.contains(event.target)) closeMore()
-  if (props.materialsOpen && !materialsRef.value?.contains(event.target) && !materialsButtonRef.value?.contains(event.target)) emit('close-materials')
+  if (!materialsRef.value?.contains(event.target) && !materialsButtonRef.value?.contains(event.target)) {
+    materialActionsOpen.value = false
+    if (props.materialsOpen) emit('close-materials')
+  }
 }
 const handleEscape = event => {
   const discussion = event.target?.closest?.('.chat-panel')
   if (discussion && !discussion.contains(composerRef.value)) return
   if (event.key !== 'Escape' || event.defaultPrevented || hasChildDialog()) return
-  if (props.materialsOpen) {
+  if (props.materialsOpen || materialActionsOpen.value) {
+    materialActionsOpen.value = false
     event.preventDefault()
     event.stopPropagation()
     emit('close-materials')
@@ -241,11 +297,15 @@ const handleEscape = event => {
   }
 }
 onMounted(() => {
+  mobileQuery?.addEventListener?.('change', syncViewport)
   document.addEventListener('pointerdown', handleOutside)
+  document.addEventListener('click', handleOutside)
   document.addEventListener('keydown', handleEscape, true)
 })
 onBeforeUnmount(() => {
+  mobileQuery?.removeEventListener?.('change', syncViewport)
   document.removeEventListener('pointerdown', handleOutside)
+  document.removeEventListener('click', handleOutside)
   document.removeEventListener('keydown', handleEscape, true)
 })
 const isFocused = ref(false)
@@ -258,7 +318,7 @@ const draftText = computed(() => String(props.draft || ''))
 const draftLength = computed(() => draftText.value.length)
 const hasDraft = computed(() => Boolean(draftText.value.trim()))
 const inputLocked = computed(() => props.interactionLocked || props.isStreaming || props.isAwaitingReply || Boolean(props.voice?.voiceInteractionLocked))
-const canSend = computed(() => (hasDraft.value || (props.discussionVariant === 'bounty' && props.hasTypedAttachments)) && !inputLocked.value && !stopTarget.value)
+const canSend = computed(() => (hasDraft.value || (props.discussionVariant === 'bounty' && props.hasTypedAttachments)) && !inputLocked.value && !props.sendBlocked && !stopTarget.value)
 const composerClass = computed(() => ({
   'is-streaming': props.isStreaming,
   'has-draft': hasDraft.value,
@@ -363,7 +423,8 @@ watch([stopTarget, inputLocked, () => props.contextKey], ([target, locked, conte
   }
 })
 
-watch(() => props.contextKey, () => { moreOpen.value = false })
+watch(() => props.contextKey, () => { closeTools(); imageContextKey = null })
+watch(inputLocked, locked => { if (locked) closeTools() })
 
 watch([() => props.draft, () => props.compact], () => nextTick(resizeTextarea), { immediate: true })
 </script>
@@ -700,8 +761,8 @@ watch([() => props.draft, () => props.compact], () => nextTick(resizeTextarea), 
   gap: 4px;
 }
 .is-compact .composer-textarea { flex: 1 0 100%; width: 100%; box-sizing: border-box; }
-.is-compact .composer-actions { flex: 0 0 auto; gap: 0; margin-left: auto; }
-.is-compact .composer-inline-voice { margin-left: 0; }
+.is-compact .composer-actions { flex: 1 0 100%; gap: 6px; width: 100%; }
+.is-compact .composer-inline-voice { margin-left: auto; }
 @media (max-width: 360px) {
   .is-compact .composer-input-area { flex-wrap: wrap; }
   .is-compact .composer-textarea { flex-basis: 100%; width: 100%; }
@@ -711,4 +772,6 @@ watch([() => props.draft, () => props.compact], () => nextTick(resizeTextarea), 
 .discussion-surface .composer-textarea { color: var(--hall-text,#242e2b); background:var(--hall-surface,#fffefa); border-color:var(--hall-border,#e3e5dc); }
 .composer-more,.composer-add-materials,.composer-stop { color:var(--hall-text,#242e2b); }
 .composer-send:not(.composer-stop){background:var(--hall-brand,#923f30);color:var(--hall-surface,#fffefa)}
+.composer-material-actions { display: flex; gap: 12px; padding: 12px 0; }
+.composer-material-actions button { flex: 1; min-height: 64px; border: 1px solid var(--hall-border, #e3e5dc); border-radius: 10px; background: var(--hall-surface, #fffefa); color: inherit; font: inherit; cursor: pointer; }
 </style>

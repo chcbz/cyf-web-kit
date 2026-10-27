@@ -190,7 +190,8 @@
       :discussion-variant="discussionVariant"
       :draft="draft"
       :has-typed-attachments="typedEnabled && discussionVariant === 'bounty' && typedSourceSelectors.length > 0"
-      :interaction-locked="conversationBusy || serverTaskCompleted"
+      :interaction-locked="conversationBusy || serverTaskCompleted || materialSelectionBusy || materialActionBusy || materialUploadBusy"
+      :send-blocked="materialWriteUnresolved || materialUploadPending || pendingMaterials.length > 0"
       :actions-disabled="serverTaskCompleted"
       :is-awaiting-reply="isAwaitingReply"
       :is-streaming="isStreaming"
@@ -211,24 +212,49 @@
       @open-tools="closeHistory"
       @close-materials="materialPickerOpen = false"
       @open-materials="toggleMaterialPicker"
+      @import-images="importMaterialImages"
     >
+      <template #attachments>
+        <div
+          v-if="activeMaterialLinks.length"
+          class="composer-attachment-strip"
+          tabindex="0"
+          aria-label="已选资料，可横向滚动"
+        >
+          <article v-for="link in activeMaterialLinks" :key="link.relationId" class="composer-attachment-card">
+            <HallMaterialThumbnail :file-id="link.fileId" :version="link.version" :identity-key="materialIdentityKey" />
+            <span class="composer-attachment-name"><strong :title="materialName(link)">{{ materialName(link) }}</strong><small>固定版本 v{{ link.version }}</small></span>
+            <button type="button" :aria-label="`预览 ${materialName(link)}`" @click="previewMaterial(link)">预览</button>
+            <button
+              type="button"
+              :disabled="materialSelectionBusy || materialActionBusy || materialUploadBusy || conversationBusy || serverTaskCompleted"
+              :aria-label="`移除 ${materialName(link)}`"
+              @click="removeMaterialReference(link)"
+            >移除</button>
+          </article>
+        </div>
+      </template>
       <template #materials>
+        <p v-if="materialPickerLoading" class="material-reference-state" role="status">正在读取资料…</p>
         <HallMaterialPicker
-          v-if="isTaskDiscussion && !serverTaskCompleted"
-          ref="taskMaterialPickerRef"
+          v-if="!serverTaskCompleted"
+          ref="materialPickerRef"
           dialog-only
-          :model-value="pendingTaskMaterials"
+          :model-value="pickerMaterials"
           :identity-epoch="identityEpoch"
           :identity-scope="`${identityScope}\u0000${taskId}\u0000${conversationId}`"
           :enabled="hasMaterialScope && !serverTaskCompleted"
           :disabled="materialSelectionBusy || materialActionBusy || conversationBusy || serverTaskCompleted"
-          @update:model-value="completeTaskMaterials"
+          @update:model-value="completeMaterials"
+          @import-materials="attachMaterials"
+          @upload-busy="materialUploadBusy = $event"
+          @upload-pending="materialUploadPending = $event"
         >
           <template #context>
             <WorkspaceWriteRecovery :pending="selectedMaterialDirectory.pendingWrites.value" @retry="selectedMaterialDirectory.retryWrite" />
             <p v-if="selectedMaterialDirectory.writeNotice.value" role="status">{{ selectedMaterialDirectory.writeNotice.value }}</p>
             <p v-if="materialError" class="material-reference-error" role="alert">{{ materialError }}</p>
-            <details class="material-use-settings">
+            <details v-if="isTaskDiscussion" class="material-use-settings">
               <summary>本事项资料与使用范围<span v-if="activeMaterialLinks.length"> · {{ activeMaterialLinks.length }} 份</span></summary>
               <label v-if="typedEnabled" class="typed-material-scope">资料范围
                 <select v-model="draftMaterialScope" aria-label="资料范围">
@@ -251,69 +277,17 @@
             </details>
           </template>
         </HallMaterialPicker>
-        <div v-if="isTaskDiscussion && (materialSelectionBusy || pendingTaskMaterials.length)" class="material-link-status" role="status">
+        <div v-if="materialSelectionBusy || pendingMaterials.length" class="material-link-status" role="status">
           <span v-if="materialSelectionBusy">正在关联所选资料…</span>
           <template v-else>
             <span>部分资料尚未关联，已有选择保留。</span>
             <button type="button" @click="toggleMaterialPicker">查看并继续</button>
           </template>
         </div>
-        <p v-if="isTaskDiscussion && materialPickerOpen && !hasMaterialScope" class="material-reference-notice" role="status">未确认当前事项标识，不能读取或展示资料。</p>
-        <section v-if="!isTaskDiscussion && materialPickerOpen && !serverTaskCompleted" class="material-reference-picker" aria-label="引用议事资料">
-          <div class="material-reference-heading">
-            <div>
-              <strong>引用资料</strong>
-              <small>引用当前选择的资料版本，关联到当前议事。</small>
-            </div>
-            <button type="button" aria-label="收起引用资料" @click="materialPickerOpen = false">
-              <var-icon name="close" />
-            </button>
-          </div>
-          <p v-if="!hasMaterialScope" class="material-reference-notice">
-            请先发送一条消息建立议事，再从资料中选择引用。
-          </p>
-          <template v-else>
-            <WorkspaceWriteRecovery :pending="selectedMaterialDirectory.pendingWrites.value" @retry="selectedMaterialDirectory.retryWrite" />
-            <p v-if="selectedMaterialDirectory.writeNotice.value" role="status">{{ selectedMaterialDirectory.writeNotice.value }}</p>
-            <p v-if="materialError" class="material-reference-error" role="alert">{{ materialError }}</p>
-            <div v-if="materialLoading" class="material-reference-state">正在查找资料…</div>
-            <div v-if="!workspace.items.value?.length" class="material-reference-state">
-              暂无可引用资料。
-              <button type="button" @click="$emit('open-workspace')">去添加资料</button>
-            </div>
-            <ul v-else class="material-reference-list">
-              <li v-for="file in workspace.items.value" :key="file.fileId">
-                <div class="material-reference-file">
-                  <strong :title="file.displayName">{{ file.displayName }}</strong>
-                  <small>版本 {{ file.latestVersion }}</small>
-                </div>
-                <button
-                  v-if="linkedFileIds.has(`${file.fileId}:${file.latestVersion}`)"
-                  type="button"
-                  class="material-reference-linked"
-                  :disabled="materialActionBusy"
-                  @click="removeMaterialReference(linkFor(file))"
-                >移除引用</button>
-                <button
-                  v-else
-                  type="button"
-                  :disabled="materialActionBusy"
-                  @click="addMaterialReference(file)"
-                >引用</button>
-              </li>
-            </ul>
-            <div v-if="activeMaterialLinks.length" class="active-material-references">
-              <span>本次议事已引用：</span>
-              <button
-                v-for="link in activeMaterialLinks"
-                :key="link.relationId"
-                type="button"
-                :disabled="materialActionBusy"
-                @click="removeMaterialReference(link)"
-              >{{ materialName(link) }} · v{{ link.version }} <var-icon name="close" /></button>
-            </div>
-          </template>
-        </section>
+        <p v-if="materialPickerOpen && !hasMaterialScope" class="material-reference-notice" role="status">{{ isTaskDiscussion ? '未确认当前事项标识，不能读取或展示资料。' : '请先发送一条消息建立议事，再从资料中选择引用。' }}</p>
+        <p v-if="materialError" class="material-reference-error" role="alert">{{ materialError }}</p>
+        <WorkspaceWriteRecovery :pending="selectedMaterialDirectory.pendingWrites.value" @retry="selectedMaterialDirectory.retryWrite" />
+        <p v-if="selectedMaterialDirectory.writeNotice.value" role="status">{{ selectedMaterialDirectory.writeNotice.value }}</p>
       </template>
     </HallChatComposer>
   </div>
@@ -327,6 +301,7 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import HallChatComposer from './HallChatComposer.vue'
 import HallMaterialPicker from './HallMaterialPicker.vue'
+import HallMaterialThumbnail from './HallMaterialThumbnail.vue'
 import HallConversationHistory from './HallConversationHistory.vue'
 import BountyTypedOutcomeCard from './BountyTypedOutcomeCard.vue'
 import { discussionTurns, discussionDeliveryText, discussionTurnStatus } from '../../composables/juyiting/hallDiscussionTurns.js'
@@ -463,23 +438,35 @@ const taskMaterialLinks = usePersonalWorkspaceTaskLinks({
   identityEpoch: materialIdentityKey
 })
 const materialNames = ref({})
-const pendingTaskMaterials = ref([])
-const taskMaterialPickerRef = ref(null)
+const pendingMaterials = ref([])
+const materialPickerRef = ref(null)
 const draftMaterialScope = ref('TASK_DEFAULT')
 const draftSourceIds = ref(new Set())
 const materialSelectionBusy = ref(false)
+const materialUploadBusy = ref(false)
+const materialUploadPending = ref(false)
+const materialPickerLoading = ref(false)
+let materialRefresh = null
 let materialSelectionGeneration = 0
 const typedSelectedSourceIds = ref(new Set())
 const hasMaterialScope = computed(() => isTaskDiscussion.value ? Boolean(taskId.value) : Boolean(props.conversationId))
+// UI, staging and recovery are shared; only the authorized association scope differs.
 const selectedMaterialDirectory = computed(() => isTaskDiscussion.value ? taskMaterialLinks : conversationMaterialLinks)
-const materialLoading = computed(() => workspace.loading.value || selectedMaterialDirectory.value.loading.value)
+const materialWriteUnresolved = computed(() => selectedMaterialDirectory.value.pendingWrites.value.length > 0)
 const materialActionBusy = computed(() => ['saving', 'removing'].includes(selectedMaterialDirectory.value.actionState.value))
 const materialError = computed(() => selectedMaterialDirectory.value.error.value || workspace.error.value)
 const activeMaterialLinks = computed(() => selectedMaterialDirectory.value.links.value.filter(link => link.state === 'ACTIVE' &&
   (isTaskDiscussion.value ? ['INPUT', 'REFERENCE'].includes(link.role) : link.role === 'REFERENCE')))
-const linkedFileIds = computed(() => new Set(activeMaterialLinks.value.map(link => `${link.fileId}:${link.version}`)))
-const linkFor = file => activeMaterialLinks.value.find(link => link.fileId === file.fileId && link.version === file.latestVersion)
 const materialName = link => materialNames.value[link.fileId] || workspace.items.value.find(file => file.fileId === link.fileId)?.displayName || `资料 ${link.fileId}`
+const pickerMaterials = computed(() => [...new Map([
+  ...activeMaterialLinks.value.map(link => ({ fileId: link.fileId, version: link.version, displayName: materialName(link) })),
+  ...pendingMaterials.value
+].map(material => [`${material.fileId}:${material.version}`, material])).values()])
+const previewMaterial = link => materialPickerRef.value?.preview?.({ ...link, displayName: materialName(link) })
+const importMaterialImages = files => {
+  if (!hasMaterialScope.value) { materialPickerOpen.value = true; return }
+  void materialPickerRef.value?.importImages?.(files)
+}
 const typedMaterialScope = ref('TASK_DEFAULT')
 const typedSourceSelectors = computed(() => (typedMaterialScope.value === 'NONE' ? [] : activeMaterialLinks.value).filter(link => typedSelectedSourceIds.value.has(`${link.fileId}\u0000${link.version}`) ).map(link => ({ kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: link.fileId, version: String(link.version), purpose: link.role })))
 const toggleDraftSource = (link, selected) => {
@@ -498,57 +485,73 @@ const resolveMaterialNames = async operationKey => {
     }
   }
 }
-const refreshMaterialReferences = async () => {
-  if (!hasMaterialScope.value) return
+const refreshMaterialReferences = () => {
+  if (!hasMaterialScope.value) return Promise.resolve(false)
   const operationKey = `${materialIdentityKey.value}\u0000${taskId.value}\u0000${props.conversationId}`
+  if (materialRefresh?.key === operationKey) return materialRefresh.promise
   const directory = selectedMaterialDirectory.value
-  const [, loaded] = await Promise.all([workspace.refresh({ state: 'ACTIVE' }), directory.load()])
-  if (!loaded || operationKey !== `${materialIdentityKey.value}\u0000${taskId.value}\u0000${props.conversationId}`) return
-  await resolveMaterialNames(operationKey)
+  const request = { key: operationKey, promise: null }
+  request.promise = (async () => {
+    const [, loaded] = await Promise.all([workspace.refresh({ state: 'ACTIVE' }), directory.load()])
+    if (!loaded || operationKey !== `${materialIdentityKey.value}\u0000${taskId.value}\u0000${props.conversationId}`) return false
+    await resolveMaterialNames(operationKey)
+    return operationKey === `${materialIdentityKey.value}\u0000${taskId.value}\u0000${props.conversationId}`
+  })().finally(() => { if (materialRefresh === request) materialRefresh = null })
+  materialRefresh = request
+  return request.promise
 }
 const toggleMaterialPicker = async () => {
   if (serverTaskCompleted.value) { materialPickerOpen.value = false; return }
-  if (isTaskDiscussion.value) {
-    if (!hasMaterialScope.value) { materialPickerOpen.value = true; return }
-    draftMaterialScope.value = typedMaterialScope.value
-    draftSourceIds.value = new Set(typedSelectedSourceIds.value)
-    void refreshMaterialReferences()
-    await taskMaterialPickerRef.value?.open?.()
-    return
-  }
-  materialPickerOpen.value = !materialPickerOpen.value
-  if (materialPickerOpen.value) await refreshMaterialReferences()
+  if (materialPickerLoading.value) return
+  if (!hasMaterialScope.value) { materialPickerOpen.value = true; return }
+  materialPickerOpen.value = false
+  draftMaterialScope.value = typedMaterialScope.value
+  draftSourceIds.value = new Set(typedSelectedSourceIds.value)
+  const generation = materialSelectionGeneration
+  materialPickerLoading.value = true
+  try {
+    if (!await refreshMaterialReferences() || generation !== materialSelectionGeneration || serverTaskCompleted.value) return
+    await materialPickerRef.value?.open?.()
+  } finally { if (generation === materialSelectionGeneration) materialPickerLoading.value = false }
 }
-const completeTaskMaterials = materials => {
+const completeMaterials = materials => {
   if (serverTaskCompleted.value || materialSelectionBusy.value || !hasMaterialScope.value) return
   typedMaterialScope.value = draftMaterialScope.value
   typedSelectedSourceIds.value = new Set(draftSourceIds.value)
-  void attachTaskMaterials(materials)
+  void attachMaterials(materials, true)
 }
-const attachTaskMaterials = async materials => {
-  if (!isTaskDiscussion.value || serverTaskCompleted.value || materialSelectionBusy.value || !hasMaterialScope.value) return
-  pendingTaskMaterials.value = materials.map(material => ({ ...material }))
+const attachMaterials = async (materials, reconcile = false) => {
+  if (serverTaskCompleted.value || materialSelectionBusy.value || !hasMaterialScope.value) return
+  const directory = selectedMaterialDirectory.value
+  pendingMaterials.value = materials.map(material => ({ ...material }))
   const generation = ++materialSelectionGeneration
   materialSelectionBusy.value = true
   try {
     for (const material of materials) {
       if (generation !== materialSelectionGeneration || serverTaskCompleted.value) return
       const existing = activeMaterialLinks.value.find(link => link.fileId === material.fileId && link.version === material.version)
-      const link = existing || await taskMaterialLinks.attach({ fileId: material.fileId, version: material.version, role: 'REFERENCE' })
+      const link = existing || await directory.attach({ fileId: material.fileId, version: material.version, role: 'REFERENCE' })
       if (generation !== materialSelectionGeneration || serverTaskCompleted.value) return
-      if (!link || link.state !== 'ACTIVE') break // Keep failed/unattempted selections and the existing write recovery intent.
+      if (!link || link.state !== 'ACTIVE') return // Keep failed/unattempted selections and the existing write recovery intent.
       materialNames.value = { ...materialNames.value, [material.fileId]: material.displayName }
-      pendingTaskMaterials.value = pendingTaskMaterials.value.filter(item => item.fileId !== material.fileId || item.version !== material.version)
+      if (!existing && props.typedEnabled && typedMaterialScope.value === 'EXPLICIT') typedSelectedSourceIds.value = new Set([...typedSelectedSourceIds.value, `${link.fileId}\u0000${link.version}`])
+      pendingMaterials.value = pendingMaterials.value.filter(item => item.fileId !== material.fileId || item.version !== material.version)
+    }
+    if (reconcile) {
+      const selected = new Set(materials.map(material => `${material.fileId}:${material.version}`))
+      for (const link of [...activeMaterialLinks.value]) {
+        if (generation !== materialSelectionGeneration || serverTaskCompleted.value) return
+        if (!selected.has(`${link.fileId}:${link.version}`)) {
+          const removed = await directory.detach(link)
+          if (!removed) return
+        }
+      }
     }
   } finally { if (generation === materialSelectionGeneration) materialSelectionBusy.value = false }
 }
-const addMaterialReference = async file => {
-  if (isTaskDiscussion.value) return
-  await conversationMaterialLinks.attach({ fileId: file.fileId, version: file.latestVersion, role: 'REFERENCE' })
-}
 const removeMaterialReference = async link => {
-  if (!link || isTaskDiscussion.value) return
-  await conversationMaterialLinks.detach(link)
+  if (!link || serverTaskCompleted.value || materialSelectionBusy.value || materialActionBusy.value || props.conversationBusy || materialUploadBusy.value) return
+  await selectedMaterialDirectory.value.detach(link)
 }
 const closeHistory = () => {
   if (!historyRef.value?.dismissBlocked) historyOpen.value = false
@@ -595,12 +598,17 @@ watch(() => `${materialIdentityKey.value}\u0000${taskId.value}\u0000${props.conv
   materialNames.value = {}
   materialSelectionGeneration++
   materialSelectionBusy.value = false
-  pendingTaskMaterials.value = []
+  materialUploadBusy.value = false
+  materialUploadPending.value = false
+  materialPickerLoading.value = false
+  materialRefresh = null
+  pendingMaterials.value = []
   typedSelectedSourceIds.value = new Set()
   typedMaterialScope.value = 'TASK_DEFAULT'
   draftMaterialScope.value = 'TASK_DEFAULT'
   draftSourceIds.value = new Set()
-}, { flush: 'sync' })
+  if (hasMaterialScope.value && !serverTaskCompleted.value) void refreshMaterialReferences()
+}, { flush: 'sync', immediate: true })
 watch(serverTaskCompleted, (terminal, previous) => {
   if (!terminal) return
   materialPickerOpen.value = false
@@ -1095,10 +1103,26 @@ button:disabled {
     max-width: 94%;
   }
 }
+.composer-attachment-strip { display: flex; flex: 1 0 100%; box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; gap: 8px; padding: 6px 2px; overflow-x: auto; scrollbar-width: none; }
+.composer-attachment-strip::-webkit-scrollbar { display: none; }
+.composer-attachment-strip:focus-visible { outline: 2px solid var(--hall-brand, #923f30); outline-offset: -2px; }
+.composer-attachment-card { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; max-width: 300px; padding: 8px; background: var(--hall-surface, #fffefa); border: 1px solid var(--hall-border, #e3e5dc); border-radius: 8px; }
+.composer-attachment-name { display: flex; flex-direction: column; min-width: 0; }
+.composer-attachment-name strong { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.composer-attachment-name small { font-size: 11px; color: var(--hall-text-muted, #68716b); }
+.composer-attachment-card button { min-height: 44px; flex-shrink: 0; padding: 4px; background: transparent; font-size: 12px; }
 </style>
 
 <style scoped>
 .task-material-directory{display:grid;gap:8px}.task-material-reference{display:grid;gap:5px;padding:10px 12px;border:1px solid #d8ded8;border-radius:8px;background:#f6faf7}.task-material-reference>div{display:flex;align-items:baseline;justify-content:space-between;gap:8px}.task-material-reference strong,.task-material-reference small{overflow-wrap:anywhere}.task-material-reference small{color:#5f746b;font-size:11px}.task-material-reference p{margin:0;color:#5b6963;font-size:12px;line-height:1.55}.material-reference-notice{line-height:1.55}
+.composer-attachment-strip { display: flex; flex: 1 0 100%; box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; gap: 8px; padding: 6px 2px; overflow-x: auto; scrollbar-width: none; }
+.composer-attachment-strip::-webkit-scrollbar { display: none; }
+.composer-attachment-strip:focus-visible { outline: 2px solid var(--hall-brand, #923f30); outline-offset: -2px; }
+.composer-attachment-card { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; max-width: 300px; padding: 8px; background: var(--hall-surface, #fffefa); border: 1px solid var(--hall-border, #e3e5dc); border-radius: 8px; }
+.composer-attachment-name { display: flex; flex-direction: column; min-width: 0; }
+.composer-attachment-name strong { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.composer-attachment-name small { font-size: 11px; color: var(--hall-text-muted, #68716b); }
+.composer-attachment-card button { min-height: 44px; flex-shrink: 0; padding: 4px; background: transparent; font-size: 12px; }
 </style>
 
 <style scoped>
@@ -1111,8 +1135,24 @@ button:disabled {
 .message-output-preview header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .message-output-preview header button { min-width: 40px; min-height: 40px; border: 0; background: transparent; color: inherit; font-size: 24px; cursor: pointer; }
 .message-output-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.composer-attachment-strip { display: flex; flex: 1 0 100%; box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; gap: 8px; padding: 6px 2px; overflow-x: auto; scrollbar-width: none; }
+.composer-attachment-strip::-webkit-scrollbar { display: none; }
+.composer-attachment-strip:focus-visible { outline: 2px solid var(--hall-brand, #923f30); outline-offset: -2px; }
+.composer-attachment-card { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; max-width: 300px; padding: 8px; background: var(--hall-surface, #fffefa); border: 1px solid var(--hall-border, #e3e5dc); border-radius: 8px; }
+.composer-attachment-name { display: flex; flex-direction: column; min-width: 0; }
+.composer-attachment-name strong { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.composer-attachment-name small { font-size: 11px; color: var(--hall-text-muted, #68716b); }
+.composer-attachment-card button { min-height: 44px; flex-shrink: 0; padding: 4px; background: transparent; font-size: 12px; }
 </style>
 
 <style scoped>
 .discussion-turn-progress { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; color: var(--hall-text-muted, #68716b); font-size: 12px; }
+.composer-attachment-strip { display: flex; flex: 1 0 100%; box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; gap: 8px; padding: 6px 2px; overflow-x: auto; scrollbar-width: none; }
+.composer-attachment-strip::-webkit-scrollbar { display: none; }
+.composer-attachment-strip:focus-visible { outline: 2px solid var(--hall-brand, #923f30); outline-offset: -2px; }
+.composer-attachment-card { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; max-width: 300px; padding: 8px; background: var(--hall-surface, #fffefa); border: 1px solid var(--hall-border, #e3e5dc); border-radius: 8px; }
+.composer-attachment-name { display: flex; flex-direction: column; min-width: 0; }
+.composer-attachment-name strong { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.composer-attachment-name small { font-size: 11px; color: var(--hall-text-muted, #68716b); }
+.composer-attachment-card button { min-height: 44px; flex-shrink: 0; padding: 4px; background: transparent; font-size: 12px; }
 </style>

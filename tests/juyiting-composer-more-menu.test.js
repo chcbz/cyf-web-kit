@@ -198,3 +198,53 @@ describe('Juyi Hall simple composer more menu', () => {
     } finally { wrapper.unmount() }
   })
 })
+
+describe('unified mobile material actions', () => {
+  for (const discussionVariant of ['public', 'private', 'bounty']) {
+    it(`${discussionVariant}: native inputs, dismissal, keyboard focus and context fence`, async () => {
+      const previous = window.matchMedia
+      window.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} })
+      const wrapper = create({ discussionVariant, contextKey: 'thread-a' })
+      try {
+        const clip = wrapper.get('.composer-add-materials')
+        await clip.trigger('click')
+        expect(wrapper.get('.composer-material-actions').text()).to.equal('拍照相册资料')
+        expect(wrapper.get('input[capture]').attributes('capture')).to.equal('environment')
+        expect(wrapper.get('input[multiple]').attributes('capture')).to.equal(undefined)
+        await wrapper.get('.composer-material-actions').trigger('pointerdown')
+        expect(wrapper.find('.composer-material-actions').exists()).to.equal(true)
+        document.body.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+        await Vue.nextTick()
+        expect(wrapper.find('.composer-material-actions').exists()).to.equal(false)
+        await clip.trigger('click')
+        await wrapper.get('textarea').trigger('focus')
+        expect(wrapper.find('.composer-material-actions').exists()).to.equal(false)
+        await clip.trigger('click')
+        await wrapper.get('.composer-more').trigger('click')
+        expect(wrapper.find('.composer-material-actions').exists()).to.equal(false)
+        await clip.trigger('click')
+        document.body.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+        await Vue.nextTick()
+        expect(wrapper.find('.composer-material-actions').exists()).to.equal(false)
+        expect(document.activeElement).to.equal(clip.element)
+        await clip.trigger('click')
+        await wrapper.get('.composer-material-actions button:last-child').trigger('click')
+        expect(wrapper.emitted('open-materials')).to.have.length(1)
+        expect(wrapper.find('.composer-material-actions').exists()).to.equal(false)
+        await clip.trigger('click')
+        await wrapper.get('.composer-material-actions button:nth-child(2)').trigger('click')
+        const album = wrapper.get('input[multiple]')
+        Object.defineProperty(album.element, 'files', { configurable: true, value: [{ name: 'photo.png' }] })
+        await album.trigger('change')
+        expect(wrapper.emitted('import-images')).to.have.length(1)
+        await clip.trigger('click')
+        await wrapper.get('.composer-material-actions button:nth-child(2)').trigger('click')
+        await wrapper.setProps({ contextKey: 'thread-b' })
+        await album.trigger('change')
+        expect(wrapper.emitted('import-images')).to.have.length(1)
+        expect(wrapper.emitted('send-message')).to.equal(undefined)
+        expect(wrapper.emitted('update:draft')).to.equal(undefined)
+      } finally { wrapper.unmount(); window.matchMedia = previous }
+    })
+  }
+})

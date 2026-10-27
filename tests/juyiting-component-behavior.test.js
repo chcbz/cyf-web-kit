@@ -148,7 +148,8 @@ const loadSfc = (relativePath, runtimeAgentApi = { post: async () => { throw new
     .replace(/^import\s+WorkItemPlanPanel\s+from\s+['"]\.\/WorkItemPlanPanel\.vue['"];?\s*$/gm, 'var WorkItemPlanPanel = { template: \'<section class="work-item-plan-stub" />\', props: [\'task\', \'enabled\', \'authorizationGeneration\'] }')
     .replace(/^import\s+TeamRecommendationPanel\s+from\s+['"]\.\/TeamRecommendationPanel\.vue['"];?\s*$/gm, 'var TeamRecommendationPanel = { template: \'<section class="team-recommendation-stub" />\', props: [\'task\', \'authorizationGeneration\'] }')
     .replace(/^import\s+HallDraftEditor\s+from\s+['"]\.\/HallDraftEditor\.vue['"];?\s*$/gm, 'var HallDraftEditor = { template: \'<section class="hall-draft-editor-stub" />\', props: [\'agents\', \'selectedAgent\', \'identityEpoch\'], emits: [\'close\'] }')
-    .replace(/^import\s+HallMaterialPicker\s+from\s+['"]\.\/HallMaterialPicker\.vue['"];?\s*$/gm, 'var HallMaterialPicker = { template: \'<section class="hall-material-picker-stub" />\', props: [\'modelValue\', \'identityScope\', \'identityEpoch\', \'disabled\'], emits: [\'update:modelValue\'] }')
+    .replace(/^import\s+HallMaterialPicker\s+from\s+['"]\.\/HallMaterialPicker\.vue['"];?\s*$/gm, `var HallMaterialPicker = { data: () => ({ opened: false }), methods: { open() { this.opened = true } }, template: '<section class="hall-material-picker-stub" :data-open="opened" />', props: ['modelValue', 'identityScope', 'identityEpoch', 'disabled'], emits: ['update:modelValue'] }`)
+    .replace(/^import\s+HallMaterialThumbnail\s+from\s+['"]\.\/HallMaterialThumbnail\.vue['"];?\s*$/gm, `var HallMaterialThumbnail = { template: '<span class="material-thumbnail-stub" />' }`)
     .replace(/^import\s+HostingRentPanel\s+from\s+['"].\/HostingRentPanel\.vue['"];?\s*$/gm, 'var HostingRentPanel = { template: \'<section class="hosting-rent-stub" />\', props: [\'persona\', \'resolvePersona\'] }')
     // Dedicated archive-maintenance tests cover this child; keep the hall fixture scoped to its parent.
     .replace(/^import\s+ArchiveMaintenance\s+from\s+['"].\/archive\/ArchiveMaintenance\.vue['"];?\s*$/gm, 'var ArchiveMaintenance = Vue.defineComponent({render: () => null})')
@@ -2141,19 +2142,17 @@ describe('JuyiHall component behavior', () => {
     })
   }
 
-  it('opens workspace from the material picker without sending or changing the draft', async () => {
+  it('opens the shared material selector without sending or changing the draft', async () => {
     const wrapper = mount(ChatPanel, {
       global: { stubs }, props: { conversationId: 'conversation-1', draft: '保留草稿',
         mentionLabel: agent => agent.name, senderText: message => message.sender }
     })
     try {
       await wrapper.get('[aria-label="添加资料"]').trigger('click')
-      await Vue.nextTick()
-      const picker = wrapper.get('.material-reference-picker')
-      const workspaceButton = picker.findAll('button').find(button => button.text() === '去添加资料')
-      expect(workspaceButton, 'workspace action is reachable in the picker').not.to.equal(undefined)
-      await workspaceButton.trigger('click')
-      expect(wrapper.emitted('open-workspace')).to.deep.equal([[]])
+      await waitForStageReady()
+      expect(wrapper.get('.hall-material-picker-stub').attributes('data-open')).to.equal('true')
+      expect(wrapper.find('.material-reference-picker').exists()).to.equal(false)
+      expect(wrapper.emitted('open-workspace')).to.equal(undefined)
       expect(wrapper.emitted('send-message')).to.equal(undefined)
       expect(wrapper.emitted('update:draft')).to.equal(undefined)
       expect(wrapper.get('textarea').element.value).to.equal('保留草稿')
@@ -2170,7 +2169,7 @@ describe('JuyiHall component behavior', () => {
     })
     await wrapper.find('.composer-add-materials').trigger('click')
     expect(wrapper.get('.composer-more').attributes('aria-expanded')).to.equal('false')
-    const picker = wrapper.get('.material-reference-picker').element
+    const picker = wrapper.get('.material-reference-notice').element
     for (let node = picker; node; node = node.parentElement) {
       expect(node.style.display).not.to.equal('none')
     }
