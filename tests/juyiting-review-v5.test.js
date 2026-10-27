@@ -39,6 +39,18 @@ describe('revision feedback and existing refresh continuation', () => {
     assert.equal(revisionProgressPending(value), false)
     assert.match(revisionProgressHint(value.reviewProgress), /未受理/)
   })
+  it('shows unknown child execution honestly while keeping read-only refresh available', () => {
+    for (const childState of ['UNKNOWN', 'RECOVERY_REQUIRED']) {
+      const value = fixture()
+      value.reviewProgress = { ...value.reviewProgress, operationId: 'review', state: 'COMMITTED', stateVersion: '2', childRequestId: 'child', childState, childStateVersion: '3' }
+      assert.ok(typedOutcomeProjection(value))
+      assert.equal(revisionProgressPending(value), true)
+      assert.match(revisionProgressHint(value.reviewProgress), /待核对/)
+      assert.match(revisionProgressHint(value.reviewProgress), /请勿重复提交/)
+      assert.doesNotMatch(revisionProgressHint(value.reviewProgress), /正在原议事继续处理/)
+      assert.equal(reviewProgressAdvances(value.reviewProgress, { ...value.reviewProgress, childState: 'COMPLETED', childStateVersion: '4' }), true)
+    }
+  })
   it('re-reads the committed child on later parent refresh without any POST or new listener', async () => {
     const parent = fixture()
     parent.reviewProgress = { ...parent.reviewProgress, operationId: 'review', state: 'COMMITTED', stateVersion: '2', childRequestId: 'child', childState: 'RUNNING', childStateVersion: '0' }
