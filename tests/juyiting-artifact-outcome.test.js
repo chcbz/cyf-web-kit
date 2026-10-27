@@ -108,7 +108,7 @@ describe('F06 ArtifactOutcomePanel binding', () => {
       await tick()
       const select = wrapper.find('select'); await select.setValue('draft-1\u00003')
       expect(wrapper.find('input[inputmode="numeric"]').exists()).to.equal(false)
-      expect(wrapper.text()).to.include('由服务器原子核验')
+      expect(wrapper.text()).to.include('只能接受尚未验收的成果')
       await wrapper.find('.artifact-outcome-confirm input').setValue(true)
       expect(wrapper.find('button[type="submit"]').attributes('disabled')).to.equal(undefined)
       await wrapper.find('form').trigger('submit')

@@ -41,7 +41,7 @@
         </select>
       </label>
       <p v-if="!outcomes.workspaceArtifacts.length" class="artifact-outcome-warning">当前工作台未提供可选成果；不能猜测历史版本或成果状态。</p>
-      <p class="artifact-outcome-note">仅接受尚未裁决的成果：提交以裁决版本 0 为前提，由服务器原子核验，不代表工作台已确认其状态。已经接受或取代的历史成果不能重新接受，请提交新的成果版本。</p>
+      <p class="artifact-outcome-note">只能接受尚未验收的成果。已接受或已被替换的成果，请提交新版本后再验收。</p>
       <label class="artifact-outcome-confirm"><input v-model="outcomes.confirmed" :disabled="outcomes.busy || outcomes.refreshRequired" type="checkbox" />我确认接受所选成果，并取代勾选的已接受成果。</label>
       <p
         v-if="outcomes.submitMessage"
@@ -52,7 +52,7 @@
       >{{ outcomes.submitMessage }}</p>
       <p v-if="outcomes.submitState === 'conflict'" class="artifact-outcome-warning" role="alert">请刷新并重新选择；系统不会盲目重试。</p>
       <p v-if="outcomes.submitState === 'unknown'" class="artifact-outcome-warning" role="alert">网络结果不明确；请刷新确认，系统不会重发。</p>
-      <button type="submit" :disabled="!outcomes.canSubmit">{{ outcomes.submitState === 'submitting' ? '正在确认…' : '确认权威接受' }}</button>
+      <button type="submit" :disabled="!outcomes.canSubmit">{{ outcomes.submitState === 'submitting' ? '正在确认…' : '确认接受' }}</button>
     </form>
   </section>
 </template>

@@ -99,7 +99,7 @@ describe('five fixes cancellation thin confirmation layer', () => {
     const task = panelTask(); const wrapper = await openPanel(task)
     try {
       await wrapper.get('.ordinary-cancel-action').trigger('click')
-      expect(wrapper.get('[role="dialog"]').text()).to.include('原事项A').and.include('服务端核验')
+      expect(wrapper.get('[role="dialog"]').text()).to.include('原事项A').and.include('未产生费用、尚未开始')
       expect(wrapper.emitted('cancel-task')).to.equal(undefined)
       await wrapper.get('.dismiss').trigger('click'); expect(wrapper.emitted('cancel-task')).to.equal(undefined)
       await wrapper.get('.ordinary-cancel-action').trigger('click')
@@ -316,8 +316,8 @@ describe('matter detail send status presentation (original recovery semantics)',
       expect(wrapper.get('.matter-advice-card .matter-send-status').classes()).not.to.include('is-warning')
       expect(wrapper.find('.matter-send-actions').exists()).to.equal(false)
       expect(wrapper.get('.matter-send-details').element.open).to.equal(false)
-      expect(wrapper.get('.matter-send-details summary').text()).to.equal(status === 'HISTORICAL' ? '历史指派信息' : '技术详情')
-      expect(wrapper.get('.matter-send-details').text()).to.include('1 份资料').and.include('source-file v2')
+      expect(wrapper.get('.matter-send-details summary').text()).to.equal(status === 'HISTORICAL' ? '历史指派信息' : '提交信息')
+      expect(wrapper.get('.matter-send-details').text()).to.include('1 份资料').and.not.include('source-file v2')
       expect(wrapper.emitted('check-point-and-start')).to.equal(undefined)
       expect(wrapper.emitted('resume-point-and-start')).to.equal(undefined)
     } finally { wrapper.unmount() }

@@ -7,16 +7,13 @@
 
     <p v-if="!events.length" class="task-empty-state">尚无可展示的协作事件。</p>
 
-    <ol v-else class="task-timeline-list" aria-label="按事件版本升序的协作时间线">
+    <ol v-else class="task-timeline-list" aria-label="按发生顺序排列的协作记录">
       <li v-for="event in events" :key="event.version" class="task-timeline-item">
         <template v-if="event.redacted">
-          <strong class="task-event-version">版本 {{ event.version }}</strong>
-          <span class="task-redacted-event">此事件内容已脱敏。</span>
+          <span class="task-redacted-event">此记录的部分内容不可查看。</span>
         </template>
         <template v-else>
-          <strong class="task-event-version">版本 {{ event.version }}</strong>
-          <span class="task-event-type" :title="event.eventType">{{ event.eventType }}</span>
-          <span class="task-event-summary" :title="eventSummary(event)">{{ eventSummary(event) }}</span>
+          <span class="task-event-type">{{ eventLabel(event.eventType) }}</span>
           <time class="task-event-time" :datetime="event.occurredAt">{{ event.occurredAt }}</time>
         </template>
       </li>
@@ -30,10 +27,7 @@ defineProps({
   truncated: { type: Boolean, default: false }
 })
 
-const eventSummary = event => {
-  const actor = event.actorId ? `${event.actorType}:${event.actorId}` : event.actorType
-  return `${actor} · ${event.aggregateType}:${event.aggregateId}`
-}
+const eventLabel = type => ({ TASK_STARTED: '事项已开始', TASK_CREATED: '事项已创建', TASK_COMPLETED: '事项已完成', TASK_CANCELLED: '事项已取消', PROGRESS_REPORTED: '进度已更新', WORK_ITEM_LEASE_RELEASED: '工作项已释放', WORK_ITEM_CREATED: '已新增工作项', WORK_ITEM_COMPLETED: '工作项已完成', ARTIFACT_SUBMITTED: '已提交成果' })[type] || '协作记录已更新'
 </script>
 
 <style scoped>

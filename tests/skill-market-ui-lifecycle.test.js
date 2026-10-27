@@ -117,7 +117,7 @@ describe('SM-C1 actual management component lifecycle (no composable stub)', () 
     wrapper.unmount(); mock.api.post = post
     wrapper = mount(skillComponents().Management, { attachTo: document.body, props: { show: true, targetAgent: { agentId: 'agt_demo', name: '测试好汉' }, actorScopeKey: 'actor-a', agentApi: mock.api }, global: { stubs: { teleport: true } } })
     await until(() => button(wrapper, '核对结果')); await button(wrapper, '核对结果').trigger('click')
-    expect(wrapper.text()).to.include('报价结果待核对')
+    expect(wrapper.text()).to.include('报价结果待确认')
     await button(wrapper, '继续核对').trigger('click'); await until(() => button(wrapper, '确认安装'))
     expect(mock.requests.some(r => r.path === '/agt_demo/skill-changes' && r.method === 'POST')).to.equal(false)
     expect(wrapper.find('.skill-inline-footer').text()).to.include('测试好汉 · 图片修改 · 1.1.0')

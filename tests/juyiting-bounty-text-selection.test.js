@@ -94,7 +94,7 @@ describe('bounty persisted text selection archive', () => {
       const save = wrapper.findAll('button')[0]
       await save.trigger('click')
       await Vue.nextTick()
-      expect(wrapper.text()).to.include('正在从服务端持久正文冻结选区')
+      expect(wrapper.text()).to.include('正在保存文字片段')
       expect(wrapper.findAll('button')[0].attributes('disabled')).to.equal('')
       await save.trigger('click')
       expect(digests).to.have.length(1)
@@ -340,7 +340,7 @@ describe('bounty persisted text selection archive', () => {
       if (count === 1) throw Object.assign(new Error('response lost'), { requestErrorClass: 'network' })
       return response(receipt(request.data.items[0].textSelection))
     }, async ({ wrapper, requests, counts }) => {
-      expect(wrapper.text()).to.include('保存结果不明确')
+      expect(wrapper.text()).to.include('暂时无法确认是否保存')
       await wrapper.findAll('button')[1].trigger('click'); await flushPromises()
       expect(requests[1]).to.deep.equal(requests[0])
       expect(counts.uuid).to.equal(1)
@@ -368,7 +368,7 @@ describe('bounty persisted text selection archive', () => {
   for (const [name, mutate] of Object.entries(malformed)) it(`does not claim saved for ${name}`, async () => {
     await exercise(request => response(mutate(receipt(request.data.items[0].textSelection))), ({ wrapper, requests }) => {
       expect(requests).to.have.length(1)
-      expect(wrapper.text()).to.include('保存结果不明确')
+      expect(wrapper.text()).to.include('暂时无法确认是否保存')
       expect(wrapper.text()).not.to.include('文字片段已保存')
       expect(wrapper.findAll('button')[1].text()).to.equal('重试原保存')
     })
@@ -385,7 +385,7 @@ describe('bounty persisted text selection archive', () => {
     }, async ({ wrapper, requests }) => {
       await wrapper.findAll('button')[1].trigger('click'); await flushPromises()
       expect(requests).to.have.length(2)
-      expect(wrapper.text()).to.include('保存结果不明确')
+      expect(wrapper.text()).to.include('暂时无法确认是否保存')
       expect(wrapper.text()).not.to.include('should-not-appear')
     })
   })
@@ -398,7 +398,7 @@ describe('bounty persisted text selection archive', () => {
     }, ({ wrapper }) => {
       expect(wrapper.text()).to.include('该文字片段未保存')
       expect(wrapper.text()).not.to.include('文字片段已保存')
-      expect(wrapper.text()).not.to.include('保存结果不明确')
+      expect(wrapper.text()).not.to.include('暂时无法确认是否保存')
     })
   })
 

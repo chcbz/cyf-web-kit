@@ -188,6 +188,14 @@ describe('C07C task workspace accessibility and responsive contract', () => {
     }
   })
 
+  it('shows human-readable events without internal actor or aggregate identities', () => {
+    const wrapper = mount(TaskTimeline, { props: { events: [{ version: '9', eventType: 'TASK_STARTED', actorType: 'AGENT', actorId: 'internal-agent', aggregateType: 'TASK', aggregateId: 'internal-task', occurredAt: '2026-10-27T00:00:00Z' }] } })
+    try {
+      expect(wrapper.text()).to.include('事项已开始')
+      expect(wrapper.text()).not.to.match(/TASK_STARTED|internal-agent|internal-task|版本 9/)
+    } finally { wrapper.unmount() }
+  })
+
   it('renders redacted timeline events by reading only redacted and version', () => {
     const accessed = []
     const redacted = {}
@@ -201,8 +209,8 @@ describe('C07C task workspace accessibility and responsive contract', () => {
     })
     const wrapper = mount(TaskTimeline, { props: { events: [redacted] } })
     try {
-      expect(wrapper.text()).to.include('版本 9')
-      expect(wrapper.text()).to.include('此事件内容已脱敏。')
+      expect(wrapper.text()).not.to.include('版本 9')
+      expect(wrapper.text()).to.include('此记录的部分内容不可查看。')
       expect(new Set(accessed)).to.deep.equal(new Set(['redacted', 'version']))
     } finally {
       wrapper.unmount()

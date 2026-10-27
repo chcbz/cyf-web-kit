@@ -26,7 +26,7 @@ const harness = (options = {}) => {
 describe('archive position and maintenance recovery', () => {
   it('passes an explicit selected target and never infers installation success', async () => {
     const h = harness()
-    try { await wait(() => !h.api.busy.value); await h.api.submit('position', '/appointments', { positionId: 'editor', agentId: 'lin-chong' }); expect(h.calls[0][1]).to.deep.equal({ positionId: 'editor', agentId: 'lin-chong' }); expect(h.api.notice.value).to.contain('有效安装回执'); expect(h.api.positions.value.installations).to.deep.equal([]) } finally { h.wrapper.unmount() }
+    try { await wait(() => !h.api.busy.value); await h.api.submit('position', '/appointments', { positionId: 'editor', agentId: 'lin-chong' }); expect(h.calls[0][1]).to.deep.equal({ positionId: 'editor', agentId: 'lin-chong' }); expect(h.api.notice.value).to.contain('请查看安装进度'); expect(h.api.positions.value.installations).to.deep.equal([]) } finally { h.wrapper.unmount() }
   })
   it('keeps the original key but never persists source text after a lost response', async () => {
     const h = harness({ jobApi: { post: async () => { throw new Error('response lost') } } })

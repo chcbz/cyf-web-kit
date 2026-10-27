@@ -62,7 +62,7 @@ describe('formal TASK execution boundary', () => {
       inputs: [{ fileId: 'file_1', version: '2' }], instruction: '请制作正式 PDF', outputContentMimeType: 'application/pdf'
     }])
     assert.equal(formal.activeExecution.value?.taskId, 'task_1')
-    assert.match(formal.stateText.value, /不表示 Provider 已开始/)
+    assert.match(formal.stateText.value, /正在等待办理/)
   })
 
   it('allows zero materials only when generation capability is enabled and verifies an empty echoed input set', async () => {

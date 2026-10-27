@@ -46,11 +46,14 @@ describe('C07B task workspace presentation', () => {
 
   it('uses safe timeline projections and a fixed redaction message', () => {
     expect(timelineSource).to.include('v-if="event.redacted"')
-    expect(timelineSource).to.include('此事件内容已脱敏。')
-    expect(timelineSource).to.include('版本 {{ event.version }}')
+    expect(timelineSource).to.include('此记录的部分内容不可查看。')
+    expect(timelineSource).not.to.include('版本 {{ event.version }}')
+    expect(timelineSource).not.to.include('event.actorId')
+    expect(timelineSource).not.to.include('event.aggregateId')
+    expect(timelineSource).to.include('eventLabel(event.eventType)')
     expect(timelineSource).not.to.include('event.payload')
     expect(timelineSource).not.to.include('v-html')
-    expect(timelineSource).to.include('aria-label="按事件版本升序的协作时间线"')
+    expect(timelineSource).to.include('aria-label="按发生顺序排列的协作记录"')
   })
 
   it('keeps artifacts and conversation association metadata-only and exposes truncation indicators', () => {
