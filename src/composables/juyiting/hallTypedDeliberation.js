@@ -233,6 +233,7 @@ export const revisionProgressHint = progress => {
   if (progress?.state === 'QUEUED') return '正在核对本轮成果与修改要求，尚未开始修改。'
   if (progress?.state === 'REJECTED') return '本次修改未受理，请核对当前成果后在原议事继续说明。'
   if (progress?.state !== 'COMMITTED') return ''
+  if (['UNKNOWN', 'RECOVERY_REQUIRED'].includes(progress.childState)) return '本次修改的执行状态待核对，上一版仍保留；请勿重复提交修改要求。'
   if (['FAILED', 'CANCELLED', 'PARTIAL'].includes(progress.childState)) return '本次修改未完成，上一版仍保留；可以在原议事继续说明。'
   if (progress.childState === 'COMPLETED') return '本轮回复已完成，请查看后续答复；成果提交与验收状态以当前成果为准。'
   return '已受理修改，正在原议事继续处理；上一版仍保留。'
