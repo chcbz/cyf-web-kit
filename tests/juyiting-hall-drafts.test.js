@@ -69,7 +69,7 @@ describe('JYT-UX-W03 Hall draft submission and recovery adapter', () => {
     expect(calls[1].headers).to.deep.equal({ 'If-Match': '"1"' })
     expect(drafts.draft.value.editableFields.title).to.equal('整理案卷')
     expect(drafts.reloadRequired.value).to.equal(true)
-    expect(drafts.error.value).to.match(/本地内容未覆盖/)
+    expect(drafts.error.value).to.equal('草稿已有更新，本次修改未保存。重新载入会替换当前输入，请先复制需要保留的内容。')
     drafts.dispose()
   })
 

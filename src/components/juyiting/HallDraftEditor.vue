@@ -41,7 +41,7 @@
           </label>
         </details>
         <p v-if="drafts.error.value" class="draft-error" role="alert">{{ drafts.error.value }}</p>
-        <p v-if="drafts.reloadRequired.value" class="draft-error" role="alert">服务端版本已变化；本地输入未覆盖。请先恢复草稿再决定是否重填。</p>
+        <p v-if="drafts.reloadRequired.value" class="draft-error" role="alert">草稿已有更新，本次修改未保存。重新载入会替换当前输入，请先复制需要保留的内容。</p>
         <div class="draft-actions"><span v-if="needsSave" class="muted">未保存；可确认保存草稿。</span><span v-else-if="isCurrentDraftSaved" class="draft-saved">已保存到账号，尚未交办。</span><button v-if="drafts.draft.value?.state === 'EDITING'" type="button" :disabled="busy" @click="discard">放弃草稿</button><button type="submit" :disabled="busy">{{ isTaskCreate ? '保存草稿' : revisionSource ? '保存修改草稿' : drafts.draft.value ? '保存修改' : '确认保存草稿' }}</button><button v-if="isTaskCreate" type="button" class="primary" :disabled="busy || formalStarting || !canProceed || Boolean(drafts.unresolvedIntent.value)" @click="startFormalTask">开始办事</button><button v-else-if="!isTaskAction" type="button" class="primary" :disabled="busy || !canProceed" @click="nextToConfirm">下一步：确认交办</button></div>
         <p v-if="isTaskAction" role="status">这是正式事项草稿；此处只保存编辑。正式张榜和返工请使用原正式入口。</p>
       </form>

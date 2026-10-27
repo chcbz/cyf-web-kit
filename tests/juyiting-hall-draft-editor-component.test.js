@@ -140,6 +140,39 @@ describe('JYT-UX-W03 HallDraftEditor boundary', () => {
     wrapper.unmount()
   })
 
+  it('keeps current input on a revision conflict and warns before a server draft replaces it', async () => {
+    const previousState = editorState
+    const deps = editorDeps()
+    const adapter = deps.useHallDrafts()
+    const saved = { title: '服务端旧标题', instruction: '服务端旧需求', targetAgentId: '', outputMime: '', inputs: [] }
+    const latest = { ...saved, title: '服务端新标题', instruction: '服务端新需求' }
+    adapter.save = async () => { adapter.reloadRequired.value = true; adapter.state.value = 'error'; return null }
+    adapter.list = async () => { adapter.summaries.value = [{ draftId: 'conflict-draft', revision: '2', title: latest.title }]; return true }
+    adapter.load = async () => {
+      adapter.draft.value = { draftId: 'conflict-draft', revision: '2', state: 'EDITING', editableFields: latest }
+      adapter.reloadRequired.value = false
+      return adapter.draft.value
+    }
+    deps.useHallDrafts = () => adapter
+    const wrapper = mount(loadEditor(deps), { props: { initialKind: 'TASK_CREATE', identityScope: 'tenant\u0000client\u0000owner' } })
+    try {
+      adapter.draft.value = { draftId: 'conflict-draft', revision: '1', state: 'EDITING', editableFields: saved }
+      await wrapper.find('textarea').setValue('当前未保存需求')
+      await wrapper.find('input').setValue('当前未保存标题')
+      await wrapper.find('form').trigger('submit')
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(wrapper.find('textarea').element.value).to.equal('当前未保存需求')
+      expect(wrapper.text()).to.include('草稿已有更新，本次修改未保存。重新载入会替换当前输入，请先复制需要保留的内容。')
+      await button(wrapper, '恢复草稿').trigger('click')
+      await Vue.nextTick()
+      expect(wrapper.find('textarea').element.value).to.equal('当前未保存需求')
+      await wrapper.findAll('button').find(item => item.text().startsWith('服务端新标题')).trigger('click')
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(wrapper.find('textarea').element.value).to.equal(latest.instruction)
+      expect(wrapper.find('input').element.value).to.equal(latest.title)
+    } finally { wrapper.unmount(); editorState = previousState }
+  })
+
   it('mounts fixed private results, hides unavailable actions, and creates a revision from the exact output reference', async () => {
     const wrapper = mount(HallDraftEditor, {
       props: { agents: [], selectedAgent: null, identityEpoch: 7, identityScope: 'tenant\u0000client\u0000owner' }
