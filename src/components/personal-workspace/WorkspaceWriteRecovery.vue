@@ -6,8 +6,8 @@
     aria-live="polite"
   >
     <div v-for="item in pending" :key="item.target">
-      <p>{{ item.label }}：{{ item.state === 'SENDING' ? '正在提交原操作…' : item.state === 'PROCESSING' ? '服务端仍在处理，请勿重复新建。' : '提交结果尚未确认，请继续原操作核对结果，勿重复新建。' }}</p>
-      <button type="button" :disabled="item.state === 'SENDING'" @click="$emit('retry', item.target)">继续原操作</button>
+      <p>{{ item.label }}：{{ item.state === 'SENDING' ? '正在提交…' : item.state === 'PROCESSING' ? '正在处理，请勿重复提交。' : '结果尚未确认，请查询结果，不要重复提交。' }}</p>
+      <button type="button" :disabled="item.state === 'SENDING'" @click="$emit('retry', item.target)">继续核对</button>
     </div>
     <p>请先核对这次操作，再刷新或关闭页面；刷新后将无法在此继续恢复。</p>
   </section>

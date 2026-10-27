@@ -50,7 +50,7 @@
         <p v-if="!records.accepted.length">验收成果关联待核对。</p>
         <div v-for="batch in records.acceptedBatches" :key="batch.deliveryId">
           <p>验收状态：已通过 · {{ batch.items.filter(item => item.displayRole === 'RESULT').length }} 份固定成果</p>
-          <p>交付编号：{{ batch.deliveryId }} · 交付版本 {{ batch.deliveryVersion }}</p>
+          <p>第 {{ batch.deliveryVersion }} 版</p>
         </div>
       </details>
     </template>

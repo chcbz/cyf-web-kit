@@ -217,7 +217,7 @@ export const useHallConversation = ({
         if (attempt !== capabilityAttempt) throw new DOMException('Stale capability negotiation', 'AbortError')
         const capability = apiData(response)
         const v2 = v2Supported(capability)
-        if (!v2) throw new Error('服务端不支持当前议事协议，请更新服务后重试')
+        if (!v2) throw new Error('议事暂不可用，请稍后重试')
         capabilityState.value = { loaded: true, v2: true }
       } catch (error) {
         if (error?.name === 'AbortError' || !guardCurrent(guard) || attempt !== capabilityAttempt) throw error?.name === 'AbortError'
@@ -1537,7 +1537,7 @@ export const useHallConversation = ({
     } catch (error) {
       if (error?.name === 'AbortError') return false
       log.warn('聚义厅协议确认失败', error)
-      deliberationStatus.value = '当前议事协议不可用，消息未发送，请稍后重试'
+      deliberationStatus.value = '消息未发送，请稍后重试'
       showToast(deliberationStatus.value)
       return false
     }
@@ -1709,7 +1709,7 @@ export const useHallConversation = ({
         sender: 'SYSTEM',
         content: exactId && stillBusy
           ? '传令连接中断，正在原话头核对回话；请勿重复发送。'
-          : exactId ? '传令连接中断，但原请求已核对为终态。' : '传令连接中断，结果未知；请从议事记录核对，勿直接重发。',
+          : exactId ? '连接已中断，本轮已结束。' : '传令连接中断，结果未知；请从议事记录核对，勿直接重发。',
         timestamp: Date.now(),
         streaming: false
       })

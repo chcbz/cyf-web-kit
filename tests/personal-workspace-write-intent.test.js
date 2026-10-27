@@ -23,7 +23,7 @@ describe('workspace immutable in-page write intent', () => {
     await assert.rejects(a)
     assert.equal(keys.length, 1)
     assert.equal(writes.pending.value[0].state, 'UNKNOWN')
-    await assert.rejects(writes.run({ ...spec, input: [new Blob(['changed']), '1'] }), /重试原操作/)
+    await assert.rejects(writes.run({ ...spec, input: [new Blob(['changed']), '1'] }), /重试/)
     fail = false
     assert.equal(await writes.retry('f'), 'saved')
     assert.equal(keys[0][0], keys[1][0]); assert.equal(keys[1][1], true)
@@ -119,7 +119,7 @@ describe('workspace retry error lifecycle', () => {
         const pending = w.retryWrite('f'); await Promise.resolve()
         assert.equal(w.error.value, '')
         wait.resolve({ ...file, metadataRevision: '2' }); assert.ok(await pending)
-        assert.equal(w.error.value, ''); assert.match(w.writeNotice.value, /已提交/)
+        assert.equal(w.error.value, ''); assert.equal(w.writeNotice.value, '')
         assert.equal(calls[0].headers['Idempotency-Key'], calls[1].headers['Idempotency-Key'])
         assert.equal(calls[0].headers['If-Match'], calls[1].headers['If-Match'])
         assert.deepEqual(calls[0].data, calls[1].data)

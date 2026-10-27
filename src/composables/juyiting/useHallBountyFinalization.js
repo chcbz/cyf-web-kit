@@ -40,7 +40,7 @@ const freezeBody = body => Object.freeze({ ...body, selectedOutputs: Object.free
 const browserStorage = () => { try { return globalThis.sessionStorage || globalThis.window?.sessionStorage || null } catch { return null } }
 const uuid = () => {
   const value = globalThis.crypto?.randomUUID?.()
-  if (!value) throw new Error('当前环境无法生成安全验收幂等键，未发送请求。')
+  if (!value) throw new Error('当前浏览器暂时无法提交验收，本次未提交。')
   return `conversation-finalize-${value}`
 }
 const unwrap = response => response

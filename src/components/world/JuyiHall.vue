@@ -322,7 +322,7 @@
       <p>{{ deliveryReview.operation.value.message }}</p>
       <button v-if="deliveryReview.operation.value.intent" type="button" :disabled="deliveryReview.operation.value.busy" @click="deliveryReview.checkOriginal">查询原验收</button>
       <button v-if="deliveryReview.operation.value.state === 'UNKNOWN' || deliveryReview.operation.value.state === 'PROCESSING'" type="button" :disabled="deliveryReview.operation.value.busy" @click="deliveryReview.resumeOriginal">继续原验收</button>
-      <button v-if="deliveryReview.operation.value.receipt && ['COMMITTED', 'REJECTED'].includes(deliveryReview.operation.value.state)" type="button" :disabled="deliveryReview.operation.value.busy" @click="deliveryReview.settleOriginal">重新核对并结束原操作</button>
+      <button v-if="deliveryReview.operation.value.receipt && ['COMMITTED', 'REJECTED'].includes(deliveryReview.operation.value.state)" type="button" :disabled="deliveryReview.operation.value.busy" @click="deliveryReview.settleOriginal">核对并确认结果</button>
     </section>
           <BountyPanel
             v-if="panelFrames.includes('tasks')"
@@ -2532,7 +2532,7 @@ const assignTask = async (task, agent) => {
   // turn an uncertain original write into a fresh legacy assignment.
   const original = pointAndStartIntentState(task.id)
   if (pointAndStartIntentReadLane(original) === 'UNAVAILABLE') {
-    showToast('无法读取原点将恢复记录；未另建点将。请恢复浏览器本地存储后核对原操作。')
+    showToast('无法读取原点将恢复记录；未另建点将。请恢复浏览器本地存储后核对结果。')
     return false
   }
   if (original.state === 'PRESENT' || original.state === 'CORRUPT') {
@@ -3050,7 +3050,7 @@ const canStartAgentConversation = agent => Boolean(resolvePermittedConversationA
 
 const handleBindPersona = async (persona, mode = 'local') => {
   if (mode !== 'local') {
-    showToast('山寨安顿请先打开服务端租约报价，不会直接免费开通。')
+    showToast('请先查看安顿报价，确认后才会收费。')
     return false
   }
   try {

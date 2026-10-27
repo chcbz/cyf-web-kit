@@ -57,7 +57,7 @@ export function usePersonalWorkspaceWriteIntent () {
     const prior = entries.get(target)
     if (prior) {
       if (!sameInput(prior.input, input)) {
-        return Promise.reject(new Error('该目标有结果尚未确认的操作，请先重试原操作，不要修改内容后重复提交。'))
+        return Promise.reject(new Error('该目标有结果尚未确认的操作，请先重试，不要修改内容后重复提交。'))
       }
       return attempt(prior)
     }

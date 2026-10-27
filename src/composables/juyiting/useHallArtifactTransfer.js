@@ -170,7 +170,7 @@ export const useHallArtifactTransfer = ({ api = createApi('/agent'), subject, wo
       if (!capturedCurrent(captured, capturedTask, capturedActor, capturedEpoch, controller)) return null
       const result = unwrap(await request({ url: `/tasks/${encodeURIComponent(capturedTask)}/artifacts`, method: 'POST', data: body, params: { actorAgentId: capturedActor } }, controller))
       if (!capturedCurrent(captured, capturedTask, capturedActor, capturedEpoch, controller)) return null
-      if (!responseMatchesPublish(result, body, chosen.size)) throw new Error('服务回执与本次成果不匹配，未确认保存。')
+      if (!responseMatchesPublish(result, body, chosen.size)) throw new Error('暂时无法确认成果是否保存，请查询结果。')
       receipt.value = result; state.value = 'published'; message.value = '服务已确认保存该精确成果版本。'
       return result
     } catch (error) {

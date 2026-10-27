@@ -75,7 +75,7 @@ export const useHallOrdinaryCancellation = ({ agentApi, selectedTask, tasks, ide
           { expectedTaskVersion: expected }, options))
         if (receipt?.taskId !== task.id || receipt.status !== 'cancelled' || parseTaskEventVersion(receipt.taskVersion) === null || compareTaskEventVersions(receipt.taskVersion, expected) <= 0) {
           receipt = null
-          throw new Error('取消回执不匹配')
+          throw new Error('暂时无法确认是否取消成功，请查询结果。')
         }
       } catch (error) {
         if (!current()) { update('unresolved'); return false }

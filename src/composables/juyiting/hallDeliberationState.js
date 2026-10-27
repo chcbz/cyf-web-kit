@@ -4,7 +4,7 @@ const TERMINAL_TURN_STATES = new Set(['FINAL_PERSISTED', 'PUBLISHED', 'FAILED', 
 const TERMINAL_REQUEST_STATES = new Set(['COMPLETED', 'PARTIAL', 'FAILED', 'CANCELLED', 'OUTPUT_COMMITTED', 'RESULT_COMMITTED'])
 const PENDING_LABELS = {
   RECEIVED: '已受理', QUEUED: '排队中', DISPATCHED: '正在理解', UNDERSTANDING: '正在理解',
-  INSPECT: '只读检查中', STREAMING: '生成中', GENERATING: '生成中', FALLBACK: '安全回退处理中',
+  INSPECT: '正在查阅', STREAMING: '生成中', GENERATING: '生成中', FALLBACK: '正在处理',
   RECOVERY_REQUIRED: '需要恢复核对', ACCEPTANCE_UNKNOWN: '结果未知，正在核对', UNKNOWN: '结果未知，正在核对',
   CANCEL_REQUESTED: '正在取消', COMPLETED: '已完成', PARTIAL: '部分回话已完成', FAILED: '回话失败',
   CANCELLED: '已取消', FINAL_PERSISTED: '已完成', PUBLISHED: '已完成', OUTPUT_COMMITTED: '本轮成果已就绪', RESULT_COMMITTED: '本轮结果已登记'
@@ -131,15 +131,6 @@ export const cancellationTarget = (request, turns) => {
 export const deliberationStatusText = (request, turns) => {
   const pending = (turns || []).filter(isPendingTurn)
   const source = pending[0] || request || {}
-  const route = stringField(source.route || request?.route).toUpperCase()
-  const engine = stringField(source.engine || request?.engine)
-  const profile = stringField(source.profile || request?.profile)
-  const sandbox = stringField(source.sandbox || request?.sandbox)
   const state = normalizeDeliberationState(source.state || request?.state)
-  const fast = source.fastChat === true || request?.fastChat === true || /fast/i.test(`${route} ${engine} ${profile}`)
-  const runtime = fast ? 'Fast' : (engine || profile)
-  const observedRoute = route.startsWith('CHAT') ? 'CHAT' : route.startsWith('INSPECT') ? 'INSPECT' : ''
-  const observed = [runtime, observedRoute, sandbox].filter(Boolean).join(' · ')
-  const phase = PENDING_LABELS[state] || ''
-  return [observed, phase].filter(Boolean).join(' · ')
+  return PENDING_LABELS[state] || ''
 }

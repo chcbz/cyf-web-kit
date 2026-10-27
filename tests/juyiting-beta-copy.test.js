@@ -35,7 +35,7 @@ describe('beta workbench copy boundaries', () => {
   })
   it('keeps write recovery and lifetime explicit instead of calling replay a query', () => {
     const recovery = source('components/personal-workspace/WorkspaceWriteRecovery.vue')
-    expect(recovery).to.include('继续原操作')
+    expect(recovery).to.include('继续核对')
     expect(recovery).to.include('刷新后将无法在此继续恢复')
     expect(recovery).to.include("$emit('retry', item.target)")
     expect(recovery).not.to.include('>查询结果<')

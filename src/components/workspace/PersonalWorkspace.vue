@@ -110,8 +110,8 @@
       </section>
 
       <section v-if="!embedded && activeModal === 'delivery'" class="babao-modal child-modal delivery-modal" aria-labelledby="workspace-generation-title">
-        <div class="modal-heading"><div><p class="section-kicker">第二层 · 交付台</p><h2 id="workspace-generation-title">{{ showDeliveryProgress ? '交付进度' : '直接生成交付件' }}</h2><p>{{ showDeliveryProgress ? '服务端回执与查询结果在此处显示。' : '只保留一条清晰流程：选 Agent、定类型、写需求。' }}</p></div><button type="button" class="quiet-action" @click="backToBox">返回箱面</button></div>
-        <section v-if="showDeliveryProgress" class="execution-status delivery-receipt" aria-live="polite"><p class="receipt-title">本次交付回执</p><template v-if="execution.receipt.value"><dl class="file-details"><div><dt>执行状态</dt><dd>{{ executionStateText(execution.receipt.value.state) }}</dd></div><div><dt>目标 Agent</dt><dd>{{ execution.selectedExecutionAgent.value?.name || execution.receipt.value.targetAgentId }}</dd></div><div><dt>执行编号</dt><dd>{{ execution.receipt.value.executionId }}</dd></div></dl><p v-if="execution.receipt.value.state === 'QUEUED'" class="workspace-note">服务端已接受请求，正在等待结果；尚未确认任何运行阶段或交付完成。</p></template><p v-else class="workspace-note">{{ execution.executionState.value === 'creating' ? '正在提交原请求；尚未收到服务端执行回执。' : '原请求结果待确认；只查询原请求，不会再次提交。' }}</p><div class="actions"><button type="button" @click="refreshExecution">刷新进度</button><button type="button" :disabled="execution.execution.value?.state !== 'QUEUED'" @click="revokeExecutionInputs">撤销尚未开始的输入授权</button><button
+        <div class="modal-heading"><div><p class="section-kicker">第二层 · 交付台</p><h2 id="workspace-generation-title">{{ showDeliveryProgress ? '交付进度' : '直接生成交付件' }}</h2><p>{{ showDeliveryProgress ? '查看本次交付进度。' : '选择好汉，说明想要的成果。' }}</p></div><button type="button" class="quiet-action" @click="backToBox">返回箱面</button></div>
+        <section v-if="showDeliveryProgress" class="execution-status delivery-receipt" aria-live="polite"><p class="receipt-title">交付进度</p><template v-if="execution.receipt.value"><dl class="file-details"><div><dt>执行状态</dt><dd>{{ executionStateText(execution.receipt.value.state) }}</dd></div><div><dt>执行好汉</dt><dd>{{ execution.selectedExecutionAgent.value?.name || '执行好汉' }}</dd></div></dl><p v-if="execution.receipt.value.state === 'QUEUED'" class="workspace-note">已提交，正在等待结果。</p></template><p v-else class="workspace-note">{{ execution.executionState.value === 'creating' ? '正在提交…' : '提交结果待确认，请查询进度，勿重复提交。' }}</p><div class="actions"><button type="button" @click="refreshExecution">刷新进度</button><button type="button" :disabled="execution.execution.value?.state !== 'QUEUED'" @click="revokeExecutionInputs">撤销尚未开始的输入授权</button><button
           type="button"
           class="quiet-action"
           :disabled="cannotPrepareNewExecution"
@@ -126,12 +126,12 @@
             @click="loadExecutionCapabilities"
           >刷新能力</button></div></template>
           <p v-else class="workspace-note">当前没有已确认开放的直接生成类型，不会用演示内容代替。</p></template>
-        <details class="execution-history" aria-label="服务端执行历史"><summary>最近执行</summary><div class="history-content"><div class="history-heading"><span>服务端记录</span><button
+        <details class="execution-history" aria-label="交付记录"><summary>最近执行</summary><div class="history-content"><div class="history-heading"><span>交付记录</span><button
           type="button"
           class="quiet-action"
           :disabled="execution.historyState.value === 'loading'"
           @click="execution.loadHistory({ adopt: false })"
-        >刷新记录</button></div><p v-if="execution.historyState.value === 'loading'" class="workspace-note" role="status">正在读取服务端执行记录…</p><p v-else-if="execution.historyState.value === 'error'" class="workspace-error" role="alert">{{ execution.historyError.value }}</p><p v-else-if="execution.historyState.value === 'empty'" class="workspace-note">服务端暂无最近执行记录。</p><div v-else-if="execution.historyState.value === 'ready'" class="history-list"><button
+        >刷新记录</button></div><p v-if="execution.historyState.value === 'loading'" class="workspace-note" role="status">正在读取记录…</p><p v-else-if="execution.historyState.value === 'error'" class="workspace-error" role="alert">{{ execution.historyError.value }}</p><p v-else-if="execution.historyState.value === 'empty'" class="workspace-note">暂无交付记录。</p><div v-else-if="execution.historyState.value === 'ready'" class="history-list"><button
           v-for="item in execution.history.value"
           :key="item.executionId"
           type="button"
@@ -139,7 +139,7 @@
           :disabled="historySelectionBlocked"
           :class="{ active: execution.receipt.value?.executionId === item.executionId }"
           @click="chooseHistoryExecution(item.executionId)"
-        ><span><strong>{{ executionStateText(item.state) }}</strong><small>{{ execution.selectedExecutionAgent.value?.agentId === item.targetAgentId ? execution.selectedExecutionAgent.value?.name : item.targetAgentId }}</small></span><small>{{ item.executionId }}</small></button></div><button
+        ><span><strong>{{ executionStateText(item.state) }}</strong><small>{{ execution.selectedExecutionAgent.value?.agentId === item.targetAgentId ? execution.selectedExecutionAgent.value?.name : '执行好汉' }}</small></span></button></div><button
           v-if="execution.historyNextCursor.value"
           type="button"
           class="load-more quiet-action"
@@ -179,7 +179,7 @@
           :key="item.fileId"
           type="button"
           @click="removeExecutionMaterial(item.fileId)"
-        >{{ materialLabel(item) }} ×</button></div><p v-if="!executionMaterials.length" class="workspace-note">先从“版本与预览”选择一份资料，或将当前版本加入本次执行。</p><p v-if="!canExecuteSelectedVersion" class="workspace-note">当前文件类型未被服务端确认可作为执行资料。</p><label><span>已有 Agent</span><select :value="execution.selectedAgentId.value" :disabled="execution.rosterState.value === 'loading'" @change="selectExecutionAgent($event.target.value)"><option value="">请选择已有 Agent</option><option v-for="agent in execution.agents.value" :key="agent.agentId" :value="agent.agentId">{{ agent.name }}{{ agent.status ? `（${agent.status}）` : '' }}</option></select></label><label><span>交付类型</span><select v-model="executionOutputMime"><option v-for="mime in execution.allowedMimeTypes.value" :key="mime" :value="mime">{{ deliveryTypeText(mime) }}</option></select></label><label><span>需求说明</span><textarea v-model="executionInstruction" maxlength="4000" placeholder="例如：请根据所选资料制作 PPT，并说明保留项。"></textarea></label><p v-if="execution.rosterError.value" class="workspace-error" role="alert">{{ execution.rosterError.value }}</p><div class="actions"><button type="button" :disabled="!canCreateExecution" @click="createExecution">创建私人执行</button><button
+        >{{ materialLabel(item) }} ×</button></div><p v-if="!executionMaterials.length" class="workspace-note">先从“版本与预览”选择一份资料，或将当前版本加入本次执行。</p><p v-if="!canExecuteSelectedVersion" class="workspace-note">当前文件类型暂不能用于生成成果。</p><label><span>已有 Agent</span><select :value="execution.selectedAgentId.value" :disabled="execution.rosterState.value === 'loading'" @change="selectExecutionAgent($event.target.value)"><option value="">请选择已有 Agent</option><option v-for="agent in execution.agents.value" :key="agent.agentId" :value="agent.agentId">{{ agent.name }}{{ agent.status ? `（${agent.status}）` : '' }}</option></select></label><label><span>交付类型</span><select v-model="executionOutputMime"><option v-for="mime in execution.allowedMimeTypes.value" :key="mime" :value="mime">{{ deliveryTypeText(mime) }}</option></select></label><label><span>需求说明</span><textarea v-model="executionInstruction" maxlength="4000" placeholder="例如：请根据所选资料制作 PPT，并说明保留项。"></textarea></label><p v-if="execution.rosterError.value" class="workspace-error" role="alert">{{ execution.rosterError.value }}</p><div class="actions"><button type="button" :disabled="!canCreateExecution" @click="createExecution">创建私人执行</button><button
           type="button"
           class="quiet-action"
           :disabled="execution.rosterState.value === 'loading'"
@@ -189,12 +189,12 @@
           type="button"
           class="quiet-action"
           @click="prepareNewExecution"
-        >另起一项新交付（不重试当前）</button></div><section v-if="execution.receipt.value" class="execution-status"><dl class="file-details"><div><dt>执行状态</dt><dd>{{ executionStateText(execution.receipt.value.state) }}</dd></div><div><dt>目标 Agent</dt><dd>{{ execution.selectedExecutionAgent.value?.name || execution.receipt.value.targetAgentId }}</dd></div><div><dt>执行编号</dt><dd>{{ execution.receipt.value.executionId }}</dd></div></dl><p v-if="execution.receipt.value.state === 'QUEUED'" class="workspace-note">服务端已接受请求，正在等待结果；尚未确认任何运行阶段或交付完成。</p><div class="actions"><button type="button" @click="refreshExecution">刷新进度</button><button type="button" :disabled="execution.execution.value?.state !== 'QUEUED'" @click="revokeExecutionInputs">撤销尚未开始的输入授权</button></div></section><p v-if="execution.completionNotice.value" class="execution-notice" role="status">{{ execution.completionNotice.value }}</p><p v-if="execution.error.value" class="workspace-error" role="alert">{{ execution.error.value }}</p></section>
+        >另起一项新交付（不重试当前）</button></div><section v-if="execution.receipt.value" class="execution-status"><dl class="file-details"><div><dt>执行状态</dt><dd>{{ executionStateText(execution.receipt.value.state) }}</dd></div><div><dt>执行好汉</dt><dd>{{ execution.selectedExecutionAgent.value?.name || '执行好汉' }}</dd></div></dl><p v-if="execution.receipt.value.state === 'QUEUED'" class="workspace-note">已提交，正在等待结果。</p><div class="actions"><button type="button" @click="refreshExecution">刷新进度</button><button type="button" :disabled="execution.execution.value?.state !== 'QUEUED'" @click="revokeExecutionInputs">撤销尚未开始的输入授权</button></div></section><p v-if="execution.completionNotice.value" class="execution-notice" role="status">{{ execution.completionNotice.value }}</p><p v-if="execution.error.value" class="workspace-error" role="alert">{{ execution.error.value }}</p></section>
       </section>
     </section>
     <WorkspaceWriteRecovery :pending="workspace.pendingWrites.value" @retry="workspace.retryWrite" />
-    <p v-if="workspace.writeNotice.value" class="workspace-note workspace-page-message" role="status">{{ workspace.writeNotice.value }} <template v-if="workspace.detailRetryFileId.value"><button type="button" :disabled="workspace.actionState.value === 'loading-detail'" @click="retrySavedDetail">重读详情</button></template></p>
-    <p v-if="workspace.error.value" class="workspace-error workspace-page-message" role="alert">{{ workspace.error.value }}</p><p v-if="workspace.lastOperation.value" class="workspace-receipt" role="status">最近操作：{{ workspace.lastOperation.value.operationId }}（{{ workspace.lastOperation.value.state }}）</p>
+    <p v-if="workspace.writeNotice.value" class="workspace-note workspace-page-message" role="status">{{ workspace.writeNotice.value }} <template v-if="workspace.detailRetryFileId.value"><button type="button" :disabled="workspace.actionState.value === 'loading-detail'" @click="retrySavedDetail">重新加载</button></template></p>
+    <p v-if="workspace.error.value" class="workspace-error workspace-page-message" role="alert">{{ workspace.error.value }}</p>
   </main>
 </template>
 

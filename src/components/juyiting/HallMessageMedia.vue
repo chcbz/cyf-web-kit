@@ -89,7 +89,7 @@ const loadPreview = async () => {
     if (pending.signal.aborted || generation !== requestGeneration) return
     const actualMime = String(blob.type || '').toLowerCase().split(';')[0].trim()
     if (actualMime !== props.part.mime || safeMediaKind({ ...props.part, mime: actualMime }) !== mediaKind.value) {
-      throw new Error('媒体类型与服务端声明不一致，暂不预览。')
+      throw new Error('文件信息不一致，暂时无法预览。')
     }
     previewUrl.value = URL.createObjectURL(blob)
   } catch (cause) {

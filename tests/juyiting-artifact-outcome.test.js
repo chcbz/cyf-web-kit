@@ -113,7 +113,7 @@ describe('F06 ArtifactOutcomePanel binding', () => {
       expect(wrapper.find('button[type="submit"]').attributes('disabled')).to.equal(undefined)
       await wrapper.find('form').trigger('submit')
       expect(calls.filter(call => call.method === 'POST')).to.have.length(1)
-      expect(wrapper.text()).to.include('服务端已确认')
+      expect(wrapper.text()).to.include('验收已通过')
     } finally {
       wrapper.unmount()
       Object.defineProperty(globalThis, 'crypto', { configurable: true, value: originalCrypto })

@@ -457,9 +457,9 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       if (error?.status === 409) {
         try {
           await loadProgress()
-          errorMessage.value = '阅读进度已在另一处更新，已刷新服务端位置。'
+          errorMessage.value = '阅读进度已在另一处更新，已同步到最新位置。'
         } catch {
-          errorMessage.value = '阅读进度发生冲突，且服务端位置刷新失败。'
+          errorMessage.value = '阅读进度已在另一处更新，暂时无法同步，请重试。'
         }
       } else {
         errorMessage.value = '阅读进度暂未保存。'
@@ -907,7 +907,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       typeof value.answer !== 'string' || utf8ByteLength(value.answer) > ANSWER_BYTE_LIMIT ||
       !Number.isInteger(value.retryCount) || value.retryCount < 0 || value.retryCount > 2 ||
       !isIsoInstant(value.createdAt) || !isIsoInstant(value.updatedAt) || Date.parse(value.updatedAt) < Date.parse(value.createdAt)) {
-      throw new Error('案卷问答快照响应无效')
+      throw new Error('暂时无法读取问答记录，请重试。')
     }
     requireResponder(value.responder)
     await requireQuestionAnchor(value.anchor, value.selectedText)
@@ -918,7 +918,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
       (terminal && !isIsoInstant(value.completedAt)) || (!terminal && value.completedAt !== null) ||
       (value.completedAt && (Date.parse(value.completedAt) < Date.parse(value.createdAt) || Date.parse(value.completedAt) < Date.parse(value.updatedAt))) ||
       (value.status === 'SUCCEEDED' ? !value.answer : value.answer !== '')) {
-      throw new Error('案卷问答状态快照无效')
+      throw new Error('暂时无法读取问答进度，请重试。')
     }
     return { ...value, responder: RESPONDER }
   }

@@ -191,12 +191,11 @@
                   </div>
                   <p v-if="pointAndStartForDetail.status === 'UNKNOWN'" class="matter-send-note">继续原请求将沿用原提交信息恢复，不创建新的需求。</p>
                   <details class="matter-send-details">
-                    <summary>{{ pointAndStartForDetail.status === 'HISTORICAL' ? '历史指派信息' : '技术详情' }}</summary>
+                    <summary>{{ pointAndStartForDetail.status === 'HISTORICAL' ? '历史指派信息' : '提交信息' }}</summary>
                     <p>发送状态：{{ pointAndStartRecoveryTitle }}</p>
                     <p>承办好汉：{{ pointAndStartAgentName }}</p>
                     <p>本次资料：{{ pointAndStartInputCount }}。</p>
-                    <p>好汉编号：{{ pointAndStartForDetail.intent.body.targetAgentId || pointAndStartForDetail.intent.body.agentId }}；需求修订：{{ pointAndStartForDetail.intent.body.requirementRevision }}。</p>
-                    <p>资料编号与固定版本：{{ pointAndStartInputSummary }}。</p>
+
                     <p v-if="pointAndStartForDetail.error && pointAndStartForDetail.status !== 'FAILED'">查询说明：{{ pointAndStartForDetail.error }}</p>
                   </details>
                 </section>
@@ -508,7 +507,7 @@
     <var-dialog
       v-model:show="showCancellationDialog"
       title="确认取消未开工事项？"
-      :message="`即将申请取消“${cancellationCandidate?.task.title || '原事项'}”。仅限无资金事实且未实际开始的事项，最终由服务端核验；历史指派与成果保留。确认后不会继续办理；若结果未确认，只核对原结果，不重复提交。`"
+      :message="`即将申请取消“${cancellationCandidate?.task.title || '原事项'}”。仅限未产生费用、尚未开始的事项；记录和成果会保留。确认后不会继续办理；若结果未确认，只核对原结果，不重复提交。`"
       confirm-button-text="确认取消事项"
       cancel-button-text="保留事项"
       confirm-button-text-type="danger"
@@ -693,7 +692,7 @@ const pointAndStartForDetail = computed(() => {
 })
 const pointAndStartRecoveryTitle = computed(() => ({
   SENDING: '正在发送需求',
-  CONFIRMED: '发送回执已收到',
+  CONFIRMED: '已发送',
   COST_CONSENT_PENDING: '历史请求待费用确认',
   UNKNOWN: '发送结果待确认',
   PREPARING: '正在准备会话',
@@ -704,7 +703,7 @@ const pointAndStartRecoveryTitle = computed(() => ({
 }[pointAndStartForDetail.value?.status] || '发送状态待核对'))
 const pointAndStartRecoveryHint = computed(() => ({
   SENDING: '正在发送需求…请勿重复提交。',
-  CONFIRMED: '已收到发送回执，正在核对议事状态，无需重复提交。',
+  CONFIRMED: '已发送，正在查询进度，请勿重复提交。',
   COST_CONSENT_PENDING: '此历史请求涉及费用确认，请使用原费用确认流程；不会通过此处重发。',
   UNKNOWN: '发送结果暂未确认，请先查询，避免重复提交。',
   PREPARING: '正在准备议事…需求已保存，无需重复提交。',

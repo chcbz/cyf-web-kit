@@ -95,7 +95,7 @@ export function useFormalTaskExecution ({
     if (revoking.value || revokeIntent.value?.uncertain) return '原撤销请求结果待核对，只查询原执行，不能开始新的正式办理。'
     if (!scope.executionAuthorized) return scope.executionAuthorizationReason || '当前任务尚未获父级授权进入正式执行，不能开始执行。'
     if (execution.capabilityState.value === 'loading') return '正在读取执行能力。'
-    if (execution.capabilityState.value !== 'ready' || !execution.allowedMimeTypes.value.includes(FORMAL_TASK_OUTPUT_MIME_TYPE)) return '当前能力未确认可生成真实 PDF，不能开始执行。'
+    if (execution.capabilityState.value !== 'ready' || !execution.allowedMimeTypes.value.includes(FORMAL_TASK_OUTPUT_MIME_TYPE)) return '当前暂不支持生成 PDF。'
     if (execution.rosterState.value === 'loading') return '正在核对目标 Agent。'
     if (execution.rosterState.value !== 'ready' || !execution.agents.value.some(agent => agent.agentId === scope.targetAgentId)) return '指定 targetAgentId 当前不可作为正式执行目标。'
     if (execution.unresolvedIntent.value) return '原执行请求结果未知，正在仅查询原请求；不能重复提交。'
@@ -108,8 +108,8 @@ export function useFormalTaskExecution ({
     if (execution.unresolvedIntent.value || execution.executionState.value === 'unknown') return '原请求结果未知：仅可恢复查询，不能重发。'
     const value = activeExecution.value
     if (!value) return '尚未确认本正式任务的执行记录。'
-    if (value.state === 'QUEUED') return '服务端已建立 TASK 执行，正在等待客户端接收或运行；这不表示 Provider 已开始，也不表示已有交付。'
-    if (value.state === 'OUTPUT_COMMITTED') return 'TASK runtime 已提交输出；正式交付是否 submitted/accepted 仍须以 formal-deliveries 回执为准。'
+    if (value.state === 'QUEUED') return '已提交，正在等待办理。'
+    if (value.state === 'OUTPUT_COMMITTED') return '成果已生成，请查看交付记录和验收状态。'
     if (value.state === 'INPUTS_REVOKED') return '本次 TASK 输入授权已撤销，后续读取和提交将被拒绝；不代表已取消外部调用或免除费用。'
     if (value.state === 'FAILED') return value.failureMessage || '本次 TASK 执行已报告失败。'
     return `执行状态 ${value.state} 尚待核对。`
@@ -136,7 +136,7 @@ export function useFormalTaskExecution ({
       await execution.refreshExecution()
     }
     if (execution.execution.value && !isFormalExecution(execution.execution.value)) {
-      scopeError.value = '服务端恢复记录与当前正式 taskId、TASK 模式、workItemId、conversationId、targetAgentId 或 PDF 输出不一致；未显示为本任务执行，也不会重发。'
+      scopeError.value = '查询结果与当前事项不一致，请重新加载事项后核对。'
       return null
     }
     return activeExecution.value
@@ -161,7 +161,7 @@ export function useFormalTaskExecution ({
     if (!isFormalExecution(result) || !sameInputs(
       result.inputs.map(input => ({ fileId: input.fileId, version: input.version })), normalized
     )) {
-      scopeError.value = '执行回执未精确回显本任务、TASK 模式、工作项、会话、目标、PDF 或输入版本；未显示为成功，请仅恢复查询。'
+      scopeError.value = '暂时无法确认本次办理结果，请查询进度，勿重复提交。'
       return null
     }
     return result

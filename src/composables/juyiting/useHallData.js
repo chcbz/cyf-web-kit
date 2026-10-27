@@ -374,7 +374,7 @@ export const useHallData = ({
   const bindPersona = async (persona, mode = 'local') => {
     // Paid server INITIAL and free REPROVISION both require the hosting DTO flow.
     // Never retry a hosting 503 through the legacy {mode: 'server'} endpoint.
-    if (mode !== 'local') throw new Error('山寨安顿必须先核对服务端租约和报价；不会改走旧式 server 接口。')
+    if (mode !== 'local') throw new Error('请先查看并确认安顿报价。')
     if (!persona?.personaCode || persona.systemAgent || (persona.bound && !persona.boundToMe)) return
     let bindResult = null
     const response = await agentApi.post(`/personas/${persona.personaCode}/bind`, { mode }, {

@@ -212,7 +212,7 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
     } finally { controllers.delete(controller) }
   }
   const apply = value => {
-    if (!validDraft(value)) throw new Error('草稿回执无效，尚不能显示为已保存。')
+    if (!validDraft(value)) throw new Error('暂时无法确认草稿是否保存，请查询结果。')
     draft.value = value
     state.value = 'ready'
     error.value = ''
@@ -307,7 +307,7 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
     state.value = 'discarding'; error.value = ''
     try {
       const result = await request({ url: `/hall/drafts/${encodeURIComponent(snapshot.draftId)}/discard`, method: 'POST', headers: { 'Idempotency-Key': keyFactory() }, data: { expectedRevision: snapshot.revision } }, snapshot)
-      if (!result || result.draftId !== snapshot.draftId || result.state !== 'DISCARDED') throw new Error('放弃草稿回执无效，尚不能确认放弃。')
+      if (!result || result.draftId !== snapshot.draftId || result.state !== 'DISCARDED') throw new Error('暂时无法确认是否删除草稿，请查询结果。')
       draft.value = null; state.value = 'idle'; error.value = ''; reloadRequired.value = false
       return result
     } catch (cause) {
@@ -336,7 +336,7 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
   }
   const applyReceipt = (value, intent) => {
     const kind = intent.kind || (draft.value?.draftId === intent.draftId ? draft.value.kind : null)
-    if (!validReceipt(value, kind)) throw new Error('交办回执无效，尚不能显示为已受理。')
+    if (!validReceipt(value, kind)) throw new Error('暂时无法确认是否交办成功，请查询结果，勿重复交办。')
     caseView.value = null
     executionView.value = null
     executionResults.value = null
@@ -419,7 +419,7 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
     error.value = ''
     try {
       const task = await request({ url: `/tasks/${encodeURIComponent(ref.sourceId)}`, method: 'GET' }, snapshot)
-      if (task?.id !== ref.sourceId || typeof task.status !== 'string') throw new Error('正式事项尚未核对，未用交办回执代替事项详情。')
+      if (task?.id !== ref.sourceId || typeof task.status !== 'string') throw new Error('暂时无法读取事项详情，请重新加载。')
       state.value = 'ready'
       return task
     } catch (cause) {
@@ -439,7 +439,7 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
     resultsError.value = ''
     try {
       const value = await request({ url: `/hall/executions/${encodeURIComponent(executionId)}/results`, method: 'GET' }, snapshot)
-      if (!validResults(value) || value.executionId !== executionId) throw new Error('成果回执无效，未展示可能不完整的成果。')
+      if (!validResults(value) || value.executionId !== executionId) throw new Error('成果信息不完整，请重新加载。')
       executionResults.value = value
       resultsState.value = value.items.length ? 'ready' : 'empty'
       return value
@@ -460,7 +460,7 @@ export function useHallDrafts ({ agentApi = defaultAgentApi, identityEpoch = 0, 
     error.value = ''
     try {
       const value = await request({ url: `/hall/cases/${encodeURIComponent(caseId)}`, method: 'GET' }, snapshot)
-      if (!validCase(value) || value.caseId !== caseId) throw new Error('事项进展回执无效，未展示可能不完整的进展。')
+      if (!validCase(value) || value.caseId !== caseId) throw new Error('进展信息不完整，请重新加载。')
       caseView.value = value
       return value
     } catch (cause) {

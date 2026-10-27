@@ -96,7 +96,7 @@
             <template v-if="source.kind === 'TASK_LINKED_WORKSPACE_VERSION'">
               <strong>{{ materialName(source) }}</strong><span>版本 {{ source.version }} · {{ source.purpose === 'INPUT' ? '输入资料' : '参考资料' }}</span>
             </template>
-            <template v-else><strong>会话资料 {{ source.assetId }}</strong><span>修订 {{ source.assetRevision }}</span></template>
+            <template v-else><strong>会话资料</strong><span>修订 {{ source.assetRevision }}</span></template>
           </article>
         </div>
         <BountyTextSelectionArchive

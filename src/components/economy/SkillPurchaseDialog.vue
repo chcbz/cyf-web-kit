@@ -5,7 +5,7 @@
       <p class="price">报价：{{ formatMoney(quote?.price ?? product.price) }}</p>
       <p class="target">目标 Agent：{{ targetAgent?.name || targetAgent?.agentId || targetAgent?.id || '未选择' }}</p>
       <p v-if="!previewEnabled" class="reason">预览购买功能未启用。</p>
-      <p v-else-if="product.canPurchase !== true" class="reason">{{ product.canPurchaseReason || product.purchaseReason || product.reason || '服务端未允许购买。' }}</p>
+      <p v-else-if="product.canPurchase !== true" class="reason">{{ product.canPurchaseReason || product.purchaseReason || product.reason || '此技能暂不可购买。' }}</p>
       <template v-else>
         <p class="section-title">逐项批准权限</p>
         <label v-for="permission in permissions" :key="permission" class="permission">

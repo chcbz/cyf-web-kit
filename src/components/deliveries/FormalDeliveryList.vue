@@ -27,7 +27,7 @@
         <span>第 {{ delivery.revision }} 版</span>
       </div>
       <p class="formal-delivery-summary">{{ delivery.summary || '未提供交付摘要。' }}</p>
-      <p>提交于 {{ formatTime(delivery.submittedAt) }} · 交付 Agent {{ delivery.producerAgentId }}</p>
+      <p>提交于 {{ formatTime(delivery.submittedAt) }}</p>
       <section class="formal-artifacts" aria-label="交付文件">
         <h4>交付文件</h4>
         <ul>
@@ -51,12 +51,7 @@
           </li>
         </ul>
       </section>
-      <details class="formal-technical"><summary>技术信息</summary>
-        <p>批次 {{ delivery.deliveryId }} · 工作项 {{ delivery.workItemId }} · 运行 {{ delivery.runId }}</p>
-        <p>任务版本 {{ delivery.taskVersion }} · 工作项版本 {{ delivery.workItemVersion }}</p>
-        <p>清单 {{ delivery.manifestArtifactId }} · v{{ delivery.manifestArtifactVersion }}</p>
-        <ul><li v-for="artifact in delivery.items" :key="`tech:${artifact.artifactId}:${artifact.artifactVersion}`">{{ artifact.artifactId }} · {{ artifact.contentHash }}</li></ul>
-      </details>
+
       <section v-if="delivery.reviewedAt || delivery.reviewReason" class="formal-review" aria-label="验收意见">
         <h4>验收意见</h4>
         <p v-if="delivery.reviewedAt">{{ formatTime(delivery.reviewedAt) }}</p>

@@ -41,7 +41,7 @@ const errorMessage = error => {
   if (error?.code === 'TASK_FILE_LINK_CHANGED' || error?.status === 412) return '关联已变化，请刷新后再解除。'
   if (error?.code === 'PRECONDITION_REQUIRED' || error?.status === 428) return '关联版本前提缺失，请刷新后再解除。'
   if (error?.status === 400) return '关联请求格式无效，请检查文件版本和资料用途。'
-  if (error?.status === 503) return '任务资料关联暂不可用；写入结果未确认时，请重试原操作，不要重复新建。'
+  if (error?.status === 503) return '任务资料关联暂不可用；写入结果未确认时，请重试，不要重复新建。'
   return error?.message || '任务资料关联请求未完成，请刷新确认。'
 }
 
@@ -189,10 +189,11 @@ export function usePersonalWorkspaceTaskLinks ({ api = createApi('/agent'), task
   const retryWrite = async target => {
     const originalParent = JSON.parse(target)[0]
     if (originalParent !== currentTaskId.value) {
-      error.value = '请返回原任务后重试原操作。'
+      error.value = '请返回原任务后重试。'
       return null
     }
     const context = contextKey.value
+    error.value = ''; writeNotice.value = ''
     try { return await writes.retry(target) } catch (cause) {
       if (context === contextKey.value && !disposed) { error.value = errorMessage(cause); actionState.value = 'error' }
       return null
@@ -209,7 +210,7 @@ export function usePersonalWorkspaceTaskLinks ({ api = createApi('/agent'), task
     actionState.value = 'saving'; error.value = ''; writeNotice.value = ''
     try {
       return await writes.run({
-        target: JSON.stringify([selectedTaskId, fileId]), input: ['CREATE', version, role], label: `关联任务资料（${selectedTaskId} / ${fileId}）`,
+        target: JSON.stringify([selectedTaskId, fileId]), input: ['CREATE', version, role], label: '添加资料',
         execute: async (key, replay) => {
           const { data } = await request({
             url: `/tasks/${encodeURIComponent(selectedTaskId)}/file-links`, method: 'POST',
@@ -217,7 +218,7 @@ export function usePersonalWorkspaceTaskLinks ({ api = createApi('/agent'), task
           }, { generation, contextKey: originalContext })
           if (!validLink(data, selectedTaskId) || (!replay && data.state !== 'ACTIVE') ||
               data.fileId !== fileId || data.version !== version || data.role !== role) {
-            throw new Error('任务资料关联回执无效，请重试原操作核对。')
+            throw new Error('暂时无法确认是否添加资料，请查询结果，勿重复添加。')
           }
           return data
         },
@@ -225,7 +226,7 @@ export function usePersonalWorkspaceTaskLinks ({ api = createApi('/agent'), task
           if (originalContext !== contextKey.value || disposed) return
           replace(data)
           actionState.value = 'ready'
-          writeNotice.value = data.state === 'ACTIVE' ? '原关联操作已提交。' : '原关联操作已提交，但当前关联已解除。'
+          writeNotice.value = data.state === 'ACTIVE' ? '' : '此资料已被移除。'
         }
       })
     } catch (cause) {
@@ -247,7 +248,7 @@ export function usePersonalWorkspaceTaskLinks ({ api = createApi('/agent'), task
     actionState.value = 'removing'; error.value = ''; writeNotice.value = ''
     try {
       return await writes.run({
-        target: JSON.stringify([selectedTaskId, original.fileId]), input: ['DELETE', original.relationId, ifMatch], label: `解除任务资料关联（${selectedTaskId} / ${original.fileId}）`,
+        target: JSON.stringify([selectedTaskId, original.fileId]), input: ['DELETE', original.relationId, ifMatch], label: '移除资料',
         execute: async (key, replay) => {
           const { data } = await request({
             url: `/tasks/${encodeURIComponent(selectedTaskId)}/file-links/${encodeURIComponent(original.relationId)}`,
@@ -256,7 +257,7 @@ export function usePersonalWorkspaceTaskLinks ({ api = createApi('/agent'), task
           if (!validDetach(data, selectedTaskId) || (!replay && data.link.state !== 'DETACHED') ||
               data.link.relationId !== original.relationId || data.link.fileId !== original.fileId ||
               data.link.version !== original.version || data.link.role !== original.role) {
-            throw new Error('解除任务资料关联回执无效，请重试原操作核对。')
+            throw new Error('暂时无法确认是否移除资料，请查询结果。')
           }
           return data
         },
@@ -264,7 +265,7 @@ export function usePersonalWorkspaceTaskLinks ({ api = createApi('/agent'), task
           if (originalContext !== contextKey.value || disposed) return
           replace(data.link)
           actionState.value = 'ready'
-          writeNotice.value = data.link.state === 'DETACHED' ? '原解除操作已提交。' : '原解除操作已提交，但当前资料已重新关联。'
+          writeNotice.value = data.link.state === 'DETACHED' ? '' : '此资料已重新关联。'
         }
       })
     } catch (cause) {

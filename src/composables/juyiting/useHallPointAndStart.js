@@ -44,7 +44,7 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
     const value = await get(pointAndStartReadPath(intent), intent.key)
     if (!current(captured, epoch, contextEpoch)) return null
     const projection = pointAndStartProjection(value, intent, intent.projection)
-    if (!projection) throw new Error('原点将投影不匹配或版本回退；未再次办理')
+    if (!projection) throw new Error('承办信息已变化，请查询结果，勿重复交办。')
     intent = persist(captured, { ...intent, projection })
     state.value = { status: statusForProjection(projection), intent, projection, error: null }
     if (projection.currentAssignment && projection.bootstrapState !== 'ADMITTED') {
@@ -62,7 +62,7 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
     if (!current(captured, epoch, contextEpoch)) return null
     if (task?.id !== intent.taskId || !pointAndStartLong(task.taskVersion, true) ||
       BigInt(task.taskVersion) < BigInt(projection.taskVersion) || task.assignedAgentId !== pointAndStartTarget(intent) ||
-      !['assigned', 'running', 'reviewing', 'completed'].includes(task.status)) throw new Error('点将已确认，当前榜文快照尚未核对；未补发首轮')
+      !['assigned', 'running', 'reviewing', 'completed'].includes(task.status)) throw new Error('已确认承办，事项信息尚未更新，请重新加载。')
     // A newer task snapshot may reflect reassignment; recheck the original action
     // before attaching, instead of treating taskVersion as assignmentRevision.
     if (task.taskVersion !== projection.taskVersion) {
@@ -86,7 +86,7 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
     const result = unwrap(await agentApi.create(`/tasks/${encodeURIComponent(intent.taskId)}/point-and-deliberate`, clone(intent.body), options(intent.key)))
     if (!current(captured, epoch, contextEpoch)) return null
     const projection = pointAndStartProjection(result, intent, intent.projection)
-    if (!projection) throw new Error('点将回执未能匹配；保留原键核对，不重新点将')
+    if (!projection) throw new Error('暂时无法确认承办结果，请查询结果，勿重复交办。')
     intent = persist(captured, { ...intent, projection, postAcknowledged: true })
     state.value = { status: statusForProjection(projection), intent, projection, error: null }
     return project(intent, captured, epoch, contextEpoch)

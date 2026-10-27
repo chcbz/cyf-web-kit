@@ -77,7 +77,7 @@ export function useEconomyReadOnlyPreview ({ client = economyReadOnlyPreviewClie
       if (!capabilityCurrent(captured)) return { accepted: false, capabilities: null, captured }
       const next = assessReadOnlyPreviewCapabilities(value)
       capability.value = value
-      capabilityError.value = next.available || next.reason === 'PREVIEW_DISABLED' ? '' : '经济预览协议不可用。'
+      capabilityError.value = next.available || next.reason === 'PREVIEW_DISABLED' ? '' : '暂时无法加载经济预览，请稍后重试。'
       protocolError.value = next.available || next.reason === 'PREVIEW_DISABLED' ? '' : next.reason
       entry.state.value = { status: next.available ? 'ready' : 'unavailable', data: value, error: capabilityError.value }
       return { accepted: true, capabilities: next.capabilities, captured }

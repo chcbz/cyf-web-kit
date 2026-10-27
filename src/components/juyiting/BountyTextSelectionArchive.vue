@@ -42,7 +42,7 @@ const archiveGeneration = ref(0)
 const exactMessageId = value => typeof value === 'string' && /^[1-9][0-9]{0,18}$/.test(value) && (value.length < 19 || value <= '9223372036854775807')
 const eligible = computed(() => Boolean(props.identityKey && props.conversationId && exactMessageId(props.message?.localId)
   && typeof props.message?.content === 'string' && props.message.content && !props.message?.streaming))
-const uuid = () => { const value = globalThis.crypto?.randomUUID?.(); if (!value) throw new Error('当前环境不能生成安全幂等键。'); return `conversation-text-archive-${value}` }
+const uuid = () => { const value = globalThis.crypto?.randomUUID?.(); if (!value) throw new Error('当前浏览器暂时无法保存，请更换浏览器后重试。'); return `conversation-text-archive-${value}` }
 const sha256 = async value => Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))), byte => byte.toString(16).padStart(2, '0')).join('')
 const resetArchiveState = () => {
   archiveGeneration.value += 1
@@ -84,7 +84,7 @@ const archive = async retry => {
       const snapshot = { messageId: props.message.localId, startCodePoint: selected.startCodePoint,
         endCodePoint: selected.endCodePoint, text: selected.text }
       intent = { idempotencyKey: uuid(), body: null }
-      state.value = { state: 'saving', busy: true, message: '正在从服务端持久正文冻结选区…', intent }
+      state.value = { state: 'saving', busy: true, message: '正在保存文字片段…', intent }
       const digest = await sha256(snapshot.text)
       if (!ownsAttempt()) return
       intent = { idempotencyKey: intent.idempotencyKey, body: { mode: 'create', items: [{
@@ -93,7 +93,7 @@ const archive = async retry => {
       }] } }
     }
     if (!ownsAttempt()) return
-    state.value = { state: 'saving', busy: true, message: retry ? '正在重放原保存操作…' : '正在从服务端持久正文冻结选区…', intent }
+    state.value = { state: 'saving', busy: true, message: retry ? '正在核对保存结果…' : '正在保存文字片段…', intent }
     requestStarted = true
     const response = await api.execute({ url: `/conversations/${encodeURIComponent(props.conversationId)}/archive-operations`, method: 'POST', headers: { 'Idempotency-Key': intent.idempotencyKey }, data: intent.body, autoLoading: false, needAuth: true })
     if (!ownsAttempt()) return
@@ -102,7 +102,7 @@ const archive = async retry => {
     const item = Array.isArray(value?.items) && value.items.length === 1 ? value.items[0] : null
     const selected = item?.textSelection
     const expectedItemState = { pending: 'pending', saving: 'saving', saved: 'saved', partial_failed: 'failed' }[value?.state]
-    const receiptUnknown = () => Object.assign(new Error('保存回执无法确认冻结文字选区。'), { archiveOutcomeUnknown: true })
+    const receiptUnknown = () => Object.assign(new Error('暂时无法确认文字是否保存，请查询结果。'), { archiveOutcomeUnknown: true })
     if (!/^arc_[0-9a-f]{32}$/.test(value?.operationId || '') || !exactMessageId(value?.revision)
       || !expectedItemState || item?.sourceKind !== 'textSelection' || item.state !== expectedItemState
       || selected?.messageId !== expected.messageId || !exactMessageId(selected?.messageRevision)
@@ -116,7 +116,7 @@ const archive = async retry => {
     if (value.state === 'pending' || value.state === 'saving') {
       state.value = { state: 'pending', busy: false, message: '保存操作已受理，尚未确认完成；可重试原保存继续核对。', intent }
     } else if (value.state === 'partial_failed') {
-      state.value = { state: 'error', busy: false, message: typeof item.message === 'string' && item.message ? item.message : '服务端确认文字片段未保存。', intent }
+      state.value = { state: 'error', busy: false, message: typeof item.message === 'string' && item.message ? item.message : '文字片段未保存，请重试。', intent }
     } else {
       if (typeof item.fileId !== 'string' || !item.fileId.trim() || !validMaterialVersion(item.version)) throw receiptUnknown()
       state.value = { state: 'saved', busy: false, message: `文字片段已保存：${item.fileId} v${item.version}`, intent }
@@ -124,7 +124,7 @@ const archive = async retry => {
   } catch (cause) {
     if (!ownsAttempt()) return
     const unknown = requestStarted && (cause?.archiveOutcomeUnknown || cause?.requestErrorClass === 'network' || cause instanceof TypeError || cause?.status >= 500 || cause?.response?.status >= 500)
-    state.value = { state: unknown ? 'unknown' : 'error', busy: false, message: unknown ? '保存结果不明确；请重试原操作，核对冻结文字选区。' : (cause?.message || '文字片段保存失败。'), intent: requestStarted ? intent : null }
+    state.value = { state: unknown ? 'unknown' : 'error', busy: false, message: unknown ? '暂时无法确认是否保存，请查询结果，勿重复保存。' : (cause?.message || '文字片段保存失败。'), intent: requestStarted ? intent : null }
   }
 }
 onBeforeUnmount(() => { archiveGeneration.value += 1 })

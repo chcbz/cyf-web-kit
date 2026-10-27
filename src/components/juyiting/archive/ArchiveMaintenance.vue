@@ -1,11 +1,11 @@
 <template>
   <section class="archive-maintenance" aria-label="典籍任职与维护">
     <header><h3>任职与维护</h3><button type="button" :disabled="busy" @click="reload">刷新与恢复</button></header>
-    <p class="hint">新增典籍是内容数据，不需要改代码。技能安装不授予业务权限，最终由后端校验。</p>
+    <p class="hint">维护典籍需要相应的管理权限。</p>
     <p v-if="error" role="alert" class="error">{{ error }}</p>
     <p v-if="notice" role="status">{{ notice }}</p>
     <aside v-if="pending" role="status" class="card">
-      原操作结果未决，已保存身份隔离的恢复引用。请先查询，不要另建任务。
+      上次操作结果待确认，请先查询，勿重复提交。
       <p v-if="pending.body.kind === 'job' && pending.body.path === ''">刷新后重试需重新选择完全相同的底本；正文不存入浏览器持久存储。</p>
       <button type="button" :disabled="busy" @click="retry(sourceText)">按原操作重试</button>
     </aside>
@@ -82,7 +82,7 @@
       <details v-if="draftText"><summary>版本数据（只读）</summary><pre>{{ draftText }}</pre></details>
     </section>
     <details class="card">
-      <summary>技能与职位配置（需要后端管理权限）</summary>
+      <summary>技能与职位配置（需管理权限）</summary>
       <form class="form-grid" @submit.prevent="defineSkill">
         <label>技能标识<input v-model="skill.skillKey" required placeholder="archive-maintenance" /></label>
         <label>技能类型<select v-model="skill.type"><option value="POSITION">职位技能</option><option value="GENERAL">通用技能</option></select></label>
@@ -99,7 +99,7 @@
           required
         /></label>
         <label>业务范围<input v-model="definition.resource" required placeholder="archive:public 或 archive:work:作品标识" /></label>
-        <label><input v-model="definition.allowPublish" type="checkbox" />允许发布（后端另行校验授权）</label>
+        <label><input v-model="definition.allowPublish" type="checkbox" />允许发布（需发布权限）</label>
         <fieldset><legend>默认技能（可多选、可被多个职位引用）</legend><label v-for="s in positions.skills" :key="s.key"><input v-model="definition.skillKeys" type="checkbox" :value="s.key" />{{ s.key }} · {{ s.type === 'GENERAL' ? '通用' : '职位' }}</label></fieldset>
         <button :disabled="blocked">保存职位及默认技能</button>
       </form>
@@ -128,7 +128,7 @@ const canPublish = computed(() => positions.value.positions.find(p => p.position
 watch(canPublish, allowed => { if (!allowed) job.mode = 'DRAFT_ONLY' })
 watch(() => [props.identityScope, props.identityEpoch], () => { sourceGeneration++; Object.assign(definition, initialDefinition()); Object.assign(skill, { skillKey: '', type: 'POSITION', productVersionId: '' }); agentId.value = ''; positionId.value = ''; appointmentId.value = ''; sourceText.value = ''; draftText.value = ''; Object.assign(job, { skillKey: '', workId: '', title: '', author: '', sourceName: '', sourceRights: '', mode: 'DRAFT_ONLY' }) })
 const installLabel = i => ({ INSTALL_PENDING: '待安装', INSTALLED: i.usable ? '已就绪' : '不可使用', REMOVE_PENDING: '已停用，待卸载', REMOVED: '已卸载', FAILED: `失败：${i.errorCode || '请重试'}` }[i.state] || i.state)
-const jobLabel = state => ({ WAITING: '等待 Runtime 执行', FAILED: '技能执行失败，未发布', DRAFT: '草稿已完成，未上架', PUBLISHED: '已发布' }[state] || state)
+const jobLabel = state => ({ WAITING: '等待执行', FAILED: '技能执行失败，未发布', DRAFT: '草稿已完成，未上架', PUBLISHED: '已发布' }[state] || state)
 const appoint = () => submit('position', '/appointments', { positionId: positionId.value, agentId: agentId.value })
 const defineSkill = () => submit('position', '/skills', { ...skill })
 const configure = () => submit('position', '/definitions', { ...definition, skillKeys: [...definition.skillKeys] })

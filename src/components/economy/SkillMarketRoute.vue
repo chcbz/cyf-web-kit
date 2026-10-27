@@ -1,8 +1,8 @@
 <template>
   <section class="skill-market-route" aria-label="技能集市预览">
-    <p v-if="loading" role="status">正在核对服务端预览能力…</p>
+    <p v-if="loading" role="status">正在加载…</p>
     <p v-else-if="error" role="alert">{{ error }}</p>
-    <p v-else-if="!marketEnabled" role="status">技能集市预览当前未由服务端启用。</p>
+    <p v-else-if="!marketEnabled" role="status">技能集市暂未开放。</p>
     <template v-else>
       <label>
         选择已拥有的 Agent
@@ -13,7 +13,7 @@
           </option>
         </select>
       </label>
-      <p v-if="!ownedAgents.length" role="status">服务端未返回可购买技能的已拥有 Agent。</p>
+      <p v-if="!ownedAgents.length" role="status">暂无可购买技能的好汉。</p>
       <SkillMarket
         v-if="selectedAgent"
         :preview-enabled="marketEnabled"

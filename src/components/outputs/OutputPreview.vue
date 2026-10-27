@@ -111,7 +111,7 @@ watch(() => [props.item?.artifactId, props.item?.artifactVersion, props.item?.fi
       ? (typeof result?.reason === 'string' && result.reason.trim() ? result.reason.trim() : '预览内容不完整；请下载原文件查看。')
       : ''
     const documentNote = isDocumentTextPreview(item)
-      ? (rendered.length > 1 ? '这是服务端提供的分页/分表预览；版式、分页与公式计算请以下载原文件为准。' : '这是文档内容预览；版式、分页与公式计算请以下载原文件为准。')
+      ? (rendered.length > 1 ? '这是内容预览；完整排版和公式请下载原文件查看。' : '这是内容预览；完整排版和公式请下载原文件查看。')
       : ''
     previewNote.value = [partialNote, documentNote].filter(Boolean).join(' ')
   } catch (error) {

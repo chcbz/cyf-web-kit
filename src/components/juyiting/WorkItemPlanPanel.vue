@@ -27,7 +27,7 @@
         <button type="button" :disabled="state === 'confirming' || stale" @click="confirm">显式确认提交</button>
         <button v-if="stale" type="button" :disabled="state === 'confirming'" @click="suggest">重新获取建议</button>
       </div>
-      <ul v-if="confirmedItems.length" class="confirmed-items"><li v-for="item in confirmedItems" :key="item.workItemId || item.itemKey">{{ item.title }}（{{ item.status || 'pending' }}，未分配）</li></ul>
+      <ul v-if="confirmedItems.length" class="confirmed-items"><li v-for="item in confirmedItems" :key="item.workItemId || item.itemKey">{{ item.title }}（{{ ({ pending: '待分配', ready: '可办理', running: '办理中', completed: '已完成', failed: '失败', cancelled: '已取消' })[item.status || 'pending'] || '状态待确认' }}，未分配）</li></ul>
     </template>
   </section>
 </template>

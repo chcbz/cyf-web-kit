@@ -198,7 +198,7 @@ export const useHallTaskActions = ({
     if (snapshot?.id !== receipt.taskId || !validString(snapshot.status) || !isCanonicalDecimalString(snapshot.taskVersion) ||
       BigInt(snapshot.taskVersion) < BigInt(receipt.taskVersion) ||
       (snapshot.taskVersion === receipt.taskVersion && (snapshot.status !== 'assigned' ||
-        snapshot.assignedAgentId !== receipt.agentId))) throw new Error('领令已确认，榜文快照尚未同步')
+        snapshot.assignedAgentId !== receipt.agentId))) throw new Error('已确认承办，事项信息尚未更新，请重新加载。')
     // Only canonical TaskDTO snapshots are applied. Never copy receipt fields or
     // overwrite an equal/newer snapshot, including one delivered while GET ran.
     for (const current of new Set(currentTaskSnapshots(receipt.taskId, task))) {
@@ -281,7 +281,7 @@ export const useHallTaskActions = ({
         receipt = await agentApi.create(`/tasks/${encodeURIComponent(id)}/claim`, { ...operation.body }, {
           autoLoading: false, headers: { 'Idempotency-Key': operation.key }
         })
-        if (!matchingReceipt(receipt, operation)) throw new Error('领令回执不匹配；请核对原领令，不要重新取价')
+        if (!matchingReceipt(receipt, operation)) throw new Error('暂时无法确认承办结果，请查询结果，勿重复付款。')
       } catch (error) {
         if (isDefinitiveFundedFailure(error) || definitiveClaimFailures.has(error?.code)) unresolvedClaims.delete(id)
         setFundedClaimState({ taskId: id, agentId, quoteId: operation.body.quoteId,
@@ -376,12 +376,12 @@ export const useHallTaskActions = ({
       if (receipt?.taskId !== task.id || receipt?.fundingStatus !== 'REFUNDED' ||
         !validString(receipt?.refundTransactionId) || !['refundedMicro', 'remainingMicro', 'taskVersion', 'fundingVersion', 'refundedAt'].every(field => isCanonicalDecimalString(receipt?.[field])) ||
         BigInt(receipt.taskVersion) <= BigInt(version)) {
-        throw new Error('撤榜回执不匹配；请核对原撤榜，不要重复扣款')
+        throw new Error('暂时无法确认撤销结果，请查询结果，勿重复付款。')
       }
       try {
         const canonical = await agentApi.get(`/tasks/${encodeURIComponent(task.id)}`, undefined, { autoLoading: false })
         if (canonical?.id !== task.id || !isCanonicalDecimalString(taskVersion(canonical)) || BigInt(taskVersion(canonical)) < BigInt(receipt.taskVersion)) {
-          throw new Error('榜文快照尚未同步')
+          throw new Error('事项信息尚未更新，请重新加载。')
         }
         for (const current of new Set(currentTaskSnapshots(task.id, task))) {
           const currentVersion = taskVersion(current)

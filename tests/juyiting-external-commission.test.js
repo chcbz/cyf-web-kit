@@ -259,7 +259,7 @@ describe('D3.1 actual detail surfaces', () => {
     expect(wrapper.find('[role="switch"]').exists()).to.equal(false)
     expect(wrapper.text()).to.include('设置不可用')
     await wrapper.setProps({ externalPolicyStatus: 'UNKNOWN' })
-    expect(wrapper.text()).to.include('继续原操作')
+    expect(wrapper.text()).to.include('继续核对')
     await wrapper.setProps({ selectedAgent: { ...owned(), boundToMe: false } })
     expect(wrapper.find('.external-policy').exists()).to.equal(false)
   })

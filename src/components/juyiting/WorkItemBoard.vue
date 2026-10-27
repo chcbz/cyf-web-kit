@@ -3,7 +3,7 @@
     <div class="work-item-board-heading">
       <div>
         <h3 id="work-item-board-heading">工作项看板</h3>
-        <p>状态、承办与依赖均以当前协作快照为准；系统负责依赖解锁。</p>
+        <p>前置工作完成后，可继续后续工作。</p>
       </div>
       <span class="work-item-board-count">{{ entries.length }} 项</span>
     </div>
@@ -24,24 +24,23 @@
             </div>
             <p>{{ item.description || '未提供工作项说明。' }}</p>
             <dl>
-              <div><dt>承办</dt><dd :title="item.assigneeAgentId || '未指派'">{{ item.assigneeAgentId || '未指派' }}<template v-if="item.assigneeRole"> · {{ item.assigneeRole }}</template></dd></div>
-              <div><dt>类型</dt><dd :title="item.workType">{{ item.workType }}</dd></div>
+              <div><dt>承办</dt><dd >{{ assigneeName(item.assigneeAgentId) }}<template v-if="item.assigneeRole"> · {{ ({ coordinator: '协调', producer: '承办', reviewer: '复核' })[item.assigneeRole] || '成员' }}</template></dd></div>
+              <div><dt>类型</dt><dd>{{ ({ analysis: '分析', implementation: '制作', verification: '验证', review: '复核', coordination: '协调', documentation: '文档' })[item.workType] || '其他' }}</dd></div>
               <div><dt>尝试</dt><dd>{{ item.attemptCount }} / {{ item.maxAttempts }}</dd></div>
-              <div v-if="item.leaseUntil"><dt>租约至</dt><dd :title="item.leaseUntil">{{ item.leaseUntil }}</dd></div>
             </dl>
             <div class="work-item-dependencies">
               <span>依赖</span>
               <p v-if="item.dependencyState === 'none'">无前置工作项。</p>
-              <p v-else-if="item.dependencyState === 'invalid'">依赖数据不可用；请以服务端状态为准。</p>
+              <p v-else-if="item.dependencyState === 'invalid'">暂时无法读取前置事项，请重新加载。</p>
               <template v-else>
                 <ul>
-                  <li v-for="dependency in item.dependencyItems" :key="dependency.workItemId" :title="dependency.workItemId">
-                    {{ dependency.title }}<template v-if="dependency.status">（{{ dependency.status }}）</template><template v-else>（当前快照未包含）</template>
+                  <li v-for="dependency in item.dependencyItems" :key="dependency.workItemId">
+                    {{ dependency.title }}<template v-if="dependency.status">（{{ statusLabels[dependency.status] || '状态待确认' }}）</template><template v-else>（暂未获取）</template>
                   </li>
                 </ul>
                 <p v-if="item.remainingDependencyCount">另有 {{ item.remainingDependencyCount }} 项依赖未展开。</p>
                 <p>{{ item.completedDependencyCount }} / {{ item.dependencyCount }} 项依赖已完成。</p>
-                <p v-if="item.missingDependencyIds.length" class="work-item-board-warning">有 {{ item.missingDependencyIds.length }} 项依赖未在当前快照中提供。</p>
+                <p v-if="item.missingDependencyIds.length" class="work-item-board-warning">有 {{ item.missingDependencyIds.length }} 项前置工作暂时无法查看。</p>
               </template>
             </div>
           </li>
@@ -58,7 +57,8 @@ import { toRef } from 'vue'
 import { useHallWorkItemBoard } from '@/composables/juyiting/useHallWorkItemBoard'
 
 const props = defineProps({ workspace: { type: Object, default: () => ({ workItems: [], members: [] }) } })
-const { columns, entries } = useHallWorkItemBoard({ workspace: toRef(props, 'workspace') })
+const assigneeName = id => { const i = (props.workspace.members || []).findIndex(member => member.agentId === id); return i < 0 ? (id ? '承办信息待确认' : '未指派') : (props.workspace.members[i].name || props.workspace.members[i].personaName || `成员 ${i + 1}`) }
+const { columns, entries, statusLabels } = useHallWorkItemBoard({ workspace: toRef(props, 'workspace') })
 </script>
 
 <style scoped>

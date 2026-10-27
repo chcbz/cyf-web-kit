@@ -62,7 +62,7 @@
               ></span>
               <div>
                 <strong ref="detailTitleRef" tabindex="-1">{{ selectedAgent.name || selectedAgent.personaName || selectedAgent.agentId }}</strong>
-                <small>{{ portraitName(selectedAgent) }} / {{ selectedAgent.agentId }}</small>
+                <small>{{ portraitName(selectedAgent) }}</small>
               </div>
             </div>
             <div v-if="canManagePolicy" class="external-policy" aria-label="接外单设置">
@@ -85,8 +85,8 @@
               <p v-if="externalPolicyError" class="profile-error" role="alert">{{ externalPolicyError }}</p>
               <p v-if="externalPolicyStatus === 'UNKNOWN'" role="status">原修改结果未知，暂不能另开修改。</p>
               <div v-if="externalPolicyStatus === 'UNKNOWN'" class="external-policy-recovery">
-                <button type="button" :disabled="externalPolicyBusy" @click="$emit('check-external-policy')">查询原操作</button>
-                <button type="button" :disabled="externalPolicyBusy" @click="$emit('resume-external-policy')">继续原操作</button>
+                <button type="button" :disabled="externalPolicyBusy" @click="$emit('check-external-policy')">查询结果</button>
+                <button type="button" :disabled="externalPolicyBusy" @click="$emit('resume-external-policy')">继续核对</button>
               </div>
               <button
                 v-else-if="externalPolicyStatus === 'UNAVAILABLE'"

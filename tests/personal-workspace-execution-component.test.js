@@ -122,7 +122,7 @@ describe('personal workspace execution receipt presentation', () => {
     assert.equal(wrapper.classes().includes('is-progress-view'), true)
     assert.equal(delivery.element.children[1].classList.contains('delivery-receipt'), true)
     assert.match(delivery.text(), /交付进度/)
-    assert.match(delivery.text(), /本次交付回执/)
+    assert.match(delivery.text(), /交付进度/)
     assert.match(delivery.text(), /已接受，等待结果/)
     assert.equal(delivery.find('.composer-steps').exists(), false)
     assert.equal(delivery.find('details.execution-history').attributes('open'), undefined)
@@ -132,7 +132,7 @@ describe('personal workspace execution receipt presentation', () => {
     const queuedReceipt = execution.receipt.value
     execution.receipt.value = null; execution.executionState.value = 'unknown'; execution.unresolvedIntent.value = { idempotencyKey: 'pending-key' }
     await Vue.nextTick()
-    assert.match(delivery.text(), /只查询原请求，不会再次提交/)
+    assert.match(delivery.text(), /请查询进度，勿重复提交/)
     assert.equal(delivery.find('.composer-steps').exists(), false)
     assert.equal(delivery.findAll('button').find(button => button.text().includes('另起一项新交付')).element.disabled, true)
     execution.receipt.value = queuedReceipt; execution.executionState.value = 'ready'; execution.unresolvedIntent.value = null

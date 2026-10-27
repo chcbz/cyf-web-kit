@@ -67,7 +67,7 @@
 
     <section v-if="economyReadOnlyPreviewBuildEnabled" class="economy-discovery" aria-labelledby="economy-readonly-preview-title">
       <h3 id="economy-readonly-preview-title">经济预览</h3>
-      <p>只读，不扣款、不下单、不安装、不启用托管；实际可读能力由服务端认证后确认。</p>
+      <p>仅供查看，不会产生费用。</p>
       <p v-if="readOnlyPreviewState === 'loading'" class="capability-status" role="status">正在确认经济预览是否可用…</p>
       <p v-else-if="readOnlyPreviewError" class="capability-error" role="alert">{{ readOnlyPreviewError }}</p>
       <div class="discovery-links">
@@ -78,7 +78,7 @@
 
     <section v-if="economyPreviewAvailable" class="economy-discovery" aria-labelledby="economy-discovery-title">
       <h3 id="economy-discovery-title">开发预览</h3>
-      <p>经济预览由服务端能力决定；未开启时不会显示可操作的钱包或市场功能。</p>
+
       <div class="discovery-links">
         <router-link to="/wallet">查看 SILVER 钱袋</router-link>
         <router-link to="/skill-market">发现技能市场</router-link>

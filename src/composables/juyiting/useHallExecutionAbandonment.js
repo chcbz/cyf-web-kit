@@ -76,7 +76,7 @@ export const useHallExecutionAbandonment = ({ api = createApi('/chat'), conversa
         autoLoading: false, needAuth: true, signal: controller.signal })
       if (!current(snapshot, controller)) return null
       const receipt = unwrap(response)
-      if (!validAbandonmentReceipt(receipt, snapshot.intent) || (status.value.receipt && receiptFields.some(field => status.value.receipt[field] !== receipt[field]))) throw new Error('原放弃操作回执不匹配')
+      if (!validAbandonmentReceipt(receipt, snapshot.intent) || (status.value.receipt && receiptFields.some(field => status.value.receipt[field] !== receipt[field]))) throw new Error('暂时无法确认是否已放弃，请查询结果。')
       status.value = { state: 'completed', busy: true, intent: snapshot.intent, receipt: Object.freeze({ ...receipt }),
         message: '本轮未交付结果已放弃；已发生的费用不撤销，不代表服务商已停止执行。' }
       return status.value.receipt
@@ -85,9 +85,9 @@ export const useHallExecutionAbandonment = ({ api = createApi('/chat'), conversa
       const code = cause?.status ?? cause?.response?.status
       // Even a GET404 may race a committed POST. Keep the original operation; never infer "not executed".
       status.value = { ...status.value, state: status.value.receipt ? 'completed' : 'unknown', busy: true,
-        message: code === 409 ? '执行状态已变化或已有成果；请刷新议事并查询原操作，未放弃已有成果。'
-          : code === 401 || code === 403 ? '当前身份无权核对原操作；未显示终止成功。'
-            : '尚不能确认原操作结果；请查询或继续原操作，原幂等键已保留。' }
+        message: code === 409 ? '执行状态已变化或已有成果；请刷新议事并查询结果，未放弃已有成果。'
+          : code === 401 || code === 403 ? '当前身份无权核对结果；未显示终止成功。'
+            : '尚不能确认原操作结果；请查询或继续核对，原幂等键已保留。' }
       return null
     } finally {
       controllers.delete(controller)

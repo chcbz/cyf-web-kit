@@ -127,7 +127,7 @@
           <p>{{ item.content }}</p>
           <div class="result-meta">
             <span>{{ sourceText(item.summaryType || item.sourceType) }}</span>
-            <span v-if="item.conversationId">话头 {{ item.conversationId }}</span>
+
             <span v-if="item.timestamp">{{ formatTime(item.timestamp) }}</span>
           </div>
           <button

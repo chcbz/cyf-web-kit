@@ -91,8 +91,8 @@ describe('W06 workspace bounty material links', () => {
     await wrapper.get('.attach-material').trigger('click')
 
     assert.deepEqual(attached, [{ fileId: 'file_a', version: '1', role: 'INPUT' }])
-    assert.match(wrapper.text(), /不会启动 Agent 执行/)
-    assert.match(wrapper.text(), /明确开始正式办理/)
+    assert.match(wrapper.text(), /不会自动开始办理/)
+    assert.match(wrapper.text(), /开始办理/)
   })
 
 
@@ -116,7 +116,7 @@ describe('W06 workspace bounty material links', () => {
     await Vue.nextTick()
 
     assert.match(wrapper.text(), /真实参考资料 · v2 · 参考资料/)
-    assert.match(wrapper.text(), /明确勾选.*input manifest/)
+    assert.match(wrapper.text(), /只有勾选的资料会用于本次办理/)
     await wrapper.get('.formal-inputs input').setValue(true)
     await wrapper.get('.begin-formal-execution').trigger('click')
     assert.deepEqual(begun, [{ inputs: [{ fileId: 'file_ref', version: '2' }], instruction: '整理正式成果', confirmed: true }])
@@ -130,7 +130,7 @@ describe('W06 workspace bounty material links', () => {
     wrappers.push(wrapper)
 
     assert.match(wrapper.text(), /成果关联由执行流程管理/)
-    assert.match(wrapper.text(), /正式交付状态仍需以正式交付回执确认/)
+    assert.match(wrapper.text(), /验收情况请查看交付状态/)
     assert.equal(wrapper.find('.task-link-row.output .open-linked-file').exists(), true)
     assert.equal(wrapper.find('.task-link-row.output button:not(.open-linked-file)').exists(), false)
   })
