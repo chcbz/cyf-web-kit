@@ -31,6 +31,18 @@ describe('completed matter records display over fixed acceptance facts', () => {
     expect(completedReviewRecords(context(), 'other').accepted).to.have.length(0)
     c.taskState = 'REVIEWING'; expect(completedReviewRecords(c, 'task-1').history).to.have.length(0)
   })
+  it('archived matter keeps exact accepted history read-only, never treating archive itself as acceptance', () => {
+    const c = context(); c.taskState = 'ARCHIVED'; c.history.unshift(c.currentDelivery); c.currentDelivery = null
+    const r = completedReviewRecords(c, 'task-1')
+    expect(r.accepted).to.have.length(2); expect(r.complete).to.equal(true)
+    const { wrapper } = harness({ context: c, archived: true })
+    expect(wrapper.text()).to.include('已归档 · 只读')
+    expect(wrapper.text()).not.to.include('继续议事'); expect(wrapper.text()).not.to.include('验收此版')
+    expect(readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')).to.include("['completed', 'archived'].includes(formalTaskRef?.status)")
+    c.history.forEach(batch => { batch.state = 'SUBMITTED' })
+    expect(completedReviewRecords(c, 'task-1').accepted).to.have.length(0)
+    expect(completedReviewRecords(c, 'task-1').complete).to.equal(false)
+  })
   it('does not repeat an accepted exact version in other history while retaining a distinct prior version', () => {
     const c = context(); c.history[0].items.push(item('a', '2'))
     const result = completedReviewRecords(c, 'task-1')
@@ -133,6 +145,6 @@ describe('completed detail shell confirmation and original read-only navigation'
     const panel = readFileSync(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url), 'utf8')
     expect(panel).to.include("$emit('view-discussion-history', detailTask)")
     expect(hall).to.include('@view-discussion-history="continueBountyModification($event)"')
-    expect(hall).to.include("formalTaskRef.value.status !== 'completed'")
+    expect(hall).to.include("!['completed', 'archived'].includes(formalTaskRef.value.status)")
   })
 })

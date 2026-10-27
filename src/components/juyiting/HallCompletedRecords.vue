@@ -1,6 +1,6 @@
 <template>
   <section class="completed-records" aria-label="成果与验收记录">
-    <header><h3>成果与验收记录</h3><p class="muted">已完成 · 只读</p><p>{{ title }}</p><p class="muted">已验收的版本固定保留。其他历史成果不代表已验收。</p></header>
+    <header><h3>成果与验收记录</h3><p class="muted">{{ archived ? '已归档' : '已完成' }} · 只读</p><p>{{ title }}</p><p class="muted">已验收的版本固定保留。其他历史成果不代表已验收。</p></header>
     <p v-if="loading" role="status">正在读取成果与验收记录…</p>
     <p v-else-if="error" role="alert">{{ error }} <button type="button" @click="retry">重试</button></p>
     <template v-else>
@@ -63,7 +63,7 @@ import { useOutputs } from '../../composables/useOutputs.js'
 import { completedReviewRecords, exactReviewOutput } from '../../composables/juyiting/completedReviewRecords.js'
 const props = defineProps({
   taskId: { type: String, required: true }, taskVersion: { type: [String, Number], default: '' },
-  identityKey: { type: String, required: true }, title: { type: String, default: '' },
+  identityKey: { type: String, required: true }, title: { type: String, default: '' }, archived: { type: Boolean, default: false },
   context: { type: Object, default: null }, loading: { type: Boolean, default: false }, error: { type: String, default: '' }
 })
 const emit = defineEmits(['refresh'])

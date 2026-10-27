@@ -247,7 +247,7 @@
                     <p v-if="detailTask.status === 'completed'" class="matter-fee-note">事项已完成，可查看已验收成果和历史议事；不能继续修改或重复验收。</p>
                     <p v-else-if="!isTerminalMatter(detailTask)" class="matter-fee-note">补充要求、查看结果和提出修改，都在原议事中继续。</p>
                     <button
-                      v-if="detailTask.status === 'completed'"
+                      v-if="['completed', 'archived'].includes(detailTask.status)"
                       type="button"
                       class="matter-secondary-action"
                       @click="$emit('view-discussion-history', detailTask)"
@@ -355,7 +355,7 @@
                 @summary="matterResourceSummary = $event"
               />
               <section v-if="!embeddedHall || taskPresentation(detailTask).readOnly || taskPresentation(detailTask).phase === 'COMPLETED'" class="matter-resources" aria-label="资料与成果">
-                <button type="button" class="matter-results-action" @click="$emit('open-formal-results', detailTask)">{{ detailTask.status === 'completed' ? '查看成果与验收记录' : embeddedHall || taskPresentation(detailTask).readOnly ? '查看历史成果' : '查看正式成果与验收' }}</button>
+                <button type="button" class="matter-results-action" @click="$emit('open-formal-results', detailTask)">{{ ['completed', 'archived'].includes(detailTask.status) ? '查看成果与验收记录' : embeddedHall || taskPresentation(detailTask).readOnly ? '查看历史成果' : '查看正式成果与验收' }}</button>
               </section>
               <WorkItemPlanPanel v-if="!embeddedHall && canActOnTask(detailTask)" :task="detailTask" :enabled="workItemPlanEnabled" :authorization-generation="authorizationGeneration" />
 
