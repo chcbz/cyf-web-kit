@@ -34,6 +34,21 @@ describe('SE2 scoped directory and generic data-only result consumers', () => {
     const wrong = outcome(); wrong.outcome.action.operation = 'INSPECT_INPUTS'
     assert.equal(skillResultReferences([wrong], context).length, 0)
   })
+  it('reads v5 skill results with the same exact execution binding as v4', async () => {
+    const v5 = outcome(); v5.outcome.outcomeContractVersion = 5; v5.outcome.deliverable = false
+    assert.equal(skillResultReferences([v5], context)[0]?.executionId, 'pwe_test')
+    assert.equal(skillResultReferences([v5], { ...context, taskId: 'other' }).length, 0)
+    const calls = []; const scope = effectScope(); let service
+    scope.run(() => { service = useHallSkillResults({ api: { get: async (...args) => { calls.push(args); return result() } },
+      getContext: () => context, getOutcomes: () => [v5], identityKey: () => 'owner', enabled: () => true }) })
+    try {
+      await drain()
+      assert.equal(calls[0][0], '/conversations/1/executions/pwe_test/result')
+      assert.equal(service.results.value[0].complete, true)
+    } finally { service.dispose(); scope.stop() }
+    v5.outcome.outcomeContractVersion = 99
+    assert.equal(skillResultReferences([v5], context).length, 0)
+  })
   it('permits arbitrary JSON data without fabricating a file or accepting the task', () => {
     const value = skillResultProjection(result(), expected())
     assert.equal(value.complete, true); assert.deepEqual(value.outputs, []); assert.deepEqual(value.data, result().data)

@@ -185,11 +185,13 @@ const activeExecutionUnknown = computed(() => {
   const request = props.activeRequest
   if (!props.typedEnabled || props.isStreaming || !request?.requestId ||
     request.conversationId !== props.conversationId ||
-    request.conversationGeneration !== props.conversationGeneration || props.activeTurns.length) return false
+    request.conversationGeneration !== props.conversationGeneration ||
+    (props.activeTurns.length && request.state !== 'COMPLETED')) return false
   const linked = props.typedOutcomes.filter(card => card.conversationId === props.conversationId &&
     card.conversationGeneration === props.conversationGeneration &&
     card.outcome?.taskId === String(props.selectedTask?.id || '') && card.outcome.kind === 'ACTION_REQUEST' &&
-    card.actionProgress?.childRequestId === request.requestId && card.actionProgress.childRoute === 'EXECUTE')
+    (card.actionProgress?.childRequestId === request.requestId ||
+      (card.requestId === request.requestId && request.state === 'COMPLETED')) && card.actionProgress?.childRoute === 'EXECUTE')
   return linked.length === 1 && linked[0].actionProgress.state === 'RESULT_UNKNOWN'
 })
 
