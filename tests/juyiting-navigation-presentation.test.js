@@ -108,7 +108,8 @@ describe('Juyi Hall navigation presentation', () => {
     expect(source).to.include("? '← 名册' : '← 返回'")
     expect(source).to.include('.panel-title .panel-return')
     expect(source).to.include('@click="closePanel"')
-    expect(source).to.include('externalRootModalOpen: props.onboardingVisible')
+    expect(source).not.to.include('externalRootModalOpen: props.onboardingVisible')
+    expect(source).to.include(':inert="props.onboardingVisible || voiceInteractionLocked')
   })
 
 

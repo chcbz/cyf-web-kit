@@ -4,6 +4,8 @@ import { compileScript, parse } from '@vue/compiler-sfc'
 import { mount } from '@vue/test-utils'
 import * as Vue from 'vue'
 import * as geometry from '../src/components/juyiting/hallOnboardingGeometry.js'
+import { resolveHallNavigationPresentation } from '../src/composables/juyiting/useHallPanels.js'
+import { buildNavigationHostSource } from './helpers/juyiting-navigation-host.js'
 
 global.Element = global.window?.Element
 global.HTMLElement = global.window?.HTMLElement
@@ -33,6 +35,15 @@ const loadOnboarding = game => {
     })
     .replace('export default', 'return')
   return new Function('Vue', 'game', 'geometry', body)(Vue, game, geometry)
+}
+
+const loadNavigationHost = () => {
+  const { descriptor } = parse(buildNavigationHostSource())
+  const body = compileScript(descriptor, { id: 'hall-navigation-host', inlineTemplate: true }).content
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
+    .replace(/^import.*resolveHallNavigationPresentation.*$/m, '')
+    .replace('export default', 'return')
+  return new Function('Vue', 'resolveHallNavigationPresentation', body)(Vue, resolveHallNavigationPresentation)
 }
 
 const restoreDescriptor = (target, key, descriptor) => {
@@ -228,6 +239,82 @@ describe('HallOnboarding mounted geometry', () => {
     expect(card.bottom).to.be.at.most(832)
     fixture.wrapper.unmount()
   })
+  for (const width of [320, 390, 760, 761, 1440]) {
+    it(`keeps real Hall navigation visible and inert during guidance at ${width}px`, async () => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
+      const host = mount(loadNavigationHost(), { attachTo: document.body, props: { onboardingVisible: false }, global: { stubs: { 'var-icon': { render: () => Vue.h('i') } } } })
+      const page = host.element
+      const dock = page.querySelector('.workbench-mobile-nav')
+      const sidebar = page.querySelector('.hall-workbench-sidebar')
+      const visibleNav = width <= 760 ? dock : sidebar
+      // jsdom geometry is synthetic; visibility still follows real computed/v-show.
+      for (const target of page.querySelectorAll('[data-workbench-tab], [data-tour]')) {
+        target.getBoundingClientRect = () => ({ left: 24, top: 700, right: 90, bottom: 744, width: 66, height: 44 })
+        target.getClientRects = () => target.hasAttribute('data-tour') || visibleNav.contains(target) && visibleNav.style.display !== 'none' ? [target.getBoundingClientRect()] : []
+      }
+      let guide
+      try {
+        expect(dock.style.display).not.to.equal('none')
+        expect(dock.hasAttribute('inert')).to.equal(false)
+        await host.setProps({ onboardingVisible: true })
+        expect(dock.style.display).not.to.equal('none')
+        expect(page.classList.contains('has-workbench-dock')).to.equal(true)
+        expect(dock.hasAttribute('inert')).to.equal(true)
+        expect(sidebar.hasAttribute('inert')).to.equal(true)
+        for (const panel of ['', 'tasks', 'treasure', 'mine']) {
+          host.vm.renderedPanel = panel
+          host.vm.activePanel = panel
+          await Vue.nextTick()
+          expect(dock.style.display, panel || 'overview').not.to.equal('none')
+        }
+        host.vm.renderedPanel = ''
+        host.vm.activePanel = ''
+        await Vue.nextTick()
+        guide = mount(loadOnboarding({}), { attachTo: document.body, props: { modelValue: true } })
+        await Vue.nextTick()
+        await Vue.nextTick()
+        for (let step = 0; step < 4; step++) {
+          await runFrame()
+          expect(document.querySelector('.onboarding-spotlight'), `step ${step + 1}`).not.to.equal(null)
+          expect(document.querySelector('.target-note')).to.equal(null)
+          expect(page.closest('[inert]')).not.to.equal(null)
+          if (step < 3) {
+            document.querySelector('.next-button').click()
+            await Vue.nextTick()
+          }
+        }
+        expect(host.emitted('navigate')).to.equal(undefined)
+        await guide.setProps({ modelValue: false })
+        await host.setProps({ onboardingVisible: false })
+        expect(page.hasAttribute('inert')).to.equal(false)
+        expect(page.hasAttribute('aria-hidden')).to.equal(false)
+        expect(dock.hasAttribute('inert')).to.equal(false)
+        expect(sidebar.hasAttribute('inert')).to.equal(false)
+        expect(dock.style.display).not.to.equal('none')
+        await host.find('.workbench-mobile-nav [data-workbench-tab="tasks"]').trigger('click')
+        expect(host.emitted('navigate')).to.deep.equal([['tasks']])
+        await host.setProps({ onboardingVisible: true })
+        host.vm.hallKeyboardActive = true
+        await Vue.nextTick()
+        expect(dock.style.display).to.equal('none')
+        host.vm.hallKeyboardActive = false
+        host.vm.renderedPanel = 'tasks'
+        host.vm.activePanel = 'tasks'
+        host.vm.bountyPanelRef = { canGoBack: true }
+        await Vue.nextTick()
+        expect(dock.style.display).to.equal('none')
+        host.vm.bountyPanelRef = null
+        host.vm.renderedPanel = 'messages'
+        host.vm.activePanel = 'messages'
+        await Vue.nextTick()
+        expect(dock.style.display).to.equal('none')
+      } finally {
+        guide?.unmount()
+        host.unmount()
+      }
+    })
+  }
+
   for (const width of [320, 390, 760, 761, 1440]) {
     it(`uses the visible workbench navigation at ${width}px without dispatching business actions`, async () => {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })

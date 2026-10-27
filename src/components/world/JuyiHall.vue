@@ -1,6 +1,6 @@
 <template>
   <div ref="hallRootRef" class="juyi-page" tabindex="-1" :style="hallViewportStyle" :class="{ 'is-immersive-map': isImmersiveMap, 'is-panel-open': isPanelSessionActive, 'is-virtual-landscape': isVirtualLandscape, 'has-workbench-dock': showWorkbenchDock && (Boolean(activePanel) || !renderedPanel), 'is-keyboard-active': hallKeyboardActive, [`experience-${experienceMode}`]: true, [`home-${homeMode}`]: true }">
-    <aside v-show="isOverviewHome" class="hall-workbench-sidebar" :inert="voiceInteractionLocked || isPanelSessionActive && !workbenchPrimaryPanelSet.has(renderedPanel) ? '' : null" aria-label="工作台侧栏">
+    <aside v-show="isOverviewHome" class="hall-workbench-sidebar" :inert="props.onboardingVisible || voiceInteractionLocked || isPanelSessionActive && !workbenchPrimaryPanelSet.has(renderedPanel) ? '' : null" aria-label="工作台侧栏">
       <button class="workbench-brand" type="button" @click="openWorkbenchPage('overview')"><span class="workbench-seal">聚</span><span>聚义厅<small>一起，把事情办成。</small></span></button>
       <p class="workbench-nav-caption">我的工作空间</p>
       <nav class="workbench-side-nav" aria-label="工作台主导航">
@@ -46,7 +46,7 @@
         <button class="hall-help-action" type="button" @click="emit('open-onboarding', $event.currentTarget)">怎么开始？</button>
       </div>
     </div>
-    <nav v-show="showWorkbenchDock && (Boolean(activePanel) || !renderedPanel)" class="workbench-mobile-nav" aria-label="移动端导航" :inert="voiceInteractionLocked || isPanelSessionActive && !workbenchPrimaryPanelSet.has(renderedPanel) ? '' : null">
+    <nav v-show="showWorkbenchDock && (Boolean(activePanel) || !renderedPanel)" class="workbench-mobile-nav" aria-label="移动端导航" :inert="props.onboardingVisible || voiceInteractionLocked || isPanelSessionActive && !workbenchPrimaryPanelSet.has(renderedPanel) ? '' : null">
       <button v-for="tab in workbenchMobileTabs" :key="tab.panel" type="button" :data-workbench-tab="tab.panel" :aria-label="tab.label" :aria-current="workbenchCurrentPage === tab.panel ? 'page' : null" @click="openWorkbenchPage(tab.panel)"><var-icon :name="tab.icon" /><span>{{ tab.label }}</span></button>
     </nav>
     <HallPortraitHome
@@ -1119,8 +1119,8 @@ const navigationPresentation = computed(() => resolveHallNavigationPresentation(
   treasureCanGoBack: Boolean(treasurePanelRef.value?.canGoBack),
   libraryCanGoBack: Boolean(libraryPanelRef.value?.canGoBack),
   portraitTaskDetailOpen: portraitTaskDetailOpen.value,
-  isKeyboardActive: hallKeyboardActive.value,
-  externalRootModalOpen: props.onboardingVisible
+  // Guidance highlights navigation; unlike business modals it must not hide the dock.
+  isKeyboardActive: hallKeyboardActive.value
 }))
 const showWorkbenchDock = computed(() => navigationPresentation.value.showWorkbenchDock)
 const hallRootRef = ref(null)
