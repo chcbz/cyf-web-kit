@@ -4,7 +4,7 @@
       v-if="modelValue"
       ref="overlayRef"
       class="onboarding-overlay"
-      :class="{ 'has-target': Boolean(targetRect), 'is-virtual-landscape': virtualLandscape }"
+      :class="{ 'has-target': Boolean(targetRect), 'is-virtual-landscape': virtualLandscape, 'is-workbench': activeMode.endsWith('workbench') }"
       @pointerdown.self="later"
     >
       <div
@@ -33,7 +33,7 @@
       >
         <div class="dialog-heading">
           <div>
-            <p class="eyebrow">聚义厅 · {{ modeLabel }}引导</p>
+            <p class="eyebrow">聚义厅 · {{ modeLabel }}使用指导</p>
             <h1 id="hall-onboarding-title">{{ currentStep.title }}</h1>
           </div>
           <button class="close-button" type="button" aria-label="稍后查看新手引导" @click="later">×</button>
@@ -42,6 +42,7 @@
         <p id="hall-onboarding-description" class="intro">{{ currentStep.description }}</p>
         <p class="sr-only" aria-live="polite" aria-atomic="true">{{ currentStep.title }}。{{ currentStep.description }}</p>
         <p v-if="!targetRect && (currentStep.target || currentStep.hotspotId)" class="target-note" role="status">{{ targetNote }}</p>
+        <p class="guide-note">只介绍入口，不会替你提交需求或发送消息。</p>
         <p class="step-progress">第 {{ stepIndex + 1 }} 步，共 {{ steps.length }} 步</p>
         <p v-if="templateLabel" class="template-note">访客体验参考：{{ templateLabel }}</p>
 
@@ -76,13 +77,30 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'later', 'skip', 'complete'])
 
-const REQUIREMENT_STEPS = Object.freeze([
-  { title: '描述需求', description: '在办事首页写下想办成的事，也可以添加资料。开始办事后需求会保存为待确认承办事项。' },
-  { title: '确认承办好汉', description: '系统推荐承办好汉，你可以确认或另选。确认承办后才交给好汉办理，提交成功不代表已经开工。' },
-  { title: '在议事中协作与验收', description: '澄清、查看结果和提出修改都在同一议事中完成。成果提交后，通过验收入口查看并确认验收。' },
-  { title: '找回事项与资料', description: '从事项页继续办理或查看已完成成果；从资料页管理和复用固定版本资料。' }
+const workbenchSteps = mobile => {
+  const navigation = mobile ? '底部导航' : '左侧导航'
+  const navTarget = mobile ? '.workbench-mobile-nav' : '.hall-workbench-sidebar'
+  return Object.freeze([
+    { title: '从办事页开始', target: '[data-tour="workbench-request"]', description: '在“办事”页写下目标，按需添加资料。点击“开始办事”先保存需求，确认承办后才交给好汉。' },
+    { title: '确认承办，再协作验收', target: `${navTarget} [data-workbench-tab="tasks"]`, description: `从${navigation}进入“事项”，打开需求，确认推荐好汉或另选。之后在原议事补充要求、查看结果和提出修改；成果提交后，查看并明确确认验收才算完成。` },
+    { title: '在资料页查找与复用', target: `${navTarget} [data-workbench-tab="treasure"]`, description: `从${navigation}进入“资料”，管理文件、查看成果，选择需要引用的固定版本。资料不是必选，添加资料不等于已经发送给好汉。` },
+    { title: '更多入口与使用帮助', target: `${navTarget} [data-workbench-tab="mine"]`, description: mobile
+      ? '底部“我的”汇集好汉名册、典籍阁、待办提醒和厅中实景，也能重新打开“使用帮助”。点“稍后”仅收起本次引导；“跳过本版本”不影响手动重看。'
+      : '左侧“我的”汇集好汉名册、典籍阁和待办提醒；侧栏下方可进入厅中实景、重看“使用帮助”。点“稍后”仅收起本次引导；“跳过本版本”不影响手动重看。' }
+  ])
+}
+const MAP_STEPS = Object.freeze([
+  { title: '回到办事工作台', description: '厅中实景是另一种浏览方式。收起引导后，选择“办事概览”回到工作台，在“办事”页描述目标并按需添加资料。' },
+  { title: '确认承办好汉', description: '点击“开始办事”先保存需求，确认推荐好汉或另选后才交给好汉办理；提交成功不代表已经开工。' },
+  { title: '在议事中协作与验收', description: '澄清、查看结果和提出修改都在原议事中完成。成果提交后，查看并明确确认验收才算完成。' },
+  { title: '找回事项与资料', description: '工作台的“事项”可继续办理，“资料”可查找文件与固定版本成果；“我的”中可重看使用帮助。' }
 ])
-const TOUR_STEPS = Object.freeze({ 'portrait-command': REQUIREMENT_STEPS, 'landscape-map': REQUIREMENT_STEPS })
+const TOUR_STEPS = Object.freeze({
+  'mobile-workbench': workbenchSteps(true),
+  'desktop-workbench': workbenchSteps(false),
+  'portrait-command': MAP_STEPS,
+  'landscape-map': MAP_STEPS
+})
 
 const dialogRef = ref(null)
 const overlayRef = ref(null)
@@ -109,10 +127,10 @@ let scrolledTargetKey = null
 const templateLabel = computed(() => guestDemoTemplates.find(item => item.id === props.template)?.eyebrow || '')
 const steps = computed(() => TOUR_STEPS[activeMode.value] || TOUR_STEPS['portrait-command'])
 const currentStep = computed(() => steps.value[Math.min(stepIndex.value, steps.value.length - 1)])
-const modeLabel = computed(() => activeMode.value === 'landscape-map' ? '横屏全景' : '竖屏掌上')
+const modeLabel = computed(() => ({ 'mobile-workbench': '手机端', 'desktop-workbench': 'PC端', 'landscape-map': '厅中实景', 'portrait-command': '厅中实景' })[activeMode.value])
 const targetNote = computed(() => currentStep.value?.optional
   ? '当前设备没有显示这个可选按钮，可继续下一步。'
-  : '当前区域仍在加载或暂未显示，可继续、返回上一步或跳过本版本。')
+  : '当前页面未显示这个入口。可继续阅读，收起引导后按说明进入；引导不会自动切页或提交需求。')
 const dialogCssWidth = computed(() => Math.max(0, Math.min(360, (virtualLandscape.value ? viewportSize.value.height : viewportSize.value.width) - 24)))
 const dialogFootprint = computed(() => virtualLandscape.value
   ? { width: dialogIntrinsicHeight.value, height: dialogCssWidth.value }
@@ -262,7 +280,10 @@ const readViewport = () => ({
   width: Math.max(0, Number(window.visualViewport?.width) || Number(window.innerWidth) || 0),
   height: Math.max(0, Number(window.visualViewport?.height) || Number(window.innerHeight) || 0)
 })
-const experienceMode = page => page?.classList?.contains('experience-landscape-map') ? 'landscape-map' : 'portrait-command'
+// Match the workbench's CSS breakpoint, not orientation or keyboard-shrunk visualViewport.
+const experienceMode = page => page?.classList?.contains('home-overview')
+  ? (window.innerWidth <= 760 ? 'mobile-workbench' : 'desktop-workbench')
+  : page?.classList?.contains('experience-landscape-map') ? 'landscape-map' : 'portrait-command'
 const stepKey = step => `${activeMode.value}:${stepIndex.value}:${step?.hotspotId || step?.target || 'missing'}`
 const updateObservedTarget = target => {
   if (!resizeObserver || observedGeometryTarget === target) return
@@ -309,19 +330,20 @@ const syncGeometry = () => {
     if (focusedHotspotKey === key) rect = hotspotClientRect(step.hotspotId, page)
     updateObservedTarget(page?.querySelector?.('.hall-board .melon-layer canvas') || null)
   } else {
-    const target = step?.target ? page?.querySelector?.(step.target) : null
+    const target = step?.target ? [...(page?.querySelectorAll?.(step.target) || [])].find(element => element.getClientRects().length > 0) : null
     updateObservedTarget(target || null)
     rect = rectFromEdges(target?.getBoundingClientRect?.())
     const canFitInViewport = rect && rect.height <= viewportSize.value.height - 24
-    const needsScroll = rect && (rect.bottom < 8 || rect.top > viewportSize.value.height - 8 ||
-      (canFitInViewport && (rect.top < 8 || rect.bottom > viewportSize.value.height - 8)))
+    const needsScroll = rect && (rect.bottom <= 0 || rect.top >= viewportSize.value.height ||
+      rect.right <= 0 || rect.left >= viewportSize.value.width ||
+      (canFitInViewport && (rect.top < 0 || rect.bottom > viewportSize.value.height)))
     if (needsScroll) {
       if (scrolledTargetKey !== key) {
         scrolledTargetKey = key
         target.scrollIntoView?.({ block: 'center', inline: 'nearest', behavior: 'auto' })
+        scheduleGeometry()
       }
       rect = null
-      scheduleGeometry()
     }
   }
   targetRect.value = paddedTargetRect(rect, viewportSize.value)
@@ -489,6 +511,7 @@ const later = () => emit('later')
 h1 { margin: 0; font-size: clamp(22px, 5vw, 30px); line-height: 1.16; }
 .close-button { width: 34px; height: 34px; flex: 0 0 auto; border: 0; border-radius: 50%; color: #285a50; font-size: 26px; line-height: 1; background: #edf3e9; cursor: pointer; }
 .intro { margin: 16px 0 10px; color: #49574f; line-height: 1.65; }
+.guide-note { margin: 0 0 10px; color: #68716b; font-size: 12px; line-height: 1.5; }
 .target-note { margin: 0 0 10px; padding: 9px 11px; border-radius: 10px; color: #70551a; background: #fff5d7; font-size: 13px; line-height: 1.45; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .step-progress, .template-note { margin: 0; color: #637168; font-size: 13px; }
@@ -498,6 +521,16 @@ h1 { margin: 0; font-size: clamp(22px, 5vw, 30px); line-height: 1.16; }
 .later-button, .skip-button { border: 1px solid #cfdacf; color: #285a50; background: #fffdf8; }
 .previous-button { border: 1px solid #9db9aa; color: #285a50; background: #edf3e9; }
 .complete-button { border: 1px solid #f6c64a; color: #173936; background: #f6c64a; }
+.is-workbench .onboarding-dialog { color: #242e2b; background: #fffefa; border-color: #e3e5dc; border-radius: 12px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+.is-workbench .close-button, .is-workbench .previous-button { color: #242e2b; background: #f3f3ed; }
+.is-workbench .later-button, .is-workbench .skip-button { color: #242e2b; background: #fffefa; border-color: #ccd2c5; }
+.is-workbench .eyebrow { color: #923f30; }
+.is-workbench .intro { color: #68716b; }
+.is-workbench h1 { font-size: 22px; line-height: 1.35; }
+.is-workbench .complete-button { color: #fffefa; background: #923f30; border-color: #923f30; }
+.is-workbench .onboarding-spotlight { border-color: #923f30; }
+.dialog-actions button { min-height: 44px; font-family: inherit; }
+.dialog-actions button:focus-visible, .close-button:focus-visible { outline: 3px solid #923f3080; outline-offset: 2px; }
 @media (max-width: 480px) { .onboarding-dialog { padding: 18px; border-radius: 15px; } .dialog-actions button { flex: 1 1 auto; } }
 @media (prefers-reduced-motion: reduce) { .onboarding-spotlight { transition: none; } }
 </style>

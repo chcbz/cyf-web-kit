@@ -6,7 +6,7 @@
         <h2>今天，想办成什么事？</h2>
         <p>说说你的目标，让好汉协助你完成。</p>
       </header>
-      <form class="overview-start-card overview-quick-request" aria-label="描述需求" @submit.prevent="submitQuickRequest">
+      <form data-tour="workbench-request" class="overview-start-card overview-quick-request" aria-label="描述需求" @submit.prevent="submitQuickRequest">
         <span class="overview-start-mark" aria-hidden="true">事</span>
         <div class="overview-start-copy">
           <h3>你想办成什么事？</h3>

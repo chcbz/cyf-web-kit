@@ -52,7 +52,7 @@ test('four-step requirement onboarding keeps both layout modes and safe geometry
   const portrait = readFileSync(new URL('../src/components/juyiting/HallPortraitHome.vue', import.meta.url), 'utf8')
   const stage = readFileSync(new URL('../src/components/juyiting/HallStage.vue', import.meta.url), 'utf8')
 
-  assert.equal((modal.match(/title: '/g) || []).length, 4)
+  assert.equal((modal.match(/title: '/g) || []).length, 8)
   assert.match(modal, /成果提交后/)
   assert.match(modal, /'portrait-command'/)
   assert.match(modal, /'landscape-map'/)
@@ -208,7 +208,7 @@ test('skip is versioned and completion persists independently for each user', ()
 
   assert.equal(userA.skip().status, 'skipped')
   assert.equal(createHallOnboarding({ subject: 'user-a', localStorage, sessionStorage: memoryStorage() }).snapshot().visible, false)
-  assert.equal(createHallOnboarding({ subject: 'user-a', version: 'v3', localStorage, sessionStorage: memoryStorage() }).snapshot().visible, true)
+  assert.equal(createHallOnboarding({ subject: 'user-a', version: 'future', localStorage, sessionStorage: memoryStorage() }).snapshot().visible, true)
 
   const userB = createHallOnboarding({ subject: 'user-b', localStorage, sessionStorage: memoryStorage() })
   assert.equal(userB.snapshot().visible, true)
@@ -680,4 +680,17 @@ test('the executable onboarding DOM harness cleans up isolation when opening foc
   assert.equal(externalControl.getAttribute('aria-hidden'), 'preserved-external')
   assert.equal(document.listenerCount('keydown'), 0)
   assert.equal(document.listenerCount('focusin'), 0)
+})
+
+
+test('v2 dismissal does not suppress the new v3 guide or overwrite historical state', () => {
+  const localStorage = memoryStorage(), sessionStorage = memoryStorage()
+  const old = createHallOnboarding({ subject: 'user-a', version: 'v2', localStorage, sessionStorage })
+  old.complete()
+  assert.equal(HALL_ONBOARDING_VERSION, 'v3')
+  const current = createHallOnboarding({ subject: 'user-a', localStorage, sessionStorage })
+  assert.equal(current.snapshot().visible, true)
+  current.skip()
+  assert.equal(createHallOnboarding({ subject: 'user-a', version: 'v2', localStorage, sessionStorage }).snapshot().status, 'completed')
+  assert.equal(current.open().visible, true)
 })

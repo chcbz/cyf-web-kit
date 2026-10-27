@@ -109,11 +109,12 @@ describe('HallOnboarding mounted geometry', () => {
     await Vue.nextTick()
   }
 
-  const mountFixture = async ({ mode = 'portrait-command', virtual = false, targetRect = null, game = null } = {}) => {
+  const mountFixture = async ({ mode = 'portrait-command', virtual = false, workbench = false, targetRect = null, game = null } = {}) => {
     const page = document.createElement('main')
-    page.className = `juyi-page experience-${mode}${virtual ? ' is-virtual-landscape' : ''}`
+    page.className = `juyi-page experience-${mode}${virtual ? ' is-virtual-landscape' : ''}${workbench ? ' home-overview' : ''}`
     const target = document.createElement('div')
-    target.dataset.tour = mode === 'landscape-map' ? 'landscape-map' : 'portrait-preview'
+    target.dataset.tour = workbench ? 'workbench-request' : mode === 'landscape-map' ? 'landscape-map' : 'portrait-preview'
+    target.getClientRects = () => [target.getBoundingClientRect()]
     let currentRect = targetRect
     target.getBoundingClientRect = () => currentRect || { left: 24, top: 160, right: 366, bottom: 360, width: 342, height: 200 }
     target.scrollIntoView = () => {
@@ -196,9 +197,9 @@ describe('HallOnboarding mounted geometry', () => {
     window.dispatchEvent(new window.Event('resize'))
     await runFrame()
 
-    expect(document.querySelector('.eyebrow')?.textContent).to.include('横屏全景')
+    expect(document.querySelector('.eyebrow')?.textContent).to.include('厅中实景')
     expect(document.querySelector('.step-progress')?.textContent).to.include('第 1 步')
-    expect(document.querySelector('#hall-onboarding-title')?.textContent).to.equal('描述需求')
+    expect(document.querySelector('#hall-onboarding-title')?.textContent).to.equal('回到办事工作台')
     fixture.wrapper.unmount()
   })
 
@@ -227,4 +228,70 @@ describe('HallOnboarding mounted geometry', () => {
     expect(card.bottom).to.be.at.most(832)
     fixture.wrapper.unmount()
   })
+  for (const width of [320, 390, 760, 761, 1440]) {
+    it(`uses the visible workbench navigation at ${width}px without dispatching business actions`, async () => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
+      // Wide PC with a narrow visual viewport is still the CSS desktop layout.
+      if (width === 1440) Object.defineProperty(window, 'visualViewport', { configurable: true, value: { width: 390, height: 844 } })
+      const fixture = await mountFixture({ workbench: true, mode: 'landscape-map' })
+      const mobile = width <= 760
+      const hiddenNav = document.createElement('nav')
+      hiddenNav.className = mobile ? 'hall-workbench-sidebar' : 'workbench-mobile-nav'
+      const nav = document.createElement('nav')
+      nav.className = mobile ? 'workbench-mobile-nav' : 'hall-workbench-sidebar'
+      let writes = 0
+      for (const panel of ['tasks', 'treasure', 'mine']) {
+        for (const [container, visible] of [[hiddenNav, false], [nav, true]]) {
+          const button = document.createElement('button')
+          button.dataset.workbenchTab = panel
+          button.getBoundingClientRect = () => ({ left: 24, top: 800, right: 100, bottom: 844, width: 76, height: 44 })
+          button.getClientRects = () => visible ? [button.getBoundingClientRect()] : []
+          button.addEventListener('click', () => { writes++ })
+          container.append(button)
+        }
+      }
+      fixture.page.append(hiddenNav, nav)
+      await runFrame()
+      expect(document.querySelector('.eyebrow').textContent).to.include(mobile ? '手机端' : 'PC端')
+      expect(document.querySelector('.onboarding-spotlight')).not.to.equal(null)
+      for (let i = 1; i < 4; i++) {
+        document.querySelector('.next-button').click()
+        await Vue.nextTick()
+        await runFrame()
+        expect(document.querySelector('.onboarding-spotlight')).not.to.equal(null)
+        expect(document.querySelector('.target-note')).to.equal(null)
+      }
+      expect(document.querySelector('#hall-onboarding-description').textContent).to.include('使用帮助')
+      document.querySelector('.previous-button').click()
+      await Vue.nextTick()
+      expect(document.querySelector('#hall-onboarding-title').textContent).to.include('资料')
+      expect(writes).to.equal(0)
+      fixture.wrapper.unmount()
+    })
+  }
+
+  it('explains missing or hidden workbench targets and stays navigable', async () => {
+    const fixture = await mountFixture({ workbench: true })
+    fixture.target.getClientRects = () => []
+    await runFrame()
+    expect(document.querySelector('.onboarding-spotlight')).to.equal(null)
+    expect(document.querySelector('.target-note').textContent).to.include('不会自动切页或提交需求')
+    document.querySelector('.next-button').click()
+    await Vue.nextTick()
+    expect(document.querySelector('.step-progress').textContent).to.include('第 2 步')
+    fixture.wrapper.unmount()
+  })
+
+  it('restarts at step one when crossing the actual workbench breakpoint', async () => {
+    const fixture = await mountFixture({ workbench: true })
+    document.querySelector('.next-button').click()
+    await Vue.nextTick()
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 })
+    window.dispatchEvent(new window.Event('resize'))
+    await runFrame()
+    expect(document.querySelector('.eyebrow').textContent).to.include('PC端')
+    expect(document.querySelector('.step-progress').textContent).to.include('第 1 步')
+    fixture.wrapper.unmount()
+  })
+
 })
