@@ -134,7 +134,8 @@ describe('formal discussion terminal resource and toolbar layout', () => {
       expect(wrapper.emitted('typed-reply')).to.equal(undefined)
       expect(wrapper.find('[aria-label="议事记录"]').exists()).to.equal(true)
       await wrapper.setProps({ selectedTask: { id: 'u', status: 'running' }, eventStreamRecovering: false })
-      expect(wrapper.find('[aria-label="新对话"]').exists()).to.equal(true)
+      // Running task discussions still allow replies, but never create another conversation.
+      expect(wrapper.find('[aria-label="新对话"]').exists()).to.equal(false)
       expect(wrapper.findComponent(Card).props('readOnly')).to.equal(false)
     } finally { wrapper.unmount() }
   })
