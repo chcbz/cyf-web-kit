@@ -709,3 +709,94 @@ describe('bounty output gallery live owner scope', () => {
   })
 
 })
+
+describe('RB-01/D01 real gallery native execution consumer', () => {
+  const nativeRequest = () => ({ requestId: 'native', requestRevision: '1', conversationId: '1', conversationGeneration: '1',
+    state: 'RESULT_COMMITTED', stateVersion: '8', turns: [], steps: [{ stepId: 'native-step', stepNumber: '1', taskId: 'task',
+      assignmentRevision: '1', targetAgentId: 'agent', kind: 'EXECUTE', state: 'RESULT_COMMITTED', stateVersion: '8',
+      executionIntentId: 'intent', executionId: 'native-execution', executionState: 'RESULT_COMMITTED' }] })
+  const props = () => ({ enabled: true, identityKey: 'owner:auth', conversationId: '1', conversationGeneration: '1',
+    taskId: 'task', request: nativeRequest(), typedOutcomes: [] })
+  const component = api => new Function('Vue', 'deps', script)(Vue, { revisionProgressPending, useHallSkillResults, skillResultDataText,
+    createApi: () => api, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps,
+    currentOutputDelivery, completedTextItem, completedExecutionDelivery, outputRequestPending })
+  it('loads data-only results from persisted steps with no ACTION_REQUEST and recovers after remount', async () => {
+    const calls = []
+    const api = { get: async path => {
+      calls.push(path)
+      if (path === '/requests/native') return nativeRequest()
+      if (path === '/requests/native/steps/native-step/outputs') return []
+      if (path === '/conversations/1/executions/native-execution/result') return { schemaVersion: 2,
+        conversationId: '1', conversationGeneration: '1', taskId: 'task', requestId: 'native', stepId: 'native-step',
+        executionId: 'native-execution', executionStateVersion: '3', state: 'RESULT_COMMITTED', phase: 'COMPLETE',
+        resultSha256: 'a'.repeat(64), data: { text: '原生直接执行的真实已提交投影' }, outputs: [] }
+      throw new Error(`unexpected GET ${path}`)
+    } }
+    const Component = component(api)
+    for (let i = 0; i < 2; i++) {
+      const wrapper = mount(Component, { props: props() })
+      try {
+        await flushPromises()
+        expect(wrapper.text()).to.include('原生直接执行的真实已提交投影')
+        expect(wrapper.text()).to.include('已归档')
+        expect(wrapper.text()).not.to.include('来源或归档状态不匹配')
+        expect(wrapper.findAll('pre')).to.have.length(1)
+        expect(wrapper.findAll('button').some(button => /验收|重试执行/.test(button.text()))).to.equal(false)
+      } finally { wrapper.unmount() }
+    }
+    expect(calls.filter(path => path.endsWith('/result'))).to.have.length(2)
+    expect(calls.some(path => path.includes('typed-outcome'))).to.equal(false)
+  })
+  it('shows only exact committed native file references without inventing a delivery outcome', async () => {
+    const file = { outputId: 'native-file', contentMimeType: 'application/pdf', sha256: 'b'.repeat(64), byteLength: '20',
+      previewUrl: null, downloadUrl: '/chat/requests/native/steps/native-step/outputs/native-file?download=true', assetRef: null, replaces: null }
+    const api = { get: async path => {
+      if (path === '/requests/native') return nativeRequest()
+      if (path === '/requests/native/steps/native-step/outputs') return []
+      if (path.endsWith('/native-execution/result')) return { schemaVersion: 2, conversationId: '1', conversationGeneration: '1',
+        taskId: 'task', requestId: 'native', stepId: 'native-step', executionId: 'native-execution', executionStateVersion: '3',
+        state: 'RESULT_COMMITTED', phase: 'COMPLETE', resultSha256: 'a'.repeat(64), data: null, outputs: [file] }
+      throw new Error(`unexpected GET ${path}`)
+    } }
+    const wrapper = mount(component(api), { props: { ...props(), acceptance: true } })
+    try {
+      await flushPromises()
+      expect(wrapper.text()).to.include('application/pdf · 20 字节')
+      expect(wrapper.text()).not.to.include('本次交付范围尚不明确')
+      expect(wrapper.findAll('.bounty-output')).to.have.length(2)
+      expect(wrapper.findAll('pre')).to.have.length(0)
+    } finally { wrapper.unmount() }
+  })
+  it('never exposes ARCHIVING data and rejects a late native reply after owner change', async () => {
+    const pending = []; let archiving = true
+    const api = { get: async (path, _query, options) => {
+      if (path === '/requests/native') return nativeRequest()
+      if (path === '/requests/native/steps/native-step/outputs') return []
+      if (path.endsWith('/native-execution/result')) {
+        const value = { schemaVersion: 2, conversationId: '1', conversationGeneration: '1', taskId: 'task', requestId: 'native',
+          stepId: 'native-step', executionId: 'native-execution', executionStateVersion: '3', state: 'RESULT_COMMITTED',
+          phase: 'ARCHIVING', resultSha256: 'a'.repeat(64), data: null, outputs: [] }
+        if (archiving) return value
+        return new Promise(resolve => pending.push({ resolve: () => resolve({ ...value, phase: 'COMPLETE', data: '旧主体迟到结果' }), signal: options.signal }))
+      }
+      throw new Error(`unexpected GET ${path}`)
+    } }
+    const wrapper = mount(component(api), { props: props() })
+    try {
+      await flushPromises()
+      expect(wrapper.text()).to.include('正在归档（尚未完成）')
+      expect(wrapper.findAll('pre')).to.have.length(0)
+      archiving = false
+      await wrapper.find('.output-refresh').trigger('click'); await flushPromises()
+      expect(pending.length).to.equal(1)
+      await wrapper.setProps({ identityKey: 'owner:new-auth' }); await flushPromises()
+      expect(pending[0].signal.aborted).to.equal(true)
+      pending[0].resolve(); await flushPromises()
+      expect(wrapper.text()).not.to.include('旧主体迟到结果')
+    } finally {
+      wrapper.unmount()
+      for (const read of pending) read.resolve()
+      await flushPromises()
+    }
+  })
+})

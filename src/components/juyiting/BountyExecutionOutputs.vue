@@ -88,8 +88,10 @@ const props = defineProps({
   taskVersion: { type: [String, Number], default: '' }, taskId: { type: String, default: '' }
 })
 const api = createApi('/chat')
+const requestSnapshots = ref([])
 const skillResults = useHallSkillResults({ api, getContext: () => ({ conversationId: props.conversationId,
   conversationGeneration: props.conversationGeneration, taskId: props.taskId }), getOutcomes: () => props.typedOutcomes,
+  getRequests: () => requestSnapshots.value,
   identityKey: () => props.identityKey, enabled: () => props.enabled && !!props.identityKey })
 const resultItems = computed(() => skillResults.results.value.flatMap(result => result.outputs))
 const allItems = computed(() => [...new Map([...items.value, ...resultItems.value].map(item => [outputItemKey(item), item])).values()])
@@ -100,7 +102,6 @@ const allDeliveries = computed(() => {
       deliveryRelation: result.reference.deliveryRelation, requestId: result.requestId, stepId: result.stepId })
   return [...map.values()]
 })
-const requestSnapshots = ref([])
 const catalogRequests = computed(() => Array.isArray(props.catalog) && props.catalog.length
   ? props.catalog.map(entry => entry?.request).filter(Boolean)
   : (props.request ? [props.request] : []))

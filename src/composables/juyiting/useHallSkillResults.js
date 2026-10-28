@@ -1,17 +1,18 @@
 import { ref, watch } from 'vue'
 import { skillResultAdvances, skillResultProjection, skillResultReferences } from './hallSkillResults.js'
 /** Read-only execution polling, fenced by full identity and conversation generation. */
-export const useHallSkillResults = ({ api, getContext, getOutcomes, identityKey, enabled }) => {
+export const useHallSkillResults = ({ api, getContext, getOutcomes, getRequests = () => [], identityKey, enabled }) => {
   const results = ref([]); const error = ref(''); const loading = ref(false)
   let epoch = 0; let disposed = false; let controller = null; let timer = null
   const scopeFingerprint = () => JSON.stringify([identityKey(), enabled(), getContext()])
-  const fingerprint = () => JSON.stringify([scopeFingerprint(), getOutcomes()])
+  const fingerprint = () => JSON.stringify([scopeFingerprint(), getOutcomes(), getRequests()])
   let previousScope = null
   const reset = (clear = true) => { epoch++; controller?.abort(); controller = null; clearTimeout(timer); timer = null; if (clear) results.value = []; error.value = ''; loading.value = false }
   const refresh = async () => {
     if (disposed || controller || !enabled()) return
+    clearTimeout(timer); timer = null
     const generation = epoch; const key = fingerprint(); const context = { ...getContext() }
-    const references = skillResultReferences(getOutcomes(), context)
+    const references = skillResultReferences(getOutcomes(), context, getRequests())
     if (!references.length) return
     const own = new AbortController(); controller = own; loading.value = true
     const current = () => !disposed && generation === epoch && key === fingerprint() && !own.signal.aborted
@@ -29,10 +30,10 @@ export const useHallSkillResults = ({ api, getContext, getOutcomes, identityKey,
         } catch (cause) {
           if (!current()) return
           if ((cause?.response?.status ?? cause?.status) !== 404) throw cause
-          // The exact child is not yet visible; never replace it with a history item.
+          // Missing/invisible is not evidence of a queue or completion; never scan history.
           const previous = results.value.find(item => item.executionId === reference.executionId)
           if (previous) { next.push(previous); continue }
-          next.push(Object.freeze({ executionId: reference.executionId, phase: 'QUEUED', complete: false, data: null, outputs: [], reference }))
+          next.push(Object.freeze({ executionId: reference.executionId, phase: 'UNKNOWN', complete: false, data: null, outputs: [], reference }))
         }
       }
       if (current()) { results.value = next; error.value = '' }
@@ -45,6 +46,16 @@ export const useHallSkillResults = ({ api, getContext, getOutcomes, identityKey,
       }
     }
   }
-  const stop = watch(fingerprint, () => { const scope = scopeFingerprint(); reset(scope !== previousScope); previousScope = scope; if (enabled()) void refresh() }, { immediate: true, flush: 'sync' })
+  // Request/outcome projections may fill in within one security scope. Keep only
+  // still-bound results, cancel obsolete reads, and never let their replies land.
+  // Identity, task, conversation or generation changes clear all state instead.
+  const stop = watch(fingerprint, () => {
+    const scope = scopeFingerprint(); reset(scope !== previousScope); previousScope = scope
+    const references = skillResultReferences(getOutcomes(), getContext(), getRequests())
+    results.value = results.value.filter(result => references.some(reference =>
+      reference.executionId === result.executionId && reference.requestId === result.reference.requestId &&
+      (reference.stepId == null || reference.stepId === (result.stepId ?? result.reference.stepId))))
+    if (enabled()) void refresh()
+  }, { immediate: true, flush: 'sync' })
   return { results, error, loading, refresh, dispose: () => { disposed = true; reset(); stop() } }
 }

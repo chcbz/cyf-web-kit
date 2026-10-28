@@ -1,5 +1,5 @@
 import { isTerminalRequestState, isTerminalTurnState } from './hallDeliberationState.js'
-import { typedOutcomeProjection } from './hallTypedDeliberation.js'
+import { typedLong, typedOutcomeProjection } from './hallTypedDeliberation.js'
 
 /** Browser-safe projection of the owner-authorized conversation output catalog. */
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/
@@ -34,6 +34,19 @@ export function scopedExecutionSteps (request, conversationId) {
   return (Array.isArray(request.steps) ? request.steps : []).filter(step =>
     step?.kind === 'EXECUTE' && exactOutputId(step.stepId) && exactOutputId(step.executionId)
   ).map(step => ({ requestId: request.requestId, stepId: step.stepId }))
+}
+
+/** RequestView/StepView are persisted API projections, not model action prose.
+ * Step stateVersion belongs to the step, never the execution CAS version. */
+export function scopedExecutionReferences (request, context) {
+  if (!exactOutputId(context?.conversationId) || !exactOutputId(context?.taskId) ||
+    !typedLong(context?.conversationGeneration) || request?.conversationId !== context.conversationId ||
+    request.conversationGeneration !== context.conversationGeneration || !exactOutputId(request.requestId) ||
+    !typedLong(request.requestRevision)) return []
+  return (Array.isArray(request.steps) ? request.steps : []).filter(step =>
+    step?.kind === 'EXECUTE' && step.taskId === context.taskId && exactOutputId(step.stepId) && exactOutputId(step.executionId)
+  ).map(step => Object.freeze({ conversationId: context.conversationId, conversationGeneration: context.conversationGeneration,
+    taskId: context.taskId, requestId: request.requestId, stepId: step.stepId, executionId: step.executionId }))
 }
 
 export function outputCatalogItems (items, requestId, stepId) {
