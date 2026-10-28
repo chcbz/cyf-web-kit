@@ -73,25 +73,38 @@ describe('shared Hall task presentation and authoritative phase counts', () => {
     expect(model.tasks.value).to.deep.equal([])
   })
   it('rejects stale assignee recommendations after a newer selection, identity change, or unmount', async () => {
-    const identity = ref('owner-a'), calls = []
+    const identity = ref('owner-a'), selectedTask = ref(null), calls = []
     const model = data({ async create (url, body, options) {
-      const wait = pending(); calls.push({ options, wait }); await wait.promise
-    } }, { identityScope: identity })
+      const wait = pending(); calls.push({ url, body, options, wait }); await wait.promise
+    } }, { identityScope: identity, selectedTask })
+    const selection = id => ({ id, status: 'open', taskVersion: '7', title: id, description: '' })
     const complete = (index, id) => {
-      calls[index].options.onSuccess([{ agent: { agentId: id } }]); calls[index].wait.resolve()
+      const taskId = calls[index].url.split('/')[2]
+      calls[index].options.onSuccess({ taskId, taskVersion: '7', state: 'READY', observedAt: 1,
+        candidateSetComplete: true, requirementSummary: '需求', questions: [], recommendations: [{
+          agent: { agentId: id, name: id, abilities: [], canOperate: true, boundToMe: true, status: 'online' },
+          reason: '匹配', gaps: [], evidence: [{ id: 'e', kind: 'DECLARED_ABILITY', label: '本领', description: '声明', available: true }]
+        }] })
+      calls[index].wait.resolve()
     }
-    const a = model.loadTaskRecommendations({ id: 'task-a' })
-    const b = model.loadTaskRecommendations({ id: 'task-b' })
+    selectedTask.value = selection('task-a'); const a = model.loadTaskRecommendations()
+    selectedTask.value = selection('task-b'); const b = model.loadTaskRecommendations()
+    expect(calls[0].options.signal.aborted).to.equal(true)
+    expect(calls[1].body).to.deep.equal({ expectedTaskVersion: '7' })
     complete(1, 'current-agent'); await b
     complete(0, 'stale-agent'); expect(await a).to.deep.equal([])
-    expect(model.taskRecommendations.value).not.to.have.property('task-a')
-    expect(model.taskRecommendations.value['task-b'][0].agent.agentId).to.equal('current-agent')
-    const c = model.loadTaskRecommendations({ id: 'task-c' })
-    identity.value = 'owner-b'; complete(2, 'wrong-owner'); await c
+    expect(model.taskRecommendations.value['task-a'].result).to.equal(null)
+    expect(model.recommendationState.value.result.recommendations[0].agent.agentId).to.equal('current-agent')
+    expect(model.taskRecommendations.value['task-b'].result.recommendations[0].agent.agentId).to.equal('current-agent')
+    selectedTask.value = selection('task-c'); const c = model.loadTaskRecommendations()
+    identity.value = 'owner-b'; expect(calls[2].options.signal.aborted).to.equal(true)
+    complete(2, 'wrong-owner'); await c
     expect(model.taskRecommendations.value).to.deep.equal({})
-    const d = model.loadTaskRecommendations({ id: 'task-d' })
-    model.dispose(); complete(3, 'after-unmount'); await d
-    expect(model.taskRecommendations.value).to.deep.equal({})
+    selectedTask.value = selection('task-d'); const d = model.loadTaskRecommendations()
+    model.dispose(); expect(calls[3].options.signal.aborted).to.equal(true)
+    complete(3, 'after-unmount'); await d
+    expect(model.taskRecommendations.value['task-d'].state).to.equal('LOADING')
+    expect(model.taskRecommendations.value['task-d'].result).to.equal(null)
   })
 
 })

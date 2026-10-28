@@ -276,7 +276,7 @@ describe('scoped bounty output actions live on the actual message cards', () => 
 
 
 describe('large text preview copy on the real outputs component', () => {
-  it('verifies bytes then gives an honest preview limit without a nonexistent download action', async () => {
+  it('verifies bytes then gives an honest preview limit and offers download', async () => {
     const { createHash } = await import('node:crypto')
     const content = 'x'.repeat(2 * 1024 * 1024 + 1)
     const blob = new Blob([content], { type: 'text/plain' })
@@ -293,7 +293,7 @@ describe('large text preview copy on the real outputs component', () => {
       for (let i = 0; i < 100 && !wrapper.text().includes('文本较大'); i++) { await new Promise(resolve => setTimeout(resolve, 5)); await settle() }
       expect(wrapper.text()).to.include('文本较大，暂不支持在议事中预览')
       expect(wrapper.text()).not.to.include('请下载查看')
-      expect(wrapper.findAll('button').some(button => button.text() === '下载')).to.equal(false)
+      expect(wrapper.findAll('button').some(button => button.text() === '下载')).to.equal(true)
       expect(calls.every(call => call !== 'POST')).to.equal(true)
     } finally { wrapper.unmount() }
   })

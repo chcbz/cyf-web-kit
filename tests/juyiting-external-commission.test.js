@@ -276,6 +276,7 @@ describe('D3.1 actual detail surfaces', () => {
     expect(wrapper.text()).to.include('其他用户 · 离线')
     await wrapper.findAll('button').find(b => b.text() === '加载更多候选').trigger('click')
     expect(wrapper.emitted('more-candidates')).to.have.length(1)
+    await wrapper.get('.matter-candidates button').trigger('click')
     await wrapper.get('.matter-primary-action').trigger('click')
     expect(wrapper.emitted('assign-task')[0][1].agentId).to.equal('external')
     await wrapper.setProps({ selectedTask: { ...task, status: 'assigned', assignedAgentId: 'external', assignedTarget: summary() }, assigneeCandidates: [] })
