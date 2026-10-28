@@ -356,6 +356,8 @@
             :portrait-name="portraitName"
             :portrait-style="portraitStyle"
             :recommended-agents="recommendedAgents"
+            :recommendation-state="recommendationState"
+            @refresh-recommendation="loadTaskRecommendations(selectedTask, { refresh: true })"
             :assignee-candidates="assigneeCandidates"
             :candidates-loading="candidatesLoading"
             :candidates-error="candidatesError"
@@ -364,7 +366,6 @@
             :operable-agents="operableRosterAgents"
             :selected-task="selectedTask"
             :task-ability-options="taskAbilityOptions"
-            :task-agent-match-score="taskAgentMatchScore"
             :task-state-class="taskStateClass"
             :task-status-count="taskStatusCount"
             :task-status-filter="taskStatusFilter"
@@ -1276,13 +1277,6 @@ const abilityText = (agent) => {
 }
 
 
-const taskAgentMatchScore = (task, agent) => {
-  const requiredAbilities = task?.requiredAbilities || []
-  if (!requiredAbilities.length) return 80
-  const agentAbilities = new Set((agent?.abilities || []).map(ability => ability.toLowerCase()))
-  const matched = requiredAbilities.filter(ability => agentAbilities.has(String(ability).toLowerCase())).length
-  return Math.round((matched / requiredAbilities.length) * 100)
-}
 
 const {
   dispose: disposeHallData,
@@ -1312,6 +1306,7 @@ const {
   operableRosterAgents,
   personaCatalog,
   recommendedAgents,
+  recommendationState,
   rosterError,
   rosterLoading,
   setAgentFilter,
@@ -1336,7 +1331,6 @@ const {
   normalizeStatus,
   selectedAgent,
   selectedTask,
-  taskAgentMatchScore,
   sceneState: hallSceneState
 })
 

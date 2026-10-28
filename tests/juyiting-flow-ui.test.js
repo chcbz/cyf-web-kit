@@ -262,3 +262,56 @@ describe('actual JuyiHall destructive confirmation handler', () => {
     resolve('confirm'); expect(await pending).to.equal(true); expect(h.dialogs).to.have.length(1); expect(h.deleted).to.have.length(1)
   })
 })
+
+
+describe('model recommendation actual matter UI', () => {
+  it('nonembedded detail also exposes model failure and explicit retry', async () => {
+    const task = { id: 'recommend', title: '写说明', status: 'open', taskVersion: '1' }
+    const wrapper = mount(Panel, { props: { ...baseProps, embeddedHall: false, tasks: [task], selectedTask: task,
+      recommendationState: { state: 'ERROR', result: null }, recommendedAgents: [] } })
+    try {
+      wrapper.vm.openTask(task); await Vue.nextTick()
+      expect(wrapper.get('.modal-agent-scroll .matter-recommendation').text()).to.include('暂不可用')
+      await wrapper.get('.modal-agent-scroll .matter-recommendation button').trigger('click')
+      expect(wrapper.emitted('refresh-recommendation')).to.have.length(1)
+      expect(wrapper.emitted('assign-task')).to.equal(undefined)
+    } finally { wrapper.unmount() }
+  })
+
+  it('shows evidence and gaps without score; only explicit confirmation dispatches', async () => {
+    const task = { id: 'recommend', title: '写说明', status: 'open', taskVersion: '1' }
+    const agent = { ...baseProps.operableAgents[0], recommendationReason: '已登记写作本领',
+      recommendationEvidence: [{ id: 'ability:0', label: '写作', description: '登记声明' }], recommendationGaps: ['确认受众'] }
+    const wrapper = mount(Panel, { props: { ...baseProps, tasks: [task], selectedTask: task, recommendedAgents: [agent],
+      recommendationState: { state: 'READY', result: { requirementSummary: '编写说明', questions: [] } } } })
+    try {
+      wrapper.vm.openTask(task); await Vue.nextTick()
+      expect(wrapper.get('.matter-recommendation').text()).to.include('登记声明')
+      expect(wrapper.get('.matter-recommendation').text()).to.include('待核实：确认受众')
+      expect(wrapper.text()).not.to.include('评分明细')
+      expect(wrapper.emitted('assign-task')).to.equal(undefined)
+      await wrapper.get('.matter-recommendation button').trigger('click')
+      expect(wrapper.emitted('refresh-recommendation')).to.have.length(1)
+      expect(wrapper.emitted('assign-task')).to.equal(undefined)
+      await wrapper.get('.matter-primary-action').trigger('click')
+      expect(wrapper.emitted('assign-task')).to.have.length(1)
+    } finally { wrapper.unmount() }
+  })
+  it('model failure keeps explicit manual selection but never silently picks the first roster agent', async () => {
+    const task = { id: 'recommend', title: '写说明', status: 'open', taskVersion: '1' }
+    const wrapper = mount(Panel, { props: { ...baseProps, tasks: [task], selectedTask: task,
+      assigneeCandidates: [{ agentId: 'old-agent', displayName: '林冲', isMine: true, availability: 'online', providerDisplayName: null }],
+      recommendationState: { state: 'ERROR', result: null }, recommendedAgents: [] } })
+    try {
+      wrapper.vm.openTask(task); await Vue.nextTick()
+      expect(wrapper.get('.matter-recommendation').text()).to.include('暂不可用')
+      expect(wrapper.get('.matter-primary-action').attributes('disabled')).not.to.equal(undefined)
+      await wrapper.get('.matter-agent-toggle').trigger('click')
+      await wrapper.get('.matter-candidates button').trigger('click')
+      expect(wrapper.emitted('assign-task')).to.equal(undefined)
+      expect(wrapper.get('.matter-primary-action').attributes('disabled')).to.equal(undefined)
+      await wrapper.get('.matter-primary-action').trigger('click')
+      expect(wrapper.emitted('assign-task')[0][1].agentId).to.equal('old-agent')
+    } finally { wrapper.unmount() }
+  })
+})

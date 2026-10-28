@@ -1,0 +1,6 @@
+.model-recommendation-page .matter-advice-card { min-width:0; box-sizing:border-box; overflow-wrap:anywhere; }
+.model-recommendation-page .model-recommendation-demo { padding:12px; border:1px solid #dfd8c9; border-radius:10px; background:#f8f6ef; }
+.model-recommendation-page .model-recommendation-demo h4 { margin:0 0 8px; }
+.model-recommendation-page .model-manual-options,.model-recommendation-page .model-state-options { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+.model-recommendation-page .matter-advice-card button { max-width:100%; white-space:normal; min-height:36px; }
+.model-recommendation-page .matter-advice-card button:disabled { opacity:.5; cursor:not-allowed; }

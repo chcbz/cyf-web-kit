@@ -362,53 +362,6 @@ describe('useHallData deferred Juyi Hall sources', () => {
   })
 })
 
-describe('useHallData advisory recommendations', () => {
-  it('preserves recommendation diagnostics but uses candidate eligibility even for low-score recommendations without management DTO leakage', async () => {
-    const selectedTask = ref({ id: 'task-e01', status: 'open', requiredAbilities: ['planning'] })
-    const hallData = useHallData({
-      agentApi: {
-        get: async () => ({ items: ['agent-excluded', 'agent-legacy'].map(agentId => ({ agentId, displayName: agentId, providerDisplayName: null, isMine: false, availability: 'offline' })), nextAfterAgentId: null }),
-        create: async (_url, _body, options) => options.onSuccess(([{
-          score: 74,
-          eligible: false,
-          exclusionReasons: ['AGENT_ABILITY_MISMATCH'],
-          scoreParts: { ability: 0, availability: 20, success: 11, load: 15, context: 8, riskPenalty: 0 },
-          reason: '宋江首领不建议：AGENT_ABILITY_MISMATCH。',
-          matchedAbilities: [],
-          agent: { agentId: 'agent-excluded', status: 'online', canOperate: true }
-        }, {
-          score: 94,
-          agent: { agentId: 'agent-legacy', status: 'online', canOperate: true }
-        }]))
-      },
-      log: { warn: () => {} },
-      normalizeStatus: (status = '') => status.toLowerCase(),
-      selectedAgent: ref(null),
-      selectedTask,
-      taskAgentMatchScore: () => 0
-    })
-
-    await hallData.loadAssigneeCandidates()
-    await hallData.loadTaskRecommendations()
-
-    const [excluded, legacy] = hallData.recommendedAgents.value
-    expect(excluded).to.include({
-      agentId: 'agent-excluded',
-      eligible: false,
-      recommendationScore: 74,
-      recommendationReason: '宋江首领不建议：AGENT_ABILITY_MISMATCH。'
-    })
-    expect(excluded.exclusionReasons).to.deep.equal(['AGENT_ABILITY_MISMATCH'])
-    expect(excluded.scoreParts).to.deep.equal({
-      ability: 0, availability: 20, success: 11, load: 15, context: 8, riskPenalty: 0
-    })
-    expect(hallData.canAssign(selectedTask.value, excluded)).to.equal(true)
-    expect(legacy.eligible).to.equal(undefined)
-    expect(hallData.canAssign(selectedTask.value, legacy)).to.equal(true)
-    expect(legacy).not.to.have.property('canOperate')
-  })
-})
-
 describe('useHallData bounty title reload', () => {
   it('keeps the persisted bounty title returned by task search after a refresh', async () => {
     const persistedTask = {

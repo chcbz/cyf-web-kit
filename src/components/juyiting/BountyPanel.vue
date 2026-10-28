@@ -201,7 +201,18 @@
                 </section>
                 <template v-if="embeddedHall">
                   <template v-if="hasTaskAction(detailTask, 'ASSIGN')">
-                    <p v-if="matterAgent?.recommendationReason" class="matter-fee-note">推荐参考：{{ matterAgent.recommendationReason }}</p>
+                  <section class="matter-recommendation" aria-label="智能推荐" aria-live="polite">
+                    <p role="status">{{ recommendationStateText(recommendationState.state) }}</p>
+                    <p v-if="recommendationState.result?.requirementSummary">需求理解：{{ recommendationState.result.requirementSummary }}</p>
+                    <p v-for="question in recommendationState.result?.questions || []" :key="question">待确认：{{ question }}</p>
+                    <template v-if="matterAgent?.recommendationReason">
+                      <p>推荐理由（模型建议）：{{ matterAgent.recommendationReason }}</p>
+                      <ul><li v-for="evidence in matterAgent.recommendationEvidence || []" :key="evidence.id">{{ evidence.label }}：{{ evidence.description }}</li></ul>
+                      <p v-for="gap in matterAgent.recommendationGaps || []" :key="gap">待核实：{{ gap }}</p>
+                    </template>
+                    <button type="button" :disabled="recommendationState.state === 'LOADING' || pointAndStartBusy" @click="$emit('refresh-recommendation')">重新推荐</button>
+                  </section>
+
                     <p class="matter-fee-note">确认后，将需求和所选资料交给这位好汉；其运行环境及模型服务会处理这些内容。好汉离线或忙碌时，提交成功不代表已经开始办理。</p>
                     <button
                       type="button"
@@ -397,7 +408,7 @@
                   class="auto-assign-task"
                   type="button"
                   aria-label="宋江代为点将"
-                  :disabled="isFundedTask(detailTask) || !hasTaskAction(detailTask, 'ASSIGN') || !recommendedAgents.length"
+                  :disabled="isFundedTask(detailTask) || !hasTaskAction(detailTask, 'ASSIGN') || !matterCandidates.length"
                   title="宋江代为点将"
                   @click="$emit('auto-assign-task', detailTask)"
                 >
@@ -433,8 +444,14 @@
 
             <div v-if="!embeddedHall && canActOnTask(detailTask)" class="modal-agent-scroll">
               <div class="section-label">可点好汉</div>
+              <section class="matter-recommendation" aria-label="智能推荐" aria-live="polite">
+                <p role="status">{{ recommendationStateText(recommendationState.state) }}</p>
+                <p v-if="recommendationState.result?.requirementSummary">需求理解：{{ recommendationState.result.requirementSummary }}</p>
+                <p v-for="question in recommendationState.result?.questions || []" :key="question">待确认：{{ question }}</p>
+                <button type="button" :disabled="recommendationState.state === 'LOADING' || pointAndStartBusy" @click="$emit('refresh-recommendation')">重新推荐</button>
+              </section>
               <div
-                v-for="agent in recommendedAgents"
+                v-for="agent in matterCandidates"
                 :key="agent.agentId"
                 class="recommended-agent-row"
                 :class="{ active: selectedAgent?.agentId === agent.agentId }"
@@ -453,17 +470,13 @@
                     <strong>{{ agentDisplayName(agent) }}</strong>
                     <small>{{ abilityText(agent) }}</small>
                   </span>
-                  <em>{{ recommendationScore(detailTask, agent) }}%</em>
+                  <em>{{ agent.recommendationReason ? '模型建议' : '手动选择' }}</em>
                 </button>
                 <p v-if="recommendationReason(agent)" class="recommendation-reason">
                   {{ recommendationReason(agent) }}
                 </p>
-                <p v-if="recommendationExclusionReasons(agent).length" class="recommendation-reason recommendation-exclusions">
-                  不宜点将：{{ recommendationExclusionReasons(agent).join('、') }}
-                </p>
-                <p v-if="recommendationScoreParts(agent).length" class="recommendation-reason recommendation-score-parts">
-                  评分明细：{{ recommendationScoreParts(agent).join(' / ') }}
-                </p>
+                <p v-for="evidence in agent.recommendationEvidence || []" :key="evidence.id" class="recommendation-reason">{{ evidence.label }}：{{ evidence.description }}</p>
+                <p v-for="gap in agent.recommendationGaps || []" :key="gap" class="recommendation-reason">待核实：{{ gap }}</p>
                 <div class="recommended-agent-actions">
                   <button
                     type="button"
@@ -519,6 +532,17 @@
 </template>
 
 <script setup>
+const recommendationStateText = state => ({
+  IDLE: '尚未生成智能推荐，可手动选择承办。', LOADING: '正在比较需求、本领和技能，不会启动办理…',
+  READY: '以下为模型建议，能力依据以服务端观察为准，不保证办理结果。',
+  NEEDS_CLARIFICATION: '请补充以下需求后重新推荐，也可手动选择承办。',
+  NO_MATCH: '当前没有足够依据推荐合适人选，可手动选择承办。',
+  NO_CANDIDATES: '暂无可承办候选，请核对接单范围和可用状态。',
+  ERROR: '智能推荐暂不可用，可重试或手动选择承办。',
+  STALE: '事项或能力已变化，请重新推荐；原推荐不再使用。'
+}[state] || '智能推荐暂不可用。')
+
+
 import { assignedTaskTarget, assigneeProviderText, assigneeAvailabilityText } from '@/composables/juyiting/hallAssigneeCandidates.js'
 import { projectHallTask } from '../../composables/juyiting/hallTaskPresentation.js'
 import { canCancelOrdinaryTask, ordinaryTaskVersion, isTerminalMatter } from '../../composables/juyiting/useHallOrdinaryCancellation.js'
@@ -559,6 +583,7 @@ const props = defineProps({
   candidatesNextAfterAgentId: { type: String, default: null },
   operableAgents: { type: Array, default: () => [] },
   recommendedAgents: { type: Array, default: () => [] },
+  recommendationState: { type: Object, default: () => ({ state: 'IDLE', result: null }) },
   taskAbilityOptions: { type: Array, default: () => [] },
   taskStatusFilters: { type: Array, default: () => [] },
   taskAbilityFilter: { type: String, default: '' },
@@ -583,7 +608,6 @@ const props = defineProps({
   formatTime: { type: Function, required: true },
   portraitName: { type: Function, required: true },
   portraitStyle: { type: Function, required: true },
-  taskAgentMatchScore: { type: Function, required: true },
   taskStateClass: { type: Function, required: true },
   taskStatusCount: { type: Function, required: true },
   taskStatusText: { type: Function, required: true }
@@ -591,6 +615,7 @@ const props = defineProps({
 
 const emit = defineEmits([
   'assign-task',
+  'refresh-recommendation',
   'refresh-candidates',
   'more-candidates',
   'archive-task',
@@ -748,7 +773,7 @@ const matterCandidates = computed(() => {
 })
 const matterAgent = computed(() => {
   if (!hasTaskAction(detailTask.value, 'ASSIGN')) return assignedAgentForTask(detailTask.value)
-  return matterCandidateId.value ? matterCandidates.value.find(agent => agent.agentId === matterCandidateId.value) || null : matterCandidates.value[0] || null
+  return matterCandidateId.value ? matterCandidates.value.find(agent => agent.agentId === matterCandidateId.value) || null : assignableRecommendedAgents.value[0] || null
 })
 watch(() => [props.identityScope, props.authorizationGeneration, detailTask.value?.id, detailTask.value?.taskVersion], () => { matterCandidateId.value = ''; showMatterCandidates.value = false }, { flush: 'sync' })
 const confirmMatterAgent = () => {
@@ -798,31 +823,12 @@ const formatMoney = value => formatSilverMicro(typeof value === 'string' && isCa
 const canCancelFunding = task => isFundedTask(task) && hasTaskAction(task, 'ASSIGN') && typeof (task.version ?? task.taskVersion) === 'string'
 const selectedAssignees = computed(() => {
   const selected = new Set(selectedAssigneeIds.value)
-  return props.recommendedAgents.filter(agent =>
+  return matterCandidates.value.filter(agent =>
     selected.has(agent.agentId) && props.canAssign(detailTask.value, agent))
 })
 
 const agentDisplayName = (agent) => agent?.displayName || agent?.name || agent?.personaName || agent?.agentId || ''
 const recommendationReason = (agent) => agent?.recommendationReason || ''
-const recommendationExclusionReasons = (agent) => Array.isArray(agent?.exclusionReasons)
-  ? agent.exclusionReasons.filter(reason => typeof reason === 'string' && reason)
-  : []
-const scorePartLabels = {
-  ability: '本领',
-  availability: '可用',
-  success: '成功',
-  load: '负载',
-  context: '上下文',
-  riskPenalty: '风险扣减'
-}
-const recommendationScoreParts = (agent) => {
-  const parts = agent?.scoreParts
-  if (!parts || typeof parts !== 'object' || Array.isArray(parts)) return []
-  return Object.entries(parts)
-    .filter(([key, value]) => scorePartLabels[key] && typeof value === 'number')
-    .map(([key, value]) => `${scorePartLabels[key]} ${value}`)
-}
-const recommendationScore = (task, agent) => agent?.recommendationScore ?? props.taskAgentMatchScore(task, agent)
 const taskAssigneeIds = (task) => {
   if (!task) return []
   if (Array.isArray(task.assignedAgentIds)) return task.assignedAgentIds

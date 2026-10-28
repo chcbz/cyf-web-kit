@@ -1,4 +1,5 @@
 import { computed, ref, toValue, watch } from 'vue'
+import { parseAssigneeRecommendation, recommendationTaskKey } from './hallAssigneeRecommendation.js'
 import { assigneePage, assignedTaskTarget } from './hallAssigneeCandidates.js'
 import { pointAndStartLong } from './hallPointAndStartIntent.js'
 import { projectHallTask, validateHallTaskCounts } from './hallTaskPresentation.js'
@@ -15,7 +16,6 @@ export const useHallData = ({
   normalizeStatus,
   selectedAgent,
   selectedTask,
-  taskAgentMatchScore,
   sceneState,
   identityScope = '',
   authorizationGeneration = 0
@@ -63,35 +63,21 @@ export const useHallData = ({
     return [...abilities].sort()
   })
 
-  const recommendedAgents = computed(() => {
-    if (!selectedTask.value) return []
-    const serverRecommendations = taskRecommendations.value[selectedTask.value.id] || []
-    if (serverRecommendations.length) {
-      return serverRecommendations.flatMap(recommendation => {
-        // Ordinary recommendations contribute ranking only. Never copy a full
-        // management/runtime DTO into the cross-user candidate projection.
-        const candidate = selectedTask.value.funding?.mode === 'FUNDED_SINGLE_AGENT'
-          ? recommendation.agent
-          : assigneeCandidates.value.find(item => item.agentId === recommendation.agent?.agentId)
-        if (!candidate) return []
-        return [{ ...candidate,
-          recommendationScore: recommendation.score,
-          recommendationReason: recommendation.reason,
-          eligible: recommendation.eligible,
-          exclusionReasons: Array.isArray(recommendation.exclusionReasons) ? recommendation.exclusionReasons : [],
-          scoreParts: recommendation.scoreParts && typeof recommendation.scoreParts === 'object' && !Array.isArray(recommendation.scoreParts)
-            ? recommendation.scoreParts : null,
-          matchedAbilities: recommendation.matchedAbilities || []
-        }]
-      })
-    }
-
-    if (selectedTask.value.funding?.mode === 'FUNDED_SINGLE_AGENT') return agents.value
-      .filter(agent => agent.canOperate !== false && normalizeStatus(agent.status) === 'online')
-      .map(agent => ({ agent, score: taskAgentMatchScore(selectedTask.value, agent) }))
-      .sort((a, b) => b.score - a.score).slice(0, 5).map(item => item.agent)
-    return []
+  const recommendationState = computed(() => {
+    const task = selectedTask.value
+    const entry = task && taskRecommendations.value[task.id]
+    if (!entry) return { state: 'IDLE', result: null }
+    return entry.taskKey === recommendationTaskKey(task) ? entry : { state: 'STALE', result: null }
   })
+  const recommendedAgents = computed(() => recommendationState.value.state === 'READY'
+    ? recommendationState.value.result.recommendations.map(item => ({
+      ...(selectedTask.value?.funding?.mode === 'FUNDED_SINGLE_AGENT' ? item.agent : {
+        agentId: item.agent.agentId, displayName: item.agent.name,
+        providerDisplayName: item.agent.providerDisplayName ?? null, isMine: item.agent.boundToMe,
+        availability: item.agent.status
+      }), recommendationReason: item.reason, recommendationEvidence: item.evidence,
+      recommendationGaps: item.gaps
+    })) : [])
 
   const assigneeCandidates = ref([])
   const candidatesLoading = ref(false)
@@ -105,9 +91,12 @@ export const useHallData = ({
     if (!projectHallTask({ task }).actions.includes('ASSIGN')) return false
     // External eligibility belongs only to ordinary point-and-deliberate.
     if (task.funding?.mode === 'FUNDED_SINGLE_AGENT') return agent.canOperate !== false &&
-      !agent.systemAgent && normalizeStatus(agent.status) === 'online' && agent.eligible !== false
-    return candidatesTaskId.value === task.id && !candidatesError.value &&
-      assigneeCandidates.value.some(item => item.agentId === agent.agentId)
+      !agent.systemAgent && normalizeStatus(agent.status) === 'online'
+    return (candidatesTaskId.value === task.id && !candidatesError.value &&
+      assigneeCandidates.value.some(item => item.agentId === agent.agentId)) ||
+      (recommendationState.value.state === 'READY' && recommendationState.value.result.taskId === task.id &&
+       recommendationState.value.result.taskVersion === task.taskVersion &&
+       recommendationState.value.result.recommendations.some(item => item.agent.agentId === agent.agentId))
   }
 
   let detailEpoch = 0
@@ -115,8 +104,14 @@ export const useHallData = ({
   let listEpoch = 0
   let countsEpoch = 0
   let recommendationEpoch = 0
+  let recommendationRequest = null
   const identityFingerprint = () => `${toValue(authorizationGeneration)}\u0000${toValue(identityScope)}`
   const queryFingerprint = () => `${identityFingerprint()}\u0000${taskAbilityFilter.value}\u0000${taskKeyword.value}`
+  const stopRecommendationTask = watch(() => recommendationTaskKey(selectedTask.value), () => {
+    recommendationEpoch += 1
+    recommendationRequest?.controller.abort()
+    recommendationRequest = null
+  }, { flush: 'sync' })
   const stopFilters = watch([taskStatusFilter, taskAbilityFilter, taskKeyword], () => {
     listEpoch += 1
     countsEpoch += 1
@@ -126,6 +121,8 @@ export const useHallData = ({
     listEpoch += 1
     countsEpoch += 1
     recommendationEpoch += 1
+    recommendationRequest?.controller.abort()
+    recommendationRequest = null
     tasks.value = []
     taskStatusCounts.value = {}
     taskRecommendations.value = {}
@@ -135,7 +132,7 @@ export const useHallData = ({
     tasksError.value = ''
     taskCountsError.value = ''
   }, { flush: 'sync' })
-  const dispose = () => { listEpoch += 1; countsEpoch += 1; recommendationEpoch += 1; stopFilters(); stopIdentity(); stopCandidates(); stopDetailScope(); detailEpoch++; detailController?.abort(); candidatesEpoch++; candidatesController?.abort() }
+  const dispose = () => { listEpoch += 1; countsEpoch += 1; recommendationEpoch += 1; stopFilters(); stopIdentity(); stopRecommendationTask(); recommendationRequest?.controller.abort(); stopCandidates(); stopDetailScope(); detailEpoch++; detailController?.abort(); candidatesEpoch++; candidatesController?.abort() }
   // Absence/failure is not zero. Preserve decimal strings; never count the loaded page.
   const taskStatusCount = phase => taskStatusCounts.value.phaseCounts?.[phase || 'total'] ?? '—'
 
@@ -243,34 +240,44 @@ export const useHallData = ({
     }
   }
 
-  const loadTaskRecommendations = async (task = selectedTask.value) => {
-    if (!task?.id) return []
-    const epoch = ++recommendationEpoch
+  const loadTaskRecommendations = (task = selectedTask.value, { refresh = false } = {}) => {
+    if (!task?.id || !projectHallTask(task ? { task } : {}).actions.includes('ASSIGN')) return Promise.resolve([])
+    const taskKey = recommendationTaskKey(task)
     const identity = identityFingerprint()
-    const current = () => epoch === recommendationEpoch && identity === identityFingerprint()
-    let recommendations = []
-    try {
-      await agentApi.create(`/tasks/${task.id}/recommend`, {}, {
-        autoLoading: false,
-        onSuccess: (result) => {
-          if (!current()) return
-          if (!Array.isArray(result)) throw new Error('承办推荐返回格式不正确')
-          recommendations = result
-          taskRecommendations.value = {
-            ...taskRecommendations.value,
-            [task.id]: recommendations
-          }
-        }
-      })
-    } catch (error) {
-      if (!current()) return []
-      log.warn('load task recommendations failed:', error)
-      taskRecommendations.value = {
-        ...taskRecommendations.value,
-        [task.id]: []
+    const key = `${identity}\u0000${taskKey}`
+    if (recommendationRequest?.key === key) return recommendationRequest.promise
+    const cached = taskRecommendations.value[task.id]
+    if (!refresh && cached?.taskKey === taskKey && cached.state !== 'LOADING') return Promise.resolve(cached.result?.recommendations || [])
+    recommendationRequest?.controller.abort()
+    const controller = new AbortController()
+    const epoch = ++recommendationEpoch
+    const current = () => epoch === recommendationEpoch && identity === identityFingerprint() &&
+      taskKey === recommendationTaskKey(selectedTask.value)
+    const store = (state, result = null) => { if (current()) taskRecommendations.value = {
+      ...taskRecommendations.value, [task.id]: { state, result, taskKey }
+    } }
+    store('LOADING')
+    const promise = (async () => {
+      try {
+        let response
+        await agentApi.create(`/tasks/${encodeURIComponent(task.id)}/recommend`, { expectedTaskVersion: task.taskVersion }, {
+          autoLoading: false, signal: controller.signal, onSuccess: result => { response = result }
+        })
+        if (!current()) return []
+        const result = parseAssigneeRecommendation(response, task)
+        store(result.state, result)
+        return result.recommendations
+      } catch (error) {
+        if (!current()) return []
+        log.warn('load task recommendations failed:', error?.code || error?.name)
+        store(error?.code === 'RECOMMENDATION_STALE' || error?.status === 409 ? 'STALE' : 'ERROR')
+        return []
+      } finally {
+        if (recommendationRequest?.epoch === epoch) recommendationRequest = null
       }
-    }
-    return current() ? recommendations : []
+    })()
+    recommendationRequest = { key, epoch, controller, promise }
+    return promise
   }
 
   const reconcileSelectedAgent = () => {
@@ -537,6 +544,7 @@ export const useHallData = ({
     operableRosterAgents,
     personaCatalog,
     recommendedAgents,
+    recommendationState,
     rosterError,
     rosterLoading,
     setAgentFilter,
