@@ -92,7 +92,8 @@ export function previewKind (mime) {
 const DOWNLOAD_EXTENSIONS = new Map([
   ['image/png', 'png'], ['image/jpeg', 'jpg'], ['image/webp', 'webp'], ['image/gif', 'gif'],
   ['audio/mpeg', 'mp3'], ['audio/wav', 'wav'], ['audio/ogg', 'ogg'], ['audio/mp4', 'm4a'],
-  ['audio/webm', 'webm'], ['text/plain', 'txt'], ['application/pdf', 'pdf'],
+  ['audio/webm', 'webm'], ['text/plain', 'txt'], ['text/markdown', 'md'], ['text/html', 'html'],
+  ['application/json', 'json'], ['application/pdf', 'pdf'],
   ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'docx'],
   ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'xlsx'],
   ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'pptx']

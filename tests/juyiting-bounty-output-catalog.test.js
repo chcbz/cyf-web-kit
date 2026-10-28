@@ -52,6 +52,7 @@ describe('scoped bounty output catalog', () => {
   it('shares the passive attachment MIME policy and gives downloads usable extensions', () => {
     for (const [mime, extension] of [
       ['image/png', 'png'], ['image/jpeg', 'jpg'], ['audio/mp4', 'm4a'], ['audio/webm', 'webm'],
+      ['text/html', 'html'], ['text/markdown', 'md'], ['application/json', 'json'],
       ['application/pdf', 'pdf'], ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'docx']
     ]) {
       expect(downloadMimeType(mime)).to.equal(mime)

@@ -31,6 +31,7 @@
       <p v-if="item.messageSource" class="bounty-output-text">{{ item.text }}</p>
       <span>{{ item.contentMimeType }} · {{ item.byteLength }} 字节</span>
       <button v-if="item.previewUrl && previewKind(item.contentMimeType) !== 'file'" type="button" @click="loadPreview(item)">预览</button>
+      <button v-if="item.downloadUrl" type="button" @click="downloadOutput(item)">下载</button>
       <p v-if="itemErrors[outputItemKey(item)]" role="alert">{{ itemErrors[outputItemKey(item)] }}</p>
       <p v-if="textPreviews[outputItemKey(item)]" class="bounty-output-text">{{ textPreviews[outputItemKey(item)] }}</p>
       <template v-if="previewUrls[outputItemKey(item)]">
@@ -70,7 +71,8 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { createApi } from '../../composables/useHttp.js'
-import { exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, currentOutputDelivery, completedTextItem, completedExecutionDelivery, outputRequestPending } from '../../composables/juyiting/bountyOutputCatalog.js'
+import { exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, currentOutputDelivery, completedTextItem, completedExecutionDelivery, outputRequestPending } from '../../composables/juyiting/bountyOutputCatalog.js'
+import { saveOutputBlob } from '../../utils/outputDownload.js'
 import { revisionProgressPending } from '../../composables/juyiting/hallTypedDeliberation.js'
 import { useHallSkillResults } from '../../composables/juyiting/useHallSkillResults.js'
 import { skillResultDataText } from '../../composables/juyiting/hallSkillResults.js'
@@ -197,17 +199,17 @@ const list = async () => {
 }
 const refresh = () => { error.value = ''; if (timer != null) clearTimeout(timer); timer = null; if (abort) refreshQueued = true; else void list() }
 const refreshFromUser = () => { void skillResults.refresh(); emit('catalog-refresh-needed'); refresh() }
-const bytes = async item => {
+const bytes = async (item, url, mime) => {
   const generation = epoch; const controller = new AbortController(); inFlight.add(controller)
   try {
-    const response = await api.execute({ url: item.previewUrl.replace(/^\/chat/, ''), method: 'GET', responseType: 'blob', autoLoading: false, needAuth: true, signal: controller.signal })
+    const response = await api.execute({ url: url.replace(/^\/chat/, ''), method: 'GET', responseType: 'blob', autoLoading: false, needAuth: true, signal: controller.signal })
     if (controller.signal.aborted || generation !== epoch) return null
     if (!(response instanceof Blob)) throw new Error('暂时无法读取成果内容，请重试。')
     const blob = response
     if (String(blob.size) !== item.byteLength) throw new Error('成果字节长度与清单不一致，已拒绝使用。')
     if (await sha256Blob(blob) !== item.sha256) throw new Error('成果摘要校验失败，已拒绝使用。')
     if (controller.signal.aborted || generation !== epoch) return null
-    if (blob.type !== item.contentMimeType) throw new Error('媒体类型不匹配，已拒绝使用。')
+    if (blob.type !== mime) throw new Error('媒体类型不匹配，已拒绝使用。')
     return blob
   } finally { inFlight.delete(controller) }
 }
@@ -215,11 +217,20 @@ const loadPreview = async item => {
   const key = outputItemKey(item); if (!item.previewUrl || previewUrls.value[key]) return
   const generation = epoch
   try {
-    const blob = await bytes(item); if (!blob) return
+    const blob = await bytes(item, item.previewUrl, item.contentMimeType); if (!blob) return
     if (previewKind(item.contentMimeType) === 'text') { if (blob.size > 2 * 1024 * 1024) throw new Error('文本较大，暂不支持在议事中预览'); const text = await blob.text(); if (generation === epoch) patchMap(textPreviews, key, text); return }
     if (generation === epoch && previewKind(item.contentMimeType) !== 'file') patchMap(previewUrls, key, URL.createObjectURL(blob))
     patchMap(itemErrors, key, '')
   } catch (cause) { if (generation === epoch) patchMap(itemErrors, key, cause?.message || '预览失败') }
+}
+const downloadOutput = async item => {
+  const key = outputItemKey(item); const generation = epoch
+  try {
+    const blob = await bytes(item, item.downloadUrl, downloadMimeType(item.contentMimeType))
+    if (!blob || generation !== epoch) return
+    saveOutputBlob({ blob, item: { name: outputDownloadName(item) } })
+    patchMap(itemErrors, key, '')
+  } catch (cause) { if (generation === epoch) patchMap(itemErrors, key, cause?.message || '下载失败') }
 }
 watch(() => `${props.enabled}\u0000${props.identityKey}\u0000${props.conversationId}\u0000${props.taskId}\u0000${catalogRequests.value.map(request => request.requestId).join('\u0001')}`, () => {
   cleanup()

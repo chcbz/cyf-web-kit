@@ -238,7 +238,7 @@ describe('bounty output gallery live owner scope', () => {
       expect(cards[0].find('.image-rework').exists()).to.equal(false)
       expect(cards[1].find('input[type="checkbox"]').exists()).to.equal(false)
       expect(wrapper.find('.finalize-button').exists()).to.equal(false)
-      expect(wrapper.findAll('button').some(button => ['下载', '保存到工作空间', '继续修改'].includes(button.text()))).to.equal(false)
+      expect(wrapper.findAll('button').some(button => ['保存到工作空间', '继续修改'].includes(button.text()))).to.equal(false)
       expect(wrapper.emitted('task-completed')).to.equal(undefined)
     } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
   })
@@ -580,7 +580,7 @@ describe('bounty output gallery live owner scope', () => {
         expect(wrapper.findAll('.bounty-output').some(item => item.text().includes(group.completed.outcome.text))).to.equal(false)
         expect(writes).to.have.length(0)
         expect(wrapper.find('.finalize-button').exists()).to.equal(false)
-      expect(wrapper.findAll('button').some(button => ['下载', '保存到工作空间', '继续修改'].includes(button.text()))).to.equal(false)
+      expect(wrapper.findAll('button').some(button => ['保存到工作空间', '继续修改'].includes(button.text()))).to.equal(false)
       expect(wrapper.emitted('task-completed')).to.equal(undefined)
       } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
     })
@@ -643,7 +643,7 @@ describe('bounty output gallery live owner scope', () => {
       expect(wrapper.findAll('.bounty-output').some(item => item.text().includes(group.initial.outcome.text))).to.equal(false)
       expect(writes).to.have.length(0)
       expect(wrapper.find('.finalize-button').exists()).to.equal(false)
-      expect(wrapper.findAll('button').some(button => ['下载', '保存到工作空间', '继续修改'].includes(button.text()))).to.equal(false)
+      expect(wrapper.findAll('button').some(button => ['保存到工作空间', '继续修改'].includes(button.text()))).to.equal(false)
       expect(wrapper.emitted('task-completed')).to.equal(undefined)
     } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
   })
@@ -703,7 +703,7 @@ describe('bounty output gallery live owner scope', () => {
       expect(wrapper.findAll('.bounty-output').some(item => item.text().includes(group.initial.outcome.text))).to.equal(false)
       expect(writes).to.have.length(0)
       expect(wrapper.find('.finalize-button').exists()).to.equal(false)
-      expect(wrapper.findAll('button').some(button => ['下载', '保存到工作空间', '继续修改'].includes(button.text()))).to.equal(false)
+      expect(wrapper.findAll('button').some(button => ['保存到工作空间', '继续修改'].includes(button.text()))).to.equal(false)
       expect(wrapper.emitted('task-completed')).to.equal(undefined)
     } finally { wrapper?.unmount(); globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear }
   })
@@ -719,7 +719,7 @@ describe('RB-01/D01 real gallery native execution consumer', () => {
     taskId: 'task', request: nativeRequest(), typedOutcomes: [] })
   const component = api => new Function('Vue', 'deps', script)(Vue, { revisionProgressPending, useHallSkillResults, skillResultDataText,
     createApi: () => api, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps,
-    currentOutputDelivery, completedTextItem, completedExecutionDelivery, outputRequestPending })
+    downloadMimeType, outputDownloadName, saveOutputBlob: () => {}, currentOutputDelivery, completedTextItem, completedExecutionDelivery, outputRequestPending })
   it('loads data-only results from persisted steps with no ACTION_REQUEST and recovers after remount', async () => {
     const calls = []
     const api = { get: async path => {
@@ -798,5 +798,60 @@ describe('RB-01/D01 real gallery native execution consumer', () => {
       for (const read of pending) read.resolve()
       await flushPromises()
     }
+  })
+})
+
+describe('authenticated output downloads', () => {
+  for (const [mime, extension] of [['text/html', 'html'], ['text/markdown', 'md'], ['application/json', 'json'], ['image/svg+xml', 'bin']]) {
+    it(`downloads verified ${mime} as an attachment without inline preview`, async () => {
+      const payload = 'safe fixture'; const digest = createHash('sha256').update(payload).digest('hex')
+      const url = '/chat/requests/request-1/steps/step-1/outputs/file'
+      const output = { outputId: 'file', contentMimeType: mime, sha256: digest, byteLength: String(Buffer.byteLength(payload)), previewUrl: null, downloadUrl: `${url}?download=true` }
+      const calls = []; const saved = []
+      const api = { get: async path => path === '/requests/request-1'
+        ? { requestId: 'request-1', conversationId: 'conversation-1', state: 'COMPLETED', steps: [step('step-1')] }
+        : [output], execute: async call => { calls.push(call); return new Blob([payload], { type: mime === 'image/svg+xml' ? 'application/octet-stream' : mime }) } }
+      const Component = new Function('Vue', 'deps', script)(Vue, { revisionProgressPending, useHallSkillResults, skillResultDataText,
+        createApi: () => api, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps,
+        downloadMimeType, outputDownloadName, currentOutputDelivery, completedTextItem, completedExecutionDelivery, outputRequestPending,
+        saveOutputBlob: data => saved.push(data) })
+      const wrapper = mount(Component, { props: { enabled: true, identityKey: 'owner-a', conversationId: 'conversation-1',
+        request: { requestId: 'request-1', conversationId: 'conversation-1' }, taskCompleted: true } })
+      try {
+        await flushPromises()
+        expect(wrapper.findAll('button').some(button => button.text() === '预览')).to.equal(false)
+        await wrapper.findAll('button').find(button => button.text() === '下载').trigger('click')
+        for (let i = 0; i < 50 && !saved.length; i++) { await new Promise(resolve => setTimeout(resolve, 5)); await flushPromises() }
+        expect(calls).to.have.length(1)
+        expect(calls[0]).to.include({ url: `${url.slice(5)}?download=true`, method: 'GET', needAuth: true, responseType: 'blob' })
+        expect(saved).to.have.length(1); expect(saved[0].item.name).to.equal(`file.${extension}`)
+        expect(wrapper.find('iframe').exists()).to.equal(false)
+      } finally { wrapper.unmount() }
+    })
+  }
+  it('rejects bad length, digest and MIME, and cancels a late response on identity change', async () => {
+    const url = '/chat/requests/request-1/steps/step-1/outputs/file'
+    const output = { outputId: 'file', contentMimeType: 'application/json', sha256: createHash('sha256').update('abc').digest('hex'), byteLength: '3', previewUrl: null, downloadUrl: `${url}?download=true` }
+    const responses = [new Blob(['ab'], { type: 'application/json' }), new Blob(['xyz'], { type: 'application/json' }), new Blob(['abc'], { type: 'text/plain' })]
+    let pending; const saved = []
+    const api = { get: async path => path === '/requests/request-1' ? { requestId: 'request-1', conversationId: 'conversation-1', state: 'COMPLETED', steps: [step('step-1')] } : [output],
+      execute: call => responses.length ? Promise.resolve(responses.shift()) : new Promise(resolve => { pending = { resolve, signal: call.signal } }) }
+    const Component = new Function('Vue', 'deps', script)(Vue, { revisionProgressPending, useHallSkillResults, skillResultDataText,
+      createApi: () => api, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName,
+      currentOutputDelivery, completedTextItem, completedExecutionDelivery, outputRequestPending, saveOutputBlob: data => saved.push(data) })
+    const wrapper = mount(Component, { props: { enabled: true, identityKey: 'owner-a', conversationId: 'conversation-1',
+      request: { requestId: 'request-1', conversationId: 'conversation-1' }, taskCompleted: true } })
+    try {
+      await flushPromises()
+      for (const message of ['字节长度', '摘要校验', '媒体类型不匹配']) {
+        await wrapper.findAll('button').find(button => button.text() === '下载').trigger('click')
+        for (let i = 0; i < 50 && !wrapper.text().includes(message); i++) { await new Promise(resolve => setTimeout(resolve, 5)); await flushPromises() }
+        expect(wrapper.text()).to.include(message)
+      }
+      await wrapper.findAll('button').find(button => button.text() === '下载').trigger('click'); await flushPromises()
+      await wrapper.setProps({ identityKey: 'owner-b' }); expect(pending.signal.aborted).to.equal(true)
+      pending.resolve(new Blob(['abc'], { type: 'application/json' })); await flushPromises()
+      expect(saved).to.have.length(0)
+    } finally { wrapper.unmount() }
   })
 })
