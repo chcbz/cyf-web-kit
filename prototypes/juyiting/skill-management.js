@@ -37,7 +37,8 @@
       }).join(''));
     }
     const heading = $('.agent-skill-heading', section);
-    $('small', heading)?.remove();
+    const count = $('small', heading);
+    if (count?.textContent.trim()) count.textContent = `已核验安装 ${installedCount(m)} 项`;
     heading.insertAdjacentHTML('beforeend', action('管理技能', 'open', 'class="skill-inline-manage"'));
   };
   function open(id) {

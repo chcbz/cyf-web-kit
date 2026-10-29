@@ -96,12 +96,16 @@
               >重查设置</button>
             </div>
             <section class="profile-section" aria-label="技能">
-              <div class="profile-heading"><h3>技能</h3><button
-                v-if="canManagePolicy"
-                class="skill-manage-entry"
-                type="button"
-                @click="skillManagementOpen = true"
-              >管理技能</button><small v-if="profile?.skills.status === 'AVAILABLE'">已核验安装 {{ installedCount }} 项</small></div>
+              <div class="profile-heading">
+                <h3>技能</h3>
+                <small v-if="profile?.skills.status === 'AVAILABLE'">已核验安装 {{ installedCount }} 项</small>
+                <button
+                  v-if="canManagePolicy"
+                  class="skill-manage-entry"
+                  type="button"
+                  @click="skillManagementOpen = true"
+                >管理技能</button>
+              </div>
               <p v-if="!canReadProfile" role="status">仅拥有者可查看技能</p>
               <p v-else-if="profileCapabilitiesLoading" role="status">正在核对技能…</p>
               <p v-else-if="profileCapabilitiesError" class="profile-error" role="status">{{ profileCapabilitiesError }}</p>
@@ -303,7 +307,7 @@ defineExpose({ canGoBack, back, windowTitle, profileVisible })
 </script>
 
 <style scoped>
-.skill-manage-entry { min-height: 44px; padding: 4px 10px; border: 1px solid var(--hall-border, #e3e5dc); border-radius: 7px; color: var(--hall-brand, #923f30); background: var(--hall-surface, #fffefa); font-size: 13px; }
+.agent-panel .profile-heading .skill-manage-entry { margin-left: auto; min-height: 44px; padding: 4px 10px; border: 1px solid var(--hall-border, #e3e5dc); border-radius: 7px; color: var(--hall-text, #242e2b); background: #f3f4ee; font: inherit; font-size: 13px; line-height: 1.65; }
 .skill-manage-entry:focus-visible { outline: 3px solid var(--hall-focus-ring, #923f3052); outline-offset: 2px; }
 .agent-panel {
   display: flex;

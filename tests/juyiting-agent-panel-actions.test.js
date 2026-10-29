@@ -221,3 +221,39 @@ describe('AgentPanel accepted abilities prototype fidelity', () => {
     expect(rule('.agent-panel .ability-editor-actions button.ability-save:focus-visible {')).to.include('outline: 2px solid #923f30').and.include('outline-offset: 3px')
   })
 })
+
+
+describe('AgentPanel skill management heading alignment', () => {
+  const owned = { ...agent, boundToMe: true, canOperate: true, systemAgent: false }
+  const profile = { agentId: agent.agentId, observedAt: 10000, abilities: [], skills: { status: 'AVAILABLE', items: [] } }
+  it('keeps the installation summary before the last management action', () => {
+    const wrapper = mount(AgentPanel, { props: { ...props, selectedAgent: owned, profileCapabilities: profile } })
+    try {
+      const heading = wrapper.get('[aria-label="技能"] > .profile-heading')
+      expect([...heading.element.children].map(e => e.tagName)).to.deep.equal(['H3', 'SMALL', 'BUTTON'])
+      expect(heading.get('small').text()).to.equal('已核验安装 0 项')
+      expect(heading.get('button:last-child').text()).to.equal('管理技能')
+    } finally { wrapper.unmount() }
+  })
+  it('retains the rightmost action without a count, and preserves owner/operation guards', async () => {
+    const wrapper = mount(AgentPanel, { props: { ...props, selectedAgent: owned, profileCapabilitiesLoading: true } })
+    try {
+      const heading = () => wrapper.get('[aria-label="技能"] > .profile-heading')
+      expect(heading().find('small').exists()).to.equal(false)
+      expect(heading().get('button:last-child').text()).to.equal('管理技能')
+      await wrapper.setProps({ profileCapabilitiesLoading: false, profileCapabilities: { ...profile, skills: { status: 'UNAVAILABLE', items: [] } } })
+      expect(heading().find('small').exists()).to.equal(false)
+      expect(heading().find('button:last-child').exists()).to.equal(true)
+      for (const change of [{ boundToMe: false }, { canOperate: false }, { systemAgent: true }]) {
+        await wrapper.setProps({ selectedAgent: { ...owned, ...change } })
+        expect(wrapper.find('.skill-manage-entry').exists()).to.equal(false)
+      }
+    } finally { wrapper.unmount() }
+  })
+  it('locally aligns the action to the right without changing shared heading layout', () => {
+    const css = descriptor.styles[0].content
+    const rule = css.slice(css.indexOf('.agent-panel .profile-heading .skill-manage-entry {')).split('}')[0]
+    expect(rule).to.include('margin-left: auto').and.include('min-height: 44px').and.include('background: #f3f4ee').and.include('color: var(--hall-text, #242e2b)')
+    expect(css).to.include('.profile-heading, .skill-title { display: flex; justify-content: space-between;')
+  })
+})

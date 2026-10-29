@@ -729,3 +729,6 @@ body[data-ui-revision] .material-picker-dialog .material-selection-summary butto
 
 /* Guidance is not a business modal: keep mobile navigation visible, inert in JS. */
 @media(max-width:760px){body[data-current-page=help] .workbench-mobile-nav{display:flex!important}}
+
+/* Keep the skill management action at the right edge of the profile heading. */
+.agent-panel .mmd-agent-detail .agent-skill-heading > .skill-inline-manage{margin-left:auto}
