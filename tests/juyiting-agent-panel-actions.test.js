@@ -1,3 +1,4 @@
+import { useHallAgentAbilitiesEditor } from '../src/composables/juyiting/useHallAgentAbilitiesEditor.js'
 import { skillComponents } from './helpers/skill-management-components.js'
 import { readFileSync } from 'node:fs'
 import { expect } from 'chai'
@@ -131,7 +132,7 @@ describe('AgentPanel visual alignment follow-up', () => {
     try {
       expect(calls.length).to.be.greaterThan(0)
       expect(calls.every(args => args.length === 1)).to.equal(true)
-      expect(wrapper.get('[aria-label="本领"]').text()).to.include('真实本领').and.include('可用技能请查看上方技能列表')
+      expect(wrapper.get('[aria-label="本领"]').text()).to.include('真实本领').and.include('能力介绍由本人维护，不代表已安装技能或运行就绪')
       expect(wrapper.get('.profile-refresh small').text()).to.match(/^最近读取 \d{2}:\d{2}$/)
       expect(wrapper.text()).not.to.include('正在厅中候令')
       await wrapper.setProps({ selectedAgent: { ...target, errorMessage: '实际错误', currentTaskTitle: '实际任务' } })
@@ -151,5 +152,31 @@ describe('AgentPanel visual alignment follow-up', () => {
     expect(hall).to.include('<svg width="20" height="20"').and.include('stroke-width="1.8"')
     expect(hall).to.include('.is-agent-overlay :deep(.agent-panel.is-agent-detail .agent-panel-body) { padding: 0; gap: 0; }')
     expect(hall).to.include('.is-agent-overlay :deep(.agent-panel.is-agent-detail .detail-card) { width: 100%; border: 0; border-radius: 0; }')
+  })
+})
+
+
+describe('AgentPanel abilities editor actual interaction', () => {
+  it('focuses inline input, saves through the editor, and restores the edit entry', async () => {
+    const target = { ...agent, boundToMe: true, systemAgent: false }
+    const projection = Vue.ref({ agentId: agent.agentId, observedAt: 10000, abilities: ['old'], skills: { status: 'AVAILABLE', items: [] } })
+    let persisted = ['old']; const writes = []
+    const profile = { projection, loading: Vue.ref(false), error: Vue.ref(''), refresh: async () => { projection.value.abilities = persisted; return true } }
+    const api = { put: async (url, data) => { writes.push({ url, data }); persisted = data.abilities; return { agentId: agent.agentId, abilities: persisted } } }
+    const editor = useHallAgentAbilitiesEditor({ api, profile, getAgent: () => target, identityKey: () => 'owner', enabled: () => true })
+    const wrapper = mount(AgentPanel, { attachTo: document.body, props: { ...props, selectedAgent: target, profileCapabilities: projection.value, abilityEditor: editor } })
+    try {
+      await wrapper.get('[aria-label="本领"] button').trigger('click'); await Vue.nextTick()
+      expect(document.activeElement).to.equal(wrapper.get('textarea').element)
+      await wrapper.get('textarea').setValue('分析\nANALYSIS\nanalysis')
+      await wrapper.get('form.ability-editor').trigger('submit')
+      for (let i = 0; i < 8; i++) await Promise.resolve()
+      await Vue.nextTick()
+      expect(writes).to.have.length(1)
+      expect(writes[0].data).to.deep.equal({ expectedAbilities: ['old'], abilities: ['分析', 'ANALYSIS'] })
+      expect(wrapper.find('form.ability-editor').exists()).to.equal(false)
+      expect(wrapper.get('[aria-label="本领"]').text()).to.include('分析').and.include('本领已保存')
+      expect(document.activeElement).to.equal(wrapper.get('[aria-label="本领"] button').element)
+    } finally { wrapper.unmount(); editor.dispose() }
   })
 })
