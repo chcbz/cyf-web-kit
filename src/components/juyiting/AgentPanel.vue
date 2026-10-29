@@ -120,16 +120,40 @@
               <p class="profile-note">运行就绪不代表当前任务已获执行授权。</p>
             </section>
             <section class="profile-section" aria-label="本领">
-              <div class="profile-heading"><h3>本领</h3><button v-if="profile && abilityEditor && !abilityEditor.editing.value" ref="abilityEditButton" type="button" @click="abilityEditor.begin">编辑</button></div>
+              <div class="profile-heading">
+                <h3>本领</h3>
+                <button
+                  v-if="profile && abilityEditor && !abilityEditor.editing.value"
+                  ref="abilityEditButton"
+                  class="ability-edit-link"
+                  type="button"
+                  aria-label="编辑这位好汉的本领"
+                  @click="abilityEditor.begin"
+                >编辑</button>
+              </div>
               <form v-if="abilityEditor?.editing.value" class="ability-editor" @submit.prevent="abilityEditor.save">
-                <label for="hall-ability-editor">每行一项，可全部清空</label>
-                <textarea ref="abilityTextarea" id="hall-ability-editor" v-model="abilityEditor.draft.value" rows="5" :disabled="abilityEditor.busy.value"></textarea>
-                <small>最多128项，每项最多100个字符。</small>
-                <p v-if="abilityEditor.message.value" class="profile-error" role="status">{{ abilityEditor.message.value }}</p>
-                <div>
-                  <button class="ability-save" type="submit" :disabled="abilityEditor.busy.value || abilityEditor.needsCheck.value">{{ abilityEditor.busy.value ? '处理中…' : '保存' }}</button>
-                  <button v-if="abilityEditor.needsCheck.value" type="button" :disabled="abilityEditor.busy.value" @click="abilityEditor.checkLatest">核对最新本领</button>
+                <label for="hall-ability-editor">本领介绍</label>
+                <p id="hall-ability-editor-hint">每行填写一项，例如：资料整理、方案撰写。留空表示暂不填写。</p>
+                <textarea
+                  id="hall-ability-editor"
+                  ref="abilityTextarea"
+                  v-model="abilityDraft.value"
+                  rows="4"
+                  placeholder="每行填写一项本领"
+                  aria-describedby="hall-ability-editor-hint hall-ability-editor-note"
+                  :disabled="abilityEditor.busy.value"
+                ></textarea>
+                <p id="hall-ability-editor-note">仅维护这位好汉的能力介绍，不会安装技能或改变技能状态。</p>
+                <p v-if="abilityEditor.message.value" class="ability-editor-error" role="status">{{ abilityEditor.message.value }}</p>
+                <div class="ability-editor-actions">
                   <button type="button" :disabled="abilityEditor.busy.value" @click="abilityEditor.cancel">取消</button>
+                  <button
+                    v-if="abilityEditor.needsCheck.value"
+                    type="button"
+                    :disabled="abilityEditor.busy.value"
+                    @click="abilityEditor.checkLatest"
+                  >核对最新本领</button>
+                  <button class="ability-save" type="submit" :disabled="abilityEditor.busy.value || abilityEditor.needsCheck.value">{{ abilityEditor.busy.value ? '处理中…' : '保存' }}</button>
                 </div>
               </form>
               <div v-else class="ability-tags">
@@ -137,7 +161,7 @@
                 <span v-if="!displayedAbilities.length">暂无能力介绍</span>
               </div>
               <p v-if="abilityEditor && !abilityEditor.editing.value && abilityEditor.message.value" role="status">{{ abilityEditor.message.value }}</p>
-              <p class="profile-note">能力介绍由本人维护，不代表已安装技能或运行就绪。</p>
+              <p v-if="!abilityEditor?.editing.value" class="profile-note">由你维护的能力介绍，仅供参考，不代表已安装技能或运行就绪。</p>
             </section>
             <div v-if="canReadProfile" class="profile-refresh">
               <button type="button" :disabled="profileCapabilitiesLoading" @click="$emit('refresh-profile-capabilities')">{{ profileCapabilitiesLoading ? '正在刷新…' : '刷新技能与本领' }}</button>
@@ -223,6 +247,8 @@ const listRef = ref(null)
 const detailTitleRef = ref(null)
 const abilityEditButton = ref(null)
 const abilityTextarea = ref(null)
+// Keep the editor-owned mutable Ref; this component does not replace its prop.
+const abilityDraft = computed(() => props.abilityEditor?.draft)
 watch(() => props.abilityEditor?.editing.value, async (editing, wasEditing) => {
   const agentId = props.selectedAgent?.agentId
   const identity = props.identityKey
@@ -569,9 +595,19 @@ button {
 </style>
 
 <style scoped>
-.ability-editor { display: grid; gap: 8px; }
-.ability-editor textarea { width: 100%; box-sizing: border-box; font: inherit; resize: vertical; }
-.ability-editor button { padding: 7px 14px; border-radius: 5px; margin-right: 8px; }
-.ability-editor .ability-save, .ability-editor .ability-save:hover { color: #fff; background: #a33226; }
-.ability-editor button:focus-visible { outline: 2px solid #a33226; outline-offset: 2px; }
+/* Match the accepted prototype after its complete workbench cascade, not browser defaults. */
+.agent-panel .profile-section .ability-edit-link { min-height: 44px; padding: 6px 12px; border: 1px solid #e3e5dc; border-radius: 7px; background: #f3f4ee; color: #242e2b; font: inherit; font-size: 13px; line-height: 1.65; cursor: pointer; }
+.agent-panel .profile-section .ability-editor { display: grid; gap: 8px; margin-top: 12px; }
+.agent-panel .ability-editor label { color: #242e2b; font-size: 13px; font-weight: 600; }
+.agent-panel .ability-editor p { margin: 0; color: #68716b; font-size: 12px; line-height: 1.6; }
+.agent-panel .ability-editor textarea { width: 100%; min-height: 104px; box-sizing: border-box; resize: vertical; padding: 10px 12px; border: 1px solid #cbd1c8; border-radius: 8px; background: #fffefa; color: #242e2b; font: inherit; font-size: 14px; line-height: 1.6; }
+.agent-panel .ability-editor textarea:focus-visible, .agent-panel .profile-section .ability-edit-link:focus-visible { outline: 3px solid #923f3080; outline-offset: 2px; }
+.agent-panel .ability-editor-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.agent-panel .profile-section .ability-editor-actions button { min-height: 44px; padding: 8px 16px; border: 1px solid #e3e5dc; border-radius: 7px; background: #f3f4ee; color: #242e2b; font: inherit; font-size: 14px; line-height: 1.65; cursor: pointer; }
+.agent-panel .ability-editor-actions button.ability-save { background: #923f30; border-color: #923f30; color: #fffefa; }
+.agent-panel .ability-editor-actions button.ability-save:hover:not(:disabled) { background: #793326; border-color: #793326; color: #fffefa; }
+.agent-panel .ability-editor-actions button:focus-visible { outline: 3px solid #923f3080; outline-offset: 2px; }
+.agent-panel .ability-editor-actions button.ability-save:focus-visible { outline: 2px solid #923f30; outline-offset: 3px; }
+.agent-panel .ability-editor-actions button:disabled, .agent-panel .ability-editor textarea:disabled { opacity: .6; cursor: default; }
+.agent-panel .ability-editor p.ability-editor-error { color: var(--hall-danger, #a13f35); }
 </style>

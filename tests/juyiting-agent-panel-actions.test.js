@@ -132,7 +132,7 @@ describe('AgentPanel visual alignment follow-up', () => {
     try {
       expect(calls.length).to.be.greaterThan(0)
       expect(calls.every(args => args.length === 1)).to.equal(true)
-      expect(wrapper.get('[aria-label="本领"]').text()).to.include('真实本领').and.include('能力介绍由本人维护，不代表已安装技能或运行就绪')
+      expect(wrapper.get('[aria-label="本领"]').text()).to.include('真实本领').and.include('由你维护的能力介绍，仅供参考，不代表已安装技能或运行就绪')
       expect(wrapper.get('.profile-refresh small').text()).to.match(/^最近读取 \d{2}:\d{2}$/)
       expect(wrapper.text()).not.to.include('正在厅中候令')
       await wrapper.setProps({ selectedAgent: { ...target, errorMessage: '实际错误', currentTaskTitle: '实际任务' } })
@@ -178,5 +178,46 @@ describe('AgentPanel abilities editor actual interaction', () => {
       expect(wrapper.get('[aria-label="本领"]').text()).to.include('分析').and.include('本领已保存')
       expect(document.activeElement).to.equal(wrapper.get('[aria-label="本领"] button').element)
     } finally { wrapper.unmount(); editor.dispose() }
+  })
+})
+
+describe('AgentPanel accepted abilities prototype fidelity', () => {
+  const editor = () => ({ editing: Vue.ref(true), draft: Vue.ref('分析'), busy: Vue.ref(false), needsCheck: Vue.ref(false), message: Vue.ref(''), cancel: () => {}, save: () => {}, checkLatest: () => {} })
+  const ownedProps = abilityEditor => ({ ...props, selectedAgent: { ...agent, boundToMe: true, systemAgent: false }, abilityEditor, profileCapabilities: { agentId: agent.agentId, observedAt: 10000, abilities: ['分析'], skills: { status: 'AVAILABLE', items: [] } } })
+  it('renders the approved label, guidance, textarea and right-ordered secondary/primary actions', () => {
+    const wrapper = mount(AgentPanel, { props: ownedProps(editor()) })
+    try {
+      expect(wrapper.get('label[for="hall-ability-editor"]').text()).to.equal('本领介绍')
+      expect(wrapper.get('#hall-ability-editor-hint').text()).to.equal('每行填写一项，例如：资料整理、方案撰写。留空表示暂不填写。')
+      expect(wrapper.get('#hall-ability-editor-note').text()).to.equal('仅维护这位好汉的能力介绍，不会安装技能或改变技能状态。')
+      expect(wrapper.get('textarea').attributes()).to.include({ rows: '4', placeholder: '每行填写一项本领', 'aria-describedby': 'hall-ability-editor-hint hall-ability-editor-note' })
+      expect(wrapper.findAll('.ability-editor-actions button').map(b => b.text())).to.deep.equal(['取消', '保存'])
+      expect(wrapper.get('.ability-editor-actions button:last-child').attributes('type')).to.equal('submit')
+      expect(wrapper.get('.ability-editor-actions button:first-child').attributes('type')).to.equal('button')
+      expect(wrapper.find('[aria-label="本领"] > .profile-note').exists()).to.equal(false)
+    } finally { wrapper.unmount() }
+  })
+  it('preserves conflict draft and disabled states without changing the primary action order', async () => {
+    const e = editor(); const wrapper = mount(AgentPanel, { props: ownedProps(e) })
+    try {
+      e.needsCheck.value = true; e.message.value = '本领已被其他操作修改；草稿已保留'; await Vue.nextTick()
+      expect(wrapper.findAll('.ability-editor-actions button').map(b => b.text())).to.deep.equal(['取消', '核对最新本领', '保存'])
+      expect(wrapper.get('textarea').element.value).to.equal('分析')
+      expect(wrapper.get('.ability-save').element.disabled).to.equal(true)
+      expect(wrapper.get('.ability-editor-error[role="status"]').text()).to.include('草稿已保留')
+      e.busy.value = true; await Vue.nextTick()
+      expect(wrapper.findAll('.ability-editor-actions button').every(b => b.element.disabled)).to.equal(true)
+      expect(wrapper.get('textarea').element.disabled).to.equal(true)
+    } finally { wrapper.unmount() }
+  })
+  it('defines local approved borders, rounding, colors, alignment, hover and focus rather than native defaults', () => {
+    const css = descriptor.styles.map(s => s.content).join('\n')
+    const rule = selector => css.slice(css.lastIndexOf(selector)).split('}')[0]
+    expect(rule('.agent-panel .profile-section .ability-edit-link {')).to.include('border: 1px solid #e3e5dc').and.include('padding: 6px 12px')
+    expect(rule('.agent-panel .ability-editor textarea {')).to.include('border-radius: 8px').and.include('padding: 10px 12px').and.include('background: #fffefa')
+    expect(rule('.agent-panel .ability-editor-actions {')).to.include('justify-content: flex-end').and.include('gap: 8px').and.include('flex-wrap: wrap')
+    expect(rule('.agent-panel .ability-editor-actions button.ability-save {')).to.include('background: #923f30').and.include('color: #fffefa')
+    expect(rule('.agent-panel .ability-editor-actions button.ability-save:hover:not(:disabled) {')).to.include('background: #793326')
+    expect(rule('.agent-panel .ability-editor-actions button.ability-save:focus-visible {')).to.include('outline: 2px solid #923f30').and.include('outline-offset: 3px')
   })
 })
