@@ -313,9 +313,12 @@ watch([() => props.enabled, () => props.identityScope, () => props.identityEpoch
   .hall-overview .overview-main { padding: 18px 16px 0; }
   .hall-overview .overview-aside { grid-template-columns: minmax(0,1fr); }
   .hall-overview .overview-map-link { height: 185px; }
-  .hall-overview .overview-item { flex-wrap: wrap; row-gap: 3px; }
-  .hall-overview .overview-item-copy { flex: 1 1 100%; }
-  .hall-overview .overview-item > button { margin-left: auto; }
+  .hall-overview:not(.is-messages) .overview-item { flex-wrap: nowrap; gap: 10px; }
+  .hall-overview:not(.is-messages) .overview-item-copy { flex: 1 1 0; min-width: 0; }
+  .hall-overview:not(.is-messages) .overview-item > button { margin-left: 0; white-space: nowrap; }
+  .hall-overview.is-messages .overview-item { flex-wrap: wrap; row-gap: 3px; }
+  .hall-overview.is-messages .overview-item-copy { flex: 1 1 100%; }
+  .hall-overview.is-messages .overview-item > button { margin-left: auto; }
   .hall-overview .overview-aside-card { padding: 18px; }
   .hall-overview .overview-resource { flex-wrap: wrap; padding: 18px 16px; }
   .hall-overview .overview-resource button { margin-left: auto; }
