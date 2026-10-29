@@ -1,3 +1,4 @@
+import { useHallAgentAbilitiesEditor } from '../src/composables/juyiting/useHallAgentAbilitiesEditor.js'
 import * as discussionTurnHelpers from '../src/composables/juyiting/hallDiscussionTurns.js'
 import { useHallSelectedOutputReview } from '../src/composables/juyiting/useHallSelectedOutputReview.js'
 import { selectionKey } from '../src/composables/juyiting/hallSelectedOutputs.js'
@@ -2702,7 +2703,7 @@ const loadActualJuyiHall = (mocks) => {
     .replace(/import\.meta\.env/g, 'mocks.env')
     .replace(/^import\s+WorkspaceWriteRecovery\s+from\s+['"][^'"]+['"];?\s*$/gm, "var WorkspaceWriteRecovery = { template: '<section />', props: ['pending'], emits: ['retry'] }")
   .replace('export default', 'return')
-  const component = new Function('Vue', 'mocks', body)(Vue, { useHallSelectedOutputReview, selectionKey, useHallDeliveryReview, useHallAgentProfileCapabilities, useExternalServicePolicy, ...assigneeCandidates, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
+  const component = new Function('Vue', 'mocks', body)(Vue, { useHallSelectedOutputReview, selectionKey, useHallDeliveryReview, useHallAgentProfileCapabilities, useHallAgentAbilitiesEditor, useExternalServicePolicy, ...assigneeCandidates, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
   const renderBody = template.code
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace('export function render', 'return function render')

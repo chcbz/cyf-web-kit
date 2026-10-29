@@ -1,3 +1,4 @@
+import { useHallAgentAbilitiesEditor } from '../src/composables/juyiting/useHallAgentAbilitiesEditor.js'
 import { useHallSelectedOutputReview } from '../src/composables/juyiting/useHallSelectedOutputReview.js'
 import { selectionKey } from '../src/composables/juyiting/hallSelectedOutputs.js'
 import { assignedTaskTarget } from '../src/composables/juyiting/hallAssigneeCandidates.js'
@@ -128,7 +129,7 @@ const loadHallPage = mocks => {
     .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = mocks.${name}`)
     .replace(/import\.meta\.env/g, 'mocks.env')
     .replace('export default', 'return')
-  return new Function('Vue', 'mocks', body)(Vue, { useHallSelectedOutputReview, selectionKey, useHallDeliveryReview, useHallAgentProfileCapabilities, useExternalServicePolicy, assignedTaskTarget, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
+  return new Function('Vue', 'mocks', body)(Vue, { useHallSelectedOutputReview, selectionKey, useHallDeliveryReview, useHallAgentProfileCapabilities, useHallAgentAbilitiesEditor, useExternalServicePolicy, assignedTaskTarget, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
 }
 
 const makeHallPageMocks = ({ mode, counters, voiceLocked = Vue.ref(false) }) => {
