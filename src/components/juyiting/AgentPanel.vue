@@ -120,12 +120,24 @@
               <p class="profile-note">运行就绪不代表当前任务已获执行授权。</p>
             </section>
             <section class="profile-section" aria-label="本领">
-              <div class="profile-heading"><h3>本领</h3><small>{{ profile ? '最近读取记录' : '上次记录' }}</small></div>
-              <div class="ability-tags">
+              <div class="profile-heading"><h3>本领</h3><button v-if="profile && abilityEditor && !abilityEditor.editing.value" ref="abilityEditButton" type="button" @click="abilityEditor.begin">编辑</button></div>
+              <form v-if="abilityEditor?.editing.value" class="ability-editor" @submit.prevent="abilityEditor.save">
+                <label for="hall-ability-editor">每行一项，可全部清空</label>
+                <textarea ref="abilityTextarea" id="hall-ability-editor" v-model="abilityEditor.draft.value" rows="5" :disabled="abilityEditor.busy.value"></textarea>
+                <small>最多128项，每项最多100个字符。</small>
+                <p v-if="abilityEditor.message.value" class="profile-error" role="status">{{ abilityEditor.message.value }}</p>
+                <div>
+                  <button class="ability-save" type="submit" :disabled="abilityEditor.busy.value || abilityEditor.needsCheck.value">{{ abilityEditor.busy.value ? '处理中…' : '保存' }}</button>
+                  <button v-if="abilityEditor.needsCheck.value" type="button" :disabled="abilityEditor.busy.value" @click="abilityEditor.checkLatest">核对最新本领</button>
+                  <button type="button" :disabled="abilityEditor.busy.value" @click="abilityEditor.cancel">取消</button>
+                </div>
+              </form>
+              <div v-else class="ability-tags">
                 <span v-for="ability in displayedAbilities" :key="ability">{{ ability }}</span>
                 <span v-if="!displayedAbilities.length">暂无能力介绍</span>
               </div>
-              <p class="profile-note">能力介绍仅供参考，可用技能请查看上方技能列表。</p>
+              <p v-if="abilityEditor && !abilityEditor.editing.value && abilityEditor.message.value" role="status">{{ abilityEditor.message.value }}</p>
+              <p class="profile-note">能力介绍由本人维护，不代表已安装技能或运行就绪。</p>
             </section>
             <div v-if="canReadProfile" class="profile-refresh">
               <button type="button" :disabled="profileCapabilitiesLoading" @click="$emit('refresh-profile-capabilities')">{{ profileCapabilitiesLoading ? '正在刷新…' : '刷新技能与本领' }}</button>
@@ -182,6 +194,7 @@ const props = defineProps({
   profileCapabilitiesLoading: { type: Boolean, default: false },
   profileCapabilitiesError: { type: String, default: '' },
   profileReasonText: { type: Function, default: () => '暂不可用' },
+  abilityEditor: { type: Object, default: null },
   hasPendingTask: { type: Boolean, default: false },
   pointAndStartBusy: { type: Boolean, default: false },
   canPointAndDeliberate: { type: Function, default: () => false },
@@ -208,6 +221,16 @@ const mobileDetailOpen = ref(false)
 const skillManagementOpen = ref(false)
 const listRef = ref(null)
 const detailTitleRef = ref(null)
+const abilityEditButton = ref(null)
+const abilityTextarea = ref(null)
+watch(() => props.abilityEditor?.editing.value, async (editing, wasEditing) => {
+  const agentId = props.selectedAgent?.agentId
+  const identity = props.identityKey
+  await nextTick()
+  if (!props.active || agentId !== props.selectedAgent?.agentId || identity !== props.identityKey) return
+  if (editing) abilityTextarea.value?.focus()
+  else if (wasEditing && profile.value) abilityEditButton.value?.focus({ preventScroll: true })
+})
 let listScrollTop = 0
 let focusAgentId = null
 const canGoBack = computed(() => props.active && isCompactRoster.value && mobileDetailOpen.value)
@@ -543,4 +566,12 @@ button {
 .external-policy button[aria-checked="true"] { background: var(--hall-brand, #923f30); color: white; }
 .external-policy button:disabled { opacity: .6; cursor: default; }
 .external-policy button:focus-visible { outline: 2px solid var(--hall-focus-ring, #923f3052); outline-offset: 2px; }
+</style>
+
+<style scoped>
+.ability-editor { display: grid; gap: 8px; }
+.ability-editor textarea { width: 100%; box-sizing: border-box; font: inherit; resize: vertical; }
+.ability-editor button { padding: 7px 14px; border-radius: 5px; margin-right: 8px; }
+.ability-editor .ability-save, .ability-editor .ability-save:hover { color: #fff; background: #a33226; }
+.ability-editor button:focus-visible { outline: 2px solid #a33226; outline-offset: 2px; }
 </style>

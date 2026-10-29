@@ -278,6 +278,7 @@
             :profile-capabilities-loading="agentProfile.loading.value"
             :profile-capabilities-error="agentProfile.error.value"
             :profile-reason-text="agentProfileReasonText"
+            :ability-editor="agentAbilityEditor"
             v-if="panelFrames.includes('agents')"
             v-show="renderedPanel === 'agents'"
             :inert="renderedPanel !== 'agents' ? '' : null"
@@ -876,6 +877,7 @@ import { createPointAndStartIntentStore } from '@/composables/juyiting/hallPoint
 import { pointAndStartRecoveryLane } from '@/composables/juyiting/hallPointAndStartRecoveryLane'
 import { useHallBountyRequestCatalog } from '@/composables/juyiting/useHallBountyRequestCatalog'
 import { useHallTypedDeliberation } from '@/composables/juyiting/useHallTypedDeliberation'
+import { useHallAgentAbilitiesEditor } from '@/composables/juyiting/useHallAgentAbilitiesEditor'
 import { useHallAgentProfileCapabilities, agentProfileReasonText } from '@/composables/juyiting/useHallAgentProfileCapabilities'
 import { useHallSkillCapabilities } from '@/composables/juyiting/useHallSkillCapabilities'
 import { typedLong } from '@/composables/juyiting/hallTypedDeliberation'
@@ -2467,6 +2469,11 @@ const agentProfile = useHallAgentProfileCapabilities({
   identityKey: () => hallIdentityScope.value ? `${hallIdentityScope.value}:${apiStore.authorizationGeneration}` : '',
   enabled: () => renderedPanel.value === 'agents' && activePanel.value === 'agents' && Boolean(agentPanelRef.value?.profileVisible)
 })
+const agentAbilityEditor = useHallAgentAbilitiesEditor({
+  api: agentApi, profile: agentProfile, getAgent: () => selectedAgent.value,
+  identityKey: () => hallIdentityScope.value ? `${hallIdentityScope.value}:${apiStore.authorizationGeneration}` : '',
+  enabled: () => renderedPanel.value === 'agents' && activePanel.value === 'agents' && Boolean(agentPanelRef.value?.profileVisible)
+})
 const externalPolicy = useExternalServicePolicy({
   api: agentApi,
   getAgent: () => selectedAgent.value,
@@ -2475,7 +2482,8 @@ const externalPolicy = useExternalServicePolicy({
   enabled: () => renderedPanel.value === 'agents' && activePanel.value === 'agents' && Boolean(agentPanelRef.value?.profileVisible),
   storage: pointAndStartStorage
 })
-onUnmounted(() => { agentProfile.dispose(); externalPolicy.dispose() })
+onUnmounted(() => { agentAbilityEditor.dispose()
+  agentProfile.dispose(); externalPolicy.dispose() })
 
 const taskSkillDirectory = useHallSkillCapabilities({ api: agentApi, getContext: typedDeliberationContext,
   identityKey: () => `${hallIdentityScope.value}\u0000${apiStore.authorizationGeneration}\u0000${followupContextGeneration.value}`,

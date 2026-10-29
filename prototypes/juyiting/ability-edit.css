@@ -1,0 +1,25 @@
+.agent-profile-section .ability-edit-link { min-height: 36px; padding: 6px 12px; border: 1px solid #d7dcd3; border-radius: 7px; background: #fffefa; color: #923f30; font-size: 13px; cursor: pointer; }
+.agent-profile-section .ability-editor { display: grid; gap: 8px; margin-top: 12px; }
+.agent-profile-section .ability-editor label { color: #242e2b; font-size: 13px; font-weight: 600; }
+.agent-profile-section .ability-editor p { margin: 0; color: #68716b; font-size: 12px; line-height: 1.6; }
+.agent-profile-section .ability-editor textarea { width: 100%; min-height: 104px; box-sizing: border-box; resize: vertical; padding: 10px 12px; border: 1px solid #cbd1c8; border-radius: 8px; background: #fffefa; color: #242e2b; font: inherit; line-height: 1.6; }
+.agent-profile-section .ability-editor textarea:focus-visible, .agent-profile-section .ability-edit-link:focus-visible { outline: 3px solid #923f3080; outline-offset: 2px; }
+.agent-profile-section .ability-editor-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.agent-profile-section .ability-editor-actions button { min-height: 40px; padding: 8px 16px; border: 1px solid #d7dcd3; border-radius: 7px; background: #fffefa; color: #242e2b; cursor: pointer; }
+.agent-profile-section .ability-editor-actions .ability-edit-save { background: #923f30; border-color: #923f30; color: #fff; }
+
+/* Keep the primary action legible against the workbench's generic button states. */
+body[data-ui-revision] .mmd .agent-profile-section .ability-editor-actions button.ability-edit-save {
+  background: #923f30;
+  border-color: #923f30;
+  color: #fffefa;
+}
+body[data-ui-revision] .mmd .agent-profile-section .ability-editor-actions button.ability-edit-save:hover:not(:disabled) {
+  background: #793326;
+  border-color: #793326;
+  color: #fffefa;
+}
+body[data-ui-revision] .mmd .agent-profile-section .ability-editor-actions button.ability-edit-save:focus-visible {
+  outline: 2px solid #923f30;
+  outline-offset: 3px;
+}
