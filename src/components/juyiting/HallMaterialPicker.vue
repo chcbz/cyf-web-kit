@@ -82,9 +82,19 @@
               </template>
             </section>
             <div v-if="pickerDetail" class="quick-material-version-actions">
-              <button v-if="isMobile" type="button" class="quick-material-preview-toggle hall-tool" :disabled="!pickerVersion"
-                :aria-expanded="mobilePreviewOpen" aria-controls="hall-material-preview" @click="toggleMobilePreview"
-               :aria-label="mobilePreviewOpen ? '收起预览' : '预览资料'" :title="mobilePreviewOpen ? '收起预览' : '预览资料'"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+              <button
+                v-if="isMobile"
+                type="button"
+                class="quick-material-preview-toggle"
+                :disabled="!pickerVersion"
+                :aria-expanded="mobilePreviewOpen"
+                aria-controls="hall-material-preview"
+                :aria-label="mobilePreviewOpen ? '收起预览' : '预览资料'"
+                :title="mobilePreviewOpen ? '收起预览' : '预览资料'"
+                @click="toggleMobilePreview"
+              >
+                {{ mobilePreviewOpen ? '收起预览' : '预览' }}
+              </button>
               <button type="button" class="primary" :disabled="!pickerVersion || pickerAlreadyAdded || uploading" @click="stageQuickMaterial">{{ pickerAlreadyAdded ? '已添加' : '添加' }}</button>
             </div>
           </section>
@@ -92,7 +102,33 @@
         <footer>
           <div class="quick-material-selection-row">
             <button type="button" class="quick-material-count" :aria-expanded="selectionExpanded" aria-controls="quick-material-staged" @click="selectionExpanded = !selectionExpanded">已选 {{ draftMaterials.length }} 份资料 {{ selectionExpanded ? '⌄' : '⌃' }}</button>
-            <label class="quick-material-upload">上传资料<input type="file" multiple aria-label="上传资料" :disabled="uploading || uploadUnresolved" @change="uploadQuickMaterials" /></label>
+            <label
+              class="quick-material-upload hall-tool"
+              title="上传资料"
+            >
+              <svg
+                class="hall-control-icon"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5" />
+              </svg>
+              <input
+                type="file"
+                multiple
+                aria-label="上传资料"
+                :disabled="uploading || uploadUnresolved"
+                @change="uploadQuickMaterials"
+              />
+            </label>
           </div>
           <p v-if="uploading || uploadMessage" class="quick-material-upload-status" :role="uploading ? 'status' : 'alert'">{{ uploading ? '正在上传资料…' : (uploadMessage || '上传结果尚未确认，请核对原上传。') }}</p>
           <button v-if="uploadUnresolved" type="button" :disabled="uploading" @click="retryQuickUpload">核对原上传</button>

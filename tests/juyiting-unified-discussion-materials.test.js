@@ -70,6 +70,50 @@ describe('shared discussion material import receipts', () => {
       expect(wrapper.text()).to.include('上传结果尚未确认')
     } finally { wrapper.unmount() }
   })
+
+  it('keeps preview/add in one text action group and an accessible upload icon without changing fixed references', async () => {
+    const originalMatchMedia = window.matchMedia
+    window.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} })
+    const state = workspace(), previews = []
+    state.items.value = [{ fileId: 'notes', displayName: '说明.txt', latestVersion: '2', state: 'ACTIVE' }]
+    state.select = async () => {
+      const detail = { file: state.items.value[0], latestVersion: { version: '2' }, versions: [{ fileId: 'notes', version: '2', contentMimeType: 'text/plain' }] }
+      state.detail.value = detail
+      return detail
+    }
+    state.previewVersion = async version => { previews.push(version); state.preview.value = { kind: 'text', text: '固定资料' } }
+    const wrapper = mountPicker(state)
+    try {
+      await wrapper.vm.open(); await settle()
+      document.querySelector('[data-file-id="notes"]').click(); await settle()
+      const row = document.querySelector('.quick-material-version-actions')
+      const toggle = row.querySelector('.quick-material-preview-toggle')
+      expect(toggle.textContent).to.equal('预览')
+      expect(row.querySelector('svg, var-icon')).to.equal(null)
+      expect(row.querySelector('.hall-tool')).to.equal(null)
+      const upload = document.querySelector('.quick-material-upload')
+      expect(upload.classList.contains('hall-tool')).to.equal(true)
+      expect(upload.textContent.trim()).to.equal('')
+      expect(upload.querySelector('svg').getAttribute('aria-hidden')).to.equal('true')
+      const input = upload.querySelector('input[type="file"]')
+      expect(input.getAttribute('aria-label')).to.equal('上传资料')
+      expect(input.multiple).to.equal(true)
+      input.focus(); expect(document.activeElement).to.equal(input)
+      toggle.click(); await settle()
+      expect(toggle.textContent).to.equal('收起预览')
+      expect(toggle.getAttribute('aria-expanded')).to.equal('true')
+      expect(previews).to.deep.equal(['2'])
+      row.querySelector('.primary').click(); await settle()
+      expect(row.querySelector('.primary').textContent).to.equal('已添加')
+      expect(row.querySelector('.primary').disabled).to.equal(true)
+      state.items.value = [{ ...state.items.value[0], latestVersion: '3' }]
+      state.pendingWrites.value = [{ target: 'CREATE' }]; await settle()
+      expect(input.disabled).to.equal(true)
+      document.querySelector('.quick-material-confirm').click(); await settle()
+      expect(wrapper.emitted('update:modelValue').at(-1)[0]).to.deep.equal([{ fileId: 'notes', version: '2', displayName: '说明.txt', contentMimeType: 'text/plain' }])
+    } finally { wrapper.unmount(); window.matchMedia = originalMatchMedia }
+  })
+
 })
 
 const directory = () => {

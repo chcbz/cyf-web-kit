@@ -621,4 +621,6 @@ button {
 .profile-heading :is(.skill-manage-entry, .ability-edit-link) { margin-left: auto; }
 .external-policy-row { flex-wrap: nowrap; }
 .external-policy-row > span:first-child { flex: 1; min-width: 0; }
+.external-policy-row > .hall-switch-control { margin-left: auto; }
+.external-policy-row .hall-switch-status { white-space: nowrap; }
 </style>

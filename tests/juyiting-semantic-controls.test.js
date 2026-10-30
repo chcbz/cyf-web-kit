@@ -46,6 +46,16 @@ describe('Hall semantic presentation contract', () => {
     expect(select).to.include('min-width: 0')
     expect(descriptor.template.content).to.include('@change="preview(selectedVersion)"').and.include('@click="download(selectedVersion)"')
   })
+  it('anchors the delegation switch and status as a non-wrapping right-hand control', () => {
+    const { descriptor } = parseSfc(source('components/juyiting/AgentPanel.vue'))
+    const styles = postcss.parse(descriptor.styles.map(style => style.content).join('\n'))
+    const rules = new Map()
+    styles.walkRules(rule => rules.set(rule.selector, rule.toString()))
+    expect(rules.get('.external-policy-row > .hall-switch-control')).to.include('margin-left: auto')
+    expect(rules.get('.external-policy-row .hall-switch-status')).to.include('white-space: nowrap')
+    expect(descriptor.template.content).to.include('@click="$emit(\'set-external-policy\', !externalPolicy.enabled)"')
+    expect(descriptor.template.content).to.include(':disabled="!externalPolicyCanWrite"')
+  })
   it('uses the brand auth shell with reduced-motion support, not simulated success steps', () => {
     const { descriptor } = parseSfc(source('components/OAuthCallback.vue'))
     expect(descriptor.template.content).to.include('oauth-brand__seal').and.include(':aria-busy="processing"')
