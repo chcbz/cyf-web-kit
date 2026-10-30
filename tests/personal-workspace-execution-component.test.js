@@ -239,3 +239,39 @@ describe('personal workspace execution receipt presentation', () => {
   })
 
 })
+
+describe('workspace download view lifetime', () => {
+  const prepare = async saver => {
+    const workspace = workspaceMock(), execution = executionMock()
+    const apiStore = Vue.reactive({ authorizationGeneration: 1, oauthClientId: 'web-client' })
+    const component = new Function('Vue', 'deps', script)(Vue, { workspaceByteText, validMaterialVersion, deliveryTypeText,
+      useApiStore: () => apiStore, useGlobalStore: () => ({ user: { id: 'owner-a', tenantId: 'tenant-a' } }),
+      usePersonalWorkspace: () => workspace, usePersonalWorkspaceExecution: () => execution, savePersonalWorkspaceBlob: saver })
+    const wrapper = mount(component, { props: { embedded: true } }); await flushPromises()
+    await wrapper.get('.treasure-file-row button').trigger('click'); await flushPromises()
+    return { workspace, wrapper, apiStore, download: () => wrapper.get('button[aria-label="下载 v1"]').trigger('click') }
+  }
+  it('awaits the saver and renders bridge failures for the exact selected version', async () => {
+    let rejectSave, saving
+    const entered = new Promise(resolve => { saving = resolve })
+    const h = await prepare(options => { assert.equal(options.isCurrent(), true); saving(); return new Promise((resolve, reject) => { rejectSave = reject }) })
+    const versions = []; h.workspace.download = async version => { versions.push(version); return { blob: new Blob(['a']), filename: 'fixed-v1.txt' } }
+    try {
+      await h.download(); await entered
+      rejectSave(new Error('原生桥接失败')); await flushPromises()
+      assert.deepEqual(versions, ['1']); assert.equal(h.workspace.error.value, '原生桥接失败'); assert.match(h.wrapper.text(), /原生桥接失败/)
+    } finally { h.wrapper.unmount() }
+  })
+  for (const stage of ['download', 'bridge']) for (const change of ['identity', 'unmount']) it(`fences ${change} during ${stage} without posting or overwriting workspace error`, async () => {
+    let resolveDownload, rejectSave, guard, saves = 0
+    const h = await prepare(options => { saves++; guard = options.isCurrent; return new Promise((resolve, reject) => { rejectSave = reject }) })
+    h.workspace.download = () => stage === 'download' ? new Promise(resolve => { resolveDownload = resolve }) : Promise.resolve({ blob: new Blob(['a']), filename: 'v1.txt' })
+    await h.download(); await flushPromises()
+    if (change === 'identity') { h.apiStore.authorizationGeneration++; await Vue.nextTick() } else h.wrapper.unmount()
+    h.workspace.error.value = 'new view error'
+    if (stage === 'download') { resolveDownload({ blob: new Blob(['old']), filename: 'v1.txt' }) }
+    else { assert.equal(guard(), false); rejectSave(new Error('late bridge failure')) }
+    await flushPromises(); assert.equal(h.workspace.error.value, 'new view error'); assert.equal(saves, stage === 'download' ? 0 : 1)
+    if (change !== 'unmount') h.wrapper.unmount()
+  })
+})

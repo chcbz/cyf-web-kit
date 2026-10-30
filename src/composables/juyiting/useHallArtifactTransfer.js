@@ -1,5 +1,6 @@
 import { computed, getCurrentInstance, onUnmounted, ref, unref, watch } from 'vue'
 import { createApi } from '../useHttp.js'
+import { saveOutputBlob } from '../../utils/outputDownload.js'
 
 export const MAX_UPLOAD_BYTES = 16 * 1024 * 1024
 export const MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
@@ -60,7 +61,7 @@ const b64 = bytes => {
 
 /** Explicit F02 transfer boundary. It only uses createApi/useHttp, never infers an actor, and never retries publication. */
 export const useHallArtifactTransfer = ({ api = createApi('/agent'), subject, workspace, identityEpoch = 0,
-  documentRef = globalThis.document, urlApi = globalThis.URL } = {}) => {
+  documentRef = globalThis.document, urlApi = globalThis.URL, saveBlob = saveOutputBlob } = {}) => {
   const file = ref(null)
   const draft = ref(initialDraft())
   const download = ref({ artifactId: '', artifactVersion: '' })
@@ -70,6 +71,7 @@ export const useHallArtifactTransfer = ({ api = createApi('/agent'), subject, wo
   const conflict = ref(false)
   const activeUrls = new Set()
   const controllers = new Set()
+  const nativeHandoffs = new WeakSet()
   let generation = 0
   let activeOperation = null
 
@@ -105,6 +107,7 @@ export const useHallArtifactTransfer = ({ api = createApi('/agent'), subject, wo
   watch(scope, reset, { immediate: true, flush: 'sync' })
 
   const setFile = candidate => {
+    if (activeOperation) return false
     receipt.value = null; conflict.value = false; message.value = ''
     if (!candidate) { file.value = null; return false }
     const mime = safeMime(candidate.type)
@@ -211,15 +214,14 @@ export const useHallArtifactTransfer = ({ api = createApi('/agent'), subject, wo
       if (!response || !Number.isInteger(declared) || declared < 0 || declared > MAX_DOWNLOAD_BYTES || declared !== received) throw new Error('下载响应长度无效，未创建文件。')
       const mime = safeMime((response.headers.get('content-type') || '').split(';', 1)[0]) || 'application/octet-stream'
       const blob = new Blob(chunks, { type: mime })
-      const url = urlApi?.createObjectURL?.(blob)
-      if (!url) throw new Error('当前浏览器不能安全创建下载文件。')
-      activeUrls.add(url)
-      const anchor = documentRef?.createElement?.('a')
-      if (!anchor) throw new Error('当前环境不能安全发起下载。')
-      anchor.href = url; anchor.download = `artifact-v${artifactVersion}.bin`; anchor.rel = 'noopener'; anchor.click()
-      activeUrls.delete(url); urlApi.revokeObjectURL?.(url)
-      state.value = 'downloaded'; message.value = '已按指定成果版本创建本地下载。'
-      return { blob, url }
+      const saved = await saveBlob({ blob, item: { name: `artifact-v${artifactVersion}.bin` }, documentRef, urlApi, signal: controller.signal, isCurrent: () => capturedCurrent(captured, capturedTask, capturedActor, capturedEpoch, controller), onHandoff: () => {
+        nativeHandoffs.add(controller)
+        if (capturedCurrent(captured, capturedTask, capturedActor, capturedEpoch, controller)) { state.value = 'transferring'; message.value = '文件已交给小程序，无法撤回；等待原生页面确认。' }
+      } })
+      if (!capturedCurrent(captured, capturedTask, capturedActor, capturedEpoch, controller)) return null
+      state.value = saved?.status === 'transferred' ? 'transferred' : 'downloaded'
+      message.value = saved?.status === 'transferred' ? '文件已提交给小程序原生下载页；请按页面提示确认写入和后续操作。' : '已按指定成果版本创建本地下载。'
+      return { blob, transfer: saved?.status === 'transferred' ? saved : null }
     } catch (error) {
       if (!capturedCurrent(captured, capturedTask, capturedActor, capturedEpoch, controller) || error?.name === 'AbortError') return null
       if ([401, 403, 404].includes(error?.status)) clearAccessState()
@@ -231,6 +233,7 @@ export const useHallArtifactTransfer = ({ api = createApi('/agent'), subject, wo
   }
   const cancel = () => {
     if (!activeOperation) return false
+    if (nativeHandoffs.has(activeOperation)) return false
     generation += 1
     activeOperation.abort(); controllers.delete(activeOperation); activeOperation = null
     state.value = 'cancelled'; message.value = '传输已取消。'

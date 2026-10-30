@@ -37,17 +37,17 @@
         <select v-model="transfer.draft.visibility"><option value="task_members">任务成员</option><option value="reviewer">审阅者</option><option value="private">私有</option></select>
       </label>
       <label>文件
-        <input type="file" accept=".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg,.zip,text/plain,text/markdown,text/csv,application/json,application/pdf,image/png,image/jpeg,application/zip" @change="onFile" />
+        <input type="file" :disabled="['publishing', 'downloading', 'transferring'].includes(transfer.state)" accept=".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg,.zip,text/plain,text/markdown,text/csv,application/json,application/pdf,image/png,image/jpeg,application/zip" @change="onFile" />
       </label>
       <p v-if="transfer.file">已选择：{{ transfer.file.name }}（{{ transfer.file.size }} bytes）</p>
-      <div class="artifact-transfer-actions"><button type="submit" :disabled="!transfer.operable || ['publishing', 'downloading'].includes(transfer.state)">明确上传</button><button v-if="transfer.state === 'publishing'" type="button" @click="transfer.cancel">取消</button></div>
+      <div class="artifact-transfer-actions"><button type="submit" :disabled="!transfer.operable || ['publishing', 'downloading', 'transferring'].includes(transfer.state)">明确上传</button><button v-if="transfer.state === 'publishing'" type="button" @click="transfer.cancel">取消</button></div>
     </form>
 
     <section class="artifact-download-form" aria-labelledby="artifact-download-heading">
       <h4 id="artifact-download-heading">精确下载</h4>
       <label>成果标识 <input v-model.trim="transfer.download.artifactId" maxlength="100" /></label>
       <label>成果版本 <input v-model.trim="transfer.download.artifactVersion" inputmode="numeric" pattern="[1-9][0-9]*" /></label>
-      <div class="artifact-transfer-actions"><button type="button" :disabled="!transfer.operable || ['publishing', 'downloading'].includes(transfer.state)" @click="transfer.downloadExact">下载指定版本</button><button v-if="transfer.state === 'downloading'" type="button" @click="transfer.cancel">取消</button></div>
+      <div class="artifact-transfer-actions"><button type="button" :disabled="!transfer.operable || ['publishing', 'downloading', 'transferring'].includes(transfer.state)" @click="transfer.downloadExact">下载指定版本</button><button v-if="transfer.state === 'downloading'" type="button" @click="transfer.cancel">取消</button></div>
       <ul v-if="transfer.artifacts.length" class="artifact-transfer-recent" aria-label="可见成果版本">
         <li v-for="artifact in transfer.artifacts" :key="`${artifact.artifactId}:${artifact.artifactVersion}`"><span>{{ artifact.title }} · v{{ artifact.artifactVersion }}</span><button type="button" @click="transfer.selectDownload(artifact)">填入下载</button><button type="button" @click="transfer.prepareNextVersion(artifact)">填入下一版</button></li>
       </ul>

@@ -3,3 +3,7 @@
 tests/fixtures/juyiting/hall-map.snapshot.json text eol=lf
 docs/assets/juyiting/map-preview/hall-clean.svg text eol=lf
 docs/assets/juyiting/map-preview/hall-debug.svg text eol=lf
+
+# Native mini-program runtime is mirrored and verified byte-for-byte.
+# Use deterministic LF bytes on checkout, regardless of core.autocrlf.
+miniprogram/juyiting/** text eol=lf

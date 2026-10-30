@@ -1,0 +1,6 @@
+/**index.wxss**/
+page,
+.juyiting-webview {
+  width: 100%;
+  height: 100%;
+}
