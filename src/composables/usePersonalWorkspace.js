@@ -1,3 +1,4 @@
+import { saveOutputBlob } from '../utils/outputDownload.js'
 import { computed, getCurrentInstance, onBeforeUnmount, ref, toRaw, unref, watch } from 'vue'
 import { createApi } from './useHttp.js'
 import { usePersonalWorkspaceWriteIntent } from './usePersonalWorkspaceWriteIntent.js'
@@ -600,20 +601,6 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
   }
 }
 
-export function savePersonalWorkspaceBlob ({ blob, filename, documentRef = globalThis.document, urlApi = globalThis.URL } = {}) {
-  if (!(blob instanceof Blob)) throw new TypeError('A Blob is required for download')
-  const href = urlApi?.createObjectURL?.(blob)
-  const anchor = documentRef?.createElement?.('a')
-  if (!href || !anchor) throw new Error('当前浏览器不能创建安全下载。')
-  try {
-    anchor.href = href
-    anchor.download = safeDownloadFilename(filename)
-    anchor.rel = 'noopener'
-    anchor.style.display = 'none'
-    documentRef.body?.appendChild(anchor)
-    anchor.click()
-  } finally {
-    anchor.remove?.()
-    urlApi.revokeObjectURL?.(href)
-  }
+export function savePersonalWorkspaceBlob ({ blob, filename, ...options } = {}) {
+  return saveOutputBlob({ ...options, blob, item: { name: safeDownloadFilename(filename) } })
 }

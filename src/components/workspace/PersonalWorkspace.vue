@@ -242,8 +242,9 @@ const activeModal = ref(embedded ? 'library' : 'home')
 const detailPane = ref('summary')
 const isLibraryModal = computed(() => activeModal.value === 'library' || activeModal.value === 'detail')
 let viewGeneration = 0
+let disposed = false
 const viewSnapshot = () => ({ generation: viewGeneration, epoch: identityEpoch.value })
-const ownsView = snapshot => snapshot.generation === viewGeneration && snapshot.epoch === identityEpoch.value
+const ownsView = snapshot => !disposed && snapshot.generation === viewGeneration && snapshot.epoch === identityEpoch.value
 const selectedId = ref('')
 const selectedVersion = ref('1')
 const uploadFile = ref(null)
@@ -346,7 +347,20 @@ const appendVersion = async () => {
 }
 const selectedPreviewPart = computed(() => workspace.preview.value?.parts?.[workspace.preview.value?.selectedIndex] || null)
 const preview = version => { selectedVersion.value = version; void workspace.previewVersion(version) }
-const download = async version => { const result = await workspace.download(version); if (result) savePersonalWorkspaceBlob(result) }
+const download = async version => {
+  const snapshot = viewSnapshot(), fileId = selectedId.value, selection = selectedVersion.value
+  const exactVersion = version
+  const isCurrent = () => ownsView(snapshot) && fileId === selectedId.value && selection === selectedVersion.value
+  try {
+    if (!isCurrent()) return
+    const result = await workspace.download(exactVersion)
+    if (!result || !isCurrent()) return
+    await savePersonalWorkspaceBlob({ ...result, isCurrent })
+    if (!isCurrent()) return
+  } catch (error) {
+    if (isCurrent() && error?.name !== 'AbortError') workspace.error.value = error?.message || '下载未完成，请重试。'
+  }
+}
 const trash = async () => {
   const snapshot = viewSnapshot()
   const usage = await workspace.usage()
@@ -448,7 +462,7 @@ onMounted(() => {
     void execution.recover()
   }
 })
-onBeforeUnmount(() => { workspace.dispose(); execution.dispose() })
+onBeforeUnmount(() => { disposed = true; viewGeneration++; workspace.dispose(); execution.dispose() })
 </script>
 
 <style scoped src="../juyiting/hall-view-tabs.css"></style>

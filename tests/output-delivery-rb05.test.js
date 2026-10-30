@@ -147,7 +147,7 @@ describe('RB05 output directory boundary', () => {
     expect(failure?.message).to.include('8 MiB')
     failure = null
     try { await saveOutputBlob({ blob: new Blob(['x']), item: {}, host }) } catch (error) { failure = error }
-    expect(failure?.message).to.include('无法打开小程序文件页')
+    expect(failure?.message).to.include('已提交').and.include('无法确认小程序文件页').and.include('无法撤回')
   })
 
   it('downloads only the exact adapter-returned Blob and sanitizes the local filename', () => {

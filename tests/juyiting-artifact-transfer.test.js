@@ -216,3 +216,45 @@ describe('F02 ArtifactTransferPanel binding', () => {
     }
   })
 })
+
+describe('artifact transfer post-saver fences', () => {
+  for (const change of ['cancel', 'identity']) it(`does not overwrite ${change} state after a late native saver result`, async () => {
+    let options, release, started
+    const entered = new Promise(resolve => { started = resolve })
+    const t = transfer({ api: { execute: async request => {
+      const reader = { read: async () => ({ done: false, value: Uint8Array.of(97) }) }
+      request.onStreamOpen({ reader }, { headers: new Headers({ 'content-length': '1', 'content-type': 'text/plain' }) })
+      await reader.read()
+    } }, saveBlob: value => { options = value; started(); return new Promise(resolve => { release = resolve }) } })
+    t.download.value = { artifactId: 'artifact-1', artifactVersion: '2' }
+    const pending = t.downloadExact(); await entered
+    expect(options.signal.aborted).to.equal(false); expect(options.isCurrent()).to.equal(true)
+    if (change === 'cancel') t.cancel(); else identity.value++
+    const state = t.state.value, message = t.message.value
+    expect(options.signal.aborted).to.equal(true); expect(options.isCurrent()).to.equal(false)
+    release({ status: 'transferred', transferId: 'old' })
+    expect(await pending).to.equal(null); expect(t.state.value).to.equal(state); expect(t.message.value).to.equal(message)
+    t.dispose()
+  })
+})
+
+
+describe('artifact native handoff commit point', () => {
+  it('does not offer successful cancellation after native bytes were submitted', async () => {
+    let release, started
+    const entered = new Promise(resolve => { started = resolve })
+    const t = transfer({ api: { execute: async request => {
+      const reader = { read: async () => ({ done: false, value: Uint8Array.of(97) }) }
+      request.onStreamOpen({ reader }, { headers: new Headers({ 'content-length': '1', 'content-type': 'text/plain' }) })
+      await reader.read()
+    } }, saveBlob: value => { value.onHandoff({ status: 'submitted' }); started(); return new Promise(resolve => { release = resolve }) } })
+    t.download.value = { artifactId: 'artifact-1', artifactVersion: '2' }
+    const pending = t.downloadExact(); await entered
+    expect(t.state.value).to.equal('transferring'); expect(t.message.value).to.include('无法撤回')
+    expect(t.setFile(file())).to.equal(false)
+    expect(t.state.value).to.equal('transferring'); expect(t.message.value).to.include('无法撤回')
+    expect(t.cancel()).to.equal(false); expect(t.state.value).not.to.equal('cancelled')
+    release({ status: 'transferred', transferId: 'committed' }); await pending
+    expect(t.state.value).to.equal('transferred'); t.dispose()
+  })
+})

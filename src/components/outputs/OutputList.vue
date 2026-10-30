@@ -28,7 +28,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { outputPreviewKind, useOutputs } from '../../composables/useOutputs.js'
 import { saveOutputBlob } from '../../utils/outputDownload.js'
 import OutputPreview from './OutputPreview.vue'
@@ -41,9 +41,20 @@ const retryItem = ref(null)
 const previewKind = outputPreviewKind
 const sizeText = bytes => bytes == null ? '大小未知' : bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${Math.ceil(bytes / 1024)} KiB` : `${(bytes / (1024 * 1024)).toFixed(1)} MiB`
 const formatDate = value => { const time = typeof value === 'number' ? value : Date.parse(value); return Number.isFinite(time) ? new Date(time).toLocaleString('zh-CN', { hour12: false }) : '' }
+let disposed = false
+let actionGeneration = 0
+watch(outputs.cacheKey, () => { actionGeneration++; actionError.value = ''; retryItem.value = null; previewItem.value = null }, { flush: 'sync' })
+onBeforeUnmount(() => { disposed = true; actionGeneration++ })
 const download = async item => {
+  const key = outputs.cacheKey.value; const generation = ++actionGeneration
+  const isCurrent = () => !disposed && key === outputs.cacheKey.value && generation === actionGeneration
   actionError.value = ''; retryItem.value = null
-  try { const result = await outputs.download(item); await saveOutputBlob({ blob: result instanceof Blob ? result : result?.blob, item }) } catch (error) { if (error?.name !== 'AbortError') { actionError.value = error?.message || '下载失败，请刷新确认。'; retryItem.value = item } }
+  try {
+    const result = await outputs.download(item)
+    if (!isCurrent()) return
+    await saveOutputBlob({ blob: result instanceof Blob ? result : result?.blob, item, isCurrent })
+    if (!isCurrent()) return
+  } catch (error) { if (isCurrent() && error?.name !== 'AbortError') { actionError.value = error?.message || '下载失败，请刷新确认。'; retryItem.value = item } }
 }
 const retry = () => { if (retryItem.value) void download(retryItem.value); else void outputs.refresh() }
 </script>

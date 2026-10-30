@@ -2,6 +2,7 @@ import { validMaterialVersion } from '../src/composables/juyiting/materialVersio
 import { expect } from 'chai'
 import { after, before, describe, it } from 'mocha'
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { deliveryTypeText } from '../src/utils/executionFormats.js'
 
@@ -11,7 +12,7 @@ let HallDraftEditor
 let editorState
 
 const loadMaterialPicker = deps => {
-  const filename = new URL('../src/components/juyiting/HallMaterialPicker.vue', import.meta.url).pathname
+  const filename = fileURLToPath(new URL('../src/components/juyiting/HallMaterialPicker.vue', import.meta.url))
   const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
   const code = compileScript(descriptor, { id: 'draft-shared-material-picker', inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_line, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
@@ -23,7 +24,7 @@ const loadMaterialPicker = deps => {
 }
 
 const loadEditor = (deps = editorDeps()) => {
-  const filename = new URL('../src/components/juyiting/HallDraftEditor.vue', import.meta.url).pathname
+  const filename = fileURLToPath(new URL('../src/components/juyiting/HallDraftEditor.vue', import.meta.url))
   const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
   const script = compileScript(descriptor, { id: 'hall-draft-editor-test', inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_line, bindings) => {
@@ -762,5 +763,92 @@ describe('JYT-UX-W02 visible draft-step regressions', () => {
       await settle()
       expect(wrapper.find('[aria-label="成果固定版本预览"] select').findAll('option').map(option => option.text())).to.deep.equal(['v1 · 旧版.pdf', 'v2 · 固定输出.pdf'])
     } finally { wrapper.unmount() }
+  })
+})
+
+describe('HallDraftEditor result download lifetime', () => {
+  const settle = async () => { await new Promise(resolve => setTimeout(resolve, 0)); await Vue.nextTick() }
+  const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b }); return { promise, resolve, reject } }
+  const prepare = async save => {
+    const deps = editorDeps(), model = deps.useHallDrafts(), workspace = deps.usePersonalWorkspace()
+    const calls = [], blob = new Blob(['fixed-v2'], { type: 'text/plain;charset=utf-8' })
+    deps.useHallDrafts = () => model; deps.usePersonalWorkspace = () => workspace
+    deps.savePersonalWorkspaceBlob = save || (async options => { calls.push(['save', options]); return { status: 'transferred' } })
+    workspace.select = async fileId => { calls.push(['select', fileId]); return { file: { fileId, latestVersion: '99' } } }
+    workspace.download = async version => { calls.push(['download', version]); return { blob, filename: 'fixed-v2.txt' } }
+    const wrapper = mount(loadEditor(deps), { props: { identityEpoch: 1, identityScope: 'tenant\u0000client\u0000owner' } })
+    model.receipt.value = { ref: { sourceType: 'PRIVATE_CASE', sourceId: 'case-1' }, execution: { executionId: 'exec-1', state: 'OUTPUT_COMMITTED' } }
+    await settle(); await button(wrapper, '查看成果').trigger('click'); await settle()
+    return { wrapper, model, workspace, calls, blob, click: () => wrapper.get('[aria-label="下载成果"]').trigger('click') }
+  }
+  it('awaits the default saver with the exact displayed v2, never workspace latest v99', async () => {
+    const h = await prepare()
+    try {
+      await h.click(); await settle()
+      expect(h.calls.slice(0, 2)).to.deep.equal([['select', 'file-1'], ['download', '2']])
+      expect(h.calls[2][0]).to.equal('save')
+      expect(h.calls[2][1]).to.include({ blob: h.blob, filename: 'fixed-v2.txt' })
+      expect(h.calls[2][1].isCurrent()).to.equal(true)
+      expect(h.wrapper.find('.case-body [role="alert"]').exists()).to.equal(false)
+    } finally { h.wrapper.unmount() }
+  })
+  for (const change of ['identityEpoch', 'identityScope', 'unmount', 'receipt/case', 'execution', 'results', 'leave results']) {
+    it(`blocks delayed encoding after ${change} without post or stale error`, async () => {
+      const encoding = deferred(); let options, posts = 0
+      const h = await prepare(async value => {
+        options = value; await encoding.promise
+        if (!value.isCurrent()) throw new DOMException('old encoding cancelled', 'AbortError')
+        posts++
+      })
+      let unmounted = false
+      try {
+        await h.click(); await settle(); expect(options.isCurrent()).to.equal(true)
+        if (change === 'identityEpoch') await h.wrapper.setProps({ identityEpoch: 2 })
+        else if (change === 'identityScope') await h.wrapper.setProps({ identityScope: 'other-owner' })
+        else if (change === 'unmount') { h.wrapper.unmount(); unmounted = true }
+        else if (change === 'receipt/case') h.model.receipt.value = { ...h.model.receipt.value, ref: { sourceType: 'PRIVATE_CASE', sourceId: 'case-2' } }
+        else if (change === 'execution') h.model.receipt.value.execution = { executionId: 'exec-2', state: 'OUTPUT_COMMITTED' }
+        else if (change === 'results') h.model.executionResults.value = { ...h.model.executionResults.value, items: [] }
+        else await button(h.wrapper, '进展').trigger('click')
+        expect(options.isCurrent()).to.equal(false)
+        encoding.resolve(); await settle()
+        expect(posts).to.equal(0)
+        if (!unmounted) expect(h.wrapper.text()).not.to.include('old encoding cancelled')
+      } finally { if (!unmounted) h.wrapper.unmount() }
+    })
+  }
+  for (const stage of ['select', 'download']) it(`checks the fence after workspace.${stage} await`, async () => {
+    const wait = deferred(); let saves = 0, downloads = 0
+    const h = await prepare(async () => { saves++ })
+    h.workspace.select = fileId => stage === 'select' ? wait.promise : Promise.resolve({ file: { fileId } })
+    h.workspace.download = () => { downloads++; return wait.promise }
+    try {
+      await h.click(); await settle(); await h.wrapper.setProps({ identityEpoch: 2 })
+      wait.resolve(stage === 'select' ? { file: { fileId: 'file-1' } } : { blob: h.blob, filename: 'v2.txt' })
+      await settle(); expect(saves).to.equal(0); expect(downloads).to.equal(stage === 'select' ? 0 : 1)
+    } finally { h.wrapper.unmount() }
+  })
+  it('renders a rejected saver in RESULTS and handles the rejection without an unhandled promise', async () => {
+    const unhandled = [], listener = error => unhandled.push(error)
+    process.on('unhandledRejection', listener)
+    const wait = deferred(), h = await prepare(() => wait.promise)
+    try {
+      await h.click(); await settle(); wait.reject(new Error('原生文件桥接失败')); await settle()
+      expect(h.wrapper.get('.case-body [role="alert"]').text()).to.equal('原生文件桥接失败')
+      expect(unhandled).to.deep.equal([])
+      await button(h.wrapper, '进展').trigger('click'); await button(h.wrapper, '成果').trigger('click')
+      expect(h.wrapper.find('.case-body [role="alert"]').exists()).to.equal(false)
+    } finally { process.removeListener('unhandledRejection', listener); h.wrapper.unmount() }
+  })
+  it('a newer download invalidates the older action and preserves the newer visible failure', async () => {
+    const old = deferred(), newer = deferred(); let count = 0, oldGuard
+    const h = await prepare(options => { if (++count === 1) { oldGuard = options.isCurrent; return old.promise }; return newer.promise })
+    try {
+      await h.click(); await settle(); await h.click(); await settle()
+      expect(oldGuard()).to.equal(false)
+      newer.reject(new Error('current failure')); await settle()
+      old.reject(new Error('stale failure')); await settle()
+      expect(h.wrapper.get('.case-body [role="alert"]').text()).to.equal('current failure')
+    } finally { h.wrapper.unmount() }
   })
 })

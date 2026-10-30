@@ -71,6 +71,7 @@ export const useHallArtifactTransfer = ({ api = createApi('/agent'), subject, wo
   const conflict = ref(false)
   const activeUrls = new Set()
   const controllers = new Set()
+  const nativeHandoffs = new WeakSet()
   let generation = 0
   let activeOperation = null
 
@@ -106,6 +107,7 @@ export const useHallArtifactTransfer = ({ api = createApi('/agent'), subject, wo
   watch(scope, reset, { immediate: true, flush: 'sync' })
 
   const setFile = candidate => {
+    if (activeOperation) return false
     receipt.value = null; conflict.value = false; message.value = ''
     if (!candidate) { file.value = null; return false }
     const mime = safeMime(candidate.type)
@@ -212,7 +214,11 @@ export const useHallArtifactTransfer = ({ api = createApi('/agent'), subject, wo
       if (!response || !Number.isInteger(declared) || declared < 0 || declared > MAX_DOWNLOAD_BYTES || declared !== received) throw new Error('下载响应长度无效，未创建文件。')
       const mime = safeMime((response.headers.get('content-type') || '').split(';', 1)[0]) || 'application/octet-stream'
       const blob = new Blob(chunks, { type: mime })
-      const saved = await saveBlob({ blob, item: { name: `artifact-v${artifactVersion}.bin` }, documentRef, urlApi })
+      const saved = await saveBlob({ blob, item: { name: `artifact-v${artifactVersion}.bin` }, documentRef, urlApi, signal: controller.signal, isCurrent: () => capturedCurrent(captured, capturedTask, capturedActor, capturedEpoch, controller), onHandoff: () => {
+        nativeHandoffs.add(controller)
+        if (capturedCurrent(captured, capturedTask, capturedActor, capturedEpoch, controller)) { state.value = 'transferring'; message.value = '文件已交给小程序，无法撤回；等待原生页面确认。' }
+      } })
+      if (!capturedCurrent(captured, capturedTask, capturedActor, capturedEpoch, controller)) return null
       state.value = saved?.status === 'transferred' ? 'transferred' : 'downloaded'
       message.value = saved?.status === 'transferred' ? '文件已提交给小程序原生下载页；请按页面提示确认写入和后续操作。' : '已按指定成果版本创建本地下载。'
       return { blob, transfer: saved?.status === 'transferred' ? saved : null }
@@ -227,6 +233,7 @@ export const useHallArtifactTransfer = ({ api = createApi('/agent'), subject, wo
   }
   const cancel = () => {
     if (!activeOperation) return false
+    if (nativeHandoffs.has(activeOperation)) return false
     generation += 1
     activeOperation.abort(); controllers.delete(activeOperation); activeOperation = null
     state.value = 'cancelled'; message.value = '传输已取消。'

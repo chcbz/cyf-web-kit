@@ -2683,10 +2683,11 @@ const downloadTerminalOutput = async item => {
   try {
     const result = await terminalHistory.download(item)
     if (key !== terminalHistory.cacheKey.value || panelDisposed) return false
-    await saveOutputBlob({ blob: result instanceof Blob ? result : result?.blob, item })
+    await saveOutputBlob({ blob: result instanceof Blob ? result : result?.blob, item, isCurrent: () => !panelDisposed && key === terminalHistory.cacheKey.value })
+    if (panelDisposed || key !== terminalHistory.cacheKey.value) return false
     return true
   } catch (error) {
-    if (key === terminalHistory.cacheKey.value && error?.name !== 'AbortError') terminalHistoryDownloadError.value = error.message || '历史成果下载未成，请重查。'
+    if (!panelDisposed && key === terminalHistory.cacheKey.value && error?.name !== 'AbortError') terminalHistoryDownloadError.value = error.message || '历史成果下载未成，请重查。'
     return false
   }
 }

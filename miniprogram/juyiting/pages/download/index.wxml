@@ -1,0 +1,1 @@
+<view class="download-page"><view class="download-title">文件下载</view><view class="download-message">{{message}}</view><button wx:if="written && fileType" bindtap="openFile">打开文件</button><button wx:if="written && canShare" bindtap="shareFile">分享文件到微信</button><button wx:if="done" bindtap="returnToHall">返回聚义厅</button></view>

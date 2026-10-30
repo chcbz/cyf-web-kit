@@ -321,7 +321,7 @@ const pickerDetail = computed(() => {
   return versions.length ? { ...detail, versions } : null
 })
 const materialKey = material => `${material.fileId}:${material.version}`
-const resetMaterialPicker = () => { selectionExpanded.value = false; uploadMessage.value = ''; mobilePreviewOpen.value = false; pickerGeneration += 1; pickerFileId.value = ''; pickerVersion.value = null; workspace.closeDetail() }
+const resetMaterialPicker = () => { previewDownloading.value = false; selectionExpanded.value = false; uploadMessage.value = ''; mobilePreviewOpen.value = false; pickerGeneration += 1; pickerFileId.value = ''; pickerVersion.value = null; workspace.closeDetail() }
 const openQuickMaterialPicker = async () => {
   if (props.readOnly || !props.enabled || !props.identityScope || props.disabled || uploading.value) return
   directUpload.value = false
@@ -392,13 +392,15 @@ const previewSelectedMaterial = async material => {
 const downloadSelectedMaterial = async () => {
   if (!selectedPreview.value || !pickerVersion.value || previewDownloading.value) return
   const identity = materialIdentityKey.value, generation = pickerGeneration
+  const version = pickerVersion.value, fileId = selectedPreview.value.fileId
+  const isCurrent = () => !!selectedPreview.value && selectedPreview.value.fileId === fileId && version === pickerVersion.value && identity === materialIdentityKey.value && generation === pickerGeneration
   previewDownloading.value = true
   try {
-    const result = await workspace.download(pickerVersion.value)
-    if (result && selectedPreview.value && identity === materialIdentityKey.value && generation === pickerGeneration) savePersonalWorkspaceBlob(result)
-  } catch {
-    if (selectedPreview.value && identity === materialIdentityKey.value && generation === pickerGeneration) workspace.error.value = '下载未完成，请重试。'
-  } finally { previewDownloading.value = false }
+    const result = await workspace.download(version)
+    if (result && isCurrent()) await savePersonalWorkspaceBlob({ ...result, isCurrent })
+  } catch (error) {
+    if (isCurrent() && error?.name !== 'AbortError') workspace.error.value = error?.message || '下载未完成，请重试。'
+  } finally { if (isCurrent()) previewDownloading.value = false }
 }
 const stageQuickMaterial = () => {
   if (props.disabled || uploading.value || pickerAlreadyAdded.value || !materialPickerOpen.value) return

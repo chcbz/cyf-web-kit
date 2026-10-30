@@ -228,7 +228,8 @@ const downloadOutput = async item => {
   try {
     const blob = await bytes(item, item.downloadUrl, downloadMimeType(item.contentMimeType))
     if (!blob || generation !== epoch) return
-    await saveOutputBlob({ blob, item: { name: outputDownloadName(item) } })
+    await saveOutputBlob({ blob, item: { name: outputDownloadName(item) }, isCurrent: () => generation === epoch })
+    if (generation !== epoch) return
     patchMap(itemErrors, key, '')
   } catch (cause) { if (generation === epoch) patchMap(itemErrors, key, cause?.message || '下载失败') }
 }
@@ -239,7 +240,7 @@ watch(() => `${props.enabled}\u0000${props.identityKey}\u0000${props.conversatio
     // replayed, converted or used to populate a schema-3 follow-up request.
     requestSnapshots.value = catalogRequests.value; void list()
   }
-}, { immediate: true })
+}, { immediate: true, flush: 'sync' })
 // A new projection must refresh the list without discarding in-flight write intents.
 watch(() => JSON.stringify(catalogRequests.value.map(request => [request.requestId, request.state, request.stateVersion,
   (request.turns || []).map(turn => [turn.turnId, turn.state, turn.stateVersion]),

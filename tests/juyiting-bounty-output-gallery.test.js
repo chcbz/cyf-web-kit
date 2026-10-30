@@ -30,7 +30,7 @@ const script = compileScript(descriptor, { id: 'hall-bounty-live-output-test', i
   .replace(/^import\s+\{\s*useHallBountyFinalization,[^}]+\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { useHallBountyFinalization, safeFinalizationVersion } = deps')
   .replace(/^import\s+\{\s*useHallSkillResults\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { useHallSkillResults } = deps')
   .replace(/^import\s+\{\s*skillResultDataText\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { skillResultDataText } = deps')
-  .replace(/^import .*revisionProgressPending.*\n/gm, 'const { revisionProgressPending } = deps\n')
+  .replace(/^import .*revisionProgressPending.*\r?\n/gm, 'const { revisionProgressPending } = deps\n')
   .replace('export default', 'return')
 const zeroDigest = createHash('sha256').update(Buffer.alloc(20)).digest('hex')
 const item = stepId => {
