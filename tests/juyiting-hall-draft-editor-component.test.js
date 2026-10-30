@@ -189,10 +189,10 @@ describe('JYT-UX-W03 HallDraftEditor boundary', () => {
     expect(wrapper.text()).to.include('缺失.txt')
     expect(wrapper.findComponent({ name: 'HallPrivateMark' }).props('resultRef')).to.equal(null)
     expect(wrapper.findAll('.hall-result-item').at(1).findAll('button')).to.have.length(0)
-    await button(wrapper, '预览').trigger('click')
+    await wrapper.get('[aria-label="预览成果"]').trigger('click')
     await Vue.nextTick()
     expect(wrapper.findComponent({ name: 'PdfDocumentPreview' }).props('blob').type).to.equal('application/pdf')
-    await button(wrapper, '下载').trigger('click')
+    await wrapper.get('[aria-label="下载成果"]').trigger('click')
     expect(editorState.workspaceCalls).to.deep.equal([
       ['select', 'file-1'], ['preview', '2'], ['select', 'file-1'], ['download', '2'], ['save', '结案.pdf']
     ])
@@ -758,7 +758,7 @@ describe('JYT-UX-W02 visible draft-step regressions', () => {
       model.executionResults.value = { executionId: 'exec-1', state: 'OUTPUT_COMMITTED', allowedActions: ['VIEW'], items: [{ outputId: 'out-1', fileId: 'result-1', fileVersion: '2', filename: '固定输出.pdf', mime: 'application/pdf', availability: 'AVAILABLE' }] }
       await settle()
       await button(wrapper, '成果').trigger('click')
-      await button(wrapper, '预览').trigger('click')
+      await wrapper.get('[aria-label="预览成果"]').trigger('click')
       await settle()
       expect(wrapper.find('[aria-label="成果固定版本预览"] select').findAll('option').map(option => option.text())).to.deep.equal(['v1 · 旧版.pdf', 'v2 · 固定输出.pdf'])
     } finally { wrapper.unmount() }

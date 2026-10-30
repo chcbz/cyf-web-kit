@@ -201,7 +201,8 @@ describe('scoped bounty output actions live on the actual message cards', () => 
     try {
       await settle()
       const rows = wrapper.findAll('.hall-message')
-      expect(rows[0].findAll('.message-output-actions button').map(button => button.text())).to.deep.equal(['预览', '验收此版'])
+      expect(rows[0].findAll('.message-output-actions button').map(button => button.attributes('aria-label') || button.text())).to.deep.equal(['预览文字成果', '验收此版'])
+      expect(rows[0].get('[aria-label="预览文字成果"]').text()).to.equal('')
       await rows[0].get('.message-output-actions button').trigger('click'); await settle()
       expect(document.querySelector('[aria-label="文字成果预览"] pre').textContent).to.equal('固定文字1')
       document.querySelector('[aria-label="关闭预览"]').click(); await settle()

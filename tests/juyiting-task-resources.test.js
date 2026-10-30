@@ -85,7 +85,8 @@ describe('matter resources matches prototype without duplicate acceptance', () =
     const w = mount(Picker, { props: { readOnly: true, identityScope: 'owner', modelValue: [{ fileId: 'f', version: '2', displayName: '资料.md' }] }, global: { stubs: { 'var-icon': true } } })
     try {
       expect(w.find('.quick-material-open').exists()).to.equal(false)
-      expect(w.findAll('button').map(b => b.text())).to.deep.equal(['预览'])
+      expect(w.findAll('button').map(b => b.attributes('aria-label'))).to.deep.equal(['预览所选资料'])
+      expect(w.get('button').text()).to.equal('')
       await w.get('button').trigger('click'); await flush()
       expect(selected).to.deep.equal(['f']); expect(previewed).to.include('2'); expect(previewed).not.to.include('9')
       expect(w.find('.quick-material-picker').exists()).to.equal(false)

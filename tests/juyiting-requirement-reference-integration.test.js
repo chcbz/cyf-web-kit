@@ -41,7 +41,7 @@ function compileComponent (relativePath, imports) {
   return new Function('imports', code)(imports)
 }
 const button = (wrapper, label) => {
-  const found = wrapper.findAll('button').find(item => item.text() === label)
+  const found = wrapper.findAll('button').find(item => (item.attributes('aria-label') || item.text()) === label)
   assert.ok(found, `missing ${label}`)
   return found
 }
