@@ -1,6 +1,6 @@
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
-import { parse as parseSfc } from '@vue/compiler-sfc'
+import { parse as parseSfc, compileScript } from '@vue/compiler-sfc'
 import postcss from 'postcss'
 
 const source = file => readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8')
@@ -52,5 +52,54 @@ describe('Hall semantic presentation contract', () => {
     expect(descriptor.styles[0].content).to.include('prefers-reduced-motion: reduce').and.include('100svh')
     expect(descriptor.scriptSetup.content).to.include('processOAuthCallback({').and.include('scrubQuery:')
     expect(descriptor.scriptSetup.content).not.to.include('setTimeout')
+  })
+})
+
+
+describe('OAuth callback real App shell', () => {
+  it('uses the existing public-entry layout only on the callback and restores the ordinary shell', async () => {
+    const Vue = await import('vue')
+    const { mount } = await import('@vue/test-utils')
+    const callback = source('router/index.js').match(/path: '\/oauth2\/callback',[\s\S]*?meta: (\{[^}]+\})/)
+    expect(callback, 'actual callback route metadata').not.to.equal(null)
+    const meta = new Function(`return (${callback[1]})`)()
+    expect(meta.publicEntry).to.equal(true)
+    const route = Vue.reactive({ meta: {} })
+    const store = Vue.reactive({ showAppBar: true, showSideMenu: false, showBack: false, showMore: true, title: '聚义厅' })
+    const { descriptor } = parseSfc(source('App.vue'))
+    const imports = {
+      vue: { ...Vue, defineAsyncComponent: () => ({ template: '<aside class="test-side-menu" />' }) },
+      'vue-router': { useRoute: () => route },
+      '@/stores/global': { useGlobalStore: () => store },
+      '@/utils/pwa': {
+        usePwaState: () => ({ hasUpdate: Vue.ref(true), isInstallable: Vue.ref(true), isOfflineReady: Vue.ref(true) }),
+        applyAppUpdate: () => {}, dismissOfflineReady: () => {}, promptInstall: () => {}
+      }
+    }
+    const compiled = compileScript(descriptor, { id: 'auth-real-app-shell', inlineTemplate: true }).content
+      .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_all, names, path) =>
+        `const { ${names.split(',').map(name => name.trim().replace(/\s+as\s+/, ': ')).join(', ')} } = imports[${JSON.stringify(path)}]`)
+      .replaceAll('import.meta.env.VITE_APP_TITLE', "'CYF'").replace('export default', 'return')
+    const App = new Function('imports', compiled)(imports)
+    const wrapper = mount(App, { global: { stubs: {
+      'var-app-bar': { template: '<header class="test-app-bar"><slot /><slot name="right" /></header>' },
+      'var-icon': true, 'router-view': { template: '<main class="test-route-page">页面</main>' }
+    } } })
+    try {
+      const checkShell = visible => {
+        expect(wrapper.find('.test-app-bar').exists()).to.equal(visible)
+        expect(wrapper.find('.test-side-menu').exists()).to.equal(visible)
+        expect(wrapper.find('.pwa-banner').exists()).to.equal(visible)
+        expect(wrapper.find('.app-content').classes().includes('public-entry')).to.equal(!visible)
+        expect(wrapper.find('.test-route-page').exists()).to.equal(true)
+      }
+      checkShell(true)
+      route.meta = meta
+      await Vue.nextTick()
+      checkShell(false)
+      route.meta = {}
+      await Vue.nextTick()
+      checkShell(true)
+    } finally { wrapper.unmount() }
   })
 })

@@ -37,7 +37,8 @@ export default [
     component: OAuthCallback,
     meta: {
       title: 'app.task_list',
-      showInMenu: false
+      showInMenu: false,
+      publicEntry: true
     }
   },
   {
