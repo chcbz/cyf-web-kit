@@ -76,7 +76,13 @@
                   aria-describedby="external-policy-hint"
                   :disabled="!externalPolicyCanWrite"
                   @click="$emit('set-external-policy', !externalPolicy.enabled)"
-                 class="hall-switch-control" aria-label="接受平台其他用户的委派" :aria-busy="externalPolicyBusy"><span class="hall-switch-track" aria-hidden="true"><span></span></span><span class="hall-switch-status">{{ externalPolicyBusy ? '核对中…' : externalPolicy.enabled ? '已开启' : '已关闭' }}</span></button>
+                  class="hall-switch-control"
+                  aria-label="接受平台其他用户的委派"
+                  :aria-busy="externalPolicyBusy"
+                >
+                  <span class="hall-switch-status">{{ externalPolicyBusy ? '核对中…' : externalPolicy.enabled ? '已开启' : '已关闭' }}</span>
+                  <span class="hall-switch-track" aria-hidden="true"><span /></span>
+                </button>
                 <span v-else role="status">{{ externalPolicyBusy ? '正在核对…' : '设置不可用' }}</span>
               </div>
               <p id="external-policy-hint" class="profile-note">面向同平台所有用户；关闭不影响已接任务，不要求当前在线。</p>
