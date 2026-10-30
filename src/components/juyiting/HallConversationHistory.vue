@@ -20,7 +20,7 @@
           <button
             type="button"
             v-if="!readOnly"
-            class="history-delete"
+            class="history-delete hall-tool"
             :title="`删除议事记录：${conversation.title}`"
             :aria-label="conversation.id === deletingId ? `正在删除议事记录：${conversation.title}` : `删除议事记录：${conversation.title}`"
             :disabled="disabled || loading || Boolean(deletingId)"

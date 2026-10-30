@@ -22,9 +22,9 @@
       </nav>
       <div class="hall-header-tools">
         <button type="button" @click="openPanel('agents', { root: isOverviewHome })">好汉</button>
-        <button class="workbench-message-action" type="button" aria-label="查看消息" @click="openPanel('messages', { root: isOverviewHome })"><var-icon v-if="isOverviewHome" name="bell-outline" aria-hidden="true" /><span v-else>消息</span></button>
-        <button class="workbench-create-action" type="button" @click="openDefaultRequirementCreate()"><var-icon v-if="isOverviewHome" name="plus" aria-hidden="true" /><span>{{ isOverviewHome ? '提出需求' : '＋ 提出需求' }}</span></button>
-        <button class="workbench-account-action" type="button" :disabled="accountEntryDisabled" aria-label="个人中心" @click="openProfile"><var-icon v-if="isOverviewHome" name="account-circle-outline" aria-hidden="true" /><span>账户</span></button>
+        <button class="workbench-message-action hall-tool" type="button" aria-label="查看消息" @click="openPanel('messages', { root: isOverviewHome })" title="查看消息"><var-icon name="bell-outline" aria-hidden="true" /></button>
+        <button class="workbench-create-action" type="button" @click="openDefaultRequirementCreate()"><span>提出需求</span></button>
+        <button class="workbench-account-action hall-tool" type="button" :disabled="accountEntryDisabled" aria-label="个人中心" @click="openProfile" title="个人中心"><var-icon name="account-circle-outline" aria-hidden="true" /></button>
         <button class="workbench-mobile-more" type="button" aria-label="全部入口" :aria-expanded="workbenchMenuOpen" @click="workbenchMenuOpen = !workbenchMenuOpen"><var-icon name="menu" /></button>
       </div>
       <nav v-if="workbenchMenuOpen && isOverviewHome" class="workbench-more-menu" aria-label="全部入口">
@@ -199,10 +199,10 @@
     </Teleport>
 
     <footer v-if="homeMode === 'map' && !isImmersiveMap" class="hall-map-actions" :inert="isPanelSessionActive || voiceInteractionLocked ? '' : null" :aria-hidden="isPanelSessionActive ? 'true' : null">
-      <button class="hall-primary" type="button" @click="openDefaultRequirementCreate()">＋ 提出需求</button>
+      <button class="hall-primary" type="button" @click="openDefaultRequirementCreate()">提出需求</button>
       <button type="button" :aria-label="conversationEntryLabel" @click="startContextConversation">{{ conversationEntryLabel }}</button>
       <span>不必先懂所有功能，就能开始办事</span>
-      <button class="hall-continue" type="button" @click="setHomeMode('overview')">接着上次办 →</button>
+      <button class="hall-continue" type="button" @click="setHomeMode('overview')">接着上次办</button>
     </footer>
 
     <HallVoiceHud
@@ -246,12 +246,12 @@
             </button>
             <button
               v-if="navigationPresentation.showHallReturn || (renderedPanel === 'agents' && agentPanelRef?.canGoBack)"
-              class="panel-return"
+              class="panel-return hall-tool"
               type="button"
               :aria-label="renderedPanel === 'agents' && agentPanelRef?.canGoBack ? '返回名册' : navigationPresentation.showRootReturn ? '返回聚义厅' : '返回上一层'"
               :disabled="voiceInteractionLocked"
               @click="handleHallReturn"
-            >{{ renderedPanel === 'agents' && agentPanelRef?.canGoBack ? '← 名册' : '← 返回' }}</button>
+             :title="renderedPanel === 'agents' && agentPanelRef?.canGoBack ? '返回名册' : navigationPresentation.showRootReturn ? '返回聚义厅' : '返回上一层'"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 5-7 7 7 7"/></svg></button>
             <span :id="panelTitleId">{{ activePanelTitle }}</span>
             <button
               v-if="taskWorkspaceEnabled && renderedPanel === 'tasks' && !formalTaskRef && taskWorkspaceSubject"

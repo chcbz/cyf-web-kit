@@ -1898,7 +1898,7 @@ describe('JuyiHall component behavior', () => {
     })
 
     await wrapper.find('.task-card').trigger('click')
-    expect(wrapper.find('.bounty-back-button').text()).to.equal('← 返回')
+    expect(wrapper.find('.bounty-back-button').attributes('aria-label')).to.equal('返回事项列表')
     expect(wrapper.find('.bounty-modal-header h3').text()).to.equal('事项详情')
     expect(wrapper.find('.matter-archive-action').text()).to.equal('收入案卷')
     await wrapper.find('.matter-archive-action').trigger('click')
@@ -3007,7 +3007,7 @@ describe('lightweight workbench real panel navigation', () => {
         ['资料', 'file-document-outline'], ['我的', 'account-circle-outline'], ['厅中实景', 'map-marker-outline']]) {
         expect(menuButtons.find(button => button.text() === label)?.find('i').attributes('name')).to.equal(icon)
       }
-      expect(wrapper.find('.hall-header-tools .workbench-message-action i').attributes('name')).to.equal('bell-outline')
+      expect(wrapper.find('.hall-header-tools .workbench-message-action').attributes('aria-label')).to.equal('查看消息')
       expect(wrapper.find('.hall-header-tools .workbench-account-action i').attributes('name')).to.equal('account-circle-outline')
       const menuItem = menuButtons.find(button => button.text() === '资料')
       expect(menuItem).to.exist
@@ -3051,7 +3051,7 @@ describe('lightweight workbench real panel navigation', () => {
       expect(document.activeElement).to.equal(taskTab.element)
       await wrapper.find('.hall-header-tools [aria-label="查看消息"]').trigger('click'); await Vue.nextTick()
       expect(wrapper.vm.$.setupState.panelFrames).to.deep.equal(['messages'])
-      expect(wrapper.find('.panel-return').text()).to.equal('← 返回')
+      expect(wrapper.find('.panel-return').attributes('aria-label')).to.equal('返回聚义厅')
       expect(wrapper.find('.panel-return').attributes('aria-label')).to.equal('返回聚义厅')
       expect(wrapper.find('.panel-close').exists()).to.equal(false)
       await wrapper.find('.hall-header-tools > button:first-child').trigger('click'); await Vue.nextTick()
@@ -3095,7 +3095,7 @@ describe('lightweight workbench real panel navigation', () => {
       expect(wrapper.find('.acceptance-probe').exists()).to.equal(true)
       expect(wrapper.find('.floating-panel').attributes('role')).to.equal('region')
       expect(wrapper.find('.panel-title').exists()).to.equal(true)
-      expect(wrapper.find('.panel-return').text()).to.equal('← 返回')
+      expect(wrapper.find('.panel-return').attributes('aria-label')).to.equal('返回上一层')
       expect(wrapper.find('.panel-close').exists()).to.equal(false)
 
       await wrapper.find('.panel-return').trigger('click')

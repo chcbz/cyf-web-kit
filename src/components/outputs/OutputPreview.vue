@@ -4,9 +4,9 @@
     <p v-else-if="message" class="output-preview-error">{{ message }}</p>
     <template v-else-if="currentPart">
       <div v-if="parts.length > 1" class="output-preview-navigation" aria-label="预览分片导航">
-        <button type="button" :disabled="selectedPartIndex === 0" @click="selectedPartIndex -= 1">上一页</button>
+        <button type="button" :disabled="selectedPartIndex === 0" @click="selectedPartIndex -= 1" class="hall-tool" aria-label="上一页" title="上一页"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 5-7 7 7 7"/></svg></button>
         <span>第 {{ selectedPartIndex + 1 }} / {{ parts.length }} {{ currentPart.contentMimeType === 'text/plain' ? '项' : '页' }}</span>
-        <button type="button" :disabled="selectedPartIndex >= parts.length - 1" @click="selectedPartIndex += 1">下一页</button>
+        <button type="button" :disabled="selectedPartIndex >= parts.length - 1" @click="selectedPartIndex += 1" class="hall-tool" aria-label="下一页" title="下一页"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7"/></svg></button>
       </div>
       <pre v-if="typeof currentPart.text === 'string'" v-text="currentPart.text"></pre>
       <img

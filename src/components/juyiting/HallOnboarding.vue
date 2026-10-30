@@ -36,7 +36,7 @@
             <p class="eyebrow">聚义厅 · {{ modeLabel }}使用指导</p>
             <h1 id="hall-onboarding-title">{{ currentStep.title }}</h1>
           </div>
-          <button class="close-button" type="button" aria-label="稍后查看新手引导" @click="later">×</button>
+          <button class="close-button hall-tool" type="button" aria-label="稍后查看新手引导" @click="later" title="稍后查看新手引导"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
         </div>
 
         <p id="hall-onboarding-description" class="intro">{{ currentStep.description }}</p>

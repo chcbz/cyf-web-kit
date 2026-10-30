@@ -6,7 +6,7 @@
         <p>添加资料不会自动开始办理。</p>
       </div>
       <div class="task-material-heading-actions">
-        <button type="button" @click="refresh">刷新</button>
+        <button type="button" @click="refresh" class="hall-tool" aria-label="刷新资料关联" title="刷新资料关联"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M4 16l2 3a7 7 0 0 0 12-2"/></svg></button>
         <button type="button" class="open-material-picker" @click="openMaterialPicker">选择资料（可选）</button>
       </div>
     </div>
@@ -25,7 +25,7 @@
           <small>{{ link.state === 'ACTIVE' ? '当前关联' : '已解除关联' }}</small>
         </div>
         <div class="task-link-actions">
-          <button type="button" class="open-linked-file" @click="openLinkedFile(link)">在工作空间查看</button>
+          <button type="button" class="open-linked-file hall-tool" @click="openLinkedFile(link)" aria-label="在工作空间查看此资料" title="在工作空间查看此资料"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7"/></svg></button>
           <button
             v-if="link.state === 'ACTIVE' && link.role !== 'OUTPUT'"
             type="button"

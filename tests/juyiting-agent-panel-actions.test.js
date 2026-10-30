@@ -232,7 +232,7 @@ describe('AgentPanel skill management heading alignment', () => {
       const heading = wrapper.get('[aria-label="技能"] > .profile-heading')
       expect([...heading.element.children].map(e => e.tagName)).to.deep.equal(['H3', 'SMALL', 'BUTTON'])
       expect(heading.get('small').text()).to.equal('已核验安装 0 项')
-      expect(heading.get('button:last-child').text()).to.equal('管理技能')
+      expect(heading.get('button:last-child').attributes('aria-label')).to.equal('管理技能')
     } finally { wrapper.unmount() }
   })
   it('retains the rightmost action without a count, and preserves owner/operation guards', async () => {
@@ -240,7 +240,7 @@ describe('AgentPanel skill management heading alignment', () => {
     try {
       const heading = () => wrapper.get('[aria-label="技能"] > .profile-heading')
       expect(heading().find('small').exists()).to.equal(false)
-      expect(heading().get('button:last-child').text()).to.equal('管理技能')
+      expect(heading().get('button:last-child').attributes('aria-label')).to.equal('管理技能')
       await wrapper.setProps({ profileCapabilitiesLoading: false, profileCapabilities: { ...profile, skills: { status: 'UNAVAILABLE', items: [] } } })
       expect(heading().find('small').exists()).to.equal(false)
       expect(heading().find('button:last-child').exists()).to.equal(true)
@@ -255,5 +255,48 @@ describe('AgentPanel skill management heading alignment', () => {
     const rule = css.slice(css.indexOf('.agent-panel .profile-heading .skill-manage-entry {')).split('}')[0]
     expect(rule).to.include('margin-left: auto').and.include('min-height: 44px').and.include('background: #f3f4ee').and.include('color: var(--hall-text, #242e2b)')
     expect(css).to.include('.profile-heading, .skill-title { display: flex; justify-content: space-between;')
+  })
+})
+
+// The shared semantic-control policy is asserted here; business state remains in its owner.
+describe('AgentPanel semantic controls', () => {
+  const owner = { ...agent, boundToMe: true, canOperate: true, systemAgent: false }
+  const profile = { agentId: agent.agentId, observedAt: 10000, abilities: [], skills: { status: 'AVAILABLE', items: [] } }
+  it('renders familiar tools as named icons while leaving business actions as text', () => {
+    const wrapper = mount(AgentPanel, { props: { ...props, selectedAgent: owner, profileCapabilities: profile } })
+    try {
+      const manage = wrapper.get('[aria-label="管理技能"]')
+      expect(manage.text()).to.equal('')
+      expect(manage.get('svg').attributes('aria-hidden')).to.equal('true')
+      const refresh = wrapper.get('[aria-label="刷新技能与本领"]')
+      expect(refresh.text()).to.equal('')
+      expect(refresh.attributes('title')).to.equal('刷新技能与本领')
+      for (const button of wrapper.findAll('.agent-detail-actions button')) {
+        expect(button.text()).not.to.equal('')
+        expect(button.find('svg').exists()).to.equal(false)
+      }
+    } finally { wrapper.unmount() }
+  })
+  it('draws a real switch without changing the original write, busy, unknown or owner boundaries', async () => {
+    const wrapper = mount(AgentPanel, { props: { ...props, selectedAgent: owner, externalPolicy: { enabled: false }, externalPolicyCanWrite: true } })
+    try {
+      const toggle = () => wrapper.get('[role="switch"]')
+      expect(toggle().attributes('aria-label')).to.equal('接受平台其他用户的委派')
+      expect(toggle().find('.hall-switch-track > span').exists()).to.equal(true)
+      expect(toggle().attributes('aria-checked')).to.equal('false')
+      await toggle().trigger('click')
+      expect(wrapper.emitted('set-external-policy')).to.deep.equal([[true]])
+      await wrapper.setProps({ externalPolicy: { enabled: true }, externalPolicyBusy: true, externalPolicyCanWrite: false })
+      expect(toggle().attributes('aria-checked')).to.equal('true')
+      expect(toggle().attributes('aria-busy')).to.equal('true')
+      expect(toggle().element.disabled).to.equal(true)
+      await toggle().trigger('click')
+      expect(wrapper.emitted('set-external-policy')).to.have.length(1)
+      await wrapper.setProps({ externalPolicyBusy: false, externalPolicyStatus: 'UNKNOWN' })
+      expect(toggle().element.disabled).to.equal(true)
+      expect(wrapper.get('.external-policy-recovery').text()).to.include('查询结果').and.include('继续核对')
+      await wrapper.setProps({ selectedAgent: { ...owner, boundToMe: false, canOperate: false } })
+      expect(wrapper.find('[role="switch"]').exists()).to.equal(false)
+    } finally { wrapper.unmount() }
   })
 })

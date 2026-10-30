@@ -13,7 +13,7 @@
         <button
           v-if="voice.state === 'idle'"
           type="button"
-          class="voice-start"
+          class="voice-start hall-tool"
           :disabled="disabled || !voice.canRecord"
           aria-label="开始录音"
           title="开始录音"
@@ -39,7 +39,7 @@
               rx="3"
             />
             <path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8" />
-          </svg><span class="voice-action-label">语音</span>
+          </svg>
         </button>
         <button
           v-else-if="voice.state === 'recording'"
@@ -70,7 +70,7 @@
         v-show="settingsVisible"
         ref="settingsButtonRef"
         type="button"
-        class="voice-settings-trigger"
+        class="voice-settings-trigger hall-tool"
         :aria-controls="settingsId"
         :aria-expanded="String(settingsOpen)"
         aria-label="语音设置"
@@ -91,7 +91,7 @@
         >
           <path d="M10 2h4v3l2 1 2.6-1.5 2 3.5L18 9.5v5l2.6 1.5-2 3.5L16 18l-2 1v3h-4v-3l-2-1-2.6 1.5-2-3.5L6 14.5v-5L3.4 8l2-3.5L8 6l2-1Z" />
           <circle cx="12" cy="12" r="3" />
-        </svg><span class="voice-action-label">{{ recordingTarget ? '语音设置' : '设置' }}</span>
+        </svg>
       </button>
     </div>
 
@@ -105,7 +105,7 @@
       <label v-if="!draftOnly" class="voice-toggle">
         <input
           :checked="voice.autoSendEnabled"
-          type="checkbox"
+          type="checkbox" role="switch" class="hall-switch-input"
           :disabled="voice.recording"
           @change="voice.setAutoSendEnabled($event.target.checked)"
         /> 转写后自动发送
@@ -114,7 +114,7 @@
         <label class="voice-toggle">
           <input
             :checked="voice.replyVoiceEnabled"
-            type="checkbox"
+            type="checkbox" role="switch" class="hall-switch-input"
             aria-label="语音回答；播放内容为 AI 生成语音"
             @change="voice.setReplyVoiceEnabled($event.target.checked)"
           />

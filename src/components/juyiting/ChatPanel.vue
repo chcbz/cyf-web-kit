@@ -8,7 +8,7 @@
       </div>
       <div class="toolbar-actions">
         <button
-          class="icon-button"
+          class="icon-button hall-tool"
           type="button"
           title="刷新议事记录"
           aria-label="刷新议事记录"
@@ -19,7 +19,7 @@
         </button>
         <button
           ref="historyButtonRef"
-          class="icon-button"
+          class="icon-button hall-tool"
           type="button"
           title="议事记录"
           aria-label="议事记录"
@@ -31,7 +31,7 @@
         </button>
         <button
           v-if="!serverTaskCompleted && !isTaskDiscussion"
-          class="icon-button primary"
+          class="icon-button primary hall-tool"
           type="button"
           title="新对话"
           aria-label="新对话"
@@ -137,7 +137,7 @@
           role="group"
           aria-label="文字成果操作"
         >
-          <button type="button" @click="textOutputPreview = output">预览</button>
+          <button type="button" @click="textOutputPreview = output" class="hall-tool" aria-label="预览文字成果" title="预览文字成果"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
           <button
             v-if="canReviewMessageOutputs"
             type="button"
@@ -224,13 +224,13 @@
           <article v-for="link in activeMaterialLinks" :key="link.relationId" class="composer-attachment-card">
             <HallMaterialThumbnail :file-id="link.fileId" :version="link.version" :identity-key="materialIdentityKey" />
             <span class="composer-attachment-name"><strong :title="materialName(link)">{{ materialName(link) }}</strong><small>固定版本 v{{ link.version }}</small></span>
-            <button type="button" :aria-label="`预览 ${materialName(link)}`" @click="previewMaterial(link)">预览</button>
+            <button type="button" :aria-label="`预览 ${materialName(link)}`" @click="previewMaterial(link)" class="hall-tool" :title="`预览 ${materialName(link)}`"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
             <button
               type="button"
               :disabled="materialSelectionBusy || materialActionBusy || materialUploadBusy || conversationBusy || serverTaskCompleted"
               :aria-label="`移除 ${materialName(link)}`"
               @click="removeMaterialReference(link)"
-            >移除</button>
+             class="hall-tool" :title="`移除 ${materialName(link)}`"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
           </article>
         </div>
       </template>

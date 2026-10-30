@@ -39,7 +39,7 @@
           <div class="composer-actions">
             <button
               ref="moreButtonRef"
-              class="composer-more"
+              class="composer-more hall-tool"
               type="button"
               title="更多操作"
               aria-label="更多操作"
@@ -52,7 +52,7 @@
             </button>
             <button
               ref="materialsButtonRef"
-              class="composer-add-materials"
+              class="composer-add-materials hall-tool"
               type="button"
               title="添加资料"
               aria-label="添加资料"
@@ -63,7 +63,7 @@
             <div ref="voiceActionRef" class="composer-inline-voice"></div>
             <button
               v-if="stopTarget"
-              class="composer-send composer-stop"
+              class="composer-send composer-stop hall-tool"
               type="button"
               :disabled="replyCancellationState?.inFlight || actionsDisabled || voice?.voiceInteractionLocked"
               :title="stopLabel"
@@ -84,7 +84,7 @@
             </button>
             <button
               v-else
-              class="composer-send"
+              class="composer-send hall-tool"
               type="submit"
               :disabled="!canSend"
               :title="isStreaming || isAwaitingReply ? '处理中' : '发送'"

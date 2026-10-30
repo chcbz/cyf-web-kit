@@ -25,7 +25,7 @@
             :enabled="enabled"
             :disabled="quickPending"
           >
-            <button class="primary" type="submit" :disabled="quickPending || (!quickRequest.trim() && !selectedMaterials.length)"><var-icon name="send" aria-hidden="true" />{{ quickPending ? '正在保存需求…' : '开始办事' }}</button>
+            <button class="primary" type="submit" :disabled="quickPending || (!quickRequest.trim() && !selectedMaterials.length)">{{ quickPending ? '正在保存需求…' : '开始办事' }}</button>
           </HallMaterialPicker>
           <p v-if="quickMessage" class="quick-request-error" role="status">{{ quickMessage }}</p>
         </div>
@@ -33,7 +33,7 @@
     </template>
     <p v-else class="overview-intro">这里汇总需要你处理的事项。打开查看不会自动验收或归档。</p>
     <div class="overview-columns"><div class="overview-main">
-    <div class="overview-list-heading"><h3>{{ messagesOnly ? '待我处理' : archiveView ? '已归档' : selectedView === 'needsAction' ? '待我处理' : '接着上次办' }}</h3><div><button v-if="!messagesOnly" type="button" @click="emit('open-board')">查看全部事项</button><button type="button" :disabled="!enabled || model.state.value === 'loading'" @click="refresh">刷新</button></div></div>
+    <div class="overview-list-heading"><h3>{{ messagesOnly ? '待我处理' : archiveView ? '已归档' : selectedView === 'needsAction' ? '待我处理' : '接着上次办' }}</h3><div><button v-if="!messagesOnly" type="button" @click="emit('open-board')">查看全部事项</button><button type="button" :disabled="!enabled || model.state.value === 'loading'" @click="refresh" class="hall-tool" aria-label="刷新事项" title="刷新事项"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M4 16l2 3a7 7 0 0 0 12-2"/></svg></button></div></div>
     <nav v-if="!messagesOnly" class="overview-tabs" aria-label="事项范围">
       <button type="button" :aria-pressed="!archiveView && selectedView === 'recent'" @click="openView('recent')">最近事项</button>
       <button type="button" :aria-pressed="!archiveView && selectedView === 'needsAction'" @click="openView('needsAction')">待我处理</button>
@@ -48,20 +48,20 @@
           <p>{{ typeLabels[item.ref.sourceType] }} · {{ agentLabel(item) }}<span v-if="item.personalMark?.archived"> · 已归档</span></p>
           <details class="overview-technical"><summary>事项信息</summary><small>状态核对于 {{ formatTime(item.status.observedAt) }}</small></details>
         </div>
-        <button v-if="canOpenHallItem(item)" type="button" :disabled="Boolean(model.openingRef.value)" @click="openItem(item)">{{ nextLabel(item) }}</button><span v-else>暂时无法打开此事项</span>
+        <button v-if="canOpenHallItem(item)" type="button" :disabled="Boolean(model.openingRef.value)" @click="openItem(item)" class="hall-row-link" :aria-label="`${nextLabel(item)}：${item.title || '未命名事项'}`" :title="`${nextLabel(item)}：${item.title || '未命名事项'}`"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7"/></svg></button><span v-else>暂时无法打开此事项</span>
       </article>
       <p v-if="enabled && isComplete(view) && !rowsFor(view).length" class="overview-empty">{{ hasMore(view) ? '这一页没有事项，可继续读取。' : view === 'archive' ? '暂时没有归档的事项。' : view === 'needsAction' ? '暂时没有需要你处理的事项。' : '还没有开始的事项，先提出一个需求吧。' }}</p>
       <button v-if="messagesOnly && hasMore(view)" type="button" @click="loadMore(view)">读取更多事项</button>
     </section>
-    <section v-if="!messagesOnly" class="overview-resource" aria-label="资料入口"><var-icon class="overview-resource-icon" name="file-document-outline" aria-hidden="true" /><div><strong>资料留在这里，下次不用重找</strong><p>引用已有资料，查看固定版本的成果。</p></div><button type="button" @click="emit('open-workspace')">查看资料 →</button></section>
+    <section v-if="!messagesOnly" class="overview-resource" aria-label="资料入口"><var-icon class="overview-resource-icon" name="file-document-outline" aria-hidden="true" /><div><strong>资料留在这里，下次不用重找</strong><p>引用已有资料，查看固定版本的成果。</p></div><button type="button" @click="emit('open-workspace')">查看资料</button></section>
     </div><aside v-if="!messagesOnly" class="overview-aside" aria-label="快捷入口">
-      <button class="overview-map-link" type="button" @click="emit('set-home-mode', 'map')"><span aria-hidden="true">聚义厅</span>厅中实景 · 去梁山走一走 →</button>
+      <button class="overview-map-link" type="button" @click="emit('set-home-mode', 'map')"><span aria-hidden="true">聚义厅</span>厅中实景 · 去梁山走一走</button>
       <section class="overview-aside-card"><h3>待我处理</h3><p v-if="model.state.value === 'loading'">正在核对待处理事项…</p><p v-else-if="model.sections.value.needsAction.status !== 'complete'">待处理列表可能不完整，请在事项页核对。</p>
         <p v-if="!attentionItems.length">{{ model.sections.value.needsAction.status === 'complete' ? '当前没有需要处理的事项。' : '当前没有已确认的待处理项。' }}</p>
-        <button v-for="item in attentionItems" :key="`${item.ref.sourceType}:${item.ref.sourceId}`" type="button" :disabled="!canOpenHallItem(item) || Boolean(model.openingRef.value)" @click="openItem(item)"><span>{{ item.title || '未命名事项' }}<small>{{ statusText(item) }}</small></span>→</button>
-        <button class="overview-aside-link" type="button" @click="openView('needsAction')">查看待处理列表 →</button>
+        <button v-for="item in attentionItems" :key="`${item.ref.sourceType}:${item.ref.sourceId}`" type="button" :disabled="!canOpenHallItem(item) || Boolean(model.openingRef.value)" @click="openItem(item)"><span>{{ item.title || '未命名事项' }}<small>{{ statusText(item) }}</small></span><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7"/></svg></button>
+        <button class="overview-aside-link" type="button" @click="openView('needsAction')">查看待处理列表</button>
       </section>
-      <section class="overview-aside-card"><h3>找位好汉</h3><p>查看好汉的技能与当前状态。</p><button type="button" @click="emit('open-agents')">查看好汉名册 →</button></section>
+      <section class="overview-aside-card"><h3>找位好汉</h3><p>查看好汉的技能与当前状态。</p><button type="button" @click="emit('open-agents')">查看好汉名册</button></section>
     </aside></div>
   </section>
 </template>

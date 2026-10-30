@@ -98,22 +98,18 @@
               </p>
               <button
                 type="button"
-                class="reader-header-button reader-catalog-toggle"
+                class="reader-header-button reader-catalog-toggle hall-tool"
                 :aria-expanded="catalogOpen"
                 aria-controls="archive-reader-catalog"
                 @click="toggleCatalog"
-              >
-                {{ catalogOpen ? '收起目录' : '目录' }}
-              </button>
+               aria-label="典籍目录" title="典籍目录"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 5h12M9 12h12M9 19h12M3 5h1M3 12h1M3 19h1"/></svg></button>
               <button
                 type="button"
-                class="reader-header-button reader-notes-toggle"
+                class="reader-header-button reader-notes-toggle hall-tool"
                 :aria-expanded="notesOpen"
                 aria-controls="archive-reader-notes"
                 @click="toggleNotes"
-              >
-                阅读笔记
-              </button>
+               aria-label="阅读笔记" title="阅读笔记"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 3h14v18H5ZM8 8h8M8 12h8M8 16h5"/></svg></button>
             </div>
           </header>
 
@@ -230,20 +226,16 @@
                   <p>{{ note.text }}</p>
                   <button
                     type="button"
-                    class="note-edit"
+                    class="note-edit hall-tool"
                     :disabled="reader.notePending"
                     @click="editNote(note)"
-                  >
-                    编辑
-                  </button>
+                   aria-label="编辑笔记" title="编辑笔记"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m16 3 5 5M4 20l4-1L21 6l-3-3L5 16Z"/></svg></button>
                   <button
                     type="button"
-                    class="note-delete"
+                    class="note-delete hall-tool"
                     :disabled="reader.notePending"
                     @click="removeNote(note)"
-                  >
-                    删除
-                  </button>
+                   aria-label="删除笔记" title="删除笔记"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/></svg></button>
                 </li>
               </ul>
 
@@ -309,12 +301,10 @@
                   </button>
                   <button
                     type="button"
-                    class="bookmark-delete"
+                    class="bookmark-delete hall-tool"
                     aria-label="删除书签"
                     @click="removeBookmark(bookmark)"
-                  >
-                    删除
-                  </button>
+                   title="删除书签"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/></svg></button>
                 </li>
               </ul>
             </aside>
@@ -340,25 +330,19 @@
               :disabled="!reader.canGoPrevious || reader.chapterLoading"
               aria-label="上一回"
               @click="runAction(reader.goPrevious, '上一回暂无法读取。')"
-            >
-              上一回
-            </button>
+             class="hall-tool" title="上一回"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 5-7 7 7 7"/></svg></button>
             <button
               type="button"
               :disabled="!reader.canGoNext || reader.chapterLoading"
               aria-label="下一回"
               @click="runAction(reader.goNext, '下一回暂无法读取。')"
-            >
-              下一回
-            </button>
+             class="hall-tool" title="下一回"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7"/></svg></button>
             <button
               type="button"
-              class="bookmark-create"
+              class="bookmark-create hall-tool"
               :disabled="!reader.currentLocation || reader.bookmarkPending"
               @click="createBookmark"
-            >
-              {{ reader.bookmarkPending ? '保存中…' : '书签' }}
-            </button>
+             aria-label="添加书签" title="添加书签"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 3h12v18l-6-4-6 4Z"/></svg></button>
           </footer>
 
           <p

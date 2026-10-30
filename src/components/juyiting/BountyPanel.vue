@@ -25,10 +25,7 @@
             <option v-for="ability in taskAbilityOptions" :key="ability" :value="ability">{{ ability }}</option>
           </select>
         </div>
-        <button class="task-refresh" type="button" aria-label="刷新事项" title="刷新事项" @click="$emit('load-tasks')">
-          <BountyActionIcon name="refresh" />
-          <span class="toolbar-label">刷新</span>
-        </button>
+        <button class="task-refresh hall-tool" type="button" aria-label="刷新事项" title="刷新事项" @click="$emit('load-tasks')"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M4 16l2 3a7 7 0 0 0 12-2"/></svg></button>
       </div>
 
       <section v-if="requirementCreateState && requirementCreateState.status !== 'IDLE'" class="requirement-create-recovery" role="status">
@@ -69,7 +66,7 @@
           type="button"
           :aria-pressed="taskStatusFilter === item.value"
           @click="$emit('set-status-filter', item.value)"
-        >
+         class="hall-filter">
           {{ item.label }}
           <small>{{ taskStatusCount(item.value) }}</small>
         </button>
@@ -79,7 +76,7 @@
           :aria-pressed="secondaryStatusActive"
           :aria-expanded="secondaryStatusActive"
           @click="openSecondaryStatus"
-        >其他状态</button>
+         class="hall-filter">其他状态</button>
       </div>
 
       <div v-if="secondaryStatusActive" class="task-secondary-filters" aria-label="异常与历史分类">
@@ -90,7 +87,7 @@
           type="button"
           :aria-pressed="taskStatusFilter === item.value"
           @click="$emit('set-status-filter', item.value)"
-        >{{ item.label }} <small>{{ taskStatusCount(item.value) }}</small></button>
+         class="hall-filter">{{ item.label }} <small>{{ taskStatusCount(item.value) }}</small></button>
       </div>
       <div class="task-panel-body">
         <div class="task-list">
@@ -126,11 +123,9 @@
       <div v-if="detailTask" class="bounty-modal-overlay" :class="{ 'is-embedded-page': embeddedHall }" @click.self="embeddedHall ? null : closeTask()">
         <section class="bounty-modal" :role="embeddedHall ? 'region' : 'dialog'" :aria-label="embeddedHall ? '事项详情' : null" :aria-modal="embeddedHall ? null : 'true'">
           <div class="bounty-modal-header">
-            <button v-if="embeddedHall" type="button" class="bounty-back-button" @click="closeTask">← 返回</button>
+            <button v-if="embeddedHall" type="button" class="bounty-back-button hall-tool" @click="closeTask" aria-label="返回事项列表" title="返回事项列表"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 5-7 7 7 7"/></svg></button>
             <h3>{{ embeddedHall ? '事项详情' : '榜文点将' }}</h3>
-            <button v-if="!embeddedHall" class="modal-close" @click="closeTask">
-              <BountyActionIcon name="close" />
-            </button>
+            <button v-if="!embeddedHall" class="modal-close hall-tool" @click="closeTask" aria-label="关闭事项详情" title="关闭事项详情"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
           </div>
 
           <div class="bounty-modal-body">
@@ -242,10 +237,10 @@
                     <p v-if="candidatesError" role="alert">{{ candidatesError }}</p>
                     <button
                       type="button"
-                      class="matter-agent-toggle"
+                      class="matter-agent-toggle hall-tool"
                       :disabled="candidatesLoading || pointAndStartBusy || Boolean(pointAndStartForDetail)"
                       @click="$emit('refresh-candidates')"
-                    >刷新候选</button>
+                     aria-label="刷新承办候选" title="刷新承办候选"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M4 16l2 3a7 7 0 0 0 12-2"/></svg></button>
                     <button
                       type="button"
                       class="matter-primary-action"
@@ -380,61 +375,55 @@
                   :disabled="isFundedTask(detailTask) || !canAssign(detailTask, selectedAgent)"
                   :title="agentDisplayName(selectedAgent) ? `点当前好汉领令：${agentDisplayName(selectedAgent)}` : '先择好汉再点将'"
                   @click="$emit('assign-task', detailTask, selectedAgent)"
-                >
-                  <BountyActionIcon name="assign" />
-                  <span class="visually-hidden">{{ agentDisplayName(selectedAgent) ? '点将当前' : '选择好汉' }}</span>
+                 class="hall-business-action">
+                  <span class="hall-business-label">{{ agentDisplayName(selectedAgent) ? '点将当前' : '选择好汉' }}</span>
                 </button>
                 <button
                   aria-label="密议"
                   title="与当前好汉密议"
                   @click="$emit('brief-selected-task', detailTask, selectedAgent)"
-                >
-                  <BountyActionIcon name="whisper" />
-                  <span class="visually-hidden">密议</span>
+                 class="hall-business-action">
+                  <span class="hall-business-label">密议</span>
                 </button>
                 <button
-                  class="assign-selected-agents"
+                  class="assign-selected-agents hall-business-action"
                   type="button"
                   :aria-label="`点已选 ${selectedAssignees.length} 人领令`"
                   :disabled="isFundedTask(detailTask) || !selectedAssignees.length"
                   :title="`点已选 ${selectedAssignees.length} 人领令`"
                   @click="$emit('assign-task', detailTask, selectedAssignees)"
                 >
-                  <BountyActionIcon name="group" />
-                  <span class="count-badge">{{ selectedAssignees.length }}</span>
-                  <span class="visually-hidden">点将已选 {{ selectedAssignees.length }}</span>
+
+                  <span class="hall-business-label">点将已选 {{ selectedAssignees.length }}</span>
                 </button>
                 <button
-                  class="auto-assign-task"
+                  class="auto-assign-task hall-business-action"
                   type="button"
                   aria-label="宋江代为点将"
                   :disabled="isFundedTask(detailTask) || !hasTaskAction(detailTask, 'ASSIGN') || !matterCandidates.length"
                   title="宋江代为点将"
                   @click="$emit('auto-assign-task', detailTask)"
                 >
-                  <BountyActionIcon name="strategist" />
-                  <span class="visually-hidden">宋江代为点将</span>
+                  <span class="hall-business-label">宋江代为点将</span>
                 </button>
                 <button
-                  class="discuss-task-button"
+                  class="discuss-task-button hall-business-action"
                   type="button"
                   aria-label="进入议事"
                   :disabled="!hasTaskAction(detailTask, 'DISCUSS') || !taskAssigneeIds(detailTask).length"
                   :title="!taskAssigneeIds(detailTask).length ? unassignedDiscussHint : '进入该悬赏的既有议事入口'"
                   @click="$emit('discuss-task', detailTask, assignedAgentForTask(detailTask))"
                 >
-                  <BountyActionIcon name="discuss" />
-                  <span class="visually-hidden">进入议事</span>
+                  <span class="hall-business-label">进入议事</span>
                 </button>
                 <button
-                  class="archive-task-button"
+                  class="archive-task-button hall-business-action"
                   type="button"
                   aria-label="收入案卷"
                   title="收入案卷"
                   @click="$emit('archive-task', detailTask)"
                 >
-                  <BountyActionIcon name="archive" />
-                  <span class="visually-hidden">收入案卷</span>
+                  <span class="hall-business-label">收入案卷</span>
                 </button>
               </div>
               <p v-if="!embeddedHall && !taskAssigneeIds(detailTask).length" class="task-operation-hint">
@@ -483,9 +472,8 @@
                     :aria-label="`选定 ${agentDisplayName(agent)}`"
                     :title="`选定 ${agentDisplayName(agent)}`"
                     @click="$emit('select-agent', agent)"
-                  >
-                    <BountyActionIcon name="select" />
-                    <span class="visually-hidden">选定</span>
+                   class="hall-business-action">
+                    <span class="hall-business-label">选定</span>
                   </button>
                   <button
                     type="button"
@@ -493,18 +481,16 @@
                     :disabled="isFundedTask(detailTask) ? fundedClaimBlocked(detailTask, agent) : !canAssign(detailTask, agent)"
                     :title="isFundedTask(detailTask) ? `向 ${agentDisplayName(agent)} 预览报价` : `点 ${agentDisplayName(agent)} 领令`"
                     @click="$emit('assign-task', detailTask, agent)"
-                  >
-                    <BountyActionIcon name="assign" />
-                    <span class="visually-hidden">点将</span>
+                   class="hall-business-action">
+                    <span class="hall-business-label">点将</span>
                   </button>
                   <button
                     type="button"
                     :aria-label="`与 ${agentDisplayName(agent)} 密议`"
                     :title="`与 ${agentDisplayName(agent)} 密议`"
                     @click="$emit('brief-selected-task', detailTask, agent)"
-                  >
-                    <BountyActionIcon name="whisper" />
-                    <span class="visually-hidden">密议</span>
+                   class="hall-business-action">
+                    <span class="hall-business-label">密议</span>
                   </button>
                 </div>
               </div>
@@ -547,7 +533,6 @@ import { assignedTaskTarget, assigneeProviderText, assigneeAvailabilityText } fr
 import { projectHallTask } from '../../composables/juyiting/hallTaskPresentation.js'
 import { canCancelOrdinaryTask, ordinaryTaskVersion, isTerminalMatter } from '../../composables/juyiting/useHallOrdinaryCancellation.js'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import BountyActionIcon from './BountyActionIcon.vue'
 import HallTaskResources from './HallTaskResources.vue'
 import WorkItemPlanPanel from './WorkItemPlanPanel.vue'
 import TeamRecommendationPanel from './TeamRecommendationPanel.vue'

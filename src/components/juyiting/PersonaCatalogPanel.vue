@@ -11,9 +11,7 @@
     <section v-if="setupResult" class="setup-result">
       <div class="setup-head">
         <strong>{{ setupResult.message || setupTitle }}</strong>
-        <button type="button" class="setup-close" aria-label="关闭接应文书" @click="$emit('clear-setup-result')">
-          <var-icon name="close-circle-outline" />
-        </button>
+        <button type="button" class="setup-close hall-tool" aria-label="关闭接应文书" @click="$emit('clear-setup-result')" title="关闭接应文书"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
       </div>
       <template v-if="isLocalSetup">
         <p>Runtime {{ runtimeSetup.runtimeProtocolVersion }} 自行部署；安装授权不代表 Runtime 在线或事项可办理。</p>

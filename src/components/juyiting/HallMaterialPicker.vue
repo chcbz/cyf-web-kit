@@ -3,23 +3,23 @@
     <div v-if="!readOnly && !dialogOnly" class="quick-request-actions">
       <button
         type="button"
-        class="quick-material-open"
+        class="quick-material-open hall-tool"
         :disabled="disabled || !enabled"
         @click="openQuickMaterialPicker"
-      ><var-icon name="paperclip" aria-hidden="true" />添加资料（可选）<span v-if="selectedMaterials.length">{{ selectedMaterials.length }}</span></button>
+       aria-label="添加资料（可选）" title="添加资料（可选）"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m8 12 7-7a4 4 0 0 1 6 6L10 22a6 6 0 0 1-8-8L13 3M5 16 16 5"/></svg></button>
       <slot></slot>
     </div>
     <ul v-if="selectedMaterials.length && !dialogOnly" class="quick-material-summary" aria-label="已选资料">
       <li v-for="material in selectedMaterials" :key="materialKey(material)">
         <span><strong>{{ material.displayName }}</strong><small>v{{ material.version }}</small></span>
-        <button type="button" :disabled="disabled" @click="previewSelectedMaterial(material)">预览</button>
+        <button type="button" :disabled="disabled" @click="previewSelectedMaterial(material)" class="hall-tool" aria-label="预览所选资料" title="预览所选资料"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
         <button
           type="button"
           :disabled="disabled"
           v-if="!readOnly"
           :aria-label="`移除 ${material.displayName} v${material.version}`"
           @click="removeSelectedMaterial(material)"
-        >移除</button>
+         class="hall-tool" :title="`移除 ${material.displayName} v${material.version}`"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
       </li>
     </ul>
     <div v-if="directUpload && (uploading || uploadUnresolved || uploadMessage)" class="quick-material-import-status" role="status">
@@ -42,7 +42,7 @@
         @keydown="handlePickerKeydown"
       >
         <header>
-          <button type="button" class="quick-material-back" @click="backFromPicker"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m14 6-6 6 6 6" /></svg>返回</button>
+          <button type="button" class="quick-material-back hall-tool" @click="backFromPicker" aria-label="返回资料列表" title="返回资料列表"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 5-7 7 7 7"/></svg></button>
           <div><h3 id="hall-material-picker-title">选择资料</h3><p>选择或上传资料，点击“完成”带入当前需求或议事。</p></div>
         </header>
         <div v-if="$slots.context" class="quick-material-context"><slot name="context"></slot></div>
@@ -69,22 +69,22 @@
               <p v-else-if="workspace.actionState?.value === 'loading-preview'" role="status">正在读取固定版本预览…</p>
               <template v-else>
                 <div v-if="materialPreview.kind === 'parts'" class="quick-material-pagination">
-                  <button type="button" :disabled="materialPreview.selectedIndex === 0" @click="workspace.selectPreviewPart(materialPreview.selectedIndex - 1)">上一页</button>
+                  <button type="button" :disabled="materialPreview.selectedIndex === 0" @click="workspace.selectPreviewPart(materialPreview.selectedIndex - 1)" class="hall-tool" aria-label="上一页" title="上一页"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 5-7 7 7 7"/></svg></button>
                   <span>第 {{ materialPreview.selectedIndex + 1 }} / {{ materialPreview.parts.length }} 页</span>
-                  <button type="button" :disabled="materialPreview.selectedIndex >= materialPreview.parts.length - 1" @click="workspace.selectPreviewPart(materialPreview.selectedIndex + 1)">下一页</button>
+                  <button type="button" :disabled="materialPreview.selectedIndex >= materialPreview.parts.length - 1" @click="workspace.selectPreviewPart(materialPreview.selectedIndex + 1)" class="hall-tool" aria-label="下一页" title="下一页"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7"/></svg></button>
                 </div>
                 <PdfDocumentPreview v-if="materialPreviewPart?.kind === 'pdf'" :blob="materialPreviewPart.blob" />
                 <img v-else-if="materialPreviewPart?.kind === 'image'" :src="materialPreviewPart.url" alt="资料预览" />
                 <audio v-else-if="materialPreviewPart?.kind === 'audio'" :src="materialPreviewPart.url" controls preload="none" aria-label="音频预览"></audio>
                 <pre v-else-if="materialPreviewPart?.kind === 'text'" v-text="materialPreviewPart.text"></pre>
                 <p v-if="materialPreview.message" role="status">{{ materialPreview.message }}</p>
-                <button v-if="pickerDetail && materialPreview.kind === 'error'" type="button" @click="previewQuickMaterial">重试预览</button>
+                <button v-if="pickerDetail && materialPreview.kind === 'error'" type="button" @click="previewQuickMaterial" class="hall-tool" aria-label="重试预览" title="重试预览"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M4 16l2 3a7 7 0 0 0 12-2"/></svg></button>
               </template>
             </section>
             <div v-if="pickerDetail" class="quick-material-version-actions">
-              <button v-if="isMobile" type="button" class="quick-material-preview-toggle" :disabled="!pickerVersion"
+              <button v-if="isMobile" type="button" class="quick-material-preview-toggle hall-tool" :disabled="!pickerVersion"
                 :aria-expanded="mobilePreviewOpen" aria-controls="hall-material-preview" @click="toggleMobilePreview"
-              >{{ mobilePreviewOpen ? '收起预览' : '预览' }}</button>
+               :aria-label="mobilePreviewOpen ? '收起预览' : '预览资料'" :title="mobilePreviewOpen ? '收起预览' : '预览资料'"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
               <button type="button" class="primary" :disabled="!pickerVersion || pickerAlreadyAdded || uploading" @click="stageQuickMaterial">{{ pickerAlreadyAdded ? '已添加' : '添加' }}</button>
             </div>
           </section>
@@ -98,7 +98,7 @@
           <button v-if="uploadUnresolved" type="button" :disabled="uploading" @click="retryQuickUpload">核对原上传</button>
           <section v-if="selectionExpanded" id="quick-material-staged" class="quick-material-selection" aria-label="已选资料">
             <ul class="quick-material-draft">
-              <li v-for="material in draftMaterials" :key="materialKey(material)"><span>{{ material.displayName }} · v{{ material.version }}</span><button type="button" :disabled="uploading" :aria-label="`移除 ${material.displayName} v${material.version}`" @click="removeDraftMaterial(material)">移除</button></li>
+              <li v-for="material in draftMaterials" :key="materialKey(material)"><span>{{ material.displayName }} · v{{ material.version }}</span><button type="button" :disabled="uploading" :aria-label="`移除 ${material.displayName} v${material.version}`" @click="removeDraftMaterial(material)" class="hall-tool" :title="`移除 ${material.displayName} v${material.version}`"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button></li>
               <li v-if="!draftMaterials.length">尚未选择资料</li>
             </ul>
           </section>
@@ -112,23 +112,23 @@
       <dialog v-if="selectedPreview" ref="selectedPreviewDialog" class="quick-material-standalone" aria-labelledby="selected-material-title" @cancel.prevent="closeSelectedPreview" @click="event => { if (event.target === selectedPreviewDialog) closeSelectedPreview() }">
         <header><h3 id="selected-material-title">{{ selectedPreview.displayName }}</h3><button type="button" class="quick-material-close" aria-label="关闭预览" @click="closeSelectedPreview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button></header>
         <section class="quick-material-preview" aria-label="资料预览" :aria-busy="workspace.actionState?.value === 'loading-preview'">
-          <div v-if="workspace.error.value" role="alert"><p>{{ workspace.error.value }}</p><button type="button" @click="previewSelectedMaterial(selectedPreview)">重试预览</button></div>
+          <div v-if="workspace.error.value" role="alert"><p>{{ workspace.error.value }}</p><button type="button" @click="previewSelectedMaterial(selectedPreview)" class="hall-tool" aria-label="重试预览" title="重试预览"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M4 16l2 3a7 7 0 0 0 12-2"/></svg></button></div>
           <p v-else-if="!pickerDetail || workspace.actionState?.value === 'loading-preview'" role="status">正在读取固定版本预览…</p>
               <template v-else>
                 <div v-if="materialPreview.kind === 'parts'" class="quick-material-pagination">
-                  <button type="button" :disabled="materialPreview.selectedIndex === 0" @click="workspace.selectPreviewPart(materialPreview.selectedIndex - 1)">上一页</button>
+                  <button type="button" :disabled="materialPreview.selectedIndex === 0" @click="workspace.selectPreviewPart(materialPreview.selectedIndex - 1)" class="hall-tool" aria-label="上一页" title="上一页"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 5-7 7 7 7"/></svg></button>
                   <span>第 {{ materialPreview.selectedIndex + 1 }} / {{ materialPreview.parts.length }} 页</span>
-                  <button type="button" :disabled="materialPreview.selectedIndex >= materialPreview.parts.length - 1" @click="workspace.selectPreviewPart(materialPreview.selectedIndex + 1)">下一页</button>
+                  <button type="button" :disabled="materialPreview.selectedIndex >= materialPreview.parts.length - 1" @click="workspace.selectPreviewPart(materialPreview.selectedIndex + 1)" class="hall-tool" aria-label="下一页" title="下一页"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7"/></svg></button>
                 </div>
                 <PdfDocumentPreview v-if="materialPreviewPart?.kind === 'pdf'" :blob="materialPreviewPart.blob" />
             <img v-else-if="materialPreviewPart?.kind === 'image'" :src="materialPreviewPart.url" alt="资料预览" />
                 <audio v-else-if="materialPreviewPart?.kind === 'audio'" :src="materialPreviewPart.url" controls preload="none" aria-label="音频预览"></audio>
                 <pre v-else-if="materialPreviewPart?.kind === 'text'" v-text="materialPreviewPart.text"></pre>
                 <p v-if="materialPreview.message" role="status">{{ materialPreview.message }}</p>
-                <button v-if="pickerDetail && materialPreview.kind === 'error'" type="button" @click="previewQuickMaterial">重试预览</button>
+                <button v-if="pickerDetail && materialPreview.kind === 'error'" type="button" @click="previewQuickMaterial" class="hall-tool" aria-label="重试预览" title="重试预览"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M4 16l2 3a7 7 0 0 0 12-2"/></svg></button>
               </template>
         </section>
-        <footer><button type="button" class="quick-material-download" :disabled="!pickerVersion || previewDownloading" @click="downloadSelectedMaterial"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5" /></svg>{{ previewDownloading ? '正在下载…' : '下载文件' }}</button></footer>
+        <footer><button type="button" class="quick-material-download hall-tool" :aria-busy="previewDownloading" :disabled="!pickerVersion || previewDownloading" @click="downloadSelectedMaterial" aria-label="下载文件" title="下载文件"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5"/></svg></button></footer>
       </dialog>
     </Teleport>
   </section>

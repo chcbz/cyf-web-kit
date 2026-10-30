@@ -1,0 +1,51 @@
+/* Semantic controls opt in explicitly. No business rules or DOM inference here.
+   !important geometry protects the 44px tools from legacy Hall mobile overrides. */
+.hall-tool.hall-tool, .hall-row-link.hall-row-link {
+  display: inline-flex !important; align-items: center; justify-content: center;
+  box-sizing: border-box; flex: 0 0 44px; width: 44px !important; min-width: 44px !important;
+  height: 44px; min-height: 44px !important; padding: 0 !important; gap: 0;
+  border: 1px solid transparent !important; border-radius: 8px !important;
+  color: var(--hall-text-muted, #68716b) !important; background: transparent !important;
+  box-shadow: none !important; vertical-align: middle; cursor: pointer;
+}
+.hall-tool.hall-tool:hover:not(:disabled), .hall-row-link.hall-row-link:hover:not(:disabled) {
+  background: #f6eee8 !important; color: #923f30 !important;
+}
+.hall-tool.hall-tool:disabled, .hall-row-link.hall-row-link:disabled { opacity: .5; cursor: default; }
+.hall-control-icon, .hall-tool > svg { display: block; flex: none; width: 20px; height: 20px; }
+.hall-tool.hall-tool:focus-visible, .hall-row-link.hall-row-link:focus-visible,
+.hall-switch-control.hall-switch-control:focus-visible, .hall-switch-input.hall-switch-input:focus-visible,
+.hall-action-surface.hall-action-surface:focus-visible, .hall-filter.hall-filter:focus-visible {
+  outline: 2px solid #923f30 !important; outline-offset: 3px; box-shadow: none !important;
+}
+.hall-action-surface.hall-action-surface, .hall-business-action.hall-business-action {
+  min-height: 44px; padding: 9px 16px; border: 1px solid #e3e5dc !important;
+  border-radius: 8px; color: #242e2b; background: #f3f4ee !important;
+}
+.hall-business-action.hall-business-action { width: auto !important; height: auto !important; white-space: normal; }
+.hall-filter.hall-filter { min-height: 44px; padding: 8px 14px; border-radius: 999px !important; }
+.hall-filter.hall-filter[aria-pressed="true"] { background: #f6eee8 !important; border-color: #e1c9bd !important; color: #923f30 !important; }
+.hall-switch-control.hall-switch-control {
+  display: inline-flex; align-items: center; justify-content: flex-end; flex: 0 0 auto;
+  min-height: 44px !important; gap: 8px; padding: 0 !important; border: 0 !important;
+  background: transparent !important; color: #68716b !important; cursor: pointer;
+}
+.hall-switch-track { display: inline-flex; align-items: center; flex: 0 0 40px; box-sizing: border-box;
+  width: 40px; height: 24px; padding: 3px; border-radius: 999px; background: #959e96; }
+.hall-switch-track > span { display: block; width: 18px; height: 18px; border-radius: 50%; background: #fffefa;
+  box-shadow: 0 1px 3px #242e2b26; transition: transform .16s ease; }
+.hall-switch-control[aria-checked="true"] .hall-switch-track { background: #923f30; }
+.hall-switch-control[aria-checked="true"] .hall-switch-track > span { transform: translateX(16px); }
+.hall-switch-status { min-width: 3em; font-size: 12px; }
+.hall-switch-control:disabled { opacity: .55; cursor: default; }
+/* Checkbox semantics and change handlers remain native, including Space activation. */
+.hall-switch-input.hall-switch-input { appearance: none; position: relative; box-sizing: border-box;
+  flex: 0 0 40px; width: 40px; height: 24px; min-height: 0; margin: 0; border: 0;
+  border-radius: 999px; background: #959e96; cursor: pointer; }
+.hall-switch-input.hall-switch-input::after { content: ''; position: absolute; width: 18px; height: 18px;
+  top: 3px; left: 3px; border-radius: 50%; background: #fffefa; transition: transform .16s ease; }
+.hall-switch-input.hall-switch-input:checked { background: #923f30; }
+.hall-switch-input.hall-switch-input:checked::after { transform: translateX(16px); }
+.hall-switch-input:disabled { opacity: .5; cursor: default; }
+.hall-voice-controls .voice-toggle { display: flex; min-height: 44px; align-items: center; gap: 10px; margin: 0; }
+@media (prefers-reduced-motion: reduce) { .hall-switch-track > span, .hall-switch-input::after { transition: none; } }

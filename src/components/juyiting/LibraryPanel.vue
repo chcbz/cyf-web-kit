@@ -103,10 +103,7 @@
           <option value="meeting">议事旧录</option>
           <option value="memory">长期记录</option>
         </select>
-        <button :disabled="loading || !keyword.trim()">
-          <var-icon name="magnify" />
-          <span>搜索</span>
-        </button>
+        <button :disabled="loading || !keyword.trim()" class="hall-tool" aria-label="搜索案卷" title="搜索案卷"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg></button>
       </form>
 
       <div class="library-hint">

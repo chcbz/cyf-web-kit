@@ -1,19 +1,19 @@
 <template>
   <section class="output-list" aria-label="已分享成果">
-    <header><strong>已分享成果</strong><button type="button" :disabled="outputs.loading.value" @click="outputs.refresh">刷新</button></header>
+    <header><strong>已分享成果</strong><button type="button" :disabled="outputs.loading.value" @click="outputs.refresh" class="hall-tool" aria-label="刷新成果" title="刷新成果"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M4 16l2 3a7 7 0 0 0 12-2"/></svg></button></header>
     <p v-if="outputs.state.value === 'available' && outputs.items.value.length" class="output-hint">已分享，非正式验收。</p>
     <p v-if="outputs.state.value === 'empty' && !outputs.loading.value" class="output-state">暂无可领取成果。</p>
     <p v-else-if="outputs.state.value === 'syncing'" class="output-state">成果同步中，聊天和悬赏主体不受影响。</p>
     <p v-else-if="outputs.state.value === 'forbidden'" class="output-state is-error">无访问权限。</p>
-    <p v-else-if="outputs.state.value === 'unavailable'" class="output-state is-error">{{ outputs.message.value }} <button type="button" @click="outputs.refresh">刷新</button></p>
+    <p v-else-if="outputs.state.value === 'unavailable'" class="output-state is-error">{{ outputs.message.value }} <button type="button" @click="outputs.refresh" class="hall-tool" aria-label="刷新成果" title="刷新成果"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M4 16l2 3a7 7 0 0 0 12-2"/></svg></button></p>
     <p v-else-if="outputs.loading.value" class="output-state">成果目录读取中…</p>
     <article v-for="item in outputs.items.value" :key="`${item.artifactId}:${item.artifactVersion}`" class="output-card">
       <div><strong>{{ item.title }}</strong><span>{{ item.artifactType }}</span></div>
       <p>版本 {{ item.artifactVersion }} · {{ sizeText(item.byteLength) }}<template v-if="item.sha256"> · {{ item.sha256.slice(0, 12) }}</template></p>
       <p v-if="formatDate(item.createdAt)">{{ formatDate(item.createdAt) }}</p>
       <div class="output-actions">
-        <button v-if="previewKind(item) !== 'none'" type="button" @click="previewItem = item">预览</button>
-        <button type="button" :disabled="!item.canDownload || item.state !== 'AVAILABLE'" @click="download(item)">下载</button>
+        <button v-if="previewKind(item) !== 'none'" type="button" @click="previewItem = item" class="hall-tool" aria-label="预览成果" title="预览成果"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        <button type="button" :disabled="!item.canDownload || item.state !== 'AVAILABLE'" @click="download(item)" class="hall-tool" aria-label="下载成果" title="下载成果"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5"/></svg></button>
       </div>
     </article>
     <button

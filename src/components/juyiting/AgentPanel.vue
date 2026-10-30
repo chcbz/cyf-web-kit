@@ -7,11 +7,11 @@
           :key="item.value"
           :class="{ active: agentFilter === item.value }"
           @click="$emit('set-agent-filter', item.value)"
-        >
+         class="hall-filter" :aria-pressed="agentFilter === item.value">
           {{ item.label }}
         </button>
       </div>
-      <button type="button" @click="$emit('open-catalog')">招贤令</button>
+      <button type="button" @click="$emit('open-catalog')" class="hall-action-surface">招贤令</button>
       <span>名册 {{ agents.length }} 位 · 场景中 {{ mapAgents.length }} 位</span>
     </div>
     <p v-if="loading" class="panel-data-state" role="status">正在加载好汉名册…</p>
@@ -76,9 +76,7 @@
                   aria-describedby="external-policy-hint"
                   :disabled="!externalPolicyCanWrite"
                   @click="$emit('set-external-policy', !externalPolicy.enabled)"
-                >
-                  {{ externalPolicy.enabled ? '已开启' : '已关闭' }}
-                </button>
+                 class="hall-switch-control" aria-label="接受平台其他用户的委派" :aria-busy="externalPolicyBusy"><span class="hall-switch-track" aria-hidden="true"><span></span></span><span class="hall-switch-status">{{ externalPolicyBusy ? '核对中…' : externalPolicy.enabled ? '已开启' : '已关闭' }}</span></button>
                 <span v-else role="status">{{ externalPolicyBusy ? '正在核对…' : '设置不可用' }}</span>
               </div>
               <p id="external-policy-hint" class="profile-note">面向同平台所有用户；关闭不影响已接任务，不要求当前在线。</p>
@@ -101,10 +99,10 @@
                 <small v-if="profile?.skills.status === 'AVAILABLE'">已核验安装 {{ installedCount }} 项</small>
                 <button
                   v-if="canManagePolicy"
-                  class="skill-manage-entry"
+                  class="skill-manage-entry hall-tool"
                   type="button"
                   @click="skillManagementOpen = true"
-                >管理技能</button>
+                 aria-label="管理技能" title="管理技能"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M17 13v8m-4-4h8"/></svg></button>
               </div>
               <p v-if="!canReadProfile" role="status">仅拥有者可查看技能</p>
               <p v-else-if="profileCapabilitiesLoading" role="status">正在核对技能…</p>
@@ -129,11 +127,11 @@
                 <button
                   v-if="profile && abilityEditor && !abilityEditor.editing.value"
                   ref="abilityEditButton"
-                  class="ability-edit-link"
+                  class="ability-edit-link hall-tool"
                   type="button"
                   aria-label="编辑这位好汉的本领"
                   @click="abilityEditor.begin"
-                >编辑</button>
+                 title="编辑这位好汉的本领"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m16 3 5 5M4 20l4-1L21 6l-3-3L5 16Z"/></svg></button>
               </div>
               <form v-if="abilityEditor?.editing.value" class="ability-editor" @submit.prevent="abilityEditor.save">
                 <label for="hall-ability-editor">本领介绍</label>
@@ -168,7 +166,7 @@
               <p v-if="!abilityEditor?.editing.value" class="profile-note">由你维护的能力介绍，仅供参考，不代表已安装技能或运行就绪。</p>
             </section>
             <div v-if="canReadProfile" class="profile-refresh">
-              <button type="button" :disabled="profileCapabilitiesLoading" @click="$emit('refresh-profile-capabilities')">{{ profileCapabilitiesLoading ? '正在刷新…' : '刷新技能与本领' }}</button>
+              <button type="button" :disabled="profileCapabilitiesLoading" @click="$emit('refresh-profile-capabilities')" class="hall-tool" :aria-busy="profileCapabilitiesLoading" aria-label="刷新技能与本领" title="刷新技能与本领"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M4 16l2 3a7 7 0 0 0 12-2"/></svg></button>
               <small v-if="profile" role="status">最近读取 {{ new Date(profile.observedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }) }}</small>
             </div>
             <p v-if="canReadProfile" class="profile-note">只刷新当前好汉详情；读取最新已上报记录，不触发重新扫描或重注册。</p>
@@ -614,4 +612,13 @@ button {
 .agent-panel .ability-editor-actions button.ability-save:focus-visible { outline: 2px solid #923f30; outline-offset: 3px; }
 .agent-panel .ability-editor-actions button:disabled, .agent-panel .ability-editor textarea:disabled { opacity: .6; cursor: default; }
 .agent-panel .ability-editor p.ability-editor-error { color: var(--hall-danger, #a13f35); }
+</style>
+
+<style scoped>
+.profile-heading { align-items: center; flex-wrap: nowrap; }
+.profile-heading h3 { flex-shrink: 0; }
+.profile-heading small { flex: 1; min-width: 0; }
+.profile-heading :is(.skill-manage-entry, .ability-edit-link) { margin-left: auto; }
+.external-policy-row { flex-wrap: nowrap; }
+.external-policy-row > span:first-child { flex: 1; min-width: 0; }
 </style>
