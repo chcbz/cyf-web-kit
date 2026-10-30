@@ -116,6 +116,40 @@ describe('RB05 output directory boundary', () => {
     expect(chat).to.not.include('OutputList')
   })
 
+  it('uses the bounded native bridge in WeChat and never puts file bytes in the route', async () => {
+    const calls = []
+    const host = {
+      __wxjs_environment: 'miniprogram',
+      crypto: { randomUUID: () => '12345678-1234-4234-8234-123456789abc' },
+      location: { href: 'https://kit.chaoyoufan.cn/juyiting?nativeOrientation=landscape' },
+      document: {},
+      setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout,
+      FileReader: class { readAsDataURL (blob) { blob.arrayBuffer().then(buffer => { const bytes = new Uint8Array(buffer); let binary = ''; for (const byte of bytes) binary += String.fromCharCode(byte); this.result = `data:${blob.type};base64,${btoa(binary)}`; this.onload() }) } },
+      wx: { miniProgram: {
+        postMessage: value => calls.push(['postMessage', value]),
+        redirectTo: options => { calls.push(['redirectTo', options]); options.success() }
+      } }
+    }
+    const result = await saveOutputBlob({ blob: new Blob(['exact'], { type: 'text/plain' }), item: { name: 'report.txt' }, host })
+    expect(result.status).to.equal('transferred')
+    expect(calls[0][1].data).to.include({ protocol: 'juyiting-file-download-v1', size: 5, name: 'report.txt' })
+    expect(calls[0][1].data.base64).to.equal('ZXhhY3Q=')
+    expect(calls[1][1].url).to.equal('/pages/download/index?transferId=12345678-1234-4234-8234-123456789abc&entry=landscape')
+    expect(calls[1][1].url).not.to.include('ZXhhY3Q')
+  })
+
+  it('rejects oversized mini-program files and reports native route failure', async () => {
+    const host = { __wxjs_environment: 'miniprogram', wx: { miniProgram: { postMessage() {}, redirectTo: options => options.fail() } },
+      crypto: { randomUUID: () => '12345678-1234-4234-8234-123456789abc' }, location: { href: 'https://kit.chaoyoufan.cn/' }, document: {}, setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout,
+      FileReader: class { readAsDataURL (blob) { blob.arrayBuffer().then(buffer => { this.result = `data:application/octet-stream;base64,${btoa(String.fromCharCode(...new Uint8Array(buffer)))}`; this.onload() }) } } }
+    let failure
+    try { await saveOutputBlob({ blob: new Blob([new Uint8Array(8 * 1024 * 1024 + 1)]), item: {}, host }) } catch (error) { failure = error }
+    expect(failure?.message).to.include('8 MiB')
+    failure = null
+    try { await saveOutputBlob({ blob: new Blob(['x']), item: {}, host }) } catch (error) { failure = error }
+    expect(failure?.message).to.include('无法打开小程序文件页')
+  })
+
   it('downloads only the exact adapter-returned Blob and sanitizes the local filename', () => {
     expect(safeOutputFilename({ title: '../evil:\u0000name?.txt' })).to.equal('_evil__name_.txt')
     const clicks = []

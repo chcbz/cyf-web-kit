@@ -2683,7 +2683,7 @@ const downloadTerminalOutput = async item => {
   try {
     const result = await terminalHistory.download(item)
     if (key !== terminalHistory.cacheKey.value || panelDisposed) return false
-    saveOutputBlob({ blob: result instanceof Blob ? result : result?.blob, item })
+    await saveOutputBlob({ blob: result instanceof Blob ? result : result?.blob, item })
     return true
   } catch (error) {
     if (key === terminalHistory.cacheKey.value && error?.name !== 'AbortError') terminalHistoryDownloadError.value = error.message || '历史成果下载未成，请重查。'

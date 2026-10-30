@@ -228,7 +228,7 @@ const downloadOutput = async item => {
   try {
     const blob = await bytes(item, item.downloadUrl, downloadMimeType(item.contentMimeType))
     if (!blob || generation !== epoch) return
-    saveOutputBlob({ blob, item: { name: outputDownloadName(item) } })
+    await saveOutputBlob({ blob, item: { name: outputDownloadName(item) } })
     patchMap(itemErrors, key, '')
   } catch (cause) { if (generation === epoch) patchMap(itemErrors, key, cause?.message || '下载失败') }
 }

@@ -43,7 +43,7 @@ const sizeText = bytes => bytes == null ? '大小未知' : bytes < 1024 ? `${byt
 const formatDate = value => { const time = typeof value === 'number' ? value : Date.parse(value); return Number.isFinite(time) ? new Date(time).toLocaleString('zh-CN', { hour12: false }) : '' }
 const download = async item => {
   actionError.value = ''; retryItem.value = null
-  try { const result = await outputs.download(item); saveOutputBlob({ blob: result instanceof Blob ? result : result?.blob, item }) } catch (error) { if (error?.name !== 'AbortError') { actionError.value = error?.message || '下载失败，请刷新确认。'; retryItem.value = item } }
+  try { const result = await outputs.download(item); await saveOutputBlob({ blob: result instanceof Blob ? result : result?.blob, item }) } catch (error) { if (error?.name !== 'AbortError') { actionError.value = error?.message || '下载失败，请刷新确认。'; retryItem.value = item } }
 }
 const retry = () => { if (retryItem.value) void download(retryItem.value); else void outputs.refresh() }
 </script>
