@@ -8,7 +8,8 @@ export const WECHAT_MINI_PROGRAM_SDK_URL = 'https://res.wx.qq.com/open/js/jweixi
 
 const BRIDGE_SCRIPT_ID = 'juyiting-wechat-mini-program-sdk'
 const BRIDGE_WAIT_MS = 3000
-let bridgeLoadPromise = null
+// A bridge belongs to its window; injected hosts must never reuse another window's SDK.
+const bridgeLoads = new WeakMap()
 
 export const nativeOrientationFromLocation = (location = globalThis.location) => {
   try {
@@ -49,6 +50,7 @@ export const ensureMiniProgramBridge = async ({
   if (existing) return existing
   if (!host || !document?.createElement) return null
 
+  let bridgeLoadPromise = bridgeLoads.get(host)
   if (!bridgeLoadPromise) {
     bridgeLoadPromise = new Promise(resolve => {
       let script = document.getElementById?.(BRIDGE_SCRIPT_ID)
@@ -68,8 +70,9 @@ export const ensureMiniProgramBridge = async ({
       }
       host.setTimeout?.(() => resolve(miniProgramBridge(host)), timeoutMs)
     }).finally(() => {
-      if (!miniProgramBridge(host)) bridgeLoadPromise = null
+      if (!miniProgramBridge(host)) bridgeLoads.delete(host)
     })
+    bridgeLoads.set(host, bridgeLoadPromise)
   }
   return bridgeLoadPromise
 }

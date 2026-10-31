@@ -52,4 +52,30 @@ describe('Juyi Hall Mini Program native orientation bridge', () => {
     expect(scripts).to.have.length(1)
     expect(scripts[0].src).to.equal('https://res.wx.qq.com/open/js/jweixin-1.6.0.js')
   })
+
+  it('deduplicates a pending SDK load only within the same host', async () => {
+    const makeHost = () => {
+      let timeout
+      const scripts = []
+      const host = { setTimeout: callback => { timeout = callback; return 1 } }
+      const document = {
+        getElementById: () => null,
+        createElement: () => ({ addEventListener() {} }),
+        head: { appendChild: script => scripts.push(script) }
+      }
+      return { host, document, scripts, complete(bridge) { host.wx = { miniProgram: bridge }; timeout() } }
+    }
+    const first = makeHost(), second = makeHost()
+    const firstLoad = ensureMiniProgramBridge(first)
+    const sameHostLoad = ensureMiniProgramBridge(first)
+    const secondLoad = ensureMiniProgramBridge(second)
+    expect(first.scripts).to.have.length(1)
+    expect(second.scripts).to.have.length(1)
+    const firstBridge = { navigateTo() {} }, secondBridge = { redirectTo() {} }
+    first.complete(firstBridge); second.complete(secondBridge)
+    expect(await firstLoad).to.equal(firstBridge)
+    expect(await sameHostLoad).to.equal(firstBridge)
+    expect(await secondLoad).to.equal(secondBridge)
+  })
+
 })
