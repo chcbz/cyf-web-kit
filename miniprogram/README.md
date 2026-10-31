@@ -2,6 +2,10 @@
 
 2026-10-31 核对范围：Web `2d95422951289ca0b3ab74aa805f7a4b03cbecdd` 后的本任务未提交候选；非线上状态。`juyiting/` 是权威源码，开发者工具目录仅为镜像，不纳管私人配置、登录信息或凭据。
 
+## 2026-11-01 原生启动修复（基线 Web 9a8df904）
+
+小程序入口不再 require JSON。修改共享配置后运行 `node scripts/generate-mini-program-config.mjs`，提交生成的 `juyiting/utils/app-config.js`；四个原生入口只加载该 JS 模块，H5 仍导入 JSON。回归校验两份配置完全一致，且原生 VM 加载器拒绝 JSON，避免 Node 的 JSON 扩展掩盖平台错误。
+
 ## 业务配置与公共能力
 
 - `juyiting/utils/app-config.json`：部署业务配置。集中维护应用名称、默认返回文字、临时文件命名空间、横竖屏冷启动入口映射，以及允许的 HTTPS origin、页面路径和公开 query 键。其他业务通过替换此配置接入，不修改公共模块。

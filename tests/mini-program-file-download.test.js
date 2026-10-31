@@ -18,6 +18,18 @@ const asMessage = record => ({ protocolVersion: record.protocolVersion, requestI
 
 
 describe('Juyi Hall mini-program file bridge', () => {
+  it('rejects JSON modules instead of masking native startup errors with Node JSON loading', () => {
+    expect(() => runMini('utils/app-config.json', {})).to.throw('only loads JavaScript')
+  })
+
+  it('loads native JS deployment config identical to the shared JSON manifest', () => {
+    const config = runMini('utils/app-config.js', {})
+    expect(JSON.parse(JSON.stringify(config))).to.deep.equal(JSON.parse(readMini('utils/app-config.json')))
+    let application
+    runMini('app.js', { App: value => { application = value } })
+    expect(application.globalData).to.be.an('object')
+  })
+
   it(process.env.MINIPROGRAM_PROJECT ? 'verifies explicit external mirror file set and every runtime SHA-256' : 'loads authoritative repo runtime source (external comparison requires MINIPROGRAM_PROJECT)', () => {
     const runtimeFiles = (root, prefix = '') => readdirSync(path.join(root, prefix), { withFileTypes: true }).flatMap(entry => {
       const relative = path.posix.join(prefix, entry.name)
