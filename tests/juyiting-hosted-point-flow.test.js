@@ -12,7 +12,9 @@ describe('Juyi Hall hosted point flow', () => {
     expect(productionEnv).to.include('VITE_ECONOMY_PREVIEW_ENABLED=true')
     expect(bounty).to.include("'recruit-agent'")
     expect(bounty).to.include(`@click="$emit('recruit-agent', detailTask)"`)
-    expect(bounty).to.include('!assignableRecommendedAgents.length')
+    expect(bounty).to.include('v-if="showNoAssigneeRecruitment"')
+    expect(bounty).to.include('!matterCandidates.value.length')
+    expect(bounty).to.include('props.candidatesTaskId === detailTask.value?.id')
   })
 
   it('preserves an exact task snapshot and only restores after an owned, operable online roster read', () => {

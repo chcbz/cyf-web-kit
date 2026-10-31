@@ -306,7 +306,6 @@ describe('model recommendation actual matter UI', () => {
       wrapper.vm.openTask(task); await Vue.nextTick()
       expect(wrapper.get('.matter-recommendation').text()).to.include('暂不可用')
       expect(wrapper.get('.matter-primary-action').attributes('disabled')).not.to.equal(undefined)
-      await wrapper.get('.matter-agent-toggle').trigger('click')
       await wrapper.get('.matter-candidates button').trigger('click')
       expect(wrapper.emitted('assign-task')).to.equal(undefined)
       expect(wrapper.get('.matter-primary-action').attributes('disabled')).to.equal(undefined)
