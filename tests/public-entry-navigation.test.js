@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
-import { runInNewContext } from 'node:vm'
+import { createMiniRuntimeLoader } from './helpers/miniProgramRuntime.js'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { publicEntryTarget } from '../src/utils/publicEntryNavigation.js'
 import { nativeOrientationFromLocation } from '../src/composables/juyiting/miniProgramOrientation.js'
@@ -74,7 +74,7 @@ const miniProject = process.env.MINIPROGRAM_PROJECT
 ;(miniProject ? describe : describe.skip)('paired Mini Program entry contract', () => {
   const loadPage = name => {
     let page
-    runInNewContext(readFileSync(join(miniProject, `pages/${name}/index.js`), 'utf8'), {
+    createMiniRuntimeLoader(miniProject)(`pages/${name}/index.js`, {
       Page: value => { page = value }
     })
     page.setData = data => Object.assign(page.data, data)
@@ -82,9 +82,9 @@ const miniProject = process.env.MINIPROGRAM_PROJECT
   }
   it('opens root on cold launch while carrying native portrait context', () => {
     const page = loadPage('index')
-    const initial = page.data.url
+    expect(page.data.url).to.equal('') // Do not load the cold-launch URL before parameter validation.
     page.onLoad()
-    expect(page.data.url).to.equal(initial)
+    const initial = page.data.url
     const url = new URL(page.data.url)
     expect(url.origin).to.equal('https://kit.chaoyoufan.cn')
     expect(url.pathname).to.equal('/')

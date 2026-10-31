@@ -132,9 +132,14 @@ describe('RB05 output directory boundary', () => {
     }
     const result = await saveOutputBlob({ blob: new Blob(['exact'], { type: 'text/plain' }), item: { name: 'report.txt' }, host })
     expect(result.status).to.equal('transferred')
-    expect(calls[0][1].data).to.include({ protocol: 'juyiting-file-download-v1', size: 5, name: 'report.txt' })
-    expect(calls[0][1].data.base64).to.equal('ZXhhY3Q=')
-    expect(calls[1][1].url).to.equal('/pages/download/index?transferId=12345678-1234-4234-8234-123456789abc&entry=landscape')
+    expect(calls[0][1].data).to.include({ protocolVersion: 1, messageType: 'file.download' })
+    expect(calls[0][1].data.data).to.include({ size: 5, name: 'report.txt' })
+    expect(calls[0][1].data.data.base64).to.equal('ZXhhY3Q=')
+    const query = new URL(calls[1][1].url, 'https://native.local').searchParams
+    expect(query.get('requestId')).to.equal('12345678-1234-4234-8234-123456789abc')
+    expect(query.get('returnUrl')).to.equal(host.location.href)
+    expect(query.get('returnLabel')).to.equal('返回聚义厅')
+    expect(query.get('orientation')).to.equal('landscape')
     expect(calls[1][1].url).not.to.include('ZXhhY3Q')
   })
 

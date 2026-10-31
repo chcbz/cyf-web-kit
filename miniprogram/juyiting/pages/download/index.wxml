@@ -1,1 +1,16 @@
-<view class="download-page"><view class="download-title">文件下载</view><view class="download-message">{{message}}</view><button wx:if="written && fileType" bindtap="openFile">打开文件</button><button wx:if="written && canShare" bindtap="shareFile">分享文件到微信</button><button wx:if="done" bindtap="returnToHall">返回聚义厅</button></view>
+<view class="download-page">
+  <view class="download-content">
+    <view class="download-brand">{{applicationName}}</view>
+    <view class="download-title">文件下载</view>
+    <view class="download-card">
+      <view wx:if="{{fileName}}" class="download-filename">{{fileName}}</view>
+      <view wx:else class="download-emblem" aria-label="文件"></view>
+      <view wx:if="{{message}}" class="download-message">{{message}}</view>
+    </view>
+    <view class="download-actions">
+      <button wx:if="{{written && fileType}}" class="download-button download-button-primary" hover-class="download-button-pressed" bindtap="openFile">打开文件</button>
+      <button wx:if="{{written && canShare}}" class="download-button {{fileType ? '' : 'download-button-primary'}}" hover-class="download-button-pressed" bindtap="shareFile">分享文件到微信</button>
+      <button wx:if="{{done}}" class="download-button download-button-return" hover-class="download-button-pressed" bindtap="returnToSource">{{returnLabel}}</button>
+    </view>
+  </view>
+</view>

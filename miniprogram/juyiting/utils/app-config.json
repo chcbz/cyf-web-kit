@@ -1,0 +1,33 @@
+{
+  "applicationName": "聚义厅",
+  "returnLabel": "返回聚义厅",
+  "filePrefix": "juyiting-",
+  "webPolicy": {
+    "origins": [
+      "https://kit.chaoyoufan.cn"
+    ],
+    "paths": [
+      "/",
+      "/juyiting"
+    ],
+    "queryKeys": [
+      "nativeOrientation",
+      "entry",
+      "template",
+      "view",
+      "taskId",
+      "fileId",
+      "fileVersion"
+    ]
+  },
+  "entries": {
+    "portrait": {
+      "default": "https://kit.chaoyoufan.cn/?entry=direct",
+      "fallback": "https://kit.chaoyoufan.cn/juyiting?entry=fallback"
+    },
+    "landscape": {
+      "default": "https://kit.chaoyoufan.cn/juyiting?entry=direct",
+      "portrait": "https://kit.chaoyoufan.cn/juyiting?entry=portrait"
+    }
+  }
+}
