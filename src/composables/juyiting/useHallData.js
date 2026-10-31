@@ -63,7 +63,11 @@ export const useHallData = ({
     return [...abilities].sort()
   })
 
+  const recommendationPreparation = ref(null)
+  let recommendationRefresh = null
   const recommendationState = computed(() => {
+    if (recommendationPreparation.value?.taskId === selectedTask.value?.id &&
+        recommendationPreparation.value?.identity === identityFingerprint()) return { state: 'LOADING', result: null }
     const task = selectedTask.value
     const entry = task && taskRecommendations.value[task.id]
     if (!entry) return { state: 'IDLE', result: null }
@@ -132,7 +136,7 @@ export const useHallData = ({
     tasksError.value = ''
     taskCountsError.value = ''
   }, { flush: 'sync' })
-  const dispose = () => { listEpoch += 1; countsEpoch += 1; recommendationEpoch += 1; stopFilters(); stopIdentity(); stopRecommendationTask(); recommendationRequest?.controller.abort(); stopCandidates(); stopDetailScope(); detailEpoch++; detailController?.abort(); candidatesEpoch++; candidatesController?.abort() }
+  const dispose = () => { recommendationRefresh = null; recommendationPreparation.value = null; listEpoch += 1; countsEpoch += 1; recommendationEpoch += 1; stopFilters(); stopIdentity(); stopRecommendationTask(); recommendationRequest?.controller.abort(); stopCandidates(); stopDetailScope(); detailEpoch++; detailController?.abort(); candidatesEpoch++; candidatesController?.abort() }
   // Absence/failure is not zero. Preserve decimal strings; never count the loaded page.
   const taskStatusCount = phase => taskStatusCounts.value.phaseCounts?.[phase || 'total'] ?? '—'
 
@@ -240,7 +244,7 @@ export const useHallData = ({
     }
   }
 
-  const loadTaskRecommendations = (task = selectedTask.value, { refresh = false } = {}) => {
+  const generateTaskRecommendations = (task = selectedTask.value, { refresh = false } = {}) => {
     if (!task?.id || !projectHallTask(task ? { task } : {}).actions.includes('ASSIGN')) return Promise.resolve([])
     const taskKey = recommendationTaskKey(task)
     const identity = identityFingerprint()
@@ -277,6 +281,35 @@ export const useHallData = ({
       }
     })()
     recommendationRequest = { key, epoch, controller, promise }
+    return promise
+  }
+
+  // Explicit retry refreshes the authoritative detail first; no automatic model retry.
+  // Keep preparation separate from the model epoch: adopting a new task version
+  // intentionally invalidates any old response via the existing synchronous watcher.
+  const loadTaskRecommendations = (task = selectedTask.value, { refresh = false } = {}) => {
+    const identity = identityFingerprint()
+    if (recommendationRefresh?.taskId === task?.id && recommendationRefresh.identity === identity) return recommendationRefresh.promise
+    if (!refresh) return generateTaskRecommendations(task)
+    if (!task?.id || selectedTask.value?.id !== task.id) return Promise.resolve([])
+    if (recommendationRequest?.key === `${identity}\u0000${recommendationTaskKey(task)}`) return recommendationRequest.promise
+    const operation = { taskId: task.id, identity }
+    recommendationPreparation.value = operation
+    const promise = (async () => {
+      const loaded = await loadTaskDetail(task)
+      if (recommendationRefresh !== operation || identity !== identityFingerprint() || selectedTask.value?.id !== task.id) return []
+      if (!loaded) {
+        taskRecommendations.value = { ...taskRecommendations.value, [task.id]: {
+          state: 'ERROR', result: null, taskKey: recommendationTaskKey(selectedTask.value)
+        } }
+        return []
+      }
+      return await generateTaskRecommendations(selectedTask.value, { refresh: true })
+    })().finally(() => {
+      if (recommendationRefresh === operation) { recommendationRefresh = null; recommendationPreparation.value = null }
+    })
+    operation.promise = promise
+    recommendationRefresh = operation
     return promise
   }
 
@@ -522,6 +555,7 @@ export const useHallData = ({
     bindPersona,
     canAssign,
     assigneeCandidates,
+    candidatesTaskId,
     candidatesLoading,
     candidatesError,
     candidatesNextAfterAgentId,

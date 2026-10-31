@@ -360,6 +360,7 @@
             :recommendation-state="recommendationState"
             @refresh-recommendation="loadTaskRecommendations(selectedTask, { refresh: true })"
             :assignee-candidates="assigneeCandidates"
+            :candidates-task-id="candidatesTaskId"
             :candidates-loading="candidatesLoading"
             :candidates-error="candidatesError"
             :candidates-next-after-agent-id="candidatesNextAfterAgentId"
@@ -1289,6 +1290,7 @@ const {
   bindPersona,
   canAssign,
   assigneeCandidates,
+  candidatesTaskId,
   candidatesLoading,
   candidatesError,
   candidatesNextAfterAgentId,

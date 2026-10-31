@@ -1,6 +1,15 @@
 .model-recommendation-page .matter-advice-card { min-width:0; box-sizing:border-box; overflow-wrap:anywhere; }
 .model-recommendation-page .model-recommendation-demo { padding:12px; border:1px solid #dfd8c9; border-radius:10px; background:#f8f6ef; }
 .model-recommendation-page .model-recommendation-demo h4 { margin:0 0 8px; }
-.model-recommendation-page .model-manual-options,.model-recommendation-page .model-state-options { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+.model-manual-options,.model-recommendation-page .model-state-options { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
 .model-recommendation-page .matter-advice-card button { max-width:100%; white-space:normal; min-height:36px; }
 .model-recommendation-page .matter-advice-card button:disabled { opacity:.5; cursor:not-allowed; }
+
+/* Pending assignment follows the existing commission candidate cards. */
+.model-manual-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+.model-manual-options button { display:flex; gap:12px; align-items:center; width:100%; text-align:left; padding:12px; }
+.model-manual-options button>span:nth-child(2) { flex:1; min-width:0; }
+.model-manual-options small { display:block; }
+.model-manual-options button[aria-pressed=true] { border-color:var(--work-brand,#923f30); background:var(--hall-surface-brand,#f6eee8); }
+.model-candidate-avatar { display:grid; place-items:center; flex:none; width:36px; height:36px; border-radius:50%; background:var(--hall-surface-subtle,#f3f3ed); }
+@media(max-width:720px) { .model-manual-options { grid-template-columns:1fr; } }

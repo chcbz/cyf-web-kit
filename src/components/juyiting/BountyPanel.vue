@@ -196,7 +196,8 @@
                 </section>
                 <template v-if="embeddedHall">
                   <template v-if="hasTaskAction(detailTask, 'ASSIGN')">
-                  <section class="matter-recommendation" aria-label="智能推荐" aria-live="polite">
+                  <section class="matter-recommendation" :aria-busy="recommendationState.state === 'LOADING'" aria-label="智能推荐" aria-live="polite">
+                      <span v-if="recommendationState.state === 'LOADING'" class="recommendation-spinner" aria-hidden="true" />
                     <p role="status">{{ recommendationStateText(recommendationState.state) }}</p>
                     <p v-if="recommendationState.result?.requirementSummary">需求理解：{{ recommendationState.result.requirementSummary }}</p>
                     <p v-for="question in recommendationState.result?.questions || []" :key="question">待确认：{{ question }}</p>
@@ -213,19 +214,26 @@
                       type="button"
                       class="matter-agent-toggle"
                       :aria-expanded="showMatterCandidates"
-                      :disabled="pointAndStartBusy || Boolean(pointAndStartForDetail)"
+                      :disabled="recommendationState.state === 'LOADING' || pointAndStartBusy || Boolean(pointAndStartForDetail)"
                       @click="showMatterCandidates = !showMatterCandidates"
-                    >更换承办好汉</button>
-                    <div v-if="showMatterCandidates" class="matter-candidates" aria-label="承办候选">
+                    >{{ showMatterCandidates ? '收起承办候选' : '选择承办好汉' }}</button>
+                    <div v-if="showMatterCandidates" class="matter-candidate-picker">
+                      <div class="matter-candidate-filters" aria-label="候选所属筛选">
+                        <button v-for="filter in candidateFilters" :key="filter.value" type="button"
+                          :aria-pressed="matterCandidateFilter === filter.value" @click="matterCandidateFilter = filter.value">{{ filter.label }}</button>
+                      </div>
+                      <div class="matter-candidates" aria-label="承办候选">
                       <button
-                        v-for="agent in matterCandidates"
+                        v-for="agent in filteredMatterCandidates"
                         :key="agent.agentId"
+                        class="matter-candidate-card"
                         type="button"
                         :aria-pressed="matterAgent?.agentId === agent.agentId"
-                        :disabled="pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, agent)"
+                        :disabled="recommendationState.state === 'LOADING' || pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, agent)"
                         @click="matterCandidateId = agent.agentId"
-                      ><span>{{ agentDisplayName(agent) }}</span><small>{{ assigneeProviderText(agent) }} · {{ assigneeAvailabilityText(agent) }}</small><small v-if="agent.recommendationReason">{{ agent.recommendationReason }}</small></button>
-                      <p v-if="!matterCandidates.length && !candidatesLoading && !candidatesError" role="status">暂无可承办的好汉。</p>
+                      ><span class="matter-candidate-avatar" aria-hidden="true">{{ agentDisplayName(agent).slice(0, 1) }}</span><span class="matter-candidate-copy"><strong>{{ agentDisplayName(agent) }}</strong><small>{{ assigneeProviderText(agent) }} · {{ assigneeAvailabilityText(agent) }}</small><small>{{ agent.recommendationReason || '可手动选择承办；非模型推荐' }}</small></span><span class="matter-candidate-check" aria-hidden="true">{{ matterAgent?.agentId === agent.agentId ? '✓' : '' }}</span></button>
+                      <p v-if="matterCandidates.length && !filteredMatterCandidates.length" role="status">暂无符合当前筛选的承办人，请切换筛选。</p>
+                      </div>
                       <button
                         v-if="candidatesNextAfterAgentId"
                         type="button"
@@ -244,7 +252,7 @@
                     <button
                       type="button"
                       class="matter-primary-action"
-                      :disabled="!matterAgent || pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, matterAgent)"
+                      :disabled="recommendationState.state === 'LOADING' || !matterAgent || pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, matterAgent)"
                       @click="confirmMatterAgent"
                     >确认承办，进入议事</button>
                   </template>
@@ -433,14 +441,15 @@
 
             <div v-if="!embeddedHall && canActOnTask(detailTask)" class="modal-agent-scroll">
               <div class="section-label">可点好汉</div>
-              <section class="matter-recommendation" aria-label="智能推荐" aria-live="polite">
+              <section class="matter-recommendation" :aria-busy="recommendationState.state === 'LOADING'" aria-label="智能推荐" aria-live="polite">
+                      <span v-if="recommendationState.state === 'LOADING'" class="recommendation-spinner" aria-hidden="true" />
                 <p role="status">{{ recommendationStateText(recommendationState.state) }}</p>
                 <p v-if="recommendationState.result?.requirementSummary">需求理解：{{ recommendationState.result.requirementSummary }}</p>
                 <p v-for="question in recommendationState.result?.questions || []" :key="question">待确认：{{ question }}</p>
                 <button type="button" :disabled="recommendationState.state === 'LOADING' || pointAndStartBusy" @click="$emit('refresh-recommendation')">重新推荐</button>
               </section>
               <div
-                v-for="agent in matterCandidates"
+                v-for="agent in filteredMatterCandidates"
                 :key="agent.agentId"
                 class="recommended-agent-row"
                 :class="{ active: selectedAgent?.agentId === agent.agentId }"
@@ -495,7 +504,7 @@
                 </div>
               </div>
             </div>
-            <section v-if="hasTaskAction(detailTask, 'ASSIGN') && !assignableRecommendedAgents.length" class="no-agent-recruitment" role="status">
+            <section v-if="showNoAssigneeRecruitment" class="no-agent-recruitment" role="status">
               <p>暂未寻得可领令的好汉。</p>
               <button type="button" @click="$emit('recruit-agent', detailTask)">去招贤令</button>
             </section>
@@ -563,6 +572,7 @@ const props = defineProps({
   selectedTask: { type: Object, default: null },
   selectedAgent: { type: Object, default: null },
   assigneeCandidates: { type: Array, default: () => [] },
+  candidatesTaskId: { type: String, default: null },
   candidatesLoading: { type: Boolean, default: false },
   candidatesError: { type: String, default: '' },
   candidatesNextAfterAgentId: { type: String, default: null },
@@ -750,20 +760,29 @@ const assignedAgentForTask = task => {
 }
 const assignableRecommendedAgents = computed(() => props.recommendedAgents.filter(agent => props.canAssign(detailTask.value, agent)))
 const matterCandidateId = ref('')
-const showMatterCandidates = ref(false)
+const showMatterCandidates = ref(true)
+const matterCandidateFilter = ref('all')
+const candidateFilters = [{ value: 'all', label: '全部' }, { value: 'mine', label: '我的' }, { value: 'external', label: '外部' }]
 const matterCandidates = computed(() => {
   const seen = new Set()
   return [...assignableRecommendedAgents.value, ...props.assigneeCandidates]
     .filter(agent => agent?.agentId && props.canAssign(detailTask.value, agent) && !seen.has(agent.agentId) && seen.add(agent.agentId))
 })
+const filteredMatterCandidates = computed(() => matterCandidates.value.filter(agent =>
+  matterCandidateFilter.value === 'all' || (matterCandidateFilter.value === 'mine') === (agent.isMine ?? agent.boundToMe)))
+const showNoAssigneeRecruitment = computed(() => hasTaskAction(detailTask.value, 'ASSIGN') &&
+  !matterCandidates.value.length && !props.candidatesLoading && !props.candidatesError &&
+  !props.candidatesNextAfterAgentId && (isFundedTask(detailTask.value)
+    ? props.recommendationState.state === 'NO_CANDIDATES'
+    : props.candidatesTaskId === detailTask.value?.id))
 const matterAgent = computed(() => {
   if (!hasTaskAction(detailTask.value, 'ASSIGN')) return assignedAgentForTask(detailTask.value)
   return matterCandidateId.value ? matterCandidates.value.find(agent => agent.agentId === matterCandidateId.value) || null : assignableRecommendedAgents.value[0] || null
 })
-watch(() => [props.identityScope, props.authorizationGeneration, detailTask.value?.id, detailTask.value?.taskVersion], () => { matterCandidateId.value = ''; showMatterCandidates.value = false }, { flush: 'sync' })
+watch(() => [props.identityScope, props.authorizationGeneration, detailTask.value?.id, detailTask.value?.taskVersion], () => { matterCandidateId.value = ''; showMatterCandidates.value = true; matterCandidateFilter.value = 'all' }, { flush: 'sync' })
 const confirmMatterAgent = () => {
   const agent = matterAgent.value
-  if (!agent || props.pointAndStartBusy || pointAndStartForDetail.value || !hasTaskAction(detailTask.value, 'ASSIGN') || !props.canAssign(detailTask.value, agent)) return
+  if (props.recommendationState.state === 'LOADING' || !agent || props.pointAndStartBusy || pointAndStartForDetail.value || !hasTaskAction(detailTask.value, 'ASSIGN') || !props.canAssign(detailTask.value, agent)) return
   emit('assign-task', detailTask.value, agent)
 }
 const primaryStatusFilters = computed(() => props.taskStatusFilters.filter(item => !['HISTORY', 'UNKNOWN'].includes(item.value)))
@@ -1717,4 +1736,21 @@ button:disabled {
 .matter-resources h4{margin:12px 0 6px}.matter-resources p{color:var(--hall-text-muted,#68716b);font-size:13px;line-height:1.5}
 .matter-candidates button { min-width: 0; max-width: 100%; text-align: left; overflow-wrap: anywhere; }
 .matter-candidates button small { display: block; font-size: 12px; color: var(--hall-text-muted, #68716b); }
+
+/* Same inline candidate cards as the commission prototype; do not conflate no advice with no candidates. */
+.matter-candidate-picker { min-width:0; }
+.matter-candidate-filters { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+.matter-candidate-filters button { min-height:44px; padding:8px 14px; border:1px solid var(--hall-border,#e3e5dc); border-radius:8px; background:var(--hall-surface,#fffefa); color:var(--hall-text,#242e2b); }
+.matter-candidate-filters button[aria-pressed="true"] { background:var(--hall-brand,#923f30); color:white; }
+.matter-candidates { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch; }
+.matter-candidates .matter-candidate-card { display:flex; align-items:center; gap:12px; width:100%; padding:12px; }
+.matter-candidates .matter-candidate-card[aria-pressed="true"] { background:var(--hall-surface-brand,#f6eee8); }
+.matter-candidate-avatar { flex:none; display:grid; place-items:center; width:36px; height:36px; border-radius:50%; background:var(--hall-surface-subtle,#f3f3ed); }
+.matter-candidate-copy { flex:1; min-width:0; }
+.matter-candidate-check { flex:none; width:16px; }
+.matter-candidate-picker button:focus-visible { outline:2px solid var(--hall-brand,#923f30); outline-offset:3px; }
+.recommendation-spinner { display:inline-block; width:14px; height:14px; border:2px solid var(--hall-border,#e3e5dc); border-top-color:var(--hall-brand,#923f30); border-radius:50%; animation:recommendation-spin 1s linear infinite; }
+@keyframes recommendation-spin { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce) { .recommendation-spinner { animation:none; } }
+@media(max-width:720px) { .matter-candidates { grid-template-columns:1fr; } }
 </style>

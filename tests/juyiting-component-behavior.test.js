@@ -1651,7 +1651,6 @@ describe('JuyiHall component behavior', () => {
       expect(wrapper.findAll('.task-secondary-filters button')).to.have.length(2)
       await wrapper.find('.task-card').trigger('click')
       expect(wrapper.text()).to.include('事项进展')
-      await wrapper.get('.matter-agent-toggle').trigger('click')
       await wrapper.findAll('.matter-candidates button')[1].trigger('click')
       expect(wrapper.emitted('assign-task')).to.equal(undefined)
       await wrapper.get('.matter-primary-action').trigger('click')
@@ -1659,8 +1658,44 @@ describe('JuyiHall component behavior', () => {
       await wrapper.setProps({ pointAndStartBusy: true })
       expect(wrapper.get('.matter-primary-action').element.disabled).to.equal(true)
       await wrapper.setProps({ pointAndStartBusy: false }); wrapper.vm.openTask({ ...task, id: 'second' }); await Vue.nextTick()
-      expect(wrapper.find('.matter-candidates').exists()).to.equal(false)
+      expect(wrapper.find('.matter-candidates').exists()).to.equal(true)
     } finally { wrapper.unmount() }
+  })
+
+  it('keeps manual candidates on no advice, filters without clearing selection, and shows only authoritative emptiness', async () => {
+    const task = { id: 'manual-task', taskVersion: '1', status: 'open', title: '需求' }
+    const candidates = [{ agentId: 'a', displayName: '林冲', isMine: true, availability: 'online' },
+      { agentId: 'b', displayName: '吴用', isMine: false, availability: 'offline', providerDisplayName: '他人' }]
+    const wrapper = mount(BountyPanel, { global: { stubs }, props: {
+      embeddedHall: true, tasks: [task], selectedTask: task, assigneeCandidates: candidates,
+      candidatesTaskId: task.id, recommendedAgents: [], recommendationState: { state: 'NO_MATCH' },
+      abilityText: () => '', canAssign: () => true, formatTime: v => v, portraitName: a => a.name,
+      portraitStyle: () => ({}), taskStateClass: () => '', taskStatusText: () => '待确认承办',
+      taskStatusCount: () => 1, taskStatusFilters: []
+    } })
+    await wrapper.find('.task-card').trigger('click')
+    expect(wrapper.find('.no-agent-recruitment').exists()).to.equal(false)
+    expect(wrapper.findAll('.matter-candidate-card')).to.have.length(2)
+    await wrapper.findAll('.matter-candidate-card')[1].trigger('click')
+    expect(wrapper.emitted('assign-task')).to.equal(undefined)
+    await wrapper.findAll('.matter-candidate-filters button')[1].trigger('click')
+    expect(wrapper.findAll('.matter-candidate-card')).to.have.length(1)
+    await wrapper.get('.matter-primary-action').trigger('click')
+    expect(wrapper.emitted('assign-task')[0]).to.deep.equal([task, candidates[1]])
+    await wrapper.setProps({ recommendationState: { state: 'LOADING' } })
+    expect(wrapper.get('.matter-primary-action').element.disabled).to.equal(true)
+    expect(wrapper.get('.matter-candidate-card').element.disabled).to.equal(true)
+    await wrapper.setProps({ recommendationState: { state: 'NO_MATCH' }, assigneeCandidates: [], candidatesLoading: true })
+    expect(wrapper.find('.no-agent-recruitment').exists()).to.equal(false)
+    await wrapper.setProps({ candidatesLoading: false, candidatesError: '网络错误' })
+    expect(wrapper.find('.no-agent-recruitment').exists()).to.equal(false)
+    await wrapper.setProps({ candidatesError: '', candidatesNextAfterAgentId: 'next' })
+    expect(wrapper.find('.no-agent-recruitment').exists()).to.equal(false)
+    await wrapper.setProps({ candidatesNextAfterAgentId: null, candidatesTaskId: null })
+    expect(wrapper.find('.no-agent-recruitment').exists()).to.equal(false)
+    await wrapper.setProps({ candidatesTaskId: task.id })
+    expect(wrapper.find('.no-agent-recruitment').exists()).to.equal(true)
+    wrapper.unmount()
   })
 
   it('emits explicit recommendation actions from BountyPanel', async () => {
@@ -1853,9 +1888,8 @@ describe('JuyiHall component behavior', () => {
 
     await wrapper.find('.task-card').trigger('click')
 
-    await wrapper.get('.matter-agent-toggle').trigger('click')
     const buttons = wrapper.findAll('.matter-candidates button')
-    expect(buttons.map(button => button.get('span').text())).to.deep.equal(['公孙胜', '吴用'])
+    expect(buttons.map(button => button.get('strong').text())).to.deep.equal(['公孙胜', '吴用'])
     expect(wrapper.emitted('assign-task')).to.equal(undefined)
 
     await buttons[0].trigger('click')

@@ -10,7 +10,7 @@ const result = () => ({ taskId: 'task-r1', taskVersion: '7', state: 'READY', obs
     reason: '登记了写作本领', evidence: [{ id: 'ability:0', kind: 'DECLARED_ABILITY', label: '写作', description: '登记声明', available: true }], gaps: ['需确认受众'] }] })
 const create = implementation => {
   const selectedTask = ref(task()), identityScope = ref('owner-a')
-  const data = useHallData({ agentApi: { create: implementation, get: async () => ({ items: [{ agentId: 'a', displayName: '好汉', providerDisplayName: null, isMine: true, availability: 'online' }], nextAfterAgentId: null }) }, log: { warn() {} },
+  const data = useHallData({ agentApi: { create: implementation, get: async url => url.endsWith('/assignee-candidates') ? ({ items: [{ agentId: 'a', displayName: '好汉', providerDisplayName: null, isMine: true, availability: 'online' }], nextAfterAgentId: null }) : selectedTask.value }, log: { warn() {} },
     normalizeStatus: value => value?.toLowerCase(), selectedAgent: ref(null), selectedTask, identityScope })
   data.agents.value = [agent]
   return { data, selectedTask, identityScope }
@@ -72,4 +72,49 @@ describe('single-track model assignee recommendation R1', () => {
     data.dispose()
     expect(parseAssigneeRecommendation({ ...result(), state: 'NEEDS_CLARIFICATION', recommendations: [], questions: ['面向谁？'] }, task()).state).to.equal('NEEDS_CLARIFICATION')
   })
+  it('refreshes detail once before retry, adopts current version and coalesces repeated clicks', async () => {
+    const selectedTask = ref(task()), identityScope = ref('owner')
+    let release, calls = 0, reads = 0
+    const data = useHallData({ selectedTask, selectedAgent: ref(null), identityScope,
+      normalizeStatus: v => v, log: { warn() {} }, agentApi: {
+        get: async url => {
+          if (url.endsWith('/assignee-candidates')) return { items: [], nextAfterAgentId: null }
+          reads++; await new Promise(r => { release = r }); return { ...task(), taskVersion: '8' }
+        },
+        create: async (_url, body, options) => {
+          calls++; expect(body.expectedTaskVersion).to.equal('8')
+          options.onSuccess({ ...result(), taskVersion: '8' })
+        }
+      } })
+    const first = data.loadTaskRecommendations(selectedTask.value, { refresh: true })
+    expect(data.loadTaskRecommendations(selectedTask.value, { refresh: true })).to.equal(first)
+    expect(data.recommendationState.value.state).to.equal('LOADING')
+    expect(calls).to.equal(0); release(); await first
+    expect(reads).to.equal(1); expect(calls).to.equal(1)
+    expect(data.recommendationState.value.state).to.equal('READY')
+    data.dispose()
+  })
+  it('does not call the model on failed detail refresh or after identity/task switching', async () => {
+    for (const change of ['failure', 'identity', 'task']) {
+      const selectedTask = ref(task()), identityScope = ref('owner')
+      let release, calls = 0
+      const data = useHallData({ selectedTask, selectedAgent: ref(null), identityScope,
+        normalizeStatus: v => v, log: { warn() {} }, agentApi: {
+          get: async url => {
+            if (url.endsWith('/assignee-candidates')) return { items: [], nextAfterAgentId: null }
+            await new Promise(r => { release = r })
+            if (change === 'failure') throw new Error('offline')
+            return { ...task(), taskVersion: '8' }
+          }, create: async () => { calls++ }
+        } })
+      const pending = data.loadTaskRecommendations(selectedTask.value, { refresh: true })
+      if (change === 'identity') identityScope.value = 'other'
+      if (change === 'task') selectedTask.value = { ...task(), id: 'other' }
+      release(); await pending
+      expect(calls).to.equal(0)
+      expect(data.recommendationState.value.state).to.equal(change === 'failure' ? 'ERROR' : 'IDLE')
+      data.dispose()
+    }
+  })
+
 })
