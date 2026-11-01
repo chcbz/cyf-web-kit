@@ -7,7 +7,7 @@ const task = () => ({ id: 'task-r1', taskVersion: '7', title: '写一份说明',
 const agent = { agentId: 'a', name: '好汉', status: 'online', canOperate: true, boundToMe: true, abilities: ['写作'] }
 const result = () => ({ taskId: 'task-r1', taskVersion: '7', state: 'READY', observedAt: 1000,
   candidateSetComplete: true, requirementSummary: '写使用说明', questions: [], recommendations: [{ agent,
-    reason: '登记了写作本领', evidence: [{ id: 'ability:0', kind: 'DECLARED_ABILITY', label: '写作', description: '登记声明', available: true }], gaps: ['需确认受众'] }] })
+    reason: '登记了写作本领', evidence: [{ id: 'ability:0', kind: 'DECLARED_ABILITY', label: '写作', description: '登记声明', available: true }], gaps: ['受众未知，不保证适合具体使用场景'] }] })
 const create = implementation => {
   const selectedTask = ref(task()), identityScope = ref('owner-a')
   const data = useHallData({ agentApi: { create: implementation, get: async url => url.endsWith('/assignee-candidates') ? ({ items: [{ agentId: 'a', displayName: '好汉', providerDisplayName: null, isMine: true, availability: 'online' }], nextAfterAgentId: null }) : selectedTask.value }, log: { warn() {} },
@@ -63,14 +63,19 @@ describe('single-track model assignee recommendation R1', () => {
     valid.recommendations[0].evidence[0].available = false
     expect(() => parseAssigneeRecommendation(valid, task())).to.throw()
   })
-  it('represents clarification and stale results distinctly, with explicit retry only', async () => {
+  it('rejects removed clarification and questions, retaining explicit stale retry', async () => {
     let calls = 0
     const { data } = create(async () => { calls++; throw Object.assign(new Error(), { code: 'RECOMMENDATION_STALE', status: 409 }) })
     await data.loadTaskRecommendations(); expect(data.recommendationState.value.state).to.equal('STALE')
     await data.loadTaskRecommendations(); expect(calls).to.equal(1)
     await data.loadTaskRecommendations(task(), { refresh: true }); expect(calls).to.equal(2)
     data.dispose()
-    expect(parseAssigneeRecommendation({ ...result(), state: 'NEEDS_CLARIFICATION', recommendations: [], questions: ['面向谁？'] }, task()).state).to.equal('NEEDS_CLARIFICATION')
+    for (const value of [
+      { ...result(), state: 'NEEDS_CLARIFICATION', recommendations: [], questions: ['面向谁？'] },
+      { ...result(), state: 'NEEDS_CLARIFICATION', recommendations: [], questions: [] },
+      { ...result(), questions: ['请补充需求'] },
+      { ...result(), state: 'NO_MATCH', recommendations: [], questions: ['请补充需求'] }
+    ]) expect(() => parseAssigneeRecommendation(value, task())).to.throw()
   })
   it('refreshes detail once before retry, adopts current version and coalesces repeated clicks', async () => {
     const selectedTask = ref(task()), identityScope = ref('owner')

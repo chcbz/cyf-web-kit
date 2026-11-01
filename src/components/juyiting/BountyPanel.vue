@@ -200,7 +200,6 @@
                       <span v-if="recommendationState.state === 'LOADING'" class="recommendation-spinner" aria-hidden="true" />
                     <p role="status">{{ recommendationStateText(recommendationState.state) }}</p>
                     <p v-if="recommendationState.result?.requirementSummary">需求理解：{{ recommendationState.result.requirementSummary }}</p>
-                    <p v-for="question in recommendationState.result?.questions || []" :key="question">待确认：{{ question }}</p>
                     <template v-if="matterAgent?.recommendationReason">
                       <p>推荐理由（模型建议）：{{ matterAgent.recommendationReason }}</p>
                       <ul><li v-for="evidence in matterAgent.recommendationEvidence || []" :key="evidence.id">{{ evidence.label }}：{{ evidence.description }}</li></ul>
@@ -445,7 +444,6 @@
                       <span v-if="recommendationState.state === 'LOADING'" class="recommendation-spinner" aria-hidden="true" />
                 <p role="status">{{ recommendationStateText(recommendationState.state) }}</p>
                 <p v-if="recommendationState.result?.requirementSummary">需求理解：{{ recommendationState.result.requirementSummary }}</p>
-                <p v-for="question in recommendationState.result?.questions || []" :key="question">待确认：{{ question }}</p>
                 <button type="button" :disabled="recommendationState.state === 'LOADING' || pointAndStartBusy" @click="$emit('refresh-recommendation')">重新推荐</button>
               </section>
               <div
@@ -530,7 +528,6 @@
 const recommendationStateText = state => ({
   IDLE: '尚未生成智能推荐，可手动选择承办。', LOADING: '正在比较需求、本领和技能，不会启动办理…',
   READY: '以下为模型建议，能力依据以服务端观察为准，不保证办理结果。',
-  NEEDS_CLARIFICATION: '请补充以下需求后重新推荐，也可手动选择承办。',
   NO_MATCH: '当前没有足够依据推荐合适人选，可手动选择承办。',
   NO_CANDIDATES: '暂无可承办候选，请核对接单范围和可用状态。',
   ERROR: '智能推荐暂不可用，可重试或手动选择承办。',
