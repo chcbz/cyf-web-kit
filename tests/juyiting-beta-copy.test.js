@@ -15,11 +15,11 @@ describe('beta workbench copy boundaries', () => {
     expect(failed.readOnly).to.equal(true)
     expect(failed.actions).to.deep.equal(['VIEW'])
   })
-  it('discloses external processing and submission is not execution', () => {
+  it('keeps provider identity and send recovery without redundant pending-assignment notices', () => {
     const panel = source('components/juyiting/BountyPanel.vue')
     expect(panel).to.include('所属用户 / 当前状态')
-    expect(panel).to.include('其运行环境及模型服务会处理这些内容')
-    expect(panel).to.include('提交成功不代表已经开始办理')
+    expect(panel).not.to.include('其运行环境及模型服务会处理这些内容')
+    expect(panel).to.include('确认承办，进入议事')
     expect(panel).to.include('查询发送结果')
     expect(panel).to.include('继续原请求')
   })

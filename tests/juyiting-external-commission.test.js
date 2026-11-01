@@ -271,7 +271,7 @@ describe('D3.1 actual detail surfaces', () => {
       taskStatusText: () => '', taskStateClass: () => '', taskStatusCount: () => '0', taskAgentMatchScore: () => 0 } })
     mounted.push(() => wrapper.unmount())
     wrapper.vm.openTask(task); await Vue.nextTick()
-    expect(wrapper.text()).to.include('其运行环境及模型服务会处理这些内容')
+    expect(wrapper.text()).not.to.include('其运行环境及模型服务会处理这些内容')
       expect(wrapper.get('.matter-agent-toggle').attributes('aria-expanded')).to.equal('true')
     expect(wrapper.text()).to.include('其他用户 · 离线')
     await wrapper.findAll('button').find(b => b.text() === '加载更多候选').trigger('click')

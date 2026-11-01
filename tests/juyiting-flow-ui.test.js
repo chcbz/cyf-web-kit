@@ -279,7 +279,7 @@ describe('model recommendation actual matter UI', () => {
     } finally { wrapper.unmount() }
   })
 
-  it('shows evidence and gaps without score; only explicit confirmation dispatches', async () => {
+  it('shows candidate reason without summary panels; only explicit confirmation dispatches', async () => {
     const task = { id: 'recommend', title: '写说明', status: 'open', taskVersion: '1' }
     const agent = { ...baseProps.operableAgents[0], recommendationLevel: 'HIGH', recommendationReason: '已登记写作本领',
       recommendationEvidence: [{ id: 'ability:0', label: '写作', description: '登记声明' }], recommendationGaps: ['确认受众'] }
@@ -287,12 +287,13 @@ describe('model recommendation actual matter UI', () => {
       recommendationState: { state: 'READY', result: { requirementSummary: '编写说明', questions: [] } } } })
     try {
       wrapper.vm.openTask(task); await Vue.nextTick()
-      expect(wrapper.get('.matter-recommendation').text()).to.include('登记声明')
-      expect(wrapper.get('.matter-recommendation').text()).to.include('提醒：确认受众')
+      expect(wrapper.find('.matter-recommendation').exists()).to.equal(false)
+      expect(wrapper.get('.matter-candidate-card').text()).to.include('已登记写作本领')
+      expect(wrapper.find('.recommendation-understanding').exists()).to.equal(false)
+      expect(wrapper.get('.recommendation-level').text()).to.equal('推荐度高')
       expect(wrapper.text()).not.to.include('评分明细')
       expect(wrapper.emitted('assign-task')).to.equal(undefined)
-      await wrapper.get('.matter-recommendation button').trigger('click')
-      expect(wrapper.emitted('refresh-recommendation')).to.have.length(1)
+      expect(wrapper.emitted('refresh-recommendation')).to.equal(undefined)
       expect(wrapper.emitted('assign-task')).to.equal(undefined)
       await wrapper.get('.matter-primary-action').trigger('click')
       expect(wrapper.emitted('assign-task')).to.have.length(1)
