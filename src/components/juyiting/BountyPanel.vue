@@ -196,27 +196,16 @@
                 </section>
                 <template v-if="embeddedHall">
                   <template v-if="hasTaskAction(detailTask, 'ASSIGN')">
-                  <section class="matter-recommendation" :aria-busy="recommendationState.state === 'LOADING'" aria-label="智能推荐" aria-live="polite">
+                  <section v-if="['LOADING', 'ERROR', 'STALE'].includes(recommendationState.state)" class="matter-recommendation" :aria-busy="recommendationState.state === 'LOADING'" aria-label="智能推荐" aria-live="polite">
 
                     <div class="recommendation-status" role="status">
                       <span v-if="recommendationState.state === 'LOADING'" class="recommendation-spinner" aria-hidden="true" />
                       <span>{{ recommendationStateText(recommendationState.state) }}</span>
                     </div>
                     <p v-if="recommendationState.state === 'LOADING'" class="recommendation-hint">推荐完成后，你可以查看理由并选择承办人。</p>
-                    <details v-if="recommendationState.state !== 'LOADING' && recommendationState.result?.requirementSummary"
-                      :key="`${detailTask?.id}:${recommendationState.result.observedAt}`" class="recommendation-understanding">
-                      <summary>需求理解</summary>
-                      <p>{{ recommendationState.result.requirementSummary }}</p>
-                    </details>
-                    <details v-if="matterAgent?.recommendationReason" class="recommendation-understanding" :key="matterAgent.agentId">
-                      <summary>查看所选好汉的能力依据</summary>
-                      <ul><li v-for="evidence in matterAgent.recommendationEvidence || []" :key="evidence.id">{{ evidence.label }}：{{ evidence.description }}</li></ul>
-                      <p v-for="gap in matterAgent.recommendationGaps || []" :key="gap">提醒：{{ gap }}</p>
-                    </details>
-                    <button type="button" :disabled="recommendationState.state === 'LOADING' || pointAndStartBusy" @click="$emit('refresh-recommendation')">重新推荐</button>
+                    <button v-if="recommendationState.state !== 'LOADING'" type="button" :disabled="pointAndStartBusy" @click="$emit('refresh-recommendation')">重新推荐</button>
                   </section>
 
-                    <p class="matter-fee-note">确认后，将需求和所选资料交给这位好汉；其运行环境及模型服务会处理这些内容。好汉离线或忙碌时，提交成功不代表已经开始办理。</p>
                     <button
                       type="button"
                       class="matter-agent-toggle"
@@ -225,13 +214,9 @@
                       @click="showMatterCandidates = !showMatterCandidates"
                     >{{ showMatterCandidates ? '收起承办候选' : '选择承办好汉' }}</button>
                     <div v-if="showMatterCandidates" class="matter-candidate-picker">
-                      <div class="matter-candidate-filters" aria-label="候选所属筛选">
-                        <button v-for="filter in candidateFilters" :key="filter.value" type="button"
-                          :aria-pressed="matterCandidateFilter === filter.value" @click="matterCandidateFilter = filter.value">{{ filter.label }}</button>
-                      </div>
                       <div class="matter-candidates" aria-label="承办候选">
                       <button
-                        v-for="agent in filteredMatterCandidates"
+                        v-for="agent in matterCandidates"
                         :key="agent.agentId"
                         class="matter-candidate-card"
                         type="button"
@@ -239,7 +224,6 @@
                         :disabled="recommendationState.state === 'LOADING' || pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, agent)"
                         @click="matterCandidateId = agent.agentId"
                       ><span class="matter-candidate-avatar" aria-hidden="true">{{ agentDisplayName(agent).slice(0, 1) }}</span><span class="matter-candidate-copy"><strong>{{ agentDisplayName(agent) }}</strong><small>{{ assigneeProviderText(agent) }} · {{ assigneeAvailabilityText(agent) }}</small><small v-if="agent.recommendationLevel" class="recommendation-level" :data-level="agent.recommendationLevel">{{ recommendationLevelText(agent.recommendationLevel) }}</small><small>{{ agent.recommendationReason || '可手动选择承办' }}</small></span><span class="matter-candidate-check" aria-hidden="true">{{ matterAgent?.agentId === agent.agentId ? '✓' : '' }}</span></button>
-                      <p v-if="matterCandidates.length && !filteredMatterCandidates.length" role="status">暂无符合当前筛选的承办人，请切换筛选。</p>
                       </div>
                       <button
                         v-if="candidatesNextAfterAgentId"
@@ -457,7 +441,7 @@
                 <button type="button" :disabled="recommendationState.state === 'LOADING' || pointAndStartBusy" @click="$emit('refresh-recommendation')">重新推荐</button>
               </section>
               <div
-                v-for="agent in filteredMatterCandidates"
+                v-for="agent in matterCandidates"
                 :key="agent.agentId"
                 class="recommended-agent-row"
                 :class="{ active: selectedAgent?.agentId === agent.agentId }"
@@ -769,15 +753,11 @@ const assignedAgentForTask = task => {
 const assignableRecommendedAgents = computed(() => props.recommendedAgents.filter(agent => props.canAssign(detailTask.value, agent)))
 const matterCandidateId = ref('')
 const showMatterCandidates = ref(true)
-const matterCandidateFilter = ref('all')
-const candidateFilters = [{ value: 'all', label: '全部' }, { value: 'mine', label: '我的' }, { value: 'external', label: '外部' }]
 const matterCandidates = computed(() => {
   const seen = new Set()
   return [...assignableRecommendedAgents.value, ...props.assigneeCandidates]
     .filter(agent => agent?.agentId && props.canAssign(detailTask.value, agent) && !seen.has(agent.agentId) && seen.add(agent.agentId))
 })
-const filteredMatterCandidates = computed(() => matterCandidates.value.filter(agent =>
-  matterCandidateFilter.value === 'all' || (matterCandidateFilter.value === 'mine') === (agent.isMine ?? agent.boundToMe)))
 const showNoAssigneeRecruitment = computed(() => hasTaskAction(detailTask.value, 'ASSIGN') &&
   !matterCandidates.value.length && !props.candidatesLoading && !props.candidatesError &&
   !props.candidatesNextAfterAgentId && (isFundedTask(detailTask.value)
@@ -787,7 +767,7 @@ const matterAgent = computed(() => {
   if (!hasTaskAction(detailTask.value, 'ASSIGN')) return assignedAgentForTask(detailTask.value)
   return matterCandidateId.value ? matterCandidates.value.find(agent => agent.agentId === matterCandidateId.value) || null : assignableRecommendedAgents.value.find(agent => isRecommendedLevel(agent.recommendationLevel)) || null
 })
-watch(() => [props.identityScope, props.authorizationGeneration, detailTask.value?.id, detailTask.value?.taskVersion], () => { matterCandidateId.value = ''; showMatterCandidates.value = true; matterCandidateFilter.value = 'all' }, { flush: 'sync' })
+watch(() => [props.identityScope, props.authorizationGeneration, detailTask.value?.id, detailTask.value?.taskVersion], () => { matterCandidateId.value = ''; showMatterCandidates.value = true }, { flush: 'sync' })
 const confirmMatterAgent = () => {
   const agent = matterAgent.value
   if (props.recommendationState.state === 'LOADING' || !agent || props.pointAndStartBusy || pointAndStartForDetail.value || !hasTaskAction(detailTask.value, 'ASSIGN') || !props.canAssign(detailTask.value, agent)) return
@@ -1747,9 +1727,6 @@ button:disabled {
 
 /* Same inline candidate cards as the commission prototype; do not conflate no advice with no candidates. */
 .matter-candidate-picker { min-width:0; }
-.matter-candidate-filters { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
-.matter-candidate-filters button { min-height:44px; padding:8px 14px; border:1px solid var(--hall-border,#e3e5dc); border-radius:8px; background:var(--hall-surface,#fffefa); color:var(--hall-text,#242e2b); }
-.matter-candidate-filters button[aria-pressed="true"] { background:var(--hall-brand,#923f30); color:white; }
 .matter-candidates { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch; }
 .matter-candidates .matter-candidate-card { display:flex; align-items:center; gap:12px; width:100%; padding:12px; }
 .matter-candidates .matter-candidate-card[aria-pressed="true"] { background:var(--hall-surface-brand,#f6eee8); }
@@ -1760,9 +1737,6 @@ button:disabled {
 .matter-recommendation { padding:12px; border-radius:10px; background:var(--hall-surface-subtle,#f8f6ef); }
 .recommendation-status { display:flex; align-items:center; gap:10px; line-height:1.6; }
 .recommendation-hint { margin:8px 0; font-size:13px; color:var(--hall-muted,#788178); }
-.recommendation-understanding { margin:10px 0; font-size:13px; }
-.recommendation-understanding summary { cursor:pointer; color:var(--hall-muted,#788178); }
-.recommendation-understanding p { overflow-wrap:anywhere; }
 .matter-candidate-copy .recommendation-level { font-weight:600; color:var(--hall-brand,#923f30); }
 .matter-candidate-copy .recommendation-level[data-level="UNKNOWN"], .matter-candidate-copy .recommendation-level[data-level="LOW"] { color:var(--hall-muted,#788178); }
 .recommendation-spinner { display:inline-block; flex:none; width:20px; height:20px; border:2px solid var(--hall-border,#e3e5dc); border-top-color:var(--hall-brand,#923f30); border-radius:50%; animation:recommendation-spin 1s linear infinite; }

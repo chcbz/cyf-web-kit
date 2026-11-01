@@ -1,5 +1,5 @@
 import { computed, ref, toValue, watch } from 'vue'
-import { parseAssigneeRecommendation, recommendationTaskKey, recommendationLevelOrder } from './hallAssigneeRecommendation.js'
+import { parseAssigneeRecommendation, recommendationTaskKey } from './hallAssigneeRecommendation.js'
 import { assigneePage, assignedTaskTarget } from './hallAssigneeCandidates.js'
 import { pointAndStartLong } from './hallPointAndStartIntent.js'
 import { projectHallTask, validateHallTaskCounts } from './hallTaskPresentation.js'
@@ -74,7 +74,7 @@ export const useHallData = ({
     return entry.taskKey === recommendationTaskKey(task) ? entry : { state: 'STALE', result: null }
   })
   const recommendedAgents = computed(() => ['READY', 'NO_MATCH'].includes(recommendationState.value.state)
-    ? recommendationState.value.result.recommendations.slice().sort((a, b) => recommendationLevelOrder(a.recommendationLevel) - recommendationLevelOrder(b.recommendationLevel)).map(item => ({
+    ? recommendationState.value.result.recommendations.map(item => ({
       ...(selectedTask.value?.funding?.mode === 'FUNDED_SINGLE_AGENT' ? item.agent : {
         agentId: item.agent.agentId, displayName: item.agent.name,
         providerDisplayName: item.agent.providerDisplayName ?? null, isMine: item.agent.boundToMe,

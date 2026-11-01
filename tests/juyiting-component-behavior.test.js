@@ -1635,10 +1635,10 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.text()).to.include('Inspect the camp')
   })
 
-  it('shows friendly recommendation progress, collapsed understanding and per-agent degree without a refresh icon', async () => {
+  it('shows only candidate ratings on ready and keeps loading and error recovery', async () => {
     const task = { id: 'rating-task', title: '统计成绩', status: 'open', taskVersion: '1' }
-    const agents = ['HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'].map((level, i) => ({ agentId: `a${i}`, displayName: `好汉${i}`,
-      isMine: true, availability: 'online', recommendationLevel: level, recommendationReason: `理由${i}` }))
+    const agents = ['MEDIUM', 'HIGH', 'LOW', 'UNKNOWN'].map((level, i) => ({ agentId: `a${i}`, displayName: `好汉${i}`,
+      isMine: i !== 1, availability: 'online', recommendationLevel: level, recommendationReason: `理由${i}` }))
     const state = { state: 'READY', result: { observedAt: 1, requirementSummary: '读取成绩图片并统计' } }
     const wrapper = mount(BountyPanel, { global: { stubs }, props: {
       embeddedHall: true, tasks: [task], selectedTask: task, recommendedAgents: agents,
@@ -1649,17 +1649,25 @@ describe('JuyiHall component behavior', () => {
     try {
       await wrapper.find('.task-card').trigger('click')
       expect(wrapper.find('[aria-label="刷新承办候选"]').exists()).to.equal(false)
-      expect(wrapper.findAll('.recommendation-level').map(e => e.text())).to.deep.equal(['推荐度高', '推荐度中', '推荐度低', '资料不足'])
-      expect(wrapper.get('.recommendation-understanding').element.open).to.equal(false)
-      wrapper.get('.recommendation-understanding').element.open = true
+      expect(wrapper.findAll('.recommendation-level').map(e => e.text())).to.deep.equal(['推荐度中', '推荐度高', '推荐度低', '资料不足'])
+      expect(wrapper.findAll('.matter-candidate-card')[0].attributes('aria-pressed')).to.equal('true')
+      expect(wrapper.find('.matter-recommendation').exists()).to.equal(false)
+      expect(wrapper.find('.recommendation-understanding').exists()).to.equal(false)
+      expect(wrapper.find('.matter-candidate-filters').exists()).to.equal(false)
+      expect(wrapper.text()).not.to.include('确认后，将需求和所选资料')
       await wrapper.setProps({ recommendationState: { state: 'LOADING', result: null }, recommendedAgents: [] })
       expect(wrapper.get('.recommendation-status').text()).to.equal('正在为你挑选合适的好汉…')
       expect(wrapper.find('.recommendation-spinner').exists()).to.equal(true)
       expect(wrapper.get('.matter-primary-action').element.disabled).to.equal(true)
       expect(wrapper.find('.recommendation-understanding').exists()).to.equal(false)
-      expect(wrapper.get('.matter-recommendation button').element.disabled).to.equal(true)
+      expect(wrapper.find('.matter-recommendation button').exists()).to.equal(false)
+      for (const state of ['ERROR', 'STALE']) {
+        await wrapper.setProps({ recommendationState: { state, result: null } })
+        await wrapper.get('.matter-recommendation button').trigger('click')
+      }
+      expect(wrapper.emitted('refresh-recommendation')).to.have.length(2)
       await wrapper.setProps({ recommendationState: { state: 'NO_MATCH', result: { ...state.result, observedAt: 2 } }, recommendedAgents: agents.slice(2) })
-      expect(wrapper.get('.recommendation-understanding').element.open).to.equal(false)
+      expect(wrapper.find('.matter-recommendation').exists()).to.equal(false)
       expect(wrapper.get('.matter-primary-action').element.disabled).to.equal(true)
       await wrapper.findAll('.matter-candidate-card')[1].trigger('click')
       expect(wrapper.get('.matter-primary-action').element.disabled).to.equal(false)
@@ -1698,7 +1706,7 @@ describe('JuyiHall component behavior', () => {
     } finally { wrapper.unmount() }
   })
 
-  it('keeps manual candidates on no advice, filters without clearing selection, and shows only authoritative emptiness', async () => {
+  it('keeps all manual candidates without filters and shows only authoritative emptiness', async () => {
     const task = { id: 'manual-task', taskVersion: '1', status: 'open', title: '需求' }
     const candidates = [{ agentId: 'a', displayName: '林冲', isMine: true, availability: 'online' },
       { agentId: 'b', displayName: '吴用', isMine: false, availability: 'offline', providerDisplayName: '他人' }]
@@ -1714,8 +1722,8 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.findAll('.matter-candidate-card')).to.have.length(2)
     await wrapper.findAll('.matter-candidate-card')[1].trigger('click')
     expect(wrapper.emitted('assign-task')).to.equal(undefined)
-    await wrapper.findAll('.matter-candidate-filters button')[1].trigger('click')
-    expect(wrapper.findAll('.matter-candidate-card')).to.have.length(1)
+    expect(wrapper.find('.matter-candidate-filters').exists()).to.equal(false)
+    expect(wrapper.findAll('.matter-candidate-card')).to.have.length(2)
     await wrapper.get('.matter-primary-action').trigger('click')
     expect(wrapper.emitted('assign-task')[0]).to.deep.equal([task, candidates[1]])
     await wrapper.setProps({ recommendationState: { state: 'LOADING' } })

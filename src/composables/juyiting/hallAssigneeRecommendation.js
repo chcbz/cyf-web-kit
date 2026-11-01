@@ -2,7 +2,6 @@
 const text = value => typeof value === 'string' && value.trim().length > 0
 export const isRecommendedLevel = level => ['HIGH', 'MEDIUM'].includes(level)
 export const recommendationLevelText = level => ({ HIGH: '推荐度高', MEDIUM: '推荐度中', LOW: '推荐度低', UNKNOWN: '资料不足' }[level] || '')
-export const recommendationLevelOrder = level => ({ HIGH: 0, MEDIUM: 1, LOW: 2, UNKNOWN: 3 }[level] ?? 4)
 const strings = value => Array.isArray(value) && value.every(text)
 export const recommendationTaskKey = task => JSON.stringify([task?.id, task?.taskVersion, task?.title, task?.description])
 export const parseAssigneeRecommendation = (value, task) => {

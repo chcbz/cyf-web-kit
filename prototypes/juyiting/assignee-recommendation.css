@@ -17,8 +17,6 @@
 .model-recommendation-status { display:flex; align-items:center; gap:10px; line-height:1.6; }
 .model-recommendation-spinner { flex:none; width:20px; height:20px; border:2px solid #dfd8c9; border-top-color:#923f30; border-radius:50%; animation:model-recommendation-spin .9s linear infinite; }
 .model-recommendation-hint { font-size:13px; color:#788178; }
-.model-requirement-summary { margin:10px 0; }
-.model-requirement-summary summary { cursor:pointer; color:#788178; font-size:13px; }
 .model-recommendation-level { color:#923f30; font-weight:600; }
 @keyframes model-recommendation-spin { to { transform:rotate(360deg); } }
 @media(prefers-reduced-motion:reduce) { .model-recommendation-spinner { animation:none; } }

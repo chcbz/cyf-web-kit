@@ -16,12 +16,27 @@ const create = implementation => {
   return { data, selectedTask, identityScope }
 }
 describe('single-track model assignee recommendation R1', () => {
-  it('validates degrees, retains low/unknown rows and ranks all candidates without making a score', async () => {
+  it('preserves own-first suitable advice and external-first advice when own capability is insufficient', async () => {
+    for (const rows of [
+      [{ mine: true, level: 'MEDIUM' }, { mine: false, level: 'HIGH' }],
+      [{ mine: false, level: 'HIGH' }, { mine: true, level: 'LOW' }]
+    ]) {
+      const recommendations = rows.map((row, i) => ({ ...result().recommendations[0],
+        agent: { ...agent, agentId: `order-${i}`, boundToMe: row.mine }, recommendationLevel: row.level }))
+      const { data } = create(async (_url, _input, options) => options.onSuccess({ ...result(), recommendations }))
+      await data.loadTaskRecommendations()
+      expect(data.recommendedAgents.value.map(a => a.agentId)).to.deep.equal(['order-0', 'order-1'])
+      expect(data.recommendedAgents.value.map(a => a.recommendationLevel)).to.deep.equal(rows.map(r => r.level))
+      data.dispose()
+    }
+  })
+
+  it('validates degrees, retains low/unknown rows and preserves model order without making a score', async () => {
     const rows = ['UNKNOWN', 'LOW', 'HIGH', 'MEDIUM'].map((level, index) => ({ ...result().recommendations[0],
       agent: { ...agent, agentId: String(index) }, recommendationLevel: level, evidence: level === 'UNKNOWN' ? [] : result().recommendations[0].evidence }))
     const { data } = create(async (_url, _input, options) => options.onSuccess({ ...result(), recommendations: rows }))
     await data.loadTaskRecommendations()
-    expect(data.recommendedAgents.value.map(a => a.recommendationLevel)).to.deep.equal(['HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'])
+    expect(data.recommendedAgents.value.map(a => a.recommendationLevel)).to.deep.equal(['UNKNOWN', 'LOW', 'HIGH', 'MEDIUM'])
     data.dispose()
     for (const level of [undefined, 'INVALID', 90]) {
       expect(() => parseAssigneeRecommendation({ ...result(), recommendations: [{ ...rows[2], recommendationLevel: level }] }, task())).to.throw()
