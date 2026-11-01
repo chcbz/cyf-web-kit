@@ -51,7 +51,7 @@ describe('Juyi Hall mini-program file bridge', () => {
     const actions = [...markup.matchAll(/<button\b([^>]*)>([^<]*)<\/button>/g)]
     expect(actions).to.have.length(3)
     for (const [index, [condition, handler, label]] of [
-      ['written && fileType', 'openFile', '打开文件'],
+      ['written', 'openFile', '打开文件'],
       ['written && canShare', 'shareFile', '分享文件到微信'],
       ['done', 'returnToSource', '{{returnLabel}}']
     ].entries()) {
@@ -60,7 +60,7 @@ describe('Juyi Hall mini-program file bridge', () => {
     }
     expect(markup).to.include('wx:if="{{message}}"').and.include('{{message}}')
     expect(markup).to.include('wx:if="{{fileName}}"').and.include('{{fileName}}')
-    expect(markup).to.match(/<view wx:else class="download-emblem"/)
+    expect(markup).to.include('<view class="download-emblem"')
     expect(markup).not.to.include('data-download-state')
   })
 
@@ -69,12 +69,21 @@ describe('Juyi Hall mini-program file bridge', () => {
     const css = postcss.parse(styles)
     const config = JSON.parse(readMini('pages/download/index.json'))
     expect(config).to.include({ navigationBarTitleText: '聚义厅', navigationBarBackgroundColor: '#f6f3eb', backgroundColor: '#f6f3eb' })
-    const rules = new Map()
-    css.walkRules(rule => rules.set(rule.selector, rule))
-    const value = (selector, property) => rules.get(selector)?.nodes.filter(node => node.prop === property).at(-1)?.value
+    const value = (selector, property) => {
+      let result
+      css.walkRules(rule => {
+        if (rule.selector === selector) rule.walkDecls(property, decl => { result = decl.value })
+      })
+      return result
+    }
     expect(value('.download-button-primary', 'background')).to.equal('#923f30')
-    expect(value('.download-button', 'min-height')).to.equal('48px')
+    expect(value('.download-button', 'min-height')).to.equal('52px')
     expect(value('.download-content', 'max-width')).to.equal('560px')
+    expect(value('.download-page', 'display')).to.equal('flex')
+    expect(value('.download-page', 'min-height')).to.equal('100vh')
+    expect(value('.download-content', 'flex-direction')).to.equal('column')
+    expect(value('.download-card', 'flex')).to.equal('1')
+    expect(value('.download-actions .download-button', 'width')).to.equal('100%')
     expect(styles).to.include('env(safe-area-inset-bottom)').and.include('(orientation: landscape)')
     css.walkDecls(decl => {
       if (decl.prop === 'position') expect(decl.value).not.to.equal('fixed', 'no fixed overlay hides controls')
@@ -179,15 +188,15 @@ describe('native file lifetime and terminal states', () => {
     expect(h.page.data).to.include({ fileName: '', written: false, done: true })
     expect(h.page.data.message).to.include('写入失败')
   })
-  it('shows an actionable message if neither opening nor sharing is supported', () => {
+  it('shows an actionable message when the platform share API is unavailable', () => {
     const h = nativeHarness({ record: payload({ name: '资料.zip', mime: 'application/zip' }), share: false }); h.page.onLoad({ requestId })
-    expect(h.page.data).to.include({ written: true, done: true, fileName: '资料.zip', fileType: '' })
+    expect(h.page.data).to.include({ written: true, done: true, fileName: '资料.zip' })
     expect(h.page.data.message).to.equal('当前微信版本不支持分享文件。')
   })
 
   it('writes, exposes return immediately, opens and shares the exact owned file, and deletes on return', async () => {
     const h = nativeHarness(); h.page.onLoad({ requestId, orientation: 'landscape' })
-    expect(h.page.data).to.include({ done: true, written: true, fileType: 'pdf' })
+    expect(h.page.data).to.include({ done: true, written: true })
     expect(h.timers.size).to.equal(0)
     const filePath = h.page.filePath
     h.page.openFile(); h.page.shareFile(); await h.page.returnToSource()
@@ -486,5 +495,117 @@ describe('parameterized source return and reusable mini-program framework', () =
     const error = await rejection(saveOutputBlob({ blob: new Blob(['a']), host: h.host, returnTarget: { url: 'https://evil.example/', label: '返回' } }))
     expect(error.message).to.include('返回地址无效')
     expect(h.calls).to.deep.equal([])
+  })
+})
+
+
+describe('optional download banner', () => {
+  it('has no default ad unit, placeholder or empty ad container on the normal page', () => {
+    const h = nativeHarness()
+    expect(h.page.data.adUnitId).to.equal('')
+    expect(readMini('pages/download/index.wxml')).to.include('wx:if="{{written && adUnitId}}"')
+    expect(readMini('pages/download/index.wxml')).to.include('unit-id="{{adUnitId}}" binderror="onAdError"')
+    expect(businessConfig.downloadAdUnitId).to.equal('')
+  })
+  it('uses deployment config only, never route-supplied advertising', () => {
+    const h = nativeHarness({ config: { ...businessConfig, downloadAdUnitId: ' adunit-example ' } })
+    h.page.onLoad({ requestId, adUnitId: 'adunit-untrusted' })
+    expect(h.page.data.adUnitId).to.equal('adunit-example')
+    expect(h.page.data.written).to.equal(true)
+  })
+  it('removes a failed ad without changing file, sharing, cleanup or return', async () => {
+    const h = nativeHarness({ config: { ...businessConfig, downloadAdUnitId: 'adunit-example' } })
+    h.page.onLoad({ requestId })
+    const filePath = h.page.filePath
+    const before = { ...h.page.data }
+    h.page.onAdError({ detail: { errCode: 1004 } })
+    expect(h.page.data).to.deep.equal({ ...before, adUnitId: '' })
+    expect(h.page.filePath).to.equal(filePath)
+    h.page.shareFile()
+    expect(h.calls.find(call => call[0] === 'share')[1].filePath).to.equal(filePath)
+    await h.page.returnToSource()
+    expect(h.calls).to.deep.include(['unlink', filePath])
+    expect(h.calls.some(call => call[0] === 'return')).to.equal(true)
+  })
+  it('ignores late ad errors after the page has been unloaded', () => {
+    const h = nativeHarness({ config: { ...businessConfig, downloadAdUnitId: 'adunit-example' } })
+    h.page.onUnload()
+    const before = h.calls.length
+    h.page.onAdError()
+    expect(h.calls.length).to.equal(before)
+  })
+})
+
+
+describe('uniform file opening without a format whitelist', () => {
+  for (const [name, mime] of [
+    ['a.pdf', 'application/pdf'], ['a.docx', 'application/octet-stream'],
+    ['image-edit-0.png', 'image/png'], ['photo.jpg', 'image/jpeg'],
+    ['notes.txt', 'text/plain'], ['archive.zip', 'application/zip'],
+    ['data.custom', 'application/x-custom'], ['README', 'application/octet-stream']
+  ]) it(`delegates ${name} to the platform without an explicit fileType`, () => {
+    const h = nativeHarness({ record: payload({ name, mime }) })
+    h.page.onLoad({ requestId })
+    expect(h.page.data).to.include({ written: true, message: '' })
+    expect(h.page.data).not.to.have.property('fileType')
+    h.page.openFile()
+    const options = h.calls.find(call => call[0] === 'open')[1]
+    expect(options).to.include({ filePath: h.page.filePath, showMenu: true })
+    expect(options).not.to.have.property('fileType')
+    expect(h.page.data.message).to.equal('')
+  })
+  it('does not hide the open or share entry based on MIME or extension', () => {
+    const markup = readMini('pages/download/index.wxml')
+    expect(markup).to.include('wx:if="{{written}}"')
+    expect(markup).not.to.include('fileType')
+    expect(readMini('utils/download-page.js')).not.to.include('application/pdf')
+  })
+  it('only reports a failed opening after a real platform failure, preserving retry and share', async () => {
+    const h = nativeHarness({ record: payload({ name: 'archive.zip', mime: 'application/zip' }) })
+    h.page.onLoad({ requestId })
+    const filePath = h.page.filePath
+    h.wx.openDocument = options => options.fail()
+    h.page.openFile()
+    expect(h.page.data).to.include({ written: true, message: '此设备未能打开该文件，可尝试分享。' })
+    expect(h.page.filePath).to.equal(filePath)
+    expect(h.calls.some(call => call[0] === 'unlink')).to.equal(false)
+    h.wx.openDocument = options => options.success()
+    h.page.openFile()
+    expect(h.page.data.message).to.equal('')
+    h.page.shareFile()
+    expect(h.calls.find(call => call[0] === 'share')[1].filePath).to.equal(filePath)
+    await h.page.returnToSource()
+    expect(h.calls).to.deep.include(['unlink', filePath])
+  })
+  it('does not terminate a pending write when opening is invoked too early', () => {
+    const h = nativeHarness({ delayedWrite: true })
+    h.page.onLoad({ requestId })
+    h.page.openFile()
+    expect(h.calls.some(call => call[0] === 'open')).to.equal(false)
+    expect(h.page.data).to.include({ written: false, done: false })
+    h.write().success()
+    expect(h.page.data).to.include({ written: true, done: true, message: '' })
+    h.page.openFile()
+    expect(h.calls.some(call => call[0] === 'open')).to.equal(true)
+  })
+  for (const mode of ['missing', 'throws']) it(`reports actual platform unavailability: ${mode}`, () => {
+    const h = nativeHarness()
+    h.page.onLoad({ requestId })
+    h.wx.openDocument = mode === 'missing' ? undefined : () => { throw new Error('native failure') }
+    expect(() => h.page.openFile()).not.to.throw()
+    expect(h.page.data).to.include({ written: true, message: '此设备未能打开该文件，可尝试分享。' })
+  })
+  it('ignores a late open callback after return starts', async () => {
+    const h = nativeHarness()
+    h.page.onLoad({ requestId })
+    let callback
+    h.wx.openDocument = options => { callback = options }
+    h.page.openFile()
+    await h.page.returnToSource()
+    const before = { ...h.page.data }
+    callback.fail()
+    expect(h.page.data).to.deep.equal(before)
+    h.page.openFile()
+    expect(h.page.data).to.deep.equal(before)
   })
 })

@@ -14,7 +14,7 @@ const safeName = (value, prefix) => {
   return truncateBytes(extension ? name.slice(0, -extension.length) : name, budget - utf8Length(extension)) + extension
 }
 const createDownloadPage = config => ({
-  data: { applicationName: config.applicationName, returnLabel: '返回来源页面', fileName: '', message: '正在接收文件…', done: false, written: false, fileType: '', canShare: typeof wx.shareFileMessage === 'function' },
+  data: { adUnitId: typeof config.downloadAdUnitId === 'string' ? config.downloadAdUnitId.trim() : '', applicationName: config.applicationName, returnLabel: '返回来源页面', fileName: '', message: '正在接收文件…', done: false, written: false, canShare: typeof wx.shareFileMessage === 'function' },
   onLoad(options = {}) {
     this.disposed = false
     this.terminal = false
@@ -75,21 +75,27 @@ const createDownloadPage = config => ({
       success: () => {
         this.filePath = path
         if (this.disposed || this.returning) { this.removeOwnFile(path); return }
-        this.fileType = ({ 'application/pdf': 'pdf', 'application/msword': 'doc', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx', 'application/vnd.ms-excel': 'xls', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx', 'application/vnd.ms-powerpoint': 'ppt', 'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx' })[mime] || ''
-        this.setData({ done: true, written: true, fileName: /^[.\s]*$/.test(record.name) ? '' : name, fileType: this.fileType, message: !this.fileType && !this.data.canShare ? '当前微信版本不支持分享文件。' : '' })
+        this.setData({ done: true, written: true, fileName: /^[.\s]*$/.test(record.name) ? '' : name, message: !this.data.canShare ? '当前微信版本不支持分享文件。' : '' })
       },
       fail: () => this.finish('文件写入失败，请检查小程序存储空间。')
     })
   },
+  onAdError() { this.updateData({ adUnitId: '' }) },
   updateData(value) { if (!this.disposed) this.setData(value) },
   openFile() {
-    if (this.disposed) return
-    if (!this.filePath || !this.fileType) return this.finish('该格式不支持系统文档打开；可尝试分享文件。')
-    wx.openDocument({
-      filePath: this.filePath, fileType: this.fileType, showMenu: true,
-      success: () => this.updateData({ done: true, message: '' }),
-      fail: () => this.updateData({ done: true, message: '此设备未能打开该文件，可尝试分享。' })
-    })
+    if (this.disposed || this.returning) return
+    if (!this.filePath) return this.updateData({ message: '文件尚未准备好，请稍后重试。' })
+    const path = this.filePath
+    const update = message => { if (this.filePath === path && !this.returning) this.updateData({ done: true, message }) }
+    const fail = () => update('此设备未能打开该文件，可尝试分享。')
+    try {
+      if (typeof wx.openDocument !== 'function') { fail(); return }
+      wx.openDocument({
+        filePath: path, showMenu: true,
+        success: () => update(''),
+        fail
+      })
+    } catch { fail() }
   },
   shareFile() {
     if (this.disposed) return

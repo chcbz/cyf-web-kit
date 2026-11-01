@@ -3,6 +3,7 @@ module.exports = {
   "applicationName": "聚义厅",
   "returnLabel": "返回聚义厅",
   "filePrefix": "juyiting-",
+  "downloadAdUnitId": "",
   "webPolicy": {
     "origins": [
       "https://kit.chaoyoufan.cn"
