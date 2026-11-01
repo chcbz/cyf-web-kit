@@ -34,7 +34,12 @@ describe('Juyi Hall hosted point flow', () => {
     expect(bounty).to.include('props.canAssign(detailTask.value, agent)')
     expect(bounty).to.include('[...assignableRecommendedAgents.value, ...props.assigneeCandidates]')
     expect(bounty).to.include('!seen.has(agent.agentId) && seen.add(agent.agentId)')
-    expect(bounty).to.include('@click="matterCandidateId = agent.agentId"')
+    expect(bounty).to.include('@click="selectMatterCandidate(agent)"')
+    const selection = bounty.match(/const selectMatterCandidate = async agent => \{([\s\S]*?)\n\}/)?.[1]
+    expect(selection).to.include('matterCandidateId.value = agent.agentId')
+    expect(selection).to.include('matterCandidateExpansion.value = false')
+    expect(selection).to.include('matterCandidateToggle.value?.focus()')
+    expect(selection).not.to.include("emit('assign-task'")
     expect(bounty).to.include('@click="confirmMatterAgent"')
     expect(bounty).to.include("emit('assign-task', detailTask.value, agent)")
     expect(bounty).not.to.include("props.recommendedAgents.filter(agent => ['吴用', '林冲']")
