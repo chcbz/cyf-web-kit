@@ -288,9 +288,11 @@ describe('model recommendation actual matter UI', () => {
     try {
       wrapper.vm.openTask(task); await Vue.nextTick()
       expect(wrapper.find('.matter-recommendation').exists()).to.equal(false)
-      expect(wrapper.get('.matter-candidate-card').text()).to.include('已登记写作本领')
+      expect(wrapper.get('.matter-selected-reason').text()).to.include('已登记写作本领')
+      expect(wrapper.find('.matter-candidate-card').exists()).to.equal(false)
+      await wrapper.get('.matter-agent-toggle').trigger('click')
       expect(wrapper.find('.recommendation-understanding').exists()).to.equal(false)
-      expect(wrapper.get('.recommendation-level').text()).to.equal('推荐度高')
+      expect(wrapper.get('.recommendation-level').text()).to.equal('优先推荐')
       expect(wrapper.text()).not.to.include('评分明细')
       expect(wrapper.emitted('assign-task')).to.equal(undefined)
       expect(wrapper.emitted('refresh-recommendation')).to.equal(undefined)

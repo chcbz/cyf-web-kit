@@ -41,7 +41,7 @@ describe('unified generic point detail replaces drawing-specific confirmation', 
       expect(wrapper.text()).not.to.include('其运行环境及模型服务会处理这些内容')
       expect(wrapper.get('.matter-agent-toggle').attributes('aria-expanded')).to.equal('true')
       await wrapper.get('.matter-candidates button').trigger('click')
-      const button = wrapper.findAll('button').find(item => item.text() === '确认承办，进入议事')
+      const button = wrapper.findAll('button').find(item => item.text() === '确认由吴用承办')
       expect(Boolean(button)).to.equal(true); await button.trigger('click')
       expect(wrapper.emitted('assign-task')[0][1].agentId).to.equal('agent-a')
       expect(wrapper.emitted('confirm-controlled-image-consent')).to.equal(undefined)

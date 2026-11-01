@@ -19,7 +19,7 @@ describe('beta workbench copy boundaries', () => {
     const panel = source('components/juyiting/BountyPanel.vue')
     expect(panel).to.include('所属用户 / 当前状态')
     expect(panel).not.to.include('其运行环境及模型服务会处理这些内容')
-    expect(panel).to.include('确认承办，进入议事')
+    expect(panel).to.include('确认由${agentDisplayName(matterAgent)}承办')
     expect(panel).to.include('查询发送结果')
     expect(panel).to.include('继续原请求')
   })

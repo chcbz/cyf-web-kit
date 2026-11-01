@@ -20,3 +20,6 @@
 .model-recommendation-level { color:#923f30; font-weight:600; }
 @keyframes model-recommendation-spin { to { transform:rotate(360deg); } }
 @media(prefers-reduced-motion:reduce) { .model-recommendation-spinner { animation:none; } }
+
+.model-selected-reason { margin: 8px 0 12px; color: var(--work-muted); overflow-wrap: anywhere; }
+.model-recommendation-page .matter-primary-action { white-space: normal; overflow-wrap: anywhere; }

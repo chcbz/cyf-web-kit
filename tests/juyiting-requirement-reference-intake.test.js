@@ -282,7 +282,7 @@ describe('mounted Bounty read/manage surface and original recovery', () => {
     open.vm.openTask({ id: 'existing-task', title: '画一只鸟', status: 'open' })
     await nextTick()
     expect(open.find('.formal-task-execution').exists()).to.equal(false)
-    expect(open.text()).to.include('确认承办，进入议事')
+    expect(open.text()).to.include('请选择承办人')
     expect(open.text()).not.to.include('一份可预览、下载和验收的正式 PDF')
 
     const bridgeIntent = { taskId: 'existing-task', body: { agentId: 'agent-image', requirementRevision: '1', requestedOperations: ['GENERATE_IMAGE'], initialOperation: 'GENERATE_IMAGE', inputRefs: [] }, controlledImageBridge: { schemaVersion: 1, wrapper: { schemaVersion: 1, assignment: {}, providerConsent: {} }, receipt: { schemaVersion: 1 } } }

@@ -1,7 +1,7 @@
 // One all-candidate assessment contract; recommendation degree is not a success probability.
 const text = value => typeof value === 'string' && value.trim().length > 0
 export const isRecommendedLevel = level => ['HIGH', 'MEDIUM'].includes(level)
-export const recommendationLevelText = level => ({ HIGH: '推荐度高', MEDIUM: '推荐度中', LOW: '推荐度低', UNKNOWN: '资料不足' }[level] || '')
+export const recommendationLevelText = level => ({ HIGH: '优先推荐', MEDIUM: '可以考虑', LOW: '匹配较低', UNKNOWN: '资料不足' }[level] || '')
 const strings = value => Array.isArray(value) && value.every(text)
 export const recommendationTaskKey = task => JSON.stringify([task?.id, task?.taskVersion, task?.title, task?.description])
 export const parseAssigneeRecommendation = (value, task) => {

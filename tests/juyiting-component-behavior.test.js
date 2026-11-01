@@ -1649,7 +1649,10 @@ describe('JuyiHall component behavior', () => {
     try {
       await wrapper.find('.task-card').trigger('click')
       expect(wrapper.find('[aria-label="刷新承办候选"]').exists()).to.equal(false)
-      expect(wrapper.findAll('.recommendation-level').map(e => e.text())).to.deep.equal(['推荐度中', '推荐度高', '推荐度低', '资料不足'])
+      expect(wrapper.find('.matter-candidate-card').exists()).to.equal(false)
+      expect(wrapper.get('.matter-selected-reason').text()).to.equal('理由0')
+      await wrapper.get('.matter-agent-toggle').trigger('click')
+      expect(wrapper.findAll('.recommendation-level').map(e => e.text())).to.deep.equal(['可以考虑', '优先推荐', '匹配较低', '资料不足'])
       expect(wrapper.findAll('.matter-candidate-card')[0].attributes('aria-pressed')).to.equal('true')
       expect(wrapper.find('.matter-recommendation').exists()).to.equal(false)
       expect(wrapper.find('.recommendation-understanding').exists()).to.equal(false)
@@ -1674,6 +1677,59 @@ describe('JuyiHall component behavior', () => {
       expect(wrapper.emitted('assign-task')).to.equal(undefined)
       await wrapper.get('.matter-primary-action').trigger('click')
       expect(wrapper.emitted('assign-task')[0][1].recommendationLevel).to.equal('UNKNOWN')
+    } finally { wrapper.unmount() }
+  })
+
+  it('progressively discloses asynchronous recommendations and preserves explicit expansion', async () => {
+    const task = { id: 'collapse-task', status: 'open', taskVersion: '1' }
+    const a = { agentId: 'a', displayName: '林冲', recommendationLevel: 'HIGH', recommendationReason: '能够读取图片' }
+    const b = { agentId: 'b', displayName: '吴用', recommendationLevel: 'UNKNOWN', recommendationReason: '资料不足' }
+    const wrapper = mount(BountyPanel, { attachTo: document.body, global: { stubs }, props: {
+      embeddedHall: true, selectedTask: task, tasks: [task], identityScope: 'one', authorizationGeneration: 1,
+      recommendedAgents: [], assigneeCandidates: [a, b], recommendationState: { state: 'LOADING' },
+      canAssign: () => true, abilityText: () => '', formatTime: v => v, portraitName: a => a.displayName,
+      portraitStyle: () => ({}), taskStateClass: () => '', taskStatusText: () => '', taskStatusCount: () => 1, taskStatusFilters: []
+    } })
+    try {
+      wrapper.vm.openTask(task); await Vue.nextTick()
+      expect(wrapper.get('.matter-agent-toggle').attributes('aria-expanded')).to.equal('false')
+      expect(wrapper.get('.matter-primary-action').element.disabled).to.equal(true)
+      await wrapper.setProps({ recommendedAgents: [a, b], recommendationState: { state: 'READY' } })
+      expect(wrapper.find('.matter-candidate-card').exists()).to.equal(false)
+      expect(wrapper.get('.matter-selected-reason').text()).to.equal(a.recommendationReason)
+      expect(wrapper.get('.matter-primary-action').text()).to.equal('确认由林冲承办')
+      await wrapper.get('.matter-primary-action').trigger('click')
+      expect(wrapper.emitted('assign-task')[0]).to.deep.equal([task, a])
+      await wrapper.get('.matter-agent-toggle').trigger('click')
+      expect(wrapper.get('.matter-agent-toggle').text()).to.equal('收起候选列表')
+      await wrapper.setProps({ recommendedAgents: [{ ...a }, b] })
+      expect(wrapper.findAll('.matter-candidate-card')).to.have.length(2)
+      await wrapper.findAll('.matter-candidate-card')[1].trigger('click')
+      expect(wrapper.find('.matter-candidate-card').exists()).to.equal(false)
+      expect(wrapper.get('.matter-advice-card').text()).to.include('已选承办')
+      expect(wrapper.get('.matter-primary-action').text()).to.equal('确认由吴用承办')
+      expect(document.activeElement).to.equal(wrapper.get('.matter-agent-toggle').element)
+      expect(wrapper.emitted('assign-task')).to.have.length(1)
+      await wrapper.setProps({ recommendedAgents: [a, { ...b }] })
+      expect(wrapper.get('.matter-primary-action').text()).to.equal('确认由吴用承办')
+      await wrapper.setProps({ pointAndStartBusy: true })
+      expect(wrapper.get('.matter-primary-action').element.disabled).to.equal(true)
+      expect(wrapper.get('.matter-agent-toggle').element.disabled).to.equal(true)
+      await wrapper.setProps({ pointAndStartBusy: false, recommendedAgents: [], assigneeCandidates: [a], recommendationState: { state: 'NO_MATCH' } })
+      expect(wrapper.get('.matter-primary-action').element.disabled).to.equal(true)
+      expect(wrapper.get('.matter-agent-toggle').attributes('aria-expanded')).to.equal('true')
+      for (const change of [{ identityScope: 'two' }, { authorizationGeneration: 2 }, { selectedTask: { ...task, taskVersion: '2' } }, { selectedTask: { ...task, id: 'other' } }]) {
+        await wrapper.setProps({ assigneeCandidates: [a, b], recommendationState: { state: 'NO_MATCH' } })
+        if (wrapper.get('.matter-agent-toggle').attributes('aria-expanded') === 'false') await wrapper.get('.matter-agent-toggle').trigger('click')
+        await wrapper.findAll('.matter-candidate-card')[1].trigger('click')
+        expect(wrapper.get('.matter-primary-action').text()).to.equal('确认由吴用承办')
+        await wrapper.setProps(change)
+        if (change.identityScope || change.authorizationGeneration) expect(wrapper.find('.matter-agent-toggle').exists()).to.equal(false)
+        wrapper.vm.openTask(change.selectedTask || task); await Vue.nextTick()
+        expect(wrapper.get('.matter-agent-toggle').attributes('aria-expanded')).to.equal('true')
+        expect(wrapper.get('.matter-primary-action').text()).to.equal('请选择承办人')
+        expect(wrapper.get('.matter-primary-action').element.disabled).to.equal(true)
+      }
     } finally { wrapper.unmount() }
   })
 
@@ -1723,7 +1779,9 @@ describe('JuyiHall component behavior', () => {
     await wrapper.findAll('.matter-candidate-card')[1].trigger('click')
     expect(wrapper.emitted('assign-task')).to.equal(undefined)
     expect(wrapper.find('.matter-candidate-filters').exists()).to.equal(false)
-    expect(wrapper.findAll('.matter-candidate-card')).to.have.length(2)
+    expect(wrapper.findAll('.matter-candidate-card')).to.have.length(0)
+    expect(wrapper.get('.matter-primary-action').text()).to.equal('确认由吴用承办')
+    await wrapper.get('.matter-agent-toggle').trigger('click')
     await wrapper.get('.matter-primary-action').trigger('click')
     expect(wrapper.emitted('assign-task')[0]).to.deep.equal([task, candidates[1]])
     await wrapper.setProps({ recommendationState: { state: 'LOADING' } })
