@@ -1,3 +1,4 @@
+import * as recommendationHelpers from '../src/composables/juyiting/hallAssigneeRecommendation.js'
 import * as assigneeCandidates from '../src/composables/juyiting/hallAssigneeCandidates.js'
 import * as taskPresentation from '../src/composables/juyiting/hallTaskPresentation.js'
 import { expect } from 'chai'
@@ -16,7 +17,7 @@ const compile = name => {
   const { descriptor } = parse(read(name))
   const imports = new Proxy({ vue: Vue, '@/utils/silverAmount': silver,
     './HallTaskResources.vue': Vue.defineComponent({ name: 'HallTaskResources', props: ['resultCount'], render: () => Vue.h('section') }),
-    '@/composables/juyiting/hallAssigneeCandidates.js': assigneeCandidates, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': cancellation }, { get: (target, key) => target[key] || Empty })
+    '../../composables/juyiting/hallAssigneeRecommendation.js': recommendationHelpers, '@/composables/juyiting/hallAssigneeCandidates.js': assigneeCandidates, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': cancellation }, { get: (target, key) => target[key] || Empty })
   const code = compileScript(descriptor, { id: 'flow-ui-test', inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_, names, path) => `const { ${names.replace(/\s+as\s+/g, ': ')} } = imports[${JSON.stringify(path)}]`)
     .replace(/^import\s+(\w+)\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_, name, path) => `const ${name} = imports[${JSON.stringify(path)}]`)
@@ -280,14 +281,14 @@ describe('model recommendation actual matter UI', () => {
 
   it('shows evidence and gaps without score; only explicit confirmation dispatches', async () => {
     const task = { id: 'recommend', title: '写说明', status: 'open', taskVersion: '1' }
-    const agent = { ...baseProps.operableAgents[0], recommendationReason: '已登记写作本领',
+    const agent = { ...baseProps.operableAgents[0], recommendationLevel: 'HIGH', recommendationReason: '已登记写作本领',
       recommendationEvidence: [{ id: 'ability:0', label: '写作', description: '登记声明' }], recommendationGaps: ['确认受众'] }
     const wrapper = mount(Panel, { props: { ...baseProps, tasks: [task], selectedTask: task, recommendedAgents: [agent],
       recommendationState: { state: 'READY', result: { requirementSummary: '编写说明', questions: [] } } } })
     try {
       wrapper.vm.openTask(task); await Vue.nextTick()
       expect(wrapper.get('.matter-recommendation').text()).to.include('登记声明')
-      expect(wrapper.get('.matter-recommendation').text()).to.include('待核实：确认受众')
+      expect(wrapper.get('.matter-recommendation').text()).to.include('提醒：确认受众')
       expect(wrapper.text()).not.to.include('评分明细')
       expect(wrapper.emitted('assign-task')).to.equal(undefined)
       await wrapper.get('.matter-recommendation button').trigger('click')

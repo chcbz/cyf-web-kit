@@ -1,3 +1,4 @@
+import * as recommendationHelpers from '../src/composables/juyiting/hallAssigneeRecommendation.js'
 import * as assigneeCandidates from '../src/composables/juyiting/hallAssigneeCandidates.js'
 import * as taskPresentation from '../src/composables/juyiting/hallTaskPresentation.js'
 import * as ordinaryCancellation from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
@@ -17,7 +18,7 @@ const compile = async () => {
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_m, names, path) => `const { ${names.split(',').map(x => x.trim().replace(/\s+as\s+/, ': ')).join(', ')} } = imports[${JSON.stringify(path)}]`)
     .replace(/^import\s+([^\s]+)\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_m, name, path) => `const ${name} = imports[${JSON.stringify(path)}]`)
     .replace('export default', 'return')
-  return new Function('imports', code)({ vue: Vue, '@/composables/juyiting/hallAssigneeCandidates.js': assigneeCandidates, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, './BountyActionIcon.vue': stub, './WorkItemPlanPanel.vue': stub,
+  return new Function('imports', code)({ vue: Vue, '../../composables/juyiting/hallAssigneeRecommendation.js': recommendationHelpers, '@/composables/juyiting/hallAssigneeCandidates.js': assigneeCandidates, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, './BountyActionIcon.vue': stub, './WorkItemPlanPanel.vue': stub,
     './TeamRecommendationPanel.vue': stub, './HallDraftEditor.vue': stub, './HallMaterialPicker.vue': stub,
     '@/components/personal-workspace/TaskMaterialLinks.vue': stub, '@/utils/silverAmount': silver })
 }
