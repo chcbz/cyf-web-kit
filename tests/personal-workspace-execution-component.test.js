@@ -47,6 +47,44 @@ const executionMock = () => {
 }
 
 describe('personal workspace execution receipt presentation', () => {
+  it('opens the exact embedded file through the full-row native control and preserves disabled states', async () => {
+    const workspace = workspaceMock(); const execution = executionMock()
+    const selected = []
+    const select = workspace.select
+    workspace.select = async id => { selected.push(id); return select(id) }
+    const component = new Function('Vue', 'deps', script)(Vue, { workspaceByteText, validMaterialVersion,
+      deliveryTypeText, useApiStore: () => ({ authorizationGeneration: 1, oauthClientId: 'web-client' }),
+      useGlobalStore: () => ({ user: { id: 'owner-a', tenantId: 'tenant-a' } }),
+      usePersonalWorkspace: () => workspace, usePersonalWorkspaceExecution: () => execution, savePersonalWorkspaceBlob: () => {}
+    })
+    const wrapper = mount(component, { props: { embedded: true, detailAllowed: false } })
+    try {
+      await flushPromises()
+      const button = () => wrapper.get('.treasure-file-open')
+      assert.equal(button().element.tagName, 'BUTTON')
+      assert.equal(button().attributes('aria-label'), '查看文件：案卷.txt')
+      assert.equal(button().get('svg.hall-control-icon path').attributes('d'), 'm9 5 7 7-7 7')
+      assert.equal(button().get('svg').attributes('aria-hidden'), 'true')
+      assert.equal(button().element.disabled, true)
+      await button().trigger('click')
+      assert.deepEqual(selected, [])
+      await wrapper.setProps({ detailAllowed: true })
+      workspace.actionState.value = 'loading-detail'; await Vue.nextTick()
+      assert.equal(button().element.disabled, true)
+      await button().trigger('click')
+      assert.deepEqual(selected, [])
+      workspace.actionState.value = 'idle'; await Vue.nextTick()
+      assert.equal(button().element.disabled, false)
+      assert.ok(source.includes('.treasure-file-row { position:relative;'))
+      assert.ok(source.includes('.treasure-file-row > button.treasure-file-open { position:static;'))
+      assert.ok(source.includes(".treasure-file-row > .treasure-file-open::after { content:''; position:absolute; inset:0;"))
+      await button().trigger('click'); await flushPromises()
+      assert.deepEqual(selected, ['file_1'])
+      assert.equal(wrapper.get('.treasure-content').attributes('data-view'), 'preview')
+      assert.equal(wrapper.get('.treasure-file-heading h2').text(), '案卷.txt')
+    } finally { wrapper.unmount() }
+  })
+
   for (const embedded of [true, false]) {
     it(`renders authorized audio with controls and no autoplay in ${embedded ? 'embedded' : 'full'} workspace`, async () => {
       const workspace = workspaceMock(); const execution = executionMock()

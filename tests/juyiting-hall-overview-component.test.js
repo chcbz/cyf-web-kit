@@ -181,6 +181,22 @@ describe('JYT-UX-W05 mounted overview and message projection', () => {
     } finally { wrapper.unmount() }
   })
 
+  it('keeps item information separate from the full-row open control', async () => {
+    const wrapper = mount(load({ execute: async () => response() }), { props })
+    try {
+      await settle()
+      const row = wrapper.findAll('.overview-item').find(item => item.text().includes('case-a'))
+      expect(overviewSource).to.include(".overview-item>button::after { content:''; position:absolute; inset:0;")
+      expect(overviewSource).to.include('.overview-technical { position:relative; z-index:1;')
+      expect(overviewSource).to.include('.hall-overview .overview-item>button { position:static;')
+      await row.get('summary').trigger('click')
+      expect(wrapper.emitted('open-item')).to.equal(undefined)
+      expect(row.get('button').attributes('aria-label')).to.include('case-a')
+      await row.get('button').trigger('click')
+      expect(wrapper.emitted('open-item')[0][0]).to.deep.equal({ sourceType: 'PRIVATE_CASE', sourceId: 'case-a' })
+    } finally { wrapper.unmount() }
+  })
+
   it('shows only needsAction in messages, explains partial sources, and emits exact read refs', async () => {
     const calls = []
     const wrapper = mount(load({ execute: async options => { calls.push(options); return response() } }), { props: { ...props, messagesOnly: true } })
