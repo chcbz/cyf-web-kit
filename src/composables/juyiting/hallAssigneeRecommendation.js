@@ -1,5 +1,8 @@
-// R1 only. Additive harmless fields are allowed; old scored arrays are not a second lane.
+// One all-candidate assessment contract; recommendation degree is not a success probability.
 const text = value => typeof value === 'string' && value.trim().length > 0
+export const isRecommendedLevel = level => ['HIGH', 'MEDIUM'].includes(level)
+export const recommendationLevelText = level => ({ HIGH: '推荐度高', MEDIUM: '推荐度中', LOW: '推荐度低', UNKNOWN: '资料不足' }[level] || '')
+export const recommendationLevelOrder = level => ({ HIGH: 0, MEDIUM: 1, LOW: 2, UNKNOWN: 3 }[level] ?? 4)
 const strings = value => Array.isArray(value) && value.every(text)
 export const recommendationTaskKey = task => JSON.stringify([task?.id, task?.taskVersion, task?.title, task?.description])
 export const parseAssigneeRecommendation = (value, task) => {
@@ -12,10 +15,11 @@ export const parseAssigneeRecommendation = (value, task) => {
     const agent = item?.agent
     if (!text(agent?.agentId) || seen.has(agent.agentId) || !text(agent.name) || !strings(agent.abilities) ||
         typeof agent.canOperate !== 'boolean' || typeof agent.boundToMe !== 'boolean' || !text(agent.status) ||
-        !text(item.reason) || !strings(item.gaps) || !Array.isArray(item.evidence) || !item.evidence.length ||
+        !['HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'].includes(item.recommendationLevel) || !text(item.reason) || !strings(item.gaps) || !Array.isArray(item.evidence) || (item.recommendationLevel !== 'UNKNOWN' && !item.evidence.length) ||
         !item.evidence.every(e => text(e?.id) && text(e.kind) && text(e.label) && text(e.description) && e.available === true)) throw new Error('承办推荐依据未能核对')
     seen.add(agent.agentId)
   }
-  if ((value.state === 'READY') !== Boolean(value.recommendations.length)) throw new Error('承办推荐状态不一致')
+  if ((value.state === 'READY') !== value.recommendations.some(item => isRecommendedLevel(item.recommendationLevel)) ||
+      (value.state === 'NO_CANDIDATES') !== (value.recommendations.length === 0)) throw new Error('承办推荐状态不一致')
   return value
 }

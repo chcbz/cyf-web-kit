@@ -1,5 +1,5 @@
 import { computed, ref, toValue, watch } from 'vue'
-import { parseAssigneeRecommendation, recommendationTaskKey } from './hallAssigneeRecommendation.js'
+import { parseAssigneeRecommendation, recommendationTaskKey, recommendationLevelOrder } from './hallAssigneeRecommendation.js'
 import { assigneePage, assignedTaskTarget } from './hallAssigneeCandidates.js'
 import { pointAndStartLong } from './hallPointAndStartIntent.js'
 import { projectHallTask, validateHallTaskCounts } from './hallTaskPresentation.js'
@@ -73,13 +73,13 @@ export const useHallData = ({
     if (!entry) return { state: 'IDLE', result: null }
     return entry.taskKey === recommendationTaskKey(task) ? entry : { state: 'STALE', result: null }
   })
-  const recommendedAgents = computed(() => recommendationState.value.state === 'READY'
-    ? recommendationState.value.result.recommendations.map(item => ({
+  const recommendedAgents = computed(() => ['READY', 'NO_MATCH'].includes(recommendationState.value.state)
+    ? recommendationState.value.result.recommendations.slice().sort((a, b) => recommendationLevelOrder(a.recommendationLevel) - recommendationLevelOrder(b.recommendationLevel)).map(item => ({
       ...(selectedTask.value?.funding?.mode === 'FUNDED_SINGLE_AGENT' ? item.agent : {
         agentId: item.agent.agentId, displayName: item.agent.name,
         providerDisplayName: item.agent.providerDisplayName ?? null, isMine: item.agent.boundToMe,
         availability: item.agent.status
-      }), recommendationReason: item.reason, recommendationEvidence: item.evidence,
+      }), recommendationLevel: item.recommendationLevel, recommendationReason: item.reason, recommendationEvidence: item.evidence,
       recommendationGaps: item.gaps
     })) : [])
 
@@ -98,7 +98,7 @@ export const useHallData = ({
       !agent.systemAgent && normalizeStatus(agent.status) === 'online'
     return (candidatesTaskId.value === task.id && !candidatesError.value &&
       assigneeCandidates.value.some(item => item.agentId === agent.agentId)) ||
-      (recommendationState.value.state === 'READY' && recommendationState.value.result.taskId === task.id &&
+      (['READY', 'NO_MATCH'].includes(recommendationState.value.state) && recommendationState.value.result.taskId === task.id &&
        recommendationState.value.result.taskVersion === task.taskVersion &&
        recommendationState.value.result.recommendations.some(item => item.agent.agentId === agent.agentId))
   }

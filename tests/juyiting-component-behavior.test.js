@@ -1,3 +1,4 @@
+import * as recommendationHelpers from '../src/composables/juyiting/hallAssigneeRecommendation.js'
 import { useHallAgentAbilitiesEditor } from '../src/composables/juyiting/useHallAgentAbilitiesEditor.js'
 import * as discussionTurnHelpers from '../src/composables/juyiting/hallDiscussionTurns.js'
 import { useHallSelectedOutputReview } from '../src/composables/juyiting/useHallSelectedOutputReview.js'
@@ -131,6 +132,7 @@ const loadSfc = (relativePath, runtimeAgentApi = { post: async () => { throw new
   }).content
 
   const scriptBody = script
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"][^'"]+hallAssigneeRecommendation.js['"];?\s*$/gm, (_line, names) => `var { ${names} } = arguments[11]`)
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"][^'"]+hallDiscussionTurns.js['"];?\s*$/gm, (_line, names) => `var { ${names} } = arguments[10]`)
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]@\/composables\/juyiting\/hallAssigneeCandidates\.js['"];?\s*$/gm, (_line, names) => `var { ${names} } = arguments[9]`)
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\.\/\.\.\/composables\/juyiting\/hallTaskPresentation\.js['"];?\s*$/gm, (_line, names) => `var { ${names} } = arguments[8]`)
@@ -181,7 +183,7 @@ const loadSfc = (relativePath, runtimeAgentApi = { post: async () => { throw new
   const unresolvedImports = scriptBody.match(/^import\s.+$/gm)
   if (unresolvedImports?.length) throw new SyntaxError(`Unsupported SFC imports in ${relativePath}: ${unresolvedImports.join(', ')}`)
 
-  return new Function('Vue', 'HallChatComposer', 'juyitingGame', 'classifyViewportResize', 'silverAmount', 'chatPanelDependencies', 'ordinaryCancellation', 'runtimeAgentApi', scriptBody)(Vue, HallChatComposer, hallGameMock, classifyViewportResizeMock, silverAmount, chatPanelDependencies, ordinaryCancellation, runtimeAgentApi, taskPresentation, assigneeCandidates, discussionTurnHelpers)
+  return new Function('Vue', 'HallChatComposer', 'juyitingGame', 'classifyViewportResize', 'silverAmount', 'chatPanelDependencies', 'ordinaryCancellation', 'runtimeAgentApi', scriptBody)(Vue, HallChatComposer, hallGameMock, classifyViewportResizeMock, silverAmount, chatPanelDependencies, ordinaryCancellation, runtimeAgentApi, taskPresentation, assigneeCandidates, discussionTurnHelpers, recommendationHelpers)
 }
 
 const stubs = {
@@ -1631,6 +1633,40 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.emitted('clear-task')).to.have.length(1)
     expect(wrapper.text()).to.include('Strategist / Wu Yong')
     expect(wrapper.text()).to.include('Inspect the camp')
+  })
+
+  it('shows friendly recommendation progress, collapsed understanding and per-agent degree without a refresh icon', async () => {
+    const task = { id: 'rating-task', title: '统计成绩', status: 'open', taskVersion: '1' }
+    const agents = ['HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'].map((level, i) => ({ agentId: `a${i}`, displayName: `好汉${i}`,
+      isMine: true, availability: 'online', recommendationLevel: level, recommendationReason: `理由${i}` }))
+    const state = { state: 'READY', result: { observedAt: 1, requirementSummary: '读取成绩图片并统计' } }
+    const wrapper = mount(BountyPanel, { global: { stubs }, props: {
+      embeddedHall: true, tasks: [task], selectedTask: task, recommendedAgents: agents,
+      recommendationState: state, abilityText: () => '', canAssign: () => true,
+      formatTime: v => v, portraitName: a => a.displayName, portraitStyle: () => ({}),
+      taskStateClass: () => '', taskStatusText: () => '待确认承办', taskStatusCount: () => 1, taskStatusFilters: []
+    } })
+    try {
+      await wrapper.find('.task-card').trigger('click')
+      expect(wrapper.find('[aria-label="刷新承办候选"]').exists()).to.equal(false)
+      expect(wrapper.findAll('.recommendation-level').map(e => e.text())).to.deep.equal(['推荐度高', '推荐度中', '推荐度低', '资料不足'])
+      expect(wrapper.get('.recommendation-understanding').element.open).to.equal(false)
+      wrapper.get('.recommendation-understanding').element.open = true
+      await wrapper.setProps({ recommendationState: { state: 'LOADING', result: null }, recommendedAgents: [] })
+      expect(wrapper.get('.recommendation-status').text()).to.equal('正在为你挑选合适的好汉…')
+      expect(wrapper.find('.recommendation-spinner').exists()).to.equal(true)
+      expect(wrapper.get('.matter-primary-action').element.disabled).to.equal(true)
+      expect(wrapper.find('.recommendation-understanding').exists()).to.equal(false)
+      expect(wrapper.get('.matter-recommendation button').element.disabled).to.equal(true)
+      await wrapper.setProps({ recommendationState: { state: 'NO_MATCH', result: { ...state.result, observedAt: 2 } }, recommendedAgents: agents.slice(2) })
+      expect(wrapper.get('.recommendation-understanding').element.open).to.equal(false)
+      expect(wrapper.get('.matter-primary-action').element.disabled).to.equal(true)
+      await wrapper.findAll('.matter-candidate-card')[1].trigger('click')
+      expect(wrapper.get('.matter-primary-action').element.disabled).to.equal(false)
+      expect(wrapper.emitted('assign-task')).to.equal(undefined)
+      await wrapper.get('.matter-primary-action').trigger('click')
+      expect(wrapper.emitted('assign-task')[0][1].recommendationLevel).to.equal('UNKNOWN')
+    } finally { wrapper.unmount() }
   })
 
   it('UI parity selects an explicit candidate without assigning until confirmation and keeps secondary phases reachable', async () => {

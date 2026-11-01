@@ -1488,7 +1488,7 @@ const selectTask = async (task) => {
     }
     if (identity !== hallIdentityScope.value || generation !== apiStore.authorizationGeneration || selectedTask.value?.id !== task.id) return false
     await loadTaskRecommendations(selectedTask.value)
-    markRecommendedAgents(recommendedAgents.value)
+    markRecommendedAgents(recommendedAgents.value.filter(agent => ['HIGH', 'MEDIUM'].includes(agent.recommendationLevel)))
   } else if (returningToList) {
     // Overview opens an exact detail without loading the underlying list.
     // On back, query the existing filters rather than exposing an uninitialized list.

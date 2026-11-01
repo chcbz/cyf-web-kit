@@ -81,7 +81,7 @@ describe('shared Hall task presentation and authoritative phase counts', () => {
     const complete = (index, id) => {
       const taskId = calls[index].url.split('/')[2]
       calls[index].options.onSuccess({ taskId, taskVersion: '7', state: 'READY', observedAt: 1,
-        candidateSetComplete: true, requirementSummary: '需求', questions: [], recommendations: [{
+        candidateSetComplete: true, requirementSummary: '需求', questions: [], recommendations: [{ recommendationLevel: 'HIGH',
           agent: { agentId: id, name: id, abilities: [], canOperate: true, boundToMe: true, status: 'online' },
           reason: '匹配', gaps: [], evidence: [{ id: 'e', kind: 'DECLARED_ABILITY', label: '本领', description: '声明', available: true }]
         }] })

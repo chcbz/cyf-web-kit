@@ -197,14 +197,22 @@
                 <template v-if="embeddedHall">
                   <template v-if="hasTaskAction(detailTask, 'ASSIGN')">
                   <section class="matter-recommendation" :aria-busy="recommendationState.state === 'LOADING'" aria-label="智能推荐" aria-live="polite">
+
+                    <div class="recommendation-status" role="status">
                       <span v-if="recommendationState.state === 'LOADING'" class="recommendation-spinner" aria-hidden="true" />
-                    <p role="status">{{ recommendationStateText(recommendationState.state) }}</p>
-                    <p v-if="recommendationState.result?.requirementSummary">需求理解：{{ recommendationState.result.requirementSummary }}</p>
-                    <template v-if="matterAgent?.recommendationReason">
-                      <p>推荐理由（模型建议）：{{ matterAgent.recommendationReason }}</p>
+                      <span>{{ recommendationStateText(recommendationState.state) }}</span>
+                    </div>
+                    <p v-if="recommendationState.state === 'LOADING'" class="recommendation-hint">推荐完成后，你可以查看理由并选择承办人。</p>
+                    <details v-if="recommendationState.state !== 'LOADING' && recommendationState.result?.requirementSummary"
+                      :key="`${detailTask?.id}:${recommendationState.result.observedAt}`" class="recommendation-understanding">
+                      <summary>需求理解</summary>
+                      <p>{{ recommendationState.result.requirementSummary }}</p>
+                    </details>
+                    <details v-if="matterAgent?.recommendationReason" class="recommendation-understanding" :key="matterAgent.agentId">
+                      <summary>查看所选好汉的能力依据</summary>
                       <ul><li v-for="evidence in matterAgent.recommendationEvidence || []" :key="evidence.id">{{ evidence.label }}：{{ evidence.description }}</li></ul>
-                      <p v-for="gap in matterAgent.recommendationGaps || []" :key="gap">待核实：{{ gap }}</p>
-                    </template>
+                      <p v-for="gap in matterAgent.recommendationGaps || []" :key="gap">提醒：{{ gap }}</p>
+                    </details>
                     <button type="button" :disabled="recommendationState.state === 'LOADING' || pointAndStartBusy" @click="$emit('refresh-recommendation')">重新推荐</button>
                   </section>
 
@@ -230,7 +238,7 @@
                         :aria-pressed="matterAgent?.agentId === agent.agentId"
                         :disabled="recommendationState.state === 'LOADING' || pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, agent)"
                         @click="matterCandidateId = agent.agentId"
-                      ><span class="matter-candidate-avatar" aria-hidden="true">{{ agentDisplayName(agent).slice(0, 1) }}</span><span class="matter-candidate-copy"><strong>{{ agentDisplayName(agent) }}</strong><small>{{ assigneeProviderText(agent) }} · {{ assigneeAvailabilityText(agent) }}</small><small>{{ agent.recommendationReason || '可手动选择承办；非模型推荐' }}</small></span><span class="matter-candidate-check" aria-hidden="true">{{ matterAgent?.agentId === agent.agentId ? '✓' : '' }}</span></button>
+                      ><span class="matter-candidate-avatar" aria-hidden="true">{{ agentDisplayName(agent).slice(0, 1) }}</span><span class="matter-candidate-copy"><strong>{{ agentDisplayName(agent) }}</strong><small>{{ assigneeProviderText(agent) }} · {{ assigneeAvailabilityText(agent) }}</small><small v-if="agent.recommendationLevel" class="recommendation-level" :data-level="agent.recommendationLevel">{{ recommendationLevelText(agent.recommendationLevel) }}</small><small>{{ agent.recommendationReason || '可手动选择承办' }}</small></span><span class="matter-candidate-check" aria-hidden="true">{{ matterAgent?.agentId === agent.agentId ? '✓' : '' }}</span></button>
                       <p v-if="matterCandidates.length && !filteredMatterCandidates.length" role="status">暂无符合当前筛选的承办人，请切换筛选。</p>
                       </div>
                       <button
@@ -242,12 +250,6 @@
                     </div>
                     <p v-if="candidatesLoading" role="status">正在读取承办候选…</p>
                     <p v-if="candidatesError" role="alert">{{ candidatesError }}</p>
-                    <button
-                      type="button"
-                      class="matter-agent-toggle hall-tool"
-                      :disabled="candidatesLoading || pointAndStartBusy || Boolean(pointAndStartForDetail)"
-                      @click="$emit('refresh-candidates')"
-                     aria-label="刷新承办候选" title="刷新承办候选"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M4 16l2 3a7 7 0 0 0 12-2"/></svg></button>
                     <button
                       type="button"
                       class="matter-primary-action"
@@ -441,9 +443,17 @@
             <div v-if="!embeddedHall && canActOnTask(detailTask)" class="modal-agent-scroll">
               <div class="section-label">可点好汉</div>
               <section class="matter-recommendation" :aria-busy="recommendationState.state === 'LOADING'" aria-label="智能推荐" aria-live="polite">
+
+                <div class="recommendation-status" role="status">
                       <span v-if="recommendationState.state === 'LOADING'" class="recommendation-spinner" aria-hidden="true" />
-                <p role="status">{{ recommendationStateText(recommendationState.state) }}</p>
-                <p v-if="recommendationState.result?.requirementSummary">需求理解：{{ recommendationState.result.requirementSummary }}</p>
+                      <span>{{ recommendationStateText(recommendationState.state) }}</span>
+                    </div>
+                    <p v-if="recommendationState.state === 'LOADING'" class="recommendation-hint">推荐完成后，你可以查看理由并选择承办人。</p>
+                <details v-if="recommendationState.state !== 'LOADING' && recommendationState.result?.requirementSummary"
+                      :key="`${detailTask?.id}:${recommendationState.result.observedAt}`" class="recommendation-understanding">
+                      <summary>需求理解</summary>
+                      <p>{{ recommendationState.result.requirementSummary }}</p>
+                    </details>
                 <button type="button" :disabled="recommendationState.state === 'LOADING' || pointAndStartBusy" @click="$emit('refresh-recommendation')">重新推荐</button>
               </section>
               <div
@@ -466,7 +476,7 @@
                     <strong>{{ agentDisplayName(agent) }}</strong>
                     <small>{{ abilityText(agent) }}</small>
                   </span>
-                  <em>{{ agent.recommendationReason ? '模型建议' : '手动选择' }}</em>
+                  <em>{{ recommendationLevelText(agent.recommendationLevel) || '手动选择' }}</em>
                 </button>
                 <p v-if="recommendationReason(agent)" class="recommendation-reason">
                   {{ recommendationReason(agent) }}
@@ -525,10 +535,11 @@
 </template>
 
 <script setup>
+import { isRecommendedLevel, recommendationLevelText } from '../../composables/juyiting/hallAssigneeRecommendation.js'
 const recommendationStateText = state => ({
-  IDLE: '尚未生成智能推荐，可手动选择承办。', LOADING: '正在比较需求、本领和技能，不会启动办理…',
-  READY: '以下为模型建议，能力依据以服务端观察为准，不保证办理结果。',
-  NO_MATCH: '当前没有足够依据推荐合适人选，可手动选择承办。',
+  IDLE: '可以选择一位好汉来承办。', LOADING: '正在为你挑选合适的好汉…',
+  READY: '推荐已备好，看看哪位更合适。',
+  NO_MATCH: '暂未找到特别合适的人选，你仍可查看理由并手动选择。',
   NO_CANDIDATES: '暂无可承办候选，请核对接单范围和可用状态。',
   ERROR: '智能推荐暂不可用，可重试或手动选择承办。',
   STALE: '事项或能力已变化，请重新推荐；原推荐不再使用。'
@@ -774,7 +785,7 @@ const showNoAssigneeRecruitment = computed(() => hasTaskAction(detailTask.value,
     : props.candidatesTaskId === detailTask.value?.id))
 const matterAgent = computed(() => {
   if (!hasTaskAction(detailTask.value, 'ASSIGN')) return assignedAgentForTask(detailTask.value)
-  return matterCandidateId.value ? matterCandidates.value.find(agent => agent.agentId === matterCandidateId.value) || null : assignableRecommendedAgents.value[0] || null
+  return matterCandidateId.value ? matterCandidates.value.find(agent => agent.agentId === matterCandidateId.value) || null : assignableRecommendedAgents.value.find(agent => isRecommendedLevel(agent.recommendationLevel)) || null
 })
 watch(() => [props.identityScope, props.authorizationGeneration, detailTask.value?.id, detailTask.value?.taskVersion], () => { matterCandidateId.value = ''; showMatterCandidates.value = true; matterCandidateFilter.value = 'all' }, { flush: 'sync' })
 const confirmMatterAgent = () => {
@@ -1746,7 +1757,15 @@ button:disabled {
 .matter-candidate-copy { flex:1; min-width:0; }
 .matter-candidate-check { flex:none; width:16px; }
 .matter-candidate-picker button:focus-visible { outline:2px solid var(--hall-brand,#923f30); outline-offset:3px; }
-.recommendation-spinner { display:inline-block; width:14px; height:14px; border:2px solid var(--hall-border,#e3e5dc); border-top-color:var(--hall-brand,#923f30); border-radius:50%; animation:recommendation-spin 1s linear infinite; }
+.matter-recommendation { padding:12px; border-radius:10px; background:var(--hall-surface-subtle,#f8f6ef); }
+.recommendation-status { display:flex; align-items:center; gap:10px; line-height:1.6; }
+.recommendation-hint { margin:8px 0; font-size:13px; color:var(--hall-muted,#788178); }
+.recommendation-understanding { margin:10px 0; font-size:13px; }
+.recommendation-understanding summary { cursor:pointer; color:var(--hall-muted,#788178); }
+.recommendation-understanding p { overflow-wrap:anywhere; }
+.matter-candidate-copy .recommendation-level { font-weight:600; color:var(--hall-brand,#923f30); }
+.matter-candidate-copy .recommendation-level[data-level="UNKNOWN"], .matter-candidate-copy .recommendation-level[data-level="LOW"] { color:var(--hall-muted,#788178); }
+.recommendation-spinner { display:inline-block; flex:none; width:20px; height:20px; border:2px solid var(--hall-border,#e3e5dc); border-top-color:var(--hall-brand,#923f30); border-radius:50%; animation:recommendation-spin 1s linear infinite; }
 @keyframes recommendation-spin { to { transform:rotate(360deg); } }
 @media(prefers-reduced-motion:reduce) { .recommendation-spinner { animation:none; } }
 @media(max-width:720px) { .matter-candidates { grid-template-columns:1fr; } }

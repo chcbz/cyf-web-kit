@@ -6,7 +6,7 @@ import { parseAssigneeRecommendation } from '../src/composables/juyiting/hallAss
 const task = () => ({ id: 'task-r1', taskVersion: '7', title: '写一份说明', description: '说明使用方式', status: 'open' })
 const agent = { agentId: 'a', name: '好汉', status: 'online', canOperate: true, boundToMe: true, abilities: ['写作'] }
 const result = () => ({ taskId: 'task-r1', taskVersion: '7', state: 'READY', observedAt: 1000,
-  candidateSetComplete: true, requirementSummary: '写使用说明', questions: [], recommendations: [{ agent,
+  candidateSetComplete: true, requirementSummary: '写使用说明', questions: [], recommendations: [{ agent, recommendationLevel: 'HIGH',
     reason: '登记了写作本领', evidence: [{ id: 'ability:0', kind: 'DECLARED_ABILITY', label: '写作', description: '登记声明', available: true }], gaps: ['受众未知，不保证适合具体使用场景'] }] })
 const create = implementation => {
   const selectedTask = ref(task()), identityScope = ref('owner-a')
@@ -16,6 +16,20 @@ const create = implementation => {
   return { data, selectedTask, identityScope }
 }
 describe('single-track model assignee recommendation R1', () => {
+  it('validates degrees, retains low/unknown rows and ranks all candidates without making a score', async () => {
+    const rows = ['UNKNOWN', 'LOW', 'HIGH', 'MEDIUM'].map((level, index) => ({ ...result().recommendations[0],
+      agent: { ...agent, agentId: String(index) }, recommendationLevel: level, evidence: level === 'UNKNOWN' ? [] : result().recommendations[0].evidence }))
+    const { data } = create(async (_url, _input, options) => options.onSuccess({ ...result(), recommendations: rows }))
+    await data.loadTaskRecommendations()
+    expect(data.recommendedAgents.value.map(a => a.recommendationLevel)).to.deep.equal(['HIGH', 'MEDIUM', 'LOW', 'UNKNOWN'])
+    data.dispose()
+    for (const level of [undefined, 'INVALID', 90]) {
+      expect(() => parseAssigneeRecommendation({ ...result(), recommendations: [{ ...rows[2], recommendationLevel: level }] }, task())).to.throw()
+    }
+    expect(parseAssigneeRecommendation({ ...result(), state: 'NO_MATCH', recommendations: rows.slice(0, 2) }, task()).recommendations).to.have.length(2)
+    expect(() => parseAssigneeRecommendation({ ...result(), state: 'NO_CANDIDATES', recommendations: rows.slice(0, 1) }, task())).to.throw()
+  })
+
   it('accepts additive fields but rejects old scored arrays, stale task and unsupported states', () => {
     expect(parseAssigneeRecommendation({ ...result(), future: true }, task()).state).to.equal('READY')
     for (const value of [[], [{ agent, score: 80 }], { ...result(), taskVersion: '8' }, { ...result(), state: 'DONE' },
@@ -36,10 +50,10 @@ describe('single-track model assignee recommendation R1', () => {
     await data.loadTaskRecommendations(); expect(calls).to.equal(1)
     data.dispose()
   })
-  it('never promotes local roster into recommendations on empty or failed model output', async () => {
-    const { data } = create(async (_url, _input, options) => options.onSuccess({ ...result(), state: 'NO_MATCH', recommendations: [] }))
+  it('retains unknown assessments for manual selection without inventing positive recommendations', async () => {
+    const { data } = create(async (_url, _input, options) => options.onSuccess({ ...result(), state: 'NO_MATCH', recommendations: [{ ...result().recommendations[0], recommendationLevel: 'UNKNOWN', reason: '资料不足', evidence: [] }] }))
     await data.loadTaskRecommendations(); expect(data.recommendationState.value.state).to.equal('NO_MATCH')
-    expect(data.recommendedAgents.value).to.deep.equal([]); expect(data.canAssign(task(), agent)).to.equal(true)
+    expect(data.recommendedAgents.value[0].recommendationLevel).to.equal('UNKNOWN'); expect(data.canAssign(task(), agent)).to.equal(true)
     data.dispose()
     const failed = create(async () => { throw new Error('provider offline') })
     await failed.data.loadTaskRecommendations(); expect(failed.data.recommendationState.value.state).to.equal('ERROR')
