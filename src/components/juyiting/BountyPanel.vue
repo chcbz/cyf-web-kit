@@ -163,7 +163,7 @@
                   <dl>
                     <div><dt>{{ hasTaskAction(detailTask, 'ASSIGN') ? (matterCandidateId ? '已选承办' : '推荐承办') : '承办好汉' }}</dt><dd>{{ matterAgent ? agentDisplayName(matterAgent) : (detailTask.assignedAgentName || (taskAssigneeIds(detailTask).length ? '承办信息待核对' : (hasTaskAction(detailTask, 'ASSIGN') ? (recommendationState.state === 'LOADING' ? '正在推荐…' : '请选择承办人') : '尚未确认'))) }}</dd></div>
                     <div v-if="matterAgent"><dt>所属用户 / 当前状态</dt><dd>{{ assigneeProviderText(matterAgent) }} · {{ assigneeAvailabilityText(matterAgent) }}</dd></div>
-                    <div><dt>资料 / 成果</dt><dd>{{ matterResourceSummary?.taskId === String(detailTask.id) ? `${matterResourceSummary.materials} 份资料 · ${matterResultCount ?? matterResourceSummary.outputs} 份${matterResultCount == null ? '成果引用' : '成果'}` : '见下方资料与成果' }}</dd></div>
+                    <div><dt>资料 / 成果</dt><dd>{{ matterResourceSummary?.taskId === String(detailTask.id) ? (['completed', 'archived'].includes(detailTask.status) ? `${matterResourceSummary.materials} 份资料 · 成果见验收记录` : `${matterResourceSummary.materials} 份资料 · ${matterResultCount ?? matterResourceSummary.outputs} 份${matterResultCount == null ? '成果引用' : '成果'}`) : '见下方资料与成果' }}</dd></div>
                   </dl>
                   <p v-if="hasTaskAction(detailTask, 'ASSIGN') && matterAgent?.recommendationReason" class="matter-selected-reason">{{ matterAgent.recommendationReason }}</p>
                 </template>
@@ -351,7 +351,7 @@
                 :identity-scope="identityScope"
                 :identity-epoch="authorizationGeneration"
                 :result-count="matterResultCount"
-                :completed="detailTask.status === 'completed'"
+                :completed="['completed', 'archived'].includes(detailTask.status)"
                 @summary="matterResourceSummary = $event"
               />
               <section v-if="!embeddedHall || taskPresentation(detailTask).readOnly || taskPresentation(detailTask).phase === 'COMPLETED'" class="matter-resources" aria-label="资料与成果">
@@ -656,6 +656,8 @@ const matterResultCount = computed(() => {
   const task = detailTask.value, context = props.resourceReviewContext
   if (!task || context?.taskId !== String(task.id) || context.taskState !== String(task.status).toUpperCase() ||
       (task.taskVersion != null && String(task.taskVersion) !== context.taskVersion)) return null
+  // An absent active batch does not mean archived/accepted history is empty.
+  if (['completed', 'archived'].includes(task.status)) return null
   return context.currentDelivery?.items?.filter(item => item.displayRole === 'RESULT').length ?? 0
 })
 const matterResourceSummary = ref(null)

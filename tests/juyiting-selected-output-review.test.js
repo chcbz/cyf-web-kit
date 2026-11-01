@@ -74,6 +74,13 @@ describe('selected existing outputs unified acceptance', () => {
     let release; const wait = new Promise(resolve => { release = resolve }); const f = setup({ defer: wait })
     try { await f.client.show(item(1)); const pending = f.client.confirm(); f.identity.value = 'owner-2'; release(); await pending; expect(f.accepts()).to.equal(0) } finally { release(); f.client.dispose() }
   })
+  it('preserves the file name as the accepted title without changing source identity', () => {
+    const source = { ...item(1), filename: 'roles-v2.txt' }; const selected = selectedOutput(source)
+    expect(selected.title).to.equal('roles-v2.txt')
+    expect(selected.outputId).to.equal(source.outputId); expect(selected.sha256).to.equal(source.sha256)
+    expect(batchMatchesSelection(batch([source]), [selected])).to.equal(true)
+    expect(selectedOutput(item(1)).title).to.equal(item(1).title)
+  })
   it('compares exact source and content hash, not title or newest output; supports completed text', () => {
     const a = selectedOutput(item(1)); expect(batchMatchesSelection(batch([item(1)]), [a])).to.equal(true)
     expect(batchMatchesSelection(batch([item(2)]), [a])).to.equal(false)

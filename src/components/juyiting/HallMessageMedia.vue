@@ -19,17 +19,20 @@
         <header><strong>{{ part.filename || '资料预览' }}</strong><button type="button" class="media-preview-close" aria-label="关闭预览" title="关闭预览" @click="expanded = false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button></header>
         <img v-if="previewUrl && mediaKind === 'image'" :src="previewUrl" :alt="part.filename || '会话图片'" />
         <audio v-else-if="previewUrl && mediaKind === 'audio'" :src="previewUrl" controls controlslist="nodownload" preload="none" aria-label="音频预览" />
+        <pre v-else-if="previewBlob && mediaKind === 'text'" class="asset-text-preview" v-text="previewText"></pre>
+        <PdfDocumentPreview v-else-if="previewBlob && mediaKind === 'pdf'" :blob="previewBlob" />
         <p v-else>{{ loading ? '正在读取…' : '此格式暂不支持在线预览。' }}</p>
         <p v-if="error" role="alert">{{ error }}</p>
-        <footer v-if="!previewUrl && mediaKind !== 'file'"><button type="button" :disabled="loading" @click="loadPreview">重试预览</button></footer>
+        <footer v-if="!previewBlob && mediaKind !== 'file'"><button type="button" :disabled="loading" @click="loadPreview">重试预览</button></footer>
       </dialog>
     </Teleport>
   </div>
 </template>
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import PdfDocumentPreview from '../workspace/PdfDocumentPreview.vue'
 import { createApi } from '../../composables/useHttp.js'
-import { conversationAssetContentPath, safeMediaKind } from '../../composables/juyiting/hallMessageParts.js'
+import { conversationAssetContentPath, safeAssetPreviewKind } from '../../composables/juyiting/hallMessageParts.js'
 
 const props = defineProps({
   part: { type: Object, required: true },
@@ -38,6 +41,8 @@ const props = defineProps({
 })
 const api = createApi('/chat')
 const previewUrl = ref('')
+const previewBlob = ref(null)
+const previewText = ref('')
 const loading = ref(false)
 const error = ref('')
 const expanded = ref(false)
@@ -57,7 +62,7 @@ watch(expanded, async opened => {
     if (previewReturnFocus?.isConnected) previewReturnFocus.focus()
   }
 })
-const mediaKind = computed(() => safeMediaKind(props.part))
+const mediaKind = computed(() => safeAssetPreviewKind(props.part))
 let controller = null
 let requestGeneration = 0
 const discard = () => {
@@ -66,6 +71,8 @@ const discard = () => {
   controller = null
   if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
   previewUrl.value = ''
+  previewBlob.value = null
+  previewText.value = ''
   expanded.value = false
   loading.value = false
   error.value = ''
@@ -77,7 +84,7 @@ const getBlob = async signal => {
   return response
 }
 const loadPreview = async () => {
-  if (previewUrl.value || loading.value || mediaKind.value === 'file') return
+  if (previewBlob.value || loading.value || mediaKind.value === 'file') return
   const generation = ++requestGeneration
   controller?.abort()
   const pending = new AbortController()
@@ -88,10 +95,14 @@ const loadPreview = async () => {
     const blob = await getBlob(pending.signal)
     if (pending.signal.aborted || generation !== requestGeneration) return
     const actualMime = String(blob.type || '').toLowerCase().split(';')[0].trim()
-    if (actualMime !== props.part.mime || safeMediaKind({ ...props.part, mime: actualMime }) !== mediaKind.value) {
+    if (actualMime !== props.part.mime || safeAssetPreviewKind({ ...props.part, mime: actualMime }) !== mediaKind.value) {
       throw new Error('文件信息不一致，暂时无法预览。')
     }
-    previewUrl.value = URL.createObjectURL(blob)
+    const text = mediaKind.value === 'text' ? await blob.text() : ''
+    if (pending.signal.aborted || generation !== requestGeneration) return
+    previewBlob.value = blob
+    previewText.value = text
+    if (['image', 'audio'].includes(mediaKind.value)) previewUrl.value = URL.createObjectURL(blob)
   } catch (cause) {
     if (!pending.signal.aborted && generation === requestGeneration) error.value = cause?.message || '读取内容失败，请重试。'
   } finally {
@@ -124,4 +135,8 @@ onBeforeUnmount(discard)
 .image-overlay footer button { min-height:40px; padding:6px 14px; border:1px solid #d8d8ce; border-radius:7px; background:#fffefa; color:#242e2b; cursor:pointer; }
 .image-overlay button:focus-visible { outline:2px solid #923f30; outline-offset:2px; }
 .media-asset audio { max-width: 100%; }
+</style>
+
+<style scoped>
+.asset-text-preview { white-space: pre-wrap; overflow-wrap: anywhere; overflow: auto; width: 100%; min-height: 0; }
 </style>

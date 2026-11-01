@@ -49,7 +49,7 @@ syncCurrentComposer=function(panel){optimizedComposer(panel);const ctx=conversat
  $('.composer-textarea',panel).maxLength=1200;
  const summary=$('.context-summary small',panel);if(summary)summary.title=summary.textContent;
  $$('.toolbar-actions button',panel).forEach(b=>{const terminal=!!(ctx.task?.complete||ctx.task?.cancelled);b.hidden=(page==='chat'&&b.getAttribute('aria-label')==='新对话')||(terminal&&['新对话','查看并验收'].includes(b.getAttribute('aria-label')));b.disabled=!!(ctx.pending||ctx.historyDeletingId||$('.inline-voice-status',panel));});
- if(ctx.task?.complete){const status=$('.context-summary em',panel);if(status)status.textContent='事项已完成';}
+ if(page==='chat'){const status=$('.context-summary em',panel);if(status)status.textContent=ctx.task?.complete?'事项已完成':ctx.task?.cancelled?'事项已取消':ctx.task?.phase==='待验收'?'待验收':'进行中';}
  if(['waiting','streaming'].includes(state.baselineScenario)&&!ctx.pending){$$('.is-pending',panel).forEach(e=>e.remove());}
  const menu=$('.composer-more',panel);menu?.setAttribute('aria-expanded','false');
  // Preserve actions and state, while the compact CSS positions toolbar right and voice before send.

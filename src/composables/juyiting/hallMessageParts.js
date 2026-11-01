@@ -72,3 +72,13 @@ export const safeMediaKind = part => {
   if (part?.kind === 'audio' && ['audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/wav', 'audio/webm'].includes(mime)) return 'audio'
   return 'file'
 }
+
+/** Preview policy only; never promotes an asset or changes its persisted kind. */
+export const safeAssetPreviewKind = part => {
+  const kind = safeMediaKind(part)
+  if (kind !== 'file' || part?.kind !== 'file') return kind
+  const mime = mimeFor(part?.mime || '')
+  if (['text/plain', 'text/markdown', 'application/json'].includes(mime)) return 'text'
+  if (mime === 'application/pdf') return 'pdf'
+  return 'file'
+}

@@ -4260,3 +4260,41 @@ describe('Agent roster visual close contract', () => {
     } finally { wrapper.unmount() }
   })
 })
+
+
+describe('discussion retest task status and scroll', () => {
+  const props = () => ({ agents: [], draft: '', messages: [{ localId: 'm1', sender: 'AGENT', content: '第一条' }], mentionLabel: a => a.name, senderText: m => m.sender, discussionVariant: 'bounty', selectedTask: { id: '567', status: 'running', title: '复测' }, conversationId: 'c1', connectionStatus: '已完成' })
+  it('uses the task phase instead of a completed chat request in the header', async () => {
+    const wrapper = mount(ChatPanel, { global: { stubs }, props: props() })
+    try {
+      expect(wrapper.get('.panel-toolbar').text()).to.include('进行中').and.not.to.include('已完成')
+      await wrapper.setProps({ selectedTask: { id: '567', status: 'reviewing' } })
+      expect(wrapper.get('.panel-toolbar').text()).to.include('待验收')
+    } finally { wrapper.unmount() }
+  })
+  it('does not pull a reader to the bottom and follows again on explicit action', async () => {
+    const wrapper = mount(ChatPanel, { global: { stubs }, props: props() })
+    try {
+      await Vue.nextTick()
+      const box = wrapper.get('.hall-messages').element
+      Object.defineProperty(box, 'scrollHeight', { configurable: true, value: 1200 })
+      Object.defineProperty(box, 'clientHeight', { configurable: true, value: 400 })
+      box.scrollTop = 200
+      await wrapper.get('.hall-messages').trigger('scroll')
+      await wrapper.setProps({ messages: [...props().messages, { localId: 'm2', sender: 'AGENT', content: '新消息' }] })
+      await Vue.nextTick()
+      expect(box.scrollTop).to.equal(200)
+      await wrapper.get('.new-messages-button').trigger('click')
+      expect(box.scrollTop).to.equal(1200)
+      expect(wrapper.find('.new-messages-button').exists()).to.equal(false)
+      box.scrollTop = 200
+      await wrapper.get('.hall-messages').trigger('scroll')
+      await wrapper.setProps({ identityScope: 'other-owner', identityEpoch: 2 })
+      await Vue.nextTick()
+      expect(box.scrollTop).to.equal(1200)
+      expect(wrapper.find('.new-messages-button').exists()).to.equal(false)
+      await wrapper.setProps({ conversationId: 'c2' })
+      expect(wrapper.find('.new-messages-button').exists()).to.equal(false)
+    } finally { wrapper.unmount() }
+  })
+})

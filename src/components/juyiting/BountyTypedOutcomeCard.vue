@@ -1,11 +1,11 @@
 <template>
-  <article class="typed-outcome-card" :class="`typed-${outcome.kind.toLowerCase()}`">
-    <header><strong>{{ heading }}</strong><small>{{ inspection ? '资料答复' : 'Agent 答复' }}</small></header>
-    <p class="typed-outcome-text">{{ body }}</p>
+  <article v-if="hasDetails" class="typed-outcome-card" :class="[{ 'is-inline': bodyRendered }, `typed-${outcome.kind.toLowerCase()}`]">
+    <header v-if="!bodyRendered || outcome.kind === 'ACTION_REQUEST'"><strong>{{ heading }}</strong><small>{{ inspection ? '资料答复' : 'Agent 答复' }}</small></header>
+    <p v-if="!bodyRendered" class="typed-outcome-text">{{ body }}</p>
     <small v-if="submission?.state === 'FAILED' || outcome.kind === 'SUBMISSION_REQUEST'" class="typed-submission-note" role="status">{{ submissionHint }}</small>
     <small v-if="reviewHint" class="typed-submission-note" role="status">{{ reviewHint }}</small>
     <template v-if="outcome.kind === 'CLARIFY'">
-      <p class="typed-question">{{ outcome.clarification.question }}</p>
+      <p v-if="!bodyRendered || outcome.clarification.question !== outcome.text" class="typed-question">{{ outcome.clarification.question }}</p>
       <button v-if="outcome.clarification.state === 'OPEN' && !readOnly" type="button" @click="$emit('reply', projection)">回答此问</button>
       <small v-else class="typed-state">{{ outcome.clarification.state === 'OPEN' ? '事项已结束，保留历史问题' : '已收到补充' }}</small>
     </template>
@@ -18,13 +18,14 @@
 <script setup>
 import { computed } from 'vue'
 import { revisionProgressHint } from '../../composables/juyiting/hallTypedDeliberation.js'
-const props = defineProps({ projection: { type: Object, required: true }, readOnly: { type: Boolean, default: false } })
+const props = defineProps({ projection: { type: Object, required: true }, readOnly: { type: Boolean, default: false }, bodyRendered: { type: Boolean, default: false } })
 defineEmits(['reply'])
 const outcome = computed(() => props.projection.outcome)
 const inspection = computed(() => props.projection?.purpose === 'INSPECT')
 const progress = computed(() => props.projection.actionProgress)
 const submission = computed(() => props.projection.submissionProgress)
-const reviewHint = computed(() => revisionProgressHint(props.projection.reviewProgress))
+const reviewHint = computed(() => props.bodyRendered && props.projection.reviewProgress?.state === 'COMPLETED' ? '' : revisionProgressHint(props.projection.reviewProgress))
+const hasDetails = computed(() => !props.bodyRendered || ['CLARIFY', 'ACTION_REQUEST', 'SUBMISSION_REQUEST'].includes(outcome.value.kind) || submission.value?.state === 'FAILED' || Boolean(reviewHint.value))
 const submissionHint = computed(() => outcome.value?.kind === 'SUBMISSION_REQUEST' && submission.value?.state !== 'FAILED'
   ? submission.value?.state === 'COMPLETED' ? '成果已提交，请查看并验收。' : '正在核对提交结果，请勿重复提交。'
   : submission.value?.errorCode === 'DELIVERY_REVIEW_REQUIRED'
@@ -49,4 +50,8 @@ const body = computed(() => outcome.value?.kind === 'SUBMISSION_REQUEST'
 
 <style scoped>
 .typed-submission-note { display:block; margin-top:8px; color:#76572b; line-height:1.5; }
+</style>
+
+<style scoped>
+.typed-outcome-card.is-inline { border: 0; background: transparent; padding: 0; margin: 6px 0; }
 </style>

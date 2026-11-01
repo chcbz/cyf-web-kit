@@ -31,6 +31,15 @@ describe('shared delivery review modal interaction', () => {
     }
     for (const name of installed) delete globalThis[name]
   })
+  it('uses the stored filename rather than a technical output ID in the selection list', async () => {
+    const wrapper = mount(Dialog, { props: { open: true, selectionMode: true, choices: [{ key: 'result-key', outputId: 'output-internal-id', filename: 'roles.txt' }], selectedKeys: [] }, attachTo: document.body })
+    try {
+      await flushPromises()
+      expect(wrapper.get('li strong').text()).to.equal('roles.txt')
+      expect(wrapper.get('.review-selection-preview').attributes('aria-label')).to.include('roles.txt')
+      expect(wrapper.emitted('confirm')).to.equal(undefined)
+    } finally { wrapper.unmount() }
+  })
   it('shows only result rows, provides one back control and emits user intent without deciding on mount', async () => {
     const wrapper = mount(Dialog, { props: { open: true, frozenBatch: batch }, attachTo: document.body })
     try {

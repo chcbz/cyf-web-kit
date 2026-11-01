@@ -36,7 +36,7 @@
         v-if="materialPickerOpen"
         ref="pickerDialog"
         class="quick-material-picker"
-        :class="{ 'is-mobile-preview': mobilePreviewOpen }"
+        :class="{ 'is-mobile-preview': mobilePreviewOpen, 'has-context': !!$slots.context }"
         aria-labelledby="hall-material-picker-title"
         @cancel.prevent="backFromPicker"
         @keydown="handlePickerKeydown"
@@ -458,6 +458,8 @@ onBeforeUnmount(() => { pickerGeneration += 1; mobileQuery?.removeEventListener?
 .quick-material-picker .quick-material-back { display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: transparent; border-color: transparent; color: var(--material-brand); padding-inline: 4px; }
 .quick-material-back svg { width: 20px; height: 20px; }
 .quick-material-picker button.primary, .quick-material-picker .quick-material-confirm { background: var(--material-brand); border-color: var(--material-brand); color: var(--material-paper); }
+.quick-material-picker.has-context { grid-template-rows: auto auto minmax(0, 1fr) auto; }
+.quick-material-context { min-height: 0; max-height: 35dvh; overflow: auto; }
 .quick-material-picker-body { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(0, 1.2fr); min-height: 0; min-width: 0; overflow: hidden; }
 .quick-material-list-pane { min-height: 0; min-width: 0; overflow: auto; overscroll-behavior: contain; padding: 16px; border-right: 1px solid #e3e5dc; scrollbar-gutter: stable; }
 .quick-material-files { display: grid; gap: 10px; }

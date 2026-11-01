@@ -9,14 +9,14 @@
       <p v-if="!choices.length" role="status">暂无可验收成果，请关闭后重新读取成果。</p>
       <ul><li v-for="(item, index) in choices" :key="item.key">
         <label><input type="checkbox" :checked="selectedKeys.includes(item.key)" :disabled="pending || selectionLocked" @change="$emit('toggle', item.key)" />
-          <strong>{{ item.title || item.outputId || '文字成果' }}</strong><small>成果 {{ index + 1 }}</small></label>
+          <strong>{{ item.filename || item.title || item.outputId || '文字成果' }}</strong><small>成果 {{ index + 1 }}</small></label>
         <button
           type="button"
           class="review-selection-preview"
           :disabled="pending"
           :aria-expanded="activeSelectionKey === item.key"
           :aria-controls="`review-selection-preview-${index}`"
-          :aria-label="`${activeSelectionKey === item.key ? '收起' : '预览'}成果 ${index + 1}：${item.title || item.outputId || '文字成果'}`"
+          :aria-label="`${activeSelectionKey === item.key ? '收起' : '预览'}成果 ${index + 1}：${item.filename || item.title || item.outputId || '文字成果'}`"
           @click="toggleSelectionPreview(item)"
         >{{ activeSelectionKey === item.key ? '收起预览' : '预览' }}</button>
         <section
@@ -25,7 +25,7 @@
           class="review-inline-preview"
           :aria-label="`成果 ${index + 1} 预览`"
         >
-          <h3>正在预览：成果 {{ index + 1 }} · {{ item.title || item.outputId || '文字成果' }}</h3>
+          <h3>正在预览：成果 {{ index + 1 }} · {{ item.filename || item.title || item.outputId || '文字成果' }}</h3>
           <slot name="selection-preview" :item="item" :index="index"></slot>
         </section>
       </li></ul>

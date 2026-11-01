@@ -59,7 +59,7 @@ export const normalizeHallMessage = (item, identity) => {
     parts: mergeMessageParts([], Array.isArray(item.parts) ? item.parts : []),
     timestamp: item.createTime || metadata.timestamp || Date.now(),
     streaming: false,
-    statusText: ''
+    statusText: metadata.partial === true && metadata.completionState === 'CANCELLED' ? '已停止（未完成）' : ''
   }
 }
 

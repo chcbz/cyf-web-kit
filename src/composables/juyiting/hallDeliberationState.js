@@ -6,8 +6,8 @@ const PENDING_LABELS = {
   RECEIVED: '已受理', QUEUED: '排队中', DISPATCHED: '正在理解', UNDERSTANDING: '正在理解',
   INSPECT: '正在查阅', STREAMING: '生成中', GENERATING: '生成中', FALLBACK: '正在处理',
   RECOVERY_REQUIRED: '需要恢复核对', ACCEPTANCE_UNKNOWN: '结果未知，正在核对', UNKNOWN: '结果未知，正在核对',
-  CANCEL_REQUESTED: '正在取消', COMPLETED: '已完成', PARTIAL: '部分回话已完成', FAILED: '回话失败',
-  CANCELLED: '已取消', FINAL_PERSISTED: '已完成', PUBLISHED: '已完成', OUTPUT_COMMITTED: '本轮成果已就绪', RESULT_COMMITTED: '本轮结果已登记'
+  CANCEL_REQUESTED: '正在取消', COMPLETED: '本轮回话已结束', PARTIAL: '部分回话已完成', FAILED: '回话失败',
+  CANCELLED: '本轮回复已停止', FINAL_PERSISTED: '本轮回话已结束', PUBLISHED: '本轮回话已结束', OUTPUT_COMMITTED: '本轮成果已就绪', RESULT_COMMITTED: '本轮结果已登记'
 }
 
 export const normalizeDeliberationState = value => typeof value === 'string' ? value.trim().toUpperCase() : ''

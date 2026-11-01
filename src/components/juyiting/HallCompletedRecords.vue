@@ -60,7 +60,9 @@
 import { computed, ref, watch } from 'vue'
 import OutputPreview from '../outputs/OutputPreview.vue'
 import { useOutputs } from '../../composables/useOutputs.js'
-import { completedReviewRecords, exactReviewOutput } from '../../composables/juyiting/completedReviewRecords.js'
+import { completedReviewRecords, exactReviewOutput, completedRecordTitle } from '../../composables/juyiting/completedReviewRecords.js'
+import { createApi } from '../../composables/useHttp.js'
+import { outputCatalogItems } from '../../composables/juyiting/bountyOutputCatalog.js'
 const props = defineProps({
   taskId: { type: String, required: true }, taskVersion: { type: [String, Number], default: '' },
   identityKey: { type: String, required: true }, title: { type: String, default: '' }, archived: { type: Boolean, default: false },
@@ -72,7 +74,27 @@ const outputs = useOutputs({ source: () => props.identityKey ? { type: 'task', i
 const expandedKey = ref('')
 const groups = computed(() => [{ name: '已验收成果', history: false, rows: records.value.accepted }, { name: '其他历史成果', history: true, rows: records.value.history }])
 const exactOutput = row => exactReviewOutput(outputs.items.value, row.item)
-const rowTitle = (row, index) => exactOutput(row)?.title || (!['result', 'output'].includes(row.item.purpose?.toLowerCase()) ? row.item.purpose : '') || `成果 ${index + 1}`
+const sourceOutputs = ref([])
+const sourceApi = createApi('/chat')
+const rowTitle = (row, index) => completedRecordTitle(row, index, outputs.items.value, sourceOutputs.value)
+// Read-only metadata for accepted historical sources. Existing HTTP identity cleanup
+// plus this watch cancellation prevents stale labels after task/account changes.
+watch(() => [props.taskId, props.identityKey, props.context], async (_value, _old, onCleanup) => {
+  sourceOutputs.value = []
+  if (!props.identityKey) return
+  const controller = new AbortController()
+  onCleanup(() => controller.abort())
+  const sources = [...records.value.accepted, ...records.value.history].map(row => row.item)
+    .filter(item => !item.unavailableReason && item.source?.kind === 'CONVERSATION_OUTPUT').map(item => item.source)
+  const groups = new Map(sources.map(source => [JSON.stringify([source.requestId, source.stepId]), source]))
+  for (const source of groups.values()) {
+    try {
+      const items = await sourceApi.get(`/requests/${encodeURIComponent(source.requestId)}/steps/${encodeURIComponent(source.stepId)}/outputs`, {}, { autoLoading: false, signal: controller.signal })
+      if (controller.signal.aborted) return
+      sourceOutputs.value.push(...outputCatalogItems(items, source.requestId, source.stepId))
+    } catch { if (controller.signal.aborted) return } // Label failure cannot erase an accepted fact.
+  }
+}, { immediate: true, flush: 'sync' })
 const previewId = row => `completed-preview-${encodeURIComponent(row.key)}`
 const togglePreview = row => { expandedKey.value = expandedKey.value === row.key ? '' : row.key }
 const retry = () => { expandedKey.value = ''; emit('refresh') }

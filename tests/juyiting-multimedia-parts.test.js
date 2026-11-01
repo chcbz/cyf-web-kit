@@ -111,3 +111,15 @@ describe('bounty conversation persisted media parts', () => {
     expect(mergeMessageParts([], [image(2, { assetId: '', url: 'https://example.invalid' })])).to.deep.equal([])
   })
 })
+
+describe('cancelled reply history', () => {
+  it('restores explicitly incomplete persisted text without presenting it as a completed reply', () => {
+    const message = normalizeHallMessage({ id: '33', senderType: 'agent', content: '已经生成的部分正文', metadata: { requestId: 'request-1', partial: true, completionState: 'CANCELLED' } }, 'owner')
+    expect(message.content).to.equal('已经生成的部分正文')
+    expect(message.statusText).to.equal('已停止（未完成）')
+    expect(message.streaming).to.equal(false)
+    expect(message.parts).to.deep.equal([])
+    const ordinary = normalizeHallMessage({ id: '34', senderType: 'agent', content: '完整答复', metadata: {} }, 'owner')
+    expect(ordinary.statusText).to.equal('')
+  })
+})

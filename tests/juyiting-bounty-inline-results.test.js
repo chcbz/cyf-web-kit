@@ -1,3 +1,4 @@
+import { projectHallTask } from '../src/composables/juyiting/hallTaskPresentation.js'
 import * as discussionTurnHelpers from '../src/composables/juyiting/hallDiscussionTurns.js'
 import { useHallExecutionAbandonment } from '../src/composables/juyiting/useHallExecutionAbandonment.js'
 import { expect } from 'chai'
@@ -10,8 +11,8 @@ import * as discussionContract from '../src/components/juyiting/discussionPanelC
 import { bountyDeliberationPresentation } from '../src/composables/juyiting/hallMultimediaDeliberationUi.js'
 import { useHallSkillResults } from '../src/composables/juyiting/useHallSkillResults.js'
 import { skillResultDataText } from '../src/composables/juyiting/hallSkillResults.js'
-import { revisionProgressPending } from '../src/composables/juyiting/hallTypedDeliberation.js'
-import { conversationAssetContentPath, safeMediaKind, revisionOf } from '../src/composables/juyiting/hallMessageParts.js'
+import { revisionProgressPending, revisionProgressHint } from '../src/composables/juyiting/hallTypedDeliberation.js'
+import { conversationAssetContentPath, safeMediaKind, safeAssetPreviewKind, revisionOf } from '../src/composables/juyiting/hallMessageParts.js'
 
 const source = name => readFileSync(new URL(`../src/components/juyiting/${name}.vue`, import.meta.url), 'utf8')
 const load = (name, deps) => {
@@ -29,8 +30,8 @@ const directory = () => ({ items: Vue.ref([]), links: Vue.ref([]), pendingWrites
   actionState: Vue.ref('idle'), writeNotice: Vue.ref(''), refresh: async () => true, load: async () => true,
   dispose: () => {}, retryWrite: () => {} })
 const createComponents = api => {
-  const deps = { ...discussionTurnHelpers, useHallExecutionAbandonment, ...outputCatalog, ...discussionContract, bountyDeliberationPresentation, useHallSkillResults, skillResultDataText,
-    revisionProgressPending, conversationAssetContentPath, safeMediaKind, revisionOf, createApi: () => api, saveOutputBlob: () => {},
+  const deps = { projectHallTask, PdfDocumentPreview: { props: ['blob'], template: '<section class="pdf-preview-stub" />' }, ...discussionTurnHelpers, useHallExecutionAbandonment, ...outputCatalog, ...discussionContract, bountyDeliberationPresentation, useHallSkillResults, skillResultDataText,
+    revisionProgressPending, conversationAssetContentPath, safeMediaKind, safeAssetPreviewKind, revisionOf, createApi: () => api, saveOutputBlob: () => {},
     useHallConversationArchive: () => ({ statusFor: () => ({}), save: () => {}, check: () => {} }),
     marked: Object.assign(value => value, { setOptions: () => {} }), DOMPurify: { sanitize: value => value },
     usePersonalWorkspace: directory, usePersonalWorkspaceConversationLinks: directory, usePersonalWorkspaceTaskLinks: directory,
@@ -321,4 +322,60 @@ describe('single-conversation task discussion controls', () => {
       } finally { wrapper.unmount() }
     })
   }
+})
+
+
+describe('discussion retest confirmed defects', () => {
+  it('does not repeat an already-rendered answer and keeps a real clarification action', async () => {
+    const Card = load('BountyTypedOutcomeCard', { revisionProgressHint })
+    const answer = { outcome: { kind: 'ANSWER', text: '只显示一次' } }
+    const wrapper = mount(Card, { props: { projection: answer, bodyRendered: true } })
+    try {
+      expect(wrapper.find('article').exists()).to.equal(false)
+      await wrapper.setProps({ projection: { outcome: { kind: 'CLARIFY', text: '需要补充', clarification: { question: '哪一页？', state: 'OPEN' } } } })
+      expect(wrapper.text()).to.include('哪一页？').and.not.to.include('Agent 答复')
+      expect(wrapper.find('.typed-outcome-text').exists()).to.equal(false)
+      await wrapper.get('button').trigger('click')
+      expect(wrapper.emitted('reply')).to.have.length(1)
+      await wrapper.setProps({ readOnly: true })
+      expect(wrapper.find('button').exists()).to.equal(false)
+    } finally { wrapper.unmount() }
+  })
+  for (const mime of ['text/plain', 'text/markdown', 'application/json']) {
+    it(`previews persisted ${mime} as text rather than executable markup`, async () => {
+      const calls = [], body = '<img src=x onerror=alert(1)>会议纪要'
+      const components = createComponents({ execute: async request => { calls.push(request); return new Blob([body], { type: mime }) } })
+      const wrapper = mount(components.HallMessageMedia, { attachTo: document.body, props: { part: part(1, { kind: 'file', mime }), conversationId: 'conversation-1', identityKey: 'owner-a' } })
+      try {
+        await wrapper.get('.media-actions button').trigger('click'); await settle()
+        const dialog = document.querySelector('[aria-label="会话资料预览"]')
+        expect(dialog.querySelector('pre').textContent).to.equal(body)
+        expect(dialog.querySelector('img')).to.equal(null)
+        expect(calls).to.have.length(1)
+        expect(calls[0]).to.include({ method: 'GET', needAuth: true })
+        await wrapper.setProps({ identityKey: 'owner-b' }); await settle()
+        expect(document.querySelector('[aria-label="会话资料预览"]')).to.equal(null)
+      } finally { wrapper.unmount() }
+    })
+  }
+  it('routes fixed PDF bytes to the existing PDF preview, not extension guessing', async () => {
+    const components = createComponents({ execute: async () => new Blob(['%PDF-1.7'], { type: 'application/pdf' }) })
+    const wrapper = mount(components.HallMessageMedia, { attachTo: document.body, props: { part: part(1, { kind: 'file', mime: 'application/pdf' }), conversationId: 'conversation-1', identityKey: 'owner-a' } })
+    try {
+      await wrapper.get('.media-actions button').trigger('click'); await settle()
+      expect(document.querySelector('.pdf-preview-stub')).not.to.equal(null)
+      expect(safeAssetPreviewKind({ kind: 'file', mime: 'text/html', filename: 'fake.txt' })).to.equal('file')
+      expect(safeAssetPreviewKind({ kind: 'file', mime: 'application/octet-stream', filename: 'fake.pdf' })).to.equal('file')
+    } finally { wrapper.unmount() }
+  })
+  it('retains MIME mismatch protection for text previews', async () => {
+    const components = createComponents({ execute: async () => new Blob(['x'], { type: 'text/html' }) })
+    const wrapper = mount(components.HallMessageMedia, { attachTo: document.body, props: { part: part(1, { kind: 'file', mime: 'text/plain' }), conversationId: 'conversation-1', identityKey: 'owner-a' } })
+    try {
+      await wrapper.get('.media-actions button').trigger('click'); await settle()
+      const dialog = document.querySelector('[aria-label="会话资料预览"]')
+      expect(dialog.querySelector('pre')).to.equal(null)
+      expect(dialog.textContent).to.include('文件信息不一致')
+    } finally { wrapper.unmount() }
+  })
 })

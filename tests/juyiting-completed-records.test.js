@@ -2,8 +2,9 @@ import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import * as Vue from 'vue'
 import { compileScript, parse } from '@vue/compiler-sfc'
+import { outputCatalogItems } from '../src/composables/juyiting/bountyOutputCatalog.js'
 import { mount, flushPromises } from '@vue/test-utils'
-import { completedReviewRecords, exactReviewOutput } from '../src/composables/juyiting/completedReviewRecords.js'
+import { completedReviewRecords, exactReviewOutput, completedRecordTitle } from '../src/composables/juyiting/completedReviewRecords.js'
 const file = new URL('../src/components/juyiting/HallCompletedRecords.vue', import.meta.url)
 const script = compileScript(parse(readFileSync(file, 'utf8'), { filename: file.pathname }).descriptor, { id: 'completed-records-test', inlineTemplate: true }).content
   .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
@@ -14,15 +15,56 @@ const item = (id, version = '1') => ({ artifactId: id, artifactVersion: version,
 const batch = (id, state, items) => ({ deliveryId: id, deliveryVersion: '1', state, summary: '本轮议事成果', items, allowedActions: [] })
 const context = () => ({ taskId: 'task-1', taskVersion: '8', taskState: 'COMPLETED', currentDelivery: batch('current', 'ACCEPTED', [item('a', '2'), item('b')]), history: [batch('old', 'CHANGES_REQUESTED', [item('a')])], pendingOperation: null })
 const output = item => ({ ...item, sha256: item.contentHash, title: `${item.artifactId}.png`, canPreview: true })
-function harness (props = {}, initialOutputs) {
+function harness (props = {}, initialOutputs, get = async () => []) {
   const c = context(); let refreshes = 0, more = 0
   const outputs = { items: Vue.ref(initialOutputs ?? [...c.currentDelivery.items, ...c.history[0].items].map(output)), loading: Vue.ref(false), nextCursor: Vue.ref(null), cacheKey: Vue.ref('owner:task-1'), state: Vue.ref('available'), message: Vue.ref(''), refresh: async () => { refreshes++ }, loadMore: async () => { more++; outputs.nextCursor.value = null }, preview: async () => {} }
-  const Component = new Function('Vue', 'deps', script)(Vue, { completedReviewRecords, exactReviewOutput, useOutputs: () => outputs,
+  const Component = new Function('Vue', 'deps', script)(Vue, { completedReviewRecords, exactReviewOutput, completedRecordTitle, outputCatalogItems, createApi: () => ({ get }), useOutputs: () => outputs,
     OutputPreview: Vue.defineComponent({ props: ['item'], template: '<div class="actual-preview">{{ item.artifactId }}:{{ item.artifactVersion }}</div>' }) })
   const wrapper = mount(Component, { props: { taskId: 'task-1', taskVersion: '8', identityKey: 'owner', title: '已完成事项', context: c, ...props } })
   return { wrapper, outputs, refreshes: () => refreshes, more: () => more }
 }
 describe('completed matter records display over fixed acceptance facts', () => {
+  it('labels historical files only from the exact source and hash, without changing acceptance records', () => {
+    const fixed = item('a'); fixed.source = { kind: 'CONVERSATION_OUTPUT', requestId: 'request-1', stepId: 'step-1', outputId: 'output_1' }
+    const row = { item: fixed }; const metadata = [{ ...output(fixed), title: 'output_1' }]
+    const original = { requestId: 'request-1', stepId: 'step-1', outputId: 'output_1', sha256: fixed.contentHash, filename: 'roles.txt' }
+    const before = JSON.stringify(row)
+    expect(completedRecordTitle(row, 0, metadata, [original])).to.equal('roles.txt')
+    for (const change of [{ requestId: 'other' }, { stepId: 'other' }, { outputId: 'other' }, { sha256: 'b'.repeat(64) }]) {
+      expect(completedRecordTitle(row, 0, metadata, [{ ...original, ...change }])).to.equal('成果 1')
+    }
+    expect(completedRecordTitle(row, 0, metadata, [])).to.equal('成果 1')
+    expect(JSON.stringify(row)).to.equal(before)
+  })
+  it('loads original names once per source step and discards late labels after identity change', async () => {
+    const c = context()
+    c.currentDelivery.items.forEach((item, i) => { item.source = { kind: 'CONVERSATION_OUTPUT', requestId: 'request-1', stepId: 'step-1', outputId: `output_${i}` } })
+    const calls = []
+    const { wrapper } = harness({ context: c }, [], (url, params, options) => new Promise(resolve => { calls.push({ url, options, resolve }) }))
+    const catalogue = name => c.currentDelivery.items.map((item, i) => ({ outputId: `output_${i}`, filename: `${name}-${i}.txt`, contentMimeType: 'text/plain', sha256: item.contentHash, byteLength: '1', previewUrl: `/chat/requests/request-1/steps/step-1/outputs/output_${i}`, downloadUrl: `/chat/requests/request-1/steps/step-1/outputs/output_${i}?download=true` }))
+    try {
+      expect(calls).to.have.length(1)
+      await wrapper.setProps({ identityKey: 'other' })
+      expect(calls).to.have.length(2)
+      expect(calls[0].options.signal.aborted).to.equal(true)
+      calls[0].resolve(catalogue('old-owner')); await flushPromises()
+      expect(wrapper.text()).not.to.include('old-owner')
+      calls[1].resolve(catalogue('current-owner')); await flushPromises()
+      expect(wrapper.text()).to.include('current-owner-0.txt').and.include('current-owner-1.txt')
+      expect(wrapper.text()).to.include('已验收成果（2）')
+    } finally { wrapper.unmount() }
+    expect(calls[1].options.signal.aborted).to.equal(true)
+  })
+  it('failed source-name lookup retains accepted records and formal previews', async () => {
+    const c = context(); c.currentDelivery.items[0].source = { kind: 'CONVERSATION_OUTPUT', requestId: 'request-1', stepId: 'step-1', outputId: 'output_0' }
+    const { wrapper } = harness({ context: c }, undefined, async () => { throw new Error('unavailable') })
+    try {
+      await flushPromises()
+      expect(wrapper.text()).to.include('已验收成果（2）').and.include('a.png')
+      await wrapper.findAll('.completed-result-heading button')[0].trigger('click')
+      expect(wrapper.get('.actual-preview').text()).to.equal('a:2')
+    } finally { wrapper.unmount() }
+  })
   it('does not infer acceptance from COMPLETED or from newest/current output; excludes manifests', () => {
     const c = context(); c.currentDelivery.state = 'SUBMITTED'; c.currentDelivery.items.push({ ...item('m'), displayRole: 'MANIFEST' })
     expect(completedReviewRecords(c, 'task-1').accepted).to.have.length(0)

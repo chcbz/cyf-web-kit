@@ -71,7 +71,7 @@
       <button type="button" :disabled="conversationBusy || voice?.voiceInteractionLocked" @click="$emit('retry-conversation')">重试</button>
     </div>
 
-    <div ref="messageBoxRef" class="hall-messages">
+    <div ref="messageBoxRef" class="hall-messages" @scroll.passive="trackMessageScroll">
       <div
         v-for="message in displayedMessages"
         :key="message.localId || message.timestamp"
@@ -150,6 +150,7 @@
           v-for="projection in typedForMessage(message)"
           :key="projection.key"
           :projection="projection"
+          :body-rendered="typedBodyRendered(message, projection)"
           :read-only="serverTaskCompleted"
           @reply="!serverTaskCompleted && $emit('typed-reply', $event)"
         />
@@ -166,6 +167,8 @@
 
 
     </div>
+
+    <button v-if="hasUnseenMessages" type="button" class="new-messages-button" @click="followLatestMessages">查看新消息 ↓</button>
 
     <Teleport to="body">
       <dialog
@@ -296,6 +299,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import HallMessageParts from './HallMessageParts.vue'
+import { projectHallTask } from '../../composables/juyiting/hallTaskPresentation.js'
 import BountyTextSelectionArchive from './BountyTextSelectionArchive.vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -392,6 +396,12 @@ const serverTaskCompleted = computed(() => props.discussionVariant === 'bounty' 
   (props.matterReadOnly || ['completed', 'failed', 'cancelled', 'archived'].includes(props.selectedTask?.status)))
 const typedForMessage = message => props.typedOutcomes.filter(projection =>
   projection?.outcome?.assistantMessageId === String(message?.localId || '') && !message.turnProjections?.includes(projection))
+
+// Suppress only an identical answer; distinct typed text must remain visible.
+const typedBodyRendered = (message, projection) => Boolean(message.content) && (
+  ['ACTION_REQUEST', 'SUBMISSION_REQUEST'].includes(projection?.outcome?.kind) ||
+  String(message.content).trim() === String(projection?.outcome?.text || '').trim()
+)
 
 const isTaskDiscussion = computed(() => props.discussionVariant === 'bounty')
 const displayedMessages = computed(() => !isTaskDiscussion.value ? props.messages : discussionTurns({
@@ -576,6 +586,7 @@ const resolvedSubtitle = computed(() => {
 const displayStatus = computed(() => {
   if (serverTaskCompleted.value) return ({ completed: '事项已完成', cancelled: '事项已取消', failed: '事项未完成', archived: '事项已归档' })[props.selectedTask?.status] || props.connectionStatus || '事项只读'
   if (props.eventStreamRecovering) return '正在恢复连接'
+  if (props.discussionVariant === 'bounty' && props.selectedTask) return projectHallTask({ task: props.selectedTask }).label
   return props.connectionStatus || (props.isAwaitingReply ? pendingLabel.value : '连接正常')
 })
 const pendingLabel = computed(() => {
@@ -584,13 +595,31 @@ const pendingLabel = computed(() => {
 })
 const renderMarkdown = (content = '') => DOMPurify.sanitize(marked(String(content || '')))
 
+const followingMessages = ref(true)
+const hasUnseenMessages = ref(false)
+const trackMessageScroll = () => {
+  const box = messageBoxRef.value
+  if (!box) return
+  // One rendered line tolerates rounding and keeps an intentional upward scroll stable.
+  const line = parseFloat(window.getComputedStyle(box).lineHeight) || 24
+  followingMessages.value = box.scrollHeight - box.clientHeight - box.scrollTop <= line
+  if (followingMessages.value) hasUnseenMessages.value = false
+}
+const followLatestMessages = () => {
+  followingMessages.value = true
+  hasUnseenMessages.value = false
+  const box = messageBoxRef.value
+  if (box) box.scrollTop = box.scrollHeight
+}
 watch(() => props.messages, () => {
-  nextTick(() => {
-    if (messageBoxRef.value) {
-      messageBoxRef.value.scrollTop = messageBoxRef.value.scrollHeight
-    }
-  })
+  if (!followingMessages.value) { hasUnseenMessages.value = true; return }
+  nextTick(() => { if (followingMessages.value) followLatestMessages() })
 }, { deep: true })
+watch(() => `${materialIdentityKey.value}\u0000${taskId.value}\u0000${props.conversationId}`, () => {
+  followingMessages.value = true
+  hasUnseenMessages.value = false
+  nextTick(followLatestMessages)
+})
 
 watch(() => `${materialIdentityKey.value}\u0000${taskId.value}\u0000${props.conversationId}\u0000${serverTaskCompleted.value}`, () => {
   historyOpen.value = false
@@ -1155,4 +1184,8 @@ button:disabled {
 .composer-attachment-name strong { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .composer-attachment-name small { font-size: 11px; color: var(--hall-text-muted, #68716b); }
 .composer-attachment-card button { min-height: 44px; flex-shrink: 0; padding: 4px; background: transparent; font-size: 12px; }
+</style>
+
+<style scoped>
+.new-messages-button { align-self: center; padding: 5px 12px; border: 1px solid #d8d8ce; border-radius: 18px; background: #fffefa; color: #315746; cursor: pointer; }
 </style>

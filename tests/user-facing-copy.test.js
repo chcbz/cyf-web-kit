@@ -8,7 +8,7 @@ import { usePersonalWorkspaceConversationLinks } from '../src/composables/usePer
 describe('user-facing copy cleanup', () => {
   it('shows progress without exposing engine, route, profile or sandbox', () => {
     assert.equal(deliberationStatusText({ state: 'QUEUED', route: 'CHAT', engine: 'internal-engine', profile: 'fast', sandbox: 'workspace-write' }, []), '排队中')
-    assert.equal(deliberationStatusText({ state: 'CANCELLED', route: 'INSPECT' }, []), '已取消')
+    assert.equal(deliberationStatusText({ state: 'CANCELLED', route: 'INSPECT' }, []), '本轮回复已停止')
   })
   for (const [factory, key] of [[usePersonalWorkspaceTaskLinks, 'taskId'], [usePersonalWorkspaceConversationLinks, 'conversationId']]) {
     it(`${key}: successful same-key recovery is quiet; unknown state still offers recovery without internal ids`, async () => {
