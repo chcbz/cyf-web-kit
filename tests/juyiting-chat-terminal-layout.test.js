@@ -1,3 +1,4 @@
+import * as taskPresentation from '../src/composables/juyiting/hallTaskPresentation.js'
 import * as discussionTurnHelpers from '../src/composables/juyiting/hallDiscussionTurns.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
@@ -34,7 +35,7 @@ const Picker = Vue.defineComponent({
 let taskDirectory
 const Card = Vue.defineComponent({ props: ['readOnly', 'projection'], emits: ['reply'], render() { return Vue.h('button', { disabled: this.readOnly, onClick: () => this.$emit('reply', this.projection) }, '回答此问') } })
 const Panel = new Function('Vue', 'deps', script)(Vue, {
-  ...discussionTurnHelpers,
+  ...taskPresentation, ...discussionTurnHelpers,
   usePersonalWorkspace: directory, usePersonalWorkspaceTaskLinks: () => (taskDirectory = directory()), usePersonalWorkspaceConversationLinks: directory,
   marked: Object.assign(value => value, { setOptions: () => {} }), DOMPurify: { sanitize: value => value }, HallChatComposer: Composer, HallMaterialPicker: Picker,
   HallMessageParts: { render: () => null }, BountyTextSelectionArchive: { render: () => null },
