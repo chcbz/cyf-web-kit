@@ -1,3 +1,4 @@
+import * as taskPresentation from '../src/composables/juyiting/hallTaskPresentation.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
@@ -131,7 +132,7 @@ const panel = variant => {
     return detail
   }
   state.previewVersion = async () => { state.preview.value = { kind: 'unsupported', message: '测试替身不读取真实文件' } }
-  const deps = { ...turns, usePersonalWorkspace: () => state, usePersonalWorkspaceConversationLinks: () => conversation, usePersonalWorkspaceTaskLinks: () => task,
+  const deps = { ...taskPresentation, ...turns, usePersonalWorkspace: () => state, usePersonalWorkspaceConversationLinks: () => conversation, usePersonalWorkspaceTaskLinks: () => task,
     marked: Object.assign(x => x, { setOptions() {} }), DOMPurify: { sanitize: x => x }, HallMessageParts: stub, BountyTextSelectionArchive: stub,
     HallMaterialThumbnail: stub, HallConversationHistory: stub, BountyTypedOutcomeCard: stub, WorkspaceWriteRecovery: stub, HallVoiceControls: stub }
   deps.HallChatComposer = compile('HallChatComposer', deps)
