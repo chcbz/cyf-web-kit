@@ -17,12 +17,12 @@
             @keyup.enter="$emit('load-tasks')"
           />
           <select
-            :value="taskAbilityFilter"
-            aria-label="筛选所需本领"
-            @change="$emit('update:taskAbilityFilter', $event.target.value); $emit('load-tasks')"
+            :value="taskAgentFilter"
+            aria-label="筛选承接Agent"
+            @change="$emit('update:taskAgentFilter', $event.target.value); $emit('load-tasks')"
           >
-            <option value="">全部能力</option>
-            <option v-for="ability in taskAbilityOptions" :key="ability" :value="ability">{{ ability }}</option>
+            <option value="">全部承接Agent</option>
+            <option v-for="agent in taskAgentOptions" :key="agent.agentId" :value="agent.agentId">{{ agent.displayName }}（{{ agent.agentId }}）</option>
           </select>
         </div>
         <button class="task-refresh hall-tool" type="button" aria-label="刷新事项" title="刷新事项" @click="$emit('load-tasks')"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M4 16l2 3a7 7 0 0 0 12-2"/></svg></button>
@@ -114,7 +114,7 @@
               <span v-if="!(task.requiredAbilities || []).length">未指定能力要求</span>
             </div>
           </article>
-          <div v-if="!loading && !errorMessage && !tasks.length" class="empty-list">{{ taskKeyword || taskAbilityFilter || (taskStatusFilter && taskStatusFilter !== 'all') ? '没有符合当前筛选条件的事项，请调整筛选后刷新。' : '还没有事项，先提出一个需求吧。' }}</div>
+          <div v-if="!loading && !errorMessage && !tasks.length" class="empty-list">{{ taskKeyword || taskAgentFilter || (taskStatusFilter && taskStatusFilter !== 'all') ? '没有符合当前筛选条件的事项，请调整筛选后刷新。' : '还没有事项，先提出一个需求吧。' }}</div>
         </div>
       </div>
 
@@ -573,9 +573,9 @@ const props = defineProps({
   operableAgents: { type: Array, default: () => [] },
   recommendedAgents: { type: Array, default: () => [] },
   recommendationState: { type: Object, default: () => ({ state: 'IDLE', result: null }) },
-  taskAbilityOptions: { type: Array, default: () => [] },
+  taskAgentOptions: { type: Array, default: () => [] },
   taskStatusFilters: { type: Array, default: () => [] },
-  taskAbilityFilter: { type: String, default: '' },
+  taskAgentFilter: { type: String, default: '' },
   taskKeyword: { type: String, default: '' },
   taskStatusFilter: { type: String, default: '' },
   fundedPreviewEnabled: { type: Boolean, default: false },
@@ -635,7 +635,7 @@ const emit = defineEmits([
   'select-agent',
   'select-task',
   'set-status-filter',
-  'update:taskAbilityFilter',
+  'update:taskAgentFilter',
   'update:taskKeyword'
 ])
 

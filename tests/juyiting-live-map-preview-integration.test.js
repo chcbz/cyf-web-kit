@@ -169,7 +169,7 @@ const makeHallPageMocks = ({ mode, counters, voiceLocked = Vue.ref(false) }) => 
     applySceneEvent: noop, applySceneSnapshot: noop, agentFilter: text, agents: list, bindPersona: asyncNoop, canAssign: () => true,
     filteredAgents: list, hiddenAgentCount: Vue.ref(0), loadAgents: asyncNoop, loadTasks: asyncNoop, loadTaskRecommendations: asyncNoop, loadTaskDetail: asyncNoop,
     mapAgents: list, personaCatalog: list, recommendedAgents: list, setAgentFilter: noop, setTaskStatusFilter: noop,
-    taskAbilityFilter: text, taskAbilityOptions: list, taskKeyword: text, tasks: list, taskStatusCount: Vue.ref({}), taskStatusFilter: text, unbindPersona: asyncNoop, visibleAgents: list
+    taskAgentFilter: text, taskAgentOptions: list, taskKeyword: text, tasks: list, taskStatusCount: Vue.ref({}), taskStatusFilter: text, unbindPersona: asyncNoop, visibleAgents: list
   }
   return {
     resolveLiveMapPreviewActivation, resolveHallNavigationPresentation, useFormalTaskExecutionScope,

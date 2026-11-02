@@ -501,3 +501,73 @@ describe('D3.1 assigned list rows versus authoritative detail', () => {
     } finally { hall.dispose() }
   })
 })
+
+describe('useHallData actual assignee filter', () => {
+  const zeroCounts = { phaseCounts: { PENDING_ASSIGNMENT: '0', IN_PROGRESS: '0', PENDING_ACCEPTANCE: '0', COMPLETED: '0', HISTORY: '0', UNKNOWN: '0', total: '0' }, rawStatusCounts: { total: '0' } }
+  const make = (agentApi, identityScope = ref('owner-a')) => useHallData({ agentApi, identityScope,
+    log: { warn: () => {} }, normalizeStatus: value => value, selectedAgent: ref(null), selectedTask: ref(null) })
+
+  it('sends exact Agent ID and keyword to page and full counts, never ability or client-side page filtering', async () => {
+    const calls = []
+    const hall = make({ search: async (url, params, options) => {
+      calls.push({ url, params })
+      options.onSuccess(url === '/tasks/status-counts' ? zeroCounts : { items: [{ id: 'server-authoritative' }], total: '31' })
+    } })
+    try {
+      hall.taskAgentFilter.value = 'Agent-0'
+      hall.taskKeyword.value = '事项'
+      await hall.setTaskStatusFilter('IN_PROGRESS')
+      expect(calls).to.have.length(2)
+      for (const { params } of calls) {
+        expect(params).to.include({ assignedAgentId: 'Agent-0', keyword: '事项' })
+        expect(params).not.to.have.property('ability')
+      }
+      expect(calls[0].params).to.include({ phase: 'IN_PROGRESS', pageSize: 30 })
+      expect(calls[1].params).not.to.have.property('phase')
+      expect(hall.tasks.value.map(task => task.id)).to.deep.equal(['server-authoritative'])
+      hall.taskAgentFilter.value = ''
+      await hall.loadTasks()
+      expect(calls[2].params.assignedAgentId).to.equal(undefined)
+    } finally { hall.dispose() }
+  })
+
+  it('keeps same-name IDs distinct and actual external assignees across phase changes, resets at identity boundary', async () => {
+    const identity = ref('owner-a')
+    let phase = 0
+    const hall = make({ search: async (url, params, options) => {
+      if (url === '/roster') return options.onSuccess({ items: [{ agentId: '0', name: '同名' }, { agentId: 'a', name: '同名' }] })
+      if (url === '/tasks/status-counts') return options.onSuccess(zeroCounts)
+      options.onSuccess({ items: phase++ === 0 ? [{ id: 'external-task', assignedAgentIds: ['external'], assignedAgentName: '外部承接者', requiredAbilities: ['never-an-agent'] }] : [] })
+    }, get: async (_url, _params, options) => options.onSuccess([]) }, identity)
+    try {
+      await hall.loadAgents()
+      await hall.loadTasks()
+      expect(hall.taskAgentOptions.value.map(agent => agent.agentId).sort()).to.deep.equal(['0', 'a', 'external'])
+      await hall.setTaskStatusFilter('COMPLETED')
+      expect(hall.taskAgentOptions.value.map(agent => agent.agentId)).to.include('external')
+      hall.taskAgentFilter.value = 'external'
+      identity.value = 'owner-b'
+      expect(hall.taskAgentFilter.value).to.equal('')
+      expect(hall.taskAgentOptions.value).to.deep.equal([])
+    } finally { hall.dispose() }
+  })
+
+  it('ignores page/count responses from the previous assignee selection', async () => {
+    const pending = []
+    const hall = make({ search: (url, params, options) => new Promise(resolve => pending.push({ url, params, finish: result => { options.onSuccess(result); resolve() } })) })
+    try {
+      hall.taskAgentFilter.value = 'old'
+      const old = hall.loadTasks()
+      hall.taskAgentFilter.value = 'new'
+      const fresh = hall.loadTasks()
+      pending[2].finish({ items: [{ id: 'new-task' }] })
+      pending[3].finish(zeroCounts)
+      await fresh
+      pending[0].finish({ items: [{ id: 'old-task' }] })
+      pending[1].finish(zeroCounts)
+      await old
+      expect(hall.tasks.value.map(task => task.id)).to.deep.equal(['new-task'])
+      expect(hall.taskAgentFilter.value).to.equal('new')
+    } finally { hall.dispose() }
+  })
+})

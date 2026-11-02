@@ -30,7 +30,7 @@ export const useHallData = ({
   const taskStatusCounts = ref({})
   const agentFilter = ref('all')
   const taskStatusFilter = ref('PENDING_ASSIGNMENT')
-  const taskAbilityFilter = ref('')
+  const taskAgentFilter = ref('')
   const taskKeyword = ref('')
   // Each independently fetched source owns its state so a slow optional panel
   // never blocks the map or hides a successful sibling result.
@@ -56,12 +56,35 @@ export const useHallData = ({
     .slice(0, 12))
   const hiddenAgentCount = computed(() => Math.max(mapAgents.value.length - visibleAgents.value.length, 0))
 
-  const taskAbilityOptions = computed(() => {
-    const abilities = new Set()
-    tasks.value.forEach(task => (task.requiredAbilities || []).forEach(ability => abilities.add(ability)))
-    agents.value.forEach(agent => (agent.abilities || []).forEach(ability => abilities.add(ability)))
-    return [...abilities].sort()
+  // Roster is independent of its visible status filter; preserve encountered external /
+  // historical assignees when the task page or phase changes. Never use recommendations.
+  const encounteredTaskAgents = ref([])
+  const taskAgentOptions = computed(() => {
+    const options = new Map(encounteredTaskAgents.value.map(agent => [agent.agentId, agent]))
+    allRosterAgents.value.forEach(agent => {
+      if (agent?.agentId != null && String(agent.agentId) !== '') {
+        const agentId = String(agent.agentId)
+        options.set(agentId, { agentId, displayName: agent.name || agentId })
+      }
+    })
+    if (taskAgentFilter.value && !options.has(taskAgentFilter.value)) {
+      options.set(taskAgentFilter.value, { agentId: taskAgentFilter.value, displayName: taskAgentFilter.value })
+    }
+    return [...options.values()].sort((a, b) => a.displayName.localeCompare(b.displayName) || a.agentId.localeCompare(b.agentId))
   })
+  const rememberTaskAgents = list => {
+    const options = new Map(encounteredTaskAgents.value.map(agent => [agent.agentId, agent]))
+    list.forEach(task => {
+      const ids = Array.isArray(task.assignedAgentIds) ? task.assignedAgentIds : [task.assignedAgentId]
+      ids.forEach(id => {
+        if (id == null || String(id) === '') return
+        const agentId = String(id)
+        const target = task.assignedTarget?.agentId === agentId ? task.assignedTarget : null
+        options.set(agentId, { agentId, displayName: target?.displayName || (ids.length === 1 && task.assignedAgentName) || options.get(agentId)?.displayName || agentId })
+      })
+    })
+    encounteredTaskAgents.value = [...options.values()]
+  }
 
   const recommendationPreparation = ref(null)
   let recommendationRefresh = null
@@ -110,13 +133,13 @@ export const useHallData = ({
   let recommendationEpoch = 0
   let recommendationRequest = null
   const identityFingerprint = () => `${toValue(authorizationGeneration)}\u0000${toValue(identityScope)}`
-  const queryFingerprint = () => `${identityFingerprint()}\u0000${taskAbilityFilter.value}\u0000${taskKeyword.value}`
+  const queryFingerprint = () => `${identityFingerprint()}\u0000${taskAgentFilter.value}\u0000${taskKeyword.value}`
   const stopRecommendationTask = watch(() => recommendationTaskKey(selectedTask.value), () => {
     recommendationEpoch += 1
     recommendationRequest?.controller.abort()
     recommendationRequest = null
   }, { flush: 'sync' })
-  const stopFilters = watch([taskStatusFilter, taskAbilityFilter, taskKeyword], () => {
+  const stopFilters = watch([taskStatusFilter, taskAgentFilter, taskKeyword], () => {
     listEpoch += 1
     countsEpoch += 1
     taskStatusCounts.value = {}
@@ -128,6 +151,9 @@ export const useHallData = ({
     recommendationRequest?.controller.abort()
     recommendationRequest = null
     tasks.value = []
+    taskAgentFilter.value = ''
+    encounteredTaskAgents.value = []
+    allRosterAgents.value = []
     taskStatusCounts.value = {}
     taskRecommendations.value = {}
     selectedTask.value = null
@@ -226,7 +252,7 @@ export const useHallData = ({
     let counts
     try {
       await agentApi.search('/tasks/status-counts', {
-        ability: taskAbilityFilter.value || undefined,
+        assignedAgentId: taskAgentFilter.value || undefined,
         keyword: taskKeyword.value || undefined
       }, { autoLoading: false, onSuccess: result => { counts = validateHallTaskCounts(result) } })
       if (!current()) return {}
@@ -366,6 +392,7 @@ export const useHallData = ({
   }
 
   const loadRosterAgents = async ({ derive = true } = {}) => {
+    const identity = identityFingerprint()
     rosterLoading.value = true
     rosterError.value = ''
     try {
@@ -375,17 +402,18 @@ export const useHallData = ({
       }, {
         autoLoading: false,
         onSuccess: (result) => {
-          allRosterAgents.value = result.items
+          if (identity === identityFingerprint()) allRosterAgents.value = result.items
         }
       })
-      if (derive) deriveRosterProjections()
+      if (identity === identityFingerprint() && derive) deriveRosterProjections()
     } catch (error) {
+      if (identity !== identityFingerprint()) return
       log.warn('load roster agents failed:', error)
       rosterError.value = error?.message || '好汉名册暂无法读取'
       allRosterAgents.value = []
-      if (derive) deriveRosterProjections()
+      if (identity === identityFingerprint() && derive) deriveRosterProjections()
     } finally {
-      rosterLoading.value = false
+      if (identity === identityFingerprint()) rosterLoading.value = false
     }
   }
 
@@ -452,7 +480,7 @@ export const useHallData = ({
     tasksLoading.value = true
     tasksError.value = ''
     const baseParams = {
-      ability: taskAbilityFilter.value || undefined,
+      assignedAgentId: taskAgentFilter.value || undefined,
       keyword: taskKeyword.value || undefined,
       pageNum: 1,
       pageSize: 30
@@ -467,6 +495,7 @@ export const useHallData = ({
         const list = await searchTasks(displayParams)
         if (!current()) return []
         tasks.value = list
+        rememberTaskAgents(list)
         // A task leaving the current page/filter is not deletion or revocation. Keep the
         // active context by ID; refresh the selected projection only when actually present.
         if (selectedTask.value?.id !== selectedId) return list
@@ -583,8 +612,8 @@ export const useHallData = ({
     rosterLoading,
     setAgentFilter,
     setTaskStatusFilter,
-    taskAbilityFilter,
-    taskAbilityOptions,
+    taskAgentFilter,
+    taskAgentOptions,
     taskKeyword,
     taskCountsError,
     taskCountsLoading,
