@@ -21,8 +21,8 @@ describe('submission does not complete the root; explicit review owns completion
     installed.push(name); Object.defineProperty(globalThis, name, { value: window[name], configurable: true })
   } })
   after(() => { for (const name of installed) delete globalThis[name] })
-  it('the unique toolbar icon emits only a review-opening event and cannot complete a task', async () => {
-    const Gallery = Vue.defineComponent({ emits: ['task-completed'], setup: (_, { emit }) => () => Vue.h('button', { class: 'old-submission', onClick: () => emit('task-completed', { state: 'COMPLETED', stage: 'SUBMITTED' }) }, '提交回执') })
+  it('only per-output review remains and submission receipts cannot complete a task', async () => {
+    const Gallery = Vue.defineComponent({ emits: ['task-completed', 'accept-output'], setup: (_, { emit }) => () => Vue.h('button', { class: 'old-submission', onClick: () => emit('task-completed', { state: 'COMPLETED', stage: 'SUBMITTED' }) }, '提交回执') })
     const Chat = Vue.defineComponent({ setup: (_, { slots }) => () => Vue.h('div', {}, [Vue.h('header', { class: 'toolbar' }, slots['matter-actions']?.()), Vue.h('main', { class: 'messages' }, slots['bounty-results']?.())]) })
     const noRender = { render: () => null }
     const Component = new Function('Vue', 'deps', script)(Vue, { ...discussionContract, discussionTurns, useHallExecutionAbandonment, bountyDeliberationPresentation, ChatPanel: Chat,
@@ -31,18 +31,23 @@ describe('submission does not complete the root; explicit review owns completion
     const wrapper = mount(Component, { props: { deliberationV2Enabled: true, selectedTask: task, reviewContext: { currentDelivery: { allowedActions: ['VIEW', 'ACCEPT'] } }, mentionLabel: () => '', senderText: () => '' } })
     try {
       await wrapper.get('.old-submission').trigger('click'); expect(wrapper.emitted('task-completed')).to.equal(undefined)
-      expect(wrapper.findAll('[aria-label="统一验收"]')).to.have.length(1)
-      expect(wrapper.get('.messages').find('[aria-label="统一验收"]').exists()).to.equal(false)
-      await wrapper.get('[aria-label="统一验收"]').trigger('click'); expect(wrapper.emitted('review-delivery')).to.deep.equal([[]])
-      expect(task.status).to.equal('reviewing'); await wrapper.setProps({ voice: { voiceInteractionLocked: true } })
-      expect(wrapper.get('[aria-label="统一验收"]').attributes('disabled')).to.equal('')
-      await wrapper.setProps({ reviewContext: { currentDelivery: { allowedActions: ['VIEW'] } } })
-      expect(wrapper.find('[aria-label="统一验收"]').exists()).to.equal(true)
-      await wrapper.setProps({ reviewContext: null, voice: null })
-      expect(wrapper.find('[aria-label="统一验收"]').exists()).to.equal(true)
-      expect(wrapper.find('[aria-label="统一验收"] svg').exists()).to.equal(true)
-      await wrapper.setProps({ selectedTask: { ...task, status: 'completed' } })
       expect(wrapper.find('[aria-label="统一验收"]').exists()).to.equal(false)
+      expect(wrapper.emitted('review-delivery')).to.equal(undefined)
+      const output = { taskId: 'task-1', outputId: 'output-1', version: 2 }
+      wrapper.findComponent(Gallery).vm.$emit('accept-output', output)
+      await Vue.nextTick()
+      expect(wrapper.emitted('accept-output')).to.deep.equal([[output]])
+      expect(wrapper.emitted('task-completed')).to.equal(undefined)
+      expect(task.status).to.equal('reviewing')
+      for (const props of [
+        { voice: { voiceInteractionLocked: true } },
+        { reviewContext: { currentDelivery: { allowedActions: ['VIEW'] } } },
+        { reviewContext: null, voice: null },
+        { selectedTask: { ...task, status: 'completed' } },
+      ]) {
+        await wrapper.setProps(props)
+        expect(wrapper.find('[aria-label="统一验收"]').exists()).to.equal(false)
+      }
     } finally { wrapper.unmount() }
   })
   it('the actual page guards root refresh by a scoped COMMITTED ACCEPT, not a gallery/submission receipt', () => {
