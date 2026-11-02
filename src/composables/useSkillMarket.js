@@ -197,7 +197,7 @@ export function useSkillMarket ({ agentApi = defaultAgentApi, enabled = true, ac
   }
   const canPrepare = skillKey => {
     const row = rowFor(skillKey); const draft = drafts.value[skillKey]
-    return Boolean(available.value && !storageError.value && !error.value && !loading.value && row?.candidate && draft && row.allowedActions.includes(draft.action) &&
+    return Boolean(available.value && !storageError.value && !error.value && row?.candidate && draft && row.allowedActions.includes(draft.action) &&
       (!pending.value[skillKey] || pending.value[skillKey].kind === 'QUOTE') && !busy.value[skillKey] && !draft.quoteBusy &&
       JSON.stringify(sortSkillPermissions(draft.permissions)) === JSON.stringify(sortSkillPermissions(row.candidate.requiredPermissions)))
   }

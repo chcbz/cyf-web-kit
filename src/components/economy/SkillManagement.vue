@@ -113,7 +113,7 @@
                   <dt>输入</dt><dd>{{ details(row)?.inputMimeTypes.join('、') || '未声明输入类型' }}</dd>
                   <dt>权限范围</dt><dd>{{ details(row)?.requiredPermissions.map(formatSkillPermission).join('；') || '无所需权限' }}</dd>
                   <dt>运行依赖</dt><dd>{{ details(row)?.requirements.join('；') || '无额外依赖声明' }}</dd>
-                  <dt>运行状态</dt><dd>{{ runtimeLabels[row.runtime.state] }}<template v-if="row.runtime.reasonCode"> · {{ reasonLabels[row.runtime.reasonCode] }}</template></dd>
+                  <dt>运行状态</dt><dd>{{ runtimeLabel(row) }}<template v-if="row.runtime.reasonCode"> · {{ reasonLabels[row.runtime.reasonCode] }}</template></dd>
                   <dt>新调用</dt><dd>{{ row.admissionEnabled ? '可接受新调用；每项任务仍需授权' : '未开放' }}<template v-if="change(row)?.status === 'SUCCEEDED' && !change(row).runtimeSynced"> · 运行端设置待同步</template></dd>
                 </dl>
                 <section class="skill-section">
@@ -283,11 +283,13 @@ const fundingLabel = status => ({ NONE: '无资金冻结', HELD: '资金保留',
 const draft = row => market.drafts[row.skillKey]
 const change = row => market.latestChange(row)
 const details = row => row.installed?.version || row.candidate
+const runtimeLabel = row => row.installed?.version.kind === 'INSTRUCTION' && row.runtime.state === 'NOT_EXECUTABLE' ? '原生技能包已就位（由模型使用）' : runtimeLabels[row.runtime.state]
 const panelId = row => `skill-inline-${row.skillKey}`
 const blocked = row => !!market.busy[row.skillKey] || !!market.storageError || !market.available
 const unknown = row => !!market.queryUnknown[row.skillKey] || (market.pending[row.skillKey] && !market.pending[row.skillKey].accepted) || change(row)?.status === 'RECOVERY_REQUIRED'
 const hasOperation = row => !!market.pending[row.skillKey] || (change(row) && (!skillChangeTerminal(change(row)) || change(row).status === 'RECOVERY_REQUIRED' || (change(row).status === 'FAILED_RETRYABLE' && row.allowedActions.includes('RETRY')) || (change(row).status === 'FAILED_FINAL' && !row.allowedActions.some(action => ['INSTALL', 'UPGRADE'].includes(action)))))
-const rowStatus = row => unknown(row) ? '待核对' : hasOperation(row) && change(row) ? changeLabels[change(row).status] : !row.installed ? '未安装' : row.desiredEnabled ? row.admissionEnabled ? '已启用' : '已启用，待核验' : '已停用新调用'
+const nativeInstructionReady = row => row.installed?.version.kind === 'INSTRUCTION' && row.desiredEnabled && row.runtime.state === 'NOT_EXECUTABLE' && row.runtime.reasonCode === null
+const rowStatus = row => unknown(row) ? '待核对' : hasOperation(row) && change(row) ? changeLabels[change(row).status] : !row.installed ? '未安装' : row.desiredEnabled ? row.admissionEnabled ? '已启用' : nativeInstructionReady(row) ? '已启用（原生技能）' : '已启用，待核验' : '已停用新调用'
 const versionText = row => row.installed ? `${row.installed.version.skillVersion}${row.candidate && row.candidate.productVersionId !== row.installed.version.productVersionId ? ` → ${row.candidate.skillVersion} 可升级` : ''}` : row.candidate?.skillVersion || '暂无批准候选'
 const orphanedPending = computed(() => Object.values(market.pending).filter(record => !market.items.some(row => row.skillKey === record.skillKey)))
 let trigger = null; let rowTrigger = null
