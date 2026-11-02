@@ -193,10 +193,12 @@ export const useHallBackendSceneState = ({
     const generation = lifecycleGeneration
     resyncPromise = fetchSnapshot(generation)
       .then(() => {
+        if (!active || generation !== lifecycleGeneration) return
         resyncPromise = null
         if (active && generation === lifecycleGeneration && streamModeEnabled && !eventsTerminal && isVisible(documentRef)) openStream()
       })
       .catch(() => {
+        if (!active || generation !== lifecycleGeneration) return
         resyncPromise = null
         degraded.value = true
         scheduleReconnect()
@@ -300,7 +302,10 @@ export const useHallBackendSceneState = ({
         openStream()
       }
     } else {
-      void fetchSnapshot().catch(() => { degraded.value = true })
+      const generation = lifecycleGeneration
+      void fetchSnapshot(generation).catch(() => {
+        if (active && generation === lifecycleGeneration) degraded.value = true
+      })
     }
   }
 
@@ -337,8 +342,8 @@ export const useHallBackendSceneState = ({
         }
         return value
       } catch (error) {
-        degraded.value = true
         if (active && generation === lifecycleGeneration) {
+          degraded.value = true
           active = false
           lifecycleGeneration += 1
           browserWindow()?.removeEventListener?.('focus', onFocus)
@@ -348,7 +353,7 @@ export const useHallBackendSceneState = ({
         }
         throw error
       } finally {
-        startPromise = null
+        if (!active || generation === lifecycleGeneration) startPromise = null
       }
     })()
     return startPromise
@@ -370,6 +375,8 @@ export const useHallBackendSceneState = ({
     for (const controller of pendingRequests) controller.abort()
     pendingRequests.clear()
     snapshotFlight = null
+    resyncPromise = null
+    startPromise = null
     snapshotLoading.value = false
     for (const cancel of [...phaseRetryWaiters]) cancel()
     closeStream()

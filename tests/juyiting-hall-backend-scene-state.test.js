@@ -587,6 +587,7 @@ describe('scene fallback polling lifecycle', () => {
     try {
       await state.start()
       const old = poll()
+      window.dispatchEvent(new window.Event('focus')) // joins the same old read
       state.stop()
       await state.start()
       rejectOld(new Error('late old failure'))
