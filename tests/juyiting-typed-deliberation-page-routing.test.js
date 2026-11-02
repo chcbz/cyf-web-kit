@@ -42,7 +42,7 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
   it('routes the one bounty composer through typed DISCUSSION only when the strict default-off flag is enabled', async () => {
     const enabled = ref(true); const draft = ref('画一只鸟'); const calls = []; const typed = { error: ref(''), submit: async body => { calls.push(['typed', body]); return true } }
     const send = async () => { calls.push(['legacy']); return true }
-    const actual = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled', 'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', 'typedAssignmentRevision', 'bountyAssignmentContext', 'refreshCurrentConversationTask', 'conversationTask', `return (${handler('handleSendHallMessage')})`)({ close: () => {} }, { cancel: () => {} }, () => {}, enabled, typed, draft, value => calls.push(['draft', value]), () => {}, send, () => '4', { loading: ref(false), error: ref('') }, async () => true, ref(null))
+    const actual = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled', 'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', 'typedAssignmentRevision', 'bountyAssignmentContext', 'refreshCurrentConversationTask', 'conversationTask', `const manualSendPending = { value: false }; return (${handler('handleSendHallMessage')})`)({ close: () => {} }, { cancel: () => {} }, () => {}, enabled, typed, draft, value => calls.push(['draft', value]), () => {}, send, () => '4', { loading: ref(false), error: ref('') }, async () => true, ref(null))
     expect(await actual()).to.equal(true)
     expect(calls).to.deep.equal([['typed', { content: '画一只鸟', sourceSelectors: [], materialScope: 'TASK_DEFAULT' }], ['draft', '']])
     enabled.value = false
@@ -59,7 +59,7 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       const actual = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled',
         'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', 'typedAssignmentRevision',
         'conversationTask', 'hallIdentityScope', 'apiStore', 'conversationId', 'bountyInteractionTargetId',
-        'chatContext', 'bountyAssignmentContext', 'refreshCurrentConversationTask', `return (${handler('handleSendHallMessage')})`)(
+        'chatContext', 'bountyAssignmentContext', 'refreshCurrentConversationTask', `const manualSendPending = { value: false }; return (${handler('handleSendHallMessage')})`)(
         { close() {} }, { cancel() {} }, () => {}, ref(true),
         { error: ref(''), submit: async () => { calls.push('POST'); return true } }, draft,
         () => {}, () => {}, () => { throw new Error('legacy lane forbidden') }, () => revision,
@@ -74,7 +74,7 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
     const actual = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled',
       'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', 'typedAssignmentRevision',
       'conversationTask', 'hallIdentityScope', 'apiStore', 'conversationId', 'bountyInteractionTargetId',
-      'chatContext', 'bountyAssignmentContext', 'refreshCurrentConversationTask', `return (${handler('handleSendHallMessage')})`)(
+      'chatContext', 'bountyAssignmentContext', 'refreshCurrentConversationTask', `const manualSendPending = { value: false }; return (${handler('handleSendHallMessage')})`)(
       { close() {} }, { cancel() {} }, () => {}, ref(true),
       { error: ref(''), submit: async () => calls.push('POST') }, draft,
       () => calls.push('clear'), text => calls.push(text), () => calls.push('legacy'), () => '',

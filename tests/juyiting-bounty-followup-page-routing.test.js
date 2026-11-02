@@ -19,7 +19,7 @@ const handler = name => {
 describe('ordinary JuyiHall request routing', () => {
   it('sends drawing, editing and other requests through the same discussion handler', async () => {
     const draft = ref(''); const calls = []
-    const send = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled', 'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', 'typedAssignmentRevision', 'bountyAssignmentContext', 'conversationTask', 'hallIdentityScope', 'apiStore', 'conversationId', 'bountyInteractionTargetId', 'chatContext', 'refreshCurrentConversationTask', `return (${handler('handleSendHallMessage')})`)(
+    const send = new Function('voiceReplyCorrelation', 'hallVoice', 'playSend', 'typedDeliberationEnabled', 'typedDeliberation', 'draft', 'setDraft', 'showToast', 'sendHallMessage', 'typedAssignmentRevision', 'bountyAssignmentContext', 'conversationTask', 'hallIdentityScope', 'apiStore', 'conversationId', 'bountyInteractionTargetId', 'chatContext', 'refreshCurrentConversationTask', `const manualSendPending = { value: false }; return (${handler('handleSendHallMessage')})`)(
       { close: () => {} }, { cancel: () => {} }, () => {}, ref(true),
       { submit: async payload => { calls.push(payload); return true }, error: ref('') }, draft, value => { draft.value = value }, () => {}, () => { throw new Error('unexpected legacy send') }, () => '1', { loading: ref(false), error: ref(''), refresh: async () => true }, ref({ id: '417' }), ref('owner'), { authorizationGeneration: 1 }, ref('7'), () => 'wuyong', ref({}), async () => true)
     const source = { kind: 'TASK_LINKED_WORKSPACE_VERSION', fileId: 'f', version: '1', purpose: 'INPUT', assetId: null, assetRevision: null }
