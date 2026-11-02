@@ -22,7 +22,7 @@
             @change="$emit('update:taskAgentFilter', $event.target.value); $emit('load-tasks')"
           >
             <option value="">全部承接Agent</option>
-            <option v-for="agent in taskAgentOptions" :key="agent.agentId" :value="agent.agentId">{{ agent.displayName }}（{{ agent.agentId }}）</option>
+            <option v-for="agent in taskAgentOptions" :key="agent.agentId" :value="agent.agentId">{{ agent.displayName }}</option>
           </select>
         </div>
         <button class="task-refresh hall-tool" type="button" aria-label="刷新事项" title="刷新事项" @click="$emit('load-tasks')"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M4 16l2 3a7 7 0 0 0 12-2"/></svg></button>

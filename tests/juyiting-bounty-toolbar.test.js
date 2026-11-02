@@ -35,6 +35,12 @@ describe('Bounty task toolbar', () => {
       expect(wrapper.find('.task-create-form').exists()).to.equal(false)
       expect(toolbar.get('input').attributes('aria-label')).to.equal('搜索事项名称或编号')
       expect(toolbar.get('select').attributes('aria-label')).to.equal('筛选承接Agent')
+      expect(toolbar.get('select').findAll('option').map(option => option.text())).to.deep.equal([
+        '全部承接Agent', '同名Agent', '同名Agent'
+      ])
+      expect(toolbar.get('select').findAll('option').map(option => option.element.value)).to.deep.equal([
+        '', 'agent-a', 'agent-b'
+      ])
       await toolbar.get('input').setValue(' 434 ')
       expect(wrapper.emitted('update:taskKeyword').at(-1)).to.deep.equal(['434'])
       await toolbar.get('input').trigger('keyup.enter')
