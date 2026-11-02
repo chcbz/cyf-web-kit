@@ -34,6 +34,9 @@ describe('completed matter records display over fixed acceptance facts', () => {
       expect(completedRecordTitle(row, 0, metadata, [{ ...original, ...change }])).to.equal('成果 1')
     }
     expect(completedRecordTitle(row, 0, metadata, [])).to.equal('成果 1')
+    // Live archived task: the old stored filename itself is the technical output ID.
+    expect(completedRecordTitle(row, 0, metadata, [{ ...original, filename: original.outputId }])).to.equal('成果 1')
+    expect(completedRecordTitle(row, 1, metadata, [{ ...original, filename: ` ${original.outputId} ` }])).to.equal('成果 2')
     expect(JSON.stringify(row)).to.equal(before)
   })
   it('loads original names once per source step and discards late labels after identity change', async () => {

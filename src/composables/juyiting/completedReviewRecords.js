@@ -23,7 +23,7 @@ export function completedRecordTitle (row, index, outputs, sourceOutputs = []) {
   const original = source?.kind === 'CONVERSATION_OUTPUT' && sourceOutputs.find(output =>
     output.requestId === source.requestId && output.stepId === source.stepId &&
     output.outputId === source.outputId && output.sha256 === row.item.contentHash)
-  if (typeof original?.filename === 'string' && original.filename.trim()) return original.filename
+  if (typeof original?.filename === 'string' && original.filename.trim() && original.filename.trim() !== source.outputId) return original.filename
   const title = exactReviewOutput(outputs, row.item)?.title
   if (title && title !== source?.outputId) return title
   return `成果 ${index + 1}`
