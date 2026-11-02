@@ -614,7 +614,7 @@
             @voice-apply="applyVoiceTranscript"
             :agents="chatMentionAgents"
             :event-stream-recovering="eventStreamRecovering"
-            :is-awaiting-reply="isAwaitingReply"
+            :is-awaiting-reply="isAwaitingReply || manualSendPending"
             :is-streaming="isStreaming"
             :messages="messages"
             :mention-label="portraitShortName"
@@ -623,7 +623,7 @@
             :selected-task="conversationTask"
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
-            :conversation-busy="isConversationBusy"
+            :conversation-busy="isConversationBusy || manualSendPending"
             :deliberation-status="deliberationStatus"
             :durable-cancel-target="durableCancelTarget"
             :reply-cancellation-state="replyCancellationState"
@@ -684,7 +684,7 @@
             @voice-apply="applyVoiceTranscript"
             :agents="chatMentionAgents"
             :event-stream-recovering="eventStreamRecovering"
-            :is-awaiting-reply="isAwaitingReply"
+            :is-awaiting-reply="isAwaitingReply || manualSendPending"
             :is-streaming="isStreaming"
             :messages="messages"
             :mention-label="portraitShortName"
@@ -693,7 +693,7 @@
             :selected-task="conversationTask"
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
-            :conversation-busy="isConversationBusy"
+            :conversation-busy="isConversationBusy || manualSendPending"
             :deliberation-status="deliberationStatus"
             :durable-cancel-target="durableCancelTarget"
             :reply-cancellation-state="replyCancellationState"
@@ -736,7 +736,7 @@
             @voice-apply="applyVoiceTranscript"
             :agents="chatMentionAgents"
             :event-stream-recovering="eventStreamRecovering"
-            :is-awaiting-reply="isAwaitingReply"
+            :is-awaiting-reply="isAwaitingReply || manualSendPending"
             :is-streaming="isStreaming"
             :messages="messages"
             :mention-label="portraitShortName"
@@ -745,7 +745,7 @@
             :selected-task="conversationTask"
             :sender-text="senderText"
             :connection-status="chatConnectionStatus"
-            :conversation-busy="isConversationBusy"
+            :conversation-busy="isConversationBusy || manualSendPending"
             :deliberation-status="deliberationStatus"
             :durable-cancel-target="durableCancelTarget"
             :reply-cancellation-state="replyCancellationState"
@@ -2969,30 +2969,37 @@ const handleNewHallConversation = () => {
   return true
 }
 
+const manualSendPending = ref(false)
 const handleSendHallMessage = async (typedInput = {}) => {
-  voiceReplyCorrelation.close('manual_text_send')
-  hallVoice?.cancel()
-  playSend()
-  if (typedDeliberationEnabled.value) {
-    const sourceSelectors = Array.isArray(typedInput?.sourceSelectors) ? typedInput.sourceSelectors : []
-    if (conversationTask.value?.id) {
-      const fence = [hallIdentityScope.value, apiStore.authorizationGeneration, conversationTask.value.id,
-        conversationId.value, bountyInteractionTargetId(chatContext.value), draft.value]
-      const prepared = await refreshCurrentConversationTask() && await bountyAssignmentContext.refresh()
-      const current = [hallIdentityScope.value, apiStore.authorizationGeneration, conversationTask.value?.id,
-        conversationId.value, bountyInteractionTargetId(chatContext.value), draft.value]
-      if (fence.some((value, index) => value !== current[index])) return false
-      if (!prepared || !typedAssignmentRevision()) {
-        showToast(bountyAssignmentContext.error.value || '当前指派上下文尚未核对；未发送消息。')
-        return false
+  if (manualSendPending.value) return false
+  manualSendPending.value = true
+  try {
+    voiceReplyCorrelation.close('manual_text_send')
+    hallVoice?.cancel()
+    playSend()
+    if (typedDeliberationEnabled.value) {
+      const sourceSelectors = Array.isArray(typedInput?.sourceSelectors) ? typedInput.sourceSelectors : []
+      if (conversationTask.value?.id) {
+        const fence = [hallIdentityScope.value, apiStore.authorizationGeneration, conversationTask.value.id,
+          conversationId.value, bountyInteractionTargetId(chatContext.value), draft.value]
+        const prepared = await refreshCurrentConversationTask() && await bountyAssignmentContext.refresh()
+        const current = [hallIdentityScope.value, apiStore.authorizationGeneration, conversationTask.value?.id,
+          conversationId.value, bountyInteractionTargetId(chatContext.value), draft.value]
+        if (fence.some((value, index) => value !== current[index])) return false
+        if (!prepared || !typedAssignmentRevision()) {
+          showToast(bountyAssignmentContext.error.value || '当前指派上下文尚未核对；未发送消息。')
+          return false
+        }
       }
+      const accepted = await typedDeliberation.submit({ content: draft.value, sourceSelectors, materialScope: typedInput?.materialScope || 'TASK_DEFAULT' })
+      if (accepted) setDraft('')
+      else if (typedDeliberation.error.value) showToast(typedDeliberation.error.value)
+      return accepted
     }
-    const accepted = await typedDeliberation.submit({ content: draft.value, sourceSelectors, materialScope: typedInput?.materialScope || 'TASK_DEFAULT' })
-    if (accepted) setDraft('')
-    else if (typedDeliberation.error.value) showToast(typedDeliberation.error.value)
-    return accepted
+    return await sendHallMessage()
+  } finally {
+    manualSendPending.value = false
   }
-  return sendHallMessage()
 }
 const handleTypedReply = projection => {
   if (!typedDeliberationEnabled.value || !typedDeliberation.choosePending(projection)) return false

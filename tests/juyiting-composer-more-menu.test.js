@@ -14,6 +14,27 @@ const Composer = new Function('Vue', script)(Vue)
 const create = props => mount(Composer, { attachTo: document.body, props: { mentionLabel: () => '', draft: '保留我的草稿', ...props }, global: { stubs: { 'var-icon': true } } })
 
 describe('Juyi Hall simple composer more menu', () => {
+  for (const mobile of [true, false]) {
+    it(`${mobile ? 'mobile' : 'desktop'}: reply end respects keyboard focus policy`, async () => {
+      const original = window.matchMedia
+      window.matchMedia = () => ({ matches: mobile, addEventListener() {}, removeEventListener() {} })
+      const wrapper = create({ durableCancelTarget: { requestId: 'r1' }, contextKey: 'same' })
+      let focused = 0
+      wrapper.get('textarea').element.focus = () => { focused++ }
+      try {
+        await wrapper.setProps({ durableCancelTarget: null })
+        await Vue.nextTick()
+        expect(focused).to.equal(mobile ? 0 : 1)
+        await wrapper.setProps({ isAwaitingReply: true })
+        expect(wrapper.get('.composer-send').attributes('disabled')).to.equal('')
+        expect(wrapper.get('.composer-send').attributes('aria-busy')).to.equal('true')
+        expect(wrapper.get('.composer-send').attributes('aria-label')).to.equal('处理中')
+        await wrapper.setProps({ isAwaitingReply: false })
+        expect(wrapper.get('.composer-send').attributes('disabled')).to.equal(undefined)
+        expect(focused).to.equal(mobile ? 0 : 1)
+      } finally { wrapper.unmount(); window.matchMedia = original }
+    })
+  }
   it('allows attachment-only bounty input, but not empty, private, public or locked sends', async () => {
     for (const discussionVariant of ['public', 'private', 'bounty']) {
       const wrapper = create({ draft: '  ', discussionVariant, hasTypedAttachments: true })

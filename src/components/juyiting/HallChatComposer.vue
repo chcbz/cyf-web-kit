@@ -87,6 +87,7 @@
               class="composer-send hall-tool"
               type="submit"
               :disabled="!canSend"
+              :aria-busy="isStreaming || isAwaitingReply"
               :title="isStreaming || isAwaitingReply ? '处理中' : '发送'"
               :aria-label="isStreaming || isAwaitingReply ? '处理中' : '发送'"
             >
@@ -416,9 +417,9 @@ const submit = () => {
 }
 
 watch([stopTarget, inputLocked, () => props.contextKey], ([target, locked, context], [previous, , previousContext]) => {
-  if (previous && !target && !locked && context === previousContext) {
+  if (!isMobile.value && previous && !target && !locked && context === previousContext) {
     nextTick(() => {
-      if (!stopTarget.value && !inputLocked.value && props.contextKey === context) textareaRef.value?.focus()
+      if (!isMobile.value && !stopTarget.value && !inputLocked.value && props.contextKey === context) textareaRef.value?.focus()
     })
   }
 })
