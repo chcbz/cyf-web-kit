@@ -313,7 +313,9 @@ export const useHallConversation = ({
     hallReplySignalCleanup = null
   }
 
+  let hallReplyPollTick = null
   const stopHallReplyPolling = () => {
+    hallReplyPollTick = null
     if (hallReplyPollTimer) {
       window.clearInterval(hallReplyPollTimer)
       hallReplyPollTimer = null
@@ -773,12 +775,14 @@ export const useHallConversation = ({
       return
     }
     startHallEventStream()
+    hallReplyPollTick?.()
     if (projectionsDirty) scheduleHallEventReconnect(lifecycleGeneration)
   }
 
   const handleHallEventFocus = () => {
     if (!isPageVisible() || hallEventReconnectTimer != null) return
     startHallEventStream()
+    hallReplyPollTick?.()
     if (projectionsDirty) scheduleHallEventReconnect(lifecycleGeneration)
   }
 
@@ -1129,7 +1133,7 @@ export const useHallConversation = ({
       try {
         let callbackResult
         const response = await chatApi.list('/conversation/list', {
-          pageNum: pageNum,
+          pageNum,
           pageSize: HALL_HISTORY_PAGE_SIZE,
           orderBy: 'update_time desc',
           search: {
@@ -1264,8 +1268,8 @@ export const useHallConversation = ({
     const pollCurrent = () => guardCurrent(guard) && generation === lifecycleGeneration &&
       replyGeneration === hallReplyGeneration && (!activeSendToken || activeSendToken === sendToken) && conversationId.value === id
     let inFlight = false
-    const timer = window.setInterval(async () => {
-      if (hallReplyPollTimer !== timer || inFlight) return
+    const tick = async () => {
+      if (hallReplyPollTimer !== timer || inFlight || !isPageVisible()) return
       if (!pollCurrent() || !isAwaitingReply.value) {
         if (hallReplyPollTimer === timer) stopHallReplyPolling()
         return
@@ -1279,8 +1283,10 @@ export const useHallConversation = ({
       } finally {
         inFlight = false
       }
-    }, 2000)
+    }
+    const timer = window.setInterval(tick, 2000)
     hallReplyPollTimer = timer
+    hallReplyPollTick = () => { void tick() }
   }
 
   const scheduleHallConversationSync = (id) => {

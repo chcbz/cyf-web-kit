@@ -111,7 +111,7 @@ export function createPersonalWorkspaceExecutionRecoveryStore ({ storage = globa
 }
 
 /** Browser adapter for contract-frozen personal execution endpoints. Server state is authoritative. */
-export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), identityEpoch = 0, identityScope = identityEpoch, storage = globalThis.localStorage || globalThis.window?.localStorage, pollInterval = 2000, timerApi = globalThis } = {}) {
+export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), identityEpoch = 0, identityScope = identityEpoch, storage = globalThis.localStorage || globalThis.window?.localStorage, pollInterval = 2000, timerApi = globalThis, documentRef = globalThis.document } = {}) {
   const agents = ref([])
   const rosterState = ref('idle')
   const rosterError = ref('')
@@ -137,6 +137,8 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
   const controllers = new Set()
   let generation = 0
   let polling = null
+  let pollEpoch = 0
+  let pollFlight = null
   let disposed = false
   let selectionSequence = 0
   let previousScope = currentScope.value
@@ -144,7 +146,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
   const selectedAgent = computed(() => agents.value.find(agent => agent.agentId === selectedAgentId.value) || null)
   const selectedExecutionAgent = computed(() => receipt.value ? agents.value.find(agent => agent.agentId === receipt.value.targetAgentId) || null : null)
   const pending = computed(() => Boolean(unresolvedIntent.value) || executionState.value === 'creating' || executionState.value === 'reconciling' || executionState.value === 'unknown' || receipt.value?.state === 'QUEUED')
-  const stopPolling = () => { if (polling != null) timerApi.clearTimeout?.(polling); polling = null }
+  const stopPolling = () => { pollEpoch++; if (polling != null) timerApi.clearTimeout?.(polling); polling = null }
   const reset = () => {
     generation += 1; selectionSequence += 1; stopPolling()
     for (const controller of controllers) controller.abort(abortError('Workspace identity changed'))
@@ -207,18 +209,34 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     } catch (cause) { if (cause?.name !== 'AbortError' && snapshot.generation === generation) { rosterError.value = errorMessage(cause); rosterState.value = 'error' } return [] }
   }
   const selectAgent = agentId => { if (!agents.value.some(agent => agent.agentId === agentId)) return false; selectedAgentId.value = agentId; return true }
-  const poll = async executionId => {
-    if (!ID(executionId) || disposed || receipt.value?.executionId !== executionId) return null
+  const visible = () => documentRef?.visibilityState !== 'hidden'
+  const poll = (executionId, observation = pollEpoch) => {
+    if (!ID(executionId) || disposed || !visible() || observation !== pollEpoch || receipt.value?.executionId !== executionId) return Promise.resolve(null)
     const snapshot = snapshotNow(); const sequence = selectionSequence
-    try {
-      const value = await request({ url: `/personal-workspace/executions/${encodeURIComponent(executionId)}`, method: 'GET' }, snapshot)
-      if (sequence !== selectionSequence || receipt.value?.executionId !== executionId) return null
-      const result = applyExecution(value)
-      if (!TERMINAL_EXECUTION_STATES.has(result.state) && !disposed && receipt.value?.executionId === executionId) polling = timerApi.setTimeout?.(() => { void poll(executionId) }, pollInterval) ?? null
-      return result
-    } catch (cause) { if (cause?.name !== 'AbortError' && snapshot.generation === generation && sequence === selectionSequence && receipt.value?.executionId === executionId) error.value = errorMessage(cause); return null }
+    if (pollFlight?.observation === observation && pollFlight.executionId === executionId) return pollFlight.promise
+    const flight = { observation, executionId, promise: null }
+    pollFlight = flight
+    flight.promise = (async () => {
+      try {
+        const value = await request({ url: `/personal-workspace/executions/${encodeURIComponent(executionId)}`, method: 'GET' }, snapshot)
+        if (observation !== pollEpoch || sequence !== selectionSequence || receipt.value?.executionId !== executionId) return null
+        const result = applyExecution(value)
+        if (observation === pollEpoch && visible() && !TERMINAL_EXECUTION_STATES.has(result.state) && !disposed && receipt.value?.executionId === executionId) {
+          polling = timerApi.setTimeout?.(() => { polling = null; void poll(executionId, observation) }, pollInterval) ?? null
+        }
+        return result
+      } catch (cause) {
+        if (cause?.name !== 'AbortError' && observation === pollEpoch && snapshot.generation === generation && sequence === selectionSequence && receipt.value?.executionId === executionId) error.value = errorMessage(cause)
+        return null
+      } finally { if (pollFlight === flight) pollFlight = null }
+    })()
+    return flight.promise
   }
-  const startPolling = executionId => { stopPolling(); return poll(executionId) }
+  const startPolling = executionId => {
+    if (pollFlight?.observation === pollEpoch && pollFlight.executionId === executionId) return pollFlight.promise
+    stopPolling()
+    return poll(executionId)
+  }
   const reconcile = async ({ quiet = false } = {}) => {
     const pendingIntent = recoveryStore.read()
     if (!pendingIntent) return null
@@ -320,7 +338,16 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
 
   watch([currentEpoch, currentScope], () => { if (previousScope && previousScope !== currentScope.value) recoveryStore.clear(previousScope); previousScope = currentScope.value; reset() }, { immediate: true, flush: 'sync' })
   const unregisterIdentityCleanup = registerIdentityCleanup(clearIdentityState)
-  const dispose = () => { if (disposed) return; disposed = true; unregisterIdentityCleanup(); reset() }
+  const onVisibility = () => {
+    if (!visible()) stopPolling()
+    else if (receipt.value && !TERMINAL_EXECUTION_STATES.has(receipt.value.state)) void startPolling(receipt.value.executionId)
+  }
+  documentRef?.addEventListener?.('visibilitychange', onVisibility)
+  const dispose = () => {
+    if (disposed) return
+    disposed = true; unregisterIdentityCleanup(); reset()
+    documentRef?.removeEventListener?.('visibilitychange', onVisibility)
+  }
   if (getCurrentInstance()) onBeforeUnmount(dispose)
 
   return { agents, rosterState, rosterError, selectedAgentId, selectedAgent, selectedExecutionAgent, allowedMimeTypes, inputMimeTypes, capabilityState, capabilityError, generationEnabled, execution, receipt, executionState, error, completionNotice, history, historyState, historyError, historyNextCursor, unresolvedIntent, pending, loadCapabilities, loadAgents, loadHistory, recover, selectAgent, create, prepareNewRequest, adoptExecution, selectHistoryExecution, recoverExecution, refreshExecution, revokeInputs, stopPolling, reset, dispose }

@@ -543,10 +543,6 @@ function parseSseRecord (record) {
   } catch { return null }
 }
 
-function parseVersion (value) {
-  return normalizeVersion(value)
-}
-
 function normalizeVersion (value) {
   return typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value) && BigInt(value) <= JAVA_LONG_MAX ? value : null
 }

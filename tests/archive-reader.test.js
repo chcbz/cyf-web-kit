@@ -229,7 +229,8 @@ const mountReader = (api, options = {}) => {
       reader = useArchiveReader({
         api,
         autoInitialize: options.autoInitialize ?? false,
-        saveDelay: options.saveDelay ?? 1
+        saveDelay: options.saveDelay ?? 1,
+        documentRef: options.documentRef ?? globalThis.document
       })
       return () => null
     }
@@ -406,7 +407,8 @@ const mountArchiveReader = (api, options = {}) => {
       readerState = useArchiveReader({
         ...readerOptions,
         api,
-        saveDelay: options.saveDelay ?? 1
+        saveDelay: options.saveDelay ?? 1,
+        documentRef: options.documentRef ?? globalThis.document
       })
       return readerState
     },
@@ -3023,5 +3025,27 @@ describe('archive maintenance published edition navigation', () => {
       expect(failure?.message).to.contain('响应不完整')
       expect(reader.chapter.value).to.equal(null)
     } finally { wrapper.unmount() }
+  })
+})
+
+
+describe('archive question foreground recovery', () => {
+  it('keeps hidden question observation quiet and re-reads the original question when visible', async () => {
+    const doc = new EventTarget(); doc.visibilityState = 'hidden'
+    const terminal = questionSnapshot({ status: 'SUCCEEDED', answer: '已完成', completedAt: '2026-08-23T00:00:01Z' })
+    const api = makeQuestionApi({ createSnapshot: terminal })
+    const { reader, wrapper } = mountReader(api, { documentRef: doc })
+    try {
+      primeReader(reader)
+      reader.question.value = questionSnapshot()
+      doc.dispatchEvent(new Event('visibilitychange'))
+      await settle()
+      expect(api.calls.filter(call => call.path?.startsWith('/me/questions/'))).to.have.length(0)
+      doc.visibilityState = 'visible'; doc.dispatchEvent(new Event('visibilitychange'))
+      await waitFor(() => reader.question.value?.status === 'SUCCEEDED')
+      expect(api.calls.filter(call => call.path === `/me/questions/${questionId}` && call.method === 'get')).to.have.length(1)
+      expect(reader.question.value.status).to.equal('SUCCEEDED')
+      expect(api.calls.filter(call => ['put', 'post'].includes(call.method))).to.have.length(0)
+    } finally { wrapper.unmount(); await settle() }
   })
 })

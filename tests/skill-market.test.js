@@ -1,7 +1,7 @@
 import { expect } from 'chai'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { effectScope, ref } from 'vue'
+import { effectScope, ref, nextTick } from 'vue'
 import { useSkillMarket, formatSkillMoney } from '../src/composables/useSkillMarket.js'
 import { parseStrictJson, decodeHttpResponse } from '../src/utils/apiEnvelope.js'
 import { parseSkillManagement, skillPathSegment, skillPermissionsSha256, utf8Compare } from '../src/utils/skillManagementContract.js'
@@ -402,4 +402,76 @@ describe('SM-C1 useSkillMarket lifecycle and exactly-once intent', () => {
     expect(write.options.headers['Idempotency-Key']).to.equal(original.key); expect(write.data).to.deep.equal(original.data)
   })
 
+})
+
+
+describe('skill market demand-driven observation', () => {
+  afterEach(() => { for (const scope of scopes.splice(0)) scope.stop() })
+  const settle = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); await nextTick() }
+  const environment = () => {
+    const timers = new Map(); let sequence = 0
+    const documentRef = new EventTarget(); documentRef.visibilityState = 'visible'
+    const windowRef = new EventTarget()
+    const timerApi = { setTimeout: fn => { timers.set(++sequence, fn); return sequence }, clearTimeout: id => timers.delete(id) }
+    const fire = async () => { const [id, fn] = [...timers][0] || []; if (fn) { timers.delete(id); fn(); await settle() } }
+    return { documentRef, windowRef, timerApi, timers, fire }
+  }
+  const idle = mock => { for (const row of mock.list.items) row.latestChange = null }
+  it('loads idle catalogs once, has no idle timer and resumes a full read on foreground', async () => {
+    const env = environment(); const { market, mock } = make(env); idle(mock)
+    market.setPolling(true); await settle()
+    expect(mock.requests.map(r => r.path)).to.deep.equal(['/agt_demo/skills', '/agt_demo/skill-changes'])
+    expect(env.timers.size).to.equal(0)
+    env.documentRef.visibilityState = 'hidden'; env.documentRef.dispatchEvent(new Event('visibilitychange'))
+    env.windowRef.dispatchEvent(new Event('focus')); await settle()
+    expect(mock.requests).to.have.length(2)
+    env.documentRef.visibilityState = 'visible'; env.documentRef.dispatchEvent(new Event('visibilitychange')); await settle()
+    expect(mock.requests).to.have.length(4)
+    market.dispose(); env.windowRef.dispatchEvent(new Event('focus')); await settle()
+    expect(mock.requests).to.have.length(4)
+  })
+  it('only reads each active change once per tick, without reloading catalogs; pauses hidden and closes cleanly', async () => {
+    const env = environment(); const { market, mock } = make(env); idle(mock)
+    const key = await prepareInstall(market)
+    market.setPolling(true); await settle()
+    await market.submit(key); await settle()
+    expect(env.timers.size).to.equal(1)
+    mock.requests.length = 0
+    await env.fire()
+    expect(mock.requests.map(r => r.path)).to.deep.equal([`/agt_demo/skill-changes/${mock.accepted.skillChangeId}`])
+    expect(env.timers.size).to.equal(1)
+    env.documentRef.visibilityState = 'hidden'; env.documentRef.dispatchEvent(new Event('visibilitychange')); await settle()
+    expect(env.timers.size).to.equal(0)
+    env.documentRef.visibilityState = 'visible'; env.documentRef.dispatchEvent(new Event('visibilitychange')); await settle()
+    expect(env.timers.size).to.equal(1)
+    market.setPolling(false); expect(env.timers.size).to.equal(0)
+    expect(mock.requests.filter(r => r.method === 'POST')).to.have.length(0)
+  })
+  it('does not overlap slow change reads and refreshes the directory once on terminal observation', async () => {
+    const env = environment(); const { market, mock } = make(env); idle(mock)
+    const key = await prepareInstall(market); await market.submit(key)
+    market.setPolling(true); await settle()
+    const wait = deferred(); const get = mock.api.get
+    let detailReads = 0
+    mock.api.get = async (...args) => {
+      if (args[0].includes('/skill-changes/')) { detailReads++; return wait.promise }
+      return get(...args)
+    }
+    await env.fire(); await env.fire()
+    expect(detailReads).to.equal(1); expect(env.timers.size).to.equal(0)
+    mock.requests.length = 0
+    wait.resolve({ ...mock.accepted, changeRevision: String(BigInt(mock.accepted.changeRevision) + 1n), status: 'FAILED_FINAL', retryAllowed: false })
+    await settle()
+    expect(market.changes.value.find(c => c.skillChangeId === mock.accepted.skillChangeId)?.status).to.equal('FAILED_FINAL')
+    expect(mock.requests.filter(r => r.path.endsWith('/skills'))).to.have.length(1)
+    expect(env.timers.size).to.equal(0)
+  })
+  it('reconciles matching cross-tab storage hints with reads only and ignores unrelated journals', async () => {
+    const env = environment(); const { market, mock, storage } = make(env); idle(mock)
+    market.setPolling(true); await settle(); mock.requests.length = 0
+    const event = key => Object.assign(new Event('storage'), { key, storageArea: storage })
+    env.windowRef.dispatchEvent(event('unrelated')); await settle(); expect(mock.requests).to.have.length(0)
+    env.windowRef.dispatchEvent(event('cyf.skill-management.v1:actor-a:agt_demo:image-edit')); await settle()
+    expect(mock.requests.map(r => r.path)).to.deep.equal(['/agt_demo/skills', '/agt_demo/skill-changes'])
+  })
 })

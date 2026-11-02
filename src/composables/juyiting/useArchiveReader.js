@@ -74,7 +74,7 @@ const replayAmbiguousMutation = async (send) => {
 
 export { isCanonicalDecimal, mutationHeaders, utf8ByteLength }
 
-export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitialize = true, saveDelay = 800 } = {}) => {
+export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitialize = true, saveDelay = 800, documentRef = globalThis.document } = {}) => {
   const works = ref([])
   const catalog = ref(null)
   const chapter = ref(null)
@@ -1019,12 +1019,15 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     return snapshot
   }
 
+  const questionPageVisible = () => documentRef?.visibilityState !== 'hidden'
   const recoverQuestion = (questionId, generation, delay = 0) => {
     if (!isQuestionCurrent(questionId, generation)) return
     clearQuestionTransport()
     questionPending.value = true
+    if (!questionPageVisible()) return
     questionPollTimer = setTimeout(async () => {
-      if (!isQuestionCurrent(questionId, generation)) return
+      questionPollTimer = null
+      if (!isQuestionCurrent(questionId, generation) || !questionPageVisible()) return
       try {
         const snapshot = await replaceQuestionSnapshot(questionId, generation)
         if (!snapshot || !isQuestionCurrent(questionId, generation)) return
@@ -1102,6 +1105,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
 
   const openQuestionStream = (questionId, generation) => {
     if (!isQuestionCurrent(questionId, generation) || !streamingStatus(question.value.status)) return
+    if (!questionPageVisible()) { questionPending.value = true; return }
     const cursor = question.value.currentSequence
     if (!isCanonicalDecimal(cursor)) { recoverQuestion(questionId, generation); return }
     const controller = new AbortController()
@@ -1462,12 +1466,20 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     return initialize({ workId, editionId, reuseCatalog: true })
   }
 
+  const onQuestionVisibility = () => {
+    if (!questionPageVisible()) { clearQuestionTransport(); return }
+    if (question.value && (questionPending.value || streamingStatus(question.value.status))) {
+      recoverQuestion(question.value.questionId, questionGeneration)
+    }
+  }
   onMounted(() => {
+    documentRef?.addEventListener?.('visibilitychange', onQuestionVisibility)
     unregisterIdentityCleanup = registerIdentityCleanup(clearIdentityBoundState)
     if (autoInitialize) initialize().catch(() => {})
     lifecycleTarget.addEventListener?.('pagehide', flushProgress)
   })
   onBeforeUnmount(() => {
+    documentRef?.removeEventListener?.('visibilitychange', onQuestionVisibility)
     // The host component may capture a trailing debounced scroll position in its
     // own unmount hook. This composable hook is registered first, so defer final
     // disposal one microtask and flush the resulting remote CAS intent afterward.

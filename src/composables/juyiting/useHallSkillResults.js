@@ -1,16 +1,18 @@
 import { ref, watch } from 'vue'
 import { skillResultAdvances, skillResultProjection, skillResultReferences } from './hallSkillResults.js'
 /** Read-only execution polling, fenced by full identity and conversation generation. */
-export const useHallSkillResults = ({ api, getContext, getOutcomes, getRequests = () => [], identityKey, enabled }) => {
+export const useHallSkillResults = ({ api, getContext, getOutcomes, getRequests = () => [], identityKey, enabled, documentRef = globalThis.document, timerApi = globalThis }) => {
   const results = ref([]); const error = ref(''); const loading = ref(false)
   let epoch = 0; let disposed = false; let controller = null; let timer = null
   const scopeFingerprint = () => JSON.stringify([identityKey(), enabled(), getContext()])
   const fingerprint = () => JSON.stringify([scopeFingerprint(), getOutcomes(), getRequests()])
   let previousScope = null
-  const reset = (clear = true) => { epoch++; controller?.abort(); controller = null; clearTimeout(timer); timer = null; if (clear) results.value = []; error.value = ''; loading.value = false }
-  const refresh = async () => {
-    if (disposed || controller || !enabled()) return
-    clearTimeout(timer); timer = null
+  const reset = (clear = true) => { epoch++; controller?.abort(); controller = null; timerApi.clearTimeout(timer); timer = null; if (clear) results.value = []; error.value = ''; loading.value = false }
+  const visible = () => documentRef?.visibilityState !== 'hidden'
+  const terminal = value => value.complete || ['FAILED', 'CANCELLED'].includes(value.phase)
+  const refresh = async ({ pendingOnly = false } = {}) => {
+    if (disposed || controller || !enabled() || !visible()) return
+    timerApi.clearTimeout(timer); timer = null
     const generation = epoch; const key = fingerprint(); const context = { ...getContext() }
     const references = skillResultReferences(getOutcomes(), context, getRequests())
     if (!references.length) return
@@ -19,12 +21,13 @@ export const useHallSkillResults = ({ api, getContext, getOutcomes, getRequests 
     try {
       const next = []
       for (const reference of references) {
+        const previous = results.value.find(item => item.executionId === reference.executionId)
+        if (pendingOnly && previous && terminal(previous)) { next.push(previous); continue }
         try {
           const response = await api.get(`/conversations/${encodeURIComponent(context.conversationId)}/executions/${encodeURIComponent(reference.executionId)}/result`, {}, { autoLoading: false, needAuth: true, signal: own.signal })
           if (!current()) return
           const result = skillResultProjection(response, reference)
           if (!result) throw new Error('技能结果来源或归档状态不匹配')
-          const previous = results.value.find(item => item.executionId === result.executionId)
           if (previous?.executionStateVersion != null && !skillResultAdvances(previous, result)) next.push(previous)
           else next.push(Object.freeze({ ...result, reference }))
         } catch (cause) {
@@ -41,8 +44,8 @@ export const useHallSkillResults = ({ api, getContext, getOutcomes, getRequests 
     finally {
       if (current()) {
         controller = null; loading.value = false
-        if (!error.value && results.value.some(value => !value.complete && !['FAILED', 'CANCELLED'].includes(value.phase)))
-          timer = setTimeout(() => { timer = null; void refresh() }, 2500)
+        if (visible() && !error.value && results.value.some(value => !terminal(value)))
+          timer = timerApi.setTimeout(() => { timer = null; void refresh({ pendingOnly: true }) }, 2500)
       }
     }
   }
@@ -57,5 +60,12 @@ export const useHallSkillResults = ({ api, getContext, getOutcomes, getRequests 
       (reference.stepId == null || reference.stepId === (result.stepId ?? result.reference.stepId))))
     if (enabled()) void refresh()
   }, { immediate: true, flush: 'sync' })
-  return { results, error, loading, refresh, dispose: () => { disposed = true; reset(); stop() } }
+  const onVisibility = () => {
+    timerApi.clearTimeout(timer); timer = null
+    if (visible()) void refresh() // Revalidate all results/authorization after returning.
+  }
+  documentRef?.addEventListener?.('visibilitychange', onVisibility)
+  return { results, error, loading, refresh, dispose: () => {
+    disposed = true; reset(); stop(); documentRef?.removeEventListener?.('visibilitychange', onVisibility)
+  } }
 }

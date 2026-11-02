@@ -23,7 +23,7 @@ describe('SM-C1 actual management component lifecycle (no composable stub)', () 
     await button(wrapper, '确认安装').trigger('click'); await until(() => mock.requests.some(r => r.method === 'POST' && r.path === '/agt_demo/skill-changes'))
     expect(mock.requests.find(r => r.method === 'POST' && r.path === '/agt_demo/skill-changes').data).to.deep.equal(fixture('create-install').data)
   })
-  it('allows quoting the current candidate during background catalog polling', async () => {
+  it('allows quoting the current candidate during a foreground catalog refresh', async () => {
     await open()
     const response = deferred(); const entered = deferred(); const get = mock.api.get
     let holdNextRead = true
@@ -32,6 +32,7 @@ describe('SM-C1 actual management component lifecycle (no composable stub)', () 
       return get(path, ...args)
     }
     try {
+      window.dispatchEvent(new window.Event('focus'))
       await entered.promise; await settle()
       expect(button(wrapper, '获取报价').element.disabled).to.equal(false)
       await button(wrapper, '获取报价').trigger('click')
@@ -40,7 +41,7 @@ describe('SM-C1 actual management component lifecycle (no composable stub)', () 
       expect(mock.requests.filter(r => r.method === 'POST' && r.path.endsWith('/skill-changes'))).to.have.length(0)
     } finally { response.resolve(structuredClone(mock.list)) }
   })
-  it('does not disable a prepared confirmation during background catalog polling', async () => {
+  it('does not disable a prepared confirmation during a foreground catalog refresh', async () => {
     await open()
     await button(wrapper, '获取报价').trigger('click'); await until(() => button(wrapper, '确认安装'))
     const response = deferred(); const entered = deferred(); const get = mock.api.get
@@ -50,6 +51,7 @@ describe('SM-C1 actual management component lifecycle (no composable stub)', () 
       return get(path, ...args)
     }
     try {
+      window.dispatchEvent(new window.Event('focus'))
       await entered.promise; await settle()
       expect(button(wrapper, '确认安装').element.disabled).to.equal(false)
       await button(wrapper, '确认安装').trigger('click')

@@ -426,3 +426,29 @@ describe('personal workspace execution receipt and recovery', () => {
     adapter.dispose()
   })
 })
+
+
+describe('personal execution observation lifecycle', () => {
+  it('merges manual refresh with an in-flight read and stops hidden/explicitly stopped polling from rescheduling', async () => {
+    const doc = new EventTarget(); doc.visibilityState = 'visible'
+    const scheduled = new Map(); let seq = 0; const reads = []
+    const adapter = usePersonalWorkspaceExecution({ identityEpoch: ref('poll-owner'), documentRef: doc,
+      timerApi: { setTimeout: fn => { scheduled.set(++seq, fn); return seq }, clearTimeout: id => scheduled.delete(id) },
+      api: { execute: () => new Promise(resolve => reads.push(resolve)) } })
+    try {
+      adapter.adoptExecution(executionView())
+      const duplicate = adapter.refreshExecution()
+      assert.equal(reads.length, 1)
+      doc.visibilityState = 'hidden'; doc.dispatchEvent(new Event('visibilitychange'))
+      reads[0](executionView()); await duplicate
+      assert.equal(scheduled.size, 0)
+      doc.visibilityState = 'visible'; doc.dispatchEvent(new Event('visibilitychange'))
+      assert.equal(reads.length, 2)
+      const second = adapter.refreshExecution()
+      adapter.stopPolling(); reads[1](executionView()); await second
+      assert.equal(scheduled.size, 0)
+      adapter.dispose(); doc.dispatchEvent(new Event('visibilitychange'))
+      assert.equal(reads.length, 2)
+    } finally { adapter.dispose() }
+  })
+})

@@ -141,8 +141,9 @@ const fetchRequest = async (requestId, controller) => {
   if (value?.requestId !== requestId || value?.conversationId !== props.conversationId) throw new Error('议事请求范围不匹配')
   return value
 }
+const pageVisible = () => globalThis.document?.visibilityState !== 'hidden'
 const list = async () => {
-  if (!validRootRequest() || abort) return
+  if (!validRootRequest() || abort || !pageVisible()) return
   const generation = epoch; const controller = new AbortController(); abort = controller; loading.value = true
   try {
     const ids = [...new Set(catalogRequests.value.map(request => request.requestId))]
@@ -192,7 +193,7 @@ const list = async () => {
     if (generation === epoch) {
       abort = null; loading.value = false
       if (refreshQueued) { refreshQueued = false; void list() }
-      else if (validRootRequest() && !effectiveTaskCompleted.value && !error.value &&
+      else if (pageVisible() && validRootRequest() && !effectiveTaskCompleted.value && !error.value &&
         (pendingAction.value || requestSnapshots.value.some(outputRequestPending))) timer = setTimeout(() => { timer = null; void list() }, 2500)
     }
   }
@@ -261,7 +262,12 @@ const previewSelected = async item => {
   emit('preview-ready', { item: current, url: previewUrls.value[key] || '', text: current.text || textPreviews.value[key] || '', error: itemErrors.value[key] || '' })
 }
 defineExpose({ previewSelected, loading, refresh: refreshFromUser })
-onBeforeUnmount(() => { cleanup(); skillResults.dispose(); emit('outputs-change', []) })
+const onVisibility = () => {
+  if (timer != null) clearTimeout(timer); timer = null
+  if (pageVisible() && validRootRequest()) refresh()
+}
+document.addEventListener('visibilitychange', onVisibility)
+onBeforeUnmount(() => { document.removeEventListener('visibilitychange', onVisibility); cleanup(); skillResults.dispose(); emit('outputs-change', []) })
 </script>
 <style scoped>
 .message-skill-result { min-width: 0; padding: 8px 12px; overflow-wrap: anywhere; }

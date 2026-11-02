@@ -193,3 +193,33 @@ describe('RB-01/D01 native request-step result discovery', () => {
     assert.deepEqual(service.results.value, []); assert.equal(service.loading.value, false)
   })
 })
+
+
+describe('skill result polling demand and visibility', () => {
+  it('only rechecks unfinished references on ticks but revalidates all on foreground/manual refresh', async () => {
+    const doc = new EventTarget(); doc.visibilityState = 'visible'
+    const timers = new Map(); let seq = 0; const calls = []
+    const timerApi = { setTimeout: fn => { timers.set(++seq, fn); return seq }, clearTimeout: id => timers.delete(id) }
+    const scope = effectScope()
+    const pending = { ...nativeRequest(), requestId: 'other', steps: [{ ...nativeRequest().steps[0], executionId: 'pending-execution', stepId: 'pending-step' }] }
+    const service = scope.run(() => useHallSkillResults({
+      api: { get: async path => {
+        calls.push(path)
+        return path.includes('pending-execution') ? { ...nativeResult(), requestId: 'other', stepId: 'pending-step', executionId: 'pending-execution', phase: 'ARCHIVING', data: null } : nativeResult()
+      } }, documentRef: doc, timerApi, getContext: () => context, getOutcomes: () => [],
+      getRequests: () => [nativeRequest(), pending], identityKey: () => 'owner', enabled: () => true
+    }))
+    try {
+      await drain(); await drain(); assert.equal(calls.length, 2); assert.equal(timers.size, 1)
+      const [id, tick] = [...timers][0]; timers.delete(id); tick(); await drain()
+      assert.equal(calls.length, 3); assert.match(calls[2], /pending-execution/)
+      doc.visibilityState = 'hidden'; doc.dispatchEvent(new Event('visibilitychange'))
+      assert.equal(timers.size, 0); await service.refresh(); assert.equal(calls.length, 3)
+      doc.visibilityState = 'visible'; doc.dispatchEvent(new Event('visibilitychange')); await drain(); await drain()
+      assert.equal(calls.length, 5)
+      await service.refresh(); assert.equal(calls.length, 7)
+      service.dispose(); doc.dispatchEvent(new Event('visibilitychange')); await drain()
+      assert.equal(calls.length, 7); assert.equal(timers.size, 0)
+    } finally { service.dispose(); scope.stop() }
+  })
+})

@@ -23,6 +23,21 @@ describe('task acceptance existing scoped source reads', () => {
     globalThis.clearTimeout = id => { if (id !== 999) originals.get('clearTimeout')(id) }
   })
   afterEach(() => { for (const [key, value] of originals) globalThis[key] = value; originals.clear() })
+  it('defers hidden catalog discovery and resumes on visibility without replaying writes', async () => {
+    const doc = new EventTarget(); doc.visibilityState = 'hidden'; const calls = []
+    const source = useHallBountyAcceptance({ documentRef: doc, taskId: () => 'task-1', identityKey: () => 'owner-1',
+      api: { list: async path => { calls.push(path); return response([scoped()]) },
+        get: async path => { calls.push(path); return response(page()) } } })
+    try {
+      await flushPromises(); expect(calls).to.have.length(0)
+      doc.visibilityState = 'visible'; doc.dispatchEvent(new Event('visibilitychange')); await flushPromises()
+      expect(calls).to.deep.equal(['/conversation/list', '/conversations/101/requests'])
+      doc.visibilityState = 'hidden'; doc.dispatchEvent(new Event('visibilitychange'))
+      await source.refreshCatalog(); expect(calls).to.have.length(2)
+      source.dispose(); doc.visibilityState = 'visible'; doc.dispatchEvent(new Event('visibilitychange')); await flushPromises()
+      expect(calls).to.have.length(2)
+    } finally { source.dispose() }
+  })
   it('cold-reads a unique task conversation and its durable catalogue, supporting existing callback responses without a write', async () => {
     const calls = []; const api = {
       list: async (path, body, options) => { calls.push([path, body, options.needAuth]); options.onSuccess({ items: [scoped()] }) },

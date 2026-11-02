@@ -29,7 +29,8 @@ const definiteRejection = e => e.failureClass === 'http' && [400, 403, 410, 422]
  */
 export function useSkillMarket ({ agentApi = defaultAgentApi, enabled = true, actorScopeKey = '', identityKey = null, targetAgent = null,
   purchaseIdempotencyStorage: storage = storageDefault(), createIdempotencyKey = uuid,
-  operationLocks = globalThis.navigator?.locks, now = () => Date.now(), onChanged = () => {} } = {}) {
+  operationLocks = globalThis.navigator?.locks, now = () => Date.now(), onChanged = () => {},
+  documentRef = globalThis.document, windowRef = globalThis.window, timerApi = globalThis } = {}) {
   const catalog = ref(null); const changes = ref([]); const drafts = ref({}); const pending = ref({})
   const loading = ref(false); const error = ref(''); const recordsError = ref(''); const storageError = ref('')
   const busy = ref({}); const queryUnknown = ref({}); const identityRevoked = ref(false)
@@ -159,7 +160,7 @@ export function useSkillMarket ({ agentApi = defaultAgentApi, enabled = true, ac
     } catch (cause) { if (current(token)) recordsError.value = cause.message || '操作记录读取失败。'; return null }
     finally { controllers.delete(token.c) }
   }
-  const checkOriginal = async skillKey => {
+  const checkOriginal = async (skillKey, { refreshCatalog = true } = {}) => {
     const record = pending.value[skillKey]
     const row = rowFor(skillKey)
     const id = record?.skillChangeId || (row && latestChange(row)?.skillChangeId)
@@ -173,7 +174,7 @@ export function useSkillMarket ({ agentApi = defaultAgentApi, enabled = true, ac
       const next = acceptChange(change)
       queryUnknown.value = { ...queryUnknown.value, [skillKey]: '' }
       if (record?.accepted && skillChangeTerminal(next) && next.status !== 'RECOVERY_REQUIRED') remove(skillKey, record)
-      await refresh()
+      if (refreshCatalog) await refresh()
       if (current(token) && next.status === 'SUCCEEDED') onChanged(next)
       return next
     } catch { if (current(token)) queryUnknown.value = { ...queryUnknown.value, [skillKey]: '读取结果未确认，请核对结果，不要再次购买。' }; return null }
@@ -356,44 +357,109 @@ export function useSkillMarket ({ agentApi = defaultAgentApi, enabled = true, ac
     return send({ schemaVersion: 1, kind, agentId: agentId.value, skillKey, path: `${basePath()}/skill-changes/${skillPathSegment(change.skillChangeId)}/${kind.toLowerCase()}`,
       key: createIdempotencyKey(), requestId: createIdempotencyKey(), data: { expectedChangeRevision: change.changeRevision }, skillChangeId: change.skillChangeId, accepted: false })
   })
-  const observe = async (run = observerEpoch) => {
-    if (run !== observerEpoch || !polling || !available.value || disposed) return
-    clearTimeout(timer); timer = null
-    const origin = epoch
-    const observing = () => run === observerEpoch && origin === epoch && polling && !disposed
-    for (const record of Object.values(pending.value)) {
-      if (!observing()) return
-      if (record.skillChangeId) await checkOriginal(record.skillKey)
-    }
-    if (!observing()) return
-    await refresh()
-    if (!observing()) return
-    await refreshChanges()
+  const visible = () => documentRef?.visibilityState !== 'hidden'
+  const clearObservationTimer = () => { timerApi.clearTimeout(timer); timer = null }
+  let observerFlight = null
+  const activeChanges = () => {
+    const candidates = new Map()
     for (const row of items.value) {
-      if (!observing()) return
-      if (pending.value[row.skillKey]?.skillChangeId || (latestChange(row) && !skillChangeTerminal(latestChange(row)))) await checkOriginal(row.skillKey)
+      const change = latestChange(row)
+      if (change && !skillChangeTerminal(change)) candidates.set(row.skillKey, change.skillChangeId)
     }
-    // Network observation only; never simulates progress or resubmits a write.
-    if (observing() && available.value) timer = setTimeout(() => observe(run), 2500)
+    for (const record of Object.values(pending.value)) {
+      if (!record.skillChangeId) continue // Unknown writes are never replayed by observation.
+      const known = changes.value.find(change => change.skillChangeId === record.skillChangeId)
+      if (!known || !skillChangeTerminal(known)) candidates.set(record.skillKey, record.skillChangeId)
+    }
+    return candidates
+  }
+  const scheduleObservation = () => {
+    if (!polling || disposed || !available.value || !visible() || !activeChanges().size) {
+      clearObservationTimer()
+      return
+    }
+    if (timer != null || observerFlight?.run === observerEpoch) return
+    const run = observerEpoch
+    timer = timerApi.setTimeout(() => { timer = null; void observe(false, run) }, 2500)
+  }
+  // Opening/foreground/manual refresh reads catalogs. Timer ticks only observe
+  // known nonterminal changes; idle panels do not continually reload all skills.
+  const observe = (full = false, run = observerEpoch) => {
+    if (run !== observerEpoch || !polling || !available.value || disposed || !visible()) return Promise.resolve()
+    if (observerFlight?.run === run) {
+      if (full) observerFlight.refreshPending = true
+      return observerFlight.promise
+    }
+    clearObservationTimer()
+    const origin = epoch
+    const job = { run, refreshPending: false, promise: null }
+    observerFlight = job
+    const observing = () => run === observerEpoch && origin === epoch && polling && !disposed && visible()
+    job.promise = (async () => {
+      if (full) {
+        await refresh()
+        if (!observing()) return
+        await refreshChanges()
+      }
+      let completed = false
+      for (const [key] of activeChanges()) {
+        if (!observing()) return
+        const next = await checkOriginal(key, { refreshCatalog: false })
+        if (next && skillChangeTerminal(next)) completed = true
+      }
+      if (completed && observing()) await refresh()
+    })().finally(() => {
+      if (observerFlight !== job) return
+      observerFlight = null
+      if (!observing()) return
+      if (job.refreshPending) void observe(true, run)
+      else scheduleObservation()
+    })
+    return job.promise
   }
   const setPolling = value => {
     if (polling === value) return
-    polling = value; observerEpoch++; clearTimeout(timer); timer = null
-    if (value) void observe()
+    polling = value; observerEpoch++; clearObservationTimer()
+    if (value) { recover(); void observe(true) }
   }
+  const onForeground = () => {
+    if (!polling || !available.value || disposed || !visible()) return
+    recover()
+    void observe(true)
+  }
+  const onVisibility = () => {
+    if (!visible()) { observerEpoch++; clearObservationTimer() }
+    else onForeground()
+  }
+  const onStorage = event => {
+    if (!available.value || !polling || (event.storageArea && event.storageArea !== storage)) return
+    if (event.key !== null && !event.key?.startsWith(prefix())) return
+    onForeground()
+  }
+  documentRef?.addEventListener?.('visibilitychange', onVisibility)
+  windowRef?.addEventListener?.('focus', onForeground)
+  windowRef?.addEventListener?.('storage', onStorage)
+  const stopObservationWatch = watch(() => JSON.stringify([
+    [...activeChanges()], busy.value
+  ]), scheduleObservation, { flush: 'post' })
   const reset = () => {
-    epoch++; readEpoch++; observerEpoch++; clearTimeout(timer); timer = null
+    epoch++; readEpoch++; observerEpoch++; clearObservationTimer()
     for (const c of controllers) c.abort(); controllers.clear()
     catalog.value = null; changes.value = []; drafts.value = {}; pending.value = {}; queryUnknown.value = {}; busy.value = {}
     loading.value = false; error.value = ''; recordsError.value = ''; storageError.value = ''
-    if (available.value && !disposed) { recover(); if (polling) void observe() }
+    if (available.value && !disposed) { recover(); if (polling) void observe(true) }
   }
   const stop = watch([scope, identity, agentId, () => read(enabled)], (value, prior) => {
     if (!prior || value[0] !== prior[0] || value[1] !== prior[1]) identityRevoked.value = false
     reset()
   }, { immediate: true, flush: 'sync' })
   const unregister = registerIdentityCleanup(() => { identityRevoked.value = true; reset() })
-  const dispose = () => { disposed = true; polling = false; stop(); unregister(); reset() }
+  const dispose = () => {
+    disposed = true; polling = false; stop(); stopObservationWatch(); unregister(); reset()
+    documentRef?.removeEventListener?.('visibilitychange', onVisibility)
+    windowRef?.removeEventListener?.('focus', onForeground)
+    windowRef?.removeEventListener?.('storage', onStorage)
+  }
   if (getCurrentScope()) onScopeDispose(dispose)
   return { catalog, items, changes, drafts, pending, busy, queryUnknown, loading, error, recordsError, storageError, available,
     prepare, setApprovedPermissions, canPrepare, requestQuote, submit, retry: key => changeAction(key, 'RETRY'), reconcile: key => changeAction(key, 'RECONCILE'),

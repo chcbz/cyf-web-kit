@@ -1180,6 +1180,8 @@ watch(homeMode, mode => {
 })
 const handleDocumentVisibility = () => {
   documentPreviewVisible.value = typeof document === 'undefined' || !document.hidden
+  if (document.visibilityState === 'hidden') cancelHostedPointWait({ clear: false })
+  else if (hostedPointFlow.value?.agentId) void pollHostedPointRoster(hostedPointFlow.value)
 }
 const handlePreviewSceneState = state => {
   previewSceneState.value = state || 'loading'
@@ -1546,10 +1548,14 @@ const returnToHostedPointTask = async (context, agent) => {
   showToast(`${portraitShortName(agent)} 已在线；请在原榜文中明确点将`)
   return true
 }
+let hostedPointRosterFlight = null
 const pollHostedPointRoster = async context => {
-  if (!isCurrentHostedPointFlow(context)) return
-  await loadAgents()
-  if (!isCurrentHostedPointFlow(context)) return
+  if (!isCurrentHostedPointFlow(context) || document.visibilityState === 'hidden' || hostedPointRosterFlight === context) return
+  cancelHostedPointWait({ clear: false })
+  hostedPointRosterFlight = context
+  try { await loadAgents() }
+  finally { if (hostedPointRosterFlight === context) hostedPointRosterFlight = null }
+  if (!isCurrentHostedPointFlow(context) || document.visibilityState === 'hidden') return
   const agent = operableRosterAgents.value.find(item => isHostedPointAgentOnline(item, context))
   if (agent) {
     await returnToHostedPointTask(context, agent)

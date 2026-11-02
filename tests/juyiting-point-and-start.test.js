@@ -229,6 +229,24 @@ describe('persisted exact point-and-start source contract', () => {
     expect(h.flow.state.value.intent.postAcknowledged).to.equal(true)
   })
 
+  it('pauses preparation observation when hidden and fences queued callbacks after stop', async () => {
+    const doc = new EventTarget(); doc.visibilityState = 'hidden'
+    let reads = 0
+    const value = { ...projection(), bootstrapState: 'PENDING', stateVersion: '0', conversationId: null, initialRequestId: null }
+    const h = harness({ options: { documentRef: doc }, api: { get: async () => { reads++; return value } } }); h.seed()
+    const scheduled = []
+    h.flow.observeOriginal('task-1', fn => { scheduled.push(fn); return 999 })
+    await new Promise(resolve => setImmediate(resolve)); expect(reads).to.equal(0)
+    doc.visibilityState = 'visible'; doc.dispatchEvent(new Event('visibilitychange'))
+    await new Promise(resolve => setImmediate(resolve)); expect(reads).to.equal(1); expect(scheduled).to.have.length(1)
+    doc.visibilityState = 'hidden'; doc.dispatchEvent(new Event('visibilitychange')); scheduled[0]()
+    await new Promise(resolve => setImmediate(resolve)); expect(reads).to.equal(1)
+    h.flow.stopObservation()
+    doc.visibilityState = 'visible'; doc.dispatchEvent(new Event('visibilitychange')); scheduled[0]()
+    await new Promise(resolve => setImmediate(resolve)); expect(reads).to.equal(1)
+    h.flow.dispose()
+  })
+
   it('PENDING preparation uses no new first-turn/send/POST', async () => {
     const value = { ...projection(), bootstrapState: 'PENDING', stateVersion: '0', conversationId: null, initialRequestId: null }
     const h = harness({ api: { get: async () => ((value)) } }); h.seed()

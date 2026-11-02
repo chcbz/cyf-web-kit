@@ -13,7 +13,7 @@ const statusForProjection = projection => !projection ? 'UNKNOWN' : !projection.
  * original slot; new requests never negotiate a drawing lane or paid authority. */
 export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
   canAssign = () => false, createIdempotencyKey = () => globalThis.crypto.randomUUID(),
-  getContextGeneration = () => 0, onAssignmentConfirmed = async () => {}, onAdmitted = async () => false }) => {
+  getContextGeneration = () => 0, onAssignmentConfirmed = async () => {}, onAdmitted = async () => false, documentRef = globalThis.document }) => {
   const scope = computed(() => unref(typeof actorScopeKey === 'function' ? actorScopeKey() : actorScopeKey))
   const state = ref(initialState())
   const busy = ref(false)
@@ -21,9 +21,11 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
   let disposed = false
   let observationTimer = null
   let observationTaskId = null
+  let observationTick = null
+  let observationGeneration = 0
   const confirmedAssignments = new Set()
   const contextGeneration = computed(() => getContextGeneration())
-  const stopObservation = () => { if (observationTimer !== null) clearTimeout(observationTimer); observationTimer = null; observationTaskId = null }
+  const stopObservation = () => { observationGeneration++; observationTick = null; if (observationTimer !== null) clearTimeout(observationTimer); observationTimer = null; observationTaskId = null }
   const current = (captured, epoch, contextEpoch) => !disposed && scope.value === captured && generation === epoch &&
     contextGeneration.value === contextEpoch
   const stopWatch = watch([scope, contextGeneration], () => { generation++; confirmedAssignments.clear(); stopObservation(); state.value = initialState(); busy.value = false }, { flush: 'sync' })
@@ -115,17 +117,30 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
   })
   // Read-only observation has no retry budget or deadline. It ends only at a
   // terminal/non-current projection, explicit stop, identity generation change, or disposal.
+  const visible = () => documentRef?.visibilityState !== 'hidden'
   const observeOriginal = (taskId, schedule = callback => setTimeout(callback, 1000)) => {
     stopObservation(); observationTaskId = taskId
+    const owner = observationGeneration
+    let inFlight = false
+    const currentObservation = () => !disposed && observationTaskId === taskId && owner === observationGeneration
     const tick = async () => {
-      if (disposed || observationTaskId !== taskId) return
-      await checkOriginal(taskId)
-      if (disposed || observationTaskId !== taskId || state.value.status !== 'PREPARING') { stopObservation(); return }
-      observationTimer = schedule(() => { void tick() })
+      if (!currentObservation() || inFlight || !visible()) return
+      if (observationTimer !== null) clearTimeout(observationTimer); observationTimer = null
+      inFlight = true
+      try { await checkOriginal(taskId) } finally { inFlight = false }
+      if (!currentObservation()) return
+      if (state.value.status !== 'PREPARING') { stopObservation(); return }
+      if (visible()) observationTimer = schedule(() => { void tick() })
     }
+    observationTick = tick
     void tick()
     return true
   }
+  const onVisibility = () => {
+    if (observationTimer !== null) clearTimeout(observationTimer); observationTimer = null
+    if (visible()) void observationTick?.()
+  }
+  documentRef?.addEventListener?.('visibilitychange', onVisibility)
   const start = ({ task, agent }) => {
     // Capture the explicit clicked target and selection before any asynchronous
     // read. Editing the draft while GET runs must never alter the admitted body.
@@ -188,5 +203,5 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
     }
   })
   return { state, busy, start, checkOriginal, resumeOriginal, observeOriginal, stopObservation,
-    dispose: () => { disposed = true; generation++; stopObservation(); stopWatch(); busy.value = false } }
+    dispose: () => { documentRef?.removeEventListener?.('visibilitychange', onVisibility); disposed = true; generation++; stopObservation(); stopWatch(); busy.value = false } }
 }
