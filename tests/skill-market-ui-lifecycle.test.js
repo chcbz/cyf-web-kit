@@ -23,6 +23,23 @@ describe('SM-C1 actual management component lifecycle (no composable stub)', () 
     await button(wrapper, '确认安装').trigger('click'); await until(() => mock.requests.some(r => r.method === 'POST' && r.path === '/agt_demo/skill-changes'))
     expect(mock.requests.find(r => r.method === 'POST' && r.path === '/agt_demo/skill-changes').data).to.deep.equal(fixture('create-install').data)
   })
+  it('allows quoting the current candidate during background catalog polling', async () => {
+    await open()
+    const response = deferred(); const entered = deferred(); const get = mock.api.get
+    let holdNextRead = true
+    mock.api.get = (path, ...args) => {
+      if (path.endsWith('/skills') && holdNextRead) { holdNextRead = false; entered.resolve(); return response.promise }
+      return get(path, ...args)
+    }
+    try {
+      await entered.promise; await settle()
+      expect(button(wrapper, '获取报价').element.disabled).to.equal(false)
+      await button(wrapper, '获取报价').trigger('click')
+      await until(() => button(wrapper, '确认安装'))
+      expect(mock.requests.filter(r => r.method === 'POST' && r.path === '/skill-orders/quotes')).to.have.length(1)
+      expect(mock.requests.filter(r => r.method === 'POST' && r.path.endsWith('/skill-changes'))).to.have.length(0)
+    } finally { response.resolve(structuredClone(mock.list)) }
+  })
   it('does not disable a prepared confirmation during background catalog polling', async () => {
     await open()
     await button(wrapper, '获取报价').trigger('click'); await until(() => button(wrapper, '确认安装'))
@@ -39,6 +56,17 @@ describe('SM-C1 actual management component lifecycle (no composable stub)', () 
       await until(() => mock.requests.some(r => r.method === 'POST' && r.path === '/agt_demo/skill-changes'))
       expect(mock.requests.filter(r => r.method === 'POST' && r.path === '/agt_demo/skill-changes')).to.have.length(1)
     } finally { response.resolve(structuredClone(mock.list)) }
+  })
+  it('describes an installed instruction package as model-consumed, not an unavailable executable', async () => {
+    const row = mock.list.items[0]
+    row.installed = { skillInstallationId: 'si_instruction', version: { ...row.candidate, kind: 'INSTRUCTION', manifestSha256: null } }
+    row.desiredEnabled = true; row.admissionEnabled = false; row.allowedActions = ['VIEW']
+    row.runtime = { state: 'NOT_EXECUTABLE', reasonCode: null, observedAt: Date.now(), catalogRevision: '1' }
+    wrapper = mount(skillComponents().Management, { attachTo: document.body, props: { show: true, targetAgent: { agentId: 'agt_demo' }, actorScopeKey: 'actor-a', agentApi: mock.api }, global: { stubs: { teleport: true } } })
+    await until(() => button(wrapper, '详情')); await button(wrapper, '详情').trigger('click')
+    expect(wrapper.text()).to.include('原生技能包已就位（由模型使用）')
+    expect(wrapper.text()).not.to.include('已启用，待核验')
+    expect(wrapper.text()).to.include('已启用（原生技能）')
   })
   it('unknown permission keys remain literal escaped text, including inherited object names', async () => {
     const permissions = ['__proto__', 'constructor', '<img src=x onerror="alert(1)">']
