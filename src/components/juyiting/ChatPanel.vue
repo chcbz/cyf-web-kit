@@ -137,7 +137,7 @@
           role="group"
           aria-label="文字成果操作"
         >
-          <button type="button" @click="textOutputPreview = output" class="hall-tool" aria-label="预览文字成果" title="预览文字成果"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          <button type="button" @click="textOutputPreview = output" aria-label="预览文字成果" title="预览文字成果">预览</button>
           <button
             v-if="canReviewMessageOutputs"
             type="button"
