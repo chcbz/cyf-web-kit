@@ -175,15 +175,17 @@ describe('formal discussion terminal resource and toolbar layout', () => {
       expect(wrapper.getComponent(Picker).props('modelValue')).to.deep.equal([])
     } finally { wrapper.unmount() }
   })
-  it('provides an independent matter action slot outside the message/composer areas', () => {
-    const wrapper = mount(Panel, { props: { mentionLabel: () => '', senderText: () => '' }, slots: {
-      'matter-actions': '<button class="matter-action" aria-label="查看并验收"><svg width="20" height="20"><path d="M4 12l5 5L20 6" /></svg></button>'
-    } })
+  it('has no top-level acceptance slot while preserving refresh and history', () => {
+    const wrapper = mount(Panel, { props: { mentionLabel: () => '', senderText: () => '' } })
     try {
-      expect(wrapper.find('.toolbar-actions .matter-action').exists()).to.equal(true)
-      expect(wrapper.find('.hall-messages .matter-action').exists()).to.equal(false)
-      expect(wrapper.find('.composer-probe .matter-action').exists()).to.equal(false)
-      expect(descriptor.styles[0].content).to.include('.toolbar-actions :deep(.matter-action)')
+      expect(wrapper.find('[aria-label="刷新议事记录"]').exists()).to.equal(true)
+      expect(wrapper.find('[aria-label="议事记录"]').exists()).to.equal(true)
+      expect(descriptor.template.content).not.to.include('matter-actions')
+      expect(descriptor.styles[0].content).not.to.include('matter-action')
+      const bounty = readFileSync(new URL('../src/components/juyiting/BountyDiscussionPanel.vue', import.meta.url), 'utf8')
+      expect(bounty).not.to.include('review-delivery')
+      expect(bounty).not.to.include('统一验收')
+      expect(bounty).to.include('accept-output')
     } finally { wrapper.unmount() }
   })
 })

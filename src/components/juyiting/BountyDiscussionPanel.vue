@@ -50,17 +50,6 @@
         </label>
         <TaskSkillCapabilities v-if="typedEnabled" :projection="skillDirectory" :error="skillDirectoryError" :loading="skillDirectoryLoading" @refresh="$emit('skill-directory-refresh')" />
       </template>
-      <template #matter-actions>
-        <button
-          v-if="!taskCompleted && deliberationV2Enabled"
-          type="button"
-          class="matter-action"
-          aria-label="统一验收"
-          title="验收"
-          :disabled="reviewBusy || conversationBusy || voice?.voiceInteractionLocked"
-          @click="$emit('review-delivery')"
-        ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5h10M9 12h10M9 19h10M3 5l1 1 2-2M3 12l1 1 2-2M3 19l1 1 2-2" /></svg></button>
-      </template>
       <template #turn-actions="{ requestIds }">
         <BountyExecutionTermination
           v-if="requestIds.length"
@@ -139,7 +128,7 @@ const props = defineProps({
   identityScope: { type: String, default: '' },
 })
 
-const emit = defineEmits([...discussionPanelEmits, 'execution-settled', 'review-delivery', 'typed-reply', 'typed-resume', 'skill-directory-refresh', 'choose-delivery', 'outputs-change', 'accept-output', 'preview-ready'])
+const emit = defineEmits([...discussionPanelEmits, 'execution-settled', 'typed-reply', 'typed-resume', 'skill-directory-refresh', 'choose-delivery', 'outputs-change', 'accept-output', 'preview-ready'])
 
 const messageOutputs = ref([])
 const updateMessageOutputs = items => {

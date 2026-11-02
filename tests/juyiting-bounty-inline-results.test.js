@@ -96,8 +96,8 @@ describe('scoped bounty output actions live on the actual message cards', () => 
       await rows[1].get('.message-output-accept').trigger('click')
       expect(f.wrapper.emitted('accept-output')[1][0].requestId).to.equal('request-2')
       expect(f.calls.every(call => call.method === 'GET')).to.equal(true)
-      await f.wrapper.get('[aria-label="统一验收"]').trigger('click')
-      expect(f.wrapper.emitted('review-delivery')).to.deep.equal([[]])
+      expect(f.wrapper.find('[aria-label="统一验收"]').exists()).to.equal(false)
+      expect(f.wrapper.emitted('review-delivery')).to.equal(undefined)
       expect(f.wrapper.emitted('outputs-change').at(-1)[0]).to.have.length(2)
     } finally { f.wrapper.unmount() }
   })
@@ -192,6 +192,15 @@ describe('scoped bounty output actions live on the actual message cards', () => 
       f.fail(false); await f.wrapper.findAll('button').find(button => button.text() === '重新读取成果').trigger('click'); await settle()
       expect(f.wrapper.findAll('.message-output-accept')).to.have.length(2)
     } finally { f.wrapper.unmount() }
+  })
+  it('keeps thumbnail hit area borderless and image-sized without losing keyboard focus', () => {
+    const { descriptor } = parse(source('HallMessageMedia'))
+    const css = descriptor.styles.map(style => style.content).join('\n')
+    const rule = css.match(/\.image-button \{([^}]+)\}/)[1]
+    expect(rule).to.include('border: 0')
+    expect(rule).to.include('align-self: flex-start')
+    expect(rule).to.include('width: fit-content')
+    expect(css).to.include('.image-button:focus-visible')
   })
   it('keeps completed text previews/version acceptance scoped to the exact assistant message and task', async () => {
     const components = createComponents({ execute: async () => { throw new Error('no write') } })
