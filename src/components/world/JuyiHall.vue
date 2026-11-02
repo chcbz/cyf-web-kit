@@ -329,7 +329,7 @@
             v-if="panelFrames.includes('tasks')"
             v-show="renderedPanel === 'tasks' && !formalTaskRef"
             ref="bountyPanelRef"
-            v-model:task-ability-filter="taskAbilityFilter"
+            v-model:task-agent-filter="taskAgentFilter"
             v-model:task-keyword="taskKeyword"
             embedded-hall
             :detail-allowed="canOpenPanelDetail"
@@ -367,7 +367,7 @@
             :selected-agent="selectedAgent"
             :operable-agents="operableRosterAgents"
             :selected-task="selectedTask"
-            :task-ability-options="taskAbilityOptions"
+            :task-agent-options="taskAgentOptions"
             :task-state-class="taskStateClass"
             :task-status-count="taskStatusCount"
             :task-status-filter="taskStatusFilter"
@@ -1315,8 +1315,8 @@ const {
   rosterLoading,
   setAgentFilter,
   setTaskStatusFilter,
-  taskAbilityFilter,
-  taskAbilityOptions,
+  taskAgentFilter,
+  taskAgentOptions,
   taskKeyword,
   taskCountsError,
   taskCountsLoading,
@@ -2211,7 +2211,7 @@ const {
     selectedTask.value = receipt.task
     markTaskCreated(receipt.task)
     playSuccess()
-    showToast('需求已保存，待确认承办；确认后才交给好汉办理。')
+    showToast('需求已保存，待承办；确认后才交给好汉办理。')
     void openPendingTaskDetail(receipt.task)
     return true
   }

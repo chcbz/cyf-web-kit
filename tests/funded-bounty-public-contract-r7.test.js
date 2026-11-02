@@ -77,7 +77,7 @@ const panelProps = recovery => ({
   selectedTask: null,
   selectedAgent: null,
   recommendedAgents: [],
-  taskAbilityOptions: [],
+  taskAgentOptions: [],
   taskStatusFilters: [],
   fundedPreviewEnabled: true,
   fundedCreateRecovery: recovery,

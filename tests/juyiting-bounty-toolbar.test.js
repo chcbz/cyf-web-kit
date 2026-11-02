@@ -19,13 +19,13 @@ const code = compileScript(descriptor, { id: 'bounty-toolbar-test', inlineTempla
   .replace('export default', 'return')
 const Panel = new Function('imports', code)(imports)
 const props = {
-  embeddedHall: true, taskAbilityOptions: ['绘画'],
+  embeddedHall: true, taskAgentOptions: [{ agentId: 'agent-a', displayName: '同名Agent' }, { agentId: 'agent-b', displayName: '同名Agent' }],
   abilityText: () => '', canAssign: () => false, formatTime: () => '', portraitName: () => '', portraitStyle: () => ({}),
   taskAgentMatchScore: () => 0, taskStateClass: () => '', taskStatusCount: () => 0, taskStatusText: () => ''
 }
 
 describe('Bounty task toolbar', () => {
-  it('shows only search, ability filter and accessible refresh in the embedded toolbar', async () => {
+  it('shows only search, assignee filter and accessible refresh in the embedded toolbar', async () => {
     const wrapper = mount(Panel, { props })
     try {
       const toolbar = wrapper.get('.panel-toolbar')
@@ -34,12 +34,12 @@ describe('Bounty task toolbar', () => {
       expect(toolbar.find('.task-draft-actions').exists()).to.equal(false)
       expect(wrapper.find('.task-create-form').exists()).to.equal(false)
       expect(toolbar.get('input').attributes('aria-label')).to.equal('搜索事项名称或编号')
-      expect(toolbar.get('select').attributes('aria-label')).to.equal('筛选所需本领')
+      expect(toolbar.get('select').attributes('aria-label')).to.equal('筛选承接Agent')
       await toolbar.get('input').setValue(' 434 ')
       expect(wrapper.emitted('update:taskKeyword').at(-1)).to.deep.equal(['434'])
       await toolbar.get('input').trigger('keyup.enter')
-      await toolbar.get('select').setValue('绘画')
-      expect(wrapper.emitted('update:taskAbilityFilter').at(-1)).to.deep.equal(['绘画'])
+      await toolbar.get('select').setValue('agent-b')
+      expect(wrapper.emitted('update:taskAgentFilter').at(-1)).to.deep.equal(['agent-b'])
       await toolbar.get('[aria-label="刷新事项"]').trigger('click')
       expect(wrapper.emitted('load-tasks')).to.have.length(3)
       expect(wrapper.emitted('create-task')).to.equal(undefined)

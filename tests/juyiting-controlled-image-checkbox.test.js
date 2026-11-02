@@ -26,7 +26,7 @@ const task = (id, taskVersion = '6', requirementRevision = '3') => ({ id, title:
 const props = () => ({ embeddedHall: true, tasks: [], selectedTask: task('task-a'), selectedAgent: { agentId: 'agent-a' },
   assigneeCandidates: [{ agentId: 'agent-a', displayName: '吴用', providerDisplayName: null, isMine: true, availability: 'offline' }],
   operableAgents: [{ agentId: 'agent-a', name: '吴用', canOperate: true, status: 'online' }], recommendedAgents: [],
-  taskAbilityOptions: [], taskStatusFilters: [], abilityText: () => '', canAssign: () => true,
+  taskAgentOptions: [], taskStatusFilters: [], abilityText: () => '', canAssign: () => true,
   formatTime: () => '', portraitName: () => '', portraitStyle: () => ({}), taskAgentMatchScore: () => 0,
   taskStateClass: () => '', taskStatusCount: () => 0, taskStatusText: () => '' })
 describe('unified generic point detail replaces drawing-specific confirmation', () => {

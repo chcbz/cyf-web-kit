@@ -1644,7 +1644,7 @@ describe('JuyiHall component behavior', () => {
       embeddedHall: true, tasks: [task], selectedTask: task, recommendedAgents: agents,
       recommendationState: state, abilityText: () => '', canAssign: () => true,
       formatTime: v => v, portraitName: a => a.displayName, portraitStyle: () => ({}),
-      taskStateClass: () => '', taskStatusText: () => '待确认承办', taskStatusCount: () => 1, taskStatusFilters: []
+      taskStateClass: () => '', taskStatusText: () => '待承办', taskStatusCount: () => 1, taskStatusFilters: []
     } })
     try {
       await wrapper.find('.task-card').trigger('click')
@@ -1740,8 +1740,8 @@ describe('JuyiHall component behavior', () => {
       embeddedHall: true, tasks: [task], selectedTask: task, recommendedAgents: agents, operableAgents: agents,
       abilityText: () => '', canAssign: (task, agent) => Boolean(task && agent), formatTime: v => v,
       portraitName: a => a.name, portraitStyle: () => ({}), taskAgentMatchScore: () => 90,
-      taskStateClass: () => '', taskStatusText: () => '待确认承办', taskStatusCount: () => 1,
-      taskStatusFilters: [{ label: '待确认承办', value: 'PENDING_ASSIGNMENT' }, { label: '历史', value: 'HISTORY' }, { label: '待核对', value: 'UNKNOWN' }]
+      taskStateClass: () => '', taskStatusText: () => '待承办', taskStatusCount: () => 1,
+      taskStatusFilters: [{ label: '待承办', value: 'PENDING_ASSIGNMENT' }, { label: '历史', value: 'HISTORY' }, { label: '待核对', value: 'UNKNOWN' }]
     } })
     try {
       expect(wrapper.findAll('.task-status-tabs button')).to.have.length(2)
@@ -1770,7 +1770,7 @@ describe('JuyiHall component behavior', () => {
       embeddedHall: true, tasks: [task], selectedTask: task, assigneeCandidates: candidates,
       candidatesTaskId: task.id, recommendedAgents: [], recommendationState: { state: 'NO_MATCH' },
       abilityText: () => '', canAssign: () => true, formatTime: v => v, portraitName: a => a.name,
-      portraitStyle: () => ({}), taskStateClass: () => '', taskStatusText: () => '待确认承办',
+      portraitStyle: () => ({}), taskStateClass: () => '', taskStatusText: () => '待承办',
       taskStatusCount: () => 1, taskStatusFilters: []
     } })
     await wrapper.find('.task-card').trigger('click')
@@ -1821,7 +1821,7 @@ describe('JuyiHall component behavior', () => {
         selectedTask,
         selectedAgent: null,
         recommendedAgents: [agent],
-        taskAbilityOptions: ['planning'],
+        taskAgentOptions: ['planning'],
         taskStatusFilters: [],
         abilityText: item => (item.abilities || []).join(' / '),
         canAssign: (task, targetAgent) => Boolean(task && targetAgent),
@@ -1869,7 +1869,7 @@ describe('JuyiHall component behavior', () => {
         selectedTask,
         selectedAgent: null,
         recommendedAgents: [],
-        taskAbilityOptions: ['planning'],
+        taskAgentOptions: ['planning'],
         taskStatusFilters: [],
         abilityText: item => (item.abilities || []).join(' / '),
         canAssign: (task, targetAgent) => Boolean(task && targetAgent),
@@ -1912,7 +1912,7 @@ describe('JuyiHall component behavior', () => {
         selectedAgent: null,
         recommendedAgents: agents,
         operableAgents: agents,
-        taskAbilityOptions: ['planning'],
+        taskAgentOptions: ['planning'],
         taskStatusFilters: [],
         abilityText: item => (item.abilities || []).join(' / '),
         canAssign: () => true,
@@ -1974,7 +1974,7 @@ describe('JuyiHall component behavior', () => {
         selectedAgent: hostedAgent,
         recommendedAgents: [{ ...hostedAgent }, legacyAgent],
         operableAgents: [hostedAgent, legacyAgent],
-        taskAbilityOptions: [],
+        taskAgentOptions: [],
         taskStatusFilters: [],
         abilityText: item => (item.abilities || []).join(' / '),
         canAssign: (task, agent) => Boolean(task && agent),
@@ -2019,7 +2019,7 @@ describe('JuyiHall component behavior', () => {
         selectedAgent: agent,
         recommendedAgents: [agent],
         operableAgents: [agent],
-        taskAbilityOptions: ['planning'],
+        taskAgentOptions: ['planning'],
         taskStatusFilters: [],
         abilityText: item => (item.abilities || []).join(' / '),
         canAssign: () => true,
@@ -2060,7 +2060,7 @@ describe('JuyiHall component behavior', () => {
         selectedTask,
         selectedAgent: null,
         recommendedAgents: [],
-        taskAbilityOptions: ['planning'],
+        taskAgentOptions: ['planning'],
         taskStatusFilters: [],
         abilityText: item => (item.abilities || []).join(' / '),
         canAssign: () => false,
@@ -2879,7 +2879,7 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
     catalogError: scalar, catalogLoading: Vue.ref(false), filteredAgents: value, hiddenAgentCount: Vue.ref(0), loadAgents: async () => { counters.loads.agents += 1 }, loadPersonaCatalog: asyncNoop, loadRosterAgents: asyncNoop, loadTasks: async () => { counters.loads.tasks += 1 }, loadTaskDetail: asyncNoop, loadTaskRecommendations: asyncNoop,
     operableRosterAgents: Vue.ref([{ agentId: 'agent-o04', name: '显式 roster 好汉' }]),
     mapAgents: value, mapError: scalar, personaCatalog: value, recommendedAgents: value, rosterError: scalar, rosterLoading: Vue.ref(false), setAgentFilter: asyncNoop, setTaskStatusFilter: asyncNoop,
-    taskAbilityFilter: scalar, taskAbilityOptions: value, taskCountsError: scalar, taskCountsLoading: Vue.ref(false), taskKeyword: scalar, tasks: value, tasksError: scalar, tasksLoading: Vue.ref(false), taskStatusCount: () => 0, taskStatusFilter: scalar, unbindPersona: asyncNoop, visibleAgents: value
+    taskAgentFilter: scalar, taskAgentOptions: value, taskCountsError: scalar, taskCountsLoading: Vue.ref(false), taskKeyword: scalar, tasks: value, tasksError: scalar, tasksLoading: Vue.ref(false), taskStatusCount: () => 0, taskStatusFilter: scalar, unbindPersona: asyncNoop, visibleAgents: value
   }
   const panelHelpers = counters.panelHelpers || {}
   return {
@@ -2892,7 +2892,7 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
     resolveAccountDisplayName, createHydratedIdentityScope, hasHydratedIdentity,
     isEconomyPreviewBuildEnabled: () => Boolean(economyCapability), isEconomyPreviewCapability: capability => Boolean(capability && capability.principalScopeFingerprint === economyCapability?.principalScopeFingerprint), loadEconomyPreviewCapability: async () => economyCapability,
     projectHallTask: taskPresentation.projectHallTask,
-    roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [{ value: 'open', label: '待确认承办', className: 'task-state-open' }],
+    roleDialogues: { default: [''] }, statusFilters: [], taskStatusFilters: [{ value: 'open', label: '待承办', className: 'task-state-open' }],
     useHallData: ({ selectedAgent, selectedTask }) => { counters.owners.data += 1; selectedAgent.value = { agentId: 'agent-o04', name: 'sentinel-agent' }; selectedTask.value = counters.initialSelectedTask || { id: 'task-o04', title: 'sentinel-task' }; return hallData },
     useHallHomeMode: () => ({ homeMode: Vue.ref('map'), isOverviewHome: Vue.ref(false), setHomeMode: noop }),
     useHallExperienceMode: () => ({ experienceMode: mode, isMobileCoarse: Vue.ref(true), orientationHint: scalar, orientationRequestPending: Vue.ref(false), requestLandscape: asyncNoop, requestPortrait: asyncNoop }),
@@ -3348,7 +3348,7 @@ describe('O04 actual-mounted JuyiHall panel identity', () => {
       await Vue.nextTick()
       expect(state.panelFrames).to.deep.equal(['tasks'])
       expect(wrapper.find('.bounty-panel').exists()).to.equal(true)
-      expect(wrapper.find('.bounty-panel').text()).to.include('待确认承办')
+      expect(wrapper.find('.bounty-panel').text()).to.include('待承办')
       expect(state.panelDepth).to.equal(2)
       expect(state.openPanel('agents')).to.equal(true)
       await Vue.nextTick()

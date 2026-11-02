@@ -6,7 +6,7 @@ const source = path => readFileSync(new URL(`../src/${path}`, import.meta.url), 
 describe('beta workbench copy boundaries', () => {
   it('renames presentation without granting execution or acceptance', () => {
     const pending = projectHallTask({ task: { status: 'open' } })
-    expect(pending.label).to.equal('待确认承办')
+    expect(pending.label).to.equal('待承办')
     expect(pending.phase).to.equal('PENDING_ASSIGNMENT')
     expect(pending.actions).to.deep.equal(['VIEW', 'ASSIGN'])
     expect(taskStatusFilters.find(filter => filter.value === pending.phase).label).to.equal(pending.label)

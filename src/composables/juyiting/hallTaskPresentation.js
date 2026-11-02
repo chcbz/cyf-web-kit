@@ -6,7 +6,7 @@ const rawPhases = Object.freeze({
 })
 export const hallTaskPhases = Object.freeze(['PENDING_ASSIGNMENT', 'IN_PROGRESS', 'PENDING_ACCEPTANCE', 'COMPLETED', 'HISTORY', 'UNKNOWN'])
 const meta = Object.freeze({
-  PENDING_ASSIGNMENT: ['待确认承办', 'neutral', 'task-state-open'],
+  PENDING_ASSIGNMENT: ['待承办', 'neutral', 'task-state-open'],
   IN_PROGRESS: ['进行中', 'info', 'task-state-running'],
   PENDING_ACCEPTANCE: ['待验收', 'warning', 'task-state-reviewing'],
   COMPLETED: ['已完成', 'positive', 'task-state-done'],

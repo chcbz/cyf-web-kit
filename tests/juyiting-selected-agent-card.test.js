@@ -94,7 +94,7 @@ const createHallMocks = ({ SelectedAgentCard, counters }) => {
     applySceneEvent: noop, applySceneSnapshot: noop, agentFilter: text, agents: Vue.ref([selected]), bindPersona: asyncNoop, canAssign: () => true,
     filteredAgents: Vue.ref([selected]), hiddenAgentCount: Vue.ref(0), loadAgents: asyncNoop, loadTasks: asyncNoop, loadTaskDetail: asyncNoop, loadTaskRecommendations: asyncNoop,
     mapAgents: Vue.ref([selected]), operableRosterAgents: Vue.ref([selected]), personaCatalog: list, recommendedAgents: list, setAgentFilter: asyncNoop, setTaskStatusFilter: asyncNoop,
-    taskAbilityFilter: text, taskAbilityOptions: list, taskKeyword: text, tasks: list, taskStatusCount: Vue.ref({}), taskStatusFilter: text,
+    taskAgentFilter: text, taskAgentOptions: list, taskKeyword: text, tasks: list, taskStatusCount: Vue.ref({}), taskStatusFilter: text,
     unbindPersona: asyncNoop, visibleAgents: Vue.ref([selected])
   }
   const conversationDraft = Vue.ref('旧话头')
