@@ -536,3 +536,65 @@ describe('backend scene stream recovery policy', () => {
     }
   })
 })
+
+
+describe('scene fallback polling lifecycle', () => {
+  it('skips hidden ticks and shares slow snapshot reads with foreground/retry', async () => {
+    const listeners = new Map()
+    const documentRef = { visibilityState: 'visible',
+      addEventListener: (name, fn) => listeners.set(name, fn),
+      removeEventListener: name => listeners.delete(name) }
+    let poll; let calls = 0; let release
+    const state = useHallBackendSceneState({
+      sseEnabled: false, documentRef,
+      setIntervalFn: fn => { poll = fn; return 1 }, clearIntervalFn: () => {},
+      agentApi: { execute: async () => {
+        calls++
+        if (calls === 1) return snapshot(1)
+        return new Promise(resolve => { release = resolve })
+      } }
+    })
+    try {
+      await state.start()
+      documentRef.visibilityState = 'hidden'
+      await poll()
+      expect(calls).to.equal(1)
+      documentRef.visibilityState = 'visible'
+      listeners.get('visibilitychange')()
+      const tick1 = poll(); const tick2 = poll(); const retry = state.retry()
+      expect(calls).to.equal(2)
+      release(snapshot(2))
+      await Promise.all([tick1, tick2, retry])
+      expect(state.sceneVersion.value).to.equal('2')
+      state.stop()
+      await poll()
+      expect(calls).to.equal(2)
+      expect(listeners.size).to.equal(0)
+    } finally { state.dispose() }
+  })
+
+  it('does not share or publish a stopped lifecycle read after restart', async () => {
+    let poll; let calls = 0; let rejectOld
+    const state = useHallBackendSceneState({
+      sseEnabled: false, documentRef: { visibilityState: 'visible' },
+      setIntervalFn: fn => { poll = fn; return 1 }, clearIntervalFn: () => {},
+      agentApi: { execute: async () => {
+        calls++
+        if (calls === 2) return new Promise((resolve, reject) => { rejectOld = reject })
+        return snapshot(calls)
+      } }
+    })
+    try {
+      await state.start()
+      const old = poll()
+      state.stop()
+      await state.start()
+      rejectOld(new Error('late old failure'))
+      await old
+      expect(calls).to.equal(3)
+      expect(state.sceneVersion.value).to.equal('3')
+      expect(state.snapshotError.value).to.equal('')
+      expect(state.degraded.value).to.equal(false)
+    } finally { state.dispose() }
+  })
+})

@@ -991,7 +991,7 @@ export const useHallConversation = ({
               recoveringReplyTurn = null
               isAwaitingReply.value = false
               isStreaming.value = false
-              stopHallReplyPolling()
+              if (!durableBusy.value) stopHallReplyPolling()
             } else {
               isAwaitingReply.value = true
               isStreaming.value = false
@@ -1007,7 +1007,7 @@ export const useHallConversation = ({
           } else if (hasResolvedAgentReply(messages.value)) {
             isAwaitingReply.value = false
             isStreaming.value = false
-            stopHallReplyPolling()
+            if (!durableBusy.value) stopHallReplyPolling()
           }
           if (activeRequest.value?.requestId) syncDurablePresentation()
           if (isSelectedLoad) conversationLoadError.value = ''
@@ -1263,15 +1263,22 @@ export const useHallConversation = ({
     const sendToken = activeSendToken
     const pollCurrent = () => guardCurrent(guard) && generation === lifecycleGeneration &&
       replyGeneration === hallReplyGeneration && (!activeSendToken || activeSendToken === sendToken) && conversationId.value === id
+    let inFlight = false
     const timer = window.setInterval(async () => {
+      if (hallReplyPollTimer !== timer || inFlight) return
       if (!pollCurrent() || !isAwaitingReply.value) {
         if (hallReplyPollTimer === timer) stopHallReplyPolling()
         return
       }
-      // Current protocol completion comes from the request, not just a message in history.
-      if (activeRequest.value?.requestId) await recoverUnknownRequest(activeRequest.value.requestId, guard)
-      if (!pollCurrent()) return
-      await loadHallConversationContent(id)
+      inFlight = true
+      try {
+        // Current protocol completion comes from the request, not just a message in history.
+        if (activeRequest.value?.requestId) await recoverUnknownRequest(activeRequest.value.requestId, guard)
+        if (!pollCurrent()) return
+        await loadHallConversationContent(id)
+      } finally {
+        inFlight = false
+      }
     }, 2000)
     hallReplyPollTimer = timer
   }

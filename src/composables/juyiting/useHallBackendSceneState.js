@@ -46,6 +46,7 @@ export const useHallBackendSceneState = ({
   let streamGeneration = 0
   let reconnectTimer = null
   let pollTimer = null
+  let snapshotFlight = null
   let resyncPromise = null
   let startPromise = null
   let lifecycleGeneration = 0
@@ -72,7 +73,18 @@ export const useHallBackendSceneState = ({
     }
   }
 
-  const fetchSnapshot = async (generation = lifecycleGeneration) => {
+  // Focus, fallback ticks and resync share one read within the same identity lifecycle.
+  const fetchSnapshot = (generation = lifecycleGeneration) => {
+    if (snapshotFlight?.generation === generation) return snapshotFlight.promise
+    const flight = { generation, promise: null }
+    snapshotFlight = flight
+    flight.promise = readSnapshot(generation).finally(() => {
+      if (snapshotFlight === flight) snapshotFlight = null
+    })
+    return flight.promise
+  }
+
+  const readSnapshot = async (generation) => {
     snapshotLoading.value = true
     snapshotError.value = ''
     try {
@@ -95,10 +107,10 @@ export const useHallBackendSceneState = ({
       onSnapshot(published)
       return published
     } catch (error) {
-      snapshotError.value = error?.message || '暂时无法加载场景，请重试。'
+      if (active && generation === lifecycleGeneration) snapshotError.value = error?.message || '暂时无法加载场景，请重试。'
       throw error
     } finally {
-      snapshotLoading.value = false
+      if (generation === lifecycleGeneration) snapshotLoading.value = false
     }
   }
 
@@ -126,8 +138,13 @@ export const useHallBackendSceneState = ({
 
   const startPolling = () => {
     if (!active || pollTimer != null) return
-    pollTimer = setIntervalFn(() => fetchSnapshot(lifecycleGeneration)
-      .catch(() => { degraded.value = true }), POLL_INTERVAL)
+    pollTimer = setIntervalFn(() => {
+      if (!active || !isVisible(documentRef)) return
+      const generation = lifecycleGeneration
+      return fetchSnapshot(generation).catch(() => {
+        if (active && generation === lifecycleGeneration) degraded.value = true
+      })
+    }, POLL_INTERVAL)
   }
 
   const switchToPolling = () => {
@@ -352,6 +369,8 @@ export const useHallBackendSceneState = ({
     }
     for (const controller of pendingRequests) controller.abort()
     pendingRequests.clear()
+    snapshotFlight = null
+    snapshotLoading.value = false
     for (const cancel of [...phaseRetryWaiters]) cancel()
     closeStream()
   }

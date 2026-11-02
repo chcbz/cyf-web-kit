@@ -1708,6 +1708,8 @@ describe('Hall stream transport failure read-only recovery', () => {
     let postCount = 0
     let persistedFinal = false
     let requestComplete = false
+    let requestGate = null
+    let requestReads = 0
     let conversation
     try {
       conversation = options({
@@ -1721,6 +1723,8 @@ describe('Hall stream transport failure read-only recovery', () => {
         get: async path => {
           if (path === '/capabilities') return getHallCapabilities(path)
           expect(path).to.equal(`/requests/${conversation.activeRequest.value.requestId}`)
+          requestReads++
+          if (requestGate) await requestGate.promise
           return ({ requestId: conversation.activeRequest.value.requestId, requestRevision: '1',
             conversationId: '1001', conversationGeneration: '1', state: requestComplete ? 'COMPLETED' : 'RUNNING', stateVersion: requestComplete ? '2' : '1',
             turns: [{ turnId: 'recovery-turn', requestId: conversation.activeRequest.value.requestId, requestRevision: '1',
@@ -1742,6 +1746,18 @@ describe('Hall stream transport failure read-only recovery', () => {
       expect(conversation.isAwaitingReply.value).to.equal(true)
       expect(conversation.messages.value.some(message => message.content.includes('尚无可核验'))).to.equal(true)
       expect(callbacks).to.have.length(0)
+      // A slow authoritative read must not spawn another history/readback cycle.
+      requestGate = deferred()
+      const pendingPoll = poll()
+      await Promise.resolve()
+      const readsDuringFlight = requestReads
+      const historyDuringFlight = readCount
+      await poll()
+      expect(requestReads).to.equal(readsDuringFlight)
+      expect(readCount).to.equal(historyDuringFlight)
+      requestGate.resolve()
+      await pendingPoll
+      requestGate = null
       persistedFinal = true
       await poll()
       expect(callbacks.map(value => value.messageId)).to.deep.equal(['902'])
@@ -1752,6 +1768,9 @@ describe('Hall stream transport failure read-only recovery', () => {
       expect(callbacks.map(value => value.messageId)).to.deep.equal(['902'])
       expect(conversation.isAwaitingReply.value).to.equal(false)
       expect(postCount).to.equal(1)
+      const terminalReadCount = readCount
+      await poll() // A callback already queued before clearInterval must be inert.
+      expect(readCount).to.equal(terminalReadCount)
     } finally {
       conversation?.disposeHallConversation()
       window.setInterval = setInterval
