@@ -41,7 +41,6 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14" /></svg>
         </button>
 
-        <slot name="matter-actions"></slot>
       </div>
     </div>
 
@@ -723,8 +722,7 @@ button:disabled {
   min-width: 0;
 }
 
-.icon-button,
-.toolbar-actions :deep(.matter-action) {
+.icon-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -741,20 +739,17 @@ button:disabled {
   white-space: nowrap;
 }
 
-.icon-button svg,
-.toolbar-actions :deep(.matter-action svg) {
+.icon-button svg {
   width: 20px;
   height: 20px;
   flex: 0 0 auto;
 }
 
-.icon-button:hover:not(:disabled),
-.toolbar-actions :deep(.matter-action:hover:not(:disabled)) {
+.icon-button:hover:not(:disabled) {
   background: #f2e8d8;
 }
 
-.icon-button:focus-visible,
-.toolbar-actions :deep(.matter-action:focus-visible) {
+.icon-button:focus-visible {
   outline: 2px solid #7f4a22;
   outline-offset: 2px;
 }

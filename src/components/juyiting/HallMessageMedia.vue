@@ -120,7 +120,8 @@ onBeforeUnmount(discard)
 .media-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .media-actions > button { min-height: 40px; padding: 6px 12px; border: 1px solid var(--hall-border, #e3e5dc); border-radius: 7px; background: var(--hall-surface, #fffefa); color: var(--hall-text, #242e2b); font: inherit; cursor: pointer; }
 .media-asset p { color: #a14132; margin: 0; }
-.image-button { display: block; max-width: 100%; padding: 0; background: transparent; cursor: zoom-in; }
+.image-button { display: block; align-self: flex-start; width: fit-content; max-width: 100%; padding: 0; border: 0; box-shadow: none; background: transparent; cursor: zoom-in; }
+.image-button:focus-visible { outline: 2px solid #923f30; outline-offset: 2px; }
 .image-button img { display: block; max-width: min(100%, 280px); max-height: 230px; object-fit: contain; }
 .image-overlay { position:fixed; inset:0; z-index:1400; box-sizing:border-box; width:min(960px,calc(100vw - 32px)); max-width:calc(100vw - 32px); max-height:calc(100dvh - 32px); margin:auto; border:1px solid #d8d8ce; border-radius:12px; padding:16px; background:#fffefa; color:#242e2b; }
 .image-overlay[open] { display:flex; flex-direction:column; align-items:center; gap:12px; }

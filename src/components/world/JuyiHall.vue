@@ -667,7 +667,6 @@
             :deliberation-v2-enabled="multimediaDeliberationUiEnabled"
             :review-context="deliveryReview.context.value"
             :review-busy="deliveryReview.operation.value.busy || deliveryReview.loading.value || selectedOutputReview.busy.value"
-            @review-delivery="openSelectedOutputReview()"
             :typed-outcomes="typedDeliberation.cards.value"
             :delivery-choices="typedDeliberation.deliveryChoices.value"
             :selected-delivery-id="typedDeliberation.selectedDeliveryId.value"
