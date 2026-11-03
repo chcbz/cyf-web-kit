@@ -1,3 +1,4 @@
+import { richDocumentSource } from '../src/utils/richDocumentPreview.js'
 import { strict as assert } from 'node:assert'
 import { describe, it } from 'mocha'
 import { ref } from 'vue'
@@ -63,7 +64,7 @@ describe('workspace general multimedia compatibility (no Provider)', () => {
     } finally { workspace.dispose() }
   })
 
-  it('stores arbitrary formats without granting active-content preview capability', async () => {
+  it('stores arbitrary formats while allowing only sandboxed static HTML document preview', async () => {
     for (const [filename, type, expected] of [
       ['page.html', 'text/html', 'text/html'], ['icon.svg', 'image/svg+xml', 'image/svg+xml'],
       ['archive.zip', 'application/zip', 'application/zip'], ['video.mp4', 'video/mp4', 'video/mp4'],
@@ -75,6 +76,7 @@ describe('workspace general multimedia compatibility (no Provider)', () => {
         calls.push(options)
         if (options.method === 'POST') return { operation: { operationId: 'op-a', state: 'COMMITTED' }, file: value.file, version: value.latestVersion }
         if (options.url.endsWith('/preview')) return { state: 'UNSUPPORTED', reason: 'No preview renderer' }
+        if (options.url.endsWith('/content')) return new Blob(['<h1>Static</h1><script>parent.pwned=1</script>'], { type: expected })
         return value
       } } })
       try {
@@ -82,7 +84,15 @@ describe('workspace general multimedia compatibility (no Provider)', () => {
         assert.ok(await workspace.upload(file), filename)
         assert.equal(calls[0].data.get('file').type, expected)
         await workspace.previewVersion('1')
-        assert.equal(workspace.preview.value.kind, 'unsupported')
+        assert.equal(workspace.preview.value.kind, expected === 'text/html' ? 'document' : 'unsupported')
+        if (expected === 'text/html') {
+          assert.equal(workspace.preview.value.documentKind, 'html')
+          assert.equal(calls.at(-1).needAuth, true)
+          assert.ok(calls.at(-1).url.endsWith('/versions/1/content'))
+          const doc = new DOMParser().parseFromString(richDocumentSource(workspace.preview.value.text, 'html'), 'text/html')
+          assert.equal(doc.querySelector('script'), null)
+          assert.equal(doc.querySelector('h1').textContent, 'Static')
+        }
         assert.deepEqual(objects, [])
       } finally { workspace.dispose() }
     }

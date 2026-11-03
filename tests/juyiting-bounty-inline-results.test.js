@@ -1,3 +1,4 @@
+import { richDocumentKind } from '../src/utils/richDocumentPreview.js'
 import { projectHallTask } from '../src/composables/juyiting/hallTaskPresentation.js'
 import * as discussionTurnHelpers from '../src/composables/juyiting/hallDiscussionTurns.js'
 import { useHallExecutionAbandonment } from '../src/composables/juyiting/useHallExecutionAbandonment.js'
@@ -30,7 +31,7 @@ const directory = () => ({ items: Vue.ref([]), links: Vue.ref([]), pendingWrites
   actionState: Vue.ref('idle'), writeNotice: Vue.ref(''), refresh: async () => true, load: async () => true,
   dispose: () => {}, retryWrite: () => {} })
 const createComponents = api => {
-  const deps = { projectHallTask, PdfDocumentPreview: { props: ['blob'], template: '<section class="pdf-preview-stub" />' }, ...discussionTurnHelpers, useHallExecutionAbandonment, ...outputCatalog, ...discussionContract, bountyDeliberationPresentation, useHallSkillResults, skillResultDataText,
+  const deps = { richDocumentKind, RichDocumentPreview: noRender, projectHallTask, PdfDocumentPreview: { props: ['blob'], template: '<section class="pdf-preview-stub" />' }, ...discussionTurnHelpers, useHallExecutionAbandonment, ...outputCatalog, ...discussionContract, bountyDeliberationPresentation, useHallSkillResults, skillResultDataText,
     revisionProgressPending, conversationAssetContentPath, safeMediaKind, safeAssetPreviewKind, revisionOf, createApi: () => api, saveOutputBlob: () => {},
     useHallConversationArchive: () => ({ statusFor: () => ({}), save: () => {}, check: () => {} }),
     marked: Object.assign(value => value, { setOptions: () => {} }), DOMPurify: { sanitize: value => value },
