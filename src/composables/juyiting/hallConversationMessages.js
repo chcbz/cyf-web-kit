@@ -48,6 +48,7 @@ export const normalizeHallMessage = (item, identity) => {
     senderName: isSelf ? '你' : fallbackSenderName(sender, normalizeSenderName(item.senderName) || normalizeSenderName(metadata.senderName)),
     agentId: metadata.agentId,
     requestId: typedId(metadata.requestId),
+    typedOutcomeId: typedId(metadata.outcomeId),
     jiacn: item.jiacn,
     ownerJiacn: item.ownerJiacn,
     isSelf,
@@ -62,6 +63,12 @@ export const normalizeHallMessage = (item, identity) => {
     statusText: metadata.partial === true && metadata.completionState === 'CANCELLED' ? '已停止（未完成）' : ''
   }
 }
+
+const outcomeDisplayFields = event => event?.typedOutcome ? ({
+  typedOutcomeId: typedId(event?.typedOutcome?.outcomeId),
+  typedOutcomeKind: event?.typedOutcome?.kind || '',
+  typedOutcomeTaskId: typedId(event?.typedOutcome?.taskId)
+}) : {}
 
 const JAVA_LONG_MAX = '9223372036854775807'
 
@@ -194,6 +201,7 @@ export const appendHallEventMessage = (state, event, identity) => {
       state.messages.splice(state.messages.indexOf(streamingMessage), 1)
     }
     existing.requestId = typedId(event.requestId) || existing.requestId
+    Object.assign(existing, outcomeDisplayFields(event))
     existing.content = event.content || existing.content
     existing.parts = mergeMessageParts(existing.parts, Array.isArray(event.parts) ? event.parts : [])
     existing.timestamp = event.timestamp || existing.timestamp
@@ -208,6 +216,7 @@ export const appendHallEventMessage = (state, event, identity) => {
   if (streamingMessage && event.senderType === 'agent') {
     streamingMessage.requestId = typedId(event.requestId) || streamingMessage.requestId
     streamingMessage.localId = localId
+    Object.assign(streamingMessage, outcomeDisplayFields(event))
     streamingMessage.content = event.content || streamingMessage.content
     streamingMessage.parts = mergeMessageParts(streamingMessage.parts, Array.isArray(event.parts) ? event.parts : [])
     streamingMessage.timestamp = event.timestamp || streamingMessage.timestamp
@@ -230,6 +239,7 @@ export const appendHallEventMessage = (state, event, identity) => {
     ownerJiacn: event.ownerJiacn,
     isSelf,
     turnId: finalTurnId,
+    ...outcomeDisplayFields(event),
     content: event.content || '',
     parts: mergeMessageParts([], Array.isArray(event.parts) ? event.parts : []),
     timestamp: event.timestamp || Date.now(),
@@ -283,6 +293,7 @@ const appendStreamAgentFinal = (state, event) => {
   message.senderName = senderName || message.senderName
   message.agentId = event.agentId || message.agentId
   message.turnId = finalTurnId || message.turnId
+  Object.assign(message, outcomeDisplayFields(event))
   message.content = event.content || message.content
   message.parts = mergeMessageParts(message.parts, Array.isArray(event.parts) ? event.parts : [])
   message.timestamp = event.timestamp || message.timestamp

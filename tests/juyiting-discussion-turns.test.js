@@ -108,3 +108,30 @@ describe('discussion user-facing content', () => {
     expect(inlineSkillResults([result], ['e1'])).to.deep.equal([result])
   })
 })
+
+describe('typed discussion live and reload rendering', () => {
+  it('does not expose unfinished stream text, but restores the final user answer', async () => {
+    const { discussionMessageText } = await import('../src/composables/juyiting/hallDiscussionTurns.js')
+    const streamed = { ...parent(), streaming: true, content: '请执行内部步骤' }
+    expect(discussionMessageText(project([streamed], [])[0])).to.equal('')
+    const answer = { ...streamed, streaming: false, typedOutcomeId: 'answer-1', typedOutcomeKind: 'ANSWER', typedOutcomeTaskId: 'task-1', content: '已为你调整时间。' }
+    expect(discussionMessageText(project([answer], [])[0])).to.equal(answer.content)
+    expect(discussionMessageText(streamed)).to.equal(streamed.content) // non-bounty/private retains streaming
+  })
+  it('holds persisted typed prose until the exact scoped outcome is available', async () => {
+    const { discussionMessageText } = await import('../src/composables/juyiting/hallDiscussionTurns.js')
+    const message = normalizeHallMessage({ id: 'reply-1', messageType: 'ASSISTANT', content: '请生成一张鸟的图片。', metadata: { outcomeId: 'outcome-1' } }, '')
+    expect(discussionMessageText(project([message], [])[0])).to.equal('')
+    expect(project([message], [])[0].turnAwaitingType).to.equal(true)
+    expect(discussionMessageText(project([message])[0])).to.equal('')
+    const answerProjection = projection(); answerProjection.outcome.kind = 'ANSWER'
+    expect(discussionMessageText(project([message], [answerProjection])[0])).to.equal(message.content)
+  })
+  it('uses an authoritative final event kind before its progress lookup arrives', async () => {
+    const { discussionMessageText } = await import('../src/composables/juyiting/hallDiscussionTurns.js')
+    const state = { conversationId: '42', messages: [] }
+    appendHallEventMessage(state, { type: 'agent_message', conversationId: '42', messageId: 'reply-1', senderType: 'agent', content: '请生成图片', typedOutcome: { outcomeId: 'outcome-1', taskId: 'task-1', kind: 'ACTION_REQUEST' } }, '')
+    expect(state.messages[0].typedOutcomeKind).to.equal('ACTION_REQUEST')
+    expect(discussionMessageText(project(state.messages, [])[0])).to.equal('')
+  })
+})

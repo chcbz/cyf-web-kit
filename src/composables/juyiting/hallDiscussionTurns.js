@@ -24,6 +24,15 @@ export const discussionTurns = ({ messages = [], projections = [], conversationI
     // Conflicting linkage stays separate, never picks an arbitrary reply.
     if (parents.size === 1) [...parents][0].turnRequestIds.push(child)
   }
+  for (const row of rows) {
+    if (!agentMessage(row)) continue
+    const typed = projections.find(projection => projection?.conversationId === conversationId &&
+      projection?.outcome?.taskId === taskId && projection.outcome.assistantMessageId === row.localId)
+    const knownKind = typed?.outcome?.kind || (row.typedOutcomeTaskId === taskId ? row.typedOutcomeKind : '')
+    row.turnActionRequest = knownKind === 'ACTION_REQUEST'
+    // Stream fragments cannot distinguish an answer from internal execution prose yet.
+    row.turnAwaitingType = Boolean(row.streaming || (row.typedOutcomeId && !knownKind))
+  }
   const consumed = new Set()
   for (const row of rows) {
     const parents = owners.get(row.requestId)
@@ -38,7 +47,7 @@ export const discussionTurns = ({ messages = [], projections = [], conversationI
 }
 
 // ACTION_REQUEST is control-plane prose, not a user answer. Keep the stored original intact.
-export const discussionMessageText = message => message?.turnProjections?.length ? '' : (message?.content || '')
+export const discussionMessageText = message => (message?.turnActionRequest || message?.turnAwaitingType || message?.turnProjections?.length) ? '' : (message?.content || '')
 export const discussionFooterStatus = (status, isTaskDiscussion) => isTaskDiscussion &&
   ['本轮回话已结束', '本轮结果已登记', '本轮成果已就绪'].includes(status) ? '' : status
 

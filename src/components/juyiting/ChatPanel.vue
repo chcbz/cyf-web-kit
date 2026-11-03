@@ -82,13 +82,15 @@
           <span v-if="message.streaming" class="message-state">正在回复…</span>
         </div>
         <div
-          v-if="message.turnProjections?.length"
+          v-if="message.turnProjections?.length || message.turnActionRequest"
           class="discussion-turn-progress"
           role="status"
           aria-live="polite"
         >
+          <span v-if="message.turnActionRequest && !message.turnProjections?.length">正在核对处理状态</span>
           <span v-for="projection in message.turnProjections" :key="projection.key || projection.outcome.outcomeId">{{ discussionTurnStatus(projection) }}</span>
         </div>
+        <p v-if="message.turnAwaitingType && !message.streaming" role="status">正在读取答复…</p>
         <div v-if="discussionMessageText(message)" class="message-content" v-html="renderMarkdown(discussionMessageText(message))"></div>
         <div v-if="isTaskDiscussion && message.typedTaskId === taskId && message.typedSourceSelectors?.length" class="message-parts" aria-label="本条消息资料">
           <article v-for="(source, index) in message.typedSourceSelectors" :key="index" class="task-material-reference">
@@ -154,7 +156,7 @@
           @reply="!serverTaskCompleted && $emit('typed-reply', $event)"
         />
         <slot name="turn-actions" :request-ids="message.turnRequestIds || []"></slot>
-        <small v-if="message.statusText && !message.turnProjections?.length" class="message-status">{{ message.statusText }}</small>
+        <small v-if="message.statusText && !message.turnProjections?.length && !message.turnActionRequest && !message.turnAwaitingType" class="message-status">{{ message.statusText }}</small>
       </div>
       <slot name="bounty-results"></slot>
       <p v-if="discussionFooterStatus(deliberationStatus, isTaskDiscussion) && !serverTaskCompleted" class="deliberation-status" :role="deliberationStatus.startsWith('停止失败') ? 'alert' : 'status'">{{ deliberationStatus }}</p>
