@@ -11,7 +11,7 @@ import * as outputCatalog from '../src/composables/juyiting/bountyOutputCatalog.
 import * as discussionContract from '../src/components/juyiting/discussionPanelContract.js'
 import { bountyDeliberationPresentation } from '../src/composables/juyiting/hallMultimediaDeliberationUi.js'
 import { useHallSkillResults } from '../src/composables/juyiting/useHallSkillResults.js'
-import { skillResultDataText } from '../src/composables/juyiting/hallSkillResults.js'
+import { skillResultDataText, skillResultStatus, inlineSkillResults } from '../src/composables/juyiting/hallSkillResults.js'
 import { revisionProgressPending, revisionProgressHint } from '../src/composables/juyiting/hallTypedDeliberation.js'
 import { conversationAssetContentPath, safeMediaKind, safeAssetPreviewKind, revisionOf } from '../src/composables/juyiting/hallMessageParts.js'
 
@@ -31,7 +31,7 @@ const directory = () => ({ items: Vue.ref([]), links: Vue.ref([]), pendingWrites
   actionState: Vue.ref('idle'), writeNotice: Vue.ref(''), refresh: async () => true, load: async () => true,
   dispose: () => {}, retryWrite: () => {} })
 const createComponents = api => {
-  const deps = { richDocumentKind, RichDocumentPreview: noRender, projectHallTask, PdfDocumentPreview: { props: ['blob'], template: '<section class="pdf-preview-stub" />' }, ...discussionTurnHelpers, useHallExecutionAbandonment, ...outputCatalog, ...discussionContract, bountyDeliberationPresentation, useHallSkillResults, skillResultDataText,
+  const deps = { richDocumentKind, RichDocumentPreview: noRender, projectHallTask, PdfDocumentPreview: { props: ['blob'], template: '<section class="pdf-preview-stub" />' }, ...discussionTurnHelpers, useHallExecutionAbandonment, ...outputCatalog, ...discussionContract, bountyDeliberationPresentation, useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults,
     revisionProgressPending, conversationAssetContentPath, safeMediaKind, safeAssetPreviewKind, revisionOf, createApi: () => api, saveOutputBlob: () => {},
     useHallConversationArchive: () => ({ statusFor: () => ({}), save: () => {}, check: () => {} }),
     marked: Object.assign(value => value, { setOptions: () => {} }), DOMPurify: { sanitize: value => value },
@@ -112,7 +112,8 @@ describe('scoped bounty output actions live on the actual message cards', () => 
       await settle()
       const rows = f.wrapper.findAll('.hall-message')
       expect(rows).to.have.length(1)
-      expect(rows[0].text()).to.include('正在修改图片').and.include('本轮完成')
+      expect(rows[0].text()).not.to.include('正在修改图片')
+      expect(rows[0].text()).to.include('本轮完成')
       expect(rows[0].text()).not.to.include('可预览或下载')
       expect(rows[0].findAll('.media-actions button').map(button => button.text())).to.deep.equal(['预览', '验收此版'])
       await rows[0].get('.media-actions button').trigger('click'); await settle()
@@ -122,6 +123,21 @@ describe('scoped bounty output actions live on the actual message cards', () => 
       expect(f.wrapper.emitted('accept-output')[0][0]).to.include({ requestId: 'request-1', stepId: 'step-1', outputId: 'output-1', sha256: '1'.repeat(64) })
       expect(original.parts).to.deep.equal([])
       expect(f.calls.every(call => call.method === 'GET')).to.equal(true)
+    } finally { f.wrapper.unmount() }
+  })
+  it('shows ongoing execution instead of parent completion or internal instructions', async () => {
+    const f = setup([])
+    try {
+      const original = { localId: 'parent-1', sender: 'AGENT', content: '请生成一张鸟的图片。', parts: [] }
+      const projection = { key: 'action-1', conversationId: 'conversation-1', outcome: { taskId: 'task-1', kind: 'ACTION_REQUEST', assistantMessageId: 'parent-1' }, actionProgress: { childRequestId: 'request-1', state: 'RUNNING' } }
+      await f.wrapper.setProps({ messages: [original], typedOutcomes: [projection], deliberationStatus: '本轮回话已结束' }); await settle()
+      expect(f.wrapper.text()).to.include('正在处理')
+      expect(f.wrapper.text()).not.to.include('请生成一张鸟的图片。')
+      expect(f.wrapper.text()).not.to.include('本轮回话已结束')
+      expect(f.wrapper.find('.deliberation-status').exists()).to.equal(false)
+      await f.wrapper.setProps({ deliberationStatus: '回话失败' }); await settle()
+      expect(f.wrapper.text()).to.include('回话失败')
+      expect(original.content).to.equal('请生成一张鸟的图片。')
     } finally { f.wrapper.unmount() }
   })
   it('keeps busy/voice/terminal guards and previews when the task becomes read-only', async () => {
@@ -353,7 +369,7 @@ describe('discussion retest confirmed defects', () => {
       expect(wrapper.find('button').exists()).to.equal(false)
     } finally { wrapper.unmount() }
   })
-  for (const mime of ['text/plain', 'text/markdown', 'application/json']) {
+  for (const mime of ['text/plain', 'application/json']) {
     it(`previews persisted ${mime} as text rather than executable markup`, async () => {
       const calls = [], body = '<img src=x onerror=alert(1)>会议纪要'
       const components = createComponents({ execute: async request => { calls.push(request); return new Blob([body], { type: mime }) } })

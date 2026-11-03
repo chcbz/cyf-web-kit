@@ -4,6 +4,7 @@ import { parse, compileScript } from '@vue/compiler-sfc'
 import { mount, flushPromises } from '@vue/test-utils'
 import * as Vue from 'vue'
 import { richDocumentKind, richDocumentSource } from '../src/utils/richDocumentPreview.js'
+import { conversationAssetContentPath, safeAssetPreviewKind } from '../src/composables/juyiting/hallMessageParts.js'
 import { outputPreviewKind } from '../src/composables/useOutputs.js'
 
 function component (path, imports) {
@@ -74,5 +75,29 @@ describe('static HTML and Markdown file preview', () => {
     const wrapper = mount(Preview, { props: { item: { artifactId: 'a', artifactVersion: '1', title: '旧', mimeType: 'text/html', byteLength: 1 }, load: () => new Promise(r => { resolve = r }) } })
     await wrapper.setProps({ item: null }); resolve(new Blob(['old'], { type: 'text/html' })); await flushPromises()
     assert.equal(wrapper.find('iframe').exists(), false); wrapper.unmount()
+  })
+})
+
+
+describe('conversation HTML/Markdown preview', () => {
+  for (const mime of ['text/html', 'text/markdown']) it(`previews authenticated ${mime} in the shared sandbox`, async () => {
+    const calls = []
+    const Media = component('../src/components/juyiting/HallMessageMedia.vue', {
+      '../outputs/RichDocumentPreview.vue': Rich,
+      '../../utils/richDocumentPreview.js': { richDocumentKind },
+      '../workspace/PdfDocumentPreview.vue': { render: () => null },
+      '../../composables/useHttp.js': { createApi: () => ({ execute: async request => { calls.push(request); return new Blob(['<h1>财务小工具</h1><script>alert(1)</script>'], { type: mime }) } }) },
+      '../../composables/juyiting/hallMessageParts.js': { conversationAssetContentPath, safeAssetPreviewKind }
+    })
+    const wrapper = mount(Media, { attachTo: document.body, props: { part: { partId: 'p', revision: '1', assetId: 'asset-a', kind: 'file', mime, filename: '中文收支记账本' }, conversationId: '42', identityKey: 'user-a' } })
+    try {
+      await wrapper.get('.media-actions button').trigger('click'); await flushPromises()
+      const frame = document.querySelector('[aria-label="会话资料预览"] iframe')
+      assert.ok(frame); assert.equal(frame.getAttribute('sandbox'), '')
+      assert.match(frame.srcdoc, /财务小工具/); assert.doesNotMatch(frame.srcdoc, /<script>/)
+      assert.equal(calls[0].url, '/conversations/42/assets/asset-a/content'); assert.equal(calls[0].needAuth, true)
+      await wrapper.setProps({ identityKey: 'user-b' }); await flushPromises()
+      assert.equal(document.querySelector('[aria-label="会话资料预览"]'), null)
+    } finally { wrapper.unmount() }
   })
 })

@@ -2,8 +2,8 @@
   <template v-if="enabled && inline">
     <p v-if="error" role="alert">{{ error }} <button type="button" :disabled="loading" @click="refreshFromUser">重新读取成果</button></p>
     <p v-if="skillResults.error.value" role="alert">{{ skillResults.error.value }} <button type="button" @click="skillResults.refresh">重新读取</button></p>
-    <article v-for="result in skillResults.results.value.filter(value => value.data !== null || !value.complete)" :key="result.executionId" class="message-skill-result">
-      <strong>技能结果</strong><span>{{ result.complete ? '已归档' : result.phase === 'ARCHIVING' ? '正在归档（尚未完成）' : result.phase }}</span>
+    <article v-for="result in inlineSkillResults(skillResults.results.value, representedExecutionIds)" :key="result.executionId" class="message-skill-result">
+      <span role="status">{{ skillResultStatus(result) }}</span>
       <pre v-if="result.complete && result.data !== null">{{ skillResultDataText(result.data) }}</pre>
       <small v-if="result.complete && result.data !== null">结果已记录；事项是否完成，请以验收状态为准。</small>
     </article>
@@ -22,7 +22,7 @@
     <p v-else-if="!displayItems.length && (loading || !effectiveTaskCompleted)" role="status">{{ loading ? '正在读取已提交成果…' : deliveryMessage || '结果完成后会显示在这里。' }}</p>
     <p v-if="skillResults.error.value" role="alert">{{ skillResults.error.value }} <button type="button" @click="skillResults.refresh">重新读取</button></p>
     <article v-for="result in skillResults.results.value" :key="result.executionId" class="bounty-output">
-      <strong>技能结果</strong><span>{{ result.complete ? '已归档' : result.phase === 'ARCHIVING' ? '正在归档（尚未完成）' : result.phase }}</span>
+      <span role="status">{{ skillResultStatus(result) }}</span>
       <pre v-if="result.complete && result.data !== null" class="bounty-output-text">{{ skillResultDataText(result.data) }}</pre>
       <small v-if="result.complete && result.data !== null">结果已记录；事项是否完成，请以验收状态为准。</small>
     </article>
@@ -83,12 +83,13 @@ import { exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedEx
 import { saveOutputBlob } from '../../utils/outputDownload.js'
 import { revisionProgressPending } from '../../composables/juyiting/hallTypedDeliberation.js'
 import { useHallSkillResults } from '../../composables/juyiting/useHallSkillResults.js'
-import { skillResultDataText } from '../../composables/juyiting/hallSkillResults.js'
+import { skillResultDataText, skillResultStatus, inlineSkillResults } from '../../composables/juyiting/hallSkillResults.js'
 
 const emit = defineEmits(['catalog-refresh-needed', 'outputs-change', 'accept-output', 'preview-ready'])
 const props = defineProps({
   acceptance: { type: Boolean, default: false },
   inline: { type: Boolean, default: false },
+  representedExecutionIds: { type: Array, default: () => [] },
   reviewBusy: { type: Boolean, default: false },
   taskCompleted: { type: Boolean, default: false },
   enabled: { type: Boolean, default: false }, request: { type: Object, default: null },

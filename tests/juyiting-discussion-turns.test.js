@@ -73,3 +73,38 @@ describe('discussion turn display projection', () => {
     expect(normalizeHallMessage({ id: '2', senderType: 'agent' }).requestId).to.equal('')
   })
 })
+
+// User sees outcomes, not instructions to another agent or CHAT transport completion.
+describe('discussion user-facing content', () => {
+  it('hides only exactly linked action prose, preserving originals and real user/answer text', async () => {
+    const { discussionMessageText } = await import('../src/composables/juyiting/hallDiscussionTurns.js')
+    const original = { ...parent(), content: '请生成一张鸟的图片。' }
+    expect(discussionMessageText(project([original])[0])).to.equal('')
+    expect(original.content).to.equal('请生成一张鸟的图片。')
+    expect(discussionMessageText(project([original], [ { ...projection(), conversationId: 'other' } ])[0])).to.equal(original.content)
+    expect(discussionMessageText({ sender: 'USER', content: original.content })).to.equal(original.content)
+    expect(discussionMessageText({ sender: 'AGENT', content: '这里是给你的建议。' })).to.equal('这里是给你的建议。')
+  })
+  it('does not present transport completion as task completion, retaining all non-success feedback', async () => {
+    const { discussionFooterStatus } = await import('../src/composables/juyiting/hallDiscussionTurns.js')
+    for (const label of ['本轮回话已结束', '本轮结果已登记', '本轮成果已就绪']) {
+      expect(discussionFooterStatus(label, true)).to.equal('')
+      expect(discussionFooterStatus(label, false)).to.equal(label)
+    }
+    for (const label of ['回话失败', '结果待核实', '正在读取', '本轮回复已停止']) expect(discussionFooterStatus(label, true)).to.equal(label)
+    expect(discussionTurnStatus(projection())).to.equal('正在处理')
+  })
+  it('deduplicates only normal linked progress, retaining data, unlinked and unresolved results', async () => {
+    const { inlineSkillResults, skillResultStatus } = await import('../src/composables/juyiting/hallSkillResults.js')
+    const running = { executionId: 'e1', complete: false, phase: 'RUNNING', data: null }
+    expect(inlineSkillResults([running], ['e1'])).to.deep.equal([])
+    expect(inlineSkillResults([running], [])).to.deep.equal([running])
+    for (const phase of ['RESULT_UNKNOWN', 'FAILED', 'ARCHIVING']) {
+      const result = { ...running, phase }
+      expect(inlineSkillResults([result], ['e1'])).to.deep.equal([result])
+      expect(skillResultStatus(result)).not.to.equal(phase)
+    }
+    const result = { ...running, complete: true, data: '合计42' }
+    expect(inlineSkillResults([result], ['e1'])).to.deep.equal([result])
+  })
+})

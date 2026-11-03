@@ -1,7 +1,7 @@
 import { richDocumentKind } from '../src/utils/richDocumentPreview.js'
 import { displayFixtures } from './fixtures/juyiting/interface-display-fixture.mjs'
 import { useHallSkillResults } from '../src/composables/juyiting/useHallSkillResults.js'
-import { skillResultDataText } from '../src/composables/juyiting/hallSkillResults.js'
+import { skillResultDataText, skillResultStatus, inlineSkillResults } from '../src/composables/juyiting/hallSkillResults.js'
 import { before, after } from 'mocha'
 import { Buffer } from 'node:buffer'
 import { expect } from 'chai'
@@ -30,7 +30,7 @@ const script = compileScript(descriptor, { id: 'hall-bounty-live-output-test', i
   .replace(/^import\s+\{\s*useHallConversationArchive\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { useHallConversationArchive } = deps')
   .replace(/^import\s+\{\s*useHallBountyFinalization,[^}]+\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { useHallBountyFinalization, safeFinalizationVersion } = deps')
   .replace(/^import\s+\{\s*useHallSkillResults\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { useHallSkillResults } = deps')
-  .replace(/^import\s+\{\s*skillResultDataText\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { skillResultDataText } = deps')
+  .replace(/^import\s+\{\s*skillResultDataText,\s*skillResultStatus,\s*inlineSkillResults\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { skillResultDataText, skillResultStatus, inlineSkillResults } = deps')
   .replace(/^import .*revisionProgressPending.*\r?\n/gm, 'const { revisionProgressPending } = deps\n')
   .replace(/^import RichDocumentPreview .*$/gm, "const RichDocumentPreview = { props: ['text', 'kind'], template: '<div class=\"rich-document-stub\" />' }")
   .replace(/^import \{ richDocumentKind \} .*$/gm, 'const richDocumentKind = deps.richDocumentKind')
@@ -76,7 +76,7 @@ describe('bounty output gallery live owner scope', () => {
       if (path.endsWith('/steps/step-2/outputs')) return (([item('step-2')]))
       throw new Error(`unexpected GET ${path}`)
     }, execute: async () => ((new Blob([new Uint8Array(20)], { type: 'image/png' }))) }
-    const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText, createApi: () => mockApi, exactOutputId, outputCatalogItems, outputItemKey,
+    const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults, createApi: () => mockApi, exactOutputId, outputCatalogItems, outputItemKey,
       previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, currentOutputDelivery, outputAssetPart, completedTextItem, completedExecutionDelivery, outputRequestPending, useHallBountyFinalization, safeFinalizationVersion, useHallConversationArchive, readOutputRecovery, writeOutputRecovery, saveOutputBlob: () => {}
     })
     globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? (poll = fn, 999) : oldTimeout(fn, delay, ...args)
@@ -133,7 +133,7 @@ describe('bounty output gallery live owner scope', () => {
       if (path.endsWith('/steps/step-1/outputs')) return (([item('step-1')]))
       throw new Error(`unexpected GET ${path}`)
     }, execute: async payload => { writes.push(payload); throw new Error('the output card must never POST an interaction') } }
-    const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText,
+    const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults,
       createApi: () => chatApi, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, currentOutputDelivery, outputAssetPart, completedTextItem, completedExecutionDelivery, outputRequestPending, useHallBountyFinalization, safeFinalizationVersion, useHallConversationArchive, readOutputRecovery, writeOutputRecovery, saveOutputBlob: () => {}
     })
     globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : oldTimeout(fn, delay, ...args)
@@ -169,7 +169,7 @@ describe('bounty output gallery live owner scope', () => {
       },
       execute: async () => ((responses.shift()))
     }
-    const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText,
+    const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults,
       createApi: () => chatApi, exactOutputId, outputCatalogItems, outputItemKey,
       previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, currentOutputDelivery, outputAssetPart, completedTextItem, completedExecutionDelivery, outputRequestPending, useHallBountyFinalization, safeFinalizationVersion, useHallConversationArchive, readOutputRecovery, writeOutputRecovery,
       saveOutputBlob: () => { downloaded++ }
@@ -222,7 +222,7 @@ describe('bounty output gallery live owner scope', () => {
       expect(request.method).to.equal('GET')
       return (new Blob([new Uint8Array(20)], { type: 'image/png' }))
     } }
-    const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText,
+    const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults,
       createApi: () => chatApi, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps,
       downloadMimeType, outputDownloadName, currentOutputDelivery, outputAssetPart, completedTextItem, completedExecutionDelivery, outputRequestPending, useHallBountyFinalization, safeFinalizationVersion,
       useHallConversationArchive, readOutputRecovery, writeOutputRecovery, saveOutputBlob: value => downloads.push(value)
@@ -271,7 +271,7 @@ describe('bounty output gallery live owner scope', () => {
       throw new Error(`unexpected source read ${path}`)
     }, execute: async () => { throw new Error('no archive or tool execution before acceptance') } }
     const agentApi = { execute: async payload => { calls.push(payload); throw new TypeError('unknown acceptance ACK') } }
-    const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText,
+    const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults,
       createApi: base => base === '/agent' ? agentApi : chatApi, exactOutputId, outputCatalogItems, outputItemKey,
       previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, currentOutputDelivery, outputAssetPart, completedTextItem, completedExecutionDelivery, outputRequestPending,
       useHallConversationArchive, useHallBountyFinalization, safeFinalizationVersion, saveOutputBlob: () => {}
@@ -319,7 +319,7 @@ describe('bounty output gallery live owner scope', () => {
       throw new Error(`unexpected read ${path}`)
     }, execute: async () => { throw new Error('no fake output bytes, tools, archive or personal-space prerequisite') } }
     const agentApi = { execute: async options => { calls.push(options); throw new TypeError('unknown ACK') } }
-    const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText,
+    const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults,
       createApi: base => base === '/agent' ? agentApi : chatApi, exactOutputId, outputCatalogItems, outputItemKey, previewKind,
       scopedExecutionSteps, downloadMimeType, outputDownloadName, currentOutputDelivery, outputAssetPart, completedTextItem, completedExecutionDelivery, outputRequestPending,
       useHallConversationArchive, useHallBountyFinalization, safeFinalizationVersion, saveOutputBlob: value => downloads.push(value)
@@ -379,7 +379,7 @@ describe('bounty output gallery live owner scope', () => {
           throw new Error(`unexpected source read ${path}`)
         }, execute: async () => { throw new Error('must not execute tools or invent output files') } }
         const agentApi = { execute: async options => { calls.push(options); throw new TypeError('unknown acceptance ACK') } }
-        const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText,
+        const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults,
           createApi: base => base === '/agent' ? agentApi : chatApi, exactOutputId, outputCatalogItems, outputItemKey, previewKind,
           scopedExecutionSteps, downloadMimeType, outputDownloadName, currentOutputDelivery, outputAssetPart, completedTextItem, completedExecutionDelivery, outputRequestPending,
           useHallConversationArchive, useHallBountyFinalization, safeFinalizationVersion, saveOutputBlob: () => {}
@@ -429,7 +429,7 @@ describe('bounty output gallery live owner scope', () => {
           throw new Error(`unexpected source read ${path}`)
         }, execute: async () => { throw new Error('must not execute tools or invent output files') } }
         const agentApi = { execute: async options => { calls.push(options); throw new TypeError('unknown acceptance ACK') } }
-        const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText,
+        const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults,
           createApi: base => base === '/agent' ? agentApi : chatApi, exactOutputId, outputCatalogItems, outputItemKey, previewKind,
           scopedExecutionSteps, downloadMimeType, outputDownloadName, currentOutputDelivery, outputAssetPart, completedTextItem, completedExecutionDelivery, outputRequestPending,
           useHallConversationArchive, useHallBountyFinalization, safeFinalizationVersion, saveOutputBlob: () => {}
@@ -479,7 +479,7 @@ describe('bounty output gallery live owner scope', () => {
           throw new Error(`unexpected source read ${path}`)
         }, execute: async () => { throw new Error('must not execute tools or invent output files') } }
         const agentApi = { execute: async options => { calls.push(options); throw new TypeError('unknown acceptance ACK') } }
-        const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText,
+        const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults,
           createApi: base => base === '/agent' ? agentApi : chatApi, exactOutputId, outputCatalogItems, outputItemKey, previewKind,
           scopedExecutionSteps, downloadMimeType, outputDownloadName, currentOutputDelivery, outputAssetPart, completedTextItem, completedExecutionDelivery, outputRequestPending,
           useHallConversationArchive, useHallBountyFinalization, safeFinalizationVersion, saveOutputBlob: () => {}
@@ -511,7 +511,7 @@ describe('bounty output gallery live owner scope', () => {
     const chatApi = { get: async path => path === '/requests/request-1'
       ? (({ requestId: 'request-1', conversationId: 'conversation-1', steps: [step('step-1'), step('step-2')] }))
       : (([item(path.includes('step-1') ? 'step-1' : 'step-2')])) }
-    const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText,
+    const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults,
       createApi: () => chatApi, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps,
       downloadMimeType, outputDownloadName, currentOutputDelivery, outputAssetPart, completedTextItem, completedExecutionDelivery, outputRequestPending,
       useHallConversationArchive, useHallBountyFinalization, safeFinalizationVersion, saveOutputBlob: () => {}
@@ -560,7 +560,7 @@ describe('bounty output gallery live owner scope', () => {
         if (value.method === 'GET') { reads.push(value.url); throw { response: { status: 404 } } }
         writes.push(value); throw new TypeError('unknown original ACK')
       } }
-      const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText,
+      const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults,
         createApi: base => base === '/agent' ? agentApi : api, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps,
         downloadMimeType, outputDownloadName, currentOutputDelivery, outputAssetPart, completedTextItem, completedExecutionDelivery, outputRequestPending,
         useHallConversationArchive, useHallBountyFinalization, safeFinalizationVersion, saveOutputBlob: () => {}
@@ -622,7 +622,7 @@ describe('bounty output gallery live owner scope', () => {
       if (value.method === 'GET') { reads.push(value.url); throw { response: { status: 404 } } }
       writes.push(value); throw new TypeError('unknown original ACK')
     } }
-    const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText,
+    const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults,
       createApi: base => base === '/agent' ? agentApi : api, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps,
       downloadMimeType, outputDownloadName, currentOutputDelivery, outputAssetPart, completedTextItem, completedExecutionDelivery, outputRequestPending,
       useHallConversationArchive, useHallBountyFinalization, safeFinalizationVersion, saveOutputBlob: () => {}
@@ -682,7 +682,7 @@ describe('bounty output gallery live owner scope', () => {
       if (value.method === 'GET') { reads.push(value.url); throw { response: { status: 404 } } }
       writes.push(value); throw new TypeError('unknown original ACK')
     } }
-    const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText,
+    const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults,
       createApi: base => base === '/agent' ? agentApi : api, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps,
       downloadMimeType, outputDownloadName, currentOutputDelivery, outputAssetPart, completedTextItem, completedExecutionDelivery, outputRequestPending,
       useHallConversationArchive, useHallBountyFinalization, safeFinalizationVersion, saveOutputBlob: () => {}
@@ -720,7 +720,7 @@ describe('RB-01/D01 real gallery native execution consumer', () => {
       executionIntentId: 'intent', executionId: 'native-execution', executionState: 'RESULT_COMMITTED' }] })
   const props = () => ({ enabled: true, identityKey: 'owner:auth', conversationId: '1', conversationGeneration: '1',
     taskId: 'task', request: nativeRequest(), typedOutcomes: [] })
-  const component = api => new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText,
+  const component = api => new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults,
     createApi: () => api, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps,
     downloadMimeType, outputDownloadName, saveOutputBlob: () => {}, currentOutputDelivery, completedTextItem, completedExecutionDelivery, outputRequestPending })
   it('loads data-only results from persisted steps with no ACTION_REQUEST and recovers after remount', async () => {
@@ -741,7 +741,7 @@ describe('RB-01/D01 real gallery native execution consumer', () => {
       try {
         await flushPromises()
         expect(wrapper.text()).to.include('原生直接执行的真实已提交投影')
-        expect(wrapper.text()).to.include('已归档')
+        expect(wrapper.text()).to.include('成果已生成')
         expect(wrapper.text()).not.to.include('来源或归档状态不匹配')
         expect(wrapper.findAll('pre')).to.have.length(1)
         expect(wrapper.findAll('button').some(button => /验收|重试执行/.test(button.text()))).to.equal(false)
@@ -787,7 +787,7 @@ describe('RB-01/D01 real gallery native execution consumer', () => {
     const wrapper = mount(component(api), { props: props() })
     try {
       await flushPromises()
-      expect(wrapper.text()).to.include('正在归档（尚未完成）')
+      expect(wrapper.text()).to.include('正在登记成果')
       expect(wrapper.findAll('pre')).to.have.length(0)
       archiving = false
       await wrapper.find('.output-refresh').trigger('click'); await flushPromises()
@@ -814,7 +814,7 @@ describe('authenticated output downloads', () => {
       const api = { get: async path => path === '/requests/request-1'
         ? { requestId: 'request-1', conversationId: 'conversation-1', state: 'COMPLETED', steps: [step('step-1')] }
         : [output], execute: async call => { calls.push(call); return new Blob([payload], { type: mime === 'image/svg+xml' ? 'application/octet-stream' : mime }) } }
-      const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText,
+      const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults,
         createApi: () => api, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps,
         downloadMimeType, outputDownloadName, currentOutputDelivery, completedTextItem, completedExecutionDelivery, outputRequestPending,
         saveOutputBlob: data => saved.push(data) })
@@ -846,7 +846,7 @@ describe('authenticated output downloads', () => {
     let pending; const saved = []
     const api = { get: async path => path === '/requests/request-1' ? { requestId: 'request-1', conversationId: 'conversation-1', state: 'COMPLETED', steps: [step('step-1')] } : [output],
       execute: call => responses.length ? Promise.resolve(responses.shift()) : new Promise(resolve => { pending = { resolve, signal: call.signal } }) }
-    const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText,
+    const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults,
       createApi: () => api, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName,
       currentOutputDelivery, completedTextItem, completedExecutionDelivery, outputRequestPending, saveOutputBlob: data => saved.push(data) })
     const wrapper = mount(Component, { props: { enabled: true, identityKey: 'owner-a', conversationId: 'conversation-1',

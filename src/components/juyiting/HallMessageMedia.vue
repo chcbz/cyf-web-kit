@@ -19,17 +19,20 @@
         <header><strong>{{ part.filename || '资料预览' }}</strong><button type="button" class="media-preview-close" aria-label="关闭预览" title="关闭预览" @click="expanded = false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button></header>
         <img v-if="previewUrl && mediaKind === 'image'" :src="previewUrl" :alt="part.filename || '会话图片'" />
         <audio v-else-if="previewUrl && mediaKind === 'audio'" :src="previewUrl" controls controlslist="nodownload" preload="none" aria-label="音频预览" />
+        <RichDocumentPreview v-else-if="previewBlob && documentKind" :text="previewText" :kind="documentKind" :title="part.filename" />
         <pre v-else-if="previewBlob && mediaKind === 'text'" class="asset-text-preview" v-text="previewText"></pre>
         <PdfDocumentPreview v-else-if="previewBlob && mediaKind === 'pdf'" :blob="previewBlob" />
         <p v-else>{{ loading ? '正在读取…' : '此格式暂不支持在线预览。' }}</p>
         <p v-if="error" role="alert">{{ error }}</p>
-        <footer v-if="!previewBlob && mediaKind !== 'file'"><button type="button" :disabled="loading" @click="loadPreview">重试预览</button></footer>
+        <footer v-if="!previewBlob && (mediaKind !== 'file' || documentKind)"><button type="button" :disabled="loading" @click="loadPreview">重试预览</button></footer>
       </dialog>
     </Teleport>
   </div>
 </template>
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import RichDocumentPreview from '../outputs/RichDocumentPreview.vue'
+import { richDocumentKind } from '../../utils/richDocumentPreview.js'
 import PdfDocumentPreview from '../workspace/PdfDocumentPreview.vue'
 import { createApi } from '../../composables/useHttp.js'
 import { conversationAssetContentPath, safeAssetPreviewKind } from '../../composables/juyiting/hallMessageParts.js'
@@ -62,6 +65,7 @@ watch(expanded, async opened => {
     if (previewReturnFocus?.isConnected) previewReturnFocus.focus()
   }
 })
+const documentKind = computed(() => props.part.kind === 'file' ? richDocumentKind(props.part.mime, props.part.filename) : '')
 const mediaKind = computed(() => safeAssetPreviewKind(props.part))
 let controller = null
 let requestGeneration = 0
@@ -84,7 +88,7 @@ const getBlob = async signal => {
   return response
 }
 const loadPreview = async () => {
-  if (previewBlob.value || loading.value || mediaKind.value === 'file') return
+  if (previewBlob.value || loading.value || (mediaKind.value === 'file' && !documentKind.value)) return
   const generation = ++requestGeneration
   controller?.abort()
   const pending = new AbortController()
@@ -98,7 +102,7 @@ const loadPreview = async () => {
     if (actualMime !== props.part.mime || safeAssetPreviewKind({ ...props.part, mime: actualMime }) !== mediaKind.value) {
       throw new Error('文件信息不一致，暂时无法预览。')
     }
-    const text = mediaKind.value === 'text' ? await blob.text() : ''
+    const text = mediaKind.value === 'text' || documentKind.value ? await blob.text() : ''
     if (pending.signal.aborted || generation !== requestGeneration) return
     previewBlob.value = blob
     previewText.value = text

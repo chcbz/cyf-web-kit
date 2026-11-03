@@ -56,3 +56,14 @@ export const skillResultAdvances = (before, after) => {
   if (before.resultSha256 !== null && before.resultSha256 !== after.resultSha256) return false
   return before.executionStateVersion !== after.executionStateVersion || fields.every(key => JSON.stringify(before[key]) === JSON.stringify(after[key]))
 }
+
+
+// Display-only labels; never convert a pending/unknown execution into a completed one.
+export const skillResultStatus = result => result.complete ? '成果已生成' : ({
+  READY: '等待处理', RUNNING: '正在处理', RESULT_READY: '正在登记成果',
+  WAITING_PROVIDER: '等待工具结果', RESULT_UNKNOWN: '结果待核实', UNKNOWN: '正在核对成果',
+  ARCHIVING: '正在登记成果', FAILED: '处理未完成', CANCELLED: '已取消'
+})[result.phase] || '正在核对成果'
+export const inlineSkillResults = (results, representedExecutionIds) => results.filter(result =>
+  result.complete ? result.data != null :
+    !(['READY', 'RUNNING', 'WAITING_PROVIDER'].includes(result.phase) && representedExecutionIds.includes(result.executionId)))

@@ -37,6 +37,11 @@ export const discussionTurns = ({ messages = [], projections = [], conversationI
   return rows.filter(row => !consumed.has(row))
 }
 
+// ACTION_REQUEST is control-plane prose, not a user answer. Keep the stored original intact.
+export const discussionMessageText = message => message?.turnProjections?.length ? '' : (message?.content || '')
+export const discussionFooterStatus = (status, isTaskDiscussion) => isTaskDiscussion &&
+  ['本轮回话已结束', '本轮结果已登记', '本轮成果已就绪'].includes(status) ? '' : status
+
 // Suppress only the known backend delivery wrapper after an exact request association.
 export const discussionDeliveryText = message => message.content === deliveryNotice ? '' : message.content
 

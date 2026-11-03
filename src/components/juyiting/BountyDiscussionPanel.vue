@@ -76,6 +76,7 @@
           ref="outputGallery"
           :review-busy="reviewBusy || conversationBusy"
           :inline="true"
+          :represented-execution-ids="representedExecutionIds"
           :enabled="deliberationV2Enabled"
           :task-completed="taskCompleted"
           :request="activeRequest"
@@ -161,8 +162,10 @@ const taskCompleted = computed(() => props.selectedTask?.status === 'completed' 
   Boolean(props.selectedTask?.id && props.reviewContext?.taskId === props.selectedTask.id && props.reviewContext.taskState === 'COMPLETED'))
 
 const executionRequests = computed(() => props.requestCatalog.length ? props.requestCatalog.map(entry => entry.request) : props.activeRequest ? [props.activeRequest] : [])
-const boundRequestIds = computed(() => discussionTurns({ messages: props.messages, projections: props.typedOutcomes,
-  conversationId: props.conversationId, taskId: String(props.selectedTask?.id || '') }).flatMap(message => message.turnRequestIds))
+const visibleTurns = computed(() => discussionTurns({ messages: props.messages, projections: props.typedOutcomes,
+  conversationId: props.conversationId, taskId: String(props.selectedTask?.id || '') }))
+const boundRequestIds = computed(() => visibleTurns.value.flatMap(message => message.turnRequestIds))
+const representedExecutionIds = computed(() => visibleTurns.value.flatMap(message => message.turnProjections.map(projection => projection.actionProgress?.executionId)).filter(Boolean))
 const abandonment = useHallExecutionAbandonment({
   conversationId: () => props.deliberationV2Enabled && !taskCompleted.value ? props.conversationId : null,
   identityKey: () => `${props.identityEpoch}\u0000${props.identityScope}`

@@ -89,7 +89,7 @@
         >
           <span v-for="projection in message.turnProjections" :key="projection.key || projection.outcome.outcomeId">{{ discussionTurnStatus(projection) }}</span>
         </div>
-        <div v-if="message.content" class="message-content" v-html="renderMarkdown(message.content)"></div>
+        <div v-if="discussionMessageText(message)" class="message-content" v-html="renderMarkdown(discussionMessageText(message))"></div>
         <div v-if="isTaskDiscussion && message.typedTaskId === taskId && message.typedSourceSelectors?.length" class="message-parts" aria-label="本条消息资料">
           <article v-for="(source, index) in message.typedSourceSelectors" :key="index" class="task-material-reference">
             <template v-if="source.kind === 'TASK_LINKED_WORKSPACE_VERSION'">
@@ -99,7 +99,7 @@
           </article>
         </div>
         <BountyTextSelectionArchive
-          v-if="isTaskDiscussion"
+          v-if="isTaskDiscussion && discussionMessageText(message)"
           :conversation-id="conversationId"
           :identity-key="materialIdentityKey"
           :message="message.turnOriginal || message"
@@ -157,7 +157,7 @@
         <small v-if="message.statusText && !message.turnProjections?.length" class="message-status">{{ message.statusText }}</small>
       </div>
       <slot name="bounty-results"></slot>
-      <p v-if="deliberationStatus && !serverTaskCompleted" class="deliberation-status" :role="deliberationStatus.startsWith('停止失败') ? 'alert' : 'status'">{{ deliberationStatus }}</p>
+      <p v-if="discussionFooterStatus(deliberationStatus, isTaskDiscussion) && !serverTaskCompleted" class="deliberation-status" :role="deliberationStatus.startsWith('停止失败') ? 'alert' : 'status'">{{ deliberationStatus }}</p>
       <div v-if="isAwaitingReply && !serverTaskCompleted" class="hall-message SYSTEM is-pending">
         <strong>{{ pendingAuthor }}</strong>
         <div class="message-content" v-html="renderMarkdown(pendingLabel)"></div>
@@ -307,7 +307,7 @@ import HallMaterialPicker from './HallMaterialPicker.vue'
 import HallMaterialThumbnail from './HallMaterialThumbnail.vue'
 import HallConversationHistory from './HallConversationHistory.vue'
 import BountyTypedOutcomeCard from './BountyTypedOutcomeCard.vue'
-import { discussionTurns, discussionDeliveryText, discussionTurnStatus } from '../../composables/juyiting/hallDiscussionTurns.js'
+import { discussionTurns, discussionDeliveryText, discussionTurnStatus, discussionMessageText, discussionFooterStatus } from '../../composables/juyiting/hallDiscussionTurns.js'
 import WorkspaceWriteRecovery from '../personal-workspace/WorkspaceWriteRecovery.vue'
 import { usePersonalWorkspace } from '../../composables/usePersonalWorkspace.js'
 import { usePersonalWorkspaceConversationLinks } from '../../composables/usePersonalWorkspaceConversationLinks.js'
