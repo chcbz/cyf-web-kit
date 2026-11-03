@@ -53,6 +53,8 @@ export const createHallSseParser = ({ conversationId, requestId, onEvent, onPrev
       if (!preview || Array.isArray(preview) || typeof preview !== 'object' ||
           preview.conversationId !== conversationId || preview.type !== 'agent_message_delta' ||
           typeof preview.turnId !== 'string' || !preview.turnId || typeof preview.streamId !== 'string' || !preview.streamId ||
+          typeof preview.requestId !== 'string' || !preview.requestId || typeof preview.agentId !== 'string' || !preview.agentId ||
+          !['ANSWER', 'CLARIFY'].includes(preview.streamOutcomeKind) ||
           !canonicalWireString(preview.conversationGeneration) || !canonicalWireString(preview.deltaSeq) ||
           typeof preview.content !== 'string' || !preview.content ||
           !Number.isSafeInteger(preview.occurredAt) || !Number.isFinite(new Date(preview.occurredAt).getTime()) ||

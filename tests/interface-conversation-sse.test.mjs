@@ -35,6 +35,7 @@ test('conflicting scope or cursor and rejected reducer never advance replay curs
 
 const previewMessage = (patch = {}) => eventMessage('request-test', 'conversation.preview', 'preview:stream-a:2', {
   type: 'agent_message_delta', conversationId: '42', conversationGeneration: '1', turnId: 'turn-a',
+  requestId: 'request-a', agentId: 'agent-a', streamOutcomeKind: 'ANSWER',
   streamId: 'stream-a', deltaSeq: '2', content: ' 你好\n', occurredAt: 1000, ...patch
 })
 const previewFrame = m => `event: ${m.messageType}\ndata: ${JSON.stringify(m)}\n\n`
@@ -52,6 +53,7 @@ test('transient previews have no SSE id and never enter durable reducers or adva
 test('previews cannot inject persistent checkpoints, cross conversation scope or masquerade as journal entries', () => {
   for (const wire of [frame(previewMessage()), ...[
     { conversationId: '43' }, { conversationGeneration: '0' }, { streamId: 'other' }, { deltaSeq: '3' },
+    { requestId: '' }, { agentId: '' }, { streamOutcomeKind: 'ACTION_REQUEST' },
     { turnId: '' }, { content: '' }, { occurredAt: '1000' }, { state: 'FINAL_PERSISTED' },
     ...['eventSequence', 'eventVersion', 'stateVersion', 'lastDeltaSeq', 'cursor', 'nextCursor'].map(k => ({ [k]: '9' }))
   ].map(patch => previewFrame(previewMessage(patch)))]) {

@@ -104,6 +104,56 @@ const turnState = (state, turnId) => {
   return current
 }
 
+// Presentation-only state: never advances lastDeltaSeq/stateVersion or requests a replay.
+// Only a stream observed from its first frame is displayed. A late join waits for final.
+export const appendHallPreview = (state, event) => {
+  if (event?.conversationId !== state.conversationId || !exactTurnId(event) ||
+      !canonicalWireString(event.deltaSeq) || typeof event.streamId !== 'string' || !event.streamId ||
+      typeof event.content !== 'string' || !event.content ||
+      !['ANSWER', 'CLARIFY'].includes(event.streamOutcomeKind)) return { type: 'ignored' }
+  const tracker = turnState(state, event.turnId)
+  if (tracker.terminal || tracker.waitingFinal || tracker.previewStopped) return { type: 'ignored' }
+  if (tracker.previewStreamId && tracker.previewStreamId !== event.streamId) return { type: 'ignored' }
+  const previous = BigInt(tracker.previewSeq || '0')
+  const next = BigInt(event.deltaSeq)
+  if (next <= previous) return { type: 'ignored' }
+  if (next !== previous + 1n) {
+    tracker.previewStopped = true
+    state.messages = state.messages.filter(row => !(row.streaming && row.turnId === event.turnId))
+    return { type: 'preview_dropped' }
+  }
+  tracker.previewStreamId = event.streamId
+  tracker.previewSeq = event.deltaSeq
+  let message = currentStreamingAgentMessage(state.messages, event)
+  if (message && message.streamOutcomeKind !== event.streamOutcomeKind) {
+    tracker.previewStopped = true
+    state.messages = state.messages.filter(row => row !== message)
+    return { type: 'preview_dropped' }
+  }
+  if (!message) {
+    message = { localId: `preview-${event.turnId}`, sender: 'AGENT',
+      senderName: fallbackSenderName('AGENT', event.senderName), agentId: event.agentId,
+      requestId: event.requestId, turnId: event.turnId, content: '', streaming: true,
+      streamOutcomeKind: event.streamOutcomeKind, timestamp: event.occurredAt,
+      statusText: '正在回话' }
+    state.messages.push(message)
+  }
+  message.content += event.content
+  state.isAwaitingReply = false
+  return { type: 'preview', message }
+}
+
+export const stopHallPreviews = state => {
+  const stopped = new Set()
+  for (const [turnId, tracker] of state.turnStates || []) {
+    if (tracker.previewStreamId && !tracker.terminal) {
+      tracker.previewStopped = true
+      stopped.add(turnId)
+    }
+  }
+  state.messages = state.messages.filter(row => !(row.streaming && stopped.has(row.turnId)))
+}
+
 export const hasResolvedAgentReply = (messages = []) => {
   let latestUserTimestamp = 0
   for (const message of messages) {

@@ -4,6 +4,8 @@ import { computed, reactive, ref, unref, watch } from 'vue'
 import {
   appendHallEventMessage as reduceHallEventMessage,
   appendStreamPayload,
+  appendHallPreview,
+  stopHallPreviews,
   hasResolvedAgentReply,
   normalizeHallMessage,
   normalizeSenderName,
@@ -599,7 +601,14 @@ export const useHallConversation = ({
     hallEventReconnectTimer = null
   }
 
+  const discardHallPreviews = () => {
+    const state = { messages: messages.value, turnStates }
+    stopHallPreviews(state)
+    messages.value = state.messages
+  }
+
   const stopHallEventTransport = () => {
+    discardHallPreviews()
     clearHallEventReconnect()
     if (hallEventController) hallEventController.abort(new DOMException('Hall event stream stopped', 'AbortError'))
     hallEventController = null
@@ -726,6 +735,16 @@ export const useHallConversation = ({
           if (accepted) hallEventReconnectFailures = 0
           return accepted
         },
+        onPreview: event => {
+          if (!guardCurrent(streamGuard) || event.requestId !== activeRequest.value?.requestId) return
+          const state = { conversationId: id, messages: messages.value, turnStates,
+            isAwaitingReply: isAwaitingReply.value }
+          const result = appendHallPreview(state, event)
+          messages.value = state.messages
+          isAwaitingReply.value = state.isAwaitingReply
+          if (result.type === 'preview') recordObservation('first_delta', activeRequest.value)
+        },
+        onPreviewInvalid: () => { if (guardCurrent(streamGuard)) discardHallPreviews() },
         onCursor: cursorValue => eventCursors.set(id, cursorValue),
         onCommitted: (event, cursorValue) => {
           if (event.type === 'resync_required' && pendingServerResyncCursor === cursorValue) {
