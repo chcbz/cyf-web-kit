@@ -2139,9 +2139,7 @@ export const useHallConversation = ({
         const expectedStateVersion = canonicalWireString(turn.stateVersion, { allowZero: true })
         if (!expectedStateVersion) return false
         saveCancellation(persistenceKey, selectedTarget)
-        const expectedLastDeltaSeq = canonicalWireString(turn.lastDeltaSeq, { allowZero: true })
-        if (!expectedLastDeltaSeq) return false
-        response = await chatApi.post(`/turns/${turn.turnId}/cancel`, { expectedStateVersion, expectedLastDeltaSeq }, { autoLoading: false, signal: lifecycleController.signal })
+        response = await chatApi.post(`/turns/${turn.turnId}/cancel`, { expectedStateVersion }, { autoLoading: false, signal: lifecycleController.signal })
         if (!current()) return false
         const view = authoritativeTurnView(apiData(response), requestId, turn.turnId)
         if (!view || view.conversationId !== originalConversationId ||

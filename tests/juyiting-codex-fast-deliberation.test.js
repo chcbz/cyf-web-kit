@@ -742,7 +742,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     conversation.messages.value.push({ sender: 'AGENT', turnId: 'turn-a', content: 'partial', streaming: true, statusText: '正在回话' })
     conversation.messages.value.push({ sender: 'AGENT', turnId: 'other-turn', content: 'other', streaming: true })
     expect(await conversation.cancelDeliberation({ turnId: 'turn-a' })).to.equal(true)
-    expect(posts).to.deep.equal([{ path: '/turns/turn-a/cancel', body: { expectedStateVersion: '0', expectedLastDeltaSeq: '0' } }])
+    expect(posts).to.deep.equal([{ path: '/turns/turn-a/cancel', body: { expectedStateVersion: '0' } }])
     expect(conversation.deliberationStatus.value).to.equal('本轮回复已停止')
     expect(conversation.messages.value.find(m => m.turnId === 'turn-a')).to.include({ streaming: false, content: 'partial', statusText: '已停止（未完成）' })
     expect(conversation.messages.value.find(m => m.turnId === 'other-turn').streaming).to.equal(true)

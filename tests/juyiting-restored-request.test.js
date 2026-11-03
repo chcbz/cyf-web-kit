@@ -41,7 +41,7 @@ describe('exact-conversation current round restoration', () => {
     await hall.cancelDeliberation(hall.durableCancelTarget.value)
     const write = calls.find(c => c.body)
     expect(write.path).to.equal('/turns/turn-185/cancel')
-    expect(write.body).to.deep.equal({ expectedStateVersion: '2776', expectedLastDeltaSeq: '2775' })
+    expect(write.body).to.deep.equal({ expectedStateVersion: '2776' })
   })
   it('consumes known historical status/delta replay without changing the restored round or reconnecting', async () => {
     const originalFetch = global.fetch; let controller; let transportRequestId; let fetches = 0
