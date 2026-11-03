@@ -30,8 +30,10 @@ export const discussionTurns = ({ messages = [], projections = [], conversationI
       projection?.outcome?.taskId === taskId && projection.outcome.assistantMessageId === row.localId)
     const knownKind = typed?.outcome?.kind || (row.typedOutcomeTaskId === taskId ? row.typedOutcomeKind : '')
     row.turnActionRequest = knownKind === 'ACTION_REQUEST'
-    // Stream fragments cannot distinguish an answer from internal execution prose yet.
-    row.turnAwaitingType = Boolean(row.streaming || (row.typedOutcomeId && !knownKind))
+    // Only Runtime-classified user reply deltas may render before the authoritative final.
+    // Missing/unknown purpose remains hidden for mixed-version producers.
+    const visibleStream = ['ANSWER', 'CLARIFY'].includes(row.streamOutcomeKind)
+    row.turnAwaitingType = Boolean((row.streaming && !visibleStream) || (row.typedOutcomeId && !knownKind))
   }
   const consumed = new Set()
   for (const row of rows) {

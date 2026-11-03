@@ -144,16 +144,19 @@ export const appendHallEventMessage = (state, event, identity) => {
       }
       tracker.lastDeltaSeq = deltaSeq
     }
+    const streamOutcomeKind = ['ANSWER', 'CLARIFY'].includes(event.streamOutcomeKind) ? event.streamOutcomeKind : ''
     let pendingMessage = currentStreamingAgentMessage(state.messages, event)
     if (!pendingMessage) {
       pendingMessage = {
         localId: `delta-${turnId || event.agentId || 'agent'}-${event.timestamp || Date.now()}`,
         sender: 'AGENT', senderName, agentId: event.agentId, turnId,
         content: '', timestamp: event.timestamp || Date.now(), streaming: true,
-        statusText: '正在回话'
+        statusText: '正在回话', streamOutcomeKind
       }
       state.messages.push(pendingMessage)
     }
+    // Never expose previously unclassified chunks when a later chunk acquires a purpose.
+    if (pendingMessage.streamOutcomeKind !== streamOutcomeKind) pendingMessage.streamOutcomeKind = ''
     pendingMessage.content += event.content || ''
     pendingMessage.deltaSeq = deltaSeq || pendingMessage.deltaSeq
     pendingMessage.timestamp = event.timestamp || pendingMessage.timestamp

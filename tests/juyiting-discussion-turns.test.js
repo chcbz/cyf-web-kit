@@ -1,5 +1,5 @@
 import { expect } from 'chai'
-import { discussionTurns, discussionDeliveryText, discussionTurnStatus } from '../src/composables/juyiting/hallDiscussionTurns.js'
+import { discussionTurns, discussionDeliveryText, discussionTurnStatus, discussionMessageText } from '../src/composables/juyiting/hallDiscussionTurns.js'
 import { normalizeHallMessage, appendHallEventMessage, appendStreamPayload } from '../src/composables/juyiting/hallConversationMessages.js'
 
 const part = (id = 'image-1') => ({ partId: id, revision: '1', kind: 'image', state: 'ready', assetId: `asset-${id}`, mime: 'image/png' })
@@ -133,5 +133,45 @@ describe('typed discussion live and reload rendering', () => {
     appendHallEventMessage(state, { type: 'agent_message', conversationId: '42', messageId: 'reply-1', senderType: 'agent', content: '请生成图片', typedOutcome: { outcomeId: 'outcome-1', taskId: 'task-1', kind: 'ACTION_REQUEST' } }, '')
     expect(state.messages[0].typedOutcomeKind).to.equal('ACTION_REQUEST')
     expect(discussionMessageText(project(state.messages, [])[0])).to.equal('')
+  })
+})
+
+describe('provisional user reply stream purpose', () => {
+  const delta = (seq, content, kind = 'ANSWER', turnId = 'turn-1') => ({ type: 'agent_message_delta', senderType: 'agent',
+    agentId: 'agent-1', conversationId: '42', turnId, deltaSeq: String(seq), content, streamOutcomeKind: kind })
+  const visible = state => discussionMessageText(project(state.messages, [])[0])
+  it('shows two ANSWER/CLARIFY increments before final, then replaces rather than duplicates', () => {
+    for (const kind of ['ANSWER', 'CLARIFY']) {
+      const state = { messages: [], conversationId: '42' }
+      appendHallEventMessage(state, delta(1, '你好', kind))
+      expect(state.messages[0].streaming).to.equal(true)
+      expect(visible(state)).to.equal('你好')
+      appendHallEventMessage(state, delta(2, '，请说明', kind))
+      expect(visible(state)).to.equal('你好，请说明')
+      appendHallEventMessage(state, { type: 'agent_message', senderType: 'agent', agentId: 'agent-1', conversationId: '42',
+        turnId: 'turn-1', messageId: '101', content: '你好，请说明需求', typedOutcome: { outcomeId: 'out-1', kind, taskId: 'task-1' } })
+      expect(state.messages).to.have.length(1)
+      expect(state.messages[0].streaming).to.equal(false)
+      expect(visible(state)).to.equal('你好，请说明需求')
+    }
+  })
+  it('unknown, control and mixed purpose chunks stay hidden, even when a later chunk is marked', () => {
+    for (const kinds of [[undefined, 'ANSWER', 'ANSWER'], ['ACTION_REQUEST', 'ANSWER'], ['ANSWER', undefined], ['ANSWER', 'CLARIFY']]) {
+      const state = { messages: [], conversationId: '42' }
+      kinds.forEach((kind, i) => {
+        const event = delta(i + 1, '片段'); event.streamOutcomeKind = kind
+        appendHallEventMessage(state, event)
+      })
+      expect(visible(state)).to.equal('')
+    }
+  })
+  it('keeps purpose per turn and retains sequence gap/duplicate protection', () => {
+    const state = { messages: [], conversationId: '42' }
+    appendHallEventMessage(state, delta(1, '公开'))
+    appendHallEventMessage(state, delta(1, '秘密', 'ACTION_REQUEST', 'turn-2'))
+    expect(project(state.messages, []).map(discussionMessageText)).to.deep.equal(['公开', ''])
+    expect(appendHallEventMessage(state, delta(1, 'duplicate')).type).to.equal('duplicate_delta')
+    expect(appendHallEventMessage(state, delta(3, 'gap')).type).to.equal('resync_required')
+    expect(project(state.messages, []).map(discussionMessageText)).not.to.include('公开gap')
   })
 })
