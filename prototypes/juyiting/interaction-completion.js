@@ -580,6 +580,11 @@ function handleSubmittedDiscussion(text,inputs=[],quote=null){
  state.chatDraft='';state.chatFiles=[];state.quote=null;persist();renderChat();return true;
 }
 function sendUnifiedMessage(text,inputs=[],quote=null){
+ // Startup refusal is a draft, not an admitted message or an automatic resend.
+ if(new URLSearchParams(location.search).get('runtimePreparing')==='1'){
+  state.chatDraft=text;state.chatFiles=[...inputs];state.quote=quote;persist();renderChat();
+  feedback('执行工具尚未就绪，本次未受理。内容已保留，请稍后手动发送。');return;
+ }
  if(!unifiedTask()||!state.agent||state.pending||acceptanceLocked()||state.task.complete||state.task.cancelled||(!text.trim()&&!inputs.length))return;
  if(state.simulation.reply==='failed'){
   state.chatDraft=text;state.chatFiles=[...inputs];state.quote=quote;state.error='尚不能确认本条消息是否受理（模拟）。内容已保留，请先核对，不要重复发送。';state.task.phase='需核对';renderChat();persist();return;

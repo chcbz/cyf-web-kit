@@ -32,6 +32,30 @@ describe('typed natural discussion interaction adapter', () => {
       status = undefined; expect(await lane.refresh()).to.equal(true)
     } finally { lane.dispose() }
   })
+  it('startup refusal keeps the draft unaccepted, never auto-retries and reuses its key on explicit retry', async () => {
+    let uuid = 0
+    globalThis.crypto.randomUUID = () => `00000000-0000-4000-8000-${String(++uuid).padStart(12, '0')}`
+    let ready = false; const keys = []; let accepted = 0
+    const storage = store()
+    const lane = useHallTypedDeliberation({ chatApi: {
+      create: async (_path, _body, options) => {
+        keys.push(options.headers['Idempotency-Key'])
+        if (!ready) throw Object.assign(new Error('not ready'), { code: 'TYPED_DELIBERATION_RUNTIME_NOT_READY', status: 503 })
+        throw new Error('simulate lost response after explicit retry')
+      }
+    }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1),
+    getContext: () => ({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }),
+    getCatalogEntries: () => [], storage, enabled: () => true, onAccepted: () => accepted++ })
+    try {
+      expect(await lane.submit({ content: '生成文件' })).to.equal(false)
+      expect(lane.error.value).to.include('未受理'); expect(lane.recoveryAvailable.value).to.equal(false)
+      await lane.recover(); expect(keys).to.have.length(1); expect(accepted).to.equal(0)
+      ready = true
+      expect(await lane.submit({ content: '生成文件' })).to.equal(false)
+      expect(keys).to.have.length(2); expect(keys[0]).to.equal(keys[1])
+      expect(lane.recoveryAvailable.value).to.equal(true)
+    } finally { lane.dispose() }
+  })
   it('new discussion does not manufacture a legacy catalog preparation round', async () => {
     for (const prepared of [false, true]) {
       const calls = []

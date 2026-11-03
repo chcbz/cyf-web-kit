@@ -251,11 +251,14 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       pendingQuestionId: pending.pendingQuestionId, expectedPendingQuestionStateVersion: pending.expectedPendingQuestionStateVersion, sourceSelectors, materialScope }
       : { intent: 'DISCUSSION', taskId: context.taskId, assignmentRevision: context.assignmentRevision, content, sourceSelectors, materialScope,
         parentOutcomeId: deliveryParent?.outcomeId ?? null, expectedParentStateVersion: deliveryParent ? '0' : null })
-    const key = secureKey()
+    // A definitive startup refusal is not UNKNOWN. Reuse the same key on an
+    // explicit retry of the same body, including concurrent/late receipt races.
+    const records = readRecords(storage, captured.scope, context)
+    const refused = records.find(item => item.status === 'NOT_READY' && sameContext(item.context, context) && JSON.stringify(item.body) === JSON.stringify(body))
+    const key = refused?.key || secureKey()
     if (!body || !key) { if (current(captured)) error.value = '暂时无法发送，请检查内容和资料后重试。'; return false }
     const record = { key, purpose, body: clone(body), context: clone(context), status: 'POSTING' }
-    const records = readRecords(storage, captured.scope, context)
-    if (!persistRecords(captured, [...records, record])) { if (current(captured)) error.value = '无法保存发送状态，请稍后重试。'; return false }
+    if (!persistRecords(captured, [...records.filter(item => item.key !== key), record])) { if (current(captured)) error.value = '无法保存发送状态，请稍后重试。'; return false }
     busy.value = true; error.value = ''
     try { return await postOriginal(record, captured) }
     finally { if (current(captured)) busy.value = false }
@@ -275,11 +278,12 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       await readOne(receipt.requestId, captured, purpose)
       await onAccepted?.({ receipt, body, purpose, context: clone(context), isCurrent: () => current(captured) })
       return true
-    } catch {
+    } catch (cause) {
       if (current(captured)) {
+        const notReady = cause?.code === 'TYPED_DELIBERATION_RUNTIME_NOT_READY'
         persistRecords(captured, readRecords(storage, captured.scope, context).map(item => item.key === record.key
-          ? { ...item, purpose, status: 'UNKNOWN' } : item))
-        error.value = '暂时无法确认发送结果，请刷新状态。'
+          ? { ...item, purpose, status: notReady ? 'NOT_READY' : 'UNKNOWN' } : item))
+        error.value = notReady ? '执行工具尚未就绪，本次未受理。内容已保留，请稍后手动发送。' : '暂时无法确认发送结果，请刷新状态。'
       }
       return false
     }

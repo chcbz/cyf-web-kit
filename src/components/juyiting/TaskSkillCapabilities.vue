@@ -6,7 +6,7 @@
     <p v-if="!projection && !error">{{ loading ? '正在读取…' : '尚未核对当前目录' }}</p>
     <ul v-else><li v-for="item in projection?.items || []" :key="`${item.skillKey}@${item.skillVersion}`">
       <strong>{{ item.title }}</strong> · {{ item.state === 'CALLABLE' ? '可调用' : '暂不可用' }}
-      <small v-if="item.reasonCode">{{ item.reasonCode }}</small><p>{{ skillCostText(item.costInfo) }}</p>
+      <small v-if="item.reasonCode">{{ item.reasonCode === 'NATIVE_EXECUTION_NOT_READY' ? '执行工具尚未就绪' : item.reasonCode }}</small><p>{{ skillCostText(item.costInfo) }}</p>
     </li></ul>
     <small>费用仅为登记说明；平台不批准、冻结或预扣运行费用。技能包购买价另列。</small>
   </details>
