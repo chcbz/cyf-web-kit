@@ -742,7 +742,10 @@ export const useHallConversation = ({
           const result = appendHallPreview(state, event)
           messages.value = state.messages
           isAwaitingReply.value = state.isAwaitingReply
-          if (result.type === 'preview') recordObservation('first_delta', activeRequest.value)
+          if (result.type === 'preview' && event.deltaSeq === '1' &&
+              !activeRequest.value?.observations?.some(item => item.name === 'first_delta')) {
+            recordObservation('first_delta', activeRequest.value)
+          }
         },
         onPreviewInvalid: () => { if (guardCurrent(streamGuard)) discardHallPreviews() },
         onCursor: cursorValue => eventCursors.set(id, cursorValue),

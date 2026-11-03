@@ -861,6 +861,39 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
 })
 
 describe('Juyi Hall durable SSE recovery', () => {
+  it('processes 1000 ephemeral previews without readbacks or per-frame observations', async () => {
+    const originalFetch = global.fetch
+    let controller; let transportRequestId; let conversation; let reads = 0; let streams = 0
+    global.fetch = async (_url, options) => {
+      streams++
+      transportRequestId = new Headers(options.headers).get('X-Request-Id')
+      return new Response(new ReadableStream({ start: value => { controller = value } }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream', 'X-Request-Id': transportRequestId } })
+    }
+    try {
+      conversation = base({ apiStore: { authorizationGeneration: 1, token: async () => 'token' }, chatApi: {
+        list: async (_path, _payload, options) => { reads++; options.onSuccess({ items: [{ id: '9007199254740993', conversationType: 'juyiting', conversationScopeType: 'public', conversationScopeKey: 'public' }], nextCursor: null, hasMore: false }) },
+        get: async () => { reads++; return {} },
+        getById: async (_path, _id, options) => { reads++; options.onSuccess([]) }
+      } })
+      await conversation.loadHallMessages()
+      for (let i = 0; i < 12; i++) await new Promise(resolve => setImmediate(resolve))
+      conversation.activeRequest.value = { requestId: 'preview-request', observations: [] }
+      const before = reads
+      const frame = seq => `event: conversation.preview\ndata: ${JSON.stringify({ protocolVersion: 1,
+        requestId: transportRequestId, messageType: 'conversation.preview', messageId: `preview:s1:${seq}`,
+        data: { type: 'agent_message_delta', conversationId: '9007199254740993', conversationGeneration: '1',
+          requestId: 'preview-request', turnId: 'turn-a', agentId: 'a', streamId: 's1', deltaSeq: String(seq),
+          content: 'x', streamOutcomeKind: 'ANSWER', occurredAt: 1000 } })}\n\n`
+      controller.enqueue(new TextEncoder().encode(Array.from({ length: 1000 }, (_, i) => frame(i + 1)).join('')))
+      for (let i = 0; i < 12; i++) await new Promise(resolve => setImmediate(resolve))
+      expect(conversation.messages.value.find(row => row.streaming)?.content).to.equal('x'.repeat(1000))
+      expect(conversation.activeRequest.value.observations.filter(item => item.name === 'first_delta')).to.have.length(1)
+      expect(reads).to.equal(before)
+      expect(streams).to.equal(1)
+    } finally { conversation?.disposeHallConversation(); global.fetch = originalFetch }
+  })
+
   for (const type of ['typed_question_answered', 'delivery_submission_completed']) {
     it(`commits ${type} cursor for a non-active request without resync replay`, async () => {
       const originalFetch = global.fetch
