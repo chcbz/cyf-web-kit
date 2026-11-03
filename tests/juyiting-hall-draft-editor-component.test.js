@@ -19,6 +19,7 @@ const loadMaterialPicker = deps => {
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]@\/composables\/usePersonalWorkspace['"];?\s*$/gm, 'var { usePersonalWorkspace, savePersonalWorkspaceBlob } = deps')
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"][^'"]*materialVersion\.js['"];?\s*$/gm, 'var { validMaterialVersion } = deps')
     .replace(/^import\s+PdfDocumentPreview\s+from\s+['"][^'"]+['"];?\s*$/gm, "var PdfDocumentPreview = { name: 'PdfDocumentPreview', template: '<section class=\"pdf-preview-test-slot\" />', props: ['blob'] }")
+    .replace(/^import\s+RichDocumentPreview\s+from\s+['"][^'"]+['"];?\s*$/gm, "var RichDocumentPreview = { name: 'RichDocumentPreview', template: '<section />', props: ['text', 'kind', 'title'] }")
     .replace('export default', 'return')
   return new Function('Vue', 'deps', code)(Vue, { ...deps, validMaterialVersion })
 }
@@ -41,6 +42,7 @@ const loadEditor = (deps = editorDeps()) => {
     .replace(/^import\s+\{\s*deliveryTypeText\s*\}\s+from\s+['"]@\/utils\/executionFormats['"];?\s*$/gm, 'var { deliveryTypeText } = deps')
     .replace(/^import\s+\{\s*validMaterialVersion\s*\}\s+from\s+['"][^'"]+['"];?\s*$/gm, 'var { validMaterialVersion } = deps')
     .replace(/^import\s+PdfDocumentPreview\s+from\s+['"][^'"]+['"];?\s*$/gm, "var PdfDocumentPreview = { name: 'PdfDocumentPreview', template: '<section class=\"pdf-preview-test-slot\" />', props: ['blob'] }")
+    .replace(/^import\s+RichDocumentPreview\s+from\s+['"][^'"]+['"];?\s*$/gm, "var RichDocumentPreview = { name: 'RichDocumentPreview', template: '<section />', props: ['text', 'kind', 'title'] }")
     .replace('export default', 'return')
   return new Function('Vue', 'deps', script)(Vue, { ...deps, deliveryTypeText, validMaterialVersion, HallMaterialPicker: loadMaterialPicker(deps) })
 }
@@ -850,5 +852,25 @@ describe('HallDraftEditor result download lifetime', () => {
       old.reject(new Error('stale failure')); await settle()
       expect(h.wrapper.get('.case-body [role="alert"]').text()).to.equal('current failure')
     } finally { h.wrapper.unmount() }
+  })
+})
+
+describe('private-case document preview consumer parity', () => {
+  for (const kind of ['html', 'markdown']) it(`forwards fixed ${kind} results to the shared renderer`, async () => {
+    const deps = editorDeps(), workspace = deps.usePersonalWorkspace()
+    deps.usePersonalWorkspace = () => workspace
+    workspace.previewVersion = async version => { expect(version).to.equal('2'); workspace.preview.value = { kind: 'document', documentKind: kind, text: '固定正文', message: '' }; return true }
+    const wrapper = mount(loadEditor(deps), { props: { identityScope: 'owner-a', identityEpoch: 1 } })
+    try {
+      editorState.draft.value = { draftId: 'submitted', revision: '1', state: 'SUBMITTED', editableFields: {} }
+      editorState.receipt.value = { ref: { sourceType: 'PRIVATE_CASE', sourceId: 'case-1' }, execution: { executionId: 'exec-1', targetAgentId: 'agent-1', state: 'OUTPUT_COMMITTED' }, task: null, submittedAt: 1 }
+      editorState.caseView.value = { caseId: 'case-1', executions: [{ revisionNo: '1', execution: { executionId: 'exec-1', targetAgentId: 'agent-1', state: 'OUTPUT_COMMITTED' } }] }
+      await Vue.nextTick(); await button(wrapper, '查看成果').trigger('click'); await Vue.nextTick()
+      await wrapper.get('[aria-label="预览成果"]').trigger('click'); await Vue.nextTick()
+      expect(wrapper.findComponent({ name: 'RichDocumentPreview' }).props()).to.include({ text: '固定正文', kind })
+      expect(wrapper.text()).not.to.include('预览暂不可用')
+      workspace.preview.value = { kind: 'parts', parts: [{ kind: 'document', documentKind: kind, text: '分页正文' }], selectedIndex: 0 }
+      await Vue.nextTick(); expect(wrapper.findComponent({ name: 'RichDocumentPreview' }).props()).to.include({ text: '分页正文', kind })
+    } finally { wrapper.unmount() }
   })
 })

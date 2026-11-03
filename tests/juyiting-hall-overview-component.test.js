@@ -33,6 +33,7 @@ const loadMaterialPicker = (workspace, save) => {
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\.\/\.\.\/composables\/juyiting\/materialVersion\.js['"];?\s*$/gm, 'var { validMaterialVersion } = deps')
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\.\/\.\.\/constants\/juyiting\.js['"];?\s*$/gm, 'var { taskStatusText } = deps')
     .replace(/^import\s+PdfDocumentPreview\s+from\s+['"][^'"]+['"];?\s*$/gm, "var PdfDocumentPreview = { name: 'PdfDocumentPreview', template: '<section class=\"pdf-preview-test-slot\" />', props: ['blob'] }")
+    .replace(/^import\s+RichDocumentPreview\s+from\s+['"][^'"]+['"];?\s*$/gm, "var RichDocumentPreview = { name: 'RichDocumentPreview', template: '<section />', props: ['text', 'kind', 'title'] }")
     .replace('export default', 'return')
   return new Function('Vue', 'deps', code)(Vue, { taskStatusText, validMaterialVersion, usePersonalWorkspace: () => workspace, savePersonalWorkspaceBlob: save })
 }

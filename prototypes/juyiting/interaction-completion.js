@@ -243,7 +243,7 @@ async function addLocalFiles(selected){
  try{
   const added=[];
   for(const f of files){
-   const type=f.type.startsWith('image/')?'image':f.type.startsWith('audio/')?'audio':/text|json/.test(f.type)||/\.(txt|md|csv)$/i.test(f.name)?'text':'document';
+   const type=f.type.startsWith('image/')?'image':f.type.startsWith('audio/')?'audio':/text|json/.test(f.type)||/\.(txt|html?|md|markdown|csv)$/i.test(f.name)?'text':'document';
    const text=type==='text'?await f.text():type==='document'?'此格式暂不支持内嵌预览。':'';
    const url=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error('read'));r.onabort=()=>reject(new Error('abort'));r.readAsDataURL(f);});
    added.push({id:'local-'+(++serial),name:f.name,type,text,url,version:1,note:'本机资料 · 上传离线演示'});
@@ -726,7 +726,11 @@ function handleAllPageAction(action,t){
  if(action==='complete-reader-save'){state.reader.notes=$('[aria-label="手札草稿"]').value;persist();feedback('手札已保存在本原型，不上传。');$('.reader-note-status').textContent='手札已保存（本地示例）';return true;}
  if(action==='complete-reader-cite'){state.draft=[state.draft,'请根据典籍第'+state.reader.chapter+'回的阅读示例，整理要点与待办。'].filter(Boolean).join('\n');go('create');return true;}
  if(action==='complete-upload-panel'){dialog('上传资料',`<p>上传本身不交办，也不会把资料发给好汉。本原型仅保存在当前标签页。</p><label>选择资料<input type="file" data-workspace-upload aria-label="选择本地资料"></label><label>显示名称（可选）<input data-upload-name aria-label="显示名称" placeholder="留空使用文件名称"></label><p data-upload-status role="status">尚未选择文件</p>`,button('取消','close-dialog')+button('保存到原型资料','complete-upload-confirm','disabled class="mmd-primary"'));return true;}
- if(action==='complete-upload-confirm'){const input=$('[data-workspace-upload]'),f=input?.files?.[0];if(!f)return true;const name=$('[data-upload-name]').value.trim()||f.name;t.disabled=true;const reader=new FileReader();reader.onload=()=>{const type=f.type.startsWith('image/')?'image':f.type.startsWith('audio/')?'audio':/text|json/.test(f.type)?'text':'document';state.localFiles.push({id:'local-'+(++serial),name,type,url:reader.result,note:'本机资料 · 未上传',text:type==='text'?'本地文件可下载查看。':''});$('dialog[open]')?.close();persist();render();feedback('已存入原型资料，没有上传或交办。');};reader.onerror=()=>{t.disabled=false;$('[data-upload-status]').textContent='读取失败，请重新选择文件。';};reader.readAsDataURL(f);return true;}
+ if(action==='complete-upload-confirm'){
+  const input=$('[data-workspace-upload]'),f=input?.files?.[0];if(!f)return true;
+  const d=t.closest('dialog'),name=$('[data-upload-name]',d).value.trim()||f.name;t.disabled=true;
+  readPrototypeFiles([f]).then(added=>{if(!d.isConnected||!d.open)return;added[0].name=name;state.localFiles.push(...added);d.close();persist();render();feedback('已存入原型资料，没有上传或交办。');}).catch(()=>{if(!d.isConnected)return;t.disabled=false;$('[data-upload-status]',d).textContent='读取失败，请重新选择文件。';});return true;
+ }
  return false;
 }
 document.addEventListener('change',e=>{if(e.target.matches('[data-library-source]')){state.librarySource=e.target.value;persist();}if(e.target.matches('[data-workspace-upload]')){const f=e.target.files?.[0];$('[data-action=complete-upload-confirm]').disabled=!f;$('[data-upload-status]').textContent=f?f.name:'尚未选择文件';}});
@@ -760,11 +764,11 @@ async function saveFileVersion(buttonElement){
  if($('[data-version-fail]')?.checked){status.textContent='保存失败（离线示例），已选文件保留，旧版本与事项引用未改变。';return;}
  buttonElement.disabled=true;status.textContent='正在读取本机文件，不上传…';
  try{
-  const text=/text|json/.test(f.type)||/\.(txt|md|csv)$/i.test(f.name)?await f.text():'';
+  const text=/text|json/.test(f.type)||/\.(txt|html?|md|markdown|csv)$/i.test(f.name)?await f.text():'';
   const url=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(f);});
   const version=(meta.versions?.length||0)+2,id='local-version-'+(++serial);
   const type=f.type.startsWith('image/')?'image':f.type.startsWith('audio/')?'audio':text?'text':'document';
-  const next={id,name:f.name,type,url,text:text||'本格式可下载查看；不模拟未知格式解析。',version,note:'文件新版本 · 仅存于本原型'};
+  const next={id,name:f.name,originalName:f.name,mime:f.type,type,url,text:/text|json/.test(f.type)||/\.(txt|html?|md|markdown|csv)$/i.test(f.name)?text:'本格式可下载查看；不模拟未知格式解析。',version,note:'文件新版本 · 仅存于本原型'};
   const oldMeta=structuredClone(meta);state.localFiles.push(next);meta.versions||=[];meta.versions.push({id,version});meta.demoVersion=String(version);meta.versionStatus='已保存本地 v'+version+'；原事项引用仍固定旧版本。';
   if(!persist()){state.localFiles.pop();state.fileMeta[fileId]=oldMeta;throw Error('storage');}
   if(page==='file'&&(state.fileId||'ref-brief')===fileId){state.fileManage=false;render();}feedback('新版本已保存在原型，未上传。');

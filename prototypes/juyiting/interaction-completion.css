@@ -732,3 +732,9 @@ body[data-ui-revision] .material-picker-dialog .material-selection-summary butto
 
 /* Keep the skill management action at the right edge of the profile heading. */
 .agent-panel .mmd-agent-detail .agent-skill-heading > .skill-inline-manage{margin-left:auto}
+
+/* HTML/Markdown: picker and discussion attachment share the document renderer. */
+.document-preview{width:100%;min-width:0;box-sizing:border-box;justify-self:stretch}
+.document-preview iframe{box-sizing:border-box;max-width:100%}
+.material-inline-preview:has(.document-preview){display:block}
+.mmd-preview{min-width:0;max-width:100%;overflow:auto}

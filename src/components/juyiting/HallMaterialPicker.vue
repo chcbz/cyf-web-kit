@@ -73,7 +73,8 @@
                   <span>第 {{ materialPreview.selectedIndex + 1 }} / {{ materialPreview.parts.length }} 页</span>
                   <button type="button" :disabled="materialPreview.selectedIndex >= materialPreview.parts.length - 1" @click="workspace.selectPreviewPart(materialPreview.selectedIndex + 1)" class="hall-tool" aria-label="下一页" title="下一页"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7"/></svg></button>
                 </div>
-                <PdfDocumentPreview v-if="materialPreviewPart?.kind === 'pdf'" :blob="materialPreviewPart.blob" />
+                <RichDocumentPreview v-if="materialPreviewPart?.kind === 'document'" :text="materialPreviewPart.text" :kind="materialPreviewPart.documentKind" :title="pickerDetail?.file.displayName" />
+                <PdfDocumentPreview v-else-if="materialPreviewPart?.kind === 'pdf'" :blob="materialPreviewPart.blob" />
                 <img v-else-if="materialPreviewPart?.kind === 'image'" :src="materialPreviewPart.url" alt="资料预览" />
                 <audio v-else-if="materialPreviewPart?.kind === 'audio'" :src="materialPreviewPart.url" controls preload="none" aria-label="音频预览"></audio>
                 <pre v-else-if="materialPreviewPart?.kind === 'text'" v-text="materialPreviewPart.text"></pre>
@@ -156,7 +157,8 @@
                   <span>第 {{ materialPreview.selectedIndex + 1 }} / {{ materialPreview.parts.length }} 页</span>
                   <button type="button" :disabled="materialPreview.selectedIndex >= materialPreview.parts.length - 1" @click="workspace.selectPreviewPart(materialPreview.selectedIndex + 1)" class="hall-tool" aria-label="下一页" title="下一页"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7"/></svg></button>
                 </div>
-                <PdfDocumentPreview v-if="materialPreviewPart?.kind === 'pdf'" :blob="materialPreviewPart.blob" />
+                <RichDocumentPreview v-if="materialPreviewPart?.kind === 'document'" :text="materialPreviewPart.text" :kind="materialPreviewPart.documentKind" :title="pickerDetail?.file.displayName" />
+                <PdfDocumentPreview v-else-if="materialPreviewPart?.kind === 'pdf'" :blob="materialPreviewPart.blob" />
             <img v-else-if="materialPreviewPart?.kind === 'image'" :src="materialPreviewPart.url" alt="资料预览" />
                 <audio v-else-if="materialPreviewPart?.kind === 'audio'" :src="materialPreviewPart.url" controls preload="none" aria-label="音频预览"></audio>
                 <pre v-else-if="materialPreviewPart?.kind === 'text'" v-text="materialPreviewPart.text"></pre>
@@ -172,6 +174,7 @@
 
 <script setup>
 import PdfDocumentPreview from '../workspace/PdfDocumentPreview.vue'
+import RichDocumentPreview from '../outputs/RichDocumentPreview.vue'
 import { validMaterialVersion } from '../../composables/juyiting/materialVersion.js'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { usePersonalWorkspace, savePersonalWorkspaceBlob } from '@/composables/usePersonalWorkspace'

@@ -1,7 +1,18 @@
 // Offline presentation prototype, not a production Markdown parser.
+function prototypeDocumentKind(a){
+ const mime=String(a.mime||'').split(';')[0].toLowerCase(),name=a.originalName||a.name||'';
+ return mime==='text/html'?'html':['text/markdown','text/x-markdown'].includes(mime)?'markdown':/\.html?$/i.test(name)?'html':/\.(md|markdown)$/i.test(name)?'markdown':'';
+}
+function prototypeDocumentText(a){
+ // Previous prototype uploads kept the original bytes but only placeholder text.
+ // Recover those local bytes without refetching or discarding the user's selection.
+ const url=String(a.url||'');
+ if(url.startsWith('data:')){try{const comma=url.indexOf(','),payload=url.slice(comma+1);return /;base64$/i.test(url.slice(0,comma))?new TextDecoder().decode(Uint8Array.from(atob(payload),c=>c.charCodeAt(0))):decodeURIComponent(payload);}catch{/* Keep known text if a local data URL is unreadable. */}}
+ return String(a.text||'');
+}
 function prototypeDocumentPreview(a){
- const markdown=/\.(md|markdown)$/i.test(a.name||'');
- const text=String(a.text||'');
+ const markdown=prototypeDocumentKind(a)==='markdown';
+ const text=prototypeDocumentText(a);
  let html=markdown?esc(text).replace(/^### (.+)$/gm,'<h3>$1</h3>').replace(/^## (.+)$/gm,'<h2>$1</h2>').replace(/^# (.+)$/gm,'<h1>$1</h1>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>'):text;
  const doc=new DOMParser().parseFromString(html,'text/html');
  for(const node of doc.querySelectorAll('script,iframe,object,embed,link,base,meta,form,input,button,svg,math'))node.remove();

@@ -101,3 +101,54 @@ describe('conversation HTML/Markdown preview', () => {
     } finally { wrapper.unmount() }
   })
 })
+
+describe('material picker HTML/Markdown entry points', () => {
+  const makeWorkspace = () => {
+    const workspace = {
+      items: Vue.ref([{ fileId: 'brief', displayName: '活动资料', latestVersion: '2' }]),
+      detail: Vue.ref(null), preview: Vue.ref({ kind: 'none' }), error: Vue.ref(''),
+      listState: Vue.ref('ready'), actionState: Vue.ref('idle'), loading: Vue.ref(false), nextCursor: Vue.ref(null),
+      refresh: async () => true, dispose: () => {},
+      closeDetail: () => { workspace.detail.value = null; workspace.revokePreview() },
+      revokePreview: () => { workspace.preview.value = { kind: 'none' } },
+      select: async fileId => {
+        workspace.detail.value = { file: { fileId, displayName: '活动资料', state: 'ACTIVE' }, latestVersion: { version: '2' }, versions: [{ version: '1' }, { version: '2' }] }
+        return workspace.detail.value
+      },
+      previewVersion: async version => { workspace.calledVersion = version; workspace.preview.value = workspace.document }
+    }
+    return workspace
+  }
+  for (const kind of ['html', 'markdown']) for (const standalone of [false, true]) it(`renders ${kind} via ${standalone ? 'selected-material dialog' : 'picker sidebar'}`, async () => {
+    const workspace = makeWorkspace()
+    workspace.document = { kind: 'document', documentKind: kind, text: kind === 'html' ? '<h1>正文</h1><script>alert(1)</script>' : '# 正文\n\n**重点**', message: '' }
+    const Picker = component('../src/components/juyiting/HallMaterialPicker.vue', {
+      '../outputs/RichDocumentPreview.vue': Rich, '../workspace/PdfDocumentPreview.vue': { render: () => null },
+      '../../composables/juyiting/materialVersion.js': { validMaterialVersion: value => /^[1-9][0-9]*$/.test(String(value)) },
+      '@/composables/usePersonalWorkspace': { usePersonalWorkspace: () => workspace, savePersonalWorkspaceBlob: () => {} }
+    })
+    const material = { fileId: 'brief', version: '1', displayName: '固定资料' }
+    const wrapper = mount(Picker, { attachTo: document.body, props: { identityScope: 'owner-a', modelValue: [material] }, global: { stubs: { 'var-icon': true } } })
+    try {
+      if (standalone) await wrapper.get('.quick-material-summary button').trigger('click')
+      else {
+        await wrapper.get('.quick-material-open').trigger('click'); await flushPromises()
+        document.querySelector('[data-file-id="brief"]').click()
+      }
+      await flushPromises()
+      const dialog = document.querySelector('dialog'), frame = dialog.querySelector('iframe')
+      assert.ok(frame, 'actual picker template mounts the shared renderer')
+      assert.equal(frame.getAttribute('sandbox'), ''); assert.match(frame.srcdoc, /<h1>正文<\/h1>/)
+      assert.doesNotMatch(frame.srcdoc, /<script>/); if (kind === 'markdown') assert.match(frame.srcdoc, /<strong>重点<\/strong>/)
+      assert.equal(workspace.calledVersion, '1', 'retains existing fixed version rather than latest')
+      workspace.preview.value = { kind: 'document', documentKind: kind, text: '', message: '' }; await Vue.nextTick()
+      assert.equal(dialog.querySelector('iframe'), null); assert.match(dialog.textContent, /文件内容为空/)
+      workspace.preview.value = { kind: 'error', message: '读取失败' }; await Vue.nextTick()
+      assert.match(dialog.textContent, /读取失败/); assert.ok(dialog.querySelector('[aria-label="重试预览"]'))
+      assert.equal(wrapper.emitted('update:modelValue'), undefined, 'preview does not change draft selection')
+      await wrapper.setProps({ identityScope: 'owner-b' }); await flushPromises()
+      assert.equal(document.querySelector('dialog'), null)
+      assert.deepEqual(wrapper.emitted('update:modelValue'), [[[]]], 'identity change clears prior-owner references')
+    } finally { wrapper.unmount() }
+  })
+})
