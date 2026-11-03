@@ -30,6 +30,7 @@ export const discussionTurns = ({ messages = [], projections = [], conversationI
       projection?.outcome?.taskId === taskId && projection.outcome.assistantMessageId === row.localId)
     const knownKind = typed?.outcome?.kind || (row.typedOutcomeTaskId === taskId ? row.typedOutcomeKind : '')
     row.turnActionRequest = knownKind === 'ACTION_REQUEST'
+    row.turnControlRequest = ['ACTION_REQUEST', 'REVISION_REQUEST'].includes(knownKind)
     // Only Runtime-classified user reply deltas may render before the authoritative final.
     // Missing/unknown purpose remains hidden for mixed-version producers.
     const visibleStream = ['ANSWER', 'CLARIFY'].includes(row.streamOutcomeKind)
@@ -48,8 +49,8 @@ export const discussionTurns = ({ messages = [], projections = [], conversationI
   return rows.filter(row => !consumed.has(row))
 }
 
-// ACTION_REQUEST is control-plane prose, not a user answer. Keep the stored original intact.
-export const discussionMessageText = message => (message?.turnActionRequest || message?.turnAwaitingType || message?.turnProjections?.length) ? '' : (message?.content || '')
+// Execution/revision instructions are control prose, not user answers. Keep originals intact.
+export const discussionMessageText = message => (message?.turnControlRequest || message?.turnActionRequest || message?.turnAwaitingType || message?.turnProjections?.length) ? '' : (message?.content || '')
 export const discussionFooterStatus = (status, isTaskDiscussion) => isTaskDiscussion &&
   ['本轮回话已结束', '本轮结果已登记', '本轮成果已就绪'].includes(status) ? '' : status
 

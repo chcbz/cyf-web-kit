@@ -156,7 +156,7 @@
           @reply="!serverTaskCompleted && $emit('typed-reply', $event)"
         />
         <slot name="turn-actions" :request-ids="message.turnRequestIds || []"></slot>
-        <small v-if="message.statusText && !message.turnProjections?.length && !message.turnActionRequest && !message.turnAwaitingType" class="message-status">{{ message.statusText }}</small>
+        <small v-if="message.statusText && !message.turnProjections?.length && !message.turnControlRequest && !message.turnActionRequest && !message.turnAwaitingType" class="message-status">{{ message.statusText }}</small>
       </div>
       <slot name="bounty-results"></slot>
       <p v-if="discussionFooterStatus(deliberationStatus, isTaskDiscussion) && !serverTaskCompleted" class="deliberation-status" :role="deliberationStatus.startsWith('停止失败') ? 'alert' : 'status'">{{ deliberationStatus }}</p>
@@ -400,7 +400,7 @@ const typedForMessage = message => props.typedOutcomes.filter(projection =>
 
 // Suppress only an identical answer; distinct typed text must remain visible.
 const typedBodyRendered = (message, projection) => Boolean(message.content) && (
-  ['ACTION_REQUEST', 'SUBMISSION_REQUEST'].includes(projection?.outcome?.kind) ||
+  ['ACTION_REQUEST', 'REVISION_REQUEST', 'SUBMISSION_REQUEST'].includes(projection?.outcome?.kind) ||
   String(message.content).trim() === String(projection?.outcome?.text || '').trim()
 )
 

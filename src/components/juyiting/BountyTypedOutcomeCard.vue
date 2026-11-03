@@ -1,7 +1,7 @@
 <template>
   <article v-if="hasDetails" class="typed-outcome-card" :class="[{ 'is-inline': bodyRendered }, `typed-${outcome.kind.toLowerCase()}`]">
     <header v-if="!bodyRendered || outcome.kind === 'ACTION_REQUEST'"><strong>{{ heading }}</strong><small>{{ inspection ? '资料答复' : 'Agent 答复' }}</small></header>
-    <p v-if="!bodyRendered" class="typed-outcome-text">{{ body }}</p>
+    <p v-if="!bodyRendered && outcome.kind !== 'REVISION_REQUEST'" class="typed-outcome-text">{{ body }}</p>
     <small v-if="submission?.state === 'FAILED' || outcome.kind === 'SUBMISSION_REQUEST'" class="typed-submission-note" role="status">{{ submissionHint }}</small>
     <small v-if="reviewHint" class="typed-submission-note" role="status">{{ reviewHint }}</small>
     <template v-if="outcome.kind === 'CLARIFY'">

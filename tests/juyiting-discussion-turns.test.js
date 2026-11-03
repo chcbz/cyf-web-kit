@@ -175,3 +175,28 @@ describe('provisional user reply stream purpose', () => {
     expect(project(state.messages, []).map(discussionMessageText)).not.to.include('公开gap')
   })
 })
+
+
+describe('revision control prose from production regression', () => {
+  it('hides revision instructions in live final and scoped reload, keeping user text, files and progress intact', () => {
+    const instruction = '请将检查建议整理成可下载的 HTML 文件，不改动图片。'
+    const state = { conversationId: '42', messages: [] }
+    appendHallEventMessage(state, { type: 'agent_message', conversationId: '42', messageId: 'reply-1', senderType: 'agent', content: instruction,
+      typedOutcome: { outcomeId: 'revision-1', taskId: 'task-1', kind: 'REVISION_REQUEST' } }, '')
+    const live = project(state.messages, [])[0]
+    expect(discussionMessageText(live)).to.equal('')
+    expect(live.turnControlRequest).to.equal(true)
+    expect(live.turnActionRequest).to.equal(false) // not execution progress / do not invent a child link
+    const history = normalizeHallMessage({ id: 'reply-1', messageType: 'ASSISTANT', content: instruction, metadata: { outcomeId: 'revision-1' } }, '')
+    const revision = { ...projection(), outcome: { ...projection().outcome, kind: 'REVISION_REQUEST', outcomeId: 'revision-1' },
+      actionProgress: null, reviewProgress: { state: 'COMMITTED', childRequestId: 'revision-child' } }
+    const before = structuredClone(revision)
+    const row = project([{ ...history, parts: [part()] }], [revision])[0]
+    expect(discussionMessageText(row)).to.equal('')
+    expect(row.parts).to.have.length(1)
+    expect(row.turnOriginal.content).to.equal(instruction)
+    expect(revision).to.deep.equal(before)
+    expect(discussionMessageText({ sender: 'USER', content: instruction })).to.equal(instruction)
+    expect(discussionMessageText(project([{ ...history, content: '这是给你的建议。' }], [{ ...revision, outcome: { ...revision.outcome, kind: 'ANSWER' } }])[0])).to.equal('这是给你的建议。')
+  })
+})
