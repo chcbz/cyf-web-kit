@@ -8,7 +8,13 @@
         <span>第 {{ selectedPartIndex + 1 }} / {{ parts.length }} {{ currentPart.contentMimeType === 'text/plain' ? '项' : '页' }}</span>
         <button type="button" :disabled="selectedPartIndex >= parts.length - 1" @click="selectedPartIndex += 1" class="hall-tool" aria-label="下一页" title="下一页"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7"/></svg></button>
       </div>
-      <pre v-if="typeof currentPart.text === 'string'" v-text="currentPart.text"></pre>
+      <RichDocumentPreview
+        v-if="currentPart.documentKind"
+        :text="currentPart.text"
+        :kind="currentPart.documentKind"
+        :title="item.title"
+      />
+      <pre v-else-if="typeof currentPart.text === 'string'" v-text="currentPart.text"></pre>
       <img
         v-else-if="currentPart.imageUrl"
         :src="currentPart.imageUrl"
@@ -25,6 +31,8 @@
 
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import RichDocumentPreview from './RichDocumentPreview.vue'
+import { richDocumentKind } from '../../utils/richDocumentPreview.js'
 import PdfDocumentPreview from '../workspace/PdfDocumentPreview.vue'
 import { outputPreviewKind } from '../../composables/useOutputs.js'
 
@@ -97,7 +105,8 @@ watch(() => [props.item?.artifactId, props.item?.artifactVersion, props.item?.fi
       if (!part || typeof part.partId !== 'string' || !['text/plain', 'image/png', item.mimeType].includes(part.contentMimeType) || !(part.blob instanceof Blob) || part.blob.type !== part.contentMimeType) {
         throw new Error('预览分片无效，请下载原文件查看。')
       }
-      if (part.contentMimeType === TEXT_PREVIEW_MIME) rendered.push({ partId: part.partId, contentMimeType: part.contentMimeType, text: await part.blob.text(), imageUrl: '' })
+      if (richDocumentKind(item.mimeType) && part.contentMimeType === item.mimeType) rendered.push({ partId: part.partId, contentMimeType: part.contentMimeType, text: await part.blob.text(), documentKind: richDocumentKind(item.mimeType) })
+      else if (part.contentMimeType === TEXT_PREVIEW_MIME) rendered.push({ partId: part.partId, contentMimeType: part.contentMimeType, text: await part.blob.text(), imageUrl: '' })
       else if (part.contentMimeType === PDF_MIME) rendered.push({ partId: part.partId, contentMimeType: PDF_MIME, pdfBlob: part.blob })
       else {
         const url = URL.createObjectURL(part.blob)

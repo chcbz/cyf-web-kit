@@ -1,3 +1,4 @@
+import { richDocumentKind } from '../utils/richDocumentPreview.js'
 import { saveOutputBlob } from '../utils/outputDownload.js'
 import { computed, getCurrentInstance, onBeforeUnmount, ref, toRaw, unref, watch } from 'vue'
 import { createApi } from './useHttp.js'
@@ -9,7 +10,7 @@ export const PERSONAL_WORKSPACE_MIME_TYPES = Object.freeze([
   'image/png', 'image/jpeg', 'image/webp', 'image/gif',
   'image/bmp', 'image/tiff', 'image/heic', 'image/heif', 'image/avif',
   'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/mp4', 'audio/webm',
-  'text/plain', 'application/pdf',
+  'text/plain', 'text/html', 'text/markdown', 'text/x-markdown', 'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 ])
@@ -20,7 +21,7 @@ const EXTENSION_MIME = Object.freeze({
   png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', jpe: 'image/jpeg', jfif: 'image/jpeg', webp: 'image/webp', gif: 'image/gif',
   bmp: 'image/bmp', tif: 'image/tiff', tiff: 'image/tiff', heic: 'image/heic', heif: 'image/heif', avif: 'image/avif',
   mp3: 'audio/mpeg', ogg: 'audio/ogg', oga: 'audio/ogg', wav: 'audio/wav',
-  m4a: 'audio/mp4', mp4: 'audio/mp4', webm: 'audio/webm', txt: 'text/plain', pdf: 'application/pdf',
+  m4a: 'audio/mp4', mp4: 'audio/mp4', webm: 'audio/webm', txt: 'text/plain', html: 'text/html', htm: 'text/html', md: 'text/markdown', markdown: 'text/markdown', pdf: 'application/pdf',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
@@ -43,6 +44,7 @@ const extensionFor = filename => {
 }
 const inferredMime = file => {
   const declared = normalizeMime(file?.type)
+  if (richDocumentKind(declared, file?.name) && ['text/plain', 'application/octet-stream', ''].includes(declared)) return EXTENSION_MIME[extensionFor(file?.name)] || declared
   if (declared && declared !== 'application/octet-stream') return declared
   return EXTENSION_MIME[extensionFor(file?.name)] || 'application/octet-stream'
 }
@@ -511,6 +513,16 @@ export function usePersonalWorkspace ({ api = createApi('/agent'), identityEpoch
       snapshot.epoch === currentEpoch.value && previewRequest === previewGeneration
     const requireCurrent = () => { if (!current()) throw abortError('Workspace preview changed') }
     try {
+      const documentKind = richDocumentKind(selectedVersion?.contentMimeType, selectedVersion?.originalFilename || file.displayName)
+      if (documentKind) {
+        const content = await readBlob(file.fileId, version)
+        requireCurrent()
+        const text = await content.blob.text()
+        requireCurrent()
+        preview.value = { kind: 'document', documentKind, text, message: '' }
+        actionState.value = 'ready'
+        return preview.value
+      }
       const { data } = await request({ url: `/personal-workspace/files/${encodeURIComponent(file.fileId)}/versions/${version}/preview`, method: 'GET', params: { view: 'parts' } }, snapshot)
       requireCurrent()
       if (!validPreviewView(data)) {

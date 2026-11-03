@@ -83,7 +83,7 @@ const readableArtifact = (delivery, artifact) => safeReadOutputs.value.find(outp
 const outputKey = output => output ? `${output.artifactId}:${output.artifactVersion}:${output.sha256}` : ''
 const isPreviewing = (delivery, artifact) => Boolean(props.previewOutputKey && props.previewOutputKey === outputKey(readableArtifact(delivery, artifact)))
 const previewMimeTypes = new Set([
-  'text/plain', 'text/markdown', 'text/csv', 'application/json', 'image/png', 'image/jpeg', 'application/pdf',
+  'text/plain', 'text/html', 'text/markdown', 'text/x-markdown', 'text/csv', 'application/json', 'image/png', 'image/jpeg', 'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation'

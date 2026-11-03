@@ -4,7 +4,7 @@ import { registerIdentityCleanup } from '../utils/identityLifecycle.js'
 
 const MAX_PAGE_SIZE = 100
 const DEFAULT_PAGE_SIZE = 20
-const textMimeTypes = new Set(['text/plain', 'text/markdown', 'text/csv', 'application/json'])
+const textMimeTypes = new Set(['text/plain', 'text/html', 'text/markdown', 'text/x-markdown', 'text/csv', 'application/json'])
 const imageMimeTypes = new Set(['image/png', 'image/jpeg'])
 const pdfMimeTypes = new Set(['application/pdf'])
 const documentPreviewMimeTypes = new Set([

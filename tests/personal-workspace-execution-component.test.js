@@ -23,6 +23,7 @@ script = script
   .replace(/^import\s+\{\s*workspaceByteText,\s*validMaterialVersion\s*\}\s+from\s+['"]@\/utils\/personalWorkspaceProtocol['"];?\s*$/gm, 'var { workspaceByteText, validMaterialVersion } = deps')
   .replace(/^import\s+WorkspaceWriteRecovery\s+from\s+['"][^'"]+['"];?\s*$/gm, "var WorkspaceWriteRecovery = { template: '<section />', props: ['pending'], emits: ['retry'] }")
   .replace(/^import\s+PdfDocumentPreview\s+from\s+['"][^'"]+['"];?\s*$/gm, "var PdfDocumentPreview = { name: 'PdfDocumentPreview', template: '<section />', props: ['blob'] }")
+  .replace(/^import\s+RichDocumentPreview\s+from\s+['"][^'"]+['"];?\s*$/gm, "var RichDocumentPreview = { name: 'RichDocumentPreview', template: '<section />', props: ['text', 'kind', 'title'] }")
   .replace('export default', 'return')
 
 const workspaceMock = () => {
@@ -86,6 +87,31 @@ describe('personal workspace execution receipt presentation', () => {
   })
 
   for (const embedded of [true, false]) {
+    it(`renders rich documents in ${embedded ? 'embedded' : 'full'} workspace without image fallback`, async () => {
+      const workspace = workspaceMock(); const execution = executionMock()
+      workspace.previewVersion = async () => { workspace.preview.value = { kind: 'document', documentKind: 'markdown', text: '# 文件', message: '' }; return workspace.preview.value }
+      const component = new Function('Vue', 'deps', script)(Vue, { workspaceByteText, validMaterialVersion,
+        deliveryTypeText, useApiStore: () => ({ authorizationGeneration: 1, oauthClientId: 'web-client' }),
+        useGlobalStore: () => ({ user: { id: 'owner-a', tenantId: 'tenant-a' } }),
+        usePersonalWorkspace: () => workspace, usePersonalWorkspaceExecution: () => execution, savePersonalWorkspaceBlob: () => {}
+      })
+      const wrapper = mount(component, { props: { embedded } })
+      try {
+        await flushPromises()
+        if (embedded) await wrapper.get('.treasure-file-row button').trigger('click')
+        else {
+          await wrapper.findAll('.box-actions button').find(button => button.text().includes('资料柜')).trigger('click')
+          await wrapper.get('.file-row').trigger('click'); await flushPromises()
+          await wrapper.findAll('.detail-tabs button').find(button => button.text() === '版本与预览').trigger('click')
+          await wrapper.get('.version-actions button[aria-label^="预览"]').trigger('click')
+        }
+        await flushPromises()
+        const preview = wrapper.findComponent({ name: 'RichDocumentPreview' })
+        assert.equal(preview.exists(), true)
+        assert.equal(preview.props('text'), '# 文件'); assert.equal(preview.props('kind'), 'markdown')
+      } finally { wrapper.unmount() }
+    })
+
     it(`renders authorized audio with controls and no autoplay in ${embedded ? 'embedded' : 'full'} workspace`, async () => {
       const workspace = workspaceMock(); const execution = executionMock()
       workspace.items.value[0].mediaFamily = 'AUDIO'
