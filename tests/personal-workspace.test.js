@@ -181,3 +181,38 @@ describe('common image material uploads', () => {
     })
   }
 })
+
+
+describe('HTML and Markdown fixed-version workspace preview', () => {
+  for (const [mime, filename, kind] of [['text/html', 'page.html', 'html'], ['text/markdown', 'notes.md', 'markdown'], ['text/plain', 'legacy.md', 'markdown']]) it(`reads authorized original bytes for ${mime} / ${filename}`, async () => {
+    const calls = []
+    const api = { execute: async options => {
+      calls.push(options)
+      if (options.url.endsWith('/content')) return new Blob(['# document'], { type: mime })
+      const version = versionView({ contentMimeType: mime, originalFilename: filename })
+      return reply(options, { file: fileView({ displayName: filename }), latestVersion: version, versions: [version], relations: [], derivation: [] }, { etag: '"pws_file:1"' })
+    } }
+    const workspace = usePersonalWorkspace({ api, identityEpoch: ref('owner-a') })
+    try {
+      await workspace.select('pws_file'); await workspace.previewVersion('1')
+      assert.equal(workspace.preview.value.kind, 'document'); assert.equal(workspace.preview.value.documentKind, kind)
+      assert.equal(workspace.preview.value.text, '# document')
+      assert.ok(calls.some(call => call.url === '/personal-workspace/files/pws_file/versions/1/content' && call.needAuth === true))
+      assert.equal(calls.some(call => call.url.includes('/preview')), false)
+    } finally { workspace.dispose() }
+  })
+  it('clears HTML on identity change and ignores late original bytes', async () => {
+    const pending = deferred(); const epoch = ref('owner-a')
+    const api = { execute: async options => {
+      if (options.url.endsWith('/content')) return pending.promise
+      const version = versionView({ contentMimeType: 'text/html', originalFilename: 'page.html' })
+      return reply(options, { file: fileView(), latestVersion: version, versions: [version], relations: [], derivation: [] }, { etag: '"pws_file:1"' })
+    } }
+    const workspace = usePersonalWorkspace({ api, identityEpoch: epoch })
+    try {
+      await workspace.select('pws_file'); const reading = workspace.previewVersion('1')
+      epoch.value = 'owner-b'; await Promise.resolve(); pending.resolve(new Blob(['secret'], { type: 'text/html' })); await reading
+      assert.notEqual(workspace.preview.value.text, 'secret'); assert.notEqual(workspace.preview.value.kind, 'document')
+    } finally { workspace.dispose() }
+  })
+})
