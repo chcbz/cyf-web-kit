@@ -235,19 +235,23 @@ function beginAcceptance(){
 }
 function operationDialog(){const op=state.operation;if(!op)return;finalDraft=[...op.outputs];dialog('验收进度',`<p role="status">${op.stage==='pending'?'正在核对原验收操作…':op.stage==='failed'?'验收未完成。原操作和成果已保留。':'验收状态未知。不重新提交验收。'}</p><small>原操作 ${esc(op.id)} · 冻结 ${op.outputs.length} 项成果</small><div class="mmd-attachments">${deliveryList()}</div>`,button('返回详情','complete-operation-detail')+button('查询原操作状态','complete-operation-status'));}
 function resolveOperation(){const op=state.operation;if(!op||state.task?.complete)return;if(state.simulation.accept==='ok'){op.stage='completed';state.final=[...op.outputs];state.task.complete=true;persist();const d=$('dialog[open]');if(d?.getAttribute('aria-label')==='验收进度'){d.close();if(page==='chat')renderChat();else go('detail');feedback('示例验收完成。');}else render();return;}op.stage=state.simulation.accept==='failed'?'failed':'unknown';if(page==='detail')renderDetail();if(page==='results')renderFormalResults();persist();const d=$('dialog[open]');if(d?.getAttribute('aria-label')==='验收进度'){d.close();operationDialog();}}
+async function readPrototypeFiles(selected){
+ const added=[];
+ for(const f of selected){
+  const type=f.type.startsWith('image/')?'image':f.type.startsWith('audio/')?'audio':/text|json/.test(f.type)||/\.(txt|html?|md|markdown|csv)$/i.test(f.name)?'text':'document';
+  const text=type==='text'?await f.text():type==='document'?'此格式暂不支持内嵌预览。':'';
+  const url=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error('read'));r.onabort=()=>reject(new Error('abort'));r.readAsDataURL(f);});
+  added.push({id:'local-'+(++serial),name:f.name,originalName:f.name,mime:f.type,type,text,url,size:f.size,version:1,note:'个人资料空间 · 仅本地原型'});
+ }
+ return added;
+}
 async function addLocalFiles(selected){
  const files=[...selected],d=$('.material-picker-dialog'),current=picker;
  if(!files.length||!d||current.uploading)return;
  const input=$('[data-local-files]',d),status=$('[data-picker-upload-status]',d);
  current.uploading=true;input.disabled=true;current.uploadStatus='正在读取资料…';status.hidden=false;status.textContent=current.uploadStatus;
  try{
-  const added=[];
-  for(const f of files){
-   const type=f.type.startsWith('image/')?'image':f.type.startsWith('audio/')?'audio':/text|json/.test(f.type)||/\.(txt|html?|md|markdown|csv)$/i.test(f.name)?'text':'document';
-   const text=type==='text'?await f.text():type==='document'?'此格式暂不支持内嵌预览。':'';
-   const url=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error('read'));r.onabort=()=>reject(new Error('abort'));r.readAsDataURL(f);});
-   added.push({id:'local-'+(++serial),name:f.name,type,text,url,version:1,note:'本机资料 · 上传离线演示'});
-  }
+  const added=await readPrototypeFiles(files);
   if(!d.isConnected||picker!==current)return;
   state.localFiles.push(...added);current.ids=[...new Set([...current.ids,...added.map(a=>a.id)])];
   current.selected=added[0].id;current.preview=false;current.previewDismissed=false;
