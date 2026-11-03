@@ -60,6 +60,15 @@ describe('static HTML and Markdown file preview', () => {
     const wrapper = mount(Preview, { props: { item: { artifactId: 'a', artifactVersion: '1', title: '文件', mimeType, byteLength: 10 }, load: async () => new Blob(['<h1>Title</h1>'], { type: mimeType }) } })
     try { await flushPromises(); assert.equal(wrapper.findComponent(Rich).exists(), true); assert.equal(wrapper.find('iframe').exists(), true) } finally { wrapper.unmount() }
   })
+  for (const type of ['text/html;charset=utf-8', 'text/markdown; charset=utf-8', 'application/json']) it(`preserves document MIME matching for ${type}`, async () => {
+    const mimeType = type.startsWith('text/markdown') ? 'text/markdown' : 'text/html'
+    const wrapper = mount(Preview, { props: { item: { artifactId: 'a', artifactVersion: '1', title: '文件', mimeType, byteLength: 10 }, load: async () => new Blob(['<h1>Title</h1>'], { type }) } })
+    try {
+      await flushPromises()
+      assert.equal(wrapper.findComponent(Rich).exists(), type !== 'application/json')
+      if (type === 'application/json') assert.match(wrapper.text(), /类型不匹配/)
+    } finally { wrapper.unmount() }
+  })
   it('does not show a stale output after the file context changes', async () => {
     let resolve
     const wrapper = mount(Preview, { props: { item: { artifactId: 'a', artifactVersion: '1', title: '旧', mimeType: 'text/html', byteLength: 1 }, load: () => new Promise(r => { resolve = r }) } })

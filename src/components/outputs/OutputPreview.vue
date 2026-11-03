@@ -82,6 +82,11 @@ const legacyPart = (result, kind, item) => {
   const blob = result instanceof Blob ? result : result?.blob
   if (!(blob instanceof Blob)) return []
   const expectedMime = kind === 'text' && isDocumentTextPreview(item) ? TEXT_PREVIEW_MIME : item.mimeType
+  // Original text responses may include a charset parameter. Keep the same
+  // authoritative document MIME; never accept an unrelated transport type.
+  if (richDocumentKind(expectedMime) && blob.type.split(';', 1)[0].trim().toLowerCase() === expectedMime) {
+    return [{ partId: 'content', contentMimeType: expectedMime, blob: blob.slice(0, blob.size, expectedMime) }]
+  }
   if (blob.type !== expectedMime) throw new Error('文件类型不匹配，请下载文件查看。')
   return [{ partId: 'content', contentMimeType: blob.type, blob }]
 }
