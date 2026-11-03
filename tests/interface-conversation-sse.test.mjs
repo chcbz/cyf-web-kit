@@ -55,10 +55,12 @@ test('previews cannot inject persistent checkpoints, cross conversation scope or
     { turnId: '' }, { content: '' }, { occurredAt: '1000' }, { state: 'FINAL_PERSISTED' },
     ...['eventSequence', 'eventVersion', 'stateVersion', 'lastDeltaSeq', 'cursor', 'nextCursor'].map(k => ({ [k]: '9' }))
   ].map(patch => previewFrame(previewMessage(patch)))]) {
-    let previews = 0; const errors = [], cursors = []
+    let previews = 0; const errors = [], cursors = [], dropped = [], events = []
     const parser = createHallSseParser({ conversationId: '42', requestId: 'request-test',
-      onPreview: () => previews++, onCursor: c => cursors.push(c), onInvalid: e => errors.push(e) })
-    parser.push(wire); parser.finish()
-    assert.equal(previews, 0, wire); assert.deepEqual(cursors, []); assert.equal(errors.length, 1, wire)
+      onPreview: () => previews++, onPreviewInvalid: reason => dropped.push(reason),
+      onEvent: e => events.push(e), onCursor: c => cursors.push(c), onInvalid: e => errors.push(e) })
+    parser.push(frame(message('8')) + wire + frame(message('9'))); parser.finish()
+    assert.equal(previews, 0, wire); assert.deepEqual(cursors, ['8', '9'])
+    assert.equal(events.length, 2); assert.deepEqual(errors, []); assert.equal(dropped.length, 1, wire)
   }
 })

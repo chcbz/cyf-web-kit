@@ -19,7 +19,7 @@ const canonicalField = (event, key, options) => {
   return { present: true, value: canonicalWireString(event[key], options) }
 }
 
-export const createHallSseParser = ({ conversationId, requestId, onEvent, onPreview, onCursor, onCommitted, onInvalid }) => {
+export const createHallSseParser = ({ conversationId, requestId, onEvent, onPreview, onPreviewInvalid, onCursor, onCommitted, onInvalid }) => {
   let buffer = ''
   let failed = false
   let frame = emptyFrame()
@@ -40,17 +40,24 @@ export const createHallSseParser = ({ conversationId, requestId, onEvent, onPrev
     // A preview is transient presentation, not a journal entry. It must never
     // change Last-Event-ID, commit a replay cursor or enter the business reducer.
     if (message.messageType === 'conversation.preview') {
+      const discardPreview = reason => {
+        // A rejected preview must not abort durable final delivery or cause a
+        // journal resync. Consumers may only clear their local preview here.
+        frame = emptyFrame()
+        onPreviewInvalid?.(reason)
+        return true
+      }
       const preview = message.data
       if (Object.hasOwn(message, 'correlationId') || frame.hasId || !frame.hasEvent ||
-          frame.event !== message.messageType || requestId !== undefined && message.requestId !== requestId) return invalid('invalid_preview_envelope')
+          frame.event !== message.messageType || requestId !== undefined && message.requestId !== requestId) return discardPreview('invalid_preview_envelope')
       if (!preview || Array.isArray(preview) || typeof preview !== 'object' ||
           preview.conversationId !== conversationId || preview.type !== 'agent_message_delta' ||
           typeof preview.turnId !== 'string' || !preview.turnId || typeof preview.streamId !== 'string' || !preview.streamId ||
           !canonicalWireString(preview.conversationGeneration) || !canonicalWireString(preview.deltaSeq) ||
           typeof preview.content !== 'string' || !preview.content ||
           !Number.isSafeInteger(preview.occurredAt) || !Number.isFinite(new Date(preview.occurredAt).getTime()) ||
-          message.messageId !== `preview:${preview.streamId}:${preview.deltaSeq}`) return invalid('invalid_preview')
-      if (['eventSequence', 'eventVersion', 'stateVersion', 'state', 'lastDeltaSeq', 'cursor', 'nextCursor'].some(key => Object.hasOwn(preview, key))) return invalid('preview_has_durable_state')
+          message.messageId !== `preview:${preview.streamId}:${preview.deltaSeq}`) return discardPreview('invalid_preview')
+      if (['eventSequence', 'eventVersion', 'stateVersion', 'state', 'lastDeltaSeq', 'cursor', 'nextCursor'].some(key => Object.hasOwn(preview, key))) return discardPreview('preview_has_durable_state')
       onPreview?.(preview)
       frame = emptyFrame()
       return true
