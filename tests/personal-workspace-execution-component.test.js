@@ -106,6 +106,10 @@ describe('personal workspace execution receipt presentation', () => {
           await wrapper.get('.version-actions button[aria-label^="预览"]').trigger('click')
         }
         await flushPromises()
+        if (!embedded) {
+          const accept = wrapper.find('input[type="file"]').attributes('accept')
+          for (const extension of ['.html', '.htm', '.md', '.markdown']) assert.ok(accept.split(',').includes(extension))
+        }
         const preview = wrapper.findComponent({ name: 'RichDocumentPreview' })
         assert.equal(preview.exists(), true)
         assert.equal(preview.props('text'), '# 文件'); assert.equal(preview.props('kind'), 'markdown')

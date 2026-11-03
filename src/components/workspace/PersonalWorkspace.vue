@@ -281,7 +281,7 @@ const recentExecutionText = computed(() => {
   const recent = execution.receipt.value || execution.history.value[0]
   return recent ? executionStateText(recent.state) : '暂无'
 })
-const acceptTypes = '.webp,.gif,.mp3,.ogg,.oga,.wav,.m4a,.mp4,.webm,image/webp,image/gif,audio/mpeg,audio/ogg,audio/wav,audio/mp4,audio/webm,.png,.jpg,.jpeg,.txt,.pdf,.docx,.xlsx,.pptx,image/png,image/jpeg,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation'
+const acceptTypes = '.html,.htm,.md,.markdown,text/html,text/markdown,text/x-markdown,.webp,.gif,.mp3,.ogg,.oga,.wav,.m4a,.mp4,.webm,image/webp,image/gif,audio/mpeg,audio/ogg,audio/wav,audio/mp4,audio/webm,.png,.jpg,.jpeg,.txt,.pdf,.docx,.xlsx,.pptx,image/png,image/jpeg,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation'
 
 const byteText = workspaceByteText
 const nextVersion = computed(() => { const value = workspace.detail.value?.file.latestVersion; return validMaterialVersion(value) && BigInt(value) < 2147483647n ? String(BigInt(value) + 1n) : null })
