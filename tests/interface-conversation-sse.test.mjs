@@ -32,3 +32,33 @@ test('conflicting scope or cursor and rejected reducer never advance replay curs
  }
  const cursors=[],errors=[];const parser=createHallSseParser({conversationId:'42',requestId:'request-test',onEvent:()=>false,onCursor:c=>cursors.push(c),onInvalid:e=>errors.push(e)});parser.push(frame(message('8')));assert.deepEqual(cursors,[]);assert.equal(errors.length,1)
 })
+
+const previewMessage = (patch = {}) => eventMessage('request-test', 'conversation.preview', 'preview:stream-a:2', {
+  type: 'agent_message_delta', conversationId: '42', conversationGeneration: '1', turnId: 'turn-a',
+  streamId: 'stream-a', deltaSeq: '2', content: ' 你好\n', occurredAt: 1000, ...patch
+})
+const previewFrame = m => `event: ${m.messageType}\ndata: ${JSON.stringify(m)}\n\n`
+test('transient previews have no SSE id and never enter durable reducers or advance replay cursors', () => {
+  const previews = [], events = [], cursors = [], committed = [], errors = []
+  const parser = createHallSseParser({ conversationId: '42', requestId: 'request-test',
+    onPreview: e => previews.push(e), onEvent: e => events.push(e), onCursor: c => cursors.push(c),
+    onCommitted: e => committed.push(e), onInvalid: e => errors.push(e) })
+  const wire = frame(message('8')) + previewFrame(previewMessage()) + frame(message('9'))
+  for (const char of wire) parser.push(char)
+  parser.finish()
+  assert.deepEqual(errors, []); assert.equal(previews.length, 1); assert.equal(previews[0].content, ' 你好\n')
+  assert.equal(events.length, 2); assert.equal(committed.length, 2); assert.deepEqual(cursors, ['8', '9'])
+})
+test('previews cannot inject persistent checkpoints, cross conversation scope or masquerade as journal entries', () => {
+  for (const wire of [frame(previewMessage()), ...[
+    { conversationId: '43' }, { conversationGeneration: '0' }, { streamId: 'other' }, { deltaSeq: '3' },
+    { turnId: '' }, { content: '' }, { occurredAt: '1000' }, { state: 'FINAL_PERSISTED' },
+    ...['eventSequence', 'eventVersion', 'stateVersion', 'lastDeltaSeq', 'cursor', 'nextCursor'].map(k => ({ [k]: '9' }))
+  ].map(patch => previewFrame(previewMessage(patch)))]) {
+    let previews = 0; const errors = [], cursors = []
+    const parser = createHallSseParser({ conversationId: '42', requestId: 'request-test',
+      onPreview: () => previews++, onCursor: c => cursors.push(c), onInvalid: e => errors.push(e) })
+    parser.push(wire); parser.finish()
+    assert.equal(previews, 0, wire); assert.deepEqual(cursors, []); assert.equal(errors.length, 1, wire)
+  }
+})
