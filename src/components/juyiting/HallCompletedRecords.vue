@@ -15,14 +15,20 @@
             <article v-for="(row, index) in group.rows" :key="row.key" class="completed-result">
               <div class="completed-result-heading">
                 <div><strong>{{ rowTitle(row, index) }}</strong><p class="muted">{{ group.name }} {{ index + 1 }} · 版本 {{ row.item.artifactVersion }}</p><small v-if="!exactOutput(row)">成果编号：{{ row.item.artifactId }}</small></div>
-                <button
-                  type="button"
-                  :disabled="!!row.item.unavailableReason"
-                  :aria-expanded="expandedKey === row.key"
-                  :aria-controls="previewId(row)"
-                  @click="togglePreview(row)"
-                >{{ expandedKey === row.key ? '收起预览' : '预览' }}</button>
+                <div class="completed-result-actions">
+                  <button
+                    type="button"
+                    :disabled="!!row.item.unavailableReason"
+                    :aria-expanded="expandedKey === row.key"
+                    :aria-controls="previewId(row)"
+                    @click="togglePreview(row)"
+                  >{{ expandedKey === row.key ? '收起预览' : '预览' }}</button>
+                  <button type="button" :disabled="!canTransfer(row) || !!busy" @click="transfer(row, index, 'download')">{{ busy === `download:${row.key}` ? '下载中…' : '下载' }}</button>
+                  <button type="button" :disabled="!canTransfer(row) || !!busy || savedKeys.includes(row.key)" @click="transfer(row, index, 'save')">{{ savedKeys.includes(row.key) ? '已保存' : busy === `save:${row.key}` ? '保存中…' : unknownKeys.includes(row.key) ? '核对保存结果' : '保存' }}</button>
+                </div>
               </div>
+              <p v-if="actionMessages[row.key]" role="status">{{ actionMessages[row.key] }}</p>
+              <p v-if="!row.item.unavailableReason && !canTransfer(row)" class="muted">{{ outputs.loading.value ? '正在读取固定成果…' : '此固定成果暂不可领取，请重新核对。' }} <button v-if="!outputs.loading.value" type="button" @click="retryPreview">重新核对成果</button></p>
               <p v-if="row.item.unavailableReason" role="status">该成果暂时无法预览，验收记录仍保留。</p>
               <section
                 v-if="expandedKey === row.key"
@@ -57,7 +63,9 @@
   </section>
 </template>
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { artifactRegistrationRequest, confirmedArtifactRegistration } from '../../composables/juyiting/taskArtifactRegistration.js'
+import { saveOutputBlob, safeOutputFilename } from '../../utils/outputDownload.js'
 import OutputPreview from '../outputs/OutputPreview.vue'
 import { useOutputs } from '../../composables/useOutputs.js'
 import { completedReviewRecords, exactReviewOutput, completedRecordTitle } from '../../composables/juyiting/completedReviewRecords.js'
@@ -77,6 +85,69 @@ const exactOutput = row => exactReviewOutput(outputs.items.value, row.item)
 const sourceOutputs = ref([])
 const sourceApi = createApi('/chat')
 const rowTitle = (row, index) => completedRecordTitle(row, index, outputs.items.value, sourceOutputs.value)
+// File actions reuse the existing authenticated read and owner-scoped upload adapters.
+// Only the view owns feedback; no acceptance/task state is mutated here.
+const registrationApi = createApi('/agent')
+const busy = ref('')
+const savedKeys = ref([])
+const actionMessages = ref({})
+const unknownKeys = ref([])
+const registrationRequests = new Map()
+let actionEpoch = 0
+let actionController = null
+const canTransfer = row => !row.item.unavailableReason && !!exactOutput(row)?.canDownload
+const rowStillPresent = key => [...records.value.accepted, ...records.value.history].some(row => row.key === key)
+const resetActions = () => {
+  actionEpoch++
+  actionController?.abort()
+  actionController = null
+  busy.value = ''; savedKeys.value = []; actionMessages.value = {}; unknownKeys.value = []; registrationRequests.clear()
+}
+watch(() => [props.taskId, props.identityKey], resetActions, { flush: 'sync' })
+onBeforeUnmount(resetActions)
+const transfer = async (row, index, kind) => {
+  if (busy.value || !canTransfer(row) || (kind === 'save' && (savedKeys.value.includes(row.key)))) return
+  const epoch = actionEpoch
+  const controller = new AbortController()
+  actionController = controller
+  const isCurrent = () => epoch === actionEpoch && !controller.signal.aborted && rowStillPresent(row.key)
+  const item = exactOutput(row)
+  const filename = safeOutputFilename({ title: rowTitle(row, index) })
+  busy.value = `${kind}:${row.key}`; actionMessages.value[row.key] = ''
+  try {
+    if (kind === 'download') {
+      const result = await outputs.download(item, { signal: controller.signal })
+      if (!isCurrent()) return
+      await saveOutputBlob({ blob: result instanceof Blob ? result : result?.blob, item: { title: filename }, signal: controller.signal, isCurrent })
+    } else {
+      let request = registrationRequests.get(row.key)
+      if (!request) {
+        request = await artifactRegistrationRequest({ taskId: props.taskId, item: row.item, filename })
+        if (!isCurrent()) return
+        registrationRequests.set(row.key, request)
+      }
+      const receipt = await registrationApi.post('/personal-workspace/task-artifact-registrations', request.data,
+        { headers: { 'Idempotency-Key': request.key }, signal: controller.signal, autoLoading: false })
+      if (!isCurrent()) return
+      if (!confirmedArtifactRegistration(receipt, request)) throw new Error('保存结果尚未确认，请核对保存结果。')
+      savedKeys.value.push(row.key)
+      unknownKeys.value = unknownKeys.value.filter(key => key !== row.key)
+      actionMessages.value[row.key] = receipt.file.state === 'TRASHED'
+        ? '该成果已保存，但位于回收站；请到个人资料库恢复，不会重复创建。'
+        : '已保存到个人资料库，可在“资料 → 成果”中查看；原成果及验收记录保持不变。'
+    }
+  } catch (cause) {
+    if (isCurrent() && cause?.name !== 'AbortError') {
+      actionMessages.value[row.key] = cause?.message || '操作失败，请重试。'
+      if (kind === 'save' && !(cause?.status >= 400 && cause?.status < 500)) {
+        if (!unknownKeys.value.includes(row.key)) unknownKeys.value.push(row.key)
+        actionMessages.value[row.key] += ' 请点击“核对保存结果”，不会重复创建文件。'
+      }
+    }
+  } finally {
+    if (epoch === actionEpoch) { busy.value = ''; actionController = null }
+  }
+}
 // Read-only metadata for accepted historical sources. Existing HTTP identity cleanup
 // plus this watch cancellation prevents stale labels after task/account changes.
 watch(() => [props.taskId, props.identityKey, props.context], async (_value, _old, onCleanup) => {
@@ -117,7 +188,10 @@ header { margin-bottom: 20px; } h3 { margin: 0 0 16px; } p, strong, small { over
 button { min-height: 44px; padding: 8px 12px; border: 1px solid var(--hall-border-strong, #ccd2c5); border-radius: 7px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
 button:focus-visible, summary:focus-visible { outline: 3px solid var(--hall-focus-ring, #923f3052); outline-offset: 2px; }
 .completed-result { border: 1px solid var(--hall-border, #e3e5dc); border-radius: 10px; padding: 14px; margin: 12px 0; }
-.completed-result-heading { display: flex; align-items: center; gap: 12px; } .completed-result-heading > div { flex: 1; min-width: 0; } .completed-result-heading button { flex-shrink: 0; } .completed-result-heading p { margin: 6px 0 0; }
+.completed-result-heading { display: flex; align-items: center; gap: 12px; } .completed-result-heading > div { flex: 1; min-width: 0; } .completed-result-heading button { flex-shrink: 0; } .completed-result-heading > .completed-result-actions { display: flex; flex: 0 1 auto; flex-wrap: wrap; gap: 8px; }
+button:disabled { opacity: .55; cursor: not-allowed; }
+.completed-result-heading p { margin: 6px 0 0; }
 .completed-inline-preview { border-top: 1px solid var(--hall-border, #e3e5dc); margin-top: 14px; padding-top: 12px; }
 .completed-history, .completed-receipt { border-top: 1px solid var(--hall-border, #e3e5dc); margin-top: 16px; padding-top: 12px; } summary { min-height: 44px; cursor: pointer; }
+@media (max-width: 600px) { .completed-result-heading { flex-wrap: wrap; align-items: flex-start; } .completed-result-heading > div:first-child, .completed-result-heading > .completed-result-actions { flex-basis: 100%; } }
 </style>
