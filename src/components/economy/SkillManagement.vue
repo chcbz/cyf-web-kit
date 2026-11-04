@@ -58,6 +58,7 @@
                 <h3>{{ row.name }}<span class="skill-row-status">{{ rowStatus(row) }}</span></h3>
                 <p>{{ row.description }}</p>
                 <small>{{ versionText(row) }}</small>
+                <p v-if="row.deniedActions.some(denial => denial.reasonCode === 'POSITION_MANAGED_SKILL')" class="skill-note">{{ reasonLabels.POSITION_MANAGED_SKILL }}</p>
               </div>
               <div class="skill-row-actions">
                 <button
@@ -237,7 +238,7 @@
                   >核对结果</button>
                 </footer>
               </template>
-              <p v-for="denial in row.deniedActions" :key="denial.action" class="skill-note">{{ actionLabels[denial.action] }}：{{ reasonLabels[denial.reasonCode] }}</p>
+              <p v-for="denial in row.deniedActions.filter(item => item.reasonCode !== 'POSITION_MANAGED_SKILL')" :key="denial.action" class="skill-note">{{ actionLabels[denial.action] }}：{{ reasonLabels[denial.reasonCode] }}</p>
             </div>
           </article>
         </div>
