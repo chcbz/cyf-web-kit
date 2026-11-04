@@ -1,5 +1,13 @@
 import { computed, onScopeDispose, ref, watch } from 'vue'
+import { validMaterialVersion } from './materialVersion.js'
 import { pointAndStartLong } from './hallPointAndStartIntent.js'
+
+// The shared workspace picker uses canonical strings; the edit wire uses int32 numbers.
+export const requirementPickerMaterials = attachments => attachments.map(a => ({ ...a, version: String(a.version), displayName: `资料 ${a.fileId}` }))
+const editAttachments = attachments => attachments.map(({ fileId, version }) => {
+  if (!validMaterialVersion(String(version))) throw new Error('资料版本无效，请重新选择固定版本。')
+  return { fileId, version: Number(version) }
+})
 
 const attachmentsKey = refs => JSON.stringify(refs.map(({ fileId, version }) => [fileId, version]).sort())
 const validView = (value, taskId) => value?.taskId === taskId && pointAndStartLong(value.taskVersion, true) &&
@@ -46,7 +54,7 @@ export function useHallRequirementEdit({ agentApi, task, identity, enabled, onSa
     if (!pending.value) {
       if (!snapshot.value || snapshot.value.taskId !== id) throw new Error('请先读取当前事项需求。')
       const body = { expectedTaskVersion: snapshot.value.taskVersion, expectedRequirementRevision: snapshot.value.requirementRevision,
-        title: values.title.trim(), description: values.description.trim(), attachments: values.attachments.map(({ fileId, version }) => ({ fileId, version })) }
+        title: values.title.trim(), description: values.description.trim(), attachments: editAttachments(values.attachments) }
       if (!body.title || !body.description) throw new Error('请填写事项标题和需求描述。')
       pending.value = { key: crypto.randomUUID(), body }
     }

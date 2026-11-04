@@ -23,7 +23,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import { agentApi } from '@/composables/useHttp'
-import { useHallRequirementEdit } from '@/composables/juyiting/useHallRequirementEdit.js'
+import { requirementPickerMaterials, useHallRequirementEdit } from '@/composables/juyiting/useHallRequirementEdit.js'
 import HallMaterialPicker from './HallMaterialPicker.vue'
 const props = defineProps({ task: { type: Object, required: true }, enabled: Boolean, identityScope: { type: String, default: '' }, identityEpoch: { type: [Number, String], default: 0 } })
 const emit = defineEmits(['saved', 'busy'])
@@ -46,7 +46,7 @@ const open = async name => {
   if (pending.value) { await showDialog(); return }
   if (!await load()) return
   title.value = snapshot.value.title; description.value = snapshot.value.description || ''
-  materials.value = snapshot.value.attachments.map(a => ({ ...a, displayName: `资料 ${a.fileId}` }))
+  materials.value = requirementPickerMaterials(snapshot.value.attachments)
   if (name === 'files') { await nextTick(); picker.value?.open() } else await showDialog()
 }
 const close = () => { if (busy.value) return; dialog.value?.close(); dialogOpen.value = false; returnFocus?.isConnected && returnFocus.focus() }

@@ -1,7 +1,7 @@
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { effectScope, ref } from 'vue'
-import { useHallRequirementEdit } from '../src/composables/juyiting/useHallRequirementEdit.js'
+import { requirementPickerMaterials, useHallRequirementEdit } from '../src/composables/juyiting/useHallRequirementEdit.js'
 
 const initial = () => ({ taskId: '1', taskVersion: '0', requirementRevision: '1', title: '原事项', description: '原需求', attachments: [{ fileId: 'file', version: 1 }] })
 const after = () => ({ ...initial(), taskVersion: '1', requirementRevision: '2', title: '新事项', description: '新需求' })
@@ -82,5 +82,31 @@ describe('shared matter edit Q/R wire fixture', () => {
       expect(captured).to.deep.equal({ url: wire.request.path.replace('/agent', ''), body: wire.request.body.data })
       expect(f.saved[0]).to.deep.equal(wire.response.data)
     } finally { f.scope.stop() }
+  })
+})
+
+
+describe('actual workspace picker version boundary', () => {
+  it('loads numeric edit snapshots back into canonical picker strings without selecting a newer version', () => {
+    expect(requirementPickerMaterials(initial().attachments)).to.deep.equal([{ fileId: 'file', version: '1', displayName: '资料 file' }])
+  })
+  it('saves real picker string versions as the exact numeric edit contract and accepts the receipt', async () => {
+    const f = fixture()
+    try {
+      await f.editor.load()
+      expect(await f.editor.save({ ...values(), attachments: [{ fileId: 'file', version: '1' }] })).to.equal(true)
+      expect(f.writes[0].body.attachments).to.deep.equal([{ fileId: 'file', version: 1 }])
+      expect(f.saved).to.have.length(1)
+    } finally { f.scope.stop() }
+  })
+  it('rejects out-of-range or fractional picker versions without a write or pending recovery', async () => {
+    for (const version of ['2147483648', '1.5']) {
+      const f = fixture()
+      try {
+        await f.editor.load()
+        expect(await f.editor.save({ ...values(), attachments: [{ fileId: 'file', version }] })).to.equal(false)
+        expect(f.writes).to.have.length(0); expect(f.editor.pending.value).to.equal(null)
+      } finally { f.scope.stop() }
+    }
   })
 })
