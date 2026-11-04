@@ -168,16 +168,16 @@ describe('five fixes poll lifecycle and projection hints', () => {
       expect(wrapper.emitted('task-completed')).to.equal(undefined)
     } finally { wrapper?.unmount(); clock.restore() }
   })
-  it('keeps active execution refreshing across three cycles then stops both chains at terminal snapshots', async () => {
+  it('keeps only the parent catalog scanner and refreshes the gallery when execution changes', async () => {
     const clock = timers(); const h = acceptanceHarness(); let wrapper
     try {
       const active = { ...request(), state: 'RUNNING', stateVersion: '2', turns: [] }
       h.setSnapshot(active)
       wrapper = mount(h.Panel, { props: { taskId: 'task', identityKey: 'owner-active' } }); await settle()
       for (let i = 0; i < 3; i++) await clock.tick()
-      expect(h.counts().catalog).to.equal(4); expect(h.counts().request).to.equal(4)
+      expect(h.counts().catalog).to.equal(4); expect(h.counts().request).to.equal(1)
       h.setSnapshot({ ...request(), stateVersion: '3' }); await clock.tick(); await settle()
-      const settled = h.counts(); expect(wrapper.find('.bounty-output-text').exists()).to.equal(true)
+      const settled = h.counts(); expect(settled.request).to.equal(2); expect(wrapper.find('.bounty-output-text').exists()).to.equal(true)
       for (let i = 0; i < 3; i++) await clock.tick()
       expect(h.counts()).to.deep.equal(settled); expect(clock.jobs.size).to.equal(0)
     } finally { wrapper?.unmount(); clock.restore() }
@@ -188,7 +188,7 @@ describe('five fixes poll lifecycle and projection hints', () => {
     expect(outputs.outputRequestPending({ ...request(), steps: [{ kind: 'EXECUTE', executionState: 'OUTPUT_COMMITTED' }] })).to.equal(false)
     expect(outputs.outputRequestPending({ ...request(), state: 'PARTIAL', turns: [{ state: 'STREAMING' }] })).to.equal(true)
   })
-  it('mounts a finalized parent with a live EXECUTE step, retains both refresh chains until OUTPUT_COMMITTED', async () => {
+  it('refreshes a finalized parent gallery on OUTPUT_COMMITTED without polling unchanged outcomes', async () => {
     const clock = timers(); const h = acceptanceHarness(); let wrapper
     try {
       const step = { stepId: 'step', stepNumber: '1', taskId: 'task', assignmentRevision: '3', targetAgentId: 'agent', kind: 'EXECUTE',
@@ -196,9 +196,9 @@ describe('five fixes poll lifecycle and projection hints', () => {
       h.setSnapshot({ ...request(), steps: [step] })
       wrapper = mount(h.Panel, { props: { taskId: 'task', identityKey: 'owner-child' } }); await settle()
       for (let i = 0; i < 3; i++) await clock.tick()
-      expect(h.counts()).to.deep.equal({ catalog: 4, request: 4, typed: 4 })
+      expect(h.counts()).to.deep.equal({ catalog: 4, request: 1, typed: 1 })
       h.setSnapshot({ ...request(), steps: [{ ...step, state: 'OUTPUT_COMMITTED', stateVersion: '2', executionState: 'OUTPUT_COMMITTED' }] })
-      await clock.tick(); const terminal = h.counts(); for (let i = 0; i < 3; i++) await clock.tick()
+      await clock.tick(); const terminal = h.counts(); expect(terminal.request).to.equal(2); expect(terminal.typed).to.equal(2); for (let i = 0; i < 3; i++) await clock.tick()
       expect(h.counts()).to.deep.equal(terminal); expect(clock.jobs.size).to.equal(0)
     } finally { wrapper?.unmount(); clock.restore() }
   })
@@ -207,7 +207,7 @@ describe('five fixes poll lifecycle and projection hints', () => {
     try {
       h.setSnapshot({ ...request(), state: 'RUNNING', turns: [] })
       wrapper = mount(h.Panel, { props: { taskId: 'task', identityKey: 'owner-visible' } }); await settle()
-      expect(clock.jobs.size).to.equal(2)
+      expect(clock.jobs.size).to.equal(1)
       await wrapper.setProps({ enabled: false }); await settle()
       const hidden = h.counts(); for (let i = 0; i < 3; i++) await clock.tick()
       expect(h.counts()).to.deep.equal(hidden); expect(clock.jobs.size).to.equal(0)
