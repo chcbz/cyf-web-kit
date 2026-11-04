@@ -60,7 +60,29 @@ describe('bounty output gallery live owner scope', () => {
       else delete globalThis[name]
     }
   })
-  it('keeps reading the current request after its first output and isolates same outputId previews per step', async () => {
+  for (const acceptance of [false, true]) it(`refreshes outcome progress without a second scanner (acceptance=${acceptance})`, async () => {
+    let reads = 0; let timers = 0
+    const original = globalThis.setTimeout
+    const mockApi = { get: async () => { reads++; return { requestId: 'request-1', conversationId: 'conversation-1', state: 'RUNNING', turns: [], steps: [] } } }
+    const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending, useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults,
+      createApi: () => mockApi, exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName,
+      currentOutputDelivery, completedTextItem, completedExecutionDelivery, saveOutputBlob: () => {} })
+    globalThis.setTimeout = (fn, delay, ...args) => { if (delay === 2500) { timers++; return 999 }; return original(fn, delay, ...args) }
+    let wrapper
+    try {
+      wrapper = mount(Component, { props: { acceptance, enabled: true, identityKey: 'owner-a', conversationId: 'conversation-1',
+        request: { requestId: 'request-1', conversationId: 'conversation-1', state: 'RUNNING' } } })
+      await flushPromises()
+      expect(reads).to.equal(1); expect(timers).to.equal(0)
+      await wrapper.setProps({ typedOutcomes: [{ requestId: 'request-1', state: 'READY', actionProgress: { state: 'COMPLETED' } }] })
+      await flushPromises()
+      expect(reads).to.equal(2); expect(timers).to.equal(0)
+      await wrapper.setProps({ typedOutcomes: [{ requestId: 'request-1', state: 'READY', actionProgress: { state: 'COMPLETED' } }] })
+      await flushPromises()
+      expect(reads).to.equal(2)
+    } finally { wrapper?.unmount(); globalThis.setTimeout = original }
+  })
+  it('refreshes on authoritative request changes without a gallery timer and isolates same outputId previews per step', async () => {
     const oldTimeout = globalThis.setTimeout
     const oldClear = globalThis.clearTimeout
     const oldCreate = URL.createObjectURL
@@ -89,12 +111,12 @@ describe('bounty output gallery live owner scope', () => {
         conversationId: 'conversation-1', request: { requestId: 'request-1', conversationId: 'conversation-1' } } })
       await flushPromises()
       expect(wrapper.findAll('.bounty-output')).to.have.length(1)
-      expect(poll).to.be.a('function')
-      poll()
+      expect(poll).to.equal(undefined)
+      await wrapper.setProps({ request: { requestId: 'request-1', conversationId: 'conversation-1', stateVersion: '2' } })
       await flushPromises()
       expect(requestReads).to.equal(2)
       expect(wrapper.findAll('.bounty-output')).to.have.length(2)
-      expect(poll).to.be.a('function')
+      expect(poll).to.equal(undefined)
       for (let index = 0; index < wrapper.findAll('.bounty-output').length; index++) {
         const output = wrapper.findAll('.bounty-output')[index]
         const preview = output.findAll('button').find(button => button.text() === '预览')

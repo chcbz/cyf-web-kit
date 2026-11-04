@@ -2360,8 +2360,7 @@ const {
   onDelivery: ({ agentId }) => {
     if (agentId) markAgentSpeaking(agentId, '收到传令', 'system')
   },
-  onRequestCatalogHint: event => notifyBountyRequestCatalog(event),
-  onTypedOutcome: event => { if (event?.requestId) void typedDeliberation?.readOne?.(event.requestId) }
+  onRequestCatalogHint: event => notifyBountyRequestCatalog(event)
 })
 
 const followupContextGeneration = ref(0)
@@ -2610,7 +2609,7 @@ const refreshFollowupContext = async () => {
   const captured = followupContextGeneration.value
   if (!await bountyAssignmentContext.refresh() || captured !== followupContextGeneration.value) return false
   if (!await bountyRequestCatalog.refresh() || captured !== followupContextGeneration.value) return false
-  return await typedDeliberation.refresh() && await typedDeliberation.recover()
+  return await typedDeliberation.refresh()
 }
 const resetFollowupContext = () => {
   invalidateFollowupContext()

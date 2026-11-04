@@ -510,7 +510,8 @@ export const useHallConversation = ({
       event?.type === 'typed_question_answered' ? (event.requestId || event.replyRequestId) : ''
     if (typedRequestId && event.conversationId === conversationId.value) {
       onTypedOutcome?.({ ...event, requestId: typedRequestId })
-      void refreshHallProjections(event)
+      // agent_message already requested the same catalog refresh above.
+      if (event.type !== 'agent_message') void refreshHallProjections(event)
     }
     if (!messageEvent) {
       if (typedRequestId && event.conversationId === conversationId.value) return true

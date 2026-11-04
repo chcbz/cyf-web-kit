@@ -182,10 +182,13 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       const catalogChatIds = catalogEntries.filter(entry => !entry?.request?.turns?.some(turn => turn?.route === 'INSPECT') &&
         !(entry?.request?.steps?.some(step => step.kind === 'EXECUTE') && !entry?.request?.turns?.some(turn => turn.route === 'CHAT')))
         .map(entry => entry?.request?.requestId).filter(typedId)
-      const storedInspectionIds = readRecords(storage, captured.scope, captured.context).filter(record => recordPurpose(record) === 'INSPECT')
+      const storedRecords = readRecords(storage, captured.scope, captured.context).filter(record => sameContext(record.context, captured.context))
+      const storedChatIds = storedRecords.filter(record => recordPurpose(record) === 'CHAT')
+        .map(record => record.receipt?.requestId).filter(typedId)
+      const storedInspectionIds = storedRecords.filter(record => recordPurpose(record) === 'INSPECT')
         .map(record => record.receipt?.requestId).filter(typedId)
       const inspectionRequestIds = [...new Set([...catalogInspectionIds, ...storedInspectionIds])]
-      await Promise.all([...new Set(catalogChatIds)].map(requestId => readOne(requestId, captured, 'CHAT', visited))
+      await Promise.all([...new Set([...catalogChatIds, ...storedChatIds])].map(requestId => readOne(requestId, captured, 'CHAT', visited))
         .concat(inspectionRequestIds.map(requestId => readOne(requestId, captured, 'INSPECT', visited))))
       return current(captured) && failedReads.size === 0
     }
@@ -315,7 +318,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   })
   const invalidate = () => { generation++; failedReads.clear(); ordinaryChatRequests.clear(); busy.value = false; projections.value = []; selectedPending.value = null; selectedDelivery.value = null; error.value = '' }
   const stopScope = watch(scope, invalidate, { flush: 'sync' })
-  const stopCatalog = typeof getCatalogEntries === 'function' ? watch(getCatalogEntries, () => { void refresh(); void recover() }, { deep: true }) : () => {}
+  const stopCatalog = typeof getCatalogEntries === 'function' ? watch(getCatalogEntries, () => { void refresh() }, { deep: true }) : () => {}
   const recoveryAvailable = computed(() => { storageRevision.value; return readRecords(storage, scope.value, getContext?.() || {}).some(record => record.status === 'UNKNOWN') })
   return { deliveryChoices, selectedDeliveryId, chooseDelivery, projections, cards, selectedPending, error, busy, recoveryAvailable, inspectionStatus, refresh, readOne, submit, recover, resumeUnknown, choosePending, confirmProposal,
     invalidate, dispose: () => { disposed = true; invalidate(); stopScope(); stopCatalog() } }

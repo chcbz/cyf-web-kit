@@ -79,9 +79,8 @@ import RichDocumentPreview from '../outputs/RichDocumentPreview.vue'
 import { richDocumentKind } from '../../utils/richDocumentPreview.js'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { createApi } from '../../composables/useHttp.js'
-import { exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, currentOutputDelivery, completedTextItem, completedExecutionDelivery, outputRequestPending } from '../../composables/juyiting/bountyOutputCatalog.js'
+import { exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType, outputDownloadName, currentOutputDelivery, completedTextItem, completedExecutionDelivery } from '../../composables/juyiting/bountyOutputCatalog.js'
 import { saveOutputBlob } from '../../utils/outputDownload.js'
-import { revisionProgressPending } from '../../composables/juyiting/hallTypedDeliberation.js'
 import { useHallSkillResults } from '../../composables/juyiting/useHallSkillResults.js'
 import { skillResultDataText, skillResultStatus, inlineSkillResults } from '../../composables/juyiting/hallSkillResults.js'
 
@@ -120,7 +119,7 @@ const scopedSteps = computed(() => requestSnapshots.value.flatMap(request => sco
 const executionDeliveries = ref([])
 const items = ref([]); const loading = ref(false); const error = ref('')
 const previewUrls = ref({}); const textPreviews = ref({}); const itemErrors = ref({})
-const expandedUrl = ref(''); const pendingAction = ref(false)
+const expandedUrl = ref('')
 // Submission COMPLETED is not acceptance. Only the authoritative root marks read-only completion.
 const effectiveTaskCompleted = computed(() => props.taskCompleted)
 const deliveryProjection = computed(() => {
@@ -131,13 +130,13 @@ const deliveryProjection = computed(() => {
 const displayItems = computed(() => deliveryProjection.value.items)
 const deliveryMessage = computed(() => deliveryProjection.value.message)
 watch(allItems, value => emit('outputs-change', value), { immediate: true })
-let abort = null; let timer = null; let epoch = 0; let refreshQueued = false
+let abort = null; let epoch = 0; let refreshQueued = false
 const inFlight = new Set()
 const validRootRequest = () => props.enabled && catalogRequests.value.length > 0 && catalogRequests.value.every(request => exactOutputId(request?.requestId) && request.conversationId === props.conversationId)
 const sha256Blob = async blob => Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', await blob.arrayBuffer())), byte => byte.toString(16).padStart(2, '0')).join('')
 const patchMap = (target, key, value) => { target.value = { ...target.value, [key]: value } }
 const cleanup = () => {
-  epoch++; refreshQueued = false; pendingAction.value = false; if (timer != null) clearTimeout(timer); timer = null; abort?.abort(); abort = null
+  epoch++; refreshQueued = false; abort?.abort(); abort = null
   for (const controller of inFlight) controller.abort(); inFlight.clear()
   for (const url of Object.values(previewUrls.value)) URL.revokeObjectURL(url)
   requestSnapshots.value = []; items.value = []; executionDeliveries.value = []; previewUrls.value = {}; textPreviews.value = {}
@@ -160,7 +159,7 @@ const list = async () => {
     for (const id of ids) snapshots.push(await fetchRequest(id, controller))
     if (generation !== epoch || controller.signal.aborted) return
     requestSnapshots.value = snapshots
-    const catalog = []; const deliveries = []; let actionPending = false
+    const catalog = []; const deliveries = []
     if (props.taskId) for (const request of snapshots) {
       for (const turn of request.turns || []) {
         if (turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state)) continue
@@ -179,8 +178,6 @@ const list = async () => {
         if (text) catalog.push(text)
         const delivery = completedExecutionDelivery(response, request, turn, snapshots, props.taskId)
         if (delivery) deliveries.push(delivery)
-        // Validated typed projections may precede a child appearing in the index.
-        if (revisionProgressPending(outcome) || outcome.state === 'PENDING' || ['QUEUED', 'RUNNING'].includes(outcome.actionProgress?.state)) actionPending = true
       }
     }
     for (const step of scopedSteps.value) {
@@ -195,19 +192,16 @@ const list = async () => {
     if (generation !== epoch || controller.signal.aborted) return
     const current = new Map(catalog.map(item => [outputItemKey(item), item.sha256]))
     for (const previous of items.value) if (current.get(outputItemKey(previous)) !== previous.sha256 && previewUrls.value[outputItemKey(previous)]) URL.revokeObjectURL(previewUrls.value[outputItemKey(previous)])
-    items.value = catalog; executionDeliveries.value = deliveries; pendingAction.value = actionPending; error.value = ''
-    if (actionPending && !effectiveTaskCompleted.value) emit('catalog-refresh-needed')
+    items.value = catalog; executionDeliveries.value = deliveries; error.value = ''
   } catch (cause) { if (!controller.signal.aborted && generation === epoch) error.value = cause?.message || '读取成果失败' }
   finally {
     if (generation === epoch) {
       abort = null; loading.value = false
       if (refreshQueued) { refreshQueued = false; void list() }
-      else if (pageVisible() && validRootRequest() && !effectiveTaskCompleted.value && !error.value &&
-        (pendingAction.value || requestSnapshots.value.some(outputRequestPending))) timer = setTimeout(() => { timer = null; void list() }, 2500)
     }
   }
 }
-const refresh = () => { error.value = ''; if (timer != null) clearTimeout(timer); timer = null; if (abort) refreshQueued = true; else void list() }
+const refresh = () => { error.value = ''; if (abort) refreshQueued = true; else void list() }
 const refreshFromUser = () => { void skillResults.refresh(); emit('catalog-refresh-needed'); refresh() }
 const bytes = async (item, url, mime) => {
   const generation = epoch; const controller = new AbortController(); inFlight.add(controller)
@@ -253,11 +247,12 @@ watch(() => `${props.enabled}\u0000${props.identityKey}\u0000${props.conversatio
   }
 }, { immediate: true, flush: 'sync' })
 // A new projection must refresh the list without discarding in-flight write intents.
-watch(() => JSON.stringify(catalogRequests.value.map(request => [request.requestId, request.state, request.stateVersion,
+watch(() => JSON.stringify([props.typedOutcomes, catalogRequests.value.map(request => [request.requestId, request.state, request.stateVersion,
   (request.turns || []).map(turn => [turn.turnId, turn.state, turn.stateVersion]),
-  (request.steps || []).map(step => [step.stepId, step.stateVersion, step.executionState])])), () => { if (validRootRequest()) refresh() })
+  (request.steps || []).map(step => [step.stepId, step.stateVersion, step.executionState])])]), () => { if (validRootRequest()) refresh() })
+// Progress can advance after the parent CHAT request is already terminal.
+// The parent owns event/reconnect reads; the gallery must not run a second scanner.
 watch(effectiveTaskCompleted, completed => {
-  if (timer != null) clearTimeout(timer); timer = null
   if (!completed && validRootRequest()) refresh()
 })
 let selectedPreviewGeneration = 0
@@ -273,7 +268,6 @@ const previewSelected = async item => {
 }
 defineExpose({ previewSelected, loading, refresh: refreshFromUser })
 const onVisibility = () => {
-  if (timer != null) clearTimeout(timer); timer = null
   if (pageVisible() && validRootRequest()) refresh()
 }
 document.addEventListener('visibilitychange', onVisibility)

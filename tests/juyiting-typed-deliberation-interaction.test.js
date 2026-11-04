@@ -18,6 +18,29 @@ const restoreCrypto = () => {
 describe('typed natural discussion interaction adapter', () => {
   beforeEach(() => { Object.defineProperty(globalThis, 'crypto', { configurable: true, writable: true, value: { randomUUID: () => '00000000-0000-4000-8000-000000000001' } }) })
   afterEach(restoreCrypto)
+  it('reads accepted local receipts missing from the catalog and deduplicates them when indexed', async () => {
+    let reads = 0; let entries = []
+    const context = { conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }
+    const lane = useHallTypedDeliberation({ chatApi: {
+      create: async () => receipt('DISCUSSION', 'request-1'),
+      get: async () => { reads++; return clarify('request-1') }
+    }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context,
+    getCatalogEntries: () => entries, storage: store(), enabled: () => true })
+    try {
+      expect(await lane.submit({ content: '继续' })).to.equal(true)
+      reads = 0
+      expect(await lane.refresh()).to.equal(true)
+      expect(reads).to.equal(1)
+      entries = [{ request: { requestId: 'request-1', turns: [{ route: 'CHAT' }] } }]
+      reads = 0
+      expect(await lane.refresh()).to.equal(true)
+      expect(reads).to.equal(1)
+      expect(lane.projections.value).to.have.length(1)
+      context.assignmentRevision = '5'; entries = []; reads = 0
+      await lane.refresh()
+      expect(reads).to.equal(0)
+    } finally { lane.dispose() }
+  })
   it('reports failed authoritative GETs until recovered, but ordinary CHAT 404 is not a failure', async () => {
     let status = 503
     const lane = useHallTypedDeliberation({ chatApi: { get: async () => { if (status) throw Object.assign(new Error('offline'), { status }); return clarify('request-1') } },

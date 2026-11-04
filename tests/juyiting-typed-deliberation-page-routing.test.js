@@ -341,11 +341,14 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       } finally { conversation.disposeHallConversation() }
     }
   })
-  it('binds a real durable final event only to authoritative typed GET readback', async () => {
+  it('routes outcome hints through the catalog owner without a second direct typed read', async () => {
     const calls = []
-    const callback = new Function('typedDeliberation', `return (${option('useHallConversation', 'onTypedOutcome')})`)({ readOne: value => calls.push(value) })
-    callback({ requestId: 'request-1' }); callback({})
-    expect(calls).to.deep.equal(['request-1'])
+    const callback = new Function('notifyBountyRequestCatalog', `return (${option('useHallConversation', 'onRequestCatalogHint')})`)(event => calls.push(event))
+    const event = { type: 'agent_message', requestId: 'request-1' }
+    callback(event)
+    expect(calls).to.deep.equal([event])
+    expect(() => option('useHallConversation', 'onTypedOutcome')).to.throw('missing')
+    expect(handler('refreshFollowupContext')).not.to.include('typedDeliberation.recover')
   })
 })
 
