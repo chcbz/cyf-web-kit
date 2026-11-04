@@ -41,7 +41,7 @@ export function useHallBountyAcceptance ({ api, taskId, identityKey, conversatio
   }
   const startStream = async () => {
     const source = eventSource()
-    if (!source || !valid(epoch) || !visible() || !scope.value || shared() || streamController) return
+    if (!source || taskCompleted() || !valid(epoch) || !visible() || !scope.value || shared() || streamController) return
     const captured = epoch; const generation = ++streamGeneration
     const id = scope.value.conversationId; const transport = new AbortController()
     streamController = transport
@@ -117,9 +117,9 @@ export function useHallBountyAcceptance ({ api, taskId, identityKey, conversatio
     } finally { if (valid(captured)) loading.value = false }
   }
   const stop = watch(() => [identity.value, conversationId(), enabled()], () => { void refresh() }, { immediate: true, flush: 'sync' })
-  const stopStreamWatch = watch(() => [scope.value?.conversationId, eventSource(), eventSource()?.sharedConversationId?.()], syncStream, { flush: 'sync' })
+  const stopStreamWatch = watch(() => [scope.value?.conversationId, eventSource(), eventSource()?.sharedConversationId?.(), taskCompleted()], syncStream, { flush: 'sync' })
   const stopSharedEvents = watch(() => eventSource()?.sharedEvent?.(), event => {
-    if (!shared() || !visible() || !valid(epoch) || event?.conversationId !== scope.value?.conversationId) return
+    if (taskCompleted() || !shared() || !visible() || !valid(epoch) || event?.conversationId !== scope.value?.conversationId) return
     if (event.type === 'stream_disconnected') streamError.value = '议事成果实时更新暂不可用，请重新读取。'
     else if (event.type === 'stream_ready' || isAcceptanceProjectionEvent(event)) { streamError.value = ''; void readCatalog(epoch) }
   }, { flush: 'sync' })

@@ -12,8 +12,9 @@ const frame = (id, type, seq) => {
     { type, conversationId: id, ...(ready ? { cursor: String(seq), nextCursor: String(seq) } : { eventSequence: String(seq), occurredAt: 1000 }) })
   return `event: ${m.messageType}\nid: ${m.messageId}\ndata: ${JSON.stringify(m)}\n\n`
 }
-function harness ({ shared = '', getOverride, connectOverride } = {}) {
+function harness ({ shared = '', completed = false, getOverride, connectOverride } = {}) {
   const identity = ref('owner'); const task = ref('task-1'); const conversation = ref('101'); const sharedId = ref(shared); const sharedEvent = ref(null)
+  const taskCompleted = ref(completed)
   const enabled = ref(true); const doc = new EventTarget(); doc.visibilityState = 'visible'
   const connections = []; let reads = 0; let version = 1
   const page = () => ({ schemaVersion: 1, scope: { conversationId: conversation.value, conversationGeneration: '1', taskId: task.value },
@@ -32,10 +33,10 @@ function harness ({ shared = '', getOverride, connectOverride } = {}) {
       return connectOverride ? connectOverride(connection) : response
     } }
   const source = useHallBountyAcceptance({ taskId: () => task.value, identityKey: () => identity.value, conversationId: () => conversation.value,
-    documentRef: doc, enabled: () => enabled.value, eventSource: () => eventSource,
+    documentRef: doc, taskCompleted: () => taskCompleted.value, enabled: () => enabled.value, eventSource: () => eventSource,
     api: { list: async () => ({ items: [{ id: conversation.value, conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: `task:${task.value}` }] }),
       get: async () => { reads++; const snapshot = page(); return getOverride ? getOverride(snapshot, reads) : snapshot } } })
-  return { source, identity, task, conversation, sharedId, sharedEvent, enabled, doc, connections, reads: () => reads,
+  return { source, identity, task, taskCompleted, conversation, sharedId, sharedEvent, enabled, doc, connections, reads: () => reads,
     finish: () => { version++ }, notify: type => { sharedEvent.value = { type, conversationId: conversation.value } } }
 }
 
@@ -56,6 +57,18 @@ describe('acceptance event ownership and recovery', () => {
     h.finish(); stream.push('execution_terminal', 101); await settle()
     expect(h.reads()).to.equal(3); expect(h.source.catalog.entries.value[0].request.state).to.equal('COMPLETED')
     expect(timers.size).to.equal(0)
+  })
+  it('completed task history needs neither a connection nor a timer, while manual reads remain available', async () => {
+    h = harness({ completed: true }); await settle()
+    expect(h.reads()).to.equal(1); expect(h.connections).to.have.length(0); expect(timers.size).to.equal(0)
+    await h.source.refreshCatalog(); expect(h.reads()).to.equal(2)
+  })
+  it('domain completion closes its independent stream and ignores later shared hints', async () => {
+    h = harness(); await settle(); const stream = h.connections[0]
+    stream.push('stream_ready', 3); await settle(); h.finish(); h.taskCompleted.value = true; await settle()
+    expect(stream.signal.aborted).to.equal(true); expect(h.source.catalog.entries.value[0].request.state).to.equal('COMPLETED')
+    const reads = h.reads(); h.sharedId.value = '101'; h.notify('agent_message'); await settle()
+    expect(h.reads()).to.equal(reads); expect(h.connections).to.have.length(1); expect(timers.size).to.equal(0)
   })
   it('same-conversation chat notifications use no second connection and ignore other conversations', async () => {
     h = harness({ shared: '101' }); await settle(); expect(h.connections).to.have.length(0)
