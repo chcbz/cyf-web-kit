@@ -59,6 +59,9 @@ describe('ordinary v3 Agent outcome projection', () => {
     const value = action(); value.outcome.kind = 'CLARIFY'; value.outcome.action = null; value.actionProgress = null
     value.outcome.clarification = { pendingQuestionId: 'question', state: 'OPEN', stateVersion: '0', question: '用于哪里？', requiredFacts: ['用途'], replyRequestId: null }
     expect(typedOutcomeProjection(value, context).outcome.clarification.requiredFacts).to.deep.equal(['用途'])
+    value.outcome.clarification.requiredFacts = []
+    expect(typedOutcomeProjection(value, context)).to.equal(null)
+    value.outcome.clarification.requiredFacts = ['用途']
     value.outcome.clarification.stateVersion = '1'
     expect(typedOutcomeProjection(value, context)).to.equal(null)
     Object.assign(value.outcome.clarification, { state: 'ANSWERED', replyRequestId: 'reply' })

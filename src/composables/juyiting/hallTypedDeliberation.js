@@ -116,7 +116,7 @@ const validOutcome = value => {
   const c = value.clarification; const p = value.proposal; const a = value.action
   if (value.kind === 'ANSWER') return c === null && p === null && a === null
   if (value.kind === 'CLARIFY') return p === null && a === null && exactKeys(c, clarificationFields) && typedId(c.pendingQuestionId) && prose(c.question) &&
-    Array.isArray(c.requiredFacts) && c.requiredFacts.length > 0 && new Set(c.requiredFacts).size === c.requiredFacts.length &&
+    Array.isArray(c.requiredFacts) && (value.outcomeContractVersion === 5 || c.requiredFacts.length > 0) && new Set(c.requiredFacts).size === c.requiredFacts.length &&
     c.requiredFacts.every(value.outcomeContractVersion <= 2 ? item => ['SOURCE_SELECTION', 'REFERENCE_REQUIRED', 'REQUIREMENT_DETAILS', 'OPERATION_CHOICE'].includes(item) : prose) &&
     ((c.state === 'OPEN' && c.stateVersion === '0' && c.replyRequestId === null) || (c.state === 'ANSWERED' && c.stateVersion === '1' && typedId(c.replyRequestId)))
   if (value.kind === 'EXECUTION_PROPOSAL') return value.outcomeContractVersion <= 2 && c === null && a === null && exactKeys(p, proposalFields) &&

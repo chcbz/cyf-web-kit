@@ -71,3 +71,30 @@ describe('revision feedback and existing refresh continuation', () => {
     } finally { adapter.dispose(); scope.stop() }
   })
 })
+
+describe('v5 clarification without enumerated facts', () => {
+  const clarification = () => {
+    const v = fixture()
+    const { schemaVersion, ...outcome } = f.clarificationWithoutFacts
+    Object.assign(v.outcome, outcome)
+    v.reviewProgress = null
+    v.outcome.clarification = { ...outcome.clarification, pendingQuestionId: 'question', state: 'OPEN', stateVersion: '0', replyRequestId: null }
+    return v
+  }
+  it('keeps the question and its reply lifecycle without inventing a required fact', () => {
+    const v = clarification()
+    assert.deepEqual(typedOutcomeProjection(v).outcome.clarification.requiredFacts, [])
+    Object.assign(v.outcome.clarification, { state: 'ANSWERED', stateVersion: '1', replyRequestId: 'reply' })
+    assert.ok(typedOutcomeProjection(v))
+    v.outcome.clarification.replyRequestId = null
+    assert.equal(typedOutcomeProjection(v), null)
+  })
+  it('still rejects malformed facts and an absent question', () => {
+    for (const requiredFacts of [null, '', [''], ['x', 'x'], [1]]) {
+      const v = clarification(); v.outcome.clarification.requiredFacts = requiredFacts
+      assert.equal(typedOutcomeProjection(v), null)
+    }
+    const v = clarification(); v.outcome.clarification.question = ''
+    assert.equal(typedOutcomeProjection(v), null)
+  })
+})
