@@ -158,8 +158,8 @@
               <section v-if="embeddedHall || (pointAndStartForDetail && !isTerminalMatter(detailTask))" class="matter-advice-card" aria-label="事项进展">
                 <template v-if="embeddedHall">
                   <div class="matter-advice-heading"><span>事项进展</span><strong>{{ simpleMatterStatus(detailTask) }}</strong></div>
-                  <h3>{{ detailTask.title }}</h3>
-                  <p class="matter-request">{{ detailTask.description }}</p>
+                  <div class="matter-edit-row"><h3>{{ detailTask.title }}</h3><button v-if="canEditRequirement" type="button" class="matter-edit-button" aria-label="修改事项标题" title="修改事项标题" :disabled="requirementEditBusy" @click="requirementEditor?.open('title')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l4-1 12-12-5-5L3 14l-1 8Z"/></svg></button></div>
+                  <div class="matter-edit-row matter-description-row"><p class="matter-request">{{ detailTask.description }}</p><button v-if="canEditRequirement" type="button" class="matter-edit-button" aria-label="修改需求描述" title="修改需求描述" :disabled="requirementEditBusy" @click="requirementEditor?.open('description')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 4 5 5M4 20l4-1 12-12-5-5L3 14l-1 8Z"/></svg></button></div>
                   <dl>
                     <div><dt>{{ hasTaskAction(detailTask, 'ASSIGN') ? (matterCandidateId ? '已选承办' : '推荐承办') : '承办好汉' }}</dt><dd>{{ matterAgent ? agentDisplayName(matterAgent) : (detailTask.assignedAgentName || (taskAssigneeIds(detailTask).length ? '承办信息待核对' : (hasTaskAction(detailTask, 'ASSIGN') ? (recommendationState.state === 'LOADING' ? '正在推荐…' : '请选择承办人') : '尚未确认'))) }}</dd></div>
                     <div v-if="matterAgent"><dt>所属用户 / 当前状态</dt><dd>{{ assigneeProviderText(matterAgent) }} · {{ assigneeAvailabilityText(matterAgent) }}</dd></div>
@@ -212,7 +212,7 @@
                       ref="matterCandidateToggle"
                       class="matter-agent-toggle"
                       :aria-expanded="showMatterCandidates"
-                      :disabled="recommendationState.state === 'LOADING' || pointAndStartBusy || Boolean(pointAndStartForDetail)"
+                      :disabled="recommendationState.state === 'LOADING' || requirementEditBusy || pointAndStartBusy || Boolean(pointAndStartForDetail)"
                       @click="showMatterCandidates = !showMatterCandidates"
                     >{{ showMatterCandidates ? '收起候选列表' : (matterAgent ? '更换承办人' : '选择承办人') }}</button>
                     <div v-if="showMatterCandidates" class="matter-candidate-picker">
@@ -223,7 +223,7 @@
                         class="matter-candidate-card"
                         type="button"
                         :aria-pressed="matterAgent?.agentId === agent.agentId"
-                        :disabled="recommendationState.state === 'LOADING' || pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, agent)"
+                        :disabled="recommendationState.state === 'LOADING' || requirementEditBusy || pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, agent)"
                         @click="selectMatterCandidate(agent)"
                       ><span class="matter-candidate-avatar" aria-hidden="true">{{ agentDisplayName(agent).slice(0, 1) }}</span><span class="matter-candidate-copy"><strong>{{ agentDisplayName(agent) }}</strong><small>{{ assigneeProviderText(agent) }} · {{ assigneeAvailabilityText(agent) }}</small><small v-if="agent.recommendationLevel" class="recommendation-level" :data-level="agent.recommendationLevel">{{ recommendationLevelText(agent.recommendationLevel) }}</small><small>{{ agent.recommendationReason || '可手动选择承办' }}</small></span><span class="matter-candidate-check" aria-hidden="true">{{ matterAgent?.agentId === agent.agentId ? '✓' : '' }}</span></button>
                       </div>
@@ -239,7 +239,7 @@
                     <button
                       type="button"
                       class="matter-primary-action"
-                      :disabled="recommendationState.state === 'LOADING' || !matterAgent || pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, matterAgent)"
+                      :disabled="recommendationState.state === 'LOADING' || requirementEditBusy || !matterAgent || pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, matterAgent)"
                       @click="confirmMatterAgent"
                     >{{ matterAgent ? `确认由${agentDisplayName(matterAgent)}承办` : '请选择承办人' }}</button>
                   </template>
@@ -344,16 +344,20 @@
               />
 
               <p v-if="detailTask.status === 'cancelled'" role="status">事项已取消；历史指派与成果保留，不再继续办理。</p>
+              <HallRequirementEditor v-if="embeddedHall && detailTask && hasTaskAction(detailTask, 'ASSIGN')"
+                ref="requirementEditor" :task="detailTask" :enabled="canEditRequirement"
+                :identity-scope="identityScope" :identity-epoch="authorizationGeneration"
+                @busy="requirementEditBusy = $event" @saved="requirementSaved" />
               <HallTaskResources
                 v-if="embeddedHall && resourcesActive"
-                :key="`${identityScope}:${authorizationGeneration}:${detailTask.id}`"
+                :key="`${identityScope}:${authorizationGeneration}:${detailTask.id}:${detailTask.taskVersion}`"
                 :task-id="String(detailTask.id)"
                 :identity-scope="identityScope"
                 :identity-epoch="authorizationGeneration"
                 :result-count="matterResultCount"
                 :completed="['completed', 'archived'].includes(detailTask.status)"
                 @summary="matterResourceSummary = $event"
-              />
+              ><template #actions><button v-if="canEditRequirement" type="button" class="matter-edit-button" aria-label="选择资料" title="选择资料" :disabled="requirementEditBusy" @click="requirementEditor?.open('files')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M20 12l-8 8a5 5 0 0 1-7-7l9-9a3 3 0 0 1 4 4l-9 9a1 1 0 0 1-2-2l8-8"/></svg></button></template></HallTaskResources>
               <section v-if="!embeddedHall || taskPresentation(detailTask).readOnly || taskPresentation(detailTask).phase === 'COMPLETED'" class="matter-resources" aria-label="资料与成果">
                 <button type="button" class="matter-results-action" @click="$emit('open-formal-results', detailTask)">{{ ['completed', 'archived'].includes(detailTask.status) ? '查看成果与验收记录' : embeddedHall || taskPresentation(detailTask).readOnly ? '查看历史成果' : '查看正式成果与验收' }}</button>
               </section>
@@ -440,7 +444,7 @@
                       <summary>需求理解</summary>
                       <p>{{ recommendationState.result.requirementSummary }}</p>
                     </details>
-                <button type="button" :disabled="recommendationState.state === 'LOADING' || pointAndStartBusy" @click="$emit('refresh-recommendation')">重新推荐</button>
+                <button type="button" :disabled="recommendationState.state === 'LOADING' || requirementEditBusy || pointAndStartBusy" @click="$emit('refresh-recommendation')">重新推荐</button>
               </section>
               <div
                 v-for="agent in matterCandidates"
@@ -536,6 +540,7 @@ import { assignedTaskTarget, assigneeProviderText, assigneeAvailabilityText } fr
 import { projectHallTask } from '../../composables/juyiting/hallTaskPresentation.js'
 import { canCancelOrdinaryTask, ordinaryTaskVersion, isTerminalMatter } from '../../composables/juyiting/useHallOrdinaryCancellation.js'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import HallRequirementEditor from './HallRequirementEditor.vue'
 import HallTaskResources from './HallTaskResources.vue'
 import WorkItemPlanPanel from './WorkItemPlanPanel.vue'
 import TeamRecommendationPanel from './TeamRecommendationPanel.vue'
@@ -605,6 +610,7 @@ const props = defineProps({
 const emit = defineEmits([
   'assign-task',
   'refresh-recommendation',
+  'requirement-saved',
   'refresh-candidates',
   'more-candidates',
   'archive-task',
@@ -777,7 +783,7 @@ const showMatterCandidates = computed({
   set: value => { matterCandidateExpansion.value = value }
 })
 const selectMatterCandidate = async agent => {
-  if (props.recommendationState.state === 'LOADING' || props.pointAndStartBusy || pointAndStartForDetail.value || !props.canAssign(detailTask.value, agent)) return
+  if (props.recommendationState.state === 'LOADING' || requirementEditBusy.value || props.pointAndStartBusy || pointAndStartForDetail.value || !props.canAssign(detailTask.value, agent)) return
   matterCandidateId.value = agent.agentId
   matterCandidateExpansion.value = false
   await nextTick()
@@ -786,7 +792,7 @@ const selectMatterCandidate = async agent => {
 watch(() => [props.identityScope, props.authorizationGeneration, detailTask.value?.id, detailTask.value?.taskVersion], () => { matterCandidateId.value = ''; matterCandidateExpansion.value = null }, { flush: 'sync' })
 const confirmMatterAgent = () => {
   const agent = matterAgent.value
-  if (props.recommendationState.state === 'LOADING' || !agent || props.pointAndStartBusy || pointAndStartForDetail.value || !hasTaskAction(detailTask.value, 'ASSIGN') || !props.canAssign(detailTask.value, agent)) return
+  if (props.recommendationState.state === 'LOADING' || requirementEditBusy.value || !agent || props.pointAndStartBusy || pointAndStartForDetail.value || !hasTaskAction(detailTask.value, 'ASSIGN') || !props.canAssign(detailTask.value, agent)) return
   emit('assign-task', detailTask.value, agent)
 }
 const primaryStatusFilters = computed(() => props.taskStatusFilters.filter(item => !['HISTORY', 'UNKNOWN'].includes(item.value)))
@@ -797,6 +803,16 @@ const simpleMatterStatus = task => props.taskStatusText(task)
 const taskPresentation = task => projectHallTask({ task })
 const hasTaskAction = (task, action) => taskPresentation(task).actions.includes(action)
 const canActOnTask = task => hasTaskAction(task, 'ASSIGN') || hasTaskAction(task, 'DISCUSS')
+const requirementEditor = ref(null)
+const requirementEditBusy = ref(false)
+const canEditRequirement = computed(() => props.embeddedHall && hasTaskAction(detailTask.value, 'ASSIGN') &&
+  !isFundedTask(detailTask.value) && !props.pointAndStartBusy && !pointAndStartForDetail.value)
+const requirementSaved = view => {
+  matterCandidateId.value = ''; matterCandidateExpansion.value = null
+  emit('requirement-saved', view)
+}
+watch(() => [props.identityScope, props.authorizationGeneration, detailTask.value?.id], () => { requirementEditBusy.value = false }, { flush: 'sync' })
+
 watch(matterAgent, (agent, previous) => {
   if (!agent && previous) matterCandidateExpansion.value = null
 })
@@ -1737,6 +1753,7 @@ button:disabled {
 .matter-candidates button small { display: block; font-size: 12px; color: var(--hall-text-muted, #68716b); }
 .matter-selected-reason{margin:0;color:var(--hall-muted,#68716b);font-size:13px;line-height:1.65;overflow-wrap:anywhere}
 .matter-advice-card dd,.matter-primary-action{overflow-wrap:anywhere;white-space:normal}
+.matter-edit-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}.matter-edit-row h3,.matter-edit-row .matter-request{min-width:0;white-space:pre-wrap;overflow-wrap:anywhere}.matter-description-row{align-items:flex-start}.matter-edit-button{flex:none;display:inline-flex;align-items:center;justify-content:center;width:38px;min-height:38px;padding:8px}
 </style>
 
 <style scoped>

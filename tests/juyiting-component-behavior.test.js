@@ -144,6 +144,7 @@ const loadSfc = (relativePath, runtimeAgentApi = { post: async () => { throw new
     .replace(/^import\s+\{\s*classifyViewportResize\s*\}\s+from\s+['"]@\/game\/camera\/resizePolicy\.js['"];?\s*$/gm, 'var classifyViewportResize = arguments[3]')
     .replace(/^import\s+BountyActionIcon\s+from\s+['"].\/BountyActionIcon\.vue['"];?\s*$/gm, 'var BountyActionIcon = { template: \'<span />\', props: [\'status\'] }')
     .replace(/^import\s+OutputList\s+from\s+['"]\.\.\/outputs\/OutputList\.vue['"];?\s*$/gm, 'var OutputList = { template: \'<section class="output-list-stub" />\', props: [\'source\', \'identityFingerprint\'] }')
+    .replace(/^import\s+HallRequirementEditor\s+from\s+['"].\/HallRequirementEditor\.vue['"];?\s*$/gm, 'var HallRequirementEditor = { template: \'<span />\', props: [\'task\', \'enabled\'] }')
     .replace(/^import\s+HallTaskResources\s+from\s+['"].\/HallTaskResources\.vue['"];?\s*$/gm, 'var HallTaskResources = { template: \'<section class="hall-task-resources-stub" />\' }')
     .replace(/^import\s+TaskMaterialLinks\s+from\s+['"](?:\.\.\/personal-workspace|@\/components\/personal-workspace)\/TaskMaterialLinks\.vue['"];?\s*$/gm, 'var TaskMaterialLinks = { template: \'<section class="task-material-links-stub" />\', props: [\'taskId\', \'identityFingerprint\'] }')
     .replace(/^import\s+\{\s*formatSilverMicro(?:,\s*isCanonicalMicroAmount)?\s*\}\s+from\s+['"]@\/utils\/silverAmount['"];?\s*$/gm, 'var { formatSilverMicro, isCanonicalMicroAmount } = arguments[4]')

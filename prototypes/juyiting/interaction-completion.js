@@ -647,11 +647,36 @@ function matterDetailPresentation(){
  if(acceptanceReady())return {label,tone:'success',hint:'本轮固定成果已提交。查看并验收后完成事项；不满意可在原议事继续修改。',action:'继续议事'};
  return {label,tone:'neutral',hint:'补充要求、查看结果和提出修改，都在原议事中继续。',action:'继续议事'};
 }
+// A dialog edits a captured requirement, never another matter selected later.
+function canEditMatterRequirement(){return awaitingAssignment()&&!state.pending&&!state.operation;}
+function matterEditButton(field,label){return button(uiIcon(field==='files'?'attach':'edit'),'complete-edit-requirement',`data-field="${field}" class="matter-edit-button" aria-label="${label}" title="${label}"`);}
+function matterMaterialsHeading(){return `<div class="matter-edit-row"><h4>资料与成果</h4>${canEditMatterRequirement()?matterEditButton('files','选择资料'):''}</div>`;}
+function openMatterRequirementEditor(field){
+ if(!canEditMatterRequirement())return;
+ if(field==='files'){openMaterials('task-requirement',state.task.files||[]);return;}
+ if(!['title','description'].includes(field))return;
+ const task=state.task,label=field==='title'?'事项标题':'需求描述';
+ const d=dialog('修改'+label,`<label class="matter-edit-field">${label}${field==='title'?`<input data-requirement-value value="${esc(task[field]||'')}" required>`:`<textarea data-requirement-value rows="7" required>${esc(task[field]||'')}</textarea>`}</label><p class="mmd-muted">保存后仍为待承办，不会自动开始办理。</p><p data-edit-error role="alert" hidden></p>`,button('取消','close-dialog')+button('保存','complete-save-requirement','class="mmd-primary"'));
+ d.requirementEdit={task,field,original:task[field]};
+ $('[data-requirement-value]',d).focus();
+}
+function saveMatterRequirementEditor(t){
+ const d=t.closest('dialog'),edit=d?.requirementEdit;if(!edit)return;
+ const error=$('[data-edit-error]',d),fail=message=>{error.hidden=false;error.textContent=message;};
+ if(edit.task!==state.task||!canEditMatterRequirement())return fail('事项或状态已变化，请关闭后重新查看。');
+ if(edit.task[edit.field]!==edit.original)return fail('需求已变化，请关闭后重新编辑。');
+ const input=$('[data-requirement-value]',d),value=input.value.trim();
+ if(!value){fail('请填写'+(edit.field==='title'?'事项标题':'需求描述')+'。');input.focus();return;}
+ edit.task[edit.field]=value;
+ if(!persist()){edit.task[edit.field]=edit.original;return fail('浏览器会话保存失败，请重试；本次修改未保存。');}
+ state.task.assignmentCandidate=null;taskRecommendation();
+ d.close();render();feedback('已保存并重新推荐承办（离线示例）。');
+}
 function renderMatterOverview(card,unified){
  const v=matterDetailPresentation(),t=state.task||{};card.classList.add('matter-state-card','mmd');card.dataset.matterState=v.label;
  if(awaitingAssignment()){
   card.dataset.agentRecommendation='';
-  card.innerHTML=`<div class="matter-advice-heading"><span>事项进展</span><strong class="matter-state-badge tone-warning">待确认承办</strong></div><h3>${esc(t.title||taskTitle())}</h3><p class="matter-request">${esc(t.description||taskTitle())}</p><dl><div><dt>承办好汉</dt><dd>待确认</dd></div><div><dt>资料 / 结果</dt><dd>${t.files?.length||0} 份资料 · ${state.outputs.length} 份结果</dd></div></dl><p class="matter-state-guidance">事项已保存，尚未安排承办、未开始处理。返回或刷新后可继续确认。</p>${assignmentSection()}<div class="matter-primary-actions">${button('确认承办，进入议事','complete-agent-confirm','class="matter-primary-action mmd-primary"')}</div><p class="draft-hint">离线原型：仅保存到当前浏览器会话，不调用真实 Agent、不扣费。</p>`;
+  card.innerHTML=`<div class="matter-advice-heading"><span>事项进展</span><strong class="matter-state-badge tone-warning">待承办</strong></div><div class="matter-edit-row"><h3>${esc(t.title||taskTitle())}</h3>${canEditMatterRequirement()?matterEditButton('title','修改事项标题'):''}</div><div class="matter-edit-row matter-description-row"><p class="matter-request">${esc(t.description||taskTitle())}</p>${canEditMatterRequirement()?matterEditButton('description','修改需求描述'):''}</div><dl><div><dt>承办好汉</dt><dd>待确认</dd></div><div><dt>资料 / 结果</dt><dd>${t.files?.length||0} 份资料 · ${state.outputs.length} 份结果</dd></div></dl><p class="matter-state-guidance">事项已保存，尚未安排承办、未开始处理。返回或刷新后可继续确认。</p>${assignmentSection()}<div class="matter-primary-actions">${button('确认承办，进入议事','complete-agent-confirm','class="matter-primary-action mmd-primary"')}</div><p class="draft-hint">离线原型：仅保存到当前浏览器会话，不调用真实 Agent、不扣费。</p>`;
   return;
  }
  delete card.dataset.agentRecommendation;
@@ -660,7 +685,7 @@ function renderMatterOverview(card,unified){
 }
 function renderUnifiedDetail(){
  const card=$('.matter-advice-card');if(!card)return;card.classList.add('unified-matter');renderMatterOverview(card,true);
- const materials=$('.task-material-links');if(materials)materials.innerHTML=`<div class="mmd"><h4>资料与成果</h4>${files(state.task.files,'task',false)}${awaitingAssignment()?'<p class="mmd-muted">确认承办后，在议事中查看结果或继续补充资料。</p>':''}</div>`;
+ const materials=$('.task-material-links');if(materials)materials.innerHTML=`<div class="mmd">${matterMaterialsHeading()}${files(state.task.files,'task',false)}${awaitingAssignment()?'<p class="mmd-muted">确认承办后，在议事中查看结果或继续补充资料。</p>':''}</div>`;
  if(!acceptanceReady())card.insertAdjacentHTML('beforeend',acceptanceSummary());
  $$('.matter-results-action,.baseline-cancellation').forEach(e=>e.hidden=true);
  if(awaitingAssignment()||state.task.cancelled)renderCancellation();
@@ -712,6 +737,8 @@ function refreshAllPageSurfaces(){
  const note=$('.baseline-provenance');if(note)note.textContent='四阶段办事 · 2026-10-17 · 离线示例';
 }
 function handleAllPageAction(action,t){
+ if(action==='complete-edit-requirement'){openMatterRequirementEditor(t.dataset.field);return true;}
+ if(action==='complete-save-requirement'){saveMatterRequirementEditor(t);return true;}
  if(action==='complete-file-version-submit'){saveFileVersion(t);return true;}
  if(action==='complete-pdf-page'){const a=asset(t.dataset.id),n=Number(t.dataset.page);if(!a||n<1||n>a.pages)return true;state.pdfPages||={};state.pdfPages[a.id]=n;const root=t.closest('.pdf-document'),wrapper=document.createElement('div');wrapper.innerHTML=pdfPreview(a);const region=wrapper.firstElementChild;root.replaceWith(region);const next=[...region.querySelectorAll('button')].find(e=>e.textContent===t.textContent&&!e.disabled)||region.querySelector('button:not(:disabled)');next?.focus();persist();return true;}
  if(action==='complete-catalog-profile'){dialog(t.dataset.name+' · 本领示例',`<p>${esc(t.dataset.ability)}</p><p>离线布局示例，不表示当前账号已拥有、安装或授权此Agent。</p>`,button('返回名册','close-dialog'));return true;}

@@ -130,7 +130,7 @@ function refreshAgentProfile(){
 }
 
 function renderDetail(){if(state.task?.complete){renderCompletedMatterDetail();return;}if(unifiedTask()){renderUnifiedDetail();return;}const card=$('.matter-advice-card');if(card){renderMatterOverview(card,false);}
- const materials=$('.task-material-links');if(materials){materials.innerHTML=`<div class="mmd"><h4>资料与成果</h4>${files(state.task?.files||[],'task',false)}<p class="mmd-muted">${state.outputs.length?`已有 ${state.outputs.length} 份成果，可在议事中查看。`:'尚无成果，可在议事中继续补充需求和资料。'}</p></div>`;}
+ const materials=$('.task-material-links');if(materials){materials.innerHTML=`<div class="mmd">${matterMaterialsHeading()}${files(state.task?.files||[],'task',false)}<p class="mmd-muted">${state.outputs.length?`已有 ${state.outputs.length} 份成果，可在议事中查看。`:'尚无成果，可在议事中继续补充需求和资料。'}</p></div>`;}
  renderCancellation();
  const b=$('.matter-results-action'),primary=$('.matter-primary-action');
  const terminal=!!(state.task?.cancelled||state.task?.complete),hasResults=state.outputs.length>0;
@@ -201,7 +201,7 @@ function send(){const ctx=conversation();if(ctx===state&&acceptanceLocked())retu
 function dialog(title,html,footer=''){const d=document.createElement('dialog');d.className='mmd mmd-dialog'+(title==='删除议事记录'?' history-delete-dialog':'');d.setAttribute('aria-label',title);d.innerHTML=`<header><h3>${esc(title)}</h3>${title==='删除议事记录'?'':button('关闭','close-dialog','aria-label="关闭窗口"')}</header>${html}${footer?'<footer>'+footer+'</footer>':''}`;document.body.append(d);lastFocus=document.activeElement;d.addEventListener('close',()=>{d.remove();if(lastFocus?.isConnected)lastFocus.focus();});d.showModal();return d;}
 function openMaterials(context,selection=null){
  const ids=selection||(context==='chat'?conversation().chatFiles:state.draftFiles);
- picker={context,conversation:conversation(),ids:[...ids],selected:null,preview:false,previewDismissed:false,expanded:false,scope:conversation().materialScope||'task'};
+ picker={context,task:state.task,originalFiles:JSON.stringify(state.task?.files||[]),conversation:conversation(),ids:[...ids],selected:null,preview:false,previewDismissed:false,expanded:false,scope:conversation().materialScope||'task'};
  const d=dialog('选择资料','');d.classList.add('material-picker-dialog');
  d.querySelector('header').innerHTML=button('← 返回','close-dialog','class="panel-return material-back" aria-label="返回，取消本次资料选择"')+'<div><h3>选择资料</h3><p>选择或上传资料，点击“完成”带入当前需求或议事。</p></div>';
  d.insertAdjacentHTML('beforeend','<div class="material-picker-main"><div class="material-picker-body" aria-label="可选资料"></div><section class="material-detail" aria-label="当前资料"></section></div><footer class="material-picker-footer"></footer>');
@@ -248,7 +248,13 @@ document.addEventListener('click',e=>{
   if(action==='picker-toggle-selected'){picker.expanded=!picker.expanded;renderMaterialPicker('picker-toggle-selected');return;}
  if(action==='picker-stage'){if(picker.selected&&!picker.ids.includes(picker.selected))picker.ids.push(picker.selected);renderMaterialPicker('picker-preview');return;}
  if(action==='picker-remove'){picker.ids=picker.ids.filter(x=>x!==id);renderMaterialPicker('picker-toggle-selected');return;}
- if(action==='confirm-materials'){if(picker.context==='chat'){picker.conversation.chatFiles=[...picker.ids];if(page==='chat')picker.conversation.materialScope=picker.scope;}else state.draftFiles=[...picker.ids];t.closest('dialog').close();persist();render();return;}
+ if(action==='confirm-materials'){if(picker.context==='task-requirement'){
+  if(picker.task!==state.task||!canEditMatterRequirement()||JSON.stringify(state.task.files||[])!==picker.originalFiles){feedback('事项或状态已变化，请关闭后重新选择资料。');return;}
+  const previous=state.task.files;state.task.files=[...picker.ids];
+  if(!persist()){state.task.files=previous;feedback('浏览器会话保存失败，本次资料选择未保存。');return;}
+  state.task.assignmentCandidate=null;taskRecommendation();
+  t.closest('dialog').close();render();feedback('资料已保存并重新推荐承办（离线示例）。');return;
+ }if(picker.context==='chat'){picker.conversation.chatFiles=[...picker.ids];if(page==='chat')picker.conversation.materialScope=picker.scope;}else state.draftFiles=[...picker.ids];t.closest('dialog').close();persist();render();return;}
  if(action==='close-dialog'){t.closest('dialog').close();return;}
  if(action==='preview'){if(!t.closest('.mmd-preview'))preview(id);return;}
  if(action==='download'){download(id);return;}
