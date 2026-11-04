@@ -64,7 +64,7 @@ const acceptanceHarness = () => {
     '../../composables/juyiting/useHallBountyFinalization.js': { useHallBountyFinalization, safeFinalizationVersion },
     '../../composables/juyiting/useHallBountyAcceptance.js': { useHallBountyAcceptance } }
   const Gallery = compile('BountyExecutionOutputs', shared)
-  return { reads, Gallery, eventSource, notify: () => { event.value = { type: 'agent_message', conversationId: raw.conversationId } }, Panel: compile('BountyAcceptancePanel', { ...shared, './BountyExecutionOutputs.vue': Gallery }),
+  return { reads, Gallery, eventSource, notify: (type = 'agent_message') => { event.value = { type, conversationId: raw.conversationId } }, Panel: compile('BountyAcceptancePanel', { ...shared, './BountyExecutionOutputs.vue': Gallery }),
     setSnapshot: value => { snapshot = value }, counts: () => ({ catalog: reads.filter(x => x.path.endsWith('/requests')).length,
       request: reads.filter(x => x.path === `/requests/${raw.requestId}`).length, typed: reads.filter(x => x.path.endsWith('/typed-outcome')).length }) }
 }
@@ -170,6 +170,20 @@ describe('five fixes poll lifecycle and projection hints', () => {
       expect(wrapper.find('.finalize-button').exists()).to.equal(false)
       expect(wrapper.emitted('task-completed')).to.equal(undefined)
     } finally { wrapper?.unmount(); clock.restore() }
+  })
+  it('keeps verified outputs visible during a shared transport interruption without rereading their content', async () => {
+    const h = acceptanceHarness(); let wrapper
+    try {
+      wrapper = mount(h.Panel, { props: { taskId: 'task', identityKey: 'owner-disconnected', eventSource: h.eventSource } }); await settle()
+      expect(wrapper.find('.bounty-output-text').exists()).to.equal(true)
+      const initial = h.counts(); h.notify('stream_disconnected'); await settle()
+      expect(wrapper.find('[role="alert"]').exists()).to.equal(true)
+      expect(wrapper.find('.bounty-output-text').exists()).to.equal(true); expect(h.counts()).to.deep.equal(initial)
+      h.notify('stream_ready'); await settle()
+      expect(wrapper.find('[role="alert"]').exists()).to.equal(false)
+      expect(wrapper.find('.bounty-output-text').exists()).to.equal(true)
+      expect(h.counts()).to.deep.equal({ ...initial, catalog: initial.catalog + 1 })
+    } finally { wrapper?.unmount() }
   })
   it('uses shared completion events instead of either catalogue or gallery polling', async () => {
     const clock = timers(); const h = acceptanceHarness(); let wrapper
