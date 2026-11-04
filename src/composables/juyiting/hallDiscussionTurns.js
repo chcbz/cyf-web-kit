@@ -101,7 +101,7 @@ export const discussionReplyStatus = message => {
     const state = latest.actionProgress?.state
     if (['FAILED', 'CANCELLED', 'RESULT_UNKNOWN'].includes(state)) return discussionTurnStatus(latest)
     if (hasResult) return ''
-    return state === 'COMPLETED' ? '正在读取成果…' : '正在处理…'
+    return state === 'COMPLETED' ? '正在读取成果…' : state === 'ARCHIVING' ? '已生成，登记中' : '正在处理…'
   }
   const review = latest.reviewProgress
   if (review?.state === 'REJECTED') return '本次修改未受理，原成果已保留。'

@@ -201,7 +201,7 @@ describe('discussion single reply rendering', () => {
       global: { stubs: { 'var-icon': true } } })
     try {
       expect(wrapper.findAll('.hall-message')).to.have.length(1)
-      expect(wrapper.get('.discussion-turn-progress').text()).to.equal('正在处理')
+      expect(wrapper.get('.discussion-turn-progress').text()).to.equal('正在处理…')
       expect(wrapper.findComponent(Card).exists()).to.equal(false)
       expect(wrapper.find('.message-status').exists()).to.equal(false)
       expect(wrapper.get('.turn-action-probe').text()).to.equal('child-1')
@@ -210,7 +210,7 @@ describe('discussion single reply rendering', () => {
       const delivery = { localId: 'delivery-1', requestId: 'child-1', sender: 'AGENT', agentId: 'agent-1', content: '已生成成果；可预览或下载。', parts: [{ partId: 'part-1', assetId: 'asset-1', revision: '1', kind: 'image', state: 'ready', mime: 'image/png' }] }
       await wrapper.setProps({ messages: [original, delivery], typedOutcomes: [{ ...projection, actionProgress: { ...projection.actionProgress, state: 'COMPLETED' } }] })
       expect(wrapper.findAll('.hall-message')).to.have.length(1)
-      expect(wrapper.get('.discussion-turn-progress').text()).to.equal('本轮完成')
+      expect(wrapper.find('.discussion-turn-progress').exists()).to.equal(false)
       expect(wrapper.text()).not.to.include('可预览或下载')
       expect(original.parts).to.deep.equal([])
       await wrapper.setProps({ conversationId: '43', messages: [], typedOutcomes: [] })

@@ -113,7 +113,7 @@ describe('scoped bounty output actions live on the actual message cards', () => 
       const rows = f.wrapper.findAll('.hall-message')
       expect(rows).to.have.length(1)
       expect(rows[0].text()).not.to.include('正在修改图片')
-      expect(rows[0].text()).to.include('本轮完成')
+      expect(rows[0].find('.discussion-turn-progress').exists()).to.equal(false)
       expect(rows[0].text()).not.to.include('可预览或下载')
       expect(rows[0].findAll('.media-actions button').map(button => button.text())).to.deep.equal(['预览', '验收此版'])
       await rows[0].get('.media-actions button').trigger('click'); await settle()
