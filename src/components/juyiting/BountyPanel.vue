@@ -808,7 +808,7 @@ const requirementEditBusy = ref(false)
 const canEditRequirement = computed(() => props.embeddedHall && hasTaskAction(detailTask.value, 'ASSIGN') &&
   !isFundedTask(detailTask.value) && !props.pointAndStartBusy && !pointAndStartForDetail.value)
 const requirementSaved = view => {
-  matterCandidateId.value = ''; matterCandidateExpansion.value = null
+  if (view.changed !== false) { matterCandidateId.value = ''; matterCandidateExpansion.value = null }
   emit('requirement-saved', view)
 }
 watch(() => [props.identityScope, props.authorizationGeneration, detailTask.value?.id], () => { requirementEditBusy.value = false }, { flush: 'sync' })

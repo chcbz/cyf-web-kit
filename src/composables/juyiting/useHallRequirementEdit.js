@@ -44,10 +44,12 @@ export function useHallRequirementEdit({ agentApi, task, identity, enabled, onSa
   const accept = (value, id) => {
     const command = pending.value?.body
     if (!enabled() || (pointAndStartLong(value?.taskVersion, true) && pointAndStartLong(task()?.taskVersion, true) && BigInt(value.taskVersion) < BigInt(task().taskVersion))) { pending.value = null; error.value = '事项已变化，请重新查看当前需求。'; return false }
-    if (!validView(value, id) || !command || BigInt(value.taskVersion) !== BigInt(command.expectedTaskVersion) + 1n ||
-      BigInt(value.requirementRevision) !== BigInt(command.expectedRequirementRevision) + 1n || value.title !== command.title ||
-      value.description !== command.description || attachmentsKey(value.attachments) !== attachmentsKey(command.attachments)) return false
-    snapshot.value = value; pending.value = null; error.value = ''; onSaved(value)
+    if (!validView(value, id) || !command) return false
+    const delta = BigInt(value.taskVersion) - BigInt(command.expectedTaskVersion)
+    if (![0n, 1n].includes(delta) || BigInt(value.requirementRevision) !== BigInt(command.expectedRequirementRevision) + delta ||
+      value.title !== command.title || value.description !== command.description ||
+      attachmentsKey(value.attachments) !== attachmentsKey(command.attachments)) return false
+    snapshot.value = value; pending.value = null; error.value = ''; onSaved(delta === 0n ? { ...value, changed: false } : value)
     return true
   }
   const save = values => run(async (id, options, current) => {
@@ -76,7 +78,10 @@ export function useHallRequirementEdit({ agentApi, task, identity, enabled, onSa
     }
   })
   const check = () => run(async (id, options, current) => {
-    const value = await agentApi.get(`/tasks/${encodeURIComponent(id)}/requirements/edit`, undefined, options)
+    if (!pending.value) return false
+    const value = await agentApi.get(`/tasks/${encodeURIComponent(id)}/requirements/edit`, undefined, {
+      ...options, headers: { 'Idempotency-Key': pending.value.key }
+    })
     if (!current()) return false
     if (accept(value, id)) return true
     error.value = '尚未确认本次修改。可继续原保存操作；若事项已被他人修改，请关闭后重新读取。'

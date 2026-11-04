@@ -2418,6 +2418,7 @@ typedDeliberation = useHallTypedDeliberation({
 // admission is marked below, so its own reactive write cannot cancel adoption.
 const handleRequirementSaved = async view => {
   if (selectedTask.value?.id !== view.taskId) return
+  if (view.changed === false) { showToast('内容未变化。'); return }
   const change = { title: view.title, description: view.description, taskVersion: view.taskVersion }
   selectedTask.value = { ...selectedTask.value, ...change }
   tasks.value = tasks.value.map(task => task.id === view.taskId ? { ...task, ...change } : task)
