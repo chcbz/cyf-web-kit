@@ -15,7 +15,7 @@ describe('discussion turn display projection', () => {
     expect(rows).to.have.length(1)
     expect(rows[0].parts).to.have.length(1)
     expect(rows[0].turnOriginal).to.equal(messages[0])
-    expect(rows[0].turnDeliveries[0]).to.equal(messages[1])
+    expect(rows[0].turnDeliveries[0].turnOriginal).to.equal(messages[1])
     expect(rows[0].turnRequestIds).to.deep.equal(['child-1'])
     expect(messages).to.deep.equal(before)
     expect(discussionDeliveryText(rows[0].turnDeliveries[0])).to.equal('')
@@ -198,5 +198,61 @@ describe('revision control prose from production regression', () => {
     expect(revision).to.deep.equal(before)
     expect(discussionMessageText({ sender: 'USER', content: instruction })).to.equal(instruction)
     expect(discussionMessageText(project([{ ...history, content: '这是给你的建议。' }], [{ ...revision, outcome: { ...revision.outcome, kind: 'ANSWER' } }])[0])).to.equal('这是给你的建议。')
+  })
+})
+
+// Exact production shape: revision CHAT -> action CHAT -> execution/file.
+describe('single reply across revision and execution', () => {
+  const revision = () => ({ ...projection(), outcome: { ...projection().outcome, kind: 'REVISION_REQUEST' },
+    actionProgress: null, reviewProgress: { state: 'COMMITTED', childRequestId: 'revision-child', childState: 'COMPLETED' } })
+  const action = () => ({ ...projection(), outcome: { ...projection().outcome, assistantMessageId: 'reply-2' }, actionProgress: { childRequestId: 'child-1', state: 'COMPLETED' } })
+  const child = () => ({ ...parent(), localId: 'reply-2', requestId: 'revision-child' })
+  it('replaces progress with image or document in the original row, preserving all raw records', async () => {
+    const { discussionReplyStatus } = await import('../src/composables/juyiting/hallDiscussionTurns.js')
+    for (const kind of ['image', 'file']) {
+      const messages = [parent(), child(), { ...delivery(), parts: [{ ...part(), kind }] }]
+      const before = structuredClone(messages)
+      const rows = project(messages, [revision(), action()])
+      expect(rows).to.have.length(1)
+      expect(rows[0].localId).to.equal('reply-1')
+      expect(rows[0].parts).to.have.length(1)
+      expect(rows[0].turnRequestIds).to.deep.equal(['revision-child', 'child-1'])
+      expect(rows[0].turnDeliveries.map(discussionDeliveryText)).to.deep.equal(['', ''])
+      expect(discussionReplyStatus(rows[0])).to.equal('')
+      expect(messages).to.deep.equal(before)
+    }
+  })
+  it('keeps one generic pending state and never calls completed CHAT a delivered result', async () => {
+    const { discussionReplyStatus } = await import('../src/composables/juyiting/hallDiscussionTurns.js')
+    const p = revision();p.reviewProgress.childState = 'RUNNING'
+    expect(discussionReplyStatus(project([parent()], [p])[0])).to.equal('正在处理…')
+    expect(discussionReplyStatus(project([parent()], [revision()])[0])).to.equal('正在读取答复…')
+    expect(discussionReplyStatus(project([parent(), child()], [revision(), action()])[0])).to.equal('正在读取成果…')
+  })
+  it('groups a text-only streaming answer and preserves its text and original identity', () => {
+    const answer = { ...child(), content: '已按要求调整', streamOutcomeKind: 'ANSWER', streaming: true }
+    const rows = project([parent(), answer], [revision()])
+    expect(rows).to.have.length(1)
+    expect(rows[0].streaming).to.equal(true)
+    expect(discussionDeliveryText(rows[0].turnDeliveries[0])).to.equal(answer.content)
+    expect(rows[0].turnDeliveries[0].turnOriginal).to.equal(answer)
+  })
+  it('preserves clarification projection identity for the reply button', () => {
+    const p = { ...action(), outcome: { ...action().outcome, kind: 'CLARIFY' } }
+    const rows = project([parent(), { ...child(), content: '需要什么尺寸？' }], [revision(), p])
+    expect(rows).to.have.length(1)
+    expect(rows[0].turnProjections).to.have.length(1)
+    expect(rows[0].turnDeliveries[0].localId).to.equal(p.outcome.assistantMessageId)
+    expect(discussionDeliveryText(rows[0].turnDeliveries[0])).to.equal('需要什么尺寸？')
+  })
+  it('keeps failures visible even if an older artifact is present', async () => {
+    const { discussionReplyStatus } = await import('../src/composables/juyiting/hallDiscussionTurns.js')
+    const p = action();p.actionProgress.state = 'FAILED'
+    expect(discussionReplyStatus(project([parent(), child(), delivery()], [revision(), p])[0])).to.equal('本轮未完成')
+  })
+  it('uses exact links with shuffled arrival, does not group unrelated or other-agent answers', () => {
+    expect(project([delivery(), child(), parent()], [action(), revision()])).to.have.length(1)
+    expect(project([parent(), { ...child(), requestId: 'unrelated' }], [revision()])).to.have.length(2)
+    expect(project([parent(), { ...child(), agentId: 'other' }], [revision()])).to.have.length(2)
   })
 })

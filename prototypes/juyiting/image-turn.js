@@ -3,7 +3,7 @@
 (() => {
   if (selectedScenario !== 'image-turn') return;
   let timer;
-  const captions = { running:'正在改图…', archiving:'图片已生成，正在准备预览…', unknown:'结果待核实', failed:'这次未完成', abandoned:'本轮结果已放弃', completed:'已完成' };
+  const captions = { running:'正在处理…', archiving:'已生成，正在准备展示…', unknown:'结果待核实', failed:'这次未完成', abandoned:'本轮结果已放弃', completed:'已完成' };
   const stage = () => state.imageTurn?.stage || 'completed';
   function setStage(next) {
     clearTimeout(timer);

@@ -2104,6 +2104,28 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.find('[aria-label="本条消息资料"]').exists()).to.equal(false)
   })
 
+  it('replaces revision and execution progress with one final text reply and preserves preview controls', async () => {
+    const revision = { key: 'r', conversationId: '42', outcome: { outcomeId: 'r', taskId: 'task-1', assistantMessageId: 'r-msg', kind: 'REVISION_REQUEST' }, reviewProgress: { state: 'COMMITTED', childRequestId: 'child', childState: 'RUNNING' } }
+    const initial = { localId: 'r-msg', sender: 'AGENT', agentId: 'a', content: '内部修改指令' }
+    const wrapper = mount(ChatPanel, { global: { stubs }, props: {
+      agents: [], draft: '', discussionVariant: 'bounty', selectedTask: { id: 'task-1' }, conversationId: '42',
+      mentionLabel: agent => agent.name, senderText: () => '吴用', messages: [initial], typedOutcomes: [revision]
+    } })
+    try {
+      expect(wrapper.findAll('.hall-message')).to.have.length(1)
+      expect(wrapper.text()).to.include('正在处理…')
+      expect(wrapper.text()).not.to.include('内部修改指令')
+      const answer = { localId: 'answer-msg', requestId: 'child', sender: 'AGENT', agentId: 'a', content: '这是调整后的建议。', typedOutcomeKind: 'ANSWER', typedOutcomeTaskId: 'task-1' }
+      await wrapper.setProps({ messages: [initial, answer], outputCandidates: [{ taskId: 'task-1', requestId: 'child', messageSource: { messageId: 'answer-msg', turnId: 't' } }] })
+      expect(wrapper.findAll('.hall-message')).to.have.length(1)
+      expect(wrapper.findAll('.message-content')).to.have.length(1)
+      expect(wrapper.text()).to.include(answer.content)
+      expect(wrapper.find('.discussion-turn-progress').exists()).to.equal(false)
+      expect(wrapper.find('[aria-label="预览文字成果"]').exists()).to.equal(true)
+      expect(wrapper.text()).not.to.include('本轮回复已完成')
+    } finally { wrapper.unmount() }
+  })
+
   it('keeps conversation actions in the upper toolbar and preserves their events', async () => {
     const wrapper = mount(ChatPanel, { global: { stubs }, props: {
       mentionLabel: agent => agent.name, senderText: message => message.sender

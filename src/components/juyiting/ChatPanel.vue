@@ -82,13 +82,12 @@
           <span v-if="message.streaming" class="message-state">正在回复…</span>
         </div>
         <div
-          v-if="message.turnProjections?.length || message.turnActionRequest"
+          v-if="discussionReplyStatus(message)"
           class="discussion-turn-progress"
           role="status"
           aria-live="polite"
         >
-          <span v-if="message.turnActionRequest && !message.turnProjections?.length">正在核对处理状态</span>
-          <span v-for="projection in message.turnProjections" :key="projection.key || projection.outcome.outcomeId">{{ discussionTurnStatus(projection) }}</span>
+          <span>{{ discussionReplyStatus(message) }}</span>
         </div>
         <p v-if="message.turnAwaitingType && !message.streaming" role="status">正在读取答复…</p>
         <div v-if="discussionMessageText(message)" class="message-content" v-html="renderMarkdown(discussionMessageText(message))"></div>
@@ -112,7 +111,7 @@
             v-if="discussionDeliveryText(delivery)"
             :conversation-id="conversationId"
             :identity-key="materialIdentityKey"
-            :message="delivery"
+            :message="delivery.turnOriginal || delivery"
           />
         </template>
         <HallMessageParts
@@ -309,7 +308,7 @@ import HallMaterialPicker from './HallMaterialPicker.vue'
 import HallMaterialThumbnail from './HallMaterialThumbnail.vue'
 import HallConversationHistory from './HallConversationHistory.vue'
 import BountyTypedOutcomeCard from './BountyTypedOutcomeCard.vue'
-import { discussionTurns, discussionDeliveryText, discussionTurnStatus, discussionMessageText, discussionFooterStatus } from '../../composables/juyiting/hallDiscussionTurns.js'
+import { discussionTurns, discussionDeliveryText, discussionReplyStatus, discussionMessageText, discussionFooterStatus } from '../../composables/juyiting/hallDiscussionTurns.js'
 import WorkspaceWriteRecovery from '../personal-workspace/WorkspaceWriteRecovery.vue'
 import { usePersonalWorkspace } from '../../composables/usePersonalWorkspace.js'
 import { usePersonalWorkspaceConversationLinks } from '../../composables/usePersonalWorkspaceConversationLinks.js'
@@ -396,13 +395,16 @@ const taskId = computed(() => String(props.selectedTask?.id || '').trim())
 const serverTaskCompleted = computed(() => props.discussionVariant === 'bounty' &&
   (props.matterReadOnly || ['completed', 'failed', 'cancelled', 'archived'].includes(props.selectedTask?.status)))
 const typedForMessage = message => props.typedOutcomes.filter(projection =>
-  projection?.outcome?.assistantMessageId === String(message?.localId || '') && !message.turnProjections?.includes(projection))
+  [message, ...(message.turnDeliveries || [])].some(row => projection?.outcome?.assistantMessageId === String(row?.localId || '')) && !message.turnProjections?.includes(projection))
 
 // Suppress only an identical answer; distinct typed text must remain visible.
-const typedBodyRendered = (message, projection) => Boolean(message.content) && (
-  ['ACTION_REQUEST', 'REVISION_REQUEST', 'SUBMISSION_REQUEST'].includes(projection?.outcome?.kind) ||
-  String(message.content).trim() === String(projection?.outcome?.text || '').trim()
-)
+const typedBodyRendered = (message, projection) => {
+  const row = [message, ...(message.turnDeliveries || [])].find(row => String(row.localId || '') === projection?.outcome?.assistantMessageId) || message
+  return Boolean(row.content) && (
+    ['ACTION_REQUEST', 'REVISION_REQUEST', 'SUBMISSION_REQUEST'].includes(projection?.outcome?.kind) ||
+    String(row.content).trim() === String(projection?.outcome?.text || '').trim()
+  )
+}
 
 const isTaskDiscussion = computed(() => props.discussionVariant === 'bounty')
 const displayedMessages = computed(() => !isTaskDiscussion.value ? props.messages : discussionTurns({
@@ -417,7 +419,7 @@ const outputForPart = (message, part) => {
   return matches.length === 1 ? matches[0] : null
 }
 const textOutputsFor = message => !isTaskDiscussion.value || !isAgentMessage(message) ? [] : props.outputCandidates.filter(item =>
-  item.messageSource?.messageId === String(message.localId || '') && item.taskId === taskId.value)
+  [message, ...(message.turnDeliveries || [])].some(row => item.messageSource?.messageId === String(row.localId || '')) && item.taskId === taskId.value)
 const reviewMessageOutput = item => {
   if (canReviewMessageOutputs.value && !props.outputReviewBusy && !props.conversationBusy && !props.voice?.voiceInteractionLocked && props.outputCandidates.includes(item)) emit('accept-output', item)
 }
