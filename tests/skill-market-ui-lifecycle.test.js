@@ -14,6 +14,17 @@ describe('SM-C1 actual management component lifecycle (no composable stub)', () 
     wrapper = mount(skillComponents().Management, { attachTo: document.body, props: { show: true, targetAgent: { agentId: 'agt_demo', name: '测试好汉' }, actorScopeKey: 'actor-a', agentApi: mock.api }, global: { stubs: { teleport: true } } })
     await until(() => button(wrapper, '安装')); await button(wrapper, '安装').trigger('click')
   }
+  it('shows position management explanation without a manual install button', async () => {
+    const row = mock.list.items.find(item => item.skillKey === 'image-edit')
+    row.allowedActions = ['VIEW']
+    row.deniedActions = ['INSTALL', 'UPGRADE', 'ENABLE', 'DISABLE', 'UNINSTALL', 'RETRY'].map(action => ({ action, reasonCode: 'POSITION_MANAGED_SKILL' }))
+    wrapper = mount(skillComponents().Management, { attachTo: document.body, props: { show: true, targetAgent: { agentId: 'agt_demo' }, actorScopeKey: 'actor-a', agentApi: mock.api }, global: { stubs: { teleport: true } } })
+    await settle()
+    const skill = wrapper.find('[data-skill-row="image-edit"]')
+    expect(skill.text()).to.include('岗位技能由任职管理，不提供手动安装')
+    expect(skill.findAll('button').map(item => item.text())).to.deep.equal(['详情'])
+    expect(mock.requests.filter(request => request.method === 'POST')).to.have.length(0)
+  })
   it('Chinese permission labels submit original enum keys through quote and installation', async () => {
     await open()
     expect(wrapper.findAll('.skill-permission-details span').map(label => label.text().replace(/；$/, ""))).to.deep.equal(['读取本次授权的输入', '生成结果并写回当前任务'])
