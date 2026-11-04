@@ -4,18 +4,18 @@
     :identity-scope="identityScope" :identity-epoch="identityEpoch" @update:model-value="saveMaterials" />
   <Teleport to="body">
     <dialog v-if="dialogOpen" ref="dialog" class="requirement-edit-dialog" :aria-label="dialogTitle" @cancel.prevent="close">
-      <header><h3>{{ dialogTitle }}</h3><button type="button" aria-label="关闭编辑" :disabled="busy" @click="close">关闭</button></header>
+      <header><h3>{{ dialogTitle }}</h3><button type="button" class="requirement-edit-close" aria-label="关闭编辑" title="关闭编辑" :disabled="busy" @click="close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button></header>
       <label v-if="lastField !== 'files'">{{ lastField === 'title' ? '事项标题' : '需求描述' }}
         <input v-if="lastField === 'title'" ref="field" v-model="title" maxlength="200" :disabled="blocked" />
         <textarea v-else ref="field" v-model="description" rows="7" maxlength="20000" :disabled="blocked" />
       </label>
       <p v-else>所选资料修改尚待保存，请核对原保存结果。</p>
-      <p>保存后重新推荐承办，不会自动开始办理。</p>
+      <p class="requirement-edit-hint">内容变化后重新推荐承办，不会自动开始办理。</p>
       <p v-if="error" class="requirement-edit-error" role="alert">{{ error }}</p>
       <footer>
         <button type="button" :disabled="busy" @click="close">{{ pending ? '关闭' : '取消' }}</button>
         <button v-if="pending" type="button" :disabled="busy" @click="checkSave">查询保存结果</button>
-        <button type="button" :disabled="busy" @click="saveText">{{ busy ? '正在保存…' : pending ? '继续原保存' : '保存' }}</button>
+        <button type="button" class="requirement-edit-save" :disabled="busy" @click="saveText">{{ busy ? '正在保存…' : pending ? '继续原保存' : '保存' }}</button>
       </footer>
     </dialog>
   </Teleport>
@@ -61,6 +61,56 @@ const saveMaterials = async selected => {
 defineExpose({ open })
 </script>
 <style scoped>
-.requirement-edit-dialog{box-sizing:border-box;width:min(560px,calc(100vw - 24px));max-height:calc(100dvh - 32px);overflow:auto;padding:20px;border:1px solid var(--hall-border,#ddd);border-radius:12px;background:var(--hall-surface,#fff);color:var(--hall-text,#293c34)}
-.requirement-edit-dialog::backdrop{background:#0006}.requirement-edit-dialog header,.requirement-edit-dialog footer{display:flex;align-items:center;justify-content:space-between;gap:10px}.requirement-edit-dialog h3{margin:0}.requirement-edit-dialog footer{justify-content:flex-end;flex-wrap:wrap}.requirement-edit-dialog label{display:grid;gap:8px;margin-top:16px}.requirement-edit-dialog input,.requirement-edit-dialog textarea{box-sizing:border-box;width:100%;min-width:0;padding:10px;font:inherit}.requirement-edit-dialog button{min-height:44px;padding:8px 14px}.requirement-edit-error{color:var(--hall-danger,#a3342b)}
+/* Teleport renders outside the hall: keep the prototype's theme at this boundary. */
+.requirement-edit-dialog {
+  box-sizing: border-box;
+  width: min(680px, calc(100vw - 48px));
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--hall-border, #e3e5dc);
+  border-radius: 12px;
+  background: var(--hall-surface, #fffefa);
+  color: var(--hall-text, #242e2b);
+  font: 14px/1.65 -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
+}
+.requirement-edit-dialog::backdrop { background: rgba(29, 28, 24, .45); }
+.requirement-edit-dialog header {
+  position: sticky;
+  top: -20px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -8px 0 12px;
+  padding: 12px 0;
+  background: var(--hall-surface, #fffefa);
+  border-bottom: 1px solid var(--hall-border, #e3e5dc);
+}
+.requirement-edit-dialog h3 { margin: 0; font-size: 1.17em; overflow-wrap: anywhere; }
+.requirement-edit-dialog label { display: grid; gap: 8px; min-width: 0; margin: 16px 0; }
+.requirement-edit-dialog input, .requirement-edit-dialog textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 10px;
+  border: 1px solid var(--hall-border, #e3e5dc);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--hall-text, #242e2b);
+  font: inherit;
+}
+.requirement-edit-dialog textarea { resize: vertical; }
+.requirement-edit-dialog .requirement-edit-hint { margin: 8px 0; color: var(--hall-text-muted, #68716b); font-size: 12px; line-height: 1.7; }
+.requirement-edit-dialog footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--hall-border, #e3e5dc); }
+.requirement-edit-dialog button { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-height: 44px; padding: 6px 8px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--hall-text-muted, #68716b); box-shadow: none; font: inherit; font-size: 13px; line-height: 1.5; cursor: pointer; }
+.requirement-edit-dialog button:hover:not(:disabled) { background: var(--hall-surface-brand, #f6eee8); }
+.requirement-edit-dialog .requirement-edit-close { flex: none; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 8px; }
+.requirement-edit-dialog .requirement-edit-save { padding: 7px 11px; border-color: var(--hall-brand, #923f30); border-radius: 8px; background: var(--hall-brand, #923f30); color: var(--hall-surface, #fffefa); font-size: 14px; line-height: 1.65; }
+.requirement-edit-dialog .requirement-edit-save:hover:not(:disabled) { background: var(--hall-brand-hover, #793326); border-color: var(--hall-brand-hover, #793326); }
+.requirement-edit-dialog :is(button, input, textarea):focus-visible { outline: 2px solid var(--hall-brand, #923f30); outline-offset: 2px; }
+.requirement-edit-dialog button:disabled { opacity: .55; cursor: default; }
+.requirement-edit-error { color: var(--hall-danger, #a3342b); overflow-wrap: anywhere; }
 </style>

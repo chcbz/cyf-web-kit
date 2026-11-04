@@ -1783,4 +1783,9 @@ button:disabled {
 @media(max-width:720px) { .matter-candidates { grid-template-columns:1fr; } }
 .matter-selected-reason{margin:0;color:var(--hall-muted,#68716b);font-size:13px;line-height:1.65;overflow-wrap:anywhere}
 .matter-advice-card dd,.matter-primary-action{overflow-wrap:anywhere;white-space:normal}
+/* Unfilled edit tools, including touch hover; preserve their existing hit areas. */
+.matter-edit-button,
+.matter-edit-button:hover:not(:disabled) { background: transparent; border: 1px solid transparent; box-shadow: none; color: var(--hall-text-muted, #68716b); cursor: pointer; }
+.matter-edit-button:focus-visible { outline: 2px solid var(--hall-brand, #923f30); outline-offset: 2px; }
+.matter-edit-button:disabled { opacity: .55; cursor: default; }
 </style>
