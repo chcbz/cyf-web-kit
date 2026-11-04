@@ -65,7 +65,7 @@ const profileComponent = ({ globalStore, apiStore, client }) => compileComponent
   '@/composables/useAccountSecuritySession': { useAccountSecuritySession: () => ({ busy: Vue.ref(false), error: Vue.ref(''), status: Vue.ref(''), signOutCurrentDevice: () => {}, signOutAllDevices: async () => true }) },
   '@/composables/useConfirmationDialog': { useConfirmationDialog: () => ({ cancelButton: Vue.ref(null), close: () => {}, confirming: Vue.ref(false), dialog: Vue.ref(null), onKeydown: () => {}, open: () => {} }) },
   '@/utils/silverAmount': { isEconomyPreviewBuildEnabled: () => false },
-  '@/utils/economyPreviewCapability': { isEconomyPreviewCapability: () => false, loadEconomyPreviewCapability: async () => ({}) },
+  '@/utils/economyPreviewCapability': { isEconomyPreviewCapability: () => false, isSkillMarketplaceCapability: value => value?.skillMarketplaceEnabled === true, loadEconomyPreviewCapability: client.marketCapability || (async () => ({})) },
   '@/utils/economyReadOnlyPreviewPolicy': { assessReadOnlyPreviewCapabilities },
   '@/composables/economyReadOnlyPreviewApi': { economyReadOnlyPreviewClient: client },
   '@/composables/commandObservabilityApi': { commandObservabilityClient: client.commandObservability || { capabilities: async () => ({ contractVersion: 'command-observability-v1', available: false, readOnly: true, reason: 'FORBIDDEN' }) } },
@@ -82,6 +82,23 @@ const previewComponent = state => compileComponent('../src/components/economy/Ec
 })
 
 describe('profile navigation mounted behavior', () => {
+  it('keeps the skill discovery link when economy is disabled and clears it on identity change', async () => {
+    let enabled = true
+    const client = { capabilities: async () => capabilities(false), marketCapability: async () => ({ skillMarketplaceEnabled: enabled }) }
+    const globalStore = Vue.reactive({ user: Vue.reactive({ id: 'user-a', username: 'alice', openid: 'a' }), setTitle: () => {}, setShowBack: () => {}, setShowMore: () => {} })
+    const apiStore = Vue.reactive({ authorizationGeneration: 0 })
+    const router = await routerAt('/profile')
+    const wrapper = mount(profileComponent({ globalStore, apiStore, client }), { global: { plugins: [router], stubs: { 'var-icon': true } } })
+    wrappers.push(wrapper)
+    await flushPromises()
+    expect(wrapper.find('a[href="/skill-market"]').exists()).to.equal(true)
+    expect(wrapper.find('a[href="/wallet"]').exists()).to.equal(false)
+    enabled = false
+    apiStore.authorizationGeneration += 1
+    await flushPromises()
+    expect(wrapper.find('a[href="/skill-market"]').exists()).to.equal(false)
+  })
+
   beforeEach(() => setActivePinia(createPinia()))
   afterEach(() => { for (const wrapper of wrappers.splice(0)) wrapper.unmount() })
 

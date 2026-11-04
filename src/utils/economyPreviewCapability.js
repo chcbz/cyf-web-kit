@@ -7,7 +7,7 @@ export const readEconomyCapability = capability =>
   /^[0-9a-f]{64}$/.test(capability.principalScopeSha256) ? capability : null
 
 export const isEconomyPreviewCapability = capability => readEconomyCapability(capability)?.economyPreviewEnabled === true
-export const isSkillMarketplaceCapability = capability => isEconomyPreviewCapability(capability) && capability.skillMarketplaceEnabled === true
+export const isSkillMarketplaceCapability = capability => readEconomyCapability(capability)?.skillMarketplaceEnabled === true
 
 /**
  * Proposed preview API: GET /economy/capabilities. Missing or malformed data is

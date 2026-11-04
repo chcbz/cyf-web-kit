@@ -21,13 +21,17 @@ import { isEconomyPreviewCapability, isSkillMarketplaceCapability, loadEconomyPr
 import { redirectLoggedInHome } from './homeLoginRedirect.js'
 
 const economyPreviewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
-const economyPreviewRouteGuard = async (requiredCapability = isEconomyPreviewCapability) => {
-  if (!economyPreviewBuildEnabled) return { name: 'UserProfile' }
+const capabilityRouteGuard = async requiredCapability => {
   try {
     return requiredCapability(await loadEconomyPreviewCapability()) ? true : { name: 'UserProfile' }
   } catch {
     return { name: 'UserProfile' }
   }
+}
+
+const economyPreviewRouteGuard = () => {
+  if (!economyPreviewBuildEnabled) return { name: 'UserProfile' }
+  return capabilityRouteGuard(isEconomyPreviewCapability)
 }
 
 export default [
@@ -167,7 +171,7 @@ export default [
     path: '/wallet',
     name: 'Wallet',
     component: () => import('@/components/Wallet.vue'),
-    beforeEnter: () => economyPreviewRouteGuard(isEconomyPreviewCapability),
+    beforeEnter: economyPreviewRouteGuard,
     meta: {
       title: 'SILVER 钱袋',
       showInMenu: false
@@ -177,7 +181,7 @@ export default [
     path: '/skill-market',
     name: 'SkillMarket',
     component: () => import('@/components/economy/SkillMarketRoute.vue'),
-    beforeEnter: () => economyPreviewRouteGuard(isSkillMarketplaceCapability),
+    beforeEnter: () => capabilityRouteGuard(isSkillMarketplaceCapability),
     meta: {
       title: '技能集市',
       showInMenu: false
