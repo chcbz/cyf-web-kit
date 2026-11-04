@@ -1,6 +1,6 @@
 <template>
   <section class="hall-task-resources" :aria-label="completed ? '事项资料' : '资料与成果'">
-    <h4>{{ completed ? '事项资料' : '资料与成果' }}</h4>
+    <div class="resource-heading"><h4>{{ completed ? '事项资料' : '资料与成果' }}</h4><slot name="actions"></slot></div>
     <p v-if="loading" role="status">正在读取资料与成果…</p>
     <div v-else-if="error" role="alert"><p>{{ error }}</p><button type="button" @click="load">重试</button></div>
     <template v-else>
@@ -62,4 +62,5 @@ button { border: 1px solid #e2e5dc; border-radius: 8px; background: #f5f5f0; col
 :deep(.quick-material-summary) { margin: 0; }
 :deep(.quick-material-summary li) { min-width: 0; }
 :deep(.quick-material-summary strong) { white-space: normal; overflow-wrap: anywhere; }
+.resource-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
 </style>

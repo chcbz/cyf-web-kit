@@ -359,6 +359,7 @@
             :recommended-agents="recommendedAgents"
             :recommendation-state="recommendationState"
             @refresh-recommendation="loadTaskRecommendations(selectedTask, { refresh: true })"
+            @requirement-saved="handleRequirementSaved"
             :assignee-candidates="assigneeCandidates"
             :candidates-task-id="candidatesTaskId"
             :candidates-loading="candidatesLoading"
@@ -2415,6 +2416,16 @@ typedDeliberation = useHallTypedDeliberation({
 // Every user-visible task/target/auth context change fences in-flight original
 // projection reads. The one canonical task replacement performed by a verified
 // admission is marked below, so its own reactive write cannot cancel adoption.
+const handleRequirementSaved = async view => {
+  if (selectedTask.value?.id !== view.taskId) return
+  const change = { title: view.title, description: view.description, taskVersion: view.taskVersion }
+  selectedTask.value = { ...selectedTask.value, ...change }
+  tasks.value = tasks.value.map(task => task.id === view.taskId ? { ...task, ...change } : task)
+  hallReadRevision.value++
+  showToast('已保存，正在重新推荐承办。')
+  await loadTaskRecommendations(selectedTask.value, { refresh: true })
+}
+
 const pointAndStartContextGeneration = ref(0)
 let admittedPointAndStartTaskFingerprint = null
 let admittedPointAndStartActorReset = null

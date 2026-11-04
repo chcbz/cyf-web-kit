@@ -738,3 +738,13 @@ body[data-ui-revision] .material-picker-dialog .material-selection-summary butto
 .document-preview iframe{box-sizing:border-box;max-width:100%}
 .material-inline-preview:has(.document-preview){display:block}
 .mmd-preview{min-width:0;max-width:100%;overflow:auto}
+
+/* Pending matter requirement edits: reuse the existing icon/control language. */
+.matter-edit-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+.matter-edit-row>h3,.matter-edit-row>h4,.matter-edit-row>.matter-request{min-width:0;overflow-wrap:anywhere;white-space:pre-wrap}
+.matter-description-row{align-items:flex-start}
+.mmd .matter-edit-button{display:inline-flex;align-items:center;justify-content:center;flex:0 0 38px;width:38px;min-height:38px;padding:8px}
+.matter-edit-field{display:grid;gap:8px;min-width:0}
+.matter-edit-field input,.matter-edit-field textarea{width:100%;box-sizing:border-box;min-width:0;font:inherit;padding:10px}
+.matter-edit-field textarea{resize:vertical}
+[data-edit-error]{color:#a3342b}
