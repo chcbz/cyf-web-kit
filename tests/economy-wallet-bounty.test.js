@@ -218,7 +218,7 @@ describe('funded bounty remediation', () => {
     expect(skillMarketRouteSource).to.include('principalScopeSha256')
     expect(skillMarketRouteSource).to.include('agent?.boundToMe === true && agent?.canOperate === true')
     expect(skillMarketRouteSource).to.include('isCanonicalDecimalString(agent?.version)')
-    expect(routerSource).to.include('beforeEnter: () => economyPreviewRouteGuard(isSkillMarketplaceCapability)')
+    expect(routerSource).to.include('beforeEnter: () => capabilityRouteGuard(isSkillMarketplaceCapability)')
     expect(routerSource).to.include("return { name: 'UserProfile' }")
   })
 
