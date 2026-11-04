@@ -110,3 +110,33 @@ describe('actual workspace picker version boundary', () => {
     }
   })
 })
+
+
+describe('current-state saves are not audit revisions', () => {
+  it('accepts an unchanged authoritative save without invalidating recommendations', async () => {
+    const f = fixture({ put: async () => initial() })
+    try {
+      await f.editor.load()
+      expect(await f.editor.save(initial())).to.equal(true)
+      expect(f.saved[0]).to.deep.equal({ ...initial(), changed: false })
+      expect(f.editor.pending.value).to.equal(null)
+    } finally { f.scope.stop() }
+  })
+  it('queries the original operation identity, never just a matching current value', async () => {
+    let queriedKey
+    const f = fixture({ get: async (url, params, options) => {
+      queriedKey = options.headers?.['Idempotency-Key']
+      return queriedKey ? after() : initial()
+    }, put: async () => { throw new Error('reply lost') } })
+    try {
+      await f.editor.load(); await f.editor.save(values())
+      const key = f.editor.pending.value.key
+      expect(await f.editor.check()).to.equal(true)
+      expect(queriedKey).to.equal(key)
+    } finally { f.scope.stop() }
+  })
+  it('rejects a mixed unchanged/changed version receipt', async () => {
+    const f = fixture({ put: async () => ({ ...after(), taskVersion: '0' }) })
+    try { await f.editor.load(); expect(await f.editor.save(values())).to.equal(false); expect(f.saved).to.have.length(0) } finally { f.scope.stop() }
+  })
+})
