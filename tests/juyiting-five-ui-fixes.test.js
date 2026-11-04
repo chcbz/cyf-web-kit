@@ -46,6 +46,9 @@ const timers = () => {
 }
 const acceptanceHarness = () => {
   const reads = []; let snapshot = request()
+  const event = Vue.ref(null)
+  const eventSource = { sharedConversationId: () => raw.conversationId, sharedEvent: () => event.value,
+    connect: () => { throw new Error('must reuse the chat connection') } }
   const api = { list: async () => ({ items: [{ id: raw.conversationId, conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }], nextCursor: null, hasMore: false }),
     get: async (path, params) => {
       reads.push({ path, params })
@@ -61,14 +64,14 @@ const acceptanceHarness = () => {
     '../../composables/juyiting/useHallBountyFinalization.js': { useHallBountyFinalization, safeFinalizationVersion },
     '../../composables/juyiting/useHallBountyAcceptance.js': { useHallBountyAcceptance } }
   const Gallery = compile('BountyExecutionOutputs', shared)
-  return { reads, Gallery, Panel: compile('BountyAcceptancePanel', { ...shared, './BountyExecutionOutputs.vue': Gallery }),
+  return { reads, Gallery, eventSource, notify: () => { event.value = { type: 'agent_message', conversationId: raw.conversationId } }, Panel: compile('BountyAcceptancePanel', { ...shared, './BountyExecutionOutputs.vue': Gallery }),
     setSnapshot: value => { snapshot = value }, counts: () => ({ catalog: reads.filter(x => x.path.endsWith('/requests')).length,
       request: reads.filter(x => x.path === `/requests/${raw.requestId}`).length, typed: reads.filter(x => x.path.endsWith('/typed-outcome')).length }) }
 }
 
 describe('five fixes real mounted output consumers', () => {
   beforeEach(() => window.sessionStorage.clear())
-  it('completed task stops both polling chains after first verified history read (three timer cycles)', async () => {
+  it('completed task has no polling after first verified history read (three timer cycles)', async () => {
     const clock = timers(); const h = acceptanceHarness(); let wrapper
     try {
       wrapper = mount(h.Panel, { props: { taskId: 'task', identityKey: 'owner-five', taskVersion: '9', taskCompleted: true } }); await settle()
@@ -168,15 +171,15 @@ describe('five fixes poll lifecycle and projection hints', () => {
       expect(wrapper.emitted('task-completed')).to.equal(undefined)
     } finally { wrapper?.unmount(); clock.restore() }
   })
-  it('keeps only the parent catalog scanner and refreshes the gallery when execution changes', async () => {
+  it('uses shared completion events instead of either catalogue or gallery polling', async () => {
     const clock = timers(); const h = acceptanceHarness(); let wrapper
     try {
       const active = { ...request(), state: 'RUNNING', stateVersion: '2', turns: [] }
       h.setSnapshot(active)
-      wrapper = mount(h.Panel, { props: { taskId: 'task', identityKey: 'owner-active' } }); await settle()
+      wrapper = mount(h.Panel, { props: { taskId: 'task', identityKey: 'owner-active', eventSource: h.eventSource } }); await settle()
       for (let i = 0; i < 3; i++) await clock.tick()
-      expect(h.counts().catalog).to.equal(4); expect(h.counts().request).to.equal(1)
-      h.setSnapshot({ ...request(), stateVersion: '3' }); await clock.tick(); await settle()
+      expect(h.counts().catalog).to.equal(1); expect(h.counts().request).to.equal(1)
+      h.setSnapshot({ ...request(), stateVersion: '3' }); h.notify(); await settle()
       const settled = h.counts(); expect(settled.request).to.equal(2); expect(wrapper.find('.bounty-output-text').exists()).to.equal(true)
       for (let i = 0; i < 3; i++) await clock.tick()
       expect(h.counts()).to.deep.equal(settled); expect(clock.jobs.size).to.equal(0)
@@ -194,11 +197,11 @@ describe('five fixes poll lifecycle and projection hints', () => {
       const step = { stepId: 'step', stepNumber: '1', taskId: 'task', assignmentRevision: '3', targetAgentId: 'agent', kind: 'EXECUTE',
         state: 'ADMITTED', stateVersion: '1', executionIntentId: 'intent', executionId: 'execution', executionState: 'RUNNING' }
       h.setSnapshot({ ...request(), steps: [step] })
-      wrapper = mount(h.Panel, { props: { taskId: 'task', identityKey: 'owner-child' } }); await settle()
+      wrapper = mount(h.Panel, { props: { taskId: 'task', identityKey: 'owner-child', eventSource: h.eventSource } }); await settle()
       for (let i = 0; i < 3; i++) await clock.tick()
-      expect(h.counts()).to.deep.equal({ catalog: 4, request: 1, typed: 1 })
+      expect(h.counts()).to.deep.equal({ catalog: 1, request: 1, typed: 1 })
       h.setSnapshot({ ...request(), steps: [{ ...step, state: 'OUTPUT_COMMITTED', stateVersion: '2', executionState: 'OUTPUT_COMMITTED' }] })
-      await clock.tick(); const terminal = h.counts(); expect(terminal.request).to.equal(2); expect(terminal.typed).to.equal(2); for (let i = 0; i < 3; i++) await clock.tick()
+      h.notify(); await settle(); const terminal = h.counts(); expect(terminal.request).to.equal(2); expect(terminal.typed).to.equal(2); for (let i = 0; i < 3; i++) await clock.tick()
       expect(h.counts()).to.deep.equal(terminal); expect(clock.jobs.size).to.equal(0)
     } finally { wrapper?.unmount(); clock.restore() }
   })
@@ -207,7 +210,7 @@ describe('five fixes poll lifecycle and projection hints', () => {
     try {
       h.setSnapshot({ ...request(), state: 'RUNNING', turns: [] })
       wrapper = mount(h.Panel, { props: { taskId: 'task', identityKey: 'owner-visible' } }); await settle()
-      expect(clock.jobs.size).to.equal(1)
+      expect(clock.jobs.size).to.equal(0)
       await wrapper.setProps({ enabled: false }); await settle()
       const hidden = h.counts(); for (let i = 0; i < 3; i++) await clock.tick()
       expect(h.counts()).to.deep.equal(hidden); expect(clock.jobs.size).to.equal(0)
@@ -252,7 +255,7 @@ describe('five fixes poll lifecycle and projection hints', () => {
       await settle(); version.value = '2'
       resolve(entryPage(request())); await settle()
       expect(reads).to.equal(2); expect(source.catalog.entries.value[0].request.stateVersion).to.equal('2')
-      expect(clock.jobs.size).to.equal(1)
+      expect(clock.jobs.size).to.equal(0)
     } finally { source.dispose(); clock.restore() }
   })
   it('queues a gallery version refresh during GET, and aborts/fences a late old-identity response', async () => {

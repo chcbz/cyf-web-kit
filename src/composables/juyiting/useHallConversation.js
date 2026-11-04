@@ -17,6 +17,7 @@ import { combineAbortSignals } from '../../utils/abortSignals.js'
 import { captureHallVoiceSnapshot } from './useHallVoiceConversation.js'
 import { exactHallConversationId, normalizeHallConversationHistory } from './hallConversationHistory.js'
 import { createHallSseParser } from './hallConversationSse.js'
+import { isAcceptanceProjectionEvent } from './hallAcceptanceEvents.js'
 import { isMessagePartEvent } from './hallMessageParts.js'
 import {
   bountyBootstrapReference, sameBountyBootstrapReference, bountyBootstrapContextMatches,
@@ -62,6 +63,9 @@ export const useHallConversation = ({
 }) => {
   const messages = ref([])
   const conversationId = ref('')
+  // A page-local notification, not another connection or a retained reply body.
+  const acceptanceEvent = ref(null)
+  const hallEventOwnerId = ref('')
   const conversationHistory = ref([])
   const conversationHistoryDeletingId = ref('')
   const conversationHistoryLoading = ref(false)
@@ -669,6 +673,7 @@ export const useHallConversation = ({
 
   const failHallEventStream = (generation, error) => {
     if (disposed || generation !== lifecycleGeneration || error?.name === 'AbortError') return
+    acceptanceEvent.value = { type: 'stream_disconnected', conversationId: conversationId.value }
     if (error?.status === 400 || error?.status === 409 || error?.status === 410 || error?.status === 501) {
       void authoritativeResync(conversationId.value, `sse_${error.status}`, { restartStream: error.status !== 501 })
       return
@@ -692,6 +697,7 @@ export const useHallConversation = ({
     const streamGuard = { generation, authEpoch: authEpoch(), scope: streamScope, signature: scopeSignature(streamScope) }
     const id = conversationId.value
     if (typeof id !== 'string' || !id || hallEventConversationId === id) return
+    hallEventOwnerId.value = id
     stopHallEventTransport()
     hallEventConversationId = id
     hallEventController = new AbortController()
@@ -707,7 +713,10 @@ export const useHallConversation = ({
         signal: eventSignal.signal
       })
       if (!guardCurrent(streamGuard) || !response) {
-        if (!response && guardCurrent(streamGuard)) hallEventTerminal = true
+        if (!response && guardCurrent(streamGuard)) {
+          hallEventTerminal = true
+          acceptanceEvent.value = { type: 'stream_disconnected', conversationId: id }
+        }
         hallEventController = null
         return
       }
@@ -721,11 +730,19 @@ export const useHallConversation = ({
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let pendingServerResyncCursor = ''
+      let acceptanceReady = false
       const parser = createHallSseParser({
         conversationId: id, requestId: response.headers.get('X-Request-Id'),
         onEvent: (event, candidateCursor) => {
           if (!guardCurrent(streamGuard)) return false
-          if (event.type === 'stream_ready') { hallEventReconnectFailures = 0; return true }
+          if (event.type === 'stream_ready') {
+            acceptanceReady = true
+            acceptanceEvent.value = { type: event.type, conversationId: id }
+            hallEventReconnectFailures = 0; return true
+          }
+          if (acceptanceReady && isAcceptanceProjectionEvent(event)) {
+            acceptanceEvent.value = { type: event.type, conversationId: id }
+          }
           if (event.type === 'resync_required') {
             const currentCursor = eventCursors.get(id)
             pendingServerResyncCursor = candidateCursor && (!currentCursor || BigInt(candidateCursor) > BigInt(currentCursor))
@@ -787,6 +804,7 @@ export const useHallConversation = ({
   }
 
   const stopHallEventStream = () => {
+    hallEventOwnerId.value = ''
     stopHallEventTransport()
     resetHallEventRecovery()
   }
@@ -829,6 +847,8 @@ export const useHallConversation = ({
   }
 
   const resetLifecycle = ({ keepBootstrapAdoption = false } = {}) => {
+    hallEventOwnerId.value = ''
+    acceptanceEvent.value = null
     if (!keepBootstrapAdoption) {
       bootstrapAdoptionToken = null
       isAdoptingBountyBootstrap.value = false
@@ -2231,6 +2251,14 @@ export const useHallConversation = ({
   }
 
   return {
+    acceptanceEventSource: {
+      sharedConversationId: () => hallEventOwnerId.value === conversationId.value ? hallEventOwnerId.value : '',
+      sharedEvent: () => acceptanceEvent.value,
+      connect: ({ conversationId: id, signal, cursor }) => fetchHallConversationEvents({
+        apiStore, url: apiStreamUrl('/chat/conversation/events', { id }), signal,
+        headers: cursor ? { 'Last-Event-ID': `conversation:${id}:${cursor}` } : {}
+      })
+    },
     adoptBountyBootstrap,
     refreshExecutionRequest,
     refreshHallProjections,

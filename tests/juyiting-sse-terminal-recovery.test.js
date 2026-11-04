@@ -1,6 +1,8 @@
 import { expect } from 'chai'
 import { ref } from 'vue'
 import { setImmediate } from 'node:timers'
+import { useHallBountyAcceptance } from '../src/composables/juyiting/useHallBountyAcceptance.js'
+import { eventMessage } from '../src/utils/messageEnvelope.js'
 import { useHallConversation } from '../src/composables/juyiting/useHallConversation.js'
 
 const flush = async () => { for (let i = 0; i < 5; i++) await new Promise(resolve => setImmediate(resolve)) }
@@ -14,16 +16,16 @@ const receipt = { schemaVersion: 3, intent: 'DISCUSSION', requestId: 'request-18
 const context = { taskId: '474', conversationId: '101', conversationGeneration: '1', assignmentRevision: '1', targetAgentId: 'wuyong' }
 
 describe('SSE interrupted typed round terminal recovery', () => {
-  let originalFetch; let originalTimer; let originalClear; let hall; let streams; let timers; let reads; let contentReads; let catalogHints; let currentView; let readOverride; let contentOverride; let chatContext; let apiStore; let catalogResult
+  let streamHeaders; let originalFetch; let originalTimer; let originalClear; let hall; let streams; let timers; let reads; let contentReads; let catalogHints; let currentView; let readOverride; let contentOverride; let chatContext; let apiStore; let catalogResult
   beforeEach(async () => {
     originalFetch = global.fetch; originalTimer = window.setTimeout; originalClear = window.clearTimeout
-    catalogResult = true; streams = []; timers = new Map(); reads = 0; contentReads = 0; catalogHints = []; currentView = view(); readOverride = null; contentOverride = null
+    catalogResult = true; streams = []; streamHeaders = []; timers = new Map(); reads = 0; contentReads = 0; catalogHints = []; currentView = view(); readOverride = null; contentOverride = null
     let timerId = 0
     window.setTimeout = callback => { const id = ++timerId; timers.set(id, callback); return id }
     window.clearTimeout = id => timers.delete(id)
     global.fetch = async (_url, options) => {
       let stream; const body = new ReadableStream({ start(controller) { stream = controller } })
-      streams.push(stream)
+      streams.push(stream); streamHeaders.push(new Headers(options.headers))
       return new Response(body, { status: 200, headers: { 'Content-Type': 'text/event-stream', 'X-Request-Id': new Headers(options.headers).get('X-Request-Id') } })
     }
     chatContext = ref({ taskId: '474', conversationScopeType: 'bounty', conversationScopeKey: 'task:474', mode: 'bounty', participantAgentIds: ['wuyong'], targetAgentIds: ['wuyong'] })
@@ -54,6 +56,36 @@ describe('SSE interrupted typed round terminal recovery', () => {
   const disconnect = async () => { streams.at(-1).error(new TypeError('network error: ERR_HTTP2_PROTOCOL_ERROR')); await flush() }
   const reconnect = async () => { expect(timers.size).to.equal(1); const [id, callback] = [...timers][0]; timers.delete(id); await callback(); await flush() }
 
+  it('shares the real chat connection with acceptance through replay, live updates and reconnection', async () => {
+    let catalogueReads = 0
+    const acceptance = useHallBountyAcceptance({ taskId: () => '474', identityKey: () => 'owner',
+      eventSource: () => hall.acceptanceEventSource,
+      api: { list: async () => ({ items: [{ id: '101', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:474' }] }),
+        get: async () => { catalogueReads++; return { schemaVersion: 1, scope: { taskId: '474', conversationId: '101', conversationGeneration: '1' },
+          after: '0', through: '1', nextAfter: null, hasMore: false, entries: [{ ordinal: '1', request: { ...structuredClone(currentView),
+            turns: currentView.turns.map(turn => ({ ...turn, createdAt: '1000', updatedAt: '2000' })) } }] } } } })
+    const emit = (type, sequence) => {
+      const ready = type === 'stream_ready'
+      const m = eventMessage(streamHeaders.at(-1).get('X-Request-Id'), ready ? 'conversation.stream.ready' : 'conversation.event',
+        `conversation:101:${ready ? 'ready:fixture' : sequence}`, { type, conversationId: '101',
+          ...(ready ? { cursor: String(sequence), nextCursor: String(sequence) } : { requestId: 'request-186', eventSequence: String(sequence), occurredAt: 1000 }) })
+      streams.at(-1).enqueue(new TextEncoder().encode(`event: ${m.messageType}\nid: ${m.messageId}\ndata: ${JSON.stringify(m)}\n\n`))
+    }
+    try {
+      await flush(); expect(streams).to.have.length(1); expect(catalogueReads).to.equal(1)
+      expect(acceptance.catalog.error.value).to.equal('')
+      emit('delivery_submission_completed', 9201); await flush(); expect(catalogueReads).to.equal(1)
+      emit('stream_ready', 9201); await flush(); expect(catalogueReads).to.equal(2)
+      currentView = view('COMPLETED'); emit('delivery_submission_completed', 9202); await flush()
+      expect(catalogueReads).to.equal(3); expect(acceptance.catalog.entries.value[0].request.state).to.equal('COMPLETED')
+      expect(hall.acceptanceEventSource.sharedEvent()).to.deep.equal({ type: 'delivery_submission_completed', conversationId: '101' })
+      await disconnect(); expect(hall.acceptanceEventSource.sharedConversationId()).to.equal('101')
+      expect(acceptance.error.value).not.to.equal(''); expect(streams).to.have.length(1)
+      await reconnect(); expect(streams).to.have.length(2)
+      emit('stream_ready', 9202); await flush(); expect(catalogueReads).to.equal(4); expect(acceptance.error.value).to.equal('')
+    } finally { acceptance.dispose() }
+    expect(hall.acceptanceEventSource.sharedConversationId()).to.equal('101')
+  })
   it('reads the exact terminal request and persistent final before the existing reconnect, without a second send or listener', async () => {
     currentView = view('COMPLETED'); await disconnect(); await reconnect()
     expect(reads).to.equal(2)

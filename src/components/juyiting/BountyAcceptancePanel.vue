@@ -38,12 +38,14 @@ import { createApi } from '../../composables/useHttp.js'
 import { useHallBountyAcceptance } from '../../composables/juyiting/useHallBountyAcceptance.js'
 import BountyExecutionOutputs from './BountyExecutionOutputs.vue'
 const props = defineProps({
+  eventSource: { type: Object, default: null },
   reviewContext: { type: Object, default: null }, reviewBusy: { type: Boolean, default: false },
   reviewLoading: { type: Boolean, default: false }, reviewError: { type: String, default: '' },
   enabled: { type: Boolean, default: true }, taskId: { type: String, required: true }, identityKey: { type: String, required: true }, taskCompleted: { type: Boolean, default: false },
   taskVersion: { type: [Number, String], default: '' }, conversationId: { type: String, default: '' } })
 defineEmits(['continue-modification', 'review-delivery', 'refresh-review', 'preview-output'])
 const source = useHallBountyAcceptance({ api: createApi('/chat'), taskId: () => props.taskId,
+  eventSource: () => props.eventSource,
   identityKey: () => props.identityKey, conversationId: () => props.conversationId, enabled: () => props.enabled,
   taskCompleted: () => props.taskCompleted, stateVersion: () => props.taskVersion })
 </script>
