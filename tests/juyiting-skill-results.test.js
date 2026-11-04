@@ -195,31 +195,48 @@ describe('RB-01/D01 native request-step result discovery', () => {
 })
 
 
-describe('skill result polling demand and visibility', () => {
-  it('only rechecks unfinished references on ticks but revalidates all on foreground/manual refresh', async () => {
+describe('skill result event demand and visibility', () => {
+  for (const phase of ['COMPLETE', 'FAILED']) it(`updates ${phase} from request progress without a result timer and revalidates on foreground/manual refresh`, async () => {
     const doc = new EventTarget(); doc.visibilityState = 'visible'
-    const timers = new Map(); let seq = 0; const calls = []
-    const timerApi = { setTimeout: fn => { timers.set(++seq, fn); return seq }, clearTimeout: id => timers.delete(id) }
+    const calls = []; let timers = 0; let finished = false
+    const originalTimeout = globalThis.setTimeout
+    globalThis.setTimeout = (callback, delay, ...args) => {
+      if (delay === 2500) { timers++; return 999 }
+      return originalTimeout(callback, delay, ...args)
+    }
     const scope = effectScope()
-    const pending = { ...nativeRequest(), requestId: 'other', steps: [{ ...nativeRequest().steps[0], executionId: 'pending-execution', stepId: 'pending-step' }] }
-    const service = scope.run(() => useHallSkillResults({
-      api: { get: async path => {
-        calls.push(path)
-        return path.includes('pending-execution') ? { ...nativeResult(), requestId: 'other', stepId: 'pending-step', executionId: 'pending-execution', phase: 'ARCHIVING', data: null } : nativeResult()
-      } }, documentRef: doc, timerApi, getContext: () => context, getOutcomes: () => [],
-      getRequests: () => [nativeRequest(), pending], identityKey: () => 'owner', enabled: () => true
-    }))
+    const pending = { ...nativeRequest(), requestId: 'other', state: 'RUNNING', steps: [{ ...nativeRequest().steps[0], executionId: 'pending-execution', stepId: 'pending-step', state: 'RUNNING', executionState: 'RUNNING' }] }
+    const requests = ref([nativeRequest(), pending])
+    let service
     try {
-      await drain(); await drain(); assert.equal(calls.length, 2); assert.equal(timers.size, 1)
-      const [id, tick] = [...timers][0]; timers.delete(id); tick(); await drain()
-      assert.equal(calls.length, 3); assert.match(calls[2], /pending-execution/)
+      service = scope.run(() => useHallSkillResults({
+        api: { get: async path => {
+          calls.push(path)
+          if (!path.includes('pending-execution')) return nativeResult()
+          return { ...nativeResult(), requestId: 'other', stepId: 'pending-step', executionId: 'pending-execution',
+            executionStateVersion: finished ? '5' : '4', state: finished && phase === 'FAILED' ? 'FAILED' : 'RESULT_COMMITTED',
+            phase: finished ? phase : 'ARCHIVING', data: finished && phase === 'COMPLETE' ? { text: '成果' } : null }
+        } }, documentRef: doc, getContext: () => context, getOutcomes: () => [],
+        getRequests: () => requests.value, identityKey: () => 'owner', enabled: () => true
+      }))
+      await drain(); await drain(); assert.equal(calls.length, 2); assert.equal(timers, 0)
+      assert.equal(service.results.value.find(value => value.executionId === 'pending-execution').complete, false)
+      // The existing conversation event readback changes the authoritative step/request.
+      finished = true
+      requests.value = [nativeRequest(), { ...pending, state: phase === 'COMPLETE' ? 'RESULT_COMMITTED' : 'FAILED', stateVersion: '9007199254740994',
+        steps: pending.steps.map(step => ({ ...step, stateVersion: '9007199254740994', state: phase === 'COMPLETE' ? 'RESULT_COMMITTED' : 'FAILED', executionState: phase === 'COMPLETE' ? 'RESULT_COMMITTED' : 'FAILED' })) }]
+      await drain(); await drain(); assert.equal(calls.length, 4)
+      const result = service.results.value.find(value => value.executionId === 'pending-execution')
+      assert.equal(result.phase, phase); assert.equal(result.complete, phase === 'COMPLETE')
+      requests.value = structuredClone(JSON.parse(JSON.stringify(requests.value)))
+      await drain(); assert.equal(calls.length, 4); assert.equal(timers, 0)
       doc.visibilityState = 'hidden'; doc.dispatchEvent(new Event('visibilitychange'))
-      assert.equal(timers.size, 0); await service.refresh(); assert.equal(calls.length, 3)
+      await service.refresh(); assert.equal(calls.length, 4)
       doc.visibilityState = 'visible'; doc.dispatchEvent(new Event('visibilitychange')); await drain(); await drain()
-      assert.equal(calls.length, 5)
-      await service.refresh(); assert.equal(calls.length, 7)
+      assert.equal(calls.length, 6)
+      await service.refresh(); assert.equal(calls.length, 8)
       service.dispose(); doc.dispatchEvent(new Event('visibilitychange')); await drain()
-      assert.equal(calls.length, 7); assert.equal(timers.size, 0)
-    } finally { service.dispose(); scope.stop() }
+      assert.equal(calls.length, 8); assert.equal(timers, 0)
+    } finally { service?.dispose(); scope.stop(); globalThis.setTimeout = originalTimeout }
   })
 })
