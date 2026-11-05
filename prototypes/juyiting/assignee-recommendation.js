@@ -12,6 +12,9 @@
     document.body.classList.add('model-recommendation-page');
     const card = document.querySelector('.matter-advice-card'); if (!card) return;
     if (params.get('fundedHistory') === 'true') {
+      const materials = document.querySelector('.task-material-links');
+      materials?.querySelectorAll('.matter-edit-button').forEach(button => button.remove());
+      const hint = materials?.querySelector('.mmd-muted'); if (hint) hint.textContent = '历史资料与成果仅供查阅，不再修改需求或追加执行。';
       card.innerHTML = '<div class="matter-advice-heading"><span>历史资金榜</span><strong>仅供查阅</strong></div><h3>原资金榜事项</h3><p>旧资金榜已停止创建、领令、恢复、退款和结算操作；历史记录仍可查阅。</p><p>原请求结果未知时，不会自动重发，不会按新规则补价执行。</p><button type="button" data-history-settlement>查看历史结算示例</button><p data-history-receipt hidden>原始历史结算：总额100文，成本3文，平台费2文，好汉所得95文。仅为离线示例。</p>';
       return;
     }
@@ -24,13 +27,13 @@
   };
   document.addEventListener('click', e => {
     const b=e.target.closest('button'); if(!b)return;
-    if(b.hasAttribute('data-history-settlement')){document.querySelector('[data-history-receipt]').hidden=false;return;}
+    if(b.hasAttribute('data-history-settlement')){e.preventDefault();e.stopImmediatePropagation();document.querySelector('[data-history-receipt]').hidden=false;return;}
     if(b.dataset.recommendationStage){stage=b.dataset.recommendationStage;manual='';alternatives=null;render();}
     if(b.hasAttribute('data-model-alternatives')){alternatives=b.getAttribute('aria-expanded')!=='true';render();document.querySelector('[data-model-alternatives]')?.focus();}
     if(b.dataset.modelCandidate){manual=b.dataset.modelCandidate;alternatives=false;render();document.querySelector('[data-model-alternatives]')?.focus();}
     if(b.hasAttribute('data-model-retry')){stage='LOADING';render();}
     if(b.hasAttribute('data-model-confirm'))toast('离线演示：仅确认选择，未发送真实任务。');
-  });
+  }, true);
   state.task={title:'统计一下成绩',description:'请根据上传的成绩图片整理统计。',files:[],complete:false};
   state.agent=null; render();
 })();
