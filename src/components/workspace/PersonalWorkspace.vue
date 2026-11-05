@@ -14,9 +14,15 @@
         <div ref="fileListRef" class="treasure-file-list">
           <div v-for="file in treasureFiles" :key="file.fileId" class="treasure-file-row"><div><strong>{{ file.displayName }}</strong><p>{{ originText(file.originKind) }} · {{ familyText(file.mediaFamily) }} · v{{ file.latestVersion }}</p></div><button type="button" :data-file-id="file.fileId" :disabled="!detailAllowed || workspace.actionState.value === 'loading-detail'" @click="openTreasureFile(file.fileId)" class="hall-row-link treasure-file-open" :aria-label="`查看文件：${file.displayName}`" :title="`查看文件：${file.displayName}`"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7"/></svg></button></div>
         </div>
-        <p v-if="!workspace.loading.value && workspace.listState.value !== 'error' && !treasureFiles.length" class="treasure-empty">{{ workspace.nextCursor.value ? '已读取的文件中暂无此分类；可继续读取更多。' : treasureTab === 'trash' ? '回收站为空。' : query.trim() ? '没有找到匹配的文件。' : '这里还没有文件，可上传资料或到事项中查看成果。' }}</p>
-        <p v-if="workspace.listState.value === 'error'" role="alert">部分资料未能加载，请重新加载。<button type="button" @click="refresh" class="hall-tool" aria-label="重新读取文件" title="重新读取文件"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M4 16l2 3a7 7 0 0 0 12-2"/></svg></button></p>
-        <button v-if="workspace.nextCursor.value" type="button" :disabled="workspace.loading.value" @click="loadMore">读取更多文件</button>
+        <p v-if="!workspace.loading.value && !workspace.nextCursor.value && workspace.listState.value !== 'error' && !treasureFiles.length" class="treasure-empty">{{ treasureTab === 'trash' ? '回收站为空。' : query.trim() ? '没有找到匹配的文件。' : '这里还没有文件，可上传资料或到事项中查看成果。' }}</p>
+        <p v-if="workspace.listState.value === 'error'" role="alert">文件暂未完整读取，已读取的文件会保留。<button type="button" :disabled="workspace.loading.value" @click="workspace.nextCursor.value ? loadMore() : refresh()">重试加载</button></p>
+        <p
+          v-else-if="workspace.nextCursor.value"
+          ref="listEndRef"
+          class="treasure-list-status"
+          role="status"
+        >{{ workspace.loading.value ? '正在加载更多资料…' : '向下滚动自动加载' }}</p>
+        <p v-else-if="!workspace.loading.value && treasureFiles.length" class="treasure-list-status" role="status">已显示全部资料</p>
       </template>
       <form v-else-if="treasureView === 'upload'" class="treasure-form" @submit.prevent="uploadTreasure">
         <p>上传后可在草稿里选用；上传本身不会把资料交给好汉。</p>
@@ -411,8 +417,23 @@ const treasureView = ref('list')
 const treasureTab = ref('all')
 const treasureTabs = [{ key: 'all', label: '全部' }, { key: 'materials', label: '资料' }, { key: 'results', label: '成果' }, { key: 'trash', label: '回收站' }]
 // The server supports state/query but not originKind. Never declare a category
-// empty while the unfiltered cursor still has pages; expose continuation explicitly.
+// empty while the unfiltered cursor still has pages; keep loading at the list end.
 const treasureFiles = computed(() => workspace.items.value.filter(file => treasureTab.value === 'materials' ? file.originKind === 'USER_UPLOAD' : treasureTab.value === 'results' ? file.originKind === 'AGENT_DELIVERY' : true))
+const listEndRef = ref(null)
+let listObserver = null
+const stopListObserver = () => { listObserver?.disconnect(); listObserver = null }
+watch([listEndRef, workspace.loading, workspace.nextCursor, workspace.listState, treasureTab, treasureView], () => {
+  stopListObserver()
+  if (!listEndRef.value || workspace.loading.value || workspace.listState.value === 'error' || !workspace.nextCursor.value) return
+  if (typeof IntersectionObserver === 'undefined') return
+  const observer = new IntersectionObserver(entries => {
+    if (listObserver !== observer || !entries.some(entry => entry.isIntersecting) || workspace.loading.value || workspace.listState.value === 'error') return
+    stopListObserver()
+    void loadMore()
+  }, { rootMargin: '0px 0px 120px 0px' })
+  listObserver = observer
+  observer.observe(listEndRef.value)
+}, { flush: 'post' })
 const trashUsage = ref(null)
 const trashConfirmationText = usage => `确认将“${workspace.detail.value?.file.displayName || ''}”移入回收站？仍可恢复。任务引用 ${usage.counts.taskReferences} 条；议事引用 ${usage.counts.conversationReferences} 条；现存输入授权 ${usage.counts.activeInputGrants} 条。已有固定版本引用和输入授权保留，本操作不会撤销授权。`
 watch(workspace.confirmationStale, stale => { if (stale) trashUsage.value = null }, { flush: 'sync' })
@@ -473,12 +494,13 @@ onMounted(() => {
     void execution.recover()
   }
 })
-onBeforeUnmount(() => { disposed = true; viewGeneration++; workspace.dispose(); execution.dispose() })
+onBeforeUnmount(() => { disposed = true; viewGeneration++; stopListObserver(); workspace.dispose(); execution.dispose() })
 </script>
 
 <style scoped src="../juyiting/hall-view-tabs.css"></style>
 
 <style scoped>
+.treasure-list-status { padding: 16px; text-align: center; color: var(--hall-text-muted, #68716b); }
 /* In Hall this is content of the one work window, not an app behind stacked cards. */
 .is-hall-treasure .modal-stage {
   min-height: 0;

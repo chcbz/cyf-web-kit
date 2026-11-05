@@ -42,6 +42,9 @@ export const useHallData = ({
   const catalogError = ref('')
   const tasksLoading = ref(false)
   const tasksError = ref('')
+  const tasksHasMore = ref(false)
+  let tasksPage = 0
+  let loadedTaskQuery = ''
   const taskCountsLoading = ref(false)
   const taskCountsError = ref('')
   const backendSceneAgents = ref([])
@@ -142,6 +145,10 @@ export const useHallData = ({
   const stopFilters = watch([taskStatusFilter, taskAgentFilter, taskKeyword], () => {
     listEpoch += 1
     countsEpoch += 1
+    tasksHasMore.value = false
+    tasksLoading.value = false
+    tasksPage = 0
+    loadedTaskQuery = ''
     taskStatusCounts.value = {}
   }, { flush: 'sync' })
   const stopIdentity = watch(identityFingerprint, () => {
@@ -151,6 +158,9 @@ export const useHallData = ({
     recommendationRequest?.controller.abort()
     recommendationRequest = null
     tasks.value = []
+    tasksHasMore.value = false
+    tasksPage = 0
+    loadedTaskQuery = ''
     taskAgentFilter.value = ''
     encounteredTaskAgents.value = []
     allRosterAgents.value = []
@@ -232,15 +242,15 @@ export const useHallData = ({
   }, { immediate: true, flush: 'sync' })
 
   const searchTasks = async (params) => {
-    let list = []
+    let page = null
     await agentApi.search('/tasks/search', params, {
       autoLoading: false,
       onSuccess: (result) => {
-        list = result.items
+        page = result
       }
     })
-    if (!Array.isArray(list)) throw new Error('事项列表返回格式不正确')
-    return list
+    if (!Array.isArray(page?.items)) throw new Error('事项列表返回格式不正确')
+    return page
   }
 
   const loadTaskStatusCounts = async () => {
@@ -474,15 +484,19 @@ export const useHallData = ({
   }
 
   const loadTasks = async (options = {}) => {
-    const epoch = ++listEpoch
+    const append = options?.append === true
     const fingerprint = `${queryFingerprint()}\u0000${taskStatusFilter.value}`
+    if (append && (tasksLoading.value || !tasksHasMore.value || loadedTaskQuery !== fingerprint)) return []
+    const pageNum = append ? tasksPage + 1 : 1
+    if (!append) { tasksHasMore.value = false; tasksPage = 0; loadedTaskQuery = '' }
+    const epoch = ++listEpoch
     const current = () => epoch === listEpoch && fingerprint === `${queryFingerprint()}\u0000${taskStatusFilter.value}`
     tasksLoading.value = true
     tasksError.value = ''
     const baseParams = {
       assignedAgentId: taskAgentFilter.value || undefined,
       keyword: taskKeyword.value || undefined,
-      pageNum: 1,
+      pageNum,
       pageSize: 30
     }
     const displayParams = {
@@ -492,9 +506,14 @@ export const useHallData = ({
     const selectedId = selectedTask.value?.id
     const listRequest = (async () => {
       try {
-        const list = await searchTasks(displayParams)
+        const page = await searchTasks(displayParams)
         if (!current()) return []
-        tasks.value = list
+        const list = page.items
+        const hasMore = list.length > 0 && BigInt(pageNum * baseParams.pageSize) < BigInt(page.total)
+        tasks.value = append ? [...new Map([...tasks.value, ...list].map(task => [task.id, task])).values()] : list
+        tasksPage = pageNum
+        loadedTaskQuery = fingerprint
+        tasksHasMore.value = hasMore
         rememberTaskAgents(list)
         // A task leaving the current page/filter is not deletion or revocation. Keep the
         // active context by ID; refresh the selected projection only when actually present.
@@ -507,7 +526,7 @@ export const useHallData = ({
         const needsAssignedDetail = selected?.funding?.mode !== 'FUNDED_SINGLE_AGENT' &&
           (selected?.assignedAgentId || selected?.assignedAgentIds?.length === 1) && !assignedTaskTarget(selected)
         if (selected && !needsAssignedDetail && (before === null || (after !== null && after >= before)) && (minimum === null || (after !== null && after >= minimum))) selectedTask.value = selected
-        else if (selectedId && selectedTask.value?.id === selectedId) {
+        else if ((!append || selected) && selectedId && selectedTask.value?.id === selectedId) {
           // Acceptance can move the active matter out of this filter/page. Read
           // that exact ID once; a missing list row is not a current detail snapshot.
           try {
@@ -529,13 +548,13 @@ export const useHallData = ({
         if (!current()) return []
         log.warn('load bounty tasks failed:', error)
         tasksError.value = error?.message || '悬赏榜暂无法读取'
-        tasks.value = []
+        if (!append) tasks.value = []
         return []
       } finally {
         if (current()) tasksLoading.value = false
       }
     })()
-    const [, counts] = await Promise.all([listRequest, loadTaskStatusCounts()])
+    const [, counts] = await Promise.all([listRequest, append ? Promise.resolve(null) : loadTaskStatusCounts()])
     return counts
   }
 
@@ -601,6 +620,7 @@ export const useHallData = ({
     loadTaskDetail,
     loadTaskRecommendations,
     loadTasks,
+    loadMoreTasks: () => loadTasks({ append: true }),
     mapAgents,
     mapError,
     mapLoading,
@@ -623,6 +643,7 @@ export const useHallData = ({
     taskStatusFilter,
     tasksError,
     tasksLoading,
+    tasksHasMore,
     unbindPersona,
     visibleAgents
   }
