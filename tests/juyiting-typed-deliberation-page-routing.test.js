@@ -132,7 +132,7 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       globalStore: { getJiacn: 'owner', user: {} }, log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}), portraitShortName: agent => agent?.name || '', selectedAgent, selectedTask, showToast: () => {} })
     try {
       expect(await conversation.loadHallMessages()).to.equal(true)
-      const pageAccepted = new Function('adoptTypedDiscussionReceipt', 'bountyRequestCatalog', 'showToast', `return (${option('useHallTypedDeliberation', 'onAccepted')})`)(conversation.adoptTypedDiscussionReceipt, { hint: () => calls.push('HINT') }, text => calls.push(`TOAST:${text}`))
+      const pageAccepted = new Function('adoptTypedDiscussionReceipt', 'refreshHallProjections', 'showToast', `return (${option('useHallTypedDeliberation', 'onAccepted')})`)(conversation.adoptTypedDiscussionReceipt, () => calls.push('HINT'), text => calls.push(`TOAST:${text}`))
       expect(await pageAccepted({ receipt: typedReceipt(), context: { conversationId: '7', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4', conversationGeneration: '1' }, isCurrent: () => true })).to.equal(true)
       expect(conversation.activeRequest.value).to.include({ requestId: 'request-typed-1', state: 'RUNNING', stateVersion: '0' })
       expect(conversation.activeTurns.value[0]).to.include({ turnId: 'turn-typed-1', state: 'RECEIVED', stateVersion: '0' })
@@ -155,7 +155,7 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       globalStore: { getJiacn: 'owner', user: {} }, log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}), portraitShortName: agent => agent?.name || '', selectedAgent, selectedTask, showToast: () => {} })
     try {
       expect(await conversation.loadHallMessages()).to.equal(true)
-      const pageAccepted = new Function('adoptTypedDiscussionReceipt', 'bountyRequestCatalog', 'showToast', `return (${option('useHallTypedDeliberation', 'onAccepted')})`)(conversation.adoptTypedDiscussionReceipt, { hint: () => calls.push('HINT') }, text => calls.push(`TOAST:${text}`))
+      const pageAccepted = new Function('adoptTypedDiscussionReceipt', 'refreshHallProjections', 'showToast', `return (${option('useHallTypedDeliberation', 'onAccepted')})`)(conversation.adoptTypedDiscussionReceipt, () => calls.push('HINT'), text => calls.push(`TOAST:${text}`))
       expect(await pageAccepted({ receipt: typedReceipt(), context: { conversationId: '7', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4', conversationGeneration: '1' }, isCurrent: () => true })).to.equal(true)
       expect(conversation.activeRequest.value).to.include({ requestId: 'request-typed-1', state: 'RUNNING', stateVersion: '0' })
       expect(conversation.activeTurns.value[0]).to.include({ turnId: 'turn-typed-1', state: 'RECEIVED', stateVersion: '0' })
@@ -210,7 +210,7 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       const stops = watchers.map(node => evaluate(script.slice(node.expression.start, node.expression.end)))
       stopFence = () => { stops.forEach(stop => stop()); env.bountyAssignmentContext.dispose(); env.bountyRequestCatalog.dispose() }
       const originalGeneration = followupContextGeneration.value
-      const pageAccepted = new Function('adoptTypedDiscussionReceipt', 'bountyRequestCatalog', 'showToast', `return (${option('useHallTypedDeliberation', 'onAccepted')})`)(conversation.adoptTypedDiscussionReceipt, { hint: () => calls.push('HINT') }, text => calls.push(`TOAST:${text}`))
+      const pageAccepted = new Function('adoptTypedDiscussionReceipt', 'refreshHallProjections', 'showToast', `return (${option('useHallTypedDeliberation', 'onAccepted')})`)(conversation.adoptTypedDiscussionReceipt, () => calls.push('HINT'), text => calls.push(`TOAST:${text}`))
       expect(await pageAccepted({ receipt: typedReceipt(), context: { conversationId: '7', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4', conversationGeneration: '1' }, isCurrent: () => followupContextGeneration.value === originalGeneration })).to.equal(true)
       expect(conversation.activeRequest.value).to.include({ requestId: 'request-typed-1', state: 'RUNNING', stateVersion: '0' })
       expect(conversation.activeTurns.value[0]).to.include({ turnId: 'turn-typed-1', state: 'RECEIVED', stateVersion: '0' })
@@ -392,5 +392,34 @@ describe('actual JuyiHall exact acceptance preview', () => {
     await view.run({ ...item, artifactId: 'other' })
     finish(); await first
     expect(view.preview.value.artifactId).to.equal('other')
+  })
+})
+
+
+describe('actual page targeted follow-up wiring', () => {
+  const build = (initialized = true, discover = false) => {
+    const calls = []; const generation = ref(1)
+    const catalog = { initialized: ref(initialized), refresh: async () => { calls.push('all-catalog'); return true },
+      refreshRequests: async ids => { calls.push(['catalog', ids]); return true } }
+    let reads = 0
+    const typed = { refresh: async () => { calls.push('all-outcomes'); return true },
+      relatedRequestIds: hints => discover && reads ? ['parent', 'child'] : hints.map(hint => hint.requestId),
+      refreshRequests: async ids => { reads++; calls.push(['outcomes', ids]); return true } }
+    const actual = new Function('typedDeliberationEnabled', 'conversationId', 'refreshCurrentConversationTask',
+      'followupContextGeneration', 'bountyAssignmentContext', 'bountyRequestCatalog', 'typedDeliberation',
+      `return (${handler('refreshFollowupContext')})`)(ref(true), ref('7'), async () => true,
+      generation, { refresh: async () => true }, catalog, typed)
+    return { actual, calls, generation }
+  }
+  it('live hints query only changed requests and newly disclosed children', async () => {
+    const { actual, calls } = build(true, true)
+    expect(await actual({ type: 'action_started', requestId: 'parent' })).to.equal(true)
+    expect(calls).to.deep.equal([['catalog', ['parent']], ['outcomes', ['parent']], ['catalog', ['child']], ['outcomes', ['child']]])
+  })
+  it('initial recovery and an explicit resync still take the complete-context path until send context is separated', async () => {
+    for (const [initialized, event] of [[false, { type: 'agent_message', requestId: 'one' }], [true, { type: 'resync_required' }]]) {
+      const { actual, calls } = build(initialized)
+      expect(await actual(event)).to.equal(true); expect(calls).to.deep.equal(['all-catalog', 'all-outcomes'])
+    }
   })
 })

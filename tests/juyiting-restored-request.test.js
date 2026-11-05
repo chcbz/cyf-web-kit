@@ -16,12 +16,12 @@ const entry = (ordinal, state) => {
 }
 const page = (entries, extra = {}) => ({ schemaVersion: 1, scope, after: '0', through: '185', nextAfter: null, hasMore: false, entries, ...extra })
 const instances = []
-const setup = (read = async () => page([entry('184', 'CANCELLED'), entry('185', 'STREAMING')])) => {
+const setup = (read = async () => page([entry('184', 'CANCELLED'), entry('185', 'STREAMING')]), options = {}) => {
   const calls = []; const context = ref({ taskId: '474', conversationScopeType: 'bounty', conversationScopeKey: 'task:474', mode: 'bounty', participantAgentIds: ['wuyong'], targetAgentIds: ['wuyong'] })
   const apiStore = { authorizationGeneration: 1, token: async () => null }
   const hall = useHallConversation({ apiStore, chatContext: context,
     chatMode: ref('bounty'), selectedTask: ref({ id: '474' }), selectedAgent: ref(null), outgoingMetadata: ref({}),
-    globalStore: { getJiacn: 'owner', user: {} }, log: { warn() {}, error() {} }, openPanel() {}, portraitShortName: () => '', showToast() {},
+    globalStore: { getJiacn: 'owner', user: {} }, log: { warn() {}, error() {} }, openPanel() {}, portraitShortName: () => '', showToast() {}, ...options,
     chatApi: {
       list: async () => ({ items: [{ id: '101', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:474' }] }),
       get: async (path, params, options) => {
@@ -174,4 +174,46 @@ describe('restored EXECUTE request terminal readback', () => {
     expect(hall.activeRequest.value?.state).not.to.equal('RESULT_COMMITTED')
   })
 
+})
+
+
+describe('bounded event projection invalidation', () => {
+  afterEach(() => instances.splice(0).forEach(hall => hall.disposeHallConversation()))
+  it('preserves all changed request identities arriving during an in-flight refresh', async () => {
+    const hints = []; let finish
+    const { hall } = setup(undefined, { onRequestCatalogHint: async event => {
+      hints.push(event)
+      if (hints.length === 1) await new Promise(resolve => { finish = resolve })
+      return true
+    } })
+    hall.conversationId.value = '101'
+    const first = hall.refreshHallProjections({ type: 'agent_message', conversationId: '101', requestId: 'one' })
+    const joined = hall.refreshHallProjections({ type: 'agent_message', conversationId: '101', requestId: 'two' })
+    hall.refreshHallProjections({ type: 'action_started', conversationId: '101', requestId: 'three', childRequestId: 'child' })
+    expect(joined).to.equal(first); finish(); expect(await first).to.equal(true)
+    expect(hints).to.have.length(2)
+    expect(hints[1].events.map(event => event.requestId)).to.deep.equal(['two', 'three'])
+    expect(hints[1].events[1].childRequestId).to.equal('child')
+  })
+  it('101 historical event frames trigger one projection refresh at stream-ready, then live hints stay targeted', async () => {
+    const originalFetch = global.fetch; const hints = []; let controller; let transportRequestId
+    const { hall, apiStore } = setup(undefined, { onRequestCatalogHint: async event => { hints.push(event); return true } })
+    apiStore.token = async () => 'test-token'
+    global.fetch = async (_url, options) => {
+      transportRequestId = new Headers(options.headers).get('X-Request-Id')
+      return new Response(new ReadableStream({ start(value) { controller = value } }), { status: 200,
+        headers: { 'Content-Type': 'text/event-stream', 'X-Request-Id': transportRequestId } })
+    }
+    const settle = () => new Promise(resolve => setImmediate(resolve))
+    const push = (event, seq) => controller.enqueue(new TextEncoder().encode(conversationFrame({ conversationId: '101', ...event }, seq, transportRequestId)))
+    try {
+      expect(await hall.loadHallMessages()).to.equal(true); await settle()
+      for (let i = 1; i <= 101; i++) push({ type: 'action_failed', requestId: `old-${i}` }, String(i))
+      await settle(); expect(hints).to.deep.equal([])
+      push({ type: 'stream_ready', cursor: '101', nextCursor: '101' }, '101')
+      await settle(); expect(hints.map(hint => hint.type)).to.deep.equal(['resync_required'])
+      push({ type: 'delivery_review_changed', requestId: 'live-request', parentOutcomeId: 'review-outcome', childRequestId: 'new-child' }, '102')
+      await settle(); expect(hints).to.have.length(2); expect(hints[1].requestId).to.equal('live-request'); expect(hints[1].childRequestId).to.equal('new-child')
+    } finally { hall.disposeHallConversation(); global.fetch = originalFetch }
+  })
 })

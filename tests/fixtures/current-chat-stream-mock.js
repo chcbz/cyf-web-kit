@@ -49,8 +49,8 @@ export function currentChatStreamMock(api) {
 }
 
 export function conversationFrame(event, sequence, requestId = 'test-events') {
-  const data = { ...event, occurredAt: Number(event.occurredAt || 1000) }
   const ready = event.type === 'stream_ready'
+  const data = ready ? { ...event } : { ...event, occurredAt: Number(event.occurredAt || 1000) }
   const messageType = ready ? 'conversation.stream.ready' : 'conversation.event'
   const messageId = `conversation:${event.conversationId}:${ready ? 'ready:fixture' : sequence}`
   return `event: ${messageType}\nid: ${messageId}\ndata: ${JSON.stringify({ protocolVersion: 1, requestId, messageType, messageId, data })}\n\n`

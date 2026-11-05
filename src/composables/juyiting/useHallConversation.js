@@ -458,24 +458,30 @@ export const useHallConversation = ({
   }
 
   let projectionsDirty = false
+  let replayProjectionDirty = false
   let projectionFlight = null
-  let projectionRevision = 0
   const refreshHallProjections = event => {
     if (!onRequestCatalogHint || disposed || !conversationId.value) return Promise.resolve(true)
     projectionsDirty = true
-    projectionRevision++
     const guard = captureGuard(); const id = conversationId.value
-    if (projectionFlight && projectionFlight.id === id && guardCurrent(projectionFlight.guard)) return projectionFlight.promise
-    const flight = { guard, id }; projectionFlight = flight
+    const key = [event?.type, event?.requestId, event?.childRequestId, event?.replyRequestId, event?.parentOutcomeId].join('\u0000')
+    if (projectionFlight && projectionFlight.id === id && guardCurrent(projectionFlight.guard)) {
+      projectionFlight.pending.set(key, event)
+      return projectionFlight.promise
+    }
+    const flight = { guard, id, pending: new Map([[key, event]]) }; projectionFlight = flight
     flight.promise = (async () => {
-      // Coalesce live hints in one read; new hints while awaiting need another read.
-      let revision
       let success = false
       do {
-        revision = projectionRevision
-        try { success = await onRequestCatalogHint(event) !== false } catch { success = false }
+        const events = [...flight.pending.values()]
+        flight.pending.clear()
+        const hint = events.length === 1 ? events[0] : { type: 'request_changes', conversationId: id, events }
+        // A full recovery already covers replay hints received before this read.
+        // Later replay events set the flag again; failure remains projectionsDirty.
+        if (events.some(item => item?.type === 'resync_required')) replayProjectionDirty = false
+        try { success = await onRequestCatalogHint(hint) !== false } catch { success = false }
         if (!guardCurrent(guard) || conversationId.value !== id) return false
-      } while (success && revision !== projectionRevision)
+      } while (success && flight.pending.size)
       projectionsDirty = !success
       if (!success) {
         hallEventReconnectFailures++
@@ -486,21 +492,22 @@ export const useHallConversation = ({
     return flight.promise
   }
 
-  const refreshExecutionRequest = event => {
+  const refreshExecutionRequest = (event, { refreshProjection = true } = {}) => {
     if (disposed || event?.conversationId !== conversationId.value || !typedId(event?.requestId)) return false
-    void refreshHallProjections(event)
+    if (refreshProjection) void refreshHallProjections(event)
     if (event.requestId === activeRequest.value?.requestId) scheduleAuthoritativeRequestReadback(event.requestId, { immediate: true })
     return true
   }
 
-  const appendHallEventMessage = (event, { deferServerResync = false } = {}) => {
-    if (event?.type === 'delivery_submission_completed' && event.conversationId === conversationId.value && typedId(event.requestId)) {
+  const appendHallEventMessage = (event, { deferServerResync = false, deferProjectionHint = false } = {}) => {
+    const refreshProjection = () => { if (!deferProjectionHint) void refreshHallProjections(event) }
+    if (['delivery_submission_completed', 'delivery_review_changed'].includes(event?.type) && event.conversationId === conversationId.value && typedId(event.requestId)) {
       onTypedOutcome?.(event)
-      void refreshHallProjections(event)
+      refreshProjection()
       return true
     }
     // Receipt/journal events never replace a request projection or create a successful deliverable.
-    if (['execution_abandoned', 'execution_terminal', 'action_started', 'action_failed', 'target_capability_unavailable', 'cancel_requested'].includes(event?.type)) return refreshExecutionRequest(event)
+    if (['execution_abandoned', 'execution_terminal', 'action_started', 'action_failed', 'target_capability_unavailable', 'cancel_requested'].includes(event?.type)) return refreshExecutionRequest(event, { refreshProjection: !deferProjectionHint })
     // Historical replay may contain deltas from an earlier cancelled request.
     // Only the active request owns live bubbles; persisted historical finals still render.
     if (event?.type === 'agent_message_delta' && activeRequest.value?.requestId &&
@@ -510,13 +517,13 @@ export const useHallConversation = ({
     const messageEvent = event?.type === 'agent_message_delta' || event?.type === 'agent_message' || event?.type === 'resync_required' || ['part.processing', 'part.ready', 'part.failed'].includes(event?.type)
     // Keep the active-request reducer closed. A non-active media event can only ask the
     // independent read-only catalog to re-read its owner-scoped index.
-    if (['part.ready', 'agent_message', 'resync_required'].includes(event?.type) && event.requestId && event.conversationId === conversationId.value) void refreshHallProjections(event)
+    if (['part.ready', 'agent_message', 'resync_required'].includes(event?.type) && event.requestId && event.conversationId === conversationId.value) refreshProjection()
     const typedRequestId = event?.type === 'agent_message' && event?.typedOutcome ? event.requestId :
       event?.type === 'typed_question_answered' ? (event.requestId || event.replyRequestId) : ''
     if (typedRequestId && event.conversationId === conversationId.value) {
       onTypedOutcome?.({ ...event, requestId: typedRequestId })
       // agent_message already requested the same catalog refresh above.
-      if (event.type !== 'agent_message') void refreshHallProjections(event)
+      if (event.type !== 'agent_message') refreshProjection()
     }
     if (!messageEvent) {
       if (typedRequestId && event.conversationId === conversationId.value) return true
@@ -739,6 +746,10 @@ export const useHallConversation = ({
           if (event.type === 'stream_ready') {
             acceptanceReady = true
             acceptanceEvent.value = { type: event.type, conversationId: id }
+            if (replayProjectionDirty || projectionsDirty && !projectionFlight) {
+              replayProjectionDirty = false
+              void refreshHallProjections({ type: 'resync_required', conversationId: id })
+            }
             hallEventReconnectFailures = 0; return true
           }
           if (acceptanceReady && isAcceptanceProjectionEvent(event)) {
@@ -750,7 +761,8 @@ export const useHallConversation = ({
               ? candidateCursor
               : ''
           }
-          const accepted = appendHallEventMessage(event, { deferServerResync: event.type === 'resync_required' })
+          if (!acceptanceReady && isAcceptanceProjectionEvent(event)) replayProjectionDirty = true
+          const accepted = appendHallEventMessage(event, { deferServerResync: event.type === 'resync_required', deferProjectionHint: !acceptanceReady })
           if (accepted) hallEventReconnectFailures = 0
           return accepted
         },
@@ -860,8 +872,8 @@ export const useHallConversation = ({
     recoveringReplyTurn = null
     lifecycleController.abort(new DOMException('Hall identity lifecycle reset', 'AbortError'))
     projectionsDirty = false
+    replayProjectionDirty = false
     projectionFlight = null
-    projectionRevision++
     resetDurableState()
     if (!disposed) lifecycleController = new AbortController()
   }

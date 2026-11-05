@@ -87,6 +87,28 @@ describe('SSE interrupted typed round terminal recovery', () => {
     } finally { acceptance.dispose() }
     expect(hall.acceptanceEventSource.sharedConversationId()).to.equal('101')
   })
+  for (const active of [true, false]) it(`retains replay changes across disconnect with active request=${active}`, async () => {
+    if (!active) hall.activeRequest.value = null
+    const emit = (type, sequence) => {
+      const ready = type === 'stream_ready'
+      const m = eventMessage(streamHeaders.at(-1).get('X-Request-Id'), ready ? 'conversation.stream.ready' : 'conversation.event',
+        `conversation:101:${ready ? 'ready:fixture' : sequence}`, { type, conversationId: '101',
+          ...(ready ? { cursor: String(sequence), nextCursor: String(sequence) } : { requestId: 'historical-review', eventSequence: String(sequence), occurredAt: 1000 }) })
+      streams.at(-1).enqueue(new TextEncoder().encode(`event: ${m.messageType}\nid: ${m.messageId}\ndata: ${JSON.stringify(m)}\n\n`))
+    }
+    const before = catalogHints.length
+    emit('delivery_review_changed', 9201); await flush()
+    expect(catalogHints).to.have.length(before)
+    await disconnect(); await reconnect()
+    expect(streamHeaders.at(-1).get('Last-Event-ID')).to.equal('conversation:101:9201')
+    expect(catalogHints).to.have.length(before + (active ? 1 : 0))
+    // The server does not replay the acknowledged event again.
+    emit('stream_ready', 9201); await flush()
+    expect(catalogHints.slice(before).map(hint => hint.type)).to.deep.equal(['resync_required'])
+    emit('delivery_review_changed', 9202); await flush()
+    expect(catalogHints.at(-1).requestId).to.equal('historical-review')
+    expect(catalogHints).to.have.length(before + 2)
+  })
   it('reads the exact terminal request and persistent final before the existing reconnect, without a second send or listener', async () => {
     currentView = view('COMPLETED'); await disconnect(); await reconnect()
     expect(reads).to.equal(2)

@@ -131,3 +131,70 @@ it('joins an in-flight catalog scan for send preparation and propagates its resu
     } finally { lane.dispose() }
   }
 })
+
+it('updates only an event-named request in a 101-round catalog, including a newly discovered low ordinal', async () => {
+  const calls = []; let targeted = false
+  const records = Array.from({ length: 101 }, (_, i) => ({ ordinal: String(i + 2), request: request(`req_${i + 2}`) }))
+  const lane = useHallBountyRequestCatalog({ chatApi: { get: async (_path, params) => {
+    calls.push(params)
+    if (params.requestId) {
+      expect(targeted).to.equal(true)
+      return page('0', '1', [{ ordinal: '1', request: request(params.requestId) }])
+    }
+    const after = BigInt(params.after)
+    return page(params.after, '102', records.filter(row => BigInt(row.ordinal) > after).slice(0, 100), params.after === '0', params.after === '0' ? '101' : null)
+  } }, enabled: () => true, identityScope: ref('owner'), authorizationGeneration: ref(1),
+  getContext: () => ({ conversationId: 'conversation_1', taskId: 'task_1', conversationGeneration: '1' }) })
+  try {
+    expect(await lane.refresh()).to.equal(true); expect(lane.initialized.value).to.equal(true)
+    calls.length = 0; targeted = true
+    expect(await lane.refreshRequests(['late', 'late'])).to.equal(true)
+    expect(calls).to.deep.equal([{ requestId: 'late', expectedGeneration: '1' }])
+    expect(lane.entries.value).to.have.length(102)
+    expect(lane.entries.value[0].request.requestId).to.equal('late')
+  } finally { lane.dispose() }
+})
+
+it('targeted catalog reads fence stale identity, abort on reset, and never replace unrelated history', async () => {
+  let resolve; let signal
+  const lane = useHallBountyRequestCatalog({ chatApi: { get: async (_path, _params, options) => {
+    signal = options.signal; return new Promise(done => { resolve = done })
+  } }, enabled: () => true, identityScope: ref('owner'), authorizationGeneration: ref(1),
+  getContext: () => ({ conversationId: 'conversation_1', taskId: 'task_1' }) })
+  try {
+    const flight = lane.refreshRequests(['one'])
+    expect(lane.loading.value).to.equal(true)
+    lane.reset(); expect(signal.aborted).to.equal(true)
+    resolve(page('0', '1', [{ ordinal: '1', request: request('one') }]))
+    expect(await flight).to.equal(false); expect(lane.entries.value).to.deep.equal([])
+    expect(lane.loading.value).to.equal(false)
+  } finally { lane.dispose() }
+})
+
+it('rejects targeted response containing another request or an unexpected next page', async () => {
+  for (const wrong of ['request', 'pagination']) {
+    const lane = useHallBountyRequestCatalog({ chatApi: { get: async () =>
+      page('0', '1', [{ ordinal: '1', request: request(wrong === 'request' ? 'other' : 'one') }], wrong === 'pagination', wrong === 'pagination' ? '1' : null)
+    }, enabled: () => true, identityScope: ref('owner'), authorizationGeneration: ref(1),
+    getContext: () => ({ conversationId: 'conversation_1', taskId: 'task_1' }) })
+    try {
+      expect(await lane.refreshRequests(['one'])).to.equal(false)
+      expect(lane.entries.value).to.deep.equal([]); expect(lane.error.value).not.to.equal('')
+    } finally { lane.dispose() }
+  }
+})
+
+it('consumes the shared full event-targeted response fixture through the existing public envelope decoder', async () => {
+  const { readFileSync } = await import('node:fs')
+  const { decodeHttpResponse } = await import('../src/utils/apiEnvelope.js')
+  const fixture = JSON.parse(readFileSync(new URL('./fixtures/hall-request-index-entry.json', import.meta.url), 'utf8'))
+  const calls = []
+  const lane = useHallBountyRequestCatalog({ chatApi: { get: async (_path, params) => { calls.push(params); return decodeHttpResponse(JSON.stringify(fixture), { status: 200, requestId: fixture.requestId }).value } },
+    enabled: () => true, identityScope: ref('owner'), authorizationGeneration: ref(1),
+    getContext: () => ({ conversationId: '101', conversationGeneration: '1', taskId: 'task' }) })
+  try {
+    expect(await lane.refreshRequests(['r7'])).to.equal(true)
+    expect(lane.entries.value).to.deep.equal(fixture.data.entries)
+    expect(calls).to.deep.equal([{ requestId: 'r7', expectedGeneration: '1' }])
+  } finally { lane.dispose() }
+})

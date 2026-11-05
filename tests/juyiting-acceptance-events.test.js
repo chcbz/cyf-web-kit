@@ -73,3 +73,10 @@ describe('acceptance event reader (no request polling)', () => {
     expect(failure.status).to.equal(403)
   })
 })
+
+
+it('review progress invalidates existing acceptance projections without declaring task completion', async () => {
+  const { isAcceptanceProjectionEvent } = await import('../src/composables/juyiting/hallAcceptanceEvents.js')
+  expect(isAcceptanceProjectionEvent({ type: 'delivery_review_changed' })).to.equal(true)
+  expect(isAcceptanceProjectionEvent({ type: 'agent_message_delta' })).to.equal(false)
+})

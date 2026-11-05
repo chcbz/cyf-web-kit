@@ -2398,9 +2398,9 @@ const bountyRequestCatalog = useHallBountyRequestCatalog({
     conversationGeneration: typedConversationGeneration() }),
   getContextGeneration: () => followupContextGeneration.value, enabled: () => multimediaDeliberationUiEnabled && chatMode.value === 'bounty'
 })
-notifyBountyRequestCatalog = async () => {
+notifyBountyRequestCatalog = async event => {
   if (!typedDeliberationEnabled.value) return true
-  return refreshFollowupContext()
+  return refreshFollowupContext(event)
 }
 const invalidateFollowupContext = () => { followupContextGeneration.value++; typedDeliberation?.invalidate?.() }
 // Only the authenticated binding owns these values. A newly adopted request or
@@ -2418,10 +2418,10 @@ typedDeliberation = useHallTypedDeliberation({
   enabled: () => typedDeliberationEnabled.value,
   onAccepted: async ({ receipt, purpose, context, isCurrent }) => {
     if (!isCurrent?.()) return false
-    if (purpose === 'INSPECT') { bountyRequestCatalog.hint(); showToast('Agent 正在处理资料。'); return true }
+    if (purpose === 'INSPECT') { void refreshHallProjections({ type: 'request_accepted', conversationId: context.conversationId, requestId: receipt.requestId }); showToast('Agent 正在处理资料。'); return true }
     const adopted = await adoptTypedDiscussionReceipt({ receipt, context, isCurrent })
     if (!isCurrent?.()) return false
-    bountyRequestCatalog.hint()
+    void refreshHallProjections({ type: 'request_accepted', conversationId: context.conversationId, requestId: receipt.requestId })
     showToast(adopted
       ? (receipt.intent === 'CLARIFICATION_REPLY' ? '已发送补充。' : '已发送。')
       : '消息已提交，正在确认处理状态。')
@@ -2633,13 +2633,26 @@ const retryHallConversation = async () => {
   }
   return reloadHallConversation()
 }
-const refreshFollowupContext = async () => {
+const refreshFollowupContext = async event => {
   if (!typedDeliberationEnabled.value || !conversationId.value) return false
   if (!await refreshCurrentConversationTask()) return false
   const captured = followupContextGeneration.value
   if (!await bountyAssignmentContext.refresh() || captured !== followupContextGeneration.value) return false
-  if (!await bountyRequestCatalog.refresh() || captured !== followupContextGeneration.value) return false
-  return await typedDeliberation.refresh()
+  const hints = event?.events || [event || { type: 'resync_required' }]
+  if (!bountyRequestCatalog.initialized.value || hints.some(hint => hint.type === 'resync_required')) {
+    if (!await bountyRequestCatalog.refresh() || captured !== followupContextGeneration.value) return false
+    return await typedDeliberation.refresh()
+  }
+  const requestIds = typedDeliberation.relatedRequestIds(hints)
+  if (!requestIds.length) return true
+  if (!await bountyRequestCatalog.refreshRequests(requestIds) || captured !== followupContextGeneration.value) return false
+  if (!await typedDeliberation.refreshRequests(requestIds) || captured !== followupContextGeneration.value) return false
+  // A newly committed action can reveal its actual child only on this read.
+  // Fetch that child, not every earlier round in the conversation.
+  const discovered = typedDeliberation.relatedRequestIds(hints).filter(id => !requestIds.includes(id))
+  if (!discovered.length) return true
+  if (!await bountyRequestCatalog.refreshRequests(discovered) || captured !== followupContextGeneration.value) return false
+  return await typedDeliberation.refreshRequests(discovered)
 }
 const resetFollowupContext = () => {
   invalidateFollowupContext()

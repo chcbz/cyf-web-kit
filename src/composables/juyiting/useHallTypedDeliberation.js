@@ -12,7 +12,7 @@ const cancelledWithoutOutput = entry => {
   const request = entry?.request
   return request?.state === 'CANCELLED' && Array.isArray(request.steps) && request.steps.length === 0 &&
     Array.isArray(request.turns) && request.turns.length > 0 && request.turns.every(turn =>
-      turn.state === 'CANCELLED' && turn.finalMessageId === null && String(turn.lastDeltaSeq) === '0')
+    turn.state === 'CANCELLED' && turn.finalMessageId === null && String(turn.lastDeltaSeq) === '0')
 }
 
 const secureKey = () => {
@@ -82,7 +82,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   const emptyCancellation = entry => cancelledWithoutOutput(entry) &&
     !projections.value.some(value => value.requestId === entry.request.requestId && value.state === 'READY')
 
-  let generation = 0; let disposed = false; let queued = false; let refreshFlight = null
+  let generation = 0; let disposed = false; let refreshFlight = null
   const capture = () => Object.freeze({ generation, scope: scope.value,
     authorization: unref(typeof authorizationGeneration === 'function' ? authorizationGeneration() : authorizationGeneration),
     contextGeneration: getContextGeneration?.(), context: { ...(getContext?.() || {}) } })
@@ -169,7 +169,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   const refresh = () => {
     // Read hints and send preparation join one exact in-flight projection read.
     // Joining is not an unsuccessful read and must not reject every prepared send.
-    if (refreshFlight) { queued = true; return refreshFlight }
+    if (refreshFlight) return refreshFlight
     const captured = capture()
     if (!current(captured) || !typedId(captured.context.conversationId) || !typedId(captured.context.taskId) ||
       !typedLong(captured.context.assignmentRevision, { allowZero: true })) return Promise.resolve(false)
@@ -195,10 +195,38 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     const flight = read().finally(() => {
       if (refreshFlight !== flight) return
       refreshFlight = null
-      if (queued) { queued = false; void refresh() }
     })
     refreshFlight = flight
     return flight
+  }
+  const relatedRequestIds = events => {
+    const ids = new Set(events.flatMap(event => [event.requestId, event.childRequestId, event.replyRequestId]).filter(typedId))
+    const parents = new Set(events.map(event => event.parentOutcomeId).filter(typedId))
+    const changed = new Set(ids)
+    for (const value of projections.value) {
+      if (changed.has(value.requestId)) {
+        for (const child of [value.actionProgress?.childRequestId, value.reviewProgress?.childRequestId]) if (typedId(child)) ids.add(child)
+      }
+      if (parents.has(value.outcome?.outcomeId) || ids.has(value.actionProgress?.childRequestId) ||
+          ids.has(value.reviewProgress?.childRequestId) || ids.has(value.outcome?.clarification?.replyRequestId)) ids.add(value.requestId)
+    }
+    return [...ids]
+  }
+  const refreshRequests = async requestIds => {
+    const captured = capture()
+    if (!current(captured)) return false
+    if (refreshFlight) await refreshFlight
+    if (!current(captured)) return false
+    const entries = new Map((getCatalogEntries?.() || []).map(entry => [entry.request.requestId, entry]))
+    const visited = new Set()
+    const ids = [...new Set(requestIds)].filter(typedId)
+    await Promise.all(ids.map(requestId => {
+      const request = entries.get(requestId)?.request
+      if (request?.steps?.some(step => step.kind === 'EXECUTE') && !request?.turns?.some(turn => ['CHAT', 'INSPECT'].includes(turn.route))) return null
+      const purpose = request?.turns?.some(turn => turn.route === 'INSPECT') ? 'INSPECT' : ''
+      return readOne(requestId, captured, purpose, visited)
+    }))
+    return current(captured) && ids.every(id => !failedReads.has(id))
   }
   const choosePending = projection => {
     const clarification = projection?.outcome?.kind === 'CLARIFY' ? projection.outcome.clarification : null
@@ -318,8 +346,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   })
   const invalidate = () => { generation++; failedReads.clear(); ordinaryChatRequests.clear(); busy.value = false; projections.value = []; selectedPending.value = null; selectedDelivery.value = null; error.value = '' }
   const stopScope = watch(scope, invalidate, { flush: 'sync' })
-  const stopCatalog = typeof getCatalogEntries === 'function' ? watch(getCatalogEntries, () => { void refresh() }, { deep: true }) : () => {}
   const recoveryAvailable = computed(() => { storageRevision.value; return readRecords(storage, scope.value, getContext?.() || {}).some(record => record.status === 'UNKNOWN') })
-  return { deliveryChoices, selectedDeliveryId, chooseDelivery, projections, cards, selectedPending, error, busy, recoveryAvailable, inspectionStatus, refresh, readOne, submit, recover, resumeUnknown, choosePending, confirmProposal,
-    invalidate, dispose: () => { disposed = true; invalidate(); stopScope(); stopCatalog() } }
+  return { deliveryChoices, selectedDeliveryId, chooseDelivery, projections, cards, selectedPending, error, busy, recoveryAvailable, inspectionStatus, refresh, refreshRequests, relatedRequestIds, readOne, submit, recover, resumeUnknown, choosePending, confirmProposal,
+    invalidate, dispose: () => { disposed = true; invalidate(); stopScope() } }
 }

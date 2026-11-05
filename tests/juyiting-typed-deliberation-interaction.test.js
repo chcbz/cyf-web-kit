@@ -475,3 +475,61 @@ describe('discussion-v2 effective materials replace browser history inference', 
     } finally { h.lane.dispose() }
   })
 })
+
+describe('event-targeted typed outcome reads', () => {
+  const context = { conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }
+  it('one changed round reads one outcome, not all 101; READY clarification remains mutable', async () => {
+    const reads = []; let answered = false
+    const entries = Array.from({ length: 101 }, (_, i) => ({ request: { requestId: `r${i}`, turns: [{ route: 'CHAT' }], steps: [] } }))
+    const lane = useHallTypedDeliberation({ chatApi: { get: async path => {
+      const id = path.split('/')[4]; reads.push(id); const value = clarify(id)
+      if (answered && id === 'r50') Object.assign(value.outcome.clarification, { state: 'ANSWERED', stateVersion: '1', replyRequestId: 'reply' })
+      return value
+    } }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1), enabled: () => true,
+    getContext: () => context, getCatalogEntries: () => entries })
+    try {
+      expect(await lane.refresh()).to.equal(true); expect(reads).to.have.length(101)
+      reads.length = 0; answered = true
+      expect(await lane.refreshRequests(['r50', 'r50'])).to.equal(true)
+      expect(reads).to.deep.equal(['r50']); expect(lane.projections.value).to.have.length(101)
+      expect(lane.projections.value.find(p => p.requestId === 'r50').outcome.clarification.state).to.equal('ANSWERED')
+    } finally { lane.dispose() }
+  })
+  it('maps parent/child hints without treating unrelated rounds as dirty', () => {
+    const lane = useHallTypedDeliberation({ chatApi: {}, actorScopeKey: ref('owner'), authorizationGeneration: ref(1),
+      enabled: () => true, getContext: () => context, getCatalogEntries: () => [] })
+    try {
+      lane.projections.value = [
+        { requestId: 'action-parent', actionProgress: { childRequestId: 'execution-child' }, outcome: { outcomeId: 'action-outcome' } },
+        { requestId: 'review-parent', reviewProgress: { childRequestId: 'review-child' }, outcome: { outcomeId: 'review-outcome' } },
+        { requestId: 'unrelated', outcome: { outcomeId: 'other' } }
+      ]
+      expect(lane.relatedRequestIds([{ requestId: 'execution-child' }])).to.deep.equal(['execution-child', 'action-parent'])
+      expect(lane.relatedRequestIds([{ requestId: 'action-parent' }])).to.deep.equal(['action-parent', 'execution-child'])
+      expect(lane.relatedRequestIds([{ requestId: 'new-reply', parentOutcomeId: 'review-outcome' }])).to.deep.equal(['new-reply', 'review-parent'])
+    } finally { lane.dispose() }
+  })
+  it('an EXECUTE-only hint updates its parent outcome, never calls a nonexistent child typed endpoint', async () => {
+    const reads = []
+    const lane = useHallTypedDeliberation({ chatApi: { get: async path => { reads.push(path); return clarify('parent') } },
+      actorScopeKey: ref('owner'), authorizationGeneration: ref(1), enabled: () => true, getContext: () => context,
+      getCatalogEntries: () => [{ request: { requestId: 'parent', turns: [{ route: 'CHAT' }], steps: [] } },
+        { request: { requestId: 'child', turns: [], steps: [{ kind: 'EXECUTE' }] } }] })
+    try {
+      expect(await lane.refreshRequests(['child', 'parent'])).to.equal(true)
+      expect(reads).to.deep.equal(['/conversations/7/requests/parent/typed-outcome'])
+    } finally { lane.dispose() }
+  })
+  it('catalog mutation alone no longer triggers another whole-history outcome refresh', async () => {
+    const entries = ref([]); const reads = []
+    const lane = useHallTypedDeliberation({ chatApi: { get: async path => { reads.push(path); return clarify('new') } },
+      actorScopeKey: ref('owner'), authorizationGeneration: ref(1), enabled: () => true, getContext: () => context,
+      getCatalogEntries: () => entries.value })
+    try {
+      entries.value = [{ request: { requestId: 'new', turns: [{ route: 'CHAT' }] } }]
+      await Promise.resolve(); await Promise.resolve()
+      expect(reads).to.deep.equal([])
+      expect(await lane.refreshRequests(['new'])).to.equal(true); expect(reads).to.have.length(1)
+    } finally { lane.dispose() }
+  })
+})
