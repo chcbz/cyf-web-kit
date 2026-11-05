@@ -96,7 +96,7 @@ describe('archive position recovery', () => {
       expect(h.calls).to.have.length(0)
     } finally { h.wrapper.unmount() }
   })
-  it('mounts role-only UI and emits only the authorized incumbent for private conversation', async () => {
+  it('keeps appointment actions without a duplicate private-chat entry', async () => {
     const source = readFileSync(new URL('../src/components/juyiting/archive/ArchivePositions.vue', import.meta.url), 'utf8')
     const { descriptor } = parse(source)
     let script = compileScript(descriptor, { id: 'positions', inlineTemplate: true }).content
@@ -107,21 +107,17 @@ describe('archive position recovery', () => {
     const calls = [], mock = () => ({ positions: data, busy: ref(false), error: ref(''), notice: ref(''), pending: ref(null), blocked: ref(false), reload: () => {}, submit: (...args) => calls.push(args), retry: () => {} })
     const component = new Function('Vue', 'useArchivePositions', script)(Vue, mock)
     const agent = { agentId: 'wuyong', personaName: '吴用' }
-    const wrapper = mount(component, { props: { agents: [agent], identityScope: 'owner', canStartConversation: () => true } })
+    const wrapper = mount(component, { props: { agents: [agent], identityScope: 'owner' } })
     try {
       expect(wrapper.text()).to.contain('任职管理')
       expect(wrapper.text()).not.to.match(/交办典籍维护|维护结果|发布草稿/)
       expect(wrapper.find('input[type=file]').exists()).to.equal(false)
-      const chat = () => wrapper.findAll('button').find(b => b.text() === '与吴用密议')
-      await chat().trigger('click')
-      expect(wrapper.emitted('start-conversation')).to.deep.equal([[agent]])
+      expect(wrapper.text()).to.contain('好汉详情的“密议”')
+      expect(wrapper.findAll('button').some(b => b.text().includes('密议'))).to.equal(false)
       expect(calls).to.deep.equal([])
-      await wrapper.setProps({ canStartConversation: () => false })
-      expect(chat().element.disabled).to.equal(true)
-      await chat().trigger('click')
-      expect(wrapper.emitted('start-conversation')).to.have.length(1)
-      await wrapper.setProps({ agents: [] })
-      expect(wrapper.findAll('button').find(b => b.text() === '与wuyong密议').element.disabled).to.equal(true)
+      await wrapper.findAll('button').find(b => b.text() === '卸任').trigger('click')
+      expect(calls).to.deep.equal([['/appointments/one/resign', {}]])
+      expect(wrapper.emitted('start-conversation')).to.equal(undefined)
       data.value = state(); await nextTick()
       expect(wrapper.text()).to.contain('暂无任职')
     } finally { wrapper.unmount() }

@@ -156,7 +156,7 @@ const loadSfc = (relativePath, runtimeAgentApi = { post: async () => { throw new
     .replace(/^import\s+HallMaterialThumbnail\s+from\s+['"]\.\/HallMaterialThumbnail\.vue['"];?\s*$/gm, `var HallMaterialThumbnail = { template: '<span class="material-thumbnail-stub" />' }`)
     .replace(/^import\s+HostingRentPanel\s+from\s+['"].\/HostingRentPanel\.vue['"];?\s*$/gm, 'var HostingRentPanel = { template: \'<section class="hosting-rent-stub" />\', props: [\'persona\', \'resolvePersona\'] }')
     // Dedicated archive-positions tests cover this child; keep the hall fixture scoped to its parent.
-    .replace(/^import\s+ArchivePositions\s+from\s+['"].\/archive\/ArchivePositions\.vue['"];?\s*$/gm, 'var ArchivePositions = Vue.defineComponent({name: \'ArchivePositions\', render: () => null})')
+    .replace(/^import\s+ArchivePositions\s+from\s+['"].\/archive\/ArchivePositions\.vue['"];?\s*$/gm, 'var ArchivePositions = Vue.defineComponent({render: () => null})')
     .replace(/^import\s+ArchiveReader\s+from\s+['"].\/archive\/ArchiveReader\.vue['"];?\s*$/gm, 'var ArchiveReader = { template: \'<section class="archive-reader-stub">典籍阅读</section>\' }')
     .replace(/^import\s+(\w+)\s+from\s+['"]@\/assets\/juyiting\/[^'"]+['"];?\s*$/gm, 'var $1 = \'/mock-juyiting-asset.png\'')
     .replace(/^import\s+\{\s*hallPhysicalScene,\s*hallRoomPropVisuals\s*\}\s+from\s+['"]@\/constants\/juyiting['"];?\s*$/gm, 'var hallRoomPropVisuals = []; var hallPhysicalScene = { interactiveZones: [{ key: \'main\', panel: \'chat\', title: \'忠义堂公议\', subtitle: \'厅前公议 / 众好汉\', x: 50, y: 36, w: 12, h: 7, object: \'plaque\', hitShape: \'plaque\' }, { key: \'agents\', panel: \'agents\', title: \'点将册\', subtitle: \'点将调遣\', x: 21, y: 32, w: 13, h: 7, object: \'ledger\' }, { key: \'tasks\', panel: \'tasks\', title: \'悬赏榜\', subtitle: \'榜文\', x: 76, y: 47, w: 19, h: 18, object: \'notice-rack\' }, { key: \'catalog\', panel: \'catalog\', title: \'招贤令\', subtitle: \'遍请豪杰\', x: 14, y: 68, w: 12, h: 7, object: \'banner-flag\' }, { key: \'library\', panel: \'library\', title: \'案卷阁\', subtitle: \'查卷问典\', x: 82, y: 76, w: 22, h: 18, object: \'scroll-shelf\' }, { key: \'back\', panel: null, title: \'整装处\', subtitle: \'兵甲行囊\', x: 67, y: 26, w: 12, h: 8, object: \'rear-gear\' }] }')
@@ -2538,21 +2538,6 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.text()).to.include('案卷搜索')
     expect(wrapper.emitted('search-library')).to.have.length(1)
     expect(wrapper.emitted('cite-library')[0][0].content).to.equal('Deployment notes')
-  })
-
-  it('forwards the appointed-agent conversation event without sending messages', async () => {
-    const agent = { agentId: 'wuyong', personaName: '吴用' }
-    const allowed = candidate => candidate === agent
-    const wrapper = mount(LibraryPanel, { global: { stubs }, props: { agents: [agent], canStartConversation: allowed, active: true, formatTime: String, results: [] } })
-    try {
-      await wrapper.get('#library-positions-tab').trigger('click')
-      const child = wrapper.findComponent({ name: 'ArchivePositions' })
-      const panel = child.exists() ? child : wrapper.findComponent('#library-positions-panel')
-      expect(panel.exists()).to.equal(true)
-      panel.vm.$emit('start-conversation', agent)
-      expect(wrapper.emitted('start-conversation')).to.deep.equal([[agent]])
-      expect(wrapper.emitted('start-draft')).to.equal(undefined)
-    } finally { wrapper.unmount() }
   })
 
   it('uses roving tab focus and keyboard navigation in LibraryPanel', async () => {

@@ -1,7 +1,7 @@
 <template>
   <section class="archive-positions" aria-label="典籍任职管理">
     <header><h3>任职管理</h3><button type="button" :disabled="busy" @click="reload">刷新与恢复</button></header>
-    <p class="hint">此处管理任职与岗位技能。典籍内容维护请与任职好汉密议。</p>
+    <p class="hint">此处管理任职与岗位技能。典籍内容维护请从任职好汉详情的“密议”进入。</p>
     <p v-if="error" role="alert" class="error">{{ error }}</p>
     <p v-if="notice" role="status">{{ notice }}</p>
     <aside v-if="pending" role="status" class="card">
@@ -18,7 +18,6 @@
       <p v-if="!busy && !error && !activeAppointments.length" role="status">暂无任职，请先任命好汉。</p>
       <article v-for="a in activeAppointments" :key="a.appointmentId" class="row">
         <span>{{ agentName(a.agentId) }} · {{ positionName(a.positionId) }}</span>
-        <button type="button" :disabled="!conversationAgent(a)" @click="startConversation(a)">与{{ agentName(a.agentId) }}密议</button>
         <button type="button" :disabled="blocked" @click="submit(`/appointments/${a.appointmentId}/resign`, {})">卸任</button>
       </article>
       <p class="hint">卸任立即撤销此职位权限；只有最后一个来源消失才回收职位技能，通用技能保留。</p>
@@ -67,20 +66,13 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { useArchivePositions } from '@/composables/juyiting/useArchivePositions'
-const props = defineProps({ agents: { type: Array, default: () => [] }, identityScope: { type: String, default: '' }, identityEpoch: { type: Number, default: 0 }, canStartConversation: { type: Function, default: () => false } })
-const emit = defineEmits(['start-conversation'])
+const props = defineProps({ agents: { type: Array, default: () => [] }, identityScope: { type: String, default: '' }, identityEpoch: { type: Number, default: 0 } })
 const { positions, busy, error, notice, pending, blocked, reload, submit, retry } = useArchivePositions({ identityScope: () => props.identityScope, identityEpoch: () => props.identityEpoch })
 const agentId = ref(''), positionId = ref('')
 const skill = reactive({ skillKey: '', type: 'POSITION', productVersionId: '' })
 const initialDefinition = () => ({ positionId: '', title: '', capacity: 1, resource: 'archive:public', allowPublish: false, skillKeys: [], expectedRevision: '0' })
 const definition = reactive(initialDefinition())
 const activeAppointments = computed(() => positions.value.appointments.filter(a => a.active))
-const conversationAgent = appointment => {
-  if (!appointment.active) return null
-  const agent = props.agents.find(a => a.agentId === appointment.agentId)
-  return agent && props.canStartConversation(agent) ? agent : null
-}
-const startConversation = appointment => { const agent = conversationAgent(appointment); if (agent) emit('start-conversation', agent) }
 const agentName = id => { const a = props.agents.find(a => a.agentId === id); return a?.personaName || a?.agentName || a?.name || id }
 const positionName = id => positions.value.positions.find(p => p.positionId === id)?.title || id
 watch(() => [props.identityScope, props.identityEpoch], () => { Object.assign(definition, initialDefinition()); Object.assign(skill, { skillKey: '', type: 'POSITION', productVersionId: '' }); agentId.value = ''; positionId.value = '' })

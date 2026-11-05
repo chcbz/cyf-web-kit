@@ -57,8 +57,6 @@
       :identity-epoch="identityEpoch"
       role="tabpanel"
       aria-labelledby="library-positions-tab"
-      :can-start-conversation="canStartConversation"
-      @start-conversation="$emit('start-conversation', $event)"
     />
 
     <ArchiveReader
@@ -189,7 +187,6 @@ const handleTabKeydown = (event, currentTab) => {
 
 defineProps({
   agents: { type: Array, default: () => [] },
-  canStartConversation: { type: Function, default: () => false },
   identityScope: { type: String, default: '' },
   identityEpoch: { type: Number, default: 0 },
   embedded: { type: Boolean, default: false },
@@ -205,7 +202,7 @@ defineProps({
   virtualLandscape: Boolean
 })
 
-defineEmits(['start-conversation', 'start-draft', 'cite-library', 'search-library', 'update:keyword', 'update:sourceType'])
+defineEmits(['start-draft', 'cite-library', 'search-library', 'update:keyword', 'update:sourceType'])
 
 const sourceText = (type = '') => {
   if (type === 'project') return '项目案卷'
