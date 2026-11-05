@@ -17,34 +17,20 @@ export const useHallTerminalTextHistory = ({ api, taskId, identityKey, documentR
     captureGuard: () => generation, guardCurrent: value => !disposed && value === generation,
     normalize: item => normalizeHallMessage(item, '') })
   const current = captured => !disposed && captured === generation && !!conversationId.value
-  const syncItems = () => { items.value = source.catalog.entries.value.flatMap(entry => resolved.get(entry.request.requestId) || []) }
-  const readWindow = async (captured, signal) => {
-    const ids = [...new Set(messages.value.map(message => message.requestId).filter(Boolean))]
-    if (!await source.catalog.refreshWindow(ids, { force: false }) || !current(captured)) return false
-    for (const entry of source.catalog.entries.value) {
-      const request = entry.request
-      if (resolved.has(request.requestId)) continue
-      const turns = (request.turns || []).filter(turn => turn.route === 'CHAT' && ['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state))
-      let item = null
-      if (turns.length) {
-        let outcome; let absent = false
-        try {
-          outcome = await api.get(`/conversations/${encodeURIComponent(conversationId.value)}/requests/${encodeURIComponent(request.requestId)}/typed-outcome`, {},
-            { autoLoading: false, needAuth: true, signal })
-        } catch (cause) {
-          if ((cause?.status ?? cause?.response?.status) !== 404) throw cause
-          absent = true
-          // A persisted ordinary CHAT need not have a typed outcome.
-        }
-        if (!current(captured)) return false
-        if (!absent) {
-          const turn = turns.find(value => value.turnId === outcome?.turnId)
-          if (!turn) throw new Error('历史文字成果与原议事回合不匹配。')
-          item = await completedTextItem(outcome, request, turn, taskId())
-          if (!current(captured)) return false
-        }
-      }
-      resolved.set(request.requestId, item ? [item] : [])
+  const syncItems = () => { items.value = source.catalog.entries.value.flatMap(entry => entry.request.turns.flatMap(turn => resolved.get(`${entry.request.requestId}\u0000${turn.turnId}`) || [])) }
+  const readWindow = async captured => {
+    if (!current(captured) || !pages.requestPage.value || !source.catalog.adoptPage(pages.requestPage.value)) return false
+    const entries = new Map(source.catalog.entries.value.map(entry => [entry.request.requestId, entry.request]))
+    for (const outcome of pages.typedOutcomes.value) {
+      const request = entries.get(outcome.requestId)
+      const turn = request?.turns.find(value => value.turnId === outcome.turnId)
+      if (!request || !turn) throw new Error('历史文字成果与原议事回合不匹配。')
+      if (outcome.route !== 'CHAT' || outcome.state !== 'READY') continue
+      const key = `${request.requestId}\u0000${turn.turnId}`
+      if (resolved.has(key)) continue
+      const item = await completedTextItem(outcome, request, turn, taskId())
+      if (!current(captured)) return false
+      resolved.set(key, item ? [item] : [])
     }
     return current(captured)
   }
@@ -62,7 +48,7 @@ export const useHallTerminalTextHistory = ({ api, taskId, identityKey, documentR
       } else if (mode === 'older') {
         if (!await pages.loadOlder() || !current(captured)) return false
       }
-      return await readWindow(captured, abort.signal)
+      return await readWindow(captured)
     } catch (cause) {
       if (current(captured) && cause?.name !== 'AbortError') readError.value = cause?.message || '历史文字成果读取失败，请重试当前页。'
       return false

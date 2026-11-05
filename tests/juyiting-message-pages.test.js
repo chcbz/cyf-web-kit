@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect } from 'chai'
 import { ref } from 'vue'
+import { normalizeHallMessage } from '../src/composables/juyiting/hallConversationMessages.js'
 import { hallMessagePage, useHallMessagePages } from '../src/composables/juyiting/useHallMessagePages.js'
 
 const row = id => ({ id: String(id), createTime: 1000, content: `message-${id}` })
@@ -106,6 +107,15 @@ describe('hall message display pages', () => {
     expect(await h.pages.loadOlder()).to.equal(true)
     expect(h.pages.error.value).to.equal('')
     h.pages.dispose()
+  })
+  it('replaces the matching live turn with its stored final, without dropping another active turn', () => {
+    const messages = ref([{ localId: 'live-one', turnId: 'turn-one', streaming: true }, { localId: 'live-two', turnId: 'turn-two', streaming: true }])
+    const pages = useHallMessagePages({ chatApi: {}, messages, conversationId: ref('100'), identityKey: ref('owner'),
+      captureGuard: () => 1, guardCurrent: () => true, normalize: item => normalizeHallMessage(item, '') })
+    try {
+      pages.applyLatest({ items: [{ ...row(10), metadata: { turnId: 'turn-one' } }], hasMore: false, nextCursor: null })
+      expect(messages.value.map(value => value.localId)).to.deep.equal(['10', 'live-two'])
+    } finally { pages.dispose() }
   })
   it('rejects malformed response rather than silently treating it as empty history', () => {
     for (const value of [[], {}, { items: [], hasMore: true, nextCursor: '1000:1' }, page([1], '1000:01')]) {

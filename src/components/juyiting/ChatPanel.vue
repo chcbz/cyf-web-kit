@@ -95,6 +95,7 @@
         >
           <span>{{ discussionReplyStatus(message) }}</span>
         </div>
+        <p v-if="message.typedDisplayUnavailable" role="status">结构化成果暂不可用，原回复正文仍可阅读。</p>
         <p v-if="message.turnAwaitingType && !message.streaming" role="status">正在读取答复…</p>
         <div v-if="discussionMessageText(message)" class="message-content" v-html="renderMarkdown(discussionMessageText(message))"></div>
         <div v-if="isTaskDiscussion && message.typedTaskId === taskId && message.typedSourceSelectors?.length" class="message-parts" aria-label="本条消息资料">

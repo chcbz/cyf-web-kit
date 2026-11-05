@@ -26,7 +26,7 @@ const setup = (read = async () => page([entry('185', 'STREAMING')]), options = {
       list: async () => ({ items: [{ id: '101', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:474' }] }),
       get: async (path, params, options) => {
         calls.push({ path, params })
-        if (path === '/conversation/messages') return options.onSuccess({ items: messageItems, hasMore: false, nextCursor: null })
+        if (path === '/conversation/messages') return options.onSuccess({ items: messageItems, hasMore: false, nextCursor: null, requestPage: await read(path, params), outcomeSummaries: [] })
         return read(path, params)
       },
       post: async (path, body) => { calls.push({ path, body }); return { ...entry('185', 'CANCELLED').request.turns[0], stateVersion: '2777' } }
@@ -40,8 +40,8 @@ describe('exact-conversation current round restoration', () => {
     expect(await hall.loadHallMessages()).to.equal(true)
     expect(hall.activeRequest.value.requestId).to.equal('request-185')
     expect(hall.durableCancelTarget.value).to.deep.equal({ turnId: 'turn-185' })
-    expect(calls.map(c => c.path)).to.deep.equal(['/conversations/101/requests', '/conversation/messages'])
-    expect(calls[0].params).to.deep.equal({ latest: 'true' })
+    expect(calls.map(c => c.path)).to.deep.equal(['/conversation/messages'])
+    expect(calls[0].params).to.deep.equal({ id: '101' })
     await hall.cancelDeliberation(hall.durableCancelTarget.value)
     const write = calls.find(c => c.body)
     expect(write.path).to.equal('/turns/turn-185/cancel')
@@ -50,7 +50,7 @@ describe('exact-conversation current round restoration', () => {
   it('subscribes after the request snapshot and receives a reply committed before connection without replaying old history', async () => {
     const originalFetch = global.fetch; let transportRequestId; let controller; let cursor
     const { hall, apiStore } = setup(async () => page([entry('185', 'STREAMING')], { eventCursor: '9007199254740993' }), {},
-      Array.from({ length: 50 }, (_, index) => ({ id: String(index + 500), messageType: 'USER', content: `page-message-${index}`, createTime: 1000 })))
+      Array.from({ length: 20 }, (_, index) => ({ id: String(index + 500), messageType: 'USER', content: `page-message-${index}`, createTime: 1000 })))
     apiStore.token = async () => 'test-token'
     global.fetch = async (_url, options) => {
       const headers = new Headers(options.headers)
@@ -62,7 +62,7 @@ describe('exact-conversation current round restoration', () => {
     try {
       expect(await hall.loadHallMessages()).to.equal(true); await flush()
       expect(cursor).to.equal('conversation:101:9007199254740993')
-      expect(hall.messages.value).to.have.length(50)
+      expect(hall.messages.value).to.have.length(20)
       // This delta committed after the restored snapshot, before the live subscription.
       controller.enqueue(new TextEncoder().encode(conversationFrame({ type: 'agent_message_delta', conversationId: '101',
         requestId: 'request-185', turnId: 'turn-185', deltaSeq: '2776', stateVersion: '2777', content: 'gap-reply' }, '9007199254740994', transportRequestId)))
@@ -71,7 +71,7 @@ describe('exact-conversation current round restoration', () => {
       await flush()
       expect(hall.activeTurns.value[0].lastDeltaSeq).to.equal('2776')
       expect(hall.messages.value.some(message => message.content.includes('gap-reply'))).to.equal(true)
-      expect(hall.messages.value).to.have.length(51)
+      expect(hall.messages.value).to.have.length(21)
       expect(hall.eventStreamRecovering.value).to.equal(false)
     } finally { hall.disposeHallConversation(); global.fetch = originalFetch }
   })
@@ -106,11 +106,18 @@ describe('exact-conversation current round restoration', () => {
       expect(fetches).to.equal(1)
     } finally { hall.disposeHallConversation(); global.fetch = originalFetch }
   })
+  it('restores the latest request while adopting older displayed request associations in the same response', async () => {
+    const { hall, calls } = setup(async () => page([entry('184', 'CANCELLED'), entry('185', 'STREAMING')]))
+    expect(await hall.loadHallMessages()).to.equal(true)
+    expect(hall.activeRequest.value.requestId).to.equal('request-185')
+    expect(hall.messageRequestPage.value.entries.map(value => value.request.requestId)).to.deep.equal(['request-184', 'request-185'])
+    expect(calls.map(value => value.path)).to.deep.equal(['/conversation/messages'])
+  })
   it('uses one current-round request even when its ordinal is beyond many historical pages', async () => {
     const { hall, calls } = setup(async () => page([entry('10001', 'STREAMING')], { through: '10001' }))
     expect(await hall.loadHallMessages()).to.equal(true)
-    expect(calls.filter(call => call.path === '/conversations/101/requests')).to.have.length(1)
-    expect(calls[0].params).to.deep.equal({ latest: 'true' })
+    expect(calls.filter(call => call.path === '/conversations/101/requests')).to.have.length(0)
+    expect(calls[0].params).to.deep.equal({ id: '101' })
     expect(hall.activeRequest.value.requestId).to.equal('request-10001')
   })
   it('loads empty conversation messages without inventing an active request', async () => {
@@ -118,13 +125,12 @@ describe('exact-conversation current round restoration', () => {
     expect(await hall.loadHallMessages()).to.equal(true)
     expect(hall.activeRequest.value).to.equal(null)
   })
-  for (const mutation of ['foreign-task', 'foreign-conversation', 'boundary', 'multiple', 'has-more', 'missing-event-cursor', 'invalid-event-cursor']) it(`rejects latest ${mutation} without restoring a partial older request`, async () => {
+  for (const mutation of ['foreign-task', 'foreign-conversation', 'boundary', 'has-more', 'missing-event-cursor', 'invalid-event-cursor']) it(`rejects latest ${mutation} without restoring a partial older request`, async () => {
     const { hall, calls } = setup(async () => {
       const next = page([entry('185', 'STREAMING')], { scope: { ...scope } })
       if (mutation === 'boundary') next.through = '186'
       else if (mutation === 'foreign-task') next.scope.taskId = '999'
       else if (mutation === 'foreign-conversation') next.scope.conversationId = '999'
-      else if (mutation === 'multiple') next.entries.unshift(entry('184', 'CANCELLED'))
       else if (mutation === 'missing-event-cursor') delete next.eventCursor
       else if (mutation === 'invalid-event-cursor') next.eventCursor = 42
       else { next.through = '186'; next.hasMore = true; next.nextAfter = '185' }
@@ -133,7 +139,8 @@ describe('exact-conversation current round restoration', () => {
     expect(await hall.loadHallMessages()).to.equal(false)
     expect(hall.activeRequest.value).to.equal(null)
     expect(hall.conversationLoadError.value).not.to.equal('')
-    expect(calls.some(c => c.path === '/conversation/messages')).to.equal(false)
+    expect(calls.map(c => c.path)).to.deep.equal(['/conversation/messages'])
+    expect(hall.messages.value).to.deep.equal([])
   })
   it('does not reapply a request after the task scope changes during its read', async () => {
     let finish; const pending = new Promise(resolve => { finish = resolve })

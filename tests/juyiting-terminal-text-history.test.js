@@ -20,7 +20,10 @@ const entry = n => ({ ordinal: String(n), request: { requestId: `r${n}`, request
     terminalReason: null, finalMessageId: String(n * 2), createdAt: '1', updatedAt: '1'
   }] } })
 const messagePage = (ids, nextCursor = null) => ({ items: ids.map(n => ({ id: String(n * 2), createTime: 1000,
-  content: `成果${n}`, senderType: 'agent', metadata: JSON.stringify({ requestId: `r${n}` }) })), hasMore: nextCursor !== null, nextCursor })
+  content: `成果${n}`, senderType: 'agent', metadata: JSON.stringify({ requestId: `r${n}` }) })), hasMore: nextCursor !== null, nextCursor,
+  requestPage: { schemaVersion: 1, scope: { conversationId: '42', conversationGeneration: '1', taskId: 'task' },
+    after: '0', through: String(Math.max(0, ...ids)), nextAfter: null, hasMore: false, eventCursor: null, entries: ids.map(entry) },
+  outcomeSummaries: ids.map(n => { const value = outcome(n); value.schemaVersion = 1; delete value.outcome.text; return value }) })
 const setup = ({ latest = messagePage([101, 102], '1000:202'), older = messagePage([1, 2]), hook, visible = true } = {}) => {
   const identity = ref('owner'), task = ref('task'), calls = []
   const doc = new EventTarget(); doc.visibilityState = visible ? 'visible' : 'hidden'
@@ -29,14 +32,7 @@ const setup = ({ latest = messagePage([101, 102], '1000:202'), older = messagePa
       calls.push({ path, params }); const custom = await hook?.(path, params, options)
       if (custom?.handled) return custom.value
       if (path === '/conversation/messages') { const value = params.cursor ? older : latest; options.onSuccess?.(value); return value }
-      if (path.startsWith('/conversations/42/requests?')) {
-        const ids = new URL(path, 'http://local').searchParams.getAll('requestIds').map(id => Number(id.slice(1))).sort((a, b) => a - b)
-        return { schemaVersion: 1, scope: { conversationId: '42', conversationGeneration: '1', taskId: task.value },
-          after: '0', through: String(Math.max(...ids)), nextAfter: null, hasMore: false, eventCursor: null, entries: ids.map(entry) }
-      }
-      const match = path.match(/^\/conversations\/42\/requests\/r(\d+)\/typed-outcome$/)
-      if (match) return outcome(Number(match[1]))
-      throw new Error(`Unexpected unbounded or duplicate source read: ${path}`)
+      throw new Error(`Unexpected follow-up read: ${path}`)
     } }
   const history = useHallTerminalTextHistory({ api, taskId: () => task.value, identityKey: () => identity.value, documentRef: doc })
   return { history, calls, identity, task, doc }
@@ -48,13 +44,13 @@ const settle = async h => {
 const reads = h => h.calls.filter(call => call.path.endsWith('/typed-outcome'))
 
 describe('cancelled task text history window', () => {
-  it('selects just the last 50 of 10000 messages, not the whole catalogue or duplicate request details', async () => {
-    const h = setup({ latest: messagePage(Array.from({ length: 50 }, (_, i) => 9951 + i), '1000:19902') })
+  it('receives twenty messages and their outcomes in one page request, with no follow-up GETs', async () => {
+    const h = setup({ latest: messagePage(Array.from({ length: 20 }, (_, i) => 9981 + i), '1000:19962') })
     try {
       await settle(h)
-      expect(h.history.error.value).to.equal(''); expect(h.history.items.value).to.have.length(50)
-      expect(reads(h)).to.have.length(50)
-      expect(h.calls.filter(call => call.path.startsWith('/conversations/42/requests?'))).to.have.length(1)
+      expect(h.history.error.value).to.equal(''); expect(h.history.items.value).to.have.length(20)
+      expect(reads(h)).to.have.length(0)
+      expect(h.calls.filter(call => call.path.startsWith('/conversations/42/requests?'))).to.have.length(0)
       expect(h.calls.filter(call => call.path === '/conversation/messages')).to.have.length(1)
       expect(h.calls.some(call => call.path === '/conversations/42/requests' || call.path.startsWith('/requests/'))).to.equal(false)
       expect(h.history.hasMore.value).to.equal(true)
@@ -66,13 +62,13 @@ describe('cancelled task text history window', () => {
       await settle(h); const original = h.history.items.value[0]
       expect(await h.history.loadOlder()).to.equal(true)
       expect(h.history.items.value.map(item => item.requestId)).to.deep.equal(['r1', 'r2', 'r101', 'r102'])
-      expect(h.history.items.value[2]).to.equal(original); expect(reads(h)).to.have.length(4)
+      expect(h.history.items.value[2]).to.equal(original); expect(reads(h)).to.have.length(0)
       expect(h.history.hasMore.value).to.equal(false); expect(await h.history.loadOlder()).to.equal(false)
       expect(h.calls.filter(call => call.path === '/conversation/messages')).to.have.length(2)
     } finally { h.history.dispose() }
   })
   it('an empty visible window is not a claim that all historical outcomes are absent', async () => {
-    const latest = { items: [{ id: '202', createTime: 1000, content: 'ordinary', metadata: '{}' }], hasMore: true, nextCursor: '1000:202' }
+    const latest = { ...messagePage([], '1000:202'), items: [{ id: '202', createTime: 1000, content: 'ordinary', metadata: '{}' }] }
     const h = setup({ latest })
     try {
       await settle(h); expect(h.history.items.value).to.have.length(0); expect(h.history.hasMore.value).to.equal(true)
@@ -91,40 +87,34 @@ describe('cancelled task text history window', () => {
       expect(h.calls.filter(call => call.params?.cursor).map(call => call.params.cursor)).to.deep.equal(['1000:202', '1000:202'])
     } finally { h.history.dispose() }
   })
-  it('retries failed outcome reads on the loaded window without advancing the message cursor again', async () => {
+  it('retries a malformed older page without advancing its cursor or losing prior items', async () => {
     let fail = true
-    const h = setup({ hook: async path => { if (path.endsWith('/r2/typed-outcome') && fail) { fail = false; throw new Error('typed offline') } } })
-    try {
-      await settle(h); expect(await h.history.loadOlder()).to.equal(false)
-      expect(h.history.items.value).to.have.length(3); expect(h.history.error.value).to.equal('typed offline')
-      expect(await h.history.retry()).to.equal(true); expect(h.history.error.value).to.equal('')
-      expect(h.history.items.value).to.have.length(4)
-      expect(h.calls.filter(call => call.path === '/conversation/messages')).to.have.length(2)
-      expect(reads(h).filter(call => call.path.endsWith('/r1/typed-outcome'))).to.have.length(1)
-    } finally { h.history.dispose() }
-  })
-  it('retries a failed batch selection without advancing the page or rereading successful outcomes', async () => {
-    let fail = true
-    const h = setup({ hook: async path => { if (path.includes('requestIds=r1&') && fail) { fail = false; throw new Error('index offline') } } })
+    const h = setup({ hook: async (path, params, options) => {
+      if (path === '/conversation/messages' && params.cursor && fail) {
+        fail = false
+        const broken = messagePage([1, 2]); broken.requestPage.scope.conversationId = 'foreign'
+        options.onSuccess(broken)
+        return { handled: true, value: broken }
+      }
+    } })
     try {
       await settle(h); expect(await h.history.loadOlder()).to.equal(false)
       expect(h.history.items.value).to.have.length(2)
       expect(await h.history.retry()).to.equal(true); expect(h.history.items.value).to.have.length(4)
-      expect(h.calls.filter(call => call.path === '/conversation/messages')).to.have.length(2)
+      expect(h.calls.filter(call => call.params?.cursor).map(call => call.params.cursor)).to.deep.equal(['1000:202', '1000:202'])
+      expect(reads(h)).to.have.length(0)
     } finally { h.history.dispose() }
   })
-  it('accepts ordinary CHAT 404s but does not silently treat malformed success as no outcome', async () => {
-    const h = setup({ hook: async path => {
-      if (path.endsWith('/r101/typed-outcome')) throw Object.assign(new Error('ordinary'), { status: 404 })
-      if (path.endsWith('/r102/typed-outcome')) return { handled: true, value: undefined }
-    } })
-    try { await settle(h); expect(h.history.items.value).to.have.length(0); expect(h.history.error.value).to.include('回合不匹配') }
+  it('rejects an outcome whose turn is not associated with its message page', async () => {
+    const latest = messagePage([101, 102]); latest.outcomeSummaries[0].turnId = 'foreign-turn'
+    const h = setup({ latest })
+    try { await settle(h); expect(h.history.items.value).to.have.length(0); expect(h.history.error.value).to.include('回合不匹配'); expect(reads(h)).to.have.length(0) }
     finally { h.history.dispose() }
   })
-  it('fences a late typed response on identity change and aborts its transport', async () => {
+  it('fences a late aggregate page on identity change and aborts its transport', async () => {
     let done; let signal; let first = true
     const h = setup({ hook: async (path, _params, options) => {
-      if (path.endsWith('/r101/typed-outcome') && first) { first = false; signal = options.signal; return await new Promise(resolve => { done = () => resolve({ handled: true, value: { ...outcome(101), turnId: 'stale' } }) }) }
+      if (path === '/conversation/messages' && first) { first = false; signal = options.signal; return await new Promise(resolve => { done = () => resolve({ handled: true, value: messagePage([1]) }) }) }
     } })
     try {
       for (let n = 0; n < 30 && !done; n++) await flushPromises()
@@ -142,7 +132,7 @@ describe('cancelled task text history window', () => {
       await settle(h); const flight = h.history.loadOlder(); expect(await h.history.loadOlder()).to.equal(false)
       await flushPromises(); expect(done).to.be.a('function'); h.history.dispose(); done()
       expect(await flight).to.equal(false); expect(h.history.items.value).to.have.length(0)
-      expect(reads(h)).to.have.length(2)
+      expect(reads(h)).to.have.length(0)
     } finally { done?.(); h.history.dispose() }
   })
   it('defers reads while hidden and has no stream/timer reads after initialization', async () => {

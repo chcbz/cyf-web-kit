@@ -1013,32 +1013,24 @@ export const useHallConversation = ({
       conversationLoadError.value = ''
     }
     try {
-      // Restore the current round from the exact conversation's durable ordered snapshot,
-      // before replay starts. The first historical SSE event is not the current request.
-      // Accepted bootstrap/typed receipts already own an exact request and skip this read.
-      if (restoreRequest) {
-        const taskId = expectedScope.key.startsWith('task:') ? expectedScope.key.slice(5) : ''
-        if (!typedId(taskId)) throw new Error('原事项范围无效，未恢复回话。')
-        const response = await chatApi.get(`/conversations/${encodeURIComponent(exactId)}/requests`, { latest: 'true' },
-          { autoLoading: false, needAuth: true, signal: lifecycleController.signal })
-        if (!isCurrentContentLoad() || activeRequest.value?.requestId) return false
-        const page = catalogPage(apiData(response), { conversationId: exactId, taskId, after: '0' })
-        if (!page || !catalogLong(page.eventCursor, true) || page.hasMore || page.entries.length > 1 ||
-          (page.entries.length ? page.entries[0].ordinal !== page.through : page.through !== '0')) {
-          throw new Error('原回话最新轮次范围不一致，请重试。')
-        }
-        const latest = page.entries[0]?.request
-        if (latest && !applyRequestView(latest, latest.requestId)) throw new Error('原回话状态暂不可核实，请重试。')
-        // This cursor shares the restored request's database snapshot. The subsequent
-        // message page may be newer; events committed after the snapshot are replayed.
-        // Never advance an already-running/reconnecting stream from a display reload.
-        if (!eventCursors.has(exactId) && hallEventConversationId !== exactId) eventCursors.set(exactId, page.eventCursor)
-      }
       await chatApi.get('/conversation/messages', { id: exactId }, {
         autoLoading: false,
         signal: lifecycleController.signal,
         onSuccess: (contentResult) => {
           if (!isCurrentContentLoad()) return
+          if (restoreRequest && !activeRequest.value?.requestId) {
+            const taskId = expectedScope.key.startsWith('task:') ? expectedScope.key.slice(5) : ''
+            const page = catalogPage(contentResult.requestPage, { conversationId: exactId, taskId, after: '0' })
+            if (!typedId(taskId) || !page || !catalogLong(page.eventCursor, true) || page.hasMore ||
+                (page.entries.length ? page.entries.at(-1).ordinal !== page.through : page.through !== '0')) {
+              throw new Error('原回话最新轮次范围不一致，请重试。')
+            }
+            const latest = page.entries.at(-1)?.request
+            if (latest && !applyRequestView(latest, latest.requestId)) throw new Error('原回话状态暂不可核实，请重试。')
+            // Messages, request state and cursor share one database snapshot. Older-page
+            // adoption never enters this branch or advances an existing event stream.
+            if (!eventCursors.has(exactId) && hallEventConversationId !== exactId) eventCursors.set(exactId, page.eventCursor)
+          }
           const latestMessages = messagePages.applyLatest(contentResult)
           const recovery = recoveringReplyTurn?.conversationId === exactId ? recoveringReplyTurn : null
           const finalAgentReplies = latestMessages.filter(message => message.sender === 'AGENT' && !message.streaming &&
@@ -2312,6 +2304,9 @@ export const useHallConversation = ({
     loadHallMessages,
     loadMoreHallConversationHistory,
     loadOlderHallMessages: messagePages.loadOlder,
+    messageRequestPage: messagePages.requestPage,
+    messageTypedOutcomes: messagePages.typedOutcomes,
+    refreshHallMessagePage: () => loadHallConversationContent(),
     messagePageHasMore: messagePages.hasMore,
     messagePageLoading: messagePages.loading,
     messagePageError: messagePages.error,

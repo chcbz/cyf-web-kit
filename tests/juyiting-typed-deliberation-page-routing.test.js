@@ -1,4 +1,3 @@
-import { typedId } from '../src/composables/juyiting/hallTypedDeliberation.js'
 import { discussionTurns } from '../src/composables/juyiting/hallDiscussionTurns.js'
 import { useHallExecutionAbandonment } from '../src/composables/juyiting/useHallExecutionAbandonment.js'
 import * as discussionContract from '../src/components/juyiting/discussionPanelContract.js'
@@ -16,10 +15,12 @@ import { currentChatStreamMock } from './fixtures/current-chat-stream-mock.js'
 // These receipt-adoption fixtures start with an empty existing conversation. The
 // mandatory restoration read must return its real empty catalog, not a RequestView.
 const useHallConversation = options => actualHallConversation({ ...options, chatApi: currentChatStreamMock({ ...options.chatApi,
-  get: async (path, ...args) => /^\/conversations\/[^/]+\/requests$/.test(path)
-    ? { schemaVersion: 1, scope: { conversationId: path.split('/')[2], conversationGeneration: '1', taskId: options.chatContext.value.taskId },
-      after: '0', through: '0', nextAfter: null, hasMore: false, entries: [], eventCursor: '0' }
-    : options.chatApi.get(path, ...args)
+  getById: undefined,
+  get: async (path, params, callbacks) => path === '/conversation/messages'
+    ? options.chatApi.getById(path, params.id, { ...callbacks, onSuccess: items => callbacks.onSuccess({ items, hasMore: false, nextCursor: null,
+      requestPage: { schemaVersion: 1, scope: { conversationId: params.id, conversationGeneration: '1', taskId: options.chatContext.value.taskId },
+        after: '0', through: '0', nextAfter: null, hasMore: false, entries: [], eventCursor: '0' }, outcomeSummaries: [] }) })
+    : options.chatApi.get(path, params, callbacks)
 }) })
 import { compileScript } from '@vue/compiler-sfc'
 const require = createRequire(import.meta.url)
@@ -31,7 +32,7 @@ const program = babel.parse(script, { sourceType: 'module' }).program
 const declarations = program.body.flatMap(node => node.declarations || [])
 // Extracted handlers must use bindings actually imported by the page.
 const pageTypedImport = program.body.find(node => node.type === 'ImportDeclaration' && node.source.value === '@/composables/juyiting/hallTypedDeliberation')
-if (!pageTypedImport?.specifiers.some(node => node.local.name === 'typedId')) throw new Error('page missing typedId import')
+if (!pageTypedImport?.specifiers.some(node => node.local.name === 'typedLong')) throw new Error('page missing typedLong import')
 const handler = name => { const node = declarations.find(item => item.id?.name === name); if (!node) throw new Error(`missing ${name}`); return script.slice(node.init.start, node.init.end) }
 const option = (callee, name) => {
   let call = declarations.find(item => item.init?.callee?.name === callee)?.init
@@ -186,7 +187,7 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       const apiStore = Vue.reactive({ authorizationGeneration: 1 })
       const hallIdentityScope = ref('owner'); const chatMode = ref('bounty')
       const followupContextGeneration = ref(0); const conversationTask = ref({ id: 'task-1', taskVersion: '1' })
-      const recoveries = []; const typedDeliberation = { refresh: async () => true, invalidate() { recoveries.push('INVALIDATE') }, recover: async () => { recoveries.push('RECOVER'); return true } }
+      const recoveries = []; const typedDeliberation = { refreshDeliveryChoices: async () => true, invalidate() { recoveries.push('INVALIDATE') }, recover: async () => { recoveries.push('RECOVER'); return true } }
       const env = { computed: Vue.computed, watch: Vue.watch, conversationTask, apiStore, hallIdentityScope,
         conversationId: conversation.conversationId, activeRequest: conversation.activeRequest,
         bountyInteractionTargetId: () => 'agent-1', chatContext, chatMode, followupContextGeneration,
@@ -206,6 +207,8 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       env.invalidateFollowupContext = evaluate(handler('invalidateFollowupContext'))
       env.followupTaskFence = evaluate(handler('followupTaskFence'))
       env.refreshCurrentConversationTask = async () => true
+      env.adoptMessagePresentation = () => true
+      env.refreshHallMessagePage = async () => true
       env.refreshFollowupContext = evaluate(handler('refreshFollowupContext'))
       env.refreshHallProjections = () => env.refreshFollowupContext()
       env.resetFollowupContext = evaluate(handler('resetFollowupContext'))
@@ -400,42 +403,31 @@ describe('actual JuyiHall exact acceptance preview', () => {
 })
 
 
-describe('actual page targeted follow-up wiring', () => {
-  const build = (initialized = true, discover = false) => {
+describe('actual message-page follow-up wiring', () => {
+  const build = () => {
     const calls = []; const generation = ref(1); const enabled = ref(true)
-    const catalog = { initialized: ref(initialized), entries: ref([]),
-      refresh: async () => { throw new Error('must not scan all history') },
-      refreshWindow: async (ids, options) => { calls.push(['catalog', ids, options.force]); return true } }
-    const typed = { projections: ref([]),
-      relatedRequestIds: hints => hints.map(hint => hint.requestId),
-      refreshDeliveryChoices: async () => { calls.push('choices'); return true },
-      refreshRequests: async ids => { calls.push(['outcomes', ids]); if (discover) typed.projections.value = [
-        { requestId: 'parent', actionProgress: { childRequestId: 'execution-child' }, reviewProgress: { childRequestId: 'do-not-recurse' } }
-      ]; return true } }
-    const read = new Function('followupContextGeneration', 'typedDeliberationEnabled', 'bountyRequestCatalog', 'typedDeliberation', 'typedId',
-      `return (${handler('readDisplayedProjections')})`)(generation, enabled, catalog, typed, typedId)
+    const requestPage = ref({ entries: [] }); const outcomes = ref([])
+    const catalog = { adoptPage: value => { calls.push(['catalog', value]); return true } }
+    const typed = { adoptPage: value => { calls.push(['outcomes', value]); return true },
+      refreshDeliveryChoices: async () => { calls.push('choices'); return true } }
+    const adopt = new Function('typedDeliberationEnabled', 'messageRequestPage', 'messageTypedOutcomes', 'bountyRequestCatalog', 'typedDeliberation',
+      `return (${handler('adoptMessagePresentation')})`)(enabled, requestPage, outcomes, catalog, typed)
     const actual = new Function('typedDeliberationEnabled', 'conversationId', 'refreshCurrentConversationTask',
-      'followupContextGeneration', 'bountyAssignmentContext', 'bountyRequestCatalog', 'typedDeliberation', 'displayedRequestIds', 'readDisplayedProjections',
+      'followupContextGeneration', 'bountyAssignmentContext', 'typedDeliberation', 'refreshHallMessagePage', 'adoptMessagePresentation',
       `return (${handler('refreshFollowupContext')})`)(enabled, ref('7'), async () => true,
-      generation, { refresh: async () => true }, catalog, typed, ref(['visible-1', 'visible-2']), read)
-    return { actual, read, calls, generation, catalog, typed }
+      generation, { refresh: async () => true }, typed, async () => { calls.push('message-page'); return true }, adopt)
+    return { actual, adopt, calls, generation, requestPage, outcomes }
   }
-  it('live hints query only changed requests and their direct execution children', async () => {
-    const { actual, calls } = build(true, true)
-    expect(await actual({ type: 'action_started', requestId: 'parent' })).to.equal(true)
-    expect(calls).to.deep.equal([['catalog', ['parent'], true], ['outcomes', ['parent']], ['catalog', ['execution-child'], true], 'choices'])
-  })
-  it('initial recovery and explicit resync read displayed messages, never full history or stored receipts', async () => {
-    for (const [initialized, event] of [[false, { type: 'agent_message', requestId: 'old-unshown' }], [true, { type: 'resync_required' }]]) {
-      const { actual, calls } = build(initialized)
-      expect(await actual(event)).to.equal(true)
-      expect(calls).to.deep.equal([['catalog', ['visible-1', 'visible-2'], true], ['outcomes', ['visible-1', 'visible-2']], ['catalog', [], true], 'choices'])
-    }
-  })
-  it('loading an older page reads only new outcomes, not every already displayed reply', async () => {
+  it('a live hint refreshes one message page rather than request-ID batches or outcome GETs', async () => {
     const h = build()
-    h.catalog.entries.value = [{ request: { requestId: 'visible-1' } }]
-    expect(await h.read(['visible-1', 'older-1'], 1, { force: false })).to.equal(true)
-    expect(h.calls).to.deep.equal([['catalog', ['visible-1', 'older-1'], false], ['outcomes', ['older-1']], ['catalog', [], false]])
+    expect(await h.actual({ type: 'action_started', requestId: 'parent' })).to.equal(true)
+    expect(h.calls).to.deep.equal(['message-page', ['catalog', h.requestPage.value], ['outcomes', []], 'choices'])
+  })
+  it('older-page adoption performs no HTTP reads and never adopts an active request', () => {
+    const h = build()
+    expect(h.adopt()).to.equal(true)
+    expect(h.calls).to.deep.equal([['catalog', h.requestPage.value], ['outcomes', []]])
+    expect(source).not.to.include('readDisplayedProjections')
+    expect(source).not.to.include('bountyRequestCatalog.refreshWindow')
   })
 })

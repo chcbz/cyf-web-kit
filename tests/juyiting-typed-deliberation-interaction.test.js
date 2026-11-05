@@ -18,27 +18,20 @@ const restoreCrypto = () => {
 describe('typed natural discussion interaction adapter', () => {
   beforeEach(() => { Object.defineProperty(globalThis, 'crypto', { configurable: true, writable: true, value: { randomUUID: () => '00000000-0000-4000-8000-000000000001' } }) })
   afterEach(restoreCrypto)
-  it('does not expand accepted local receipt history on display refresh; explicit recovery remains available', async () => {
-    let reads = 0; let entries = []
+  it('adopts display pages without expanding accepted local receipt history', async () => {
+    let reads = 0
     const context = { conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }
-    const lane = useHallTypedDeliberation({ chatApi: {
-      create: async () => receipt('DISCUSSION', 'request-1'),
-      get: async () => { reads++; return clarify('request-1') }
-    }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context,
-    getCatalogEntries: () => entries, storage: store(), enabled: () => true })
+    const lane = useHallTypedDeliberation({ chatApi: { create: async () => receipt('DISCUSSION', 'request-1'),
+      get: async () => { reads++; return clarify('request-1') } }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1),
+    getContext: () => context, storage: store(), enabled: () => true })
     try {
       expect(await lane.submit({ content: '继续' })).to.equal(true)
       reads = 0
-      expect(await lane.refresh()).to.equal(true)
+      expect(lane.adoptPage([])).to.equal(true)
+      expect(lane.adoptPage([clarify('request-1')])).to.equal(true)
       expect(reads).to.equal(0)
-      entries = [{ request: { requestId: 'request-1', turns: [{ route: 'CHAT' }] } }]
-      reads = 0
-      expect(await lane.refresh()).to.equal(true)
-      expect(reads).to.equal(1)
       expect(lane.projections.value).to.have.length(1)
-      context.assignmentRevision = '5'; entries = []; reads = 0
-      await lane.refresh()
-      expect(reads).to.equal(0)
+      expect(lane).not.to.have.property('refresh')
     } finally { lane.dispose() }
   })
   it('display reads do not parse the full session receipt history for each visible reply', async () => {
@@ -49,8 +42,9 @@ describe('typed natural discussion interaction adapter', () => {
       getCatalogEntries: () => [{ request: { requestId: 'visible', turns: [{ route: 'CHAT' }] } }],
       storage: { getItem: () => { storageReads++; throw new Error('history should not be read') }, setItem: () => {} } })
     try {
-      await lane.refresh(); await lane.refreshRequests(['visible'])
-      expect(storageReads).to.equal(0); expect(reads).to.have.length(2)
+      expect(lane.adoptPage([clarify('visible')])).to.equal(true)
+      expect(lane.adoptPage([clarify('visible')])).to.equal(true)
+      expect(storageReads).to.equal(0); expect(reads).to.have.length(0)
     } finally { lane.dispose() }
   })
   it('reports failed authoritative GETs until recovered, but ordinary CHAT 404 is not a failure', async () => {
@@ -60,11 +54,11 @@ describe('typed natural discussion interaction adapter', () => {
       getContext: () => ({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }),
       getCatalogEntries: () => [{ request: { requestId: 'request-1', turns: [{ route: 'CHAT' }] } }] })
     try {
-      expect(await lane.refresh()).to.equal(false)
-      status = 0; expect(await lane.refresh()).to.equal(true)
+      expect(await lane.readOne('request-1', undefined, 'CHAT')).to.equal(null)
+      status = 0; expect(await lane.readOne('request-1', undefined, 'CHAT')).not.to.equal(null)
       expect(lane.projections.value).to.have.length(1)
-      status = 404; expect(await lane.refresh()).to.equal(true)
-      status = undefined; expect(await lane.refresh()).to.equal(true)
+      status = 404; expect(await lane.readOne('request-1', undefined, 'CHAT')).to.equal(null)
+      status = undefined; expect(await lane.readOne('request-1', undefined, 'CHAT')).not.to.equal(null)
     } finally { lane.dispose() }
   })
   it('startup refusal keeps the draft unaccepted, never auto-retries and reuses its key on explicit retry', async () => {
@@ -113,7 +107,7 @@ describe('typed natural discussion interaction adapter', () => {
       getContextGeneration: () => 1, getCatalogEntries: () => [], prepareCatalog: async () => { owner.value = 'owner-b'; return true }, storage: store(), enabled: () => true })
     try { await lane.submit({ content: '继续需求' }); expect(posts).to.deep.equal(['POST']); expect(owner.value).to.equal('owner-a') } finally { lane.dispose() }
   })
-  it('send preparation joins an existing typed refresh instead of treating it as a failed read', async () => {
+  it('send preparation is independent of an explicit in-flight outcome recovery', async () => {
     let resolveFirst; let reads = 0; const posts = []
     const lane = useHallTypedDeliberation({ chatApi: {
       get: async () => ++reads === 1 ? await new Promise(resolve => { resolveFirst = resolve }) : clarify('request-1'),
@@ -123,9 +117,9 @@ describe('typed natural discussion interaction adapter', () => {
     getContextGeneration: () => 1, getCatalogEntries: () => [{ request: { requestId: 'request-1', turns: [{ route: 'CHAT' }], steps: [] } }],
     prepareCatalog: async () => true, storage: store(), enabled: () => true })
     try {
-      const reading = lane.refresh(); const sending = lane.submit({ content: '继续需求' }); await Promise.resolve()
+      const reading = lane.readOne('request-1', undefined, 'CHAT'); const sending = lane.submit({ content: '继续需求' }); await Promise.resolve()
       resolveFirst(clarify('request-1'))
-      expect(await reading).to.equal(true); await sending
+      expect(await reading).not.to.equal(null); await sending
       expect(posts).to.have.length(1)
     } finally { lane.dispose() }
   })
@@ -175,7 +169,7 @@ describe('typed natural discussion interaction adapter', () => {
     const lane = useHallTypedDeliberation({ chatApi: { get: async () => (proposal('request-3')) }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1),
       getContext: () => context.value, getContextGeneration: () => 1, getCatalogEntries: () => [{ request: { requestId: 'request-3' } }], storage: store(), enabled: () => true,
       onProposal: value => { proposals.push(value); return true } })
-    expect(await lane.refresh()).to.equal(true)
+    expect(lane.adoptPage([proposal('request-3')])).to.equal(true)
     expect(lane.projections.value[0].outcome.kind).to.equal('EXECUTION_PROPOSAL')
     expect(await lane.confirmProposal(lane.projections.value[0])).to.equal(false)
     expect(proposals).to.deep.equal([])
@@ -301,13 +295,13 @@ describe('typed inspection interaction adapter', () => {
       actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context, getContextGeneration: () => 1, getCatalogEntries: () => [], storage: memory, enabled: () => true })
     try { expect(await lane.recover()).to.equal(true); expect(await lane.resumeUnknown()).to.equal(false); expect(calls).to.deep.equal([]) } finally { lane.dispose() }
   })
-  it('discovers INSPECT from the existing request catalog and does not force that request through CHAT', async () => {
+  it('adopts the supplied historical INSPECT route without a separate inspection GET', async () => {
     const calls = []; const context = ref({ conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' })
     const pending = { schemaVersion: 6, submissionProgress: null, reviewProgress: null, route: 'INSPECT', actionProgress: null, conversationId: '7', conversationGeneration: '1', requestId: 'request-catalog-inspect', requestRevision: '1', turnId: 'turn-catalog-inspect', state: 'PENDING', outcome: null, inspection: { authorizationId: 'inspection-1', manifestSha256: `${'a'.repeat(64)}`, sourceRefIds: ['source-1'], inputSummary: null } }
     const lane = useHallTypedDeliberation({ chatApi: { get: async path => { calls.push(path); return pending } }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context.value, getContextGeneration: () => 1,
       getCatalogEntries: () => [{ request: { requestId: 'request-catalog-inspect', turns: [{ route: 'INSPECT' }] } }], storage: store(), enabled: () => true })
-    expect(await lane.refresh()).to.equal(true)
-    expect(calls).to.deep.equal(['/conversations/7/requests/request-catalog-inspect/inspection-outcome'])
+    expect(lane.adoptPage([pending])).to.equal(true)
+    expect(calls).to.deep.equal([])
     lane.dispose()
   })
   it('lets an inspection clarification continue as explicit CHAT when the user does not select another inspection', async () => {
@@ -343,7 +337,7 @@ describe('explicit text follow-up admission basis', () => {
     actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context.value, getContextGeneration: () => 1,
     getCatalogEntries: () => values.map(v => ({ request: { requestId: v.requestId, steps: [] } })), storage: store(), enabled: () => true })
     try {
-      expect(await lane.refresh()).to.equal(true); expect(await lane.submit({ content: '把这一段改短' })).to.equal(false)
+      expect(lane.adoptPage(values)).to.equal(true); expect(await lane.submit({ content: '把这一段改短' })).to.equal(false)
       expect(calls[0].body.parentOutcomeId).to.equal(two.outcome.outcomeId)
       expect(calls[0].body.expectedParentStateVersion).to.equal('0')
       two.outcome.outcomeId = 'changed-after-send'
@@ -360,9 +354,9 @@ describe('explicit text follow-up admission basis', () => {
     getContext: () => ({ conversationId: '42', conversationGeneration: '1', taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' }),
     getCatalogEntries: () => values.map(v => ({ request: { requestId: v.requestId, steps: [] } })), storage: store(), enabled: () => true })
     try {
-      expect(await lane.refresh()).to.equal(true)
+      expect(lane.adoptPage(values)).to.equal(true)
       values[1] = { ...failed, state: 'PENDING' }
-      await lane.refresh()
+      lane.adoptPage(values)
       expect(lane.projections.value.find(v => v.requestId === 'failed').state).to.equal('FAILED')
       await lane.submit({ content: '继续改稿' })
       expect(calls).to.have.length(1)
@@ -489,60 +483,29 @@ describe('discussion-v2 effective materials replace browser history inference', 
   })
 })
 
-describe('event-targeted typed outcome reads', () => {
+describe('aggregate-page typed presentation updates', () => {
   const context = { conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }
-  it('one changed round reads one outcome, not all 101; READY clarification remains mutable', async () => {
-    const reads = []; let answered = false
-    const entries = Array.from({ length: 101 }, (_, i) => ({ request: { requestId: `r${i}`, turns: [{ route: 'CHAT' }], steps: [] } }))
-    const lane = useHallTypedDeliberation({ chatApi: { get: async path => {
-      const id = path.split('/')[4]; reads.push(id); const value = clarify(id)
-      if (answered && id === 'r50') Object.assign(value.outcome.clarification, { state: 'ANSWERED', stateVersion: '1', replyRequestId: 'reply' })
-      return value
-    } }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1), enabled: () => true,
-    getContext: () => context, getCatalogEntries: () => entries })
+  const build = () => useHallTypedDeliberation({ chatApi: { get: () => { throw new Error('No display follow-up GET') } },
+    actorScopeKey: ref('owner'), authorizationGeneration: ref(1), enabled: () => true, getContext: () => context })
+  it('advances a READY clarification directly from the new page without scanning receipts or requests', () => {
+    const lane = build()
     try {
-      expect(await lane.refresh()).to.equal(true); expect(reads).to.have.length(101)
-      reads.length = 0; answered = true
-      expect(await lane.refreshRequests(['r50', 'r50'])).to.equal(true)
-      expect(reads).to.deep.equal(['r50']); expect(lane.projections.value).to.have.length(101)
-      expect(lane.projections.value.find(p => p.requestId === 'r50').outcome.clarification.state).to.equal('ANSWERED')
+      expect(lane.adoptPage([clarify('one'), clarify('two')])).to.equal(true)
+      const answered = clarify('one')
+      Object.assign(answered.outcome.clarification, { state: 'ANSWERED', stateVersion: '1', replyRequestId: 'reply' })
+      expect(lane.adoptPage([answered])).to.equal(true)
+      expect(lane.projections.value).to.have.length(2)
+      expect(lane.projections.value.find(p => p.requestId === 'one').outcome.clarification.state).to.equal('ANSWERED')
+      expect(lane.adoptPage([clarify('one')])).to.equal(false)
+      expect(lane).not.to.have.property('refreshRequests')
+      expect(lane).not.to.have.property('relatedRequestIds')
     } finally { lane.dispose() }
   })
-  it('maps parent/child hints without treating unrelated rounds as dirty', () => {
-    const lane = useHallTypedDeliberation({ chatApi: {}, actorScopeKey: ref('owner'), authorizationGeneration: ref(1),
-      enabled: () => true, getContext: () => context, getCatalogEntries: () => [] })
+  it('accepts the server-selected parent without recursively loading an execution-only child', () => {
+    const lane = build()
     try {
-      lane.projections.value = [
-        { requestId: 'action-parent', actionProgress: { childRequestId: 'execution-child' }, outcome: { outcomeId: 'action-outcome' } },
-        { requestId: 'review-parent', reviewProgress: { childRequestId: 'review-child' }, outcome: { outcomeId: 'review-outcome' } },
-        { requestId: 'unrelated', outcome: { outcomeId: 'other' } }
-      ]
-      expect(lane.relatedRequestIds([{ requestId: 'execution-child' }])).to.deep.equal(['execution-child', 'action-parent'])
-      expect(lane.relatedRequestIds([{ requestId: 'action-parent' }])).to.deep.equal(['action-parent', 'execution-child'])
-      expect(lane.relatedRequestIds([{ requestId: 'new-reply', parentOutcomeId: 'review-outcome' }])).to.deep.equal(['new-reply', 'review-parent'])
-    } finally { lane.dispose() }
-  })
-  it('an EXECUTE-only hint updates its parent outcome, never calls a nonexistent child typed endpoint', async () => {
-    const reads = []
-    const lane = useHallTypedDeliberation({ chatApi: { get: async path => { reads.push(path); return clarify('parent') } },
-      actorScopeKey: ref('owner'), authorizationGeneration: ref(1), enabled: () => true, getContext: () => context,
-      getCatalogEntries: () => [{ request: { requestId: 'parent', turns: [{ route: 'CHAT' }], steps: [] } },
-        { request: { requestId: 'child', turns: [], steps: [{ kind: 'EXECUTE' }] } }] })
-    try {
-      expect(await lane.refreshRequests(['child', 'parent'])).to.equal(true)
-      expect(reads).to.deep.equal(['/conversations/7/requests/parent/typed-outcome'])
-    } finally { lane.dispose() }
-  })
-  it('catalog mutation alone no longer triggers another whole-history outcome refresh', async () => {
-    const entries = ref([]); const reads = []
-    const lane = useHallTypedDeliberation({ chatApi: { get: async path => { reads.push(path); return clarify('new') } },
-      actorScopeKey: ref('owner'), authorizationGeneration: ref(1), enabled: () => true, getContext: () => context,
-      getCatalogEntries: () => entries.value })
-    try {
-      entries.value = [{ request: { requestId: 'new', turns: [{ route: 'CHAT' }] } }]
-      await Promise.resolve(); await Promise.resolve()
-      expect(reads).to.deep.equal([])
-      expect(await lane.refreshRequests(['new'])).to.equal(true); expect(reads).to.have.length(1)
+      expect(lane.adoptPage([clarify('parent')])).to.equal(true)
+      expect(lane.projections.value.map(value => value.requestId)).to.deep.equal(['parent'])
     } finally { lane.dispose() }
   })
 })

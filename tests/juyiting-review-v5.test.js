@@ -64,12 +64,12 @@ describe('revision feedback and existing refresh continuation', () => {
     }, actorScopeKey: 'owner', authorizationGeneration: 1, getContext: () => context, getContextGeneration: () => 1,
     getCatalogEntries: () => [{ request: { requestId: parent.requestId, turns: [{ route: 'CHAT' }] } }], enabled: () => true }))
     try {
-      await adapter.refresh(); assert.equal(adapter.projections.value.find(p => p.requestId === 'child'), undefined)
+      assert.equal(adapter.adoptPage([parent]), true); assert.equal(adapter.projections.value.find(p => p.requestId === 'child'), undefined)
       assert.equal(calls.filter(p => p.includes('/child/')).length, 0)
-      await adapter.refreshRequests(['child']); assert.equal(adapter.projections.value.find(p => p.requestId === 'child')?.state, 'PENDING')
-      completed = true; await adapter.refreshRequests(['child'])
+      assert.equal(adapter.adoptPage([child]), true); assert.equal(adapter.projections.value.find(p => p.requestId === 'child')?.state, 'PENDING')
+      completed = true; assert.equal(adapter.adoptPage([{ ...child, state: 'READY', outcome: { ...parent.outcome, outcomeId: 'child-outcome', kind: 'ANSWER', text: '修改后答复', revision: null } }]), true)
       assert.equal(adapter.projections.value.find(p => p.requestId === 'child')?.state, 'READY')
-      assert.equal(calls.filter(p => p.includes('/child/')).length, 2)
+      assert.equal(calls.length, 0)
     } finally { adapter.dispose(); scope.stop() }
   })
 })

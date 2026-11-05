@@ -923,7 +923,7 @@ import { useHallTypedDeliberation } from '@/composables/juyiting/useHallTypedDel
 import { useHallAgentAbilitiesEditor } from '@/composables/juyiting/useHallAgentAbilitiesEditor'
 import { useHallAgentProfileCapabilities, agentProfileReasonText } from '@/composables/juyiting/useHallAgentProfileCapabilities'
 import { useHallSkillCapabilities } from '@/composables/juyiting/useHallSkillCapabilities'
-import { typedId, typedLong } from '@/composables/juyiting/hallTypedDeliberation'
+import { typedLong } from '@/composables/juyiting/hallTypedDeliberation'
 import { pointAndStartIntentReadLane } from '@/composables/juyiting/hallNativeBountyCapability'
 import { useHallDrafts } from '@/composables/juyiting/useHallDrafts'
 import { useTaskWorkspace } from '@/composables/juyiting/useTaskWorkspace'
@@ -2367,6 +2367,9 @@ const {
   loadHallMessages,
   loadMoreHallConversationHistory,
   loadOlderHallMessages,
+  messageRequestPage,
+  messageTypedOutcomes,
+  refreshHallMessagePage,
   messagePageHasMore,
   messagePageLoading,
   messagePageError,
@@ -2661,40 +2664,23 @@ const retryHallConversation = async () => {
   }
   return reloadHallConversation()
 }
-// Display scope follows loaded message pages, not every historical request.
-const displayedRequestIds = computed(() => [...new Set([
-  activeRequest.value?.requestId,
-  ...messages.value.map(message => message.requestId)
-].filter(typedId))])
-const readDisplayedProjections = async (ids, captured, { force = true } = {}) => {
-  const current = () => captured === followupContextGeneration.value && typedDeliberationEnabled.value
-  const known = new Set(bountyRequestCatalog.entries.value.map(entry => entry.request.requestId))
-  const toRead = force ? ids : ids.filter(id => !known.has(id))
-  if (!current() || !await bountyRequestCatalog.refreshWindow(ids, { force }) || !current()) return false
-  if (!await typedDeliberation.refreshRequests(toRead, { choices: false }) || !current()) return false
-  // Executions have no standalone chat message. Read only direct action children
-  // needed by the displayed parent, never a recursive chain of review replies.
-  const children = typedDeliberation.projections.value.filter(value => ids.includes(value.requestId))
-    .map(value => value.actionProgress?.childRequestId).filter(typedId)
-  return await bountyRequestCatalog.refreshWindow(children, { force }) && current()
+// Message pages own their request/outcome display data; no ID-set or per-request補查.
+const adoptMessagePresentation = () => {
+  if (!typedDeliberationEnabled.value || !messageRequestPage.value) return false
+  return bountyRequestCatalog.adoptPage(messageRequestPage.value) && typedDeliberation.adoptPage(messageTypedOutcomes.value)
 }
 const refreshFollowupContext = async event => {
   if (!typedDeliberationEnabled.value || !conversationId.value) return false
   if (!await refreshCurrentConversationTask()) return false
   const captured = followupContextGeneration.value
   if (!await bountyAssignmentContext.refresh() || captured !== followupContextGeneration.value) return false
-  const hints = event?.events || [event || { type: 'resync_required' }]
-  const initial = !bountyRequestCatalog.initialized.value || hints.some(hint => hint.type === 'resync_required')
-  const ids = initial ? displayedRequestIds.value : typedDeliberation.relatedRequestIds(hints)
-  if (!await readDisplayedProjections(ids, captured)) return false
+  // A live state change refreshes the current page, never walks historical request IDs.
+  if (event && !await refreshHallMessagePage()) return false
+  if (captured !== followupContextGeneration.value || !adoptMessagePresentation()) return false
   return await typedDeliberation.refreshDeliveryChoices()
 }
-// Only membership changes trigger this path: streamed text/token changes do not.
-// Older pages enrich presentation; they never adopt a historical active request.
-watch([() => displayedRequestIds.value.join('\u0000'), () => bountyRequestCatalog.initialized.value], () => {
-  if (!typedDeliberationEnabled.value || !bountyRequestCatalog.initialized.value) return
-  void readDisplayedProjections(displayedRequestIds.value, followupContextGeneration.value, { force: false })
-})
+// Historical pages only enrich display; they never restore a historical active request.
+watch([messageRequestPage, typedDeliberationEnabled], adoptMessagePresentation)
 const resetFollowupContext = () => {
   invalidateFollowupContext()
   bountyRequestCatalog.reset()

@@ -48,6 +48,7 @@ export const normalizeHallMessage = (item, identity) => {
     senderName: isSelf ? '你' : fallbackSenderName(sender, normalizeSenderName(item.senderName) || normalizeSenderName(metadata.senderName)),
     agentId: metadata.agentId,
     requestId: typedId(metadata.requestId),
+    turnId: typedId(metadata.turnId),
     typedOutcomeId: typedId(metadata.outcomeId),
     jiacn: item.jiacn,
     ownerJiacn: item.ownerJiacn,

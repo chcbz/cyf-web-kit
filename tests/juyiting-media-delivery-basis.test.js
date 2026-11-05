@@ -70,14 +70,14 @@ describe('current v5 media follow-up basis', () => {
       getContextGeneration: () => 1, getCatalogEntries: () => entries,
       storage: { getItem: () => null, setItem: () => {} }, enabled: () => true })
       try {
-        expect(await lane.refresh()).to.equal(false) // A previous failed read must not poison a confirmed cancellation.
+        expect(await lane.readOne('old-cancelled', undefined, 'CHAT')).to.equal(null) // A previous failed read must not poison a confirmed cancellation.
         old.state = 'CANCELLED'; old.turns[0].state = 'CANCELLED'
         if (mode === 'unknown') old.state = 'UNKNOWN'
         if (mode === 'partial') old.turns[0].lastDeltaSeq = '1'
         if (mode === 'final') old.turns[0].finalMessageId = '999'
         if (mode === 'execution') old.steps = [{ kind: 'EXECUTE' }]
         if (mode === 'missing') delete old.turns[0].lastDeltaSeq
-        await lane.refresh(); await lane.submit({ content: '识别刚才生成的图片' })
+        lane.adoptPage(values); await lane.submit({ content: '识别刚才生成的图片' })
         expect(calls.length, mode).to.equal(1)
         if (calls.length) expect(calls[0].parentOutcomeId).to.equal(values[0].outcome.outcomeId)
       } finally { lane.dispose() }
@@ -92,7 +92,7 @@ describe('current v5 media follow-up basis', () => {
     actorScopeKey: identity, authorizationGeneration: auth, getContext: () => context, getContextGeneration: () => 1,
     getCatalogEntries: () => entries, storage, enabled: () => true })
     try {
-      expect(await lane.refresh()).to.equal(true); expect(gets).to.have.length(3)
+      expect(lane.adoptPage(values)).to.equal(true); expect(gets).to.have.length(0)
       await lane.submit({ content: '提交这一份成果' }); expect(calls).to.have.length(0); expect(lane.error.value).to.include('先选择')
       lane.chooseDelivery(values[0].outcome.outcomeId); await lane.submit({ content: '提交这一份成果' })
       expect(calls).to.have.length(1); expect(calls[0].body.parentOutcomeId).to.equal(values[0].outcome.outcomeId)

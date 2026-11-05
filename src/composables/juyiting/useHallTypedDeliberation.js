@@ -84,7 +84,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   const emptyCancellation = entry => cancelledWithoutOutput(entry) &&
     !projections.value.some(value => value.requestId === entry.request.requestId && value.state === 'READY')
 
-  let generation = 0; let disposed = false; let refreshFlight = null
+  let generation = 0; let disposed = false
   const capture = () => Object.freeze({ generation, scope: scope.value,
     authorization: unref(typeof authorizationGeneration === 'function' ? authorizationGeneration() : authorizationGeneration),
     contextGeneration: getContextGeneration?.(), context: { ...(getContext?.() || {}) } })
@@ -123,7 +123,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   }
   const loadMoreDeliveryChoices = () => refreshDeliveryChoices(true)
   const path = (context, requestId = '', purpose = 'CHAT') => `/conversations/${encodeURIComponent(context.conversationId)}/requests/${encodeURIComponent(requestId)}/${purpose === 'INSPECT' ? 'inspection-outcome' : 'typed-outcome'}`
-  const sorted = values => [...values].sort((a, b) => a.requestId.localeCompare(b.requestId))
+  const sorted = values => [...values].sort((a, b) => a.requestId.localeCompare(b.requestId) || a.turnId.localeCompare(b.turnId))
   const compareLong = (one, two) => one.length - two.length || (one < two ? -1 : one > two ? 1 : 0)
   const sameFinalBinding = (one, two) => one?.requestId === two?.requestId && one?.turnId === two?.turnId &&
     one?.outcome?.outcomeId === two?.outcome?.outcomeId && one?.outcome?.finalSha256 === two?.outcome?.finalSha256 &&
@@ -137,7 +137,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   }
   const apply = (projection, captured) => {
     if (!current(captured)) return false
-    const previous = projections.value.find(item => item.requestId === projection.requestId)
+    const previous = projections.value.find(item => item.requestId === projection.requestId && item.turnId === projection.turnId)
     // A delayed read cannot downgrade an authoritative final or create a false read failure.
     if (previous && previous.state !== 'PENDING' && projection.state === 'PENDING' &&
       previous.turnId === projection.turnId && previous.requestRevision === projection.requestRevision) return true
@@ -155,11 +155,24 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       if (version < 0 || (previousClarification.state === 'ANSWERED' && clarification.state === 'OPEN')) return false
       if (version === 0 && JSON.stringify(previous.outcome) !== JSON.stringify(projection.outcome)) return false
     }
-    const next = projections.value.filter(item => item.requestId !== projection.requestId).concat(projection)
+    const next = projections.value.filter(item => item.requestId !== projection.requestId || item.turnId !== projection.turnId).concat(projection)
     projections.value = sorted(next)
     const selected = selectedPending.value
     if (clarification && selected && selected.pendingQuestionId === clarification.pendingQuestionId &&
       (clarification.state === 'ANSWERED' || selected.expectedPendingQuestionStateVersion !== clarification.stateVersion)) selectedPending.value = null
+    return true
+  }
+  const adoptPage = values => {
+    const captured = capture()
+    if (!current(captured) || !Array.isArray(values)) return false
+    for (const raw of values) {
+      const context = { conversationId: captured.context.conversationId, conversationGeneration: captured.context.conversationGeneration,
+        taskId: captured.context.taskId, requestId: raw.requestId }
+      const projection = raw.route === 'INSPECT' ? inspectionOutcomeProjection(raw, context) : typedOutcomeProjection(raw, context)
+      if (!projection || !apply(projection, captured)) { error.value = '答复展示数据不匹配，请重试当前页。'; return false }
+      failedReads.delete(projection.requestId)
+    }
+    error.value = ''
     return true
   }
   const readOne = async (requestId, captured = capture(), requestedPurpose = '', visited = new Set()) => {
@@ -194,64 +207,6 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       }
       return null
     }
-  }
-  const refresh = () => {
-    // Refresh only the caller-supplied display catalog. Send context is separate;
-    // historical stored receipts do not expand this read scope.
-    if (refreshFlight) return refreshFlight
-    const captured = capture()
-    if (!current(captured) || !typedId(captured.context.conversationId) || !typedId(captured.context.taskId) ||
-      !typedLong(captured.context.assignmentRevision, { allowZero: true })) return Promise.resolve(false)
-    error.value = ''
-    const read = async () => {
-      const visited = new Set()
-      const catalogEntries = getCatalogEntries?.() || []
-      const catalogInspectionIds = catalogEntries.filter(entry => entry?.request?.turns?.some(turn => turn?.route === 'INSPECT'))
-        .map(entry => entry.request.requestId).filter(typedId)
-      const catalogChatIds = catalogEntries.filter(entry => !entry?.request?.turns?.some(turn => turn?.route === 'INSPECT') &&
-        !(entry?.request?.steps?.some(step => step.kind === 'EXECUTE') && !entry?.request?.turns?.some(turn => turn.route === 'CHAT')))
-        .map(entry => entry?.request?.requestId).filter(typedId)
-      await Promise.all([...new Set(catalogChatIds)].map(requestId => readOne(requestId, captured, 'CHAT', visited))
-        .concat([...new Set(catalogInspectionIds)].map(requestId => readOne(requestId, captured, 'INSPECT', visited))))
-      if (current(captured)) await refreshDeliveryChoices()
-      return current(captured) && failedReads.size === 0
-    }
-    const flight = read().finally(() => {
-      if (refreshFlight !== flight) return
-      refreshFlight = null
-    })
-    refreshFlight = flight
-    return flight
-  }
-  const relatedRequestIds = events => {
-    const ids = new Set(events.flatMap(event => [event.requestId, event.childRequestId, event.replyRequestId]).filter(typedId))
-    const parents = new Set(events.map(event => event.parentOutcomeId).filter(typedId))
-    const changed = new Set(ids)
-    for (const value of projections.value) {
-      if (changed.has(value.requestId)) {
-        for (const child of [value.actionProgress?.childRequestId, value.reviewProgress?.childRequestId]) if (typedId(child)) ids.add(child)
-      }
-      if (parents.has(value.outcome?.outcomeId) || ids.has(value.actionProgress?.childRequestId) ||
-          ids.has(value.reviewProgress?.childRequestId) || ids.has(value.outcome?.clarification?.replyRequestId)) ids.add(value.requestId)
-    }
-    return [...ids]
-  }
-  const refreshRequests = async (requestIds, { choices = true } = {}) => {
-    const captured = capture()
-    if (!current(captured)) return false
-    if (refreshFlight) await refreshFlight
-    if (!current(captured)) return false
-    const entries = new Map((getCatalogEntries?.() || []).map(entry => [entry.request.requestId, entry]))
-    const visited = new Set()
-    const ids = [...new Set(requestIds)].filter(typedId)
-    await Promise.all(ids.map(requestId => {
-      const request = entries.get(requestId)?.request
-      if (request?.steps?.some(step => step.kind === 'EXECUTE') && !request?.turns?.some(turn => ['CHAT', 'INSPECT'].includes(turn.route))) return null
-      const purpose = request?.turns?.some(turn => turn.route === 'INSPECT') ? 'INSPECT' : 'CHAT'
-      return readOne(requestId, captured, purpose, visited)
-    }))
-    if (choices && current(captured)) await refreshDeliveryChoices()
-    return current(captured) && ids.every(id => !failedReads.has(id))
   }
   const choosePending = projection => {
     const clarification = projection?.outcome?.kind === 'CLARIFY' ? projection.outcome.clarification : null
@@ -375,6 +330,6 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     generation++; failedReads.clear(); busy.value = false; projections.value = []; selectedPending.value = null; selectedDelivery.value = null; error.value = '' }
   const stopScope = watch(scope, invalidate, { flush: 'sync' })
   const recoveryAvailable = computed(() => { storageRevision.value; return readRecords(storage, scope.value, getContext?.() || {}).some(record => record.status === 'UNKNOWN') })
-  return { deliveryHasMore, deliveryLoading, deliveryError, refreshDeliveryChoices, loadMoreDeliveryChoices, deliveryChoices, selectedDeliveryId, chooseDelivery, projections, cards, selectedPending, error, busy, recoveryAvailable, inspectionStatus, refresh, refreshRequests, relatedRequestIds, readOne, submit, recover, resumeUnknown, choosePending, confirmProposal,
+  return { adoptPage, deliveryHasMore, deliveryLoading, deliveryError, refreshDeliveryChoices, loadMoreDeliveryChoices, deliveryChoices, selectedDeliveryId, chooseDelivery, projections, cards, selectedPending, error, busy, recoveryAvailable, inspectionStatus, readOne, submit, recover, resumeUnknown, choosePending, confirmProposal,
     invalidate, dispose: () => { disposed = true; invalidate(); stopScope() } }
 }
