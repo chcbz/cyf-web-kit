@@ -25,7 +25,7 @@ import {
   validateBountyBootstrapRequest, bootstrapReadbackIsCurrent
 } from './hallBountyBootstrap.js'
 import { typedId } from './hallTypedDeliberation.js'
-import { catalogPage, mergeCatalogEntries } from './bountyRequestCatalog.js'
+import { catalogPage } from './bountyRequestCatalog.js'
 import { bountyInteractionTargetId } from './useHallChatContext.js'
 import {
   cancellationTarget,
@@ -97,7 +97,6 @@ export const useHallConversation = ({
   const isAdoptingBountyBootstrap = ref(false)
   const eventStreamRecovering = ref(false)
   const deliberationStatus = ref('')
-  const restoredRequestIds = new Set()
   const activeRequest = ref(null)
   const activeTurns = ref([])
   const capabilityState = ref({ loaded: false, v2: false })
@@ -419,9 +418,7 @@ export const useHallConversation = ({
   const applyDeliberationEvent = event => {
     if (!event || typeof event !== 'object') return false
     if (activeRequest.value?.requestId && event.requestId && event.requestId !== activeRequest.value.requestId) {
-      // Known historical status frames advance the replay cursor, never the active round.
-      return event.conversationId === conversationId.value && restoredRequestIds.has(event.requestId) &&
-        ['interaction.state_changed', 'chat_request_replay'].includes(event.type)
+      return false
     }
     const session = activeSendSession?.roundCloseout ? activeSendSession : null
     if (session && event.requestId === session.requestId) {
@@ -513,6 +510,14 @@ export const useHallConversation = ({
     if (event?.type === 'agent_message_delta' && activeRequest.value?.requestId &&
         event.requestId && event.requestId !== activeRequest.value.requestId) return true
     const needsReadback = needsUnversionedTurnReadback(event)
+    if (event.conversationId === conversationId.value && activeRequest.value?.requestId &&
+      event.requestId && event.requestId !== activeRequest.value.requestId &&
+      ['interaction.state_changed', 'chat_request_replay'].includes(event.type)) {
+      // Authenticated conversation replay does not need a preloaded history ID list.
+      // A live non-current status still invalidates its own projection, never the active round.
+      refreshProjection()
+      return true
+    }
     const durableHandled = applyDeliberationEvent(event)
     const messageEvent = event?.type === 'agent_message_delta' || event?.type === 'agent_message' || event?.type === 'resync_required' || ['part.processing', 'part.ready', 'part.failed'].includes(event?.type)
     // Keep the active-request reducer closed. A non-active media event can only ask the
@@ -846,7 +851,6 @@ export const useHallConversation = ({
     capabilityState.value = { loaded: false, v2: false }
     deliberationStatus.value = ''
     activeRequest.value = null
-    restoredRequestIds.clear()
     activeTurns.value = []
     cancellationJobs.clear()
     turnStates.clear()
@@ -1015,26 +1019,15 @@ export const useHallConversation = ({
       if (restoreRequest) {
         const taskId = expectedScope.key.startsWith('task:') ? expectedScope.key.slice(5) : ''
         if (!typedId(taskId)) throw new Error('原事项范围无效，未恢复回话。')
-        let after = '0'; let through = null; let requestGeneration = null; let entries = []; const seen = new Set()
-        for (;;) {
-          const params = { after, ...(through !== null ? { through, expectedGeneration: requestGeneration } : {}) }
-          const response = await chatApi.get(`/conversations/${encodeURIComponent(exactId)}/requests`, params,
-            { autoLoading: false, needAuth: true, signal: lifecycleController.signal })
-          if (!isCurrentContentLoad() || activeRequest.value?.requestId) return false
-          const page = catalogPage(apiData(response), { conversationId: exactId, taskId, after, through, generation: requestGeneration })
-          if (!page) throw new Error('原回话索引范围或分页边界不一致，请重试。')
-          for (const entry of page.entries) {
-            if (seen.has(entry.request.requestId)) throw new Error('原回话索引重复，请重试。')
-            seen.add(entry.request.requestId)
-          }
-          const merged = mergeCatalogEntries(entries, page)
-          if (!merged) throw new Error('原回话索引冲突，请重试。')
-          entries = merged; through = page.through; requestGeneration = page.scope.conversationGeneration
-          if (!page.hasMore) break
-          after = page.nextAfter
+        const response = await chatApi.get(`/conversations/${encodeURIComponent(exactId)}/requests`, { latest: 'true' },
+          { autoLoading: false, needAuth: true, signal: lifecycleController.signal })
+        if (!isCurrentContentLoad() || activeRequest.value?.requestId) return false
+        const page = catalogPage(apiData(response), { conversationId: exactId, taskId, after: '0' })
+        if (!page || page.hasMore || page.entries.length > 1 ||
+          (page.entries.length ? page.entries[0].ordinal !== page.through : page.through !== '0')) {
+          throw new Error('原回话最新轮次范围不一致，请重试。')
         }
-        for (const entry of entries) restoredRequestIds.add(entry.request.requestId)
-        const latest = entries.at(-1)?.request
+        const latest = page.entries[0]?.request
         if (latest && !applyRequestView(latest, latest.requestId)) throw new Error('原回话状态暂不可核实，请重试。')
       }
       await chatApi.get('/conversation/messages', { id: exactId }, {

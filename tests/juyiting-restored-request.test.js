@@ -16,7 +16,7 @@ const entry = (ordinal, state) => {
 }
 const page = (entries, extra = {}) => ({ schemaVersion: 1, scope, after: '0', through: '185', nextAfter: null, hasMore: false, entries, ...extra })
 const instances = []
-const setup = (read = async () => page([entry('184', 'CANCELLED'), entry('185', 'STREAMING')]), options = {}) => {
+const setup = (read = async () => page([entry('185', 'STREAMING')]), options = {}) => {
   const calls = []; const context = ref({ taskId: '474', conversationScopeType: 'bounty', conversationScopeKey: 'task:474', mode: 'bounty', participantAgentIds: ['wuyong'], targetAgentIds: ['wuyong'] })
   const apiStore = { authorizationGeneration: 1, token: async () => null }
   const hall = useHallConversation({ apiStore, chatContext: context,
@@ -41,14 +41,16 @@ describe('exact-conversation current round restoration', () => {
     expect(hall.activeRequest.value.requestId).to.equal('request-185')
     expect(hall.durableCancelTarget.value).to.deep.equal({ turnId: 'turn-185' })
     expect(calls.map(c => c.path)).to.deep.equal(['/conversations/101/requests', '/conversation/messages'])
+    expect(calls[0].params).to.deep.equal({ latest: 'true' })
     await hall.cancelDeliberation(hall.durableCancelTarget.value)
     const write = calls.find(c => c.body)
     expect(write.path).to.equal('/turns/turn-185/cancel')
     expect(write.body).to.deep.equal({ expectedStateVersion: '2776' })
   })
-  it('consumes known historical status/delta replay without changing the restored round or reconnecting', async () => {
+  it('consumes unloaded historical status/delta replay without changing the restored round or reconnecting', async () => {
     const originalFetch = global.fetch; let controller; let transportRequestId; let fetches = 0
-    const { hall, apiStore } = setup(); apiStore.token = async () => 'test-token'
+    const hints = []
+    const { hall, apiStore } = setup(undefined, { onRequestCatalogHint: async event => { hints.push(event); return true } }); apiStore.token = async () => 'test-token'
     global.fetch = async (_url, options) => {
       fetches++; transportRequestId = new Headers(options.headers).get('X-Request-Id')
       return new Response(new ReadableStream({ start(value) { controller = value } }), { status: 200, headers: { 'Content-Type': 'text/event-stream', 'X-Request-Id': transportRequestId } })
@@ -67,23 +69,35 @@ describe('exact-conversation current round restoration', () => {
       expect(hall.messages.value.some(message => message.turnId === 'turn-184')).to.equal(false)
       expect(fetches).to.equal(1)
       expect(hall.eventStreamRecovering.value).to.equal(false)
+      controller.enqueue(new TextEncoder().encode(conversationFrame({ type: 'stream_ready', conversationId: '101', cursor: '3', nextCursor: '3' }, '3', transportRequestId)))
+      await new Promise(resolve => setImmediate(resolve))
+      controller.enqueue(new TextEncoder().encode(conversationFrame({ type: 'interaction.state_changed', conversationId: '101', requestId: 'new-other-client', state: 'RUNNING' }, '4', transportRequestId)))
+      await new Promise(resolve => setImmediate(resolve))
+      expect(hall.activeRequest.value.requestId).to.equal('request-185')
+      expect(hints.at(-1).requestId).to.equal('new-other-client')
+      expect(fetches).to.equal(1)
     } finally { hall.disposeHallConversation(); global.fetch = originalFetch }
   })
-  it('consumes all pages of one generation/through boundary before choosing the current round', async () => {
-    const { hall, calls } = setup(async (_path, params) => params.after === '0'
-      ? page([entry('184', 'CANCELLED')], { hasMore: true, nextAfter: '184' })
-      : page([entry('185', 'STREAMING')], { after: '184' }))
+  it('uses one current-round request even when its ordinal is beyond many historical pages', async () => {
+    const { hall, calls } = setup(async () => page([entry('10001', 'STREAMING')], { through: '10001' }))
     expect(await hall.loadHallMessages()).to.equal(true)
-    expect(calls[1].params).to.deep.equal({ after: '184', through: '185', expectedGeneration: '1' })
-    expect(hall.activeRequest.value.requestId).to.equal('request-185')
+    expect(calls.filter(call => call.path === '/conversations/101/requests')).to.have.length(1)
+    expect(calls[0].params).to.deep.equal({ latest: 'true' })
+    expect(hall.activeRequest.value.requestId).to.equal('request-10001')
   })
-  for (const mutation of ['foreign-task', 'foreign-conversation', 'boundary']) it(`rejects ${mutation} without restoring a partial older request`, async () => {
-    const { hall, calls } = setup(async (_path, params) => {
-      if (params.after === '0') return page([entry('184', 'CANCELLED')], { hasMore: true, nextAfter: '184' })
-      const next = page([entry('185', 'STREAMING')], { after: '184', scope: { ...scope } })
+  it('loads empty conversation messages without inventing an active request', async () => {
+    const { hall } = setup(async () => page([], { through: '0' }))
+    expect(await hall.loadHallMessages()).to.equal(true)
+    expect(hall.activeRequest.value).to.equal(null)
+  })
+  for (const mutation of ['foreign-task', 'foreign-conversation', 'boundary', 'multiple', 'has-more']) it(`rejects latest ${mutation} without restoring a partial older request`, async () => {
+    const { hall, calls } = setup(async () => {
+      const next = page([entry('185', 'STREAMING')], { scope: { ...scope } })
       if (mutation === 'boundary') next.through = '186'
       else if (mutation === 'foreign-task') next.scope.taskId = '999'
-      else next.scope.conversationId = '999'
+      else if (mutation === 'foreign-conversation') next.scope.conversationId = '999'
+      else if (mutation === 'multiple') next.entries.unshift(entry('184', 'CANCELLED'))
+      else { next.through = '186'; next.hasMore = true; next.nextAfter = '185' }
       return next
     })
     expect(await hall.loadHallMessages()).to.equal(false)
