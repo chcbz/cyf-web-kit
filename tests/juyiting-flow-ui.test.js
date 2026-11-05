@@ -319,3 +319,47 @@ describe('model recommendation actual matter UI', () => {
     } finally { wrapper.unmount() }
   })
 })
+
+describe('matters list scroll boundary', () => {
+  it('loads once at the list end, pauses on error/hidden views and disconnects on unmount', async () => {
+    const previous = globalThis.IntersectionObserver
+    const observers = []
+    globalThis.IntersectionObserver = class {
+      constructor (callback) { this.callback = callback; observers.push(this) }
+      observe () {}
+      disconnect () { this.disconnected = true }
+    }
+    let wrapper
+    try {
+      wrapper = mount(Panel, { props: { ...baseProps, tasks: [{ id: 'one', title: '事项', status: 'open' }], hasMore: true } })
+      await Vue.nextTick()
+      const first = observers.at(-1)
+      first.callback([{ isIntersecting: false }])
+      expect(wrapper.emitted('load-more-tasks')).to.equal(undefined)
+      first.callback([{ isIntersecting: true }]); first.callback([{ isIntersecting: true }])
+      expect(wrapper.emitted('load-more-tasks')).to.have.length(1)
+      await wrapper.setProps({ loading: true })
+      expect(wrapper.get('.task-pagination-status').text()).to.equal('正在加载更多事项…')
+      await wrapper.setProps({ loading: false, errorMessage: 'offline' })
+      const count = observers.length
+      expect(wrapper.find('.task-pagination-status button').text()).to.equal('重试加载')
+      await wrapper.get('.task-pagination-status button').trigger('click')
+      expect(wrapper.emitted('load-more-tasks')).to.have.length(2)
+      expect(observers).to.have.length(count)
+      await wrapper.setProps({ errorMessage: '', resourcesActive: false })
+      expect(observers).to.have.length(count)
+      await wrapper.setProps({ resourcesActive: true })
+      expect(observers.length).to.be.greaterThan(count)
+      await wrapper.setProps({ hasMore: false })
+      expect(wrapper.get('.task-pagination-status').text()).to.equal('已显示全部事项')
+      wrapper.unmount(); wrapper = null
+      expect(observers.every(observer => observer.disconnected)).to.equal(true)
+      expect(hall).to.include(':has-more="tasksHasMore"')
+      expect(hall).to.include('@load-more-tasks="loadMoreTasks"')
+    } finally {
+      wrapper?.unmount()
+      if (previous === undefined) delete globalThis.IntersectionObserver
+      else globalThis.IntersectionObserver = previous
+    }
+  })
+})

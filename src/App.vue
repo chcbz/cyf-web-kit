@@ -130,10 +130,11 @@ const dismissBanner = () => {
 
 // 监听全局标题变化，自动更新 document.title
 watch(() => globalStore.title, (newTitle) => {
-  if (newTitle) {
-    document.title = newTitle + ' - ' + import.meta.env.VITE_APP_TITLE
-  }
-})
+  const appTitle = import.meta.env.VITE_APP_TITLE
+  document.title = !newTitle || newTitle === appTitle || appTitle.startsWith(newTitle + ' · ')
+    ? appTitle
+    : newTitle + ' - ' + appTitle
+}, { immediate: true })
 </script>
 
 <style>

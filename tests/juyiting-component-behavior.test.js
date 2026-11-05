@@ -155,8 +155,8 @@ const loadSfc = (relativePath, runtimeAgentApi = { post: async () => { throw new
     .replace(/^import\s+HallMaterialPicker\s+from\s+['"]\.\/HallMaterialPicker\.vue['"];?\s*$/gm, `var HallMaterialPicker = { data: () => ({ opened: false }), methods: { open() { this.opened = true } }, template: '<section class="hall-material-picker-stub" :data-open="opened" />', props: ['modelValue', 'identityScope', 'identityEpoch', 'disabled'], emits: ['update:modelValue'] }`)
     .replace(/^import\s+HallMaterialThumbnail\s+from\s+['"]\.\/HallMaterialThumbnail\.vue['"];?\s*$/gm, `var HallMaterialThumbnail = { template: '<span class="material-thumbnail-stub" />' }`)
     .replace(/^import\s+HostingRentPanel\s+from\s+['"].\/HostingRentPanel\.vue['"];?\s*$/gm, 'var HostingRentPanel = { template: \'<section class="hosting-rent-stub" />\', props: [\'persona\', \'resolvePersona\'] }')
-    // Dedicated archive-maintenance tests cover this child; keep the hall fixture scoped to its parent.
-    .replace(/^import\s+ArchiveMaintenance\s+from\s+['"].\/archive\/ArchiveMaintenance\.vue['"];?\s*$/gm, 'var ArchiveMaintenance = Vue.defineComponent({render: () => null})')
+    // Dedicated archive-positions tests cover this child; keep the hall fixture scoped to its parent.
+    .replace(/^import\s+ArchivePositions\s+from\s+['"].\/archive\/ArchivePositions\.vue['"];?\s*$/gm, 'var ArchivePositions = Vue.defineComponent({render: () => null})')
     .replace(/^import\s+ArchiveReader\s+from\s+['"].\/archive\/ArchiveReader\.vue['"];?\s*$/gm, 'var ArchiveReader = { template: \'<section class="archive-reader-stub">典籍阅读</section>\' }')
     .replace(/^import\s+(\w+)\s+from\s+['"]@\/assets\/juyiting\/[^'"]+['"];?\s*$/gm, 'var $1 = \'/mock-juyiting-asset.png\'')
     .replace(/^import\s+\{\s*hallPhysicalScene,\s*hallRoomPropVisuals\s*\}\s+from\s+['"]@\/constants\/juyiting['"];?\s*$/gm, 'var hallRoomPropVisuals = []; var hallPhysicalScene = { interactiveZones: [{ key: \'main\', panel: \'chat\', title: \'忠义堂公议\', subtitle: \'厅前公议 / 众好汉\', x: 50, y: 36, w: 12, h: 7, object: \'plaque\', hitShape: \'plaque\' }, { key: \'agents\', panel: \'agents\', title: \'点将册\', subtitle: \'点将调遣\', x: 21, y: 32, w: 13, h: 7, object: \'ledger\' }, { key: \'tasks\', panel: \'tasks\', title: \'悬赏榜\', subtitle: \'榜文\', x: 76, y: 47, w: 19, h: 18, object: \'notice-rack\' }, { key: \'catalog\', panel: \'catalog\', title: \'招贤令\', subtitle: \'遍请豪杰\', x: 14, y: 68, w: 12, h: 7, object: \'banner-flag\' }, { key: \'library\', panel: \'library\', title: \'案卷阁\', subtitle: \'查卷问典\', x: 82, y: 76, w: 22, h: 18, object: \'scroll-shelf\' }, { key: \'back\', panel: null, title: \'整装处\', subtitle: \'兵甲行囊\', x: 67, y: 26, w: 12, h: 8, object: \'rear-gear\' }] }')
@@ -2578,7 +2578,7 @@ describe('JuyiHall component behavior', () => {
     })
     const readerTab = wrapper.get('#library-reader-tab')
     const searchTab = wrapper.get('#library-search-tab')
-    const maintenanceTab = wrapper.get('#library-maintenance-tab')
+    const positionsTab = wrapper.get('#library-positions-tab')
 
     expect(readerTab.attributes('tabindex')).to.equal('0')
     expect(searchTab.attributes('tabindex')).to.equal('-1')
@@ -2588,9 +2588,9 @@ describe('JuyiHall component behavior', () => {
     await searchTab.trigger('keydown', { key: 'Home' })
     expect(document.activeElement).to.equal(readerTab.element)
     await readerTab.trigger('keydown', { key: 'End' })
-    expect(document.activeElement).to.equal(maintenanceTab.element)
-    expect(maintenanceTab.attributes('tabindex')).to.equal('0')
-    await maintenanceTab.trigger('keydown', { key: 'ArrowLeft' })
+    expect(document.activeElement).to.equal(positionsTab.element)
+    expect(positionsTab.attributes('tabindex')).to.equal('0')
+    await positionsTab.trigger('keydown', { key: 'ArrowLeft' })
     expect(document.activeElement).to.equal(searchTab.element)
     await searchTab.trigger('keydown', { key: 'ArrowLeft' })
     expect(document.activeElement).to.equal(readerTab.element)

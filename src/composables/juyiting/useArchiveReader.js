@@ -99,6 +99,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
   let saveTimer
   let queuedProgressIntent = null
   let progressDrainPromise = null
+  let progressRetryPromise = null
   let drainAfterDispose = false
   let loadGeneration = 0
   let initializeGeneration = 0
@@ -1392,13 +1393,35 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     }
   }
 
-  const flushProgress = () => {
+  const flushProgress = ({ retryFailed = false } = {}) => {
     clearTimeout(saveTimer)
-    let flushPromise = progressDrainPromise
-    if (queuedProgressIntent) {
+    let flushPromise = progressRetryPromise || progressDrainPromise
+    if (!progressRetryPromise && queuedProgressIntent) {
       flushPromise = startProgressDrain()
-    } else if (saveState.value === 'pending') {
+    } else if (!progressRetryPromise && saveState.value === 'pending') {
       flushPromise = saveProgress(currentLocation.value)
+    }
+    if (!flushPromise && retryFailed && saveState.value === 'error' && currentLocation.value) {
+      const requestIdentity = identityGeneration
+      const requestEditionId = edition.value?.editionId
+      // Only an explicit user retry may reconcile and resubmit a failed position.
+      // Refresh the CAS version, not the local reading location; never retry in a loop.
+      saveState.value = 'saving'
+      flushPromise = (async () => {
+        try {
+          await loadProgress(requestEditionId)
+          if (!isCurrentIdentity(requestIdentity) || edition.value?.editionId !== requestEditionId) return null
+          return await saveProgress(currentLocation.value)
+        } catch (error) {
+          if (!isCurrentIdentity(requestIdentity) || edition.value?.editionId !== requestEditionId) return null
+          saveState.value = 'error'
+          if (!errorMessage.value) errorMessage.value = '阅读进度暂无法核对，请稍后重试保存。'
+          throw error
+        }
+      })().finally(() => {
+        if (progressRetryPromise === flushPromise) progressRetryPromise = null
+      })
+      progressRetryPromise = flushPromise
     }
     return flushPromise ? flushPromise.catch(() => null) : Promise.resolve(null)
   }
@@ -1407,6 +1430,7 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
 
   const clearIdentityBoundState = () => {
     bookSelectionGeneration += 1
+    progressRetryPromise = null
     works.value = []
     identityGeneration += 1
     initializeGeneration += 1
@@ -1453,10 +1477,11 @@ export const useArchiveReader = ({ api = createApi('/archive/v1'), autoInitializ
     if (catalog.value?.workId !== workId || edition.value?.editionId !== (editionId || works.value.find(book => book.workId === workId)?.editionId)) {
       if (bookmarkCreateOperation || newNoteOperation || noteOperations.size ||
         deleteBookmarkOperations.size || deleteNoteOperations.size || questionCreatePromise || questionRetryPromise) {
-        throw new Error('请先完成或重试当前书籍的保存操作，再切换典籍。')
+        errorMessage.value = '请先完成或重试当前书籍的保存操作，再切换典籍。'
+        throw new Error(errorMessage.value)
       }
       // Drain the old book's captured progress before changing any edition-bound state.
-      await flushProgress()
+      await flushProgress({ retryFailed: true })
       if (selection !== bookSelectionGeneration || !isCurrentIdentity(requestIdentity)) return null
       if (saveState.value === 'error') throw new Error('阅读进度暂未保存，请重试保存后再切换典籍。')
       const shelf = works.value

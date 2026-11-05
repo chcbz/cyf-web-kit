@@ -376,6 +376,8 @@
             :task-status-text="taskStatusText"
             :tasks="tasks"
             :loading="tasksLoading"
+            :has-more="tasksHasMore"
+            @load-more-tasks="loadMoreTasks"
             :error-message="tasksError"
             :counts-loading="taskCountsLoading"
             :counts-error-message="taskCountsError"
@@ -1347,6 +1349,7 @@ const {
   loadPersonaCatalog,
   loadRosterAgents,
   loadTasks,
+  loadMoreTasks,
   loadTaskDetail,
   loadTaskRecommendations,
   mapAgents,
@@ -1367,6 +1370,7 @@ const {
   tasks,
   tasksError,
   tasksLoading,
+  tasksHasMore,
   taskStatusCount,
   taskStatusFilter,
   unbindPersona,
