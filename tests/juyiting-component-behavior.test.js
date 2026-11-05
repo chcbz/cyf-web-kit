@@ -316,6 +316,8 @@ before(async () => {
   SelectedAgentCard = loadSfc('../src/components/juyiting/SelectedAgentCard.vue')
 })
 
+const syntheticTaskQuote = () => ({ state: 'AVAILABLE', quoteId: 'fixture-quote', recommendationId: 'fixture-recommendation', amount: { amountMinor: '13', currency: 'WEN' }, unavailableReason: null })
+
 describe('JuyiHall component behavior', () => {
 
   it('classifies panel layouts for desktop, landscape touch, and portrait touch viewports', async () => {
@@ -1640,7 +1642,7 @@ describe('JuyiHall component behavior', () => {
   it('shows only candidate ratings on ready and keeps loading and error recovery', async () => {
     const task = { id: 'rating-task', title: '统计成绩', status: 'open', taskVersion: '1' }
     const agents = ['MEDIUM', 'HIGH', 'LOW', 'UNKNOWN'].map((level, i) => ({ agentId: `a${i}`, displayName: `好汉${i}`,
-      isMine: i !== 1, availability: 'online', recommendationLevel: level, recommendationReason: `理由${i}` }))
+      isMine: i !== 1, availability: 'online', recommendationLevel: level, recommendationReason: `理由${i}`, taskQuote: syntheticTaskQuote() }))
     const state = { state: 'READY', result: { observedAt: 1, requirementSummary: '读取成绩图片并统计' } }
     const wrapper = mount(BountyPanel, { global: { stubs }, props: {
       embeddedHall: true, tasks: [task], selectedTask: task, recommendedAgents: agents,
@@ -1684,8 +1686,8 @@ describe('JuyiHall component behavior', () => {
 
   it('progressively discloses asynchronous recommendations and preserves explicit expansion', async () => {
     const task = { id: 'collapse-task', status: 'open', taskVersion: '1' }
-    const a = { agentId: 'a', displayName: '林冲', recommendationLevel: 'HIGH', recommendationReason: '能够读取图片' }
-    const b = { agentId: 'b', displayName: '吴用', recommendationLevel: 'UNKNOWN', recommendationReason: '资料不足' }
+    const a = { agentId: 'a', displayName: '林冲', recommendationLevel: 'HIGH', recommendationReason: '能够读取图片', taskQuote: { state: 'AVAILABLE', quoteId: 'qa', recommendationId: 'r1', amount: { amountMinor: '13', currency: 'WEN' }, unavailableReason: null } }
+    const b = { agentId: 'b', displayName: '吴用', recommendationLevel: 'UNKNOWN', recommendationReason: '资料不足', taskQuote: { state: 'AVAILABLE', quoteId: 'qb', recommendationId: 'r1', amount: { amountMinor: '0', currency: 'WEN' }, unavailableReason: null } }
     const wrapper = mount(BountyPanel, { attachTo: document.body, global: { stubs }, props: {
       embeddedHall: true, selectedTask: task, tasks: [task], identityScope: 'one', authorizationGeneration: 1,
       recommendedAgents: [], assigneeCandidates: [a, b], recommendationState: { state: 'LOADING' },
@@ -1700,6 +1702,12 @@ describe('JuyiHall component behavior', () => {
       expect(wrapper.find('.matter-candidate-card').exists()).to.equal(false)
       expect(wrapper.get('.matter-selected-reason').text()).to.equal(a.recommendationReason)
       expect(wrapper.get('.matter-primary-action').text()).to.equal('确认由林冲承办')
+      expect(wrapper.get('.matter-quote').text()).to.include('事项报价 13文')
+      await wrapper.setProps({ recommendedAgents: [{ ...a, taskQuote: { state: 'UNAVAILABLE', quoteId: null, recommendationId: 'r1', amount: null, unavailableReason: 'MODEL_PRICE_MISSING' } }, b] })
+      expect(wrapper.get('.matter-quote').text()).to.include('暂无法报价')
+      expect(wrapper.get('.matter-quote').text()).not.to.include('0文')
+      expect(wrapper.get('.matter-primary-action').element.disabled).to.equal(true)
+      await wrapper.setProps({ recommendedAgents: [a, b] })
       await wrapper.get('.matter-primary-action').trigger('click')
       expect(wrapper.emitted('assign-task')[0]).to.deep.equal([task, a])
       await wrapper.get('.matter-agent-toggle').trigger('click')
@@ -1737,7 +1745,7 @@ describe('JuyiHall component behavior', () => {
 
   it('UI parity selects an explicit candidate without assigning until confirmation and keeps secondary phases reachable', async () => {
     const task = { id: 'parity-task', title: '需求', status: 'open', taskVersion: '1', requiredAbilities: [] }
-    const agents = ['吴用', '林冲'].map((name, i) => ({ agentId: `agent-${i}`, name, status: 'online', canOperate: true }))
+    const agents = ['吴用', '林冲'].map((name, i) => ({ agentId: `agent-${i}`, name, status: 'online', canOperate: true, taskQuote: syntheticTaskQuote() }))
     const wrapper = mount(BountyPanel, { global: { stubs }, props: {
       embeddedHall: true, tasks: [task], selectedTask: task, recommendedAgents: agents, operableAgents: agents,
       abilityText: () => '', canAssign: (task, agent) => Boolean(task && agent), formatTime: v => v,
@@ -1785,7 +1793,9 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.get('.matter-primary-action').text()).to.equal('确认由吴用承办')
     await wrapper.get('.matter-agent-toggle').trigger('click')
     await wrapper.get('.matter-primary-action').trigger('click')
-    expect(wrapper.emitted('assign-task')[0]).to.deep.equal([task, candidates[1]])
+    expect(wrapper.get('.matter-primary-action').element.disabled).to.equal(true)
+    expect(wrapper.text()).to.include('尚无报价，请刷新推荐')
+    expect(wrapper.emitted('assign-task')).to.equal(undefined)
     await wrapper.setProps({ recommendationState: { state: 'LOADING' } })
     expect(wrapper.get('.matter-primary-action').element.disabled).to.equal(true)
     expect(wrapper.get('.matter-candidate-card').element.disabled).to.equal(true)
@@ -1953,6 +1963,7 @@ describe('JuyiHall component behavior', () => {
     }
     const hostedAgent = {
       agentId: 'agent-gongsunsheng',
+      taskQuote: syntheticTaskQuote(),
       name: '公孙胜',
       status: 'online',
       boundToMe: true,

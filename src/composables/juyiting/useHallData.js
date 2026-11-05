@@ -103,7 +103,7 @@ export const useHallData = ({
         providerDisplayName: item.agent.providerDisplayName ?? null, isMine: item.agent.boundToMe,
         availability: item.agent.status
       }), recommendationLevel: item.recommendationLevel, recommendationReason: item.reason, recommendationEvidence: item.evidence,
-      recommendationGaps: item.gaps
+      recommendationGaps: item.gaps, taskQuote: item.quote
     })) : [])
 
   const assigneeCandidates = ref([])

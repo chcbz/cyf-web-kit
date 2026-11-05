@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { expect } from 'chai'
 import { ref } from 'vue'
 import { useHallData } from '../src/composables/juyiting/useHallData.js'
@@ -7,7 +8,7 @@ const task = () => ({ id: 'task-r1', taskVersion: '7', title: '写一份说明',
 const agent = { agentId: 'a', name: '好汉', status: 'online', canOperate: true, boundToMe: true, abilities: ['写作'] }
 const result = () => ({ taskId: 'task-r1', taskVersion: '7', state: 'READY', observedAt: 1000,
   candidateSetComplete: true, requirementSummary: '写使用说明', questions: [], recommendations: [{ agent, recommendationLevel: 'HIGH',
-    reason: '登记了写作本领', evidence: [{ id: 'ability:0', kind: 'DECLARED_ABILITY', label: '写作', description: '登记声明', available: true }], gaps: ['受众未知，不保证适合具体使用场景'] }] })
+    quote: { state: 'AVAILABLE', quoteId: 'quote-1', recommendationId: 'recommendation-1', amount: { amountMinor: '13', currency: 'WEN' }, unavailableReason: null }, reason: '登记了写作本领', evidence: [{ id: 'ability:0', kind: 'DECLARED_ABILITY', label: '写作', description: '登记声明', available: true }], gaps: ['受众未知，不保证适合具体使用场景'] }] })
 const create = implementation => {
   const selectedTask = ref(task()), identityScope = ref('owner-a')
   const data = useHallData({ agentApi: { create: implementation, get: async url => url.endsWith('/assignee-candidates') ? ({ items: [{ agentId: 'a', displayName: '好汉', providerDisplayName: null, isMine: true, availability: 'online' }], nextAfterAgentId: null }) : selectedTask.value }, log: { warn() {} },
@@ -16,6 +17,28 @@ const create = implementation => {
   return { data, selectedTask, identityScope }
 }
 describe('single-track model assignee recommendation R1', () => {
+  it('consumes the complete envelope fixture matched by the actual API controller', () => {
+    const envelope = JSON.parse(readFileSync(new URL('./fixtures/billing/task-recommendation-quote.json', import.meta.url), 'utf8'))
+    expect(envelope.protocolVersion).to.equal(1); expect(envelope.code).to.equal('E0')
+    const parsed = parseAssigneeRecommendation(envelope.data, { id: 'task', taskVersion: '7' })
+    expect(parsed.recommendations[0].quote.quoteId).to.equal('quote-1')
+    expect(parsed.recommendations[0].quote.amount).to.deep.equal({ amountMinor: '13', currency: 'WEN' })
+  })
+  it('retains the exact quote identity and rejects missing or malformed prices instead of assuming free', async () => {
+    const { data } = create(async (_url, _input, options) => options.onSuccess(result()))
+    await data.loadTaskRecommendations()
+    expect(data.recommendedAgents.value[0].taskQuote).to.deep.equal(result().recommendations[0].quote)
+    data.dispose()
+    for (const quote of [undefined, { ...result().recommendations[0].quote, quoteId: '' },
+      { ...result().recommendations[0].quote, amount: { amountMinor: '1.2', currency: 'WEN' } },
+      { ...result().recommendations[0].quote, amount: { amountMinor: 13, currency: 'WEN' } }]) {
+      expect(() => parseAssigneeRecommendation({ ...result(), recommendations: [{ ...result().recommendations[0], quote }] }, task())).to.throw()
+    }
+    const quote = { state: 'UNAVAILABLE', quoteId: null, recommendationId: 'r1', amount: null, unavailableReason: 'MODEL_PRICE_MISSING' }
+    expect(parseAssigneeRecommendation({ ...result(), recommendations: [{ ...result().recommendations[0], quote }] }, task()).recommendations[0].quote).to.deep.equal(quote)
+    const zero = { ...result().recommendations[0].quote, amount: { amountMinor: '0', currency: 'WEN' } }
+    expect(parseAssigneeRecommendation({ ...result(), recommendations: [{ ...result().recommendations[0], quote: zero }] }, task()).recommendations[0].quote.amount.amountMinor).to.equal('0')
+  })
   it('preserves own-first suitable advice and external-first advice when own capability is insufficient', async () => {
     for (const rows of [
       [{ mine: true, level: 'MEDIUM' }, { mine: false, level: 'HIGH' }],

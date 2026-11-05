@@ -282,7 +282,7 @@ describe('model recommendation actual matter UI', () => {
 
   it('shows candidate reason without summary panels; only explicit confirmation dispatches', async () => {
     const task = { id: 'recommend', title: '写说明', status: 'open', taskVersion: '1' }
-    const agent = { ...baseProps.operableAgents[0], recommendationLevel: 'HIGH', recommendationReason: '已登记写作本领',
+    const agent = { ...baseProps.operableAgents[0], recommendationLevel: 'HIGH', taskQuote: { state: 'AVAILABLE', quoteId: 'fixture-quote', recommendationId: 'fixture-rec', amount: { amountMinor: '13', currency: 'WEN' }, unavailableReason: null }, recommendationReason: '已登记写作本领',
       recommendationEvidence: [{ id: 'ability:0', label: '写作', description: '登记声明' }], recommendationGaps: ['确认受众'] }
     const wrapper = mount(Panel, { props: { ...baseProps, tasks: [task], selectedTask: task, recommendedAgents: [agent],
       recommendationState: { state: 'READY', result: { requirementSummary: '编写说明', questions: [] } } } })
@@ -302,7 +302,7 @@ describe('model recommendation actual matter UI', () => {
       expect(wrapper.emitted('assign-task')).to.have.length(1)
     } finally { wrapper.unmount() }
   })
-  it('model failure keeps explicit manual selection but never silently picks the first roster agent', async () => {
+  it('model failure permits inspecting manual candidates but never confirms without a quote', async () => {
     const task = { id: 'recommend', title: '写说明', status: 'open', taskVersion: '1' }
     const wrapper = mount(Panel, { props: { ...baseProps, tasks: [task], selectedTask: task,
       assigneeCandidates: [{ agentId: 'old-agent', displayName: '林冲', isMine: true, availability: 'online', providerDisplayName: null }],
@@ -313,9 +313,10 @@ describe('model recommendation actual matter UI', () => {
       expect(wrapper.get('.matter-primary-action').attributes('disabled')).not.to.equal(undefined)
       await wrapper.get('.matter-candidates button').trigger('click')
       expect(wrapper.emitted('assign-task')).to.equal(undefined)
-      expect(wrapper.get('.matter-primary-action').attributes('disabled')).to.equal(undefined)
+      expect(wrapper.get('.matter-primary-action').attributes('disabled')).not.to.equal(undefined)
+      expect(wrapper.get('.matter-quote').text()).to.include('尚无报价，请刷新推荐')
       await wrapper.get('.matter-primary-action').trigger('click')
-      expect(wrapper.emitted('assign-task')[0][1].agentId).to.equal('old-agent')
+      expect(wrapper.emitted('assign-task')).to.equal(undefined)
     } finally { wrapper.unmount() }
   })
 })

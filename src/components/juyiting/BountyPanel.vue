@@ -166,6 +166,7 @@
                     <div><dt>资料 / 成果</dt><dd>{{ matterResourceSummary?.taskId === String(detailTask.id) ? (['completed', 'archived'].includes(detailTask.status) ? `${matterResourceSummary.materials} 份资料 · 成果见验收记录` : `${matterResourceSummary.materials} 份资料 · ${matterResultCount ?? matterResourceSummary.outputs} 份${matterResultCount == null ? '成果引用' : '成果'}`) : '见下方资料与成果' }}</dd></div>
                   </dl>
                   <p v-if="hasTaskAction(detailTask, 'ASSIGN') && matterAgent?.recommendationReason" class="matter-selected-reason">{{ matterAgent.recommendationReason }}</p>
+                  <p v-if="hasTaskAction(detailTask, 'ASSIGN') && matterAgent && !isFundedTask(detailTask)" class="matter-quote" role="status">{{ taskQuoteText(matterAgent.taskQuote) }}<template v-if="isAvailableTaskQuote(matterAgent.taskQuote)"> · 确认承办时预占，验收后扣除</template></p>
                 </template>
                 <section
                   v-if="pointAndStartForDetail && !isTerminalMatter(detailTask)"
@@ -225,7 +226,7 @@
                         :aria-pressed="matterAgent?.agentId === agent.agentId"
                         :disabled="recommendationState.state === 'LOADING' || requirementEditBusy || pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, agent)"
                         @click="selectMatterCandidate(agent)"
-                      ><span class="matter-candidate-avatar" aria-hidden="true">{{ agentDisplayName(agent).slice(0, 1) }}</span><span class="matter-candidate-copy"><strong>{{ agentDisplayName(agent) }}</strong><small>{{ assigneeProviderText(agent) }} · {{ assigneeAvailabilityText(agent) }}</small><small v-if="agent.recommendationLevel" class="recommendation-level" :data-level="agent.recommendationLevel">{{ recommendationLevelText(agent.recommendationLevel) }}</small><small>{{ agent.recommendationReason || '可手动选择承办' }}</small></span><span class="matter-candidate-check" aria-hidden="true">{{ matterAgent?.agentId === agent.agentId ? '✓' : '' }}</span></button>
+                      ><span class="matter-candidate-avatar" aria-hidden="true">{{ agentDisplayName(agent).slice(0, 1) }}</span><span class="matter-candidate-copy"><strong>{{ agentDisplayName(agent) }}</strong><small>{{ assigneeProviderText(agent) }} · {{ assigneeAvailabilityText(agent) }}</small><small v-if="agent.recommendationLevel" class="recommendation-level" :data-level="agent.recommendationLevel">{{ recommendationLevelText(agent.recommendationLevel) }}</small><small>{{ agent.recommendationReason || '可手动选择承办' }}</small><small v-if="!isFundedTask(detailTask)">{{ taskQuoteText(agent.taskQuote) }}</small></span><span class="matter-candidate-check" aria-hidden="true">{{ matterAgent?.agentId === agent.agentId ? '✓' : '' }}</span></button>
                       </div>
                       <button
                         v-if="candidatesNextAfterAgentId"
@@ -239,7 +240,7 @@
                     <button
                       type="button"
                       class="matter-primary-action"
-                      :disabled="recommendationState.state === 'LOADING' || requirementEditBusy || !matterAgent || pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, matterAgent)"
+                      :disabled="recommendationState.state === 'LOADING' || requirementEditBusy || !matterAgent || pointAndStartBusy || Boolean(pointAndStartForDetail) || !canAssign(detailTask, matterAgent) || (!isFundedTask(detailTask) && !isAvailableTaskQuote(matterAgent?.taskQuote))"
                       @click="confirmMatterAgent"
                     >{{ matterAgent ? `确认由${agentDisplayName(matterAgent)}承办` : '请选择承办人' }}</button>
                   </template>
@@ -525,7 +526,7 @@
 </template>
 
 <script setup>
-import { isRecommendedLevel, recommendationLevelText } from '../../composables/juyiting/hallAssigneeRecommendation.js'
+import { isRecommendedLevel, recommendationLevelText, isAvailableTaskQuote, taskQuoteText } from '../../composables/juyiting/hallAssigneeRecommendation.js'
 const recommendationStateText = state => ({
   IDLE: '可以选择一位好汉来承办。', LOADING: '正在为你挑选合适的好汉…',
   READY: '推荐已备好，看看哪位更合适。',
@@ -792,7 +793,7 @@ const selectMatterCandidate = async agent => {
 watch(() => [props.identityScope, props.authorizationGeneration, detailTask.value?.id, detailTask.value?.taskVersion], () => { matterCandidateId.value = ''; matterCandidateExpansion.value = null }, { flush: 'sync' })
 const confirmMatterAgent = () => {
   const agent = matterAgent.value
-  if (props.recommendationState.state === 'LOADING' || requirementEditBusy.value || !agent || props.pointAndStartBusy || pointAndStartForDetail.value || !hasTaskAction(detailTask.value, 'ASSIGN') || !props.canAssign(detailTask.value, agent)) return
+  if (props.recommendationState.state === 'LOADING' || requirementEditBusy.value || !agent || props.pointAndStartBusy || pointAndStartForDetail.value || !hasTaskAction(detailTask.value, 'ASSIGN') || !props.canAssign(detailTask.value, agent) || (!isFundedTask(detailTask.value) && !isAvailableTaskQuote(agent.taskQuote))) return
   emit('assign-task', detailTask.value, agent)
 }
 const primaryStatusFilters = computed(() => props.taskStatusFilters.filter(item => !['HISTORY', 'UNKNOWN'].includes(item.value)))
