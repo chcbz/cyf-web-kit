@@ -422,7 +422,7 @@
             <p v-else role="status">{{ terminalHistory.message.value }}</p>
             <div class="terminal-history-actions" role="group" aria-label="重新读取历史成果">
               <button type="button" @click="refreshTerminalHistory">重新读取历史成果</button>
-              <button type="button" @click="terminalConversationHistory.refresh">重新读取议事文字成果</button>
+              <button type="button" @click="terminalTextHistory.refresh">重新读取议事文字成果</button>
             </div>
             <article v-for="item in terminalHistory.items.value" :key="`${item.artifactId}:${item.artifactVersion}`">
               <strong>{{ item.title }}</strong>
@@ -435,13 +435,27 @@
             </article>
             <button v-if="terminalHistory.nextCursor.value" type="button" @click="terminalHistory.loadMore">读取更多历史成果</button>
             <p v-if="terminalHistoryDownloadError" role="alert">{{ terminalHistoryDownloadError }}</p>
-            <p v-if="terminalConversationHistory.error.value || terminalConversationHistory.catalog.error.value || terminalTextError" role="alert">
-              {{ terminalConversationHistory.error.value || terminalConversationHistory.catalog.error.value || terminalTextError }}
+            <p role="status">仅显示已加载消息中的文字成果；不会自动读取全部历史。</p>
+            <p v-if="terminalTextHistory.loading.value" role="status">正在读取历史文字成果…</p>
+            <p v-if="terminalTextHistory.error.value" role="alert">
+              {{ terminalTextHistory.error.value }}
+              <button
+                type="button"
+                :disabled="terminalTextHistory.loading.value"
+                @click="terminalTextHistory.retry"
+              >重试当前页</button>
             </p>
-            <article v-for="item in terminalTextItems" :key="`${item.requestId}:${item.outcomeId}`">
+            <article v-for="item in terminalTextHistory.items.value" :key="`${item.requestId}:${item.outcomeId}`">
               <strong>历史文字成果</strong>
               <pre v-text="item.text"></pre>
             </article>
+            <p v-if="!terminalTextHistory.loading.value && !terminalTextHistory.error.value && !terminalTextHistory.items.value.length" role="status">已加载的消息中暂无文字成果。</p>
+            <button
+              v-if="terminalTextHistory.hasMore.value && !terminalTextHistory.error.value"
+              type="button"
+              :disabled="terminalTextHistory.loading.value"
+              @click="terminalTextHistory.loadOlder"
+            >加载更早的议事记录</button>
           </section>
           <HallCompletedRecords
             v-else-if="renderedPanel === 'tasks' && ['completed', 'archived'].includes(formalTaskRef?.status) && hallIdentityScope"
@@ -854,8 +868,7 @@
 
 <script setup>
 import { Dialog } from '@varlet/ui'
-import { useHallBountyAcceptance } from '@/composables/juyiting/useHallBountyAcceptance'
-import { completedTextItem } from '@/composables/juyiting/bountyOutputCatalog'
+import { useHallTerminalTextHistory } from '@/composables/juyiting/useHallTerminalTextHistory'
 import { useOutputs } from '@/composables/useOutputs'
 import { saveOutputBlob } from '@/utils/outputDownload'
 import OutputPreview from '@/components/outputs/OutputPreview.vue'
@@ -2696,51 +2709,16 @@ const terminalHistory = useOutputs({
   identityFingerprint: () => `${hallIdentityScope.value}:${apiStore.authorizationGeneration}`,
   pageSize: 100
 })
-// Reuse the existing owner/task-scoped catalog and validated text projection,
-// but render no acceptance, continuation, or execution component for terminal tasks.
-const terminalConversationHistory = useHallBountyAcceptance({
+// Read-only text history uses the existing message cursor, never a full request scan.
+const terminalTextHistory = useHallTerminalTextHistory({
   api: chatApi,
   taskId: () => renderedPanel.value === 'tasks' && formalTaskRef.value?.status === 'cancelled' ? formalTaskRef.value.id : '',
-  taskCompleted: () => true,
-  stateVersion: () => formalTaskRef.value?.taskVersion ?? formalTaskRef.value?.version,
   identityKey: () => hallIdentityScope.value ? `${hallIdentityScope.value}:${apiStore.authorizationGeneration}` : ''
 })
 const refreshTerminalHistory = () => {
-  void terminalConversationHistory.refresh()
+  void terminalTextHistory.refresh()
   return terminalHistory.refresh()
 }
-const terminalTextItems = ref([])
-const terminalTextError = ref('')
-watch([() => terminalHistory.cacheKey.value, () => terminalConversationHistory.scope.value,
-  () => terminalConversationHistory.catalog.entries.value], async (_value, _old, onCleanup) => {
-  terminalTextItems.value = []; terminalTextError.value = ''
-  const controller = new AbortController()
-  onCleanup(() => controller.abort())
-  const key = terminalHistory.cacheKey.value
-  const scope = terminalConversationHistory.scope.value
-  if (!key || !scope || formalTaskRef.value?.status !== 'cancelled') return
-  const taskId = formalTaskRef.value.id
-  try {
-    const items = []
-    for (const entry of terminalConversationHistory.catalog.entries.value) {
-      const requestId = entry.request?.requestId
-      if (!requestId) continue
-      const response = await chatApi.get(`/requests/${encodeURIComponent(requestId)}`, {}, { autoLoading: false, signal: controller.signal })
-      const request = response
-      if (request?.requestId !== requestId || request.conversationId !== scope.conversationId) throw new Error('历史议事来源不匹配')
-      for (const turn of request.turns || []) {
-        if (turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state)) continue
-        const outcome = await chatApi.get(`/conversations/${encodeURIComponent(scope.conversationId)}/requests/${encodeURIComponent(requestId)}/typed-outcome`, {},
-          { autoLoading: false, signal: controller.signal })
-        const item = await completedTextItem(outcome?.data?.data ?? outcome?.data, request, turn, taskId)
-        if (item) items.push(item)
-      }
-    }
-    if (!controller.signal.aborted && key === terminalHistory.cacheKey.value) terminalTextItems.value = items
-  } catch (error) {
-    if (!controller.signal.aborted && key === terminalHistory.cacheKey.value) terminalTextError.value = error.message || '历史文字成果读取未成'
-  }
-}, { flush: 'sync' })
 
 const terminalHistoryDownloadError = ref('')
 watch(() => terminalHistory.cacheKey.value, () => { terminalHistoryDownloadError.value = '' })

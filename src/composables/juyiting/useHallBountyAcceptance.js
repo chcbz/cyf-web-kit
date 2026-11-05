@@ -7,7 +7,7 @@ import { useHallBountyRequestCatalog } from './useHallBountyRequestCatalog.js'
 const unwrap = value => value?.items
 /** Read existing owner/task scoped sources only. Never choose the latest conversation,
  * create/point/send, or convert a legacy formal delivery into a conversation output. */
-export function useHallBountyAcceptance ({ api, taskId, identityKey, conversationId = () => '', enabled = () => true, taskCompleted = () => false, stateVersion = () => '', eventSource = () => null, documentRef = globalThis.document }) {
+export function useHallBountyAcceptance ({ api, taskId, identityKey, conversationId = () => '', enabled = () => true, taskCompleted = () => false, stateVersion = () => '', eventSource = () => null, loadRequests = true, documentRef = globalThis.document }) {
   const scope = ref(null); const loading = ref(false); const readError = ref(''); const streamError = ref(''); const legacy = ref(false)
   const error = computed(() => readError.value || streamError.value)
   let epoch = 0; let disposed = false; let controller = null; let readQueued = false
@@ -21,6 +21,8 @@ export function useHallBountyAcceptance ({ api, taskId, identityKey, conversatio
   const valid = captured => !disposed && enabled() && captured === epoch
   const readCatalog = async captured => {
     if (!valid(captured) || !scope.value || !visible()) return false
+    // Read-only historical consumers own their explicit message window.
+    if (!loadRequests) return true
     if (catalog.loading.value) { readQueued = true; return false }
     const loaded = await catalog.refresh()
     if (valid(captured) && scope.value) {

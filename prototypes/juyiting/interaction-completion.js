@@ -422,7 +422,7 @@ function canCancelDemo(){return !!state.task?.notStarted&&!state.task.cancelled&
 function renderCancellation(){
  const card=$('.matter-advice-card');if(!card)return;
  $('.ordinary-cancellation',card)?.remove();
- if(state.task?.cancelled){card.insertAdjacentHTML('beforeend','<p role="status">事项已取消；历史指派与成果保留，不再继续办理。</p>');return;}
+ if(state.task?.cancelled){card.insertAdjacentHTML('beforeend','<p role="status">事项已取消；历史指派与成果保留，不再继续办理。</p>');renderTerminalTextHistory(card);return;}
  if(!canCancelDemo()&&state.cancellation?.status!=='unknown')return;
  card.insertAdjacentHTML('beforeend',`<section class="ordinary-cancellation" aria-label="普通事项取消"><p>仅取消无资金事实、未实际开始的普通事项；已点将未开工也可申请，最终以服务端核验为准。历史指派与成果保留。</p>${button(state.cancellation?.status==='unknown'?'核对原取消结果':'取消未开工事项','complete-cancel','class="ordinary-cancel-action"')}${state.cancellation?.status==='unknown'?'<p role="status">结果尚未确认；只核对原事项，不重复提交取消。</p>':''}</section>`);
 }
@@ -897,3 +897,19 @@ function renderCompletedMatterResults(root){
  root.classList.add('completed-records');
  root.innerHTML=`<header><h2>成果与验收记录</h2><p class="completed-readonly">已完成 · 只读</p><p>${esc(taskTitle())}</p><p class="mmd-muted">已验收的版本固定保留。其他历史成果不代表已验收。</p></header>${['error','empty'].includes(mode)?`<div class="completed-record-tools">${button(mode==='error'?'重试':'重新核对','complete-record-reload')}</div>`:''}${mode==='loading'?'<p role="status">正在读取成果与验收记录…</p>':mode==='error'?'<p role="alert">成果与验收记录读取失败，请重新读取；不会重新提交验收。</p>':mode==='empty'?'<p role="status">尚未读取到验收成果记录，不能仅凭“已完成”推断哪些版本已验收。请重新读取或查看历史议事。</p>':`<section><h3>已验收成果 <small>（${accepted.length}）</small></h3>${accepted.length?accepted.map((a,i)=>row(a,i,true)).join(''):'<p>验收成果关联待核对，不将其他成果推定为已验收。</p>'}</section><details class="completed-history" ${history.some(a=>a.id===state.completedPreview)?'open':''}><summary>其他历史成果（${history.length}）</summary><p class="mmd-muted">仅供查阅，不属于上方已验收的固定版本。</p>${history.length?history.map((a,i)=>row(a,i,false)).join(''):'<p>没有其他历史成果。</p>'}</details><details class="completed-receipt"><summary>验收记录</summary><p>验收状态：已通过</p><p>本次确认：${accepted.length} 份固定成果</p><p class="mmd-muted">离线示例；正式页面只展示服务端实际返回的时间、操作者与版本，不猜测缺失字段。</p></details>`}${selectedScenario==='completed-review'?`<details class="completed-demo"><summary>演示读取状态（仅原型）</summary><div class="completed-record-tools">${[['ready','正常'],['loading','加载中'],['error','读取失败'],['empty','记录缺失']].map(([key,label])=>button(label,'complete-record-state',`data-state="${key}" aria-pressed="${mode===key}"`)).join('')}</div></details>`:''}`;
 }
+
+// Cancelled-task history reuses explicit message paging; these are offline fixtures only.
+function renderTerminalTextHistory(card){
+ $('.terminal-text-history-demo',card)?.remove();
+ const mode=new URLSearchParams(location.search).get('terminalTextHistory');
+ if(state.terminalTextMode!==mode){state.terminalTextMode=mode;state.terminalTextOlder=false;state.terminalTextRetried=false;}
+ const failed=mode==='error'&&!state.terminalTextRetried,older=!!state.terminalTextOlder;
+ card.insertAdjacentHTML('beforeend',`<section class="terminal-text-history-demo" aria-label="历史议事文字成果"><h4>历史议事文字成果</h4><p role="status">仅显示已加载消息中的文字成果；不会自动读取全部历史。</p>${failed?'<p role="alert">历史文字成果读取失败；已有记录保留。</p>'+button('重试当前页','terminal-text-retry'):mode==='empty'&&!older?'<p role="status">已加载的消息中暂无文字成果，可继续加载更早记录。</p>':'<article><strong>历史文字成果</strong><p>最近一页保留的文字成果（离线示例）。</p></article>'}${older?'<article><strong>更早的文字成果</strong><p>手动加载的更早一页（离线示例）。</p></article>':''}${!failed&&!older?button('加载更早的议事记录','terminal-text-more'):''}${!failed&&older?'<p role="status">已读到最早记录。</p>':''}</section>`);
+}
+document.addEventListener('click',event=>{
+ const action=event.target.closest('[data-action]')?.dataset.action;
+ if(!['terminal-text-more','terminal-text-retry'].includes(action))return;
+ event.preventDefault();event.stopImmediatePropagation();
+ if(action==='terminal-text-more')state.terminalTextOlder=true;else state.terminalTextRetried=true;
+ renderTerminalTextHistory($('.matter-advice-card'));
+},true);
