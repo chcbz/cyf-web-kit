@@ -15,6 +15,26 @@ const setup = get => {
   return { messages, conversationId, identityKey, calls, pages }
 }
 describe('hall message display pages', () => {
+  it('loads twenty older messages in one request and waits for the next explicit page action', async () => {
+    const ids = (first, last) => Array.from({ length: last - first + 1 }, (_, index) => first + index)
+    const h = setup(async (_path, params, options) => options.onSuccess(params.cursor === '1000:22'
+      ? page(ids(2, 21), '1000:2') : page([1])))
+    h.pages.applyLatest(page(ids(22, 41), '1000:22'))
+    expect(h.messages.value).to.have.length(20)
+    expect(h.calls).to.have.length(0)
+    expect(await h.pages.loadOlder()).to.equal(true)
+    expect(h.calls).to.deep.equal([['/conversation/messages', { id: '100', cursor: '1000:22' }]])
+    expect(h.messages.value).to.have.length(40)
+    expect(h.pages.hasMore.value).to.equal(true)
+    expect(await h.pages.loadOlder()).to.equal(true)
+    expect(h.calls).to.have.length(2)
+    expect(h.messages.value.map(item => item.localId)).to.deep.equal(ids(1, 41).map(String))
+    expect(h.pages.hasMore.value).to.equal(false)
+    expect(await h.pages.loadOlder()).to.equal(false)
+    expect(h.calls).to.have.length(2)
+    h.pages.dispose()
+  })
+
   it('consumes the exact shared HTTP fixture after the existing envelope boundary', () => {
     const wire = JSON.parse(readFileSync(new URL('./fixtures/hall-message-page.json', import.meta.url), 'utf8'))
     expect(wire.protocolVersion).to.equal(1)

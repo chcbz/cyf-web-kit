@@ -23,11 +23,18 @@ const validSource = source => {
   return source.kind === 'FORMAL_ARTIFACT' && exact(source, ['kind', 'sourceDeliveryId', 'sourceArtifactId', 'sourceArtifactVersion']) &&
     reviewId(source.sourceDeliveryId) && reviewId(source.sourceArtifactId) && reviewVersion(source.sourceArtifactVersion) && source.sourceArtifactVersion !== '0'
 }
+const validDisplay = display => display === null || (exact(display, ['title', 'contentMimeType', 'contentByteLength', 'unavailableReason']) &&
+  (display.title === null || typeof display.title === 'string') &&
+  (display.contentMimeType === null || typeof display.contentMimeType === 'string') &&
+  (display.contentByteLength === null || (Number.isSafeInteger(display.contentByteLength) && display.contentByteLength >= 0)) &&
+  (display.unavailableReason === null || ['VERSION_UNAVAILABLE', 'METADATA_UNAVAILABLE'].includes(display.unavailableReason)))
+const validItemFields = item => exact(item, ['artifactId', 'artifactVersion', 'contentHash', 'purpose', 'displayRole', 'source', 'unavailableReason']) ||
+  (exact(item, ['artifactId', 'artifactVersion', 'contentHash', 'purpose', 'displayRole', 'source', 'unavailableReason', 'display']) && validDisplay(item.display))
 const taskStates = ['OPEN', 'PLANNING', 'ASSIGNED', 'RUNNING', 'BLOCKED', 'REVIEWING', 'COMPLETED', 'FAILED', 'CANCELLED', 'ARCHIVED']
 const validBatch = batch => exact(batch, ['deliveryId', 'deliveryVersion', 'state', 'batchSha256', 'summary', 'submittedAt', 'items', 'allowedActions']) &&
   reviewId(batch.deliveryId) && reviewVersion(batch.deliveryVersion) && oneOf(batch.state, ['SUBMITTED', 'ACCEPTED', 'CHANGES_REQUESTED']) && hash(batch.batchSha256) &&
   typeof batch.summary === 'string' && Number.isSafeInteger(batch.submittedAt) && batch.submittedAt >= 0 && Array.isArray(batch.items) && batch.items.length > 0 && batch.items.length <= 100 &&
-  batch.items.every(item => exact(item, ['artifactId', 'artifactVersion', 'contentHash', 'purpose', 'displayRole', 'source', 'unavailableReason']) &&
+  batch.items.every(item => validItemFields(item) &&
     reviewId(item.artifactId) && reviewVersion(item.artifactVersion) && item.artifactVersion !== '0' && BigInt(item.artifactVersion) <= 2147483647n && hash(item.contentHash) &&
     typeof item.purpose === 'string' && item.purpose.length > 0 && oneOf(item.displayRole, ['RESULT', 'MANIFEST']) &&
     (item.source === null || validSource(item.source)) &&

@@ -291,7 +291,7 @@ const normalizeFailure = failure => {
  * Read-only output directory boundary. The injected adapter is the only API seam;
  * components never embed provisional output endpoints or browser upload behavior.
  */
-export function useOutputs ({ source, taskId = null, identityFingerprint, adapter = outputReadAdapter, pageSize = DEFAULT_PAGE_SIZE } = {}) {
+export function useOutputs ({ source, taskId = null, identityFingerprint, adapter = outputReadAdapter, pageSize = DEFAULT_PAGE_SIZE, providedItems = null } = {}) {
   const items = ref([])
   const state = ref('empty')
   const message = ref('暂无可领取成果。')
@@ -329,6 +329,14 @@ export function useOutputs ({ source, taskId = null, identityFingerprint, adapte
     const currentSource = sourceValue.value
     const key = cacheKey.value
     if (!validSource(currentSource) || !key || (more && !nextCursor.value) || loading.value) return false
+    // A page owner can supply its fixed-version projection without opening a second catalog.
+    if (providedItems !== null) {
+      items.value = valueOf(providedItems) || []
+      nextCursor.value = null
+      state.value = items.value.length ? 'available' : 'empty'
+      message.value = items.value.length ? '' : '固定成果元数据暂不可用，请重新读取交付记录。'
+      return true
+    }
     const generation = requestGeneration.value
     controller?.abort(abortError('Output request replaced'))
     const requestController = new AbortController()
@@ -403,7 +411,7 @@ export function useOutputs ({ source, taskId = null, identityFingerprint, adapte
     return adapter.preview(outputRequest(item, options))
   }
 
-  watch(cacheKey, () => {
+  watch([cacheKey, () => providedItems === null ? null : valueOf(providedItems)], () => {
     reset()
     if (cacheKey.value) void load()
   }, { immediate: true })

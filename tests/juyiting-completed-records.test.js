@@ -3,9 +3,8 @@ import { readFileSync } from 'node:fs'
 import * as Vue from 'vue'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { artifactRegistrationRequest, confirmedArtifactRegistration } from '../src/composables/juyiting/taskArtifactRegistration.js'
-import { outputCatalogItems } from '../src/composables/juyiting/bountyOutputCatalog.js'
 import { mount, flushPromises } from '@vue/test-utils'
-import { completedReviewRecords, exactReviewOutput, completedRecordTitle } from '../src/composables/juyiting/completedReviewRecords.js'
+import { completedReviewRecords, exactReviewOutput, completedRecordTitle, reviewItemOutput } from '../src/composables/juyiting/completedReviewRecords.js'
 const file = new URL('../src/components/juyiting/HallCompletedRecords.vue', import.meta.url)
 const script = compileScript(parse(readFileSync(file, 'utf8'), { filename: file.pathname }).descriptor, { id: 'completed-records-test', inlineTemplate: true }).content
   .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
@@ -19,14 +18,15 @@ const output = item => ({ ...item, sha256: item.contentHash, title: `${item.arti
 function harness (props = {}, initialOutputs, get = async () => [], actions = {}) {
   const c = context(); let refreshes = 0, more = 0
   const outputs = { items: Vue.ref(initialOutputs ?? [...c.currentDelivery.items, ...c.history[0].items].map(output)), loading: Vue.ref(false), nextCursor: Vue.ref(null), cacheKey: Vue.ref('owner:task-1'), state: Vue.ref('available'), message: Vue.ref(''), refresh: async () => { refreshes++ }, loadMore: async () => { more++; outputs.nextCursor.value = null }, preview: async () => {}, download: actions.download || (async () => new Blob(['fixed'], { type: 'image/png' })) }
+  let suppliedOptions
   const registered = [], downloaded = []
   const receipt = data => ({ operation: { state: 'COMMITTED', fileId: 'pws_test', fileVersion: '1' }, file: { fileId: 'pws_test', originKind: 'AGENT_DELIVERY', state: 'ACTIVE' }, version: { fileId: 'pws_test', version: '1', sha256: data.contentSha256 } })
   const post = async (path, data, options) => { registered.push({ path, data, options }); return actions.register ? actions.register(data) : receipt(data) }
-  const Component = new Function('Vue', 'deps', script)(Vue, { completedReviewRecords, exactReviewOutput, completedRecordTitle, outputCatalogItems, createApi: base => base === '/agent' ? { post } : { get }, useOutputs: () => outputs, artifactRegistrationRequest, confirmedArtifactRegistration,
+  const Component = new Function('Vue', 'deps', script)(Vue, { completedReviewRecords, exactReviewOutput, completedRecordTitle, reviewItemOutput, createApi: base => base === '/agent' ? { post } : { get }, useOutputs: options => { suppliedOptions = options; if (actions.pageProvided) outputs.items = options.providedItems; return outputs }, artifactRegistrationRequest, confirmedArtifactRegistration,
     safeOutputFilename: item => item.title, saveOutputBlob: async args => { downloaded.push(args) },
     OutputPreview: Vue.defineComponent({ props: ['item'], template: '<div class="actual-preview">{{ item.artifactId }}:{{ item.artifactVersion }}</div>' }) })
   const wrapper = mount(Component, { props: { taskId: 'task-1', taskVersion: '8', identityKey: 'owner', title: '已完成事项', context: c, ...props } })
-  return { wrapper, outputs, registered, downloaded, refreshes: () => refreshes, more: () => more }
+  return { wrapper, outputs, registered, downloaded, refreshes: () => refreshes, more: () => more, suppliedOptions: () => suppliedOptions }
 }
 describe('completed matter records display over fixed acceptance facts', () => {
   it('requests history only on explicit open/more and keeps accepted records on history failure', async () => {
@@ -46,39 +46,48 @@ describe('completed matter records display over fixed acceptance facts', () => {
       expect(registered).to.have.length(0)
     } finally { wrapper.unmount() }
   })
-  it('labels historical files only from the exact source and hash, without changing acceptance records', () => {
-    const fixed = item('a'); fixed.source = { kind: 'CONVERSATION_OUTPUT', requestId: 'request-1', stepId: 'step-1', outputId: 'output_1' }
-    const row = { item: fixed }; const metadata = [{ ...output(fixed), title: 'output_1' }]
-    const original = { requestId: 'request-1', stepId: 'step-1', outputId: 'output_1', sha256: fixed.contentHash, filename: 'roles.txt' }
-    const before = JSON.stringify(row)
-    expect(completedRecordTitle(row, 0, metadata, [original])).to.equal('roles.txt')
-    for (const change of [{ requestId: 'other' }, { stepId: 'other' }, { outputId: 'other' }, { sha256: 'b'.repeat(64) }]) {
-      expect(completedRecordTitle(row, 0, metadata, [{ ...original, ...change }])).to.equal('成果 1')
-    }
-    expect(completedRecordTitle(row, 0, metadata, [])).to.equal('成果 1')
-    // Live archived task: the old stored filename itself is the technical output ID.
-    expect(completedRecordTitle(row, 0, metadata, [{ ...original, filename: original.outputId }])).to.equal('成果 1')
-    expect(completedRecordTitle(row, 1, metadata, [{ ...original, filename: ` ${original.outputId} ` }])).to.equal('成果 2')
-    expect(JSON.stringify(row)).to.equal(before)
+  it('labels files from fixed page metadata; missing metadata never substitutes another version', () => {
+    const fixed = item('a', '2'); const row = { item: fixed }
+    expect(completedRecordTitle(row, 0, [output(item('a', '3'))])).to.equal('成果 1')
+    fixed.display = { title: 'roles.txt', contentMimeType: 'text/plain', contentByteLength: 12, unavailableReason: null }
+    expect(completedRecordTitle(row, 0, [output(item('a', '3'))])).to.equal('roles.txt')
+    expect(reviewItemOutput(fixed)).to.include({ artifactId: 'a', artifactVersion: '2', title: 'roles.txt' })
+    fixed.display.unavailableReason = 'VERSION_UNAVAILABLE'
+    expect(reviewItemOutput(fixed)).to.equal(null)
+    fixed.source = { kind: 'CONVERSATION_OUTPUT', outputId: 'output_1' }; fixed.display.title = 'output_1'
+    expect(completedRecordTitle(row, 0, [])).to.equal('成果 1')
   })
-  it('loads original names once per source step and discards late labels after identity change', async () => {
+  it('uses page metadata and never requests source labels when history or identity changes', async () => {
     const c = context()
-    c.currentDelivery.items.forEach((item, i) => { item.source = { kind: 'CONVERSATION_OUTPUT', requestId: 'request-1', stepId: 'step-1', outputId: `output_${i}` } })
+    c.currentDelivery.items.forEach((item, i) => {
+      item.source = { kind: 'CONVERSATION_OUTPUT', requestId: 'request-1', stepId: 'step-1', outputId: `output_${i}` }
+      item.display = { title: `fixed-${i}.txt`, contentMimeType: 'text/plain', contentByteLength: 12, unavailableReason: null }
+    })
     const calls = []
-    const { wrapper } = harness({ context: c }, [], (url, params, options) => new Promise(resolve => { calls.push({ url, options, resolve }) }))
-    const catalogue = name => c.currentDelivery.items.map((item, i) => ({ outputId: `output_${i}`, filename: `${name}-${i}.txt`, contentMimeType: 'text/plain', sha256: item.contentHash, byteLength: '1', previewUrl: `/chat/requests/request-1/steps/step-1/outputs/output_${i}`, downloadUrl: `/chat/requests/request-1/steps/step-1/outputs/output_${i}?download=true` }))
+    const { wrapper, more } = harness({ context: c }, [], async url => { calls.push(url); return [] })
     try {
-      expect(calls).to.have.length(1)
-      await wrapper.setProps({ identityKey: 'other' })
-      expect(calls).to.have.length(2)
-      expect(calls[0].options.signal.aborted).to.equal(true)
-      calls[0].resolve(catalogue('old-owner')); await flushPromises()
-      expect(wrapper.text()).not.to.include('old-owner')
-      calls[1].resolve(catalogue('current-owner')); await flushPromises()
-      expect(wrapper.text()).to.include('current-owner-0.txt').and.include('current-owner-1.txt')
-      expect(wrapper.text()).to.include('已验收成果（2）')
+      await flushPromises()
+      expect(wrapper.text()).to.include('fixed-0.txt').and.include('fixed-1.txt')
+      await wrapper.setProps({ context: { ...c, history: [...c.history, batch('older', 'CHANGES_REQUESTED', [item('c')])] } })
+      await wrapper.setProps({ identityKey: 'other', context: null })
+      expect(wrapper.text()).not.to.include('fixed-0.txt')
+      expect(calls).to.have.length(0); expect(more()).to.equal(0)
     } finally { wrapper.unmount() }
-    expect(calls[1].options.signal.aborted).to.equal(true)
+  })
+  it('retains an open fixed preview and item identity while appending a history page', async () => {
+    const c = context()
+    for (const b of [c.currentDelivery, ...c.history]) for (const item of b.items) {
+      item.display = { title: `${item.artifactId}.txt`, contentMimeType: 'text/plain', contentByteLength: 12, unavailableReason: null }
+    }
+    const { wrapper, suppliedOptions } = harness({ context: c }, undefined, async () => { throw new Error('no metadata GET') }, { pageProvided: true })
+    try {
+      const before = suppliedOptions().providedItems.value[0]
+      await wrapper.findAll('.completed-result-heading button[aria-expanded]')[0].trigger('click')
+      expect(wrapper.get('.actual-preview').text()).to.equal('a:2')
+      await wrapper.setProps({ context: { ...c, history: [...c.history, batch('older', 'CHANGES_REQUESTED', [item('c')])] } })
+      expect(suppliedOptions().providedItems.value[0]).to.equal(before)
+      expect(wrapper.get('.actual-preview').text()).to.equal('a:2')
+    } finally { wrapper.unmount() }
   })
   it('failed source-name lookup retains accepted records and formal previews', async () => {
     const c = context(); c.currentDelivery.items[0].source = { kind: 'CONVERSATION_OUTPUT', requestId: 'request-1', stepId: 'step-1', outputId: 'output_0' }
@@ -241,15 +250,16 @@ describe('completed matter records display over fixed acceptance facts', () => {
       outputs.items.value.push(output(item('b'))); await flushPromises(); expect(wrapper.get('.actual-preview').text()).to.equal('b:1')
     } finally { wrapper.unmount() }
   })
-  it('reads remaining existing catalogue pages for missing metadata without replaying commands', async () => {
+  it('retries the formal page without traversing catalogues for missing metadata', async () => {
     const { wrapper, outputs, more } = harness({}, [])
     try {
-      outputs.nextCursor.value = 'page-2'; await flushPromises(); expect(more()).to.equal(1)
-      outputs.nextCursor.value = 'page-2'; await flushPromises(); expect(more()).to.equal(1)
+      outputs.nextCursor.value = 'page-2'; await flushPromises(); expect(more()).to.equal(0)
+      outputs.nextCursor.value = 'page-2'; await flushPromises(); expect(more()).to.equal(0)
       await wrapper.findAll('.completed-result-heading button[aria-expanded]')[0].trigger('click')
       await wrapper.findAll('button').find(b => b.text() === '重试预览').trigger('click')
       outputs.nextCursor.value = null; await flushPromises(); outputs.nextCursor.value = 'page-2'; await flushPromises()
-      expect(more()).to.equal(2)
+      expect(more()).to.equal(0)
+      expect(wrapper.emitted('refresh')).to.have.length(1)
     }
     finally { wrapper.unmount() }
   })

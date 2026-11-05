@@ -83,9 +83,8 @@ import { artifactRegistrationRequest, confirmedArtifactRegistration } from '../.
 import { saveOutputBlob, safeOutputFilename } from '../../utils/outputDownload.js'
 import OutputPreview from '../outputs/OutputPreview.vue'
 import { useOutputs } from '../../composables/useOutputs.js'
-import { completedReviewRecords, exactReviewOutput, completedRecordTitle } from '../../composables/juyiting/completedReviewRecords.js'
+import { completedReviewRecords, exactReviewOutput, completedRecordTitle, reviewItemOutput } from '../../composables/juyiting/completedReviewRecords.js'
 import { createApi } from '../../composables/useHttp.js'
-import { outputCatalogItems } from '../../composables/juyiting/bountyOutputCatalog.js'
 const props = defineProps({
   taskId: { type: String, required: true }, taskVersion: { type: [String, Number], default: '' },
   identityKey: { type: String, required: true }, title: { type: String, default: '' }, archived: { type: Boolean, default: false },
@@ -95,13 +94,23 @@ const props = defineProps({
 })
 const emit = defineEmits(['refresh', 'open-history', 'load-history'])
 const records = computed(() => completedReviewRecords(props.context, props.taskId))
-const outputs = useOutputs({ source: () => props.identityKey ? { type: 'task', id: props.taskId } : null, identityFingerprint: () => props.identityKey, pageSize: 100 })
+const projectedOutputs = computed(previous => {
+  // Preserve existing item identities when another history page is appended so an
+  // open preview does not download the same fixed version again. No extra retained cache.
+  const prior = new Map((previous || []).map(item => [JSON.stringify([item.artifactId, item.artifactVersion, item.sha256]), item]))
+  return [...records.value.accepted, ...records.value.history].map(row => {
+    const item = reviewItemOutput(row.item)
+    if (!item) return null
+    const old = prior.get(JSON.stringify([item.artifactId, item.artifactVersion, item.sha256]))
+    return old && old.title === item.title && old.mimeType === item.mimeType && old.byteLength === item.byteLength ? old : item
+  }).filter(Boolean)
+})
+const outputs = useOutputs({ source: () => props.identityKey ? { type: 'task', id: props.taskId } : null,
+  identityFingerprint: () => props.identityKey, providedItems: projectedOutputs })
 const expandedKey = ref('')
 const groups = computed(() => [{ name: '已验收成果', history: false, rows: records.value.accepted }, { name: '其他历史成果', history: true, rows: records.value.history }])
 const exactOutput = row => exactReviewOutput(outputs.items.value, row.item)
-const sourceOutputs = ref([])
-const sourceApi = createApi('/chat')
-const rowTitle = (row, index) => completedRecordTitle(row, index, outputs.items.value, sourceOutputs.value)
+const rowTitle = (row, index) => completedRecordTitle(row, index, outputs.items.value)
 // File actions reuse the existing authenticated read and owner-scoped upload adapters.
 // Only the view owns feedback; no acceptance/task state is mutated here.
 const registrationApi = createApi('/agent')
@@ -165,38 +174,12 @@ const transfer = async (row, index, kind) => {
     if (epoch === actionEpoch) { busy.value = ''; actionController = null }
   }
 }
-// Read-only metadata for accepted historical sources. Existing HTTP identity cleanup
-// plus this watch cancellation prevents stale labels after task/account changes.
-watch(() => [props.taskId, props.identityKey, props.context], async (_value, _old, onCleanup) => {
-  sourceOutputs.value = []
-  if (!props.identityKey) return
-  const controller = new AbortController()
-  onCleanup(() => controller.abort())
-  const sources = [...records.value.accepted, ...records.value.history].map(row => row.item)
-    .filter(item => !item.unavailableReason && item.source?.kind === 'CONVERSATION_OUTPUT').map(item => item.source)
-  const groups = new Map(sources.map(source => [JSON.stringify([source.requestId, source.stepId]), source]))
-  for (const source of groups.values()) {
-    try {
-      const items = await sourceApi.get(`/requests/${encodeURIComponent(source.requestId)}/steps/${encodeURIComponent(source.stepId)}/outputs`, {}, { autoLoading: false, signal: controller.signal })
-      if (controller.signal.aborted) return
-      sourceOutputs.value.push(...outputCatalogItems(items, source.requestId, source.stepId))
-    } catch { if (controller.signal.aborted) return } // Label failure cannot erase an accepted fact.
-  }
-}, { immediate: true, flush: 'sync' })
 const previewId = row => `completed-preview-${encodeURIComponent(row.key)}`
 const togglePreview = row => { expandedKey.value = expandedKey.value === row.key ? '' : row.key }
 const retry = () => { expandedKey.value = ''; emit('refresh') }
-// Follow the existing output cursor only while fixed records lack their exact metadata.
-// A repeated cursor must not create an automatic read loop; errors remain explicit retry.
-const seenCursors = new Set()
-const retryPreview = () => { seenCursors.clear(); void outputs.refresh() }
-watch(() => [props.taskId, props.identityKey, props.taskVersion, props.context], () => { expandedKey.value = ''; seenCursors.clear() }, { flush: 'sync' })
-watch(() => [outputs.loading.value, outputs.nextCursor.value, records.value], () => {
-  const cursor = outputs.nextCursor.value
-  if (!outputs.loading.value && cursor && !seenCursors.has(cursor) && [...records.value.accepted, ...records.value.history].some(row => !exactOutput(row))) {
-    seenCursors.add(cursor); void outputs.loadMore()
-  }
-}, { flush: 'post' })
+// Missing metadata is retried at its authoritative page, never through a task-wide catalog.
+const retryPreview = () => emit('refresh')
+watch(() => [props.taskId, props.identityKey, props.taskVersion], () => { expandedKey.value = '' }, { flush: 'sync' })
 watch(() => [props.loading, props.error], () => { if (props.loading || props.error) expandedKey.value = '' }, { flush: 'sync' })
 </script>
 <style scoped>

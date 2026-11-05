@@ -32,6 +32,15 @@ describe('explicit whole-batch review contract and immutable recovery', () => {
     c.currentDelivery.items.pop(); expect(await batchDigest(c.taskId, c.currentDelivery)).not.to.equal(fixture.batchDigestVector.expectedSha256)
     expect(reviewBody(context())).to.deep.equal(fixture.acceptRequest.data)
   })
+  it('accepts additive display metadata without changing immutable digest or acceptance commands', async () => {
+    const c = context(); const original = reviewBody(c); const digest = await batchDigest(c.taskId, c.currentDelivery)
+    c.currentDelivery.items[0].display = { title: '固定版本.txt', contentMimeType: 'text/plain', contentByteLength: 12, unavailableReason: null }
+    expect(validateContext(c, c.taskId).currentDelivery.items[0].display.title).to.equal('固定版本.txt')
+    expect(await batchDigest(c.taskId, c.currentDelivery)).to.equal(digest)
+    expect(reviewBody(c)).to.deep.equal(original)
+    c.currentDelivery.items[0].display.unavailableReason = 'VERSION_UNAVAILABLE'
+    expect(validateContext(c, c.taskId).currentDelivery.items[0].display.unavailableReason).to.equal('VERSION_UNAVAILABLE')
+  })
   it('does not coerce decimal versions or admit unknown fields/source unions/partial batches', () => {
     for (const mutate of [c => { c.taskVersion = 7 }, c => { c.taskVersion = '07' }, c => { c.assignmentRevision = '9223372036854775808' },
       c => { c.owner = 'forged' }, c => { c.currentDelivery.items[1].source.url = 'https://untrusted.invalid' },
