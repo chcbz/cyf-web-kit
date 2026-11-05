@@ -784,6 +784,8 @@
             v-model:keyword="libraryKeyword"
             v-model:source-type="librarySourceType"
             :agents="operableRosterAgents"
+            :can-start-conversation="canStartAgentConversation"
+            @start-conversation="handleStartAgentConversation"
             :identity-scope="hallIdentityScope"
             :identity-epoch="apiStore.authorizationGeneration"
             :inert="renderedPanel !== 'library' ? '' : null"

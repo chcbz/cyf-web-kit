@@ -35,29 +35,30 @@
         案卷检索
       </button>
       <button
-        id="library-maintenance-tab"
-        ref="maintenanceTab"
+        id="library-positions-tab"
+        ref="positionsTab"
         type="button"
         role="tab"
-        :tabindex="activeTab === 'maintenance' ? 0 : -1"
-        :aria-selected="activeTab === 'maintenance'"
-        aria-controls="library-maintenance-panel"
-        :class="{ active: activeTab === 'maintenance' }"
-        @click="activeTab = 'maintenance'"
-        @keydown="handleTabKeydown($event, 'maintenance')"
-      >任职与维护</button>
+        :tabindex="activeTab === 'positions' ? 0 : -1"
+        :aria-selected="activeTab === 'positions'"
+        aria-controls="library-positions-panel"
+        :class="{ active: activeTab === 'positions' }"
+        @click="activeTab = 'positions'"
+        @keydown="handleTabKeydown($event, 'positions')"
+      >任职管理</button>
     </div>
 
-    <ArchiveMaintenance
-      v-if="activeTab === 'maintenance' && active"
-      id="library-maintenance-panel"
+    <ArchivePositions
+      v-if="activeTab === 'positions' && active"
+      id="library-positions-panel"
       :key="`${identityEpoch}:${identityScope}`"
       :agents="agents"
       :identity-scope="identityScope"
       :identity-epoch="identityEpoch"
       role="tabpanel"
-      aria-labelledby="library-maintenance-tab"
-      @read-edition="readEdition"
+      aria-labelledby="library-positions-tab"
+      :can-start-conversation="canStartConversation"
+      @start-conversation="$emit('start-conversation', $event)"
     />
 
     <ArchiveReader
@@ -154,7 +155,7 @@
 <script setup>
 import { computed, nextTick, ref } from 'vue'
 import ArchiveReader from './archive/ArchiveReader.vue'
-import ArchiveMaintenance from './archive/ArchiveMaintenance.vue'
+import ArchivePositions from './archive/ArchivePositions.vue'
 
 const activeTab = ref('reader')
 const readerRef = ref(null)
@@ -164,14 +165,13 @@ const back = () => canGoBack.value ? readerRef.value?.back() : false
 defineExpose({ canGoBack, back })
 const readerTab = ref(null)
 const searchTab = ref(null)
-const maintenanceTab = ref(null)
-const tabOrder = ['reader', 'search', 'maintenance']
-const readEdition = async job => { activeTab.value = 'reader'; await nextTick(); await readerRef.value?.openPublishedEdition?.(job) }
+const positionsTab = ref(null)
+const tabOrder = ['reader', 'search', 'positions']
 
 const focusTab = async (tab) => {
   activeTab.value = tab
   await nextTick()
-  const element = tab === 'reader' ? readerTab.value : tab === 'search' ? searchTab.value : maintenanceTab.value
+  const element = tab === 'reader' ? readerTab.value : tab === 'search' ? searchTab.value : positionsTab.value
   element?.focus()
 }
 
@@ -189,6 +189,7 @@ const handleTabKeydown = (event, currentTab) => {
 
 defineProps({
   agents: { type: Array, default: () => [] },
+  canStartConversation: { type: Function, default: () => false },
   identityScope: { type: String, default: '' },
   identityEpoch: { type: Number, default: 0 },
   embedded: { type: Boolean, default: false },
@@ -204,7 +205,7 @@ defineProps({
   virtualLandscape: Boolean
 })
 
-defineEmits(['start-draft', 'cite-library', 'search-library', 'update:keyword', 'update:sourceType'])
+defineEmits(['start-conversation', 'start-draft', 'cite-library', 'search-library', 'update:keyword', 'update:sourceType'])
 
 const sourceText = (type = '') => {
   if (type === 'project') return '项目案卷'
