@@ -1,3 +1,4 @@
+import { typedId } from '../src/composables/juyiting/hallTypedDeliberation.js'
 import { discussionTurns } from '../src/composables/juyiting/hallDiscussionTurns.js'
 import { useHallExecutionAbandonment } from '../src/composables/juyiting/useHallExecutionAbandonment.js'
 import * as discussionContract from '../src/components/juyiting/discussionPanelContract.js'
@@ -28,6 +29,9 @@ const source = readFileSync(new URL('../src/components/world/JuyiHall.vue', impo
 const script = parse(source, { filename: 'JuyiHall.vue' }).descriptor.scriptSetup.content
 const program = babel.parse(script, { sourceType: 'module' }).program
 const declarations = program.body.flatMap(node => node.declarations || [])
+// Extracted handlers must use bindings actually imported by the page.
+const pageTypedImport = program.body.find(node => node.type === 'ImportDeclaration' && node.source.value === '@/composables/juyiting/hallTypedDeliberation')
+if (!pageTypedImport?.specifiers.some(node => node.local.name === 'typedId')) throw new Error('page missing typedId import')
 const handler = name => { const node = declarations.find(item => item.id?.name === name); if (!node) throw new Error(`missing ${name}`); return script.slice(node.init.start, node.init.end) }
 const option = (callee, name) => {
   let call = declarations.find(item => item.init?.callee?.name === callee)?.init
@@ -398,28 +402,40 @@ describe('actual JuyiHall exact acceptance preview', () => {
 
 describe('actual page targeted follow-up wiring', () => {
   const build = (initialized = true, discover = false) => {
-    const calls = []; const generation = ref(1)
-    const catalog = { initialized: ref(initialized), refresh: async () => { calls.push('all-catalog'); return true },
-      refreshRequests: async ids => { calls.push(['catalog', ids]); return true } }
-    let reads = 0
-    const typed = { refresh: async () => { calls.push('all-outcomes'); return true },
-      relatedRequestIds: hints => discover && reads ? ['parent', 'child'] : hints.map(hint => hint.requestId),
-      refreshRequests: async ids => { reads++; calls.push(['outcomes', ids]); return true } }
+    const calls = []; const generation = ref(1); const enabled = ref(true)
+    const catalog = { initialized: ref(initialized), entries: ref([]),
+      refresh: async () => { throw new Error('must not scan all history') },
+      refreshWindow: async (ids, options) => { calls.push(['catalog', ids, options.force]); return true } }
+    const typed = { projections: ref([]),
+      relatedRequestIds: hints => hints.map(hint => hint.requestId),
+      refreshDeliveryChoices: async () => { calls.push('choices'); return true },
+      refreshRequests: async ids => { calls.push(['outcomes', ids]); if (discover) typed.projections.value = [
+        { requestId: 'parent', actionProgress: { childRequestId: 'execution-child' }, reviewProgress: { childRequestId: 'do-not-recurse' } }
+      ]; return true } }
+    const read = new Function('followupContextGeneration', 'typedDeliberationEnabled', 'bountyRequestCatalog', 'typedDeliberation', 'typedId',
+      `return (${handler('readDisplayedProjections')})`)(generation, enabled, catalog, typed, typedId)
     const actual = new Function('typedDeliberationEnabled', 'conversationId', 'refreshCurrentConversationTask',
-      'followupContextGeneration', 'bountyAssignmentContext', 'bountyRequestCatalog', 'typedDeliberation',
-      `return (${handler('refreshFollowupContext')})`)(ref(true), ref('7'), async () => true,
-      generation, { refresh: async () => true }, catalog, typed)
-    return { actual, calls, generation }
+      'followupContextGeneration', 'bountyAssignmentContext', 'bountyRequestCatalog', 'typedDeliberation', 'displayedRequestIds', 'readDisplayedProjections',
+      `return (${handler('refreshFollowupContext')})`)(enabled, ref('7'), async () => true,
+      generation, { refresh: async () => true }, catalog, typed, ref(['visible-1', 'visible-2']), read)
+    return { actual, read, calls, generation, catalog, typed }
   }
-  it('live hints query only changed requests and newly disclosed children', async () => {
+  it('live hints query only changed requests and their direct execution children', async () => {
     const { actual, calls } = build(true, true)
     expect(await actual({ type: 'action_started', requestId: 'parent' })).to.equal(true)
-    expect(calls).to.deep.equal([['catalog', ['parent']], ['outcomes', ['parent']], ['catalog', ['child']], ['outcomes', ['child']]])
+    expect(calls).to.deep.equal([['catalog', ['parent'], true], ['outcomes', ['parent']], ['catalog', ['execution-child'], true], 'choices'])
   })
-  it('initial recovery and an explicit resync still take the complete-context path until send context is separated', async () => {
-    for (const [initialized, event] of [[false, { type: 'agent_message', requestId: 'one' }], [true, { type: 'resync_required' }]]) {
+  it('initial recovery and explicit resync read displayed messages, never full history or stored receipts', async () => {
+    for (const [initialized, event] of [[false, { type: 'agent_message', requestId: 'old-unshown' }], [true, { type: 'resync_required' }]]) {
       const { actual, calls } = build(initialized)
-      expect(await actual(event)).to.equal(true); expect(calls).to.deep.equal(['all-catalog', 'all-outcomes'])
+      expect(await actual(event)).to.equal(true)
+      expect(calls).to.deep.equal([['catalog', ['visible-1', 'visible-2'], true], ['outcomes', ['visible-1', 'visible-2']], ['catalog', [], true], 'choices'])
     }
+  })
+  it('loading an older page reads only new outcomes, not every already displayed reply', async () => {
+    const h = build()
+    h.catalog.entries.value = [{ request: { requestId: 'visible-1' } }]
+    expect(await h.read(['visible-1', 'older-1'], 1, { force: false })).to.equal(true)
+    expect(h.calls).to.deep.equal([['catalog', ['visible-1', 'older-1'], false], ['outcomes', ['older-1']], ['catalog', [], false]])
   })
 })

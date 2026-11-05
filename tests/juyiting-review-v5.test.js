@@ -51,7 +51,7 @@ describe('revision feedback and existing refresh continuation', () => {
       assert.equal(reviewProgressAdvances(value.reviewProgress, { ...value.reviewProgress, childState: 'COMPLETED', childStateVersion: '4' }), true)
     }
   })
-  it('re-reads the committed child on later parent refresh without any POST or new listener', async () => {
+  it('does not recursively read review descendants; reads a child only when explicitly displayed or hinted', async () => {
     const parent = fixture()
     parent.reviewProgress = { ...parent.reviewProgress, operationId: 'review', state: 'COMMITTED', stateVersion: '2', childRequestId: 'child', childState: 'RUNNING', childStateVersion: '0' }
     const child = { ...fixture(), requestId: 'child', turnId: 'child-turn', state: 'PENDING', outcome: null, reviewProgress: null }
@@ -64,8 +64,10 @@ describe('revision feedback and existing refresh continuation', () => {
     }, actorScopeKey: 'owner', authorizationGeneration: 1, getContext: () => context, getContextGeneration: () => 1,
     getCatalogEntries: () => [{ request: { requestId: parent.requestId, turns: [{ route: 'CHAT' }] } }], enabled: () => true }))
     try {
-      await adapter.refresh(); assert.equal(adapter.projections.value.find(p => p.requestId === 'child')?.state, 'PENDING')
-      completed = true; await adapter.refresh()
+      await adapter.refresh(); assert.equal(adapter.projections.value.find(p => p.requestId === 'child'), undefined)
+      assert.equal(calls.filter(p => p.includes('/child/')).length, 0)
+      await adapter.refreshRequests(['child']); assert.equal(adapter.projections.value.find(p => p.requestId === 'child')?.state, 'PENDING')
+      completed = true; await adapter.refreshRequests(['child'])
       assert.equal(adapter.projections.value.find(p => p.requestId === 'child')?.state, 'READY')
       assert.equal(calls.filter(p => p.includes('/child/')).length, 2)
     } finally { adapter.dispose(); scope.stop() }

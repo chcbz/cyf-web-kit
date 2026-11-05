@@ -169,8 +169,8 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       return null
     }
     visited.add(requestId)
-    const record = readRecords(storage, captured.scope, captured.context).find(item => item.receipt?.requestId === requestId)
-    const purpose = requestedPurpose || recordPurpose(record)
+    const purpose = requestedPurpose || recordPurpose(readRecords(storage, captured.scope, captured.context)
+      .find(item => item.receipt?.requestId === requestId))
     try {
       const raw = unwrap(await chatApi.get(path(captured.context, requestId, purpose), {}, { autoLoading: false, needAuth: true }))
       if (!current(captured)) return null
@@ -183,8 +183,6 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
         return null
       }
       failedReads.delete(requestId)
-      const child = projection.reviewProgress?.state === 'COMMITTED' ? projection.reviewProgress.childRequestId : null
-      if (child && child !== requestId) await readOne(child, captured, 'CHAT', visited)
       return projection
     } catch (cause) {
       // 404 means this catalog request is ordinary durable CHAT; it is not a typed UI failure.
@@ -198,8 +196,8 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     }
   }
   const refresh = () => {
-    // Read hints and send preparation join one exact in-flight projection read.
-    // Joining is not an unsuccessful read and must not reject every prepared send.
+    // Refresh only the caller-supplied display catalog. Send context is separate;
+    // historical stored receipts do not expand this read scope.
     if (refreshFlight) return refreshFlight
     const captured = capture()
     if (!current(captured) || !typedId(captured.context.conversationId) || !typedId(captured.context.taskId) ||
@@ -213,14 +211,8 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       const catalogChatIds = catalogEntries.filter(entry => !entry?.request?.turns?.some(turn => turn?.route === 'INSPECT') &&
         !(entry?.request?.steps?.some(step => step.kind === 'EXECUTE') && !entry?.request?.turns?.some(turn => turn.route === 'CHAT')))
         .map(entry => entry?.request?.requestId).filter(typedId)
-      const storedRecords = readRecords(storage, captured.scope, captured.context).filter(record => sameContext(record.context, captured.context))
-      const storedChatIds = storedRecords.filter(record => recordPurpose(record) === 'CHAT')
-        .map(record => record.receipt?.requestId).filter(typedId)
-      const storedInspectionIds = storedRecords.filter(record => recordPurpose(record) === 'INSPECT')
-        .map(record => record.receipt?.requestId).filter(typedId)
-      const inspectionRequestIds = [...new Set([...catalogInspectionIds, ...storedInspectionIds])]
-      await Promise.all([...new Set([...catalogChatIds, ...storedChatIds])].map(requestId => readOne(requestId, captured, 'CHAT', visited))
-        .concat(inspectionRequestIds.map(requestId => readOne(requestId, captured, 'INSPECT', visited))))
+      await Promise.all([...new Set(catalogChatIds)].map(requestId => readOne(requestId, captured, 'CHAT', visited))
+        .concat([...new Set(catalogInspectionIds)].map(requestId => readOne(requestId, captured, 'INSPECT', visited))))
       if (current(captured)) await refreshDeliveryChoices()
       return current(captured) && failedReads.size === 0
     }
@@ -244,7 +236,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     }
     return [...ids]
   }
-  const refreshRequests = async requestIds => {
+  const refreshRequests = async (requestIds, { choices = true } = {}) => {
     const captured = capture()
     if (!current(captured)) return false
     if (refreshFlight) await refreshFlight
@@ -255,10 +247,10 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     await Promise.all(ids.map(requestId => {
       const request = entries.get(requestId)?.request
       if (request?.steps?.some(step => step.kind === 'EXECUTE') && !request?.turns?.some(turn => ['CHAT', 'INSPECT'].includes(turn.route))) return null
-      const purpose = request?.turns?.some(turn => turn.route === 'INSPECT') ? 'INSPECT' : ''
+      const purpose = request?.turns?.some(turn => turn.route === 'INSPECT') ? 'INSPECT' : 'CHAT'
       return readOne(requestId, captured, purpose, visited)
     }))
-    if (current(captured)) await refreshDeliveryChoices()
+    if (choices && current(captured)) await refreshDeliveryChoices()
     return current(captured) && ids.every(id => !failedReads.has(id))
   }
   const choosePending = projection => {
@@ -269,8 +261,8 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       expectedPendingQuestionStateVersion: clarification.stateVersion, question: clarification.question, purpose: projection.purpose || 'CHAT' })
     return true
   }
-  // A single explicit manifest/edit chain supplies context, not delivery intent or tool authority.
-  // Independent roots, pending projections and late assets remain unresolved; never pick latest MIME.
+  // Server-selected heads supply context, not delivery intent or tool authority.
+  // Never rebuild a history graph here or pick the newest item by MIME.
   const submit = async ({ content, sourceSelectors = [], materialScope = 'TASK_DEFAULT', inspection = false } = {}) => {
     if (inspection) { error.value = '资料在原议事回合使用，请直接发送需求。'; return false }
     if (busy.value || !enabled?.()) return false

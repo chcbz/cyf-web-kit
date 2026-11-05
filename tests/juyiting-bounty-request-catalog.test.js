@@ -208,3 +208,76 @@ it('decodes the shared latest snapshot cursor without losing bigint precision', 
   expect(catalogPage({ ...decoded, eventCursor: 9007199254740993 })).to.equal(null)
   expect(catalogPage({ ...decoded, eventCursor: '-1' })).to.equal(null)
 })
+
+describe('display-window request batch selection', () => {
+  const build = get => useHallBountyRequestCatalog({ chatApi: { get }, enabled: () => true,
+    identityScope: ref('owner'), authorizationGeneration: ref(1),
+    getContext: () => ({ conversationId: 'conversation_1', taskId: 'task_1', conversationGeneration: '1' }) })
+  const selectedPage = ids => {
+    const rows = ids.map(id => ({ ordinal: String(Number(id.slice(1)) + 1), request: request(id) }))
+      .sort((a, b) => Number(a.ordinal) - Number(b.ordinal))
+    return page('0', rows.at(-1)?.ordinal || '0', rows)
+  }
+  it('reads fifty displayed requests out of ten thousand in one batch, no watermark or history pages', async () => {
+    const all = Array.from({ length: 10000 }, (_, i) => `r${i}`); const calls = []
+    const lane = build(async (path, params) => {
+      const url = new URL(path, 'http://test'); const ids = url.searchParams.getAll('requestIds')
+      calls.push(ids); expect(params).to.deep.equal({}); expect(url.searchParams.get('expectedGeneration')).to.equal('1')
+      expect(url.searchParams.has('after')).to.equal(false)
+      return selectedPage(ids)
+    })
+    try {
+      expect(await lane.refreshWindow(all.slice(-50))).to.equal(true)
+      expect(lane.entries.value).to.have.length(50); expect(calls).to.have.length(1)
+      expect(calls[0]).to.deep.equal(all.slice(-50))
+      expect(await lane.refreshWindow(all.slice(-100), { force: false })).to.equal(true)
+      expect(calls).to.have.length(2); expect(calls[1]).to.deep.equal(all.slice(-100, -50))
+      expect(lane.entries.value).to.have.length(100)
+      await lane.refreshWindow(all.slice(-100), { force: false }); expect(calls).to.have.length(2)
+    } finally { lane.dispose() }
+  })
+  it('chunks explicitly loaded windows at the existing one-hundred-entry limit', async () => {
+    const calls = []; const lane = build(async path => { const ids = new URL(path, 'http://test').searchParams.getAll('requestIds'); calls.push(ids); return selectedPage(ids) })
+    try { await lane.refreshWindow(Array.from({ length: 205 }, (_, i) => `r${i}`)); expect(calls.map(ids => ids.length)).to.deep.equal([100, 100, 5]); expect(lane.entries.value).to.have.length(205) }
+    finally { lane.dispose() }
+  })
+  it('coalesces overlapping window reads and aborts on reset without reviving old history', async () => {
+    const calls = []; const resolves = []; const signals = []
+    const lane = build((path, _, options) => { calls.push(new URL(path, 'http://test').searchParams.getAll('requestIds')); signals.push(options.signal); return new Promise(resolve => resolves.push(resolve)) })
+    try {
+      const one = lane.refreshWindow(['r1', 'r2']); const two = lane.refreshWindow(['r2', 'r3'])
+      expect(calls).to.deep.equal([['r1', 'r2'], ['r3']]); lane.reset(); expect(signals.every(signal => signal.aborted)).to.equal(true)
+      resolves[0](selectedPage(['r1', 'r2'])); resolves[1](selectedPage(['r3']))
+      expect(await one).to.equal(false); expect(await two).to.equal(false); expect(lane.entries.value).to.deep.equal([])
+    } finally { lane.dispose() }
+  })
+  for (const mode of ['missing', 'foreign', 'page', 'failure']) it(`does not mark a ${mode} batch as a complete visible window`, async () => {
+    const lane = build(async () => {
+      if (mode === 'failure') throw new Error('offline')
+      const result = selectedPage(mode === 'missing' ? ['r1'] : mode === 'foreign' ? ['r1', 'r3'] : ['r1', 'r2'])
+      if (mode === 'page') { result.hasMore = true; result.nextAfter = result.entries.at(-1).ordinal }
+      return result
+    })
+    try { expect(await lane.refreshWindow(['r1', 'r2'])).to.equal(false); expect(lane.initialized.value).to.equal(false); expect(lane.error.value).not.to.equal('') }
+    finally { lane.dispose() }
+  })
+  it('an empty display window makes no request and does not invent a conversation history', async () => {
+    const lane = build(async () => { throw new Error('must not fetch') })
+    try { expect(await lane.refreshWindow([])).to.equal(true); expect(lane.entries.value).to.deep.equal([]); expect(lane.initialized.value).to.equal(true) }
+    finally { lane.dispose() }
+  })
+})
+
+it('consumes the shared batch response through the public decoder with repeated query fields intact', async () => {
+  const { readFileSync } = await import('node:fs')
+  const { decodeHttpResponse } = await import('../src/utils/apiEnvelope.js')
+  const fixture = JSON.parse(readFileSync(new URL('./fixtures/hall-request-index-window.json', import.meta.url), 'utf8'))
+  const lane = useHallBountyRequestCatalog({ chatApi: { get: async (path, params) => {
+    expect(params).to.deep.equal({})
+    expect(new URL(path, 'http://test').searchParams.getAll('requestIds')).to.deep.equal(['r7', 'r9000'])
+    return decodeHttpResponse(JSON.stringify(fixture), { status: 200, requestId: fixture.requestId }).value
+  } }, enabled: () => true, identityScope: ref('owner'), authorizationGeneration: ref(1),
+  getContext: () => ({ conversationId: '101', conversationGeneration: '1', taskId: 'task' }) })
+  try { expect(await lane.refreshWindow(['r7', 'r9000'])).to.equal(true); expect(lane.entries.value).to.deep.equal(fixture.data.entries) }
+  finally { lane.dispose() }
+})

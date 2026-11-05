@@ -43,7 +43,7 @@
             :value="selectedDeliveryId"
             aria-label="本轮成果"
             :disabled="conversationBusy"
-            @change="$emit('choose-delivery', 'load-more-deliveries', 'refresh-deliveries', $event.target.value)"
+            @change="$emit('choose-delivery', $event.target.value)"
           >
             <option value="">请选择要继续议事的成果</option>
             <option v-for="choice in deliveryChoices" :key="choice.outcomeId" :value="choice.outcomeId">{{ choice.label }}</option>

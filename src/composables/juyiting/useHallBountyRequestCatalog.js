@@ -16,7 +16,8 @@ export const useHallBountyRequestCatalog = ({ chatApi, enabled = () => false, id
     captured.contextGeneration === getContextGeneration?.() && JSON.stringify(captured.context) === JSON.stringify(getContext?.() || {})
   const reset = () => { generation.value++; activeScan?.controller.abort(); activeScan = null; for (const read of reads.values()) read.controller.abort(); reads.clear(); initialized.value = false; entries.value = []; error.value = ''; loading.value = false }
   const refresh = () => {
-    // A send joins the same fenced read, rather than interpreting "busy" as failure.
+    // Explicit complete-catalog consumers (such as archived task history) join
+    // this fenced scan. The live conversation uses refreshWindow instead.
     if (activeScan && current(activeScan.captured)) return activeScan.promise
     if (activeScan) reset()
     const captured = capture(); const context = captured.context
@@ -55,8 +56,8 @@ export const useHallBountyRequestCatalog = ({ chatApi, enabled = () => false, id
   const refreshRequests = async requestIds => {
     const captured = capture()
     if (!current(captured)) return false
-    // Initial recovery still owns the complete current send context. A live hint must
-    // not race its snapshot or start another whole-history scan.
+    // A targeted hint must not race an explicitly requested full-history snapshot
+    // or start a second historical scan.
     if (activeScan && !await activeScan.promise) return false
     if (!current(captured)) return false
     const ids = [...new Set(requestIds)].filter(exactOutputId)
@@ -86,7 +87,56 @@ export const useHallBountyRequestCatalog = ({ chatApi, enabled = () => false, id
     }))
     return current(captured) && results.every(Boolean)
   }
+  // A visible message window is an explicit selection, never a complete history.
+  const refreshWindow = async (requestIds, { force = true } = {}) => {
+    const captured = capture()
+    if (!current(captured)) return false
+    if (activeScan && !await activeScan.promise) return false
+    if (!current(captured)) return false
+    const existing = new Set(entries.value.map(entry => entry.request.requestId))
+    const ids = [...new Set(requestIds)].filter(exactOutputId).filter(id => force || !existing.has(id))
+    const waiting = [...new Set(ids.map(id => reads.get(id)).filter(read => read && current(read.captured)))]
+    const missing = ids.filter(id => !reads.has(id) || !current(reads.get(id).captured))
+    const jobs = waiting.map(read => read.promise)
+    // Match the existing catalogue page maximum; loaded older message pages may
+    // contribute more IDs, but no unrequested history is ever discovered here.
+    for (let offset = 0; offset < missing.length; offset += 100) {
+      const batch = missing.slice(offset, offset + 100)
+      const read = { captured, controller: new AbortController() }
+      for (const id of batch) reads.set(id, read)
+      loading.value = true
+      read.promise = (async () => {
+        try {
+          const context = captured.context
+          const params = new URLSearchParams(batch.map(id => ['requestIds', id]))
+          if (context.conversationGeneration) params.set('expectedGeneration', context.conversationGeneration)
+          const raw = await chatApi.get(`/conversations/${encodeURIComponent(context.conversationId)}/requests?${params}`, {},
+            { autoLoading: false, needAuth: true, signal: read.controller.signal })
+          if (!current(captured)) return false
+          const page = catalogPage(raw, { conversationId: context.conversationId, taskId: context.taskId,
+            generation: context.conversationGeneration, after: '0' })
+          if (!page || page.hasMore || page.entries.length !== batch.length || page.entries.some(entry => !batch.includes(entry.request.requestId)))
+            throw new Error('可见消息的请求记录不匹配，请重试。')
+          const merged = mergeCatalogEntries(entries.value, page)
+          if (!merged) throw new Error('本轮成果状态已变化，请重试。')
+          entries.value = merged
+          return true
+        } catch (cause) {
+          if (current(captured)) error.value = cause?.message || '读取可见议事记录失败'
+          return false
+        } finally {
+          for (const id of batch) if (reads.get(id) === read) reads.delete(id)
+          loading.value = Boolean(activeScan || reads.size)
+        }
+      })()
+      jobs.push(read.promise)
+    }
+    const results = await Promise.all(jobs)
+    if (!current(captured) || !results.every(Boolean)) return false
+    initialized.value = true; error.value = ''
+    return true
+  }
   const executionSteps = computed(() => catalogExecutionSteps(entries.value, getContext?.() || {}))
   const stop = watch(scope, reset, { flush: 'sync' })
-  return { entries, initialized, executionSteps, error, loading, refresh, refreshRequests, reset, dispose: () => { disposed = true; reset(); stop() } }
+  return { entries, initialized, executionSteps, error, loading, refresh, refreshRequests, refreshWindow, reset, dispose: () => { disposed = true; reset(); stop() } }
 }

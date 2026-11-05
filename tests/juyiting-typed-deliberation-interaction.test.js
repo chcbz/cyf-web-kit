@@ -18,7 +18,7 @@ const restoreCrypto = () => {
 describe('typed natural discussion interaction adapter', () => {
   beforeEach(() => { Object.defineProperty(globalThis, 'crypto', { configurable: true, writable: true, value: { randomUUID: () => '00000000-0000-4000-8000-000000000001' } }) })
   afterEach(restoreCrypto)
-  it('reads accepted local receipts missing from the catalog and deduplicates them when indexed', async () => {
+  it('does not expand accepted local receipt history on display refresh; explicit recovery remains available', async () => {
     let reads = 0; let entries = []
     const context = { conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }
     const lane = useHallTypedDeliberation({ chatApi: {
@@ -30,7 +30,7 @@ describe('typed natural discussion interaction adapter', () => {
       expect(await lane.submit({ content: '继续' })).to.equal(true)
       reads = 0
       expect(await lane.refresh()).to.equal(true)
-      expect(reads).to.equal(1)
+      expect(reads).to.equal(0)
       entries = [{ request: { requestId: 'request-1', turns: [{ route: 'CHAT' }] } }]
       reads = 0
       expect(await lane.refresh()).to.equal(true)
@@ -39,6 +39,18 @@ describe('typed natural discussion interaction adapter', () => {
       context.assignmentRevision = '5'; entries = []; reads = 0
       await lane.refresh()
       expect(reads).to.equal(0)
+    } finally { lane.dispose() }
+  })
+  it('display reads do not parse the full session receipt history for each visible reply', async () => {
+    let storageReads = 0; const reads = []
+    const context = { conversationId: '7', conversationGeneration: '1', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4' }
+    const lane = useHallTypedDeliberation({ chatApi: { get: async path => { reads.push(path); return clarify('visible') } },
+      actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context, enabled: () => true,
+      getCatalogEntries: () => [{ request: { requestId: 'visible', turns: [{ route: 'CHAT' }] } }],
+      storage: { getItem: () => { storageReads++; throw new Error('history should not be read') }, setItem: () => {} } })
+    try {
+      await lane.refresh(); await lane.refreshRequests(['visible'])
+      expect(storageReads).to.equal(0); expect(reads).to.have.length(2)
     } finally { lane.dispose() }
   })
   it('reports failed authoritative GETs until recovered, but ordinary CHAT 404 is not a failure', async () => {

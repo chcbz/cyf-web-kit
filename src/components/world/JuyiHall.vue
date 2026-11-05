@@ -899,7 +899,7 @@ import { useHallTypedDeliberation } from '@/composables/juyiting/useHallTypedDel
 import { useHallAgentAbilitiesEditor } from '@/composables/juyiting/useHallAgentAbilitiesEditor'
 import { useHallAgentProfileCapabilities, agentProfileReasonText } from '@/composables/juyiting/useHallAgentProfileCapabilities'
 import { useHallSkillCapabilities } from '@/composables/juyiting/useHallSkillCapabilities'
-import { typedLong } from '@/composables/juyiting/hallTypedDeliberation'
+import { typedId, typedLong } from '@/composables/juyiting/hallTypedDeliberation'
 import { pointAndStartIntentReadLane } from '@/composables/juyiting/hallNativeBountyCapability'
 import { useHallDrafts } from '@/composables/juyiting/useHallDrafts'
 import { useTaskWorkspace } from '@/composables/juyiting/useTaskWorkspace'
@@ -2419,7 +2419,7 @@ const typedDeliberationStorage = (() => { try { return typeof window !== 'undefi
 typedDeliberation = useHallTypedDeliberation({
   chatApi, actorScopeKey: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
   getContext: typedDeliberationContext, getContextGeneration: () => followupContextGeneration.value,
-  getCatalogEntries: () => bountyRequestCatalog.entries.value, prepareCatalog: () => bountyRequestCatalog.refresh(), storage: typedDeliberationStorage,
+  getCatalogEntries: () => bountyRequestCatalog.entries.value, storage: typedDeliberationStorage,
   enabled: () => typedDeliberationEnabled.value,
   onAccepted: async ({ receipt, purpose, context, isCurrent }) => {
     if (!isCurrent?.()) return false
@@ -2638,27 +2638,40 @@ const retryHallConversation = async () => {
   }
   return reloadHallConversation()
 }
+// Display scope follows loaded message pages, not every historical request.
+const displayedRequestIds = computed(() => [...new Set([
+  activeRequest.value?.requestId,
+  ...messages.value.map(message => message.requestId)
+].filter(typedId))])
+const readDisplayedProjections = async (ids, captured, { force = true } = {}) => {
+  const current = () => captured === followupContextGeneration.value && typedDeliberationEnabled.value
+  const known = new Set(bountyRequestCatalog.entries.value.map(entry => entry.request.requestId))
+  const toRead = force ? ids : ids.filter(id => !known.has(id))
+  if (!current() || !await bountyRequestCatalog.refreshWindow(ids, { force }) || !current()) return false
+  if (!await typedDeliberation.refreshRequests(toRead, { choices: false }) || !current()) return false
+  // Executions have no standalone chat message. Read only direct action children
+  // needed by the displayed parent, never a recursive chain of review replies.
+  const children = typedDeliberation.projections.value.filter(value => ids.includes(value.requestId))
+    .map(value => value.actionProgress?.childRequestId).filter(typedId)
+  return await bountyRequestCatalog.refreshWindow(children, { force }) && current()
+}
 const refreshFollowupContext = async event => {
   if (!typedDeliberationEnabled.value || !conversationId.value) return false
   if (!await refreshCurrentConversationTask()) return false
   const captured = followupContextGeneration.value
   if (!await bountyAssignmentContext.refresh() || captured !== followupContextGeneration.value) return false
   const hints = event?.events || [event || { type: 'resync_required' }]
-  if (!bountyRequestCatalog.initialized.value || hints.some(hint => hint.type === 'resync_required')) {
-    if (!await bountyRequestCatalog.refresh() || captured !== followupContextGeneration.value) return false
-    return await typedDeliberation.refresh()
-  }
-  const requestIds = typedDeliberation.relatedRequestIds(hints)
-  if (!requestIds.length) return true
-  if (!await bountyRequestCatalog.refreshRequests(requestIds) || captured !== followupContextGeneration.value) return false
-  if (!await typedDeliberation.refreshRequests(requestIds) || captured !== followupContextGeneration.value) return false
-  // A newly committed action can reveal its actual child only on this read.
-  // Fetch that child, not every earlier round in the conversation.
-  const discovered = typedDeliberation.relatedRequestIds(hints).filter(id => !requestIds.includes(id))
-  if (!discovered.length) return true
-  if (!await bountyRequestCatalog.refreshRequests(discovered) || captured !== followupContextGeneration.value) return false
-  return await typedDeliberation.refreshRequests(discovered)
+  const initial = !bountyRequestCatalog.initialized.value || hints.some(hint => hint.type === 'resync_required')
+  const ids = initial ? displayedRequestIds.value : typedDeliberation.relatedRequestIds(hints)
+  if (!await readDisplayedProjections(ids, captured)) return false
+  return await typedDeliberation.refreshDeliveryChoices()
 }
+// Only membership changes trigger this path: streamed text/token changes do not.
+// Older pages enrich presentation; they never adopt a historical active request.
+watch([() => displayedRequestIds.value.join('\u0000'), () => bountyRequestCatalog.initialized.value], () => {
+  if (!typedDeliberationEnabled.value || !bountyRequestCatalog.initialized.value) return
+  void readDisplayedProjections(displayedRequestIds.value, followupContextGeneration.value, { force: false })
+})
 const resetFollowupContext = () => {
   invalidateFollowupContext()
   bountyRequestCatalog.reset()
