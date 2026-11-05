@@ -37,18 +37,28 @@
       @typed-reply="$emit('typed-reply', $event)"
     >
       <template #after-toolbar>
-        <label v-if="typedEnabled && !taskCompleted && deliveryChoices.length > 1" class="media-basis-choice">
+        <label v-if="typedEnabled && !taskCompleted && (deliveryChoices.length > 1 || deliveryHasMore || selectedDeliveryId)" class="media-basis-choice">
           <span>本轮成果</span>
           <select
             :value="selectedDeliveryId"
             aria-label="本轮成果"
             :disabled="conversationBusy"
-            @change="$emit('choose-delivery', $event.target.value)"
+            @change="$emit('choose-delivery', 'load-more-deliveries', 'refresh-deliveries', $event.target.value)"
           >
             <option value="">请选择要继续议事的成果</option>
             <option v-for="choice in deliveryChoices" :key="choice.outcomeId" :value="choice.outcomeId">{{ choice.label }}</option>
           </select>
         </label>
+        <button
+          v-if="typedEnabled && !taskCompleted && deliveryHasMore"
+          type="button"
+          :disabled="deliveryLoading || conversationBusy"
+          @click="$emit('load-more-deliveries')"
+        >{{ deliveryLoading ? '正在加载…' : '加载更多成果' }}</button>
+        <p v-if="typedEnabled && deliveryError" role="status">
+          {{ deliveryError }}
+          <button type="button" :disabled="deliveryLoading" @click="$emit('refresh-deliveries')">重试</button>
+        </p>
         <TaskSkillCapabilities v-if="typedEnabled" :projection="skillDirectory" :error="skillDirectoryError" :loading="skillDirectoryLoading" @refresh="$emit('skill-directory-refresh')" />
       </template>
       <template #turn-actions="{ requestIds }">
@@ -111,6 +121,9 @@ import { bountyDeliberationPresentation } from '../../composables/juyiting/hallM
 
 const props = defineProps({
   ...discussionPanelProps,
+  deliveryHasMore: { type: Boolean, default: false },
+  deliveryLoading: { type: Boolean, default: false },
+  deliveryError: { type: String, default: '' },
   deliveryChoices: { type: Array, default: () => [] },
   selectedDeliveryId: { type: String, default: '' },
   reviewContext: { type: Object, default: null },
@@ -130,7 +143,7 @@ const props = defineProps({
   identityScope: { type: String, default: '' },
 })
 
-const emit = defineEmits([...discussionPanelEmits, 'execution-settled', 'typed-reply', 'typed-resume', 'skill-directory-refresh', 'choose-delivery', 'outputs-change', 'accept-output', 'preview-ready'])
+const emit = defineEmits([...discussionPanelEmits, 'execution-settled', 'typed-reply', 'typed-resume', 'skill-directory-refresh', 'choose-delivery', 'load-more-deliveries', 'refresh-deliveries', 'outputs-change', 'accept-output', 'preview-ready'])
 
 const messageOutputs = ref([])
 const updateMessageOutputs = items => {
@@ -189,10 +202,10 @@ const activeExecutionUnknown = computed(() => {
 })
 
 const chatProps = computed(() => {
-  const {
-    deliveryChoices: _deliveryChoices, selectedDeliveryId: _selectedDeliveryId, reviewContext, reviewBusy, activeRequest, requestCatalog, activeTurns, capabilityState, deliberationV2Enabled,
-    typedRecoveryAvailable, typedInspectionStatus, ...chat
-  } = props
+  const panelOnly = ['deliveryHasMore', 'deliveryLoading', 'deliveryError', 'deliveryChoices', 'selectedDeliveryId',
+    'reviewContext', 'reviewBusy', 'activeRequest', 'requestCatalog', 'activeTurns', 'capabilityState', 'deliberationV2Enabled',
+    'typedRecoveryAvailable', 'typedInspectionStatus']
+  const chat = Object.fromEntries(Object.entries(props).filter(([key]) => !panelOnly.includes(key)))
   return { ...chat, ...(activeExecutionUnknown.value ? { isAwaitingReply: false, deliberationStatus: '结果待核实' } : {}),
     matterReadOnly: chat.matterReadOnly || taskCompleted.value, connectionStatus: taskCompleted.value ? '事项已完成' : activeExecutionUnknown.value ? '结果待核实' : chat.connectionStatus }
 })

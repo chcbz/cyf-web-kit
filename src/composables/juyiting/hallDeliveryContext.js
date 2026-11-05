@@ -29,12 +29,14 @@ export function deliveryContextPage (value, expected = {}) {
 }
 
 /** Exactly one read. The caller owns lifecycle fencing and explicit loading of another page. */
-export async function readDeliveryContextPage ({ chatApi, context, before = null, signal }) {
+export async function readDeliveryContextPage ({ chatApi, context, before = null, outcomeId = null, signal }) {
+  if (outcomeId && before) throw new Error('不能同时指定成果与分页游标。')
   const params = { expectedGeneration: context.conversationGeneration, expectedAssignmentRevision: context.assignmentRevision }
+  if (outcomeId) params.outcomeId = outcomeId
   if (before) { params.beforeMessageId = before.assistantMessageId; params.beforeOutcomeId = before.outcomeId }
   const result = await chatApi.get(`/conversations/${encodeURIComponent(context.conversationId)}/delivery-context`, params,
     { autoLoading: false, needAuth: true, signal })
   const page = deliveryContextPage(result, { ...context, before })
-  if (!page) throw new Error('当前成果上下文已变化，请重新加载。')
+  if (!page || (outcomeId && (page.hasMore || page.items.length > 1 || page.items.some(item => item.outcomeId !== outcomeId)))) throw new Error('当前成果上下文已变化，请重新加载。')
   return page
 }

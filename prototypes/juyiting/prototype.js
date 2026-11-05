@@ -149,6 +149,13 @@ function renderChat(){
  $$('.discussion-brief').forEach(e=>e.remove());
  const messages=$('.hall-messages');messages.setAttribute('aria-live','polite');messages.innerHTML=(ctx.olderMessagesLoaded||!ctx.messages.length?'':button('加载更早消息','older-messages','aria-label="加载更早消息"'))+ctx.messages.map((m,index)=>`<div class="hall-message ${m.role}"><div class="message-head"><strong>${m.role==='USER'?'你':esc(ctx.agent?.name||'好汉')}</strong></div><div class="message-content"><p>${esc(m.text)}</p>${m.submissionNotice?`<p class="submission-notice" role="status">${esc(m.submissionNotice)}</p>`:''}</div>${m.quote?`<div class="mmd mmd-quote">引用：${esc(asset(m.quote)?.name)}</div>`:''}${files(m.files||[],'message',false)}<details data-v-4c0df501 class="text-selection-archive"><summary data-v-4c0df501>保存文字片段</summary><label data-v-4c0df501>要保存的文字<textarea data-v-4c0df501 data-message-text="${index}" rows="3">${esc(m.text)}</textarea></label><button data-v-4c0df501 type="button" data-action="save-text" data-message="${index}">保存到工作空间</button></details>${m.outputs?.length?`<div class="mmd mmd-results">${m.outputs.map(id=>result(asset(id))).join('')}</div>`:''}</div>`).join('')+(ctx.error?`<div class="mmd mmd-interaction-error" role="alert">${esc(ctx.error)} ${button('核对回复状态','complete-reply-status')}</div>`:'')+(ctx.pending?`<p class="mmd-pending" role="status">${isPrivate||isPublic?'正在回复…':'正在处理…'}</p>`:'');scoped(messages,'data-v-8f1da78a');
  if(!ctx.messages.length)insert(messages,`<p class="mmd-pending">${isPrivate?'想聊什么，直接说吧。密议不会创建或更改事项。':isPublic?'这里是公共议事，可继续讨论，不会自动创建事项。':ctx.task?'这是此事项的新话头。请继续补充需求，无需重新提交事项。':'请先提出需求，确认承办后在这里继续沟通。'}</p>`);
+ if(new URLSearchParams(location.search).get('deliveryChoices')==='1'){
+   $$('.prototype-delivery-choices',panel).forEach(e=>e.remove());
+   const picker=document.createElement('div');picker.className='mmd prototype-delivery-choices';
+   const count=ctx.deliveryChoiceCount||50;
+   picker.innerHTML='<label>本轮成果 <select aria-label="本轮成果">'+Array.from({length:count},(_,i)=>'<option value="'+(i+1)+'">独立成果 '+(i+1)+'</option>').join('')+'</select></label> '+(count===50?button('加载更多成果','delivery-choice-more'):'<span>已加载全部成果</span>');
+   $('.composer-submit')?.before(picker);
+ }
  const input=$('.composer-textarea');input.disabled=!!(ctx.task?.complete||ctx.task?.cancelled);input.value=ctx.chatDraft;input.placeholder=ctx.task?.cancelled?'事项已取消，仅查看议事记录':ctx.task?.complete?'事项已完成':'补充需求，或告诉好汉哪里需要调整…';
  $$('.composer-context,.composer-meta,.hall-voice-controls',panel).forEach(e=>e.remove());input.rows=2;input.style.height='';
  $('.composer-execute')?.remove();const send=$('.composer-send');send.innerHTML='发送';send.ariaLabel='发送';send.title='发送';send.disabled=ctx.pending||!!(ctx.task?.complete||ctx.task?.cancelled)||(!ctx.chatDraft.trim()&&!ctx.chatFiles.length)||(!ctx.agent&&page!=='public');
@@ -235,6 +242,7 @@ document.addEventListener('change',e=>{const t=e.target;if(t.name==='picker-scop
 document.addEventListener('click',e=>{
  const t=e.target.closest('[data-action],button,a,[data-prototype-page]');if(!t||t.disabled||t.matches('a[download]'))return;
  if(t.type==='submit'&&t.closest('form'))return;e.preventDefault();const action=t.dataset.action,id=t.dataset.id;
+ if(action==='delivery-choice-more'){conversation().deliveryChoiceCount=51;renderChat();persist();return;}
  if(action==='composer-more'){dialog('更多',`<div class="mmd-more-menu">${button('添加资料','composer-materials')}${button('语音输入','voice-record')}${button('语音设置','voice-settings')}</div>`);return;}
  if(action==='composer-materials'){t.closest('dialog').close();openMaterials('chat');return;}
  if(action==='older-messages'){const ctx=conversation(),box=$('.hall-messages'),height=box.scrollHeight,top=box.scrollTop;ctx.olderMessagesLoaded=true;ctx.messages.unshift({role:'USER',text:'更早的一页议事记录（原型示例）'});renderChat();box.scrollTop=top+box.scrollHeight-height;return;}
@@ -290,3 +298,5 @@ seedBaseline();
 render();
 for(const ctx of [state,state.publicChat,...Object.values(state.privateChats)])if(ctx.pending&&ctx.replyStop&&['submitting','unknown'].includes(ctx.replyStop.stage)){ctx.replyStop.stage='unknown';ctx.replyStop.text='停止结果尚未确认，请核对原请求；不会重复提交。（离线示例）';persist();if(['chat','private','public'].includes(page))renderChat();}else if(ctx.pending&&['reply','unified-reply'].includes(ctx.pendingReason)){ctx.pending=false;ctx.error='示例：刷新时回复状态待核对，不自动重发。';if(ctx.task?.unified)ctx.task.phase='需核对';persist();if(['chat','private','public'].includes(page))renderChat();}
 if(state.operation?.stage==='pending')setTimeout(resolveOperation,350);
+
+// Delivery choices are explicitly paged; this offline scenario does not load API history.

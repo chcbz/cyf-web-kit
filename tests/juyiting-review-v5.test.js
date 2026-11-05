@@ -23,7 +23,7 @@ describe('message-origin v5 revision strict reader', () => {
 })
 
 // Exercise the real read adapter: a child already projected as PENDING must still advance.
-import { useHallTypedDeliberation } from '../src/composables/juyiting/useHallTypedDeliberation.js'
+import { useHallTypedDeliberation } from './fixtures/juyiting/delivery-context-api.mjs'
 import { effectScope } from 'vue'
 describe('revision feedback and existing refresh continuation', () => {
   it('keeps queued/running revisions live without treating child completion as acceptance', () => {

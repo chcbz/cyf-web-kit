@@ -2,7 +2,7 @@ import { displayFixture } from './fixtures/juyiting/interface-display-fixture.mj
 import { expect } from 'chai'
 import { ref } from 'vue'
 import { readFileSync } from 'node:fs'
-import { useHallTypedDeliberation } from '../src/composables/juyiting/useHallTypedDeliberation.js'
+import { useHallTypedDeliberation, contextPage, serverChoice } from './fixtures/juyiting/delivery-context-api.mjs'
 
 const clarify = requestId => ({ schemaVersion: 6, submissionProgress: null, reviewProgress: null, route: 'CHAT', inspection: null, actionProgress: null, conversationId: '7', conversationGeneration: '1', requestId, requestRevision: '1', turnId: `turn-${requestId}`, state: 'READY', outcome: { outcomeContractVersion: 1, revision: null, action: null, deliverable: null, messageSource: null, deliveryRelation: null,
   outcomeId: `outcome-${requestId}`, taskId: 'task-1', assignmentRevision: '4', assistantMessageId: '101', finalSha256: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', kind: 'CLARIFY', text: '请补充颜色', clarification: { pendingQuestionId: `pending-${requestId}`, state: 'OPEN', stateVersion: '0', question: '请补充颜色', requiredFacts: ['REQUIREMENT_DETAILS'], replyRequestId: null }, proposal: null } })
@@ -326,7 +326,7 @@ describe('explicit text follow-up admission basis', () => {
     two.outcome.deliveryRelation = { mode: 'APPEND', parentOutcomeId: one.outcome.outcomeId, parentFinalSha256: one.outcome.finalSha256, targetOutcomeId: null, targetFinalSha256: null }
     const values = [two, greeting, one]; const calls = []
     const context = ref({ conversationId: '42', conversationGeneration: '1', taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' })
-    const lane = useHallTypedDeliberation({ chatApi: { get: async path => (values.find(v => path.includes(`/requests/${v.requestId}/`))),
+    const lane = useHallTypedDeliberation({ serverDeliveryContext: () => contextPage(context.value, [serverChoice(two)]), chatApi: { get: async path => (values.find(v => path.includes(`/requests/${v.requestId}/`))),
       create: async (_path, body, options) => { calls.push({ body, key: options.headers['Idempotency-Key'] }); throw new Error('unknown ACK') } },
     actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context.value, getContextGeneration: () => 1,
     getCatalogEntries: () => values.map(v => ({ request: { requestId: v.requestId, steps: [] } })), storage: store(), enabled: () => true })
@@ -342,7 +342,7 @@ describe('explicit text follow-up admission basis', () => {
     const initial = value('one')
     const failed = { ...value('failed'), state: 'FAILED', outcome: null }
     const values = [initial, failed]; const calls = []
-    const lane = useHallTypedDeliberation({ chatApi: { get: async path => values.find(v => path.includes(`/requests/${v.requestId}/`)),
+    const lane = useHallTypedDeliberation({ serverDeliveryContext: () => contextPage({ conversationId: '42', conversationGeneration: '1', taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' }, [serverChoice(initial)]), chatApi: { get: async path => values.find(v => path.includes(`/requests/${v.requestId}/`)),
       create: async (_path, body) => { calls.push(body); throw new Error('unknown ACK') } },
     actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContextGeneration: () => 1,
     getContext: () => ({ conversationId: '42', conversationGeneration: '1', taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' }),
@@ -357,18 +357,19 @@ describe('explicit text follow-up admission basis', () => {
       expect(calls[0].parentOutcomeId).to.equal(initial.outcome.outcomeId)
     } finally { lane.dispose() }
   })
-  it('does not choose a parent from independent roots, incomplete reads or a media catalog', async () => {
-    for (const mode of ['roots', 'unresolved', 'media']) {
-      const values = [value('one'), value('two')]; const calls = []
-      if (mode === 'unresolved') values[1] = { ...values[1], state: 'PENDING', outcome: null }
-      if (mode === 'media') values.splice(1)
-      const lane = useHallTypedDeliberation({ chatApi: { get: async path => (values.find(v => path.includes(`/requests/${v.requestId}/`))),
-        create: async (_path, body) => { calls.push(body); throw new Error('unknown ACK') } }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1),
-      getContext: () => ({ conversationId: '42', conversationGeneration: '1', taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' }), getContextGeneration: () => 1,
-      getCatalogEntries: () => values.map(v => ({ request: { requestId: v.requestId, steps: mode === 'media' ? [{ kind: 'EXECUTE' }] : [] } })), storage: store(), enabled: () => true })
+  it('uses the server choice result, not incomplete local history, and requires explicit choice for roots', async () => {
+    const context = { conversationId: '42', conversationGeneration: '1', taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' }
+    for (const mode of ['roots', 'pending', 'empty']) {
+      const calls = []
+      const items = mode === 'empty' ? [] : [serverChoice(value('two')), serverChoice(value('one'))]
+      const lane = useHallTypedDeliberation({ serverDeliveryContext: () => contextPage(context, items, mode === 'pending'),
+        chatApi: { create: async (_path, body) => { calls.push(body); throw new Error('unknown ACK') } },
+        actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context,
+        getCatalogEntries: () => { throw new Error('send must not scan history') }, storage: store(), enabled: () => true })
       try {
-        await lane.refresh(); await lane.submit({ content: '继续讨论' }); expect(calls).to.have.length(1)
-        expect(calls[0].parentOutcomeId, mode).to.equal(null)
+        await lane.submit({ content: '继续讨论' })
+        expect(calls).to.have.length(mode === 'roots' ? 0 : 1)
+        if (calls.length) expect(calls[0].parentOutcomeId).to.equal(null)
       } finally { lane.dispose() }
     }
   })
@@ -468,7 +469,7 @@ describe('discussion-v2 effective materials replace browser history inference', 
   })
   for (const mode of ['owner', 'authorization', 'assignment']) it(`fences a delayed admission response after ${mode} changes`, async () => {
     let resolve; const h = harness({ create: () => new Promise(done => { resolve = done }) })
-    try { const pending = h.lane.submit({ content: '需求', materialScope: 'EXPLICIT', sourceSelectors: [asset] }); await Promise.resolve()
+    try { const pending = h.lane.submit({ content: '需求', materialScope: 'EXPLICIT', sourceSelectors: [asset] }); await new Promise(resolve => setImmediate(resolve))
       expect(await h.lane.submit({ content: 'duplicate' })).to.equal(false)
       if (mode === 'owner') h.identity.value = 'owner-b'; else if (mode === 'authorization') h.authorization.value++; else h.current.value = { ...h.current.value, assignmentRevision: '5' }
       resolve(receipt('DISCUSSION', 'late')); expect(await pending).to.equal(false); expect(h.lane.projections.value).to.deep.equal([]); expect(h.calls).to.have.length(1)
