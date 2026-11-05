@@ -691,7 +691,7 @@ function renderUnifiedDetail(){
  if(awaitingAssignment()||state.task.cancelled)renderCancellation();
 }
 function renderUnifiedResults(root){
- root.classList.add('unified-results');root.innerHTML=`<header><h2>事项成果与验收</h2><p>此处只展示正式交付；未提交的成果和修改记录请回原议事查看。</p></header>${acceptanceSummary()||'<p>尚无可验收的最新成果，请在原议事中继续。</p>'}${button('回到议事查看结果','complete-go','data-page="chat"')}`;
+ root.classList.add('unified-results');root.innerHTML=`<header><h2>事项成果与验收</h2><p>此处只展示正式交付；未提交的成果和修改记录请回原议事查看。</p></header>${acceptanceSummary()||'<p>尚无可验收的最新成果，请在原议事中继续。</p>'}${button('回到议事查看结果','complete-go','data-page="chat"')}`;renderFormalHistoryPaging(root);
 }
 document.addEventListener('change',e=>{if(e.target.matches('[data-draft-agent]')){state.draftAgent=e.target.value;persist();}});
 document.addEventListener('input',e=>{if(page==='create'&&e.target.matches('[name=taskTitle],[name=taskDescription]')){const status=$('[data-draft-save-status]');if(status)status.textContent='草稿已修改，尚未发送。';}});
@@ -896,7 +896,16 @@ function renderCompletedMatterResults(root){
  const row=(a,i,final)=>`<article class="completed-result"><div class="completed-result-heading"><div><strong>${esc(a.name)}</strong><p class="mmd-muted">${final?'已验收成果':'其他历史成果'} ${i+1} · 版本 ${esc(a.version||1)}</p></div>${button(state.completedPreview===a.id?'收起预览':'预览','complete-record-preview',`data-id="${esc(a.id)}" aria-expanded="${state.completedPreview===a.id}" aria-controls="preview-${esc(a.id)}"`)}</div>${state.completedPreview===a.id?`<section id="preview-${esc(a.id)}" class="completed-inline-preview" aria-label="${esc(a.name)}预览"><p>正在预览：${esc(a.name)} · 版本 ${esc(a.version||1)}</p>${media(a,true)}</section>`:''}</article>`;
  root.classList.add('completed-records');
  root.innerHTML=`<header><h2>成果与验收记录</h2><p class="completed-readonly">已完成 · 只读</p><p>${esc(taskTitle())}</p><p class="mmd-muted">已验收的版本固定保留。其他历史成果不代表已验收。</p></header>${['error','empty'].includes(mode)?`<div class="completed-record-tools">${button(mode==='error'?'重试':'重新核对','complete-record-reload')}</div>`:''}${mode==='loading'?'<p role="status">正在读取成果与验收记录…</p>':mode==='error'?'<p role="alert">成果与验收记录读取失败，请重新读取；不会重新提交验收。</p>':mode==='empty'?'<p role="status">尚未读取到验收成果记录，不能仅凭“已完成”推断哪些版本已验收。请重新读取或查看历史议事。</p>':`<section><h3>已验收成果 <small>（${accepted.length}）</small></h3>${accepted.length?accepted.map((a,i)=>row(a,i,true)).join(''):'<p>验收成果关联待核对，不将其他成果推定为已验收。</p>'}</section><details class="completed-history" ${history.some(a=>a.id===state.completedPreview)?'open':''}><summary>其他历史成果（${history.length}）</summary><p class="mmd-muted">仅供查阅，不属于上方已验收的固定版本。</p>${history.length?history.map((a,i)=>row(a,i,false)).join(''):'<p>没有其他历史成果。</p>'}</details><details class="completed-receipt"><summary>验收记录</summary><p>验收状态：已通过</p><p>本次确认：${accepted.length} 份固定成果</p><p class="mmd-muted">离线示例；正式页面只展示服务端实际返回的时间、操作者与版本，不猜测缺失字段。</p></details>`}${selectedScenario==='completed-review'?`<details class="completed-demo"><summary>演示读取状态（仅原型）</summary><div class="completed-record-tools">${[['ready','正常'],['loading','加载中'],['error','读取失败'],['empty','记录缺失']].map(([key,label])=>button(label,'complete-record-state',`data-state="${key}" aria-pressed="${mode===key}"`)).join('')}</div></details>`:''}`;
+ renderFormalHistoryPaging(root);
 }
+
+// Explicit history paging demonstration, independent of current acceptance authority.
+function renderFormalHistoryPaging(root){
+ const demo=new URLSearchParams(location.search).get('formalHistory');if(!demo)return;
+ const loaded=state.formalHistoryPage||0,failed=demo==='error'&&!state.formalHistoryRetried;
+ root.insertAdjacentHTML('beforeend',`<details class="formal-history-paging" open><summary>历史交付（已加载 ${loaded*20} 批）</summary><p>历史按页读取，不参与当前交付的验收判断。</p>${loaded?'<p>已加载的历史批次保留（离线示例）。</p>':''}${failed?'<p role="alert">历史读取失败；当前交付仍可查看。</p>':''}${button(failed?'重试当前页':loaded?'加载更多历史交付':'读取历史交付','formal-history-page')}</details>`);
+}
+document.addEventListener('click',e=>{const t=e.target.closest('[data-action="formal-history-page"]');if(!t)return;e.preventDefault();e.stopImmediatePropagation();state.formalHistoryRetried=true;state.formalHistoryPage=(state.formalHistoryPage||0)+1;render();},true);
 
 // Cancelled-task history reuses explicit message paging; these are offline fixtures only.
 function renderTerminalTextHistory(card){

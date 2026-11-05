@@ -178,7 +178,7 @@ describe('task acceptance return to original discussion', () => {
   it('routes focused, ordinary and funded results through the single shell review owner', () => {
     const start = hall.indexOf('<BountyAcceptancePanel'); const end = hall.indexOf('</BountyAcceptancePanel>', start)
     const integration = hall.slice(start, end)
-    expect(integration).to.include(':review-context="deliveryReview.context.value"')
+    expect(integration).to.include(':review-context="deliveryReview.historyContext.value"')
     expect(integration).to.include('@review-delivery="openDeliveryReview()"')
     expect(integration).to.include('@preview-output="previewReviewOutput"')
     expect(integration).not.to.include('<FormalTaskDeliveryPanel').and.not.to.include('@task-completed')
@@ -209,6 +209,15 @@ describe('mounted task acceptance panel', () => {
       slots: { legacy: '<div class="legacy-domain">旧成果</div>' } })
     try {
       expect(wrapper.findComponent(Gallery).exists()).to.equal(false)
+      await wrapper.setProps({ historyLoaded: false })
+      expect(wrapper.emitted('load-history')).to.equal(undefined)
+      const history = wrapper.get('details'); history.element.open = true; await history.trigger('toggle')
+      expect(wrapper.emitted('open-history')).to.have.length(1)
+      await wrapper.findAll('button').find(b => b.text() === '读取历史交付').trigger('click')
+      expect(wrapper.emitted('load-history')).to.have.length(1)
+      await wrapper.setProps({ historyError: '历史页失败' })
+      expect(wrapper.text()).to.include('历史页失败').and.include('正式交付')
+
       await wrapper.findAll('button').find(button => button.text() === '继续议事').trigger('click')
       expect(wrapper.emitted('continue-modification')).to.deep.equal([[scope]])
       await wrapper.findAll('button').find(button => button.text() === '查看成果并验收').trigger('click')

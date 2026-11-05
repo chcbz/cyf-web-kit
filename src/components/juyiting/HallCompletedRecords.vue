@@ -9,8 +9,13 @@
         <h4>已验收成果（{{ records.accepted.length }}）</h4>
         <p v-if="!records.accepted.length" class="muted">尚未核对到已验收的固定成果。</p>
         <template v-for="group in groups" :key="group.name">
-          <component :is="group.history ? 'details' : 'div'" :class="{ 'completed-history': group.history }" :open="group.history && group.rows.some(row => row.key === expandedKey)">
-            <summary v-if="group.history">其他历史成果（{{ group.rows.length }}）</summary>
+          <component
+            :is="group.history ? 'details' : 'div'"
+            :class="{ 'completed-history': group.history }"
+            :open="group.history && group.rows.some(row => row.key === expandedKey)"
+            @toggle="group.history && $event.target.open && $emit('open-history')"
+          >
+            <summary v-if="group.history">其他历史成果（已加载 {{ group.rows.length }} 项）</summary>
             <p v-if="group.history" class="muted">仅供查阅，不属于上方已验收的固定版本。</p>
             <article v-for="(row, index) in group.rows" :key="row.key" class="completed-result">
               <div class="completed-result-heading">
@@ -48,7 +53,17 @@
                 <p v-else role="status">{{ outputs.message.value && ['error', 'forbidden', 'unavailable'].includes(outputs.state.value) ? outputs.message.value : '此固定成果暂不可预览，不会换用其他版本。' }} <button type="button" @click="retryPreview">重试预览</button></p>
               </section>
             </article>
-            <p v-if="group.history && !group.rows.length" class="muted">没有其他正式交付历史成果。</p>
+            <p v-if="group.history && historyLoaded && !historyHasMore && !historyError && !group.rows.length" class="muted">没有其他正式交付历史成果。</p>
+            <template v-if="group.history">
+              <p v-if="historyLoading" role="status">正在读取历史交付…</p>
+              <p v-if="historyError" role="alert">{{ historyError }}</p>
+              <button
+                v-if="historyError || !historyLoaded || historyHasMore"
+                type="button"
+                :disabled="historyLoading || loading"
+                @click="$emit('load-history')"
+              >{{ historyError ? '重试当前页' : historyLoaded ? '加载更多历史交付' : '读取历史交付' }}</button>
+            </template>
           </component>
         </template>
       </section>
@@ -74,9 +89,11 @@ import { outputCatalogItems } from '../../composables/juyiting/bountyOutputCatal
 const props = defineProps({
   taskId: { type: String, required: true }, taskVersion: { type: [String, Number], default: '' },
   identityKey: { type: String, required: true }, title: { type: String, default: '' }, archived: { type: Boolean, default: false },
+  historyLoaded: { type: Boolean, default: true }, historyLoading: { type: Boolean, default: false },
+  historyHasMore: { type: Boolean, default: false }, historyError: { type: String, default: '' },
   context: { type: Object, default: null }, loading: { type: Boolean, default: false }, error: { type: String, default: '' }
 })
-const emit = defineEmits(['refresh'])
+const emit = defineEmits(['refresh', 'open-history', 'load-history'])
 const records = computed(() => completedReviewRecords(props.context, props.taskId))
 const outputs = useOutputs({ source: () => props.identityKey ? { type: 'task', id: props.taskId } : null, identityFingerprint: () => props.identityKey, pageSize: 100 })
 const expandedKey = ref('')

@@ -15,12 +15,21 @@
       </li></ul>
     </section>
     <p v-else-if="reviewContext && !reviewLoading" role="status">暂无当前正式交付；议事中的普通答复不代表已提交成果。</p>
-    <details v-if="reviewContext?.history.length"><summary>历史交付（{{ reviewContext.history.length }}）</summary>
+    <details v-if="reviewContext" @toggle="$event.target.open && $emit('open-history')"><summary>历史交付（已加载 {{ reviewContext.history.length }} 批）</summary>
       <section v-for="batch in reviewContext.history" :key="batch.deliveryId"><p>{{ batch.summary }} · {{ batch.state }}</p>
         <ul><li v-for="item in batch.items.filter(value => value.displayRole === 'RESULT')" :key="`${item.artifactId}:${item.artifactVersion}`">
           <span>{{ item.purpose }} · 版本 {{ item.artifactVersion }}</span><button type="button" :disabled="!!item.unavailableReason" @click="$emit('preview-output', item)">预览</button>
         </li></ul>
       </section>
+      <p v-if="historyLoading" role="status">正在读取历史交付…</p>
+      <p v-if="historyError" role="alert">{{ historyError }}</p>
+      <button
+        v-if="historyError || !historyLoaded || historyHasMore"
+        type="button"
+        :disabled="historyLoading || reviewLoading"
+        @click="$emit('load-history')"
+      >{{ historyError ? '重试当前页' : historyLoaded ? '加载更多历史交付' : '读取历史交付' }}</button>
+      <p v-else-if="!reviewContext.history.length" role="status">没有其他历史交付。</p>
     </details>
     <p role="status">此处只展示正式交付；未提交的成果和修改记录请回原议事查看。</p>
     <p v-if="source.loading.value" role="status">正在确认原议事入口…</p>
@@ -33,11 +42,13 @@
 import { createApi } from '../../composables/useHttp.js'
 import { useHallBountyAcceptance } from '../../composables/juyiting/useHallBountyAcceptance.js'
 const props = defineProps({
+  historyLoaded: { type: Boolean, default: true }, historyLoading: { type: Boolean, default: false },
+  historyHasMore: { type: Boolean, default: false }, historyError: { type: String, default: '' },
   reviewContext: { type: Object, default: null }, reviewBusy: { type: Boolean, default: false },
   reviewLoading: { type: Boolean, default: false }, reviewError: { type: String, default: '' },
   enabled: { type: Boolean, default: true }, taskId: { type: String, required: true }, identityKey: { type: String, required: true }, taskCompleted: { type: Boolean, default: false },
   taskVersion: { type: [Number, String], default: '' }, conversationId: { type: String, default: '' } })
-defineEmits(['continue-modification', 'review-delivery', 'refresh-review', 'preview-output'])
+defineEmits(['open-history', 'load-history', 'continue-modification', 'review-delivery', 'refresh-review', 'preview-output'])
 const source = useHallBountyAcceptance({ api: createApi('/chat'), taskId: () => props.taskId,
   // The parent owns formal review facts; only discover the original conversation here.
   loadRequests: false,

@@ -37,7 +37,7 @@ const validBatch = batch => exact(batch, ['deliveryId', 'deliveryVersion', 'stat
   batch.allowedActions.every(a => oneOf(a, ['VIEW', 'ACCEPT', 'REQUEST_CHANGES', 'CHECK_OPERATION']))
 export function validateContext (raw, taskId) {
   if (!exact(raw, ['schemaVersion', 'taskId', 'taskVersion', 'taskState', 'assignmentRevision', 'currentDelivery', 'history', 'pendingOperation']) ||
-    raw.schemaVersion !== 1 || !reviewId(taskId) || raw.taskId !== taskId || !reviewVersion(raw.taskVersion) || !reviewVersion(raw.assignmentRevision) ||
+    ![1, 2].includes(raw.schemaVersion) || !reviewId(taskId) || raw.taskId !== taskId || !reviewVersion(raw.taskVersion) || !reviewVersion(raw.assignmentRevision) ||
     !taskStates.includes(raw.taskState) || (raw.currentDelivery !== null && !validBatch(raw.currentDelivery)) || !Array.isArray(raw.history) ||
     raw.history.length > 100 || !raw.history.every(validBatch)) fail()
   const batches = [...raw.history, ...(raw.currentDelivery ? [raw.currentDelivery] : [])]
@@ -104,5 +104,14 @@ export function validateReceipt (raw, intent, previous = null) {
   if (previous && (previous.operationId !== raw.operationId || BigInt(raw.stateVersion) < BigInt(previous.stateVersion) ||
     (previous.state !== 'PROCESSING' && receiptFields.some(field => previous[field] !== raw[field])) ||
     (previous.stateVersion === raw.stateVersion && receiptFields.some(field => previous[field] !== raw[field])))) fail()
+  return freezeReviewValue(clone(raw))
+}
+
+// Separate display page: every batch is read-only, never acceptance authority.
+export function validateHistoryPage (raw) {
+  if (!exact(raw, ['items', 'nextCursor', 'hasMore']) || !Array.isArray(raw.items) || raw.items.length > 20 ||
+    !raw.items.every(batch => validBatch(batch) && batch.allowedActions.length === 1 && batch.allowedActions[0] === 'VIEW') ||
+    new Set(raw.items.map(batch => batch.deliveryId)).size !== raw.items.length || typeof raw.hasMore !== 'boolean' ||
+    (raw.hasMore ? !raw.items.length || !reviewVersion(raw.nextCursor) || raw.nextCursor === '0' : raw.nextCursor !== null)) fail()
   return freezeReviewValue(clone(raw))
 }

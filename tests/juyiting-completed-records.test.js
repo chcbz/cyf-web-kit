@@ -29,6 +29,23 @@ function harness (props = {}, initialOutputs, get = async () => [], actions = {}
   return { wrapper, outputs, registered, downloaded, refreshes: () => refreshes, more: () => more }
 }
 describe('completed matter records display over fixed acceptance facts', () => {
+  it('requests history only on explicit open/more and keeps accepted records on history failure', async () => {
+    const c = context(); c.history = []
+    const { wrapper, registered } = harness({ context: c, historyLoaded: false })
+    try {
+      expect(wrapper.emitted('open-history')).to.equal(undefined)
+      expect(wrapper.emitted('load-history')).to.equal(undefined)
+      const history = wrapper.get('.completed-history'); history.element.open = true; await history.trigger('toggle')
+      expect(wrapper.emitted('open-history')).to.have.length(1)
+      await wrapper.setProps({ historyError: '历史页失败' })
+      expect(wrapper.text()).to.include('已验收成果（2）').and.include('历史页失败')
+      await wrapper.findAll('button').find(b => b.text() === '重试当前页').trigger('click')
+      expect(wrapper.emitted('load-history')).to.have.length(1)
+      await wrapper.setProps({ historyLoading: true })
+      expect(wrapper.findAll('button').find(b => b.text() === '重试当前页').attributes('disabled')).not.to.equal(undefined)
+      expect(registered).to.have.length(0)
+    } finally { wrapper.unmount() }
+  })
   it('labels historical files only from the exact source and hash, without changing acceptance records', () => {
     const fixed = item('a'); fixed.source = { kind: 'CONVERSATION_OUTPUT', requestId: 'request-1', stepId: 'step-1', outputId: 'output_1' }
     const row = { item: fixed }; const metadata = [{ ...output(fixed), title: 'output_1' }]
@@ -108,7 +125,7 @@ describe('completed matter records display over fixed acceptance facts', () => {
     try {
       expect(wrapper.findAll('.completed-result')).to.have.length(3)
       expect(wrapper.findAll('button').map(b => b.text())).to.deep.equal(Array(3).fill(['预览', '下载', '保存']).flat())
-      expect(wrapper.text()).to.include('已验收成果（2）').and.include('其他历史成果（1）').and.include('版本 2')
+      expect(wrapper.text()).to.include('已验收成果（2）').and.include('其他历史成果（已加载 1 项）').and.include('版本 2')
       expect(wrapper.get('.completed-history').element.open).to.equal(false)
       expect(wrapper.get('.completed-receipt').element.open).to.equal(false)
       expect(wrapper.emitted()).to.deep.equal({})
