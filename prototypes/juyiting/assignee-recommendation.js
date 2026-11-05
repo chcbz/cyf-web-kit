@@ -24,6 +24,7 @@
   };
   document.addEventListener('click', e => {
     const b=e.target.closest('button'); if(!b)return;
+    if(b.hasAttribute('data-history-settlement')){document.querySelector('[data-history-receipt]').hidden=false;return;}
     if(b.dataset.recommendationStage){stage=b.dataset.recommendationStage;manual='';alternatives=null;render();}
     if(b.hasAttribute('data-model-alternatives')){alternatives=b.getAttribute('aria-expanded')!=='true';render();document.querySelector('[data-model-alternatives]')?.focus();}
     if(b.dataset.modelCandidate){manual=b.dataset.modelCandidate;alternatives=false;render();document.querySelector('[data-model-alternatives]')?.focus();}
