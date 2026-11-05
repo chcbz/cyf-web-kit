@@ -474,7 +474,6 @@
             v-else-if="renderedPanel === 'tasks' && formalTaskRef && hallIdentityScope"
             :key="formalTaskRef.id"
             :task-id="formalTaskRef.id"
-            :event-source="acceptanceEventSource"
             :identity-key="`${apiStore.authorizationGeneration}\u0000${hallIdentityScope}`"
             :task-version="formalTaskRef.taskVersion ?? formalTaskRef.version"
             :task-completed="formalTaskRef.status === 'completed'"
@@ -2326,7 +2325,6 @@ const loadSettlement = async (task) => runLoadSettlement(task)
 let notifyBountyRequestCatalog = () => {}
 
 const {
-  acceptanceEventSource,
   activeRequest,
   activeTurns,
   adoptBountyBootstrap,

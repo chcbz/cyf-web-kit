@@ -156,7 +156,7 @@ describe('flow gap actual UI consumers', () => {
     const calls = []
     const wrapper = mount(Vue.defineComponent({
       setup: () => ({ refreshTerminalHistory: () => calls.push('history'),
-        terminalConversationHistory: { refresh: () => calls.push('text') } }),
+        terminalTextHistory: { refresh: () => calls.push('text') } }),
       render: new Function('Vue', compiled.code)(Vue)
     }))
     try {

@@ -691,7 +691,7 @@ function renderUnifiedDetail(){
  if(awaitingAssignment()||state.task.cancelled)renderCancellation();
 }
 function renderUnifiedResults(root){
- root.classList.add('unified-results');root.innerHTML=`<header><h2>事项成果与验收</h2><p>每一版结果与修改要求都保留在原议事中。</p></header>${acceptanceSummary()||'<p>尚无可验收的最新成果，请在原议事中继续。</p>'}${button('回到议事查看结果','complete-go','data-page="chat"')}`;
+ root.classList.add('unified-results');root.innerHTML=`<header><h2>事项成果与验收</h2><p>此处只展示正式交付；未提交的成果和修改记录请回原议事查看。</p></header>${acceptanceSummary()||'<p>尚无可验收的最新成果，请在原议事中继续。</p>'}${button('回到议事查看结果','complete-go','data-page="chat"')}`;
 }
 document.addEventListener('change',e=>{if(e.target.matches('[data-draft-agent]')){state.draftAgent=e.target.value;persist();}});
 document.addEventListener('input',e=>{if(page==='create'&&e.target.matches('[name=taskTitle],[name=taskDescription]')){const status=$('[data-draft-save-status]');if(status)status.textContent='草稿已修改，尚未发送。';}});

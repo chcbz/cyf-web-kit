@@ -22,32 +22,27 @@
         </li></ul>
       </section>
     </details>
-    <p v-if="source.loading.value" role="status">正在读取议事成果…</p>
-    <p v-else-if="source.error.value || source.catalog.error.value" role="alert">{{ source.error.value || source.catalog.error.value }} <button type="button" @click="source.refresh">重新读取</button></p>
+    <p role="status">此处只展示正式交付；未提交的成果和修改记录请回原议事查看。</p>
+    <p v-if="source.loading.value" role="status">正在确认原议事入口…</p>
+    <p v-else-if="source.error.value" role="alert">{{ source.error.value }} <button type="button" @click="source.refresh">重新读取</button></p>
     <slot name="preview" />
     <button type="button" @click="$emit('continue-modification', source.scope.value)">{{ taskCompleted ? '查看议事记录' : '继续议事' }}</button>
-    <BountyExecutionOutputs v-if="source.scope.value && !source.legacy.value && !source.loading.value"
-      :acceptance="true" :task-completed="taskCompleted" :enabled="enabled && !source.catalog.error.value"
-      :request="source.catalog.entries.value.at(-1)?.request || null" :catalog="source.catalog.entries.value"
-      :conversation-id="source.scope.value.conversationId" :identity-key="identityKey" :task-version="taskVersion" :task-id="taskId"
-      @catalog-refresh-needed="source.refreshCatalog" />
   </section>
 </template>
 <script setup>
 import { createApi } from '../../composables/useHttp.js'
 import { useHallBountyAcceptance } from '../../composables/juyiting/useHallBountyAcceptance.js'
-import BountyExecutionOutputs from './BountyExecutionOutputs.vue'
 const props = defineProps({
-  eventSource: { type: Object, default: null },
   reviewContext: { type: Object, default: null }, reviewBusy: { type: Boolean, default: false },
   reviewLoading: { type: Boolean, default: false }, reviewError: { type: String, default: '' },
   enabled: { type: Boolean, default: true }, taskId: { type: String, required: true }, identityKey: { type: String, required: true }, taskCompleted: { type: Boolean, default: false },
   taskVersion: { type: [Number, String], default: '' }, conversationId: { type: String, default: '' } })
 defineEmits(['continue-modification', 'review-delivery', 'refresh-review', 'preview-output'])
 const source = useHallBountyAcceptance({ api: createApi('/chat'), taskId: () => props.taskId,
-  eventSource: () => props.eventSource,
+  // The parent owns formal review facts; only discover the original conversation here.
+  loadRequests: false,
   identityKey: () => props.identityKey, conversationId: () => props.conversationId, enabled: () => props.enabled,
-  taskCompleted: () => props.taskCompleted, stateVersion: () => props.taskVersion })
+  taskCompleted: () => props.taskCompleted })
 </script>
 <style scoped>
 .bounty-acceptance-panel { flex: 1; min-height: 0; overflow: auto; padding: 12px; background: var(--hall-surface, #fffefa); color: var(--hall-text, #242e2b); }
