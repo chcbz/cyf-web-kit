@@ -190,7 +190,6 @@ export const useAgentStore = defineStore('agent', {
     selectedAgentId: '',
     loading: false,
     taskLoading: false,
-    assigning: false,
     error: '',
     taskError: '',
     statusFilter: '',
@@ -307,32 +306,6 @@ export const useAgentStore = defineStore('agent', {
         log.warn('Failed to fetch reward tasks:', error)
       } finally {
         this.taskLoading = false
-      }
-    },
-
-    async assignTask (taskId, agentId) {
-      if (!taskId || !agentId || this.assigning) return
-      this.assigning = true
-
-      try {
-        await agentApi.create(`/tasks/${encodeURIComponent(taskId)}/assign`, {
-          agentId,
-          allowQueue: false
-        }, {
-          autoLoading: false,
-          needAuth: false
-        })
-
-        const agent = this.agents.find(item => item.agentId === agentId || item.id === agentId)
-        const task = this.tasks.find(item => item.id === taskId)
-        if (task && agent) {
-          task.assignedAgentId = agent.agentId
-          task.assignedAgentName = agent.name
-          task.status = 'assigned'
-          task.updatedAt = Date.now()
-        }
-      } finally {
-        this.assigning = false
       }
     },
 

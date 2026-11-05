@@ -33,7 +33,6 @@ export const useHallTaskActions = ({
   log,
   playError,
   playSuccess,
-  selectedAgent,
   selectedTask,
   showToast,
   tasks
@@ -318,37 +317,8 @@ export const useHallTaskActions = ({
       if (targetAgents.length !== 1) return false
       return claimFundedTask(task, targetAgents[0])
     }
-    if (targetAgents.some(item => !canAssign(task, item))) return false
-
-    const targetAgent = targetAgents[0]
-    let assignmentSucceeded = false
-    try {
-      const assigned = await agentApi.create(`/tasks/${task.id}/assign`, {
-        agentId: targetAgent.agentId,
-        agentIds: targetAgents.map(item => item.agentId)
-      }, { autoLoading: false })
-      Object.assign(task, assigned || {
-        status: 'assigned',
-        assignedAgentIds: targetAgents.map(item => item.agentId),
-        assignedAgentId: targetAgent.agentId,
-        assignedAgentName: targetAgents.map(item => item.name || item.personaName || item.agentId).join('、')
-      })
-      targetAgents.forEach(item => {
-        item.status = 'busy'
-        item.currentTaskTitle = task.title
-      })
-      selectedAgent.value = targetAgent
-      selectedTask.value = task
-      assignmentSucceeded = true
-      playSuccess()
-      showToast(`${task.title} 已点给 ${task.assignedAgentName}`)
-      return assignmentSucceeded
-    } catch (error) {
-      log.warn('assign bounty task failed:', error)
-      playError()
-      showToast(`点将未成：${failureReason(error, '请重查厅中动静')}`)
-      return false
-    }
+    // Ordinary matters use the quoted point-and-start flow, never this funded lane.
+    return false
   }
 
   const loadSettlement = async (task) => {
@@ -404,25 +374,6 @@ export const useHallTaskActions = ({
     }
   }
 
-  const autoAssignTask = async (task) => {
-    if (!task || task.status !== 'open' || isFundedTask(task)) return false
-    try {
-      const assigned = await agentApi.create(`/tasks/${task.id}/auto-assign`, {}, { autoLoading: false }) || { ...task, status: 'assigned' }
-      tasks.value = tasks.value.map(item => item.id === task.id ? { ...item, ...assigned } : item)
-      selectedTask.value = { ...task, ...assigned }
-      const assignedIds = assigned.assignedAgentIds || (assigned.assignedAgentId ? [assigned.assignedAgentId] : [])
-      const assignedNames = assigned.assignees?.map(item => item.agentName || item.agentId).filter(Boolean)
-      playSuccess()
-      showToast(`宋江已点 ${assignedNames?.length ? assignedNames.join('、') : assignedIds.join('、')} 领令`)
-      return true
-    } catch (error) {
-      log.warn('auto assign bounty task failed:', error)
-      playError()
-      showToast(`宋江点将未成：${failureReason(error, '请看荐单后手动点将')}`)
-      return false
-    }
-  }
-
   const archiveTask = async (task) => {
     if (!task) return false
     try {
@@ -440,5 +391,5 @@ export const useHallTaskActions = ({
     }
   }
 
-  return { ...ordinaryCancellation, archiveTask, autoAssignTask, assignTask, cancelFunding, createTask, loadSettlement, fundedClaimState, refreshFundedClaim, fundedCreateRecovery, resumeFundedCreate }
+  return { ...ordinaryCancellation, archiveTask, assignTask, cancelFunding, createTask, loadSettlement, fundedClaimState, refreshFundedClaim, fundedCreateRecovery, resumeFundedCreate }
 }

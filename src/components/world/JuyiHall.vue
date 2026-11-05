@@ -386,7 +386,6 @@
             @cancel-funded-quote="settleFundedQuote(false)"
             @refresh-funded-claim="refreshFundedClaim"
             @recruit-agent="beginHostedPointFlow"
-            @auto-assign-task="autoAssignTask"
             @assign-task="assignTask"
             @archive-task="archiveTask"
             @brief-selected-task="briefSelectedTask"
@@ -1471,7 +1470,6 @@ const {
   markRecommendedAgents,
   markTaskArchived,
   markTaskAssigned,
-  markTaskAutoAssigned,
   markTaskCreated,
   resetSceneFeedback,
   sceneAgents,
@@ -2168,7 +2166,6 @@ const {
   refreshFundedClaim,
   resumeFundedCreate: runResumeFundedCreate,
   archiveTask: runArchiveTask,
-  autoAssignTask: runAutoAssignTask,
   assignTask: runAssignTask,
   cancelTask,
   cancellationState,
@@ -2262,17 +2259,6 @@ const resumeFundedCreate = async () => {
   const created = await runResumeFundedCreate()
   if (created) markTaskCreated(selectedTask.value)
   return created
-}
-
-const autoAssignTask = async (task) => {
-  if (task?.funding?.mode === 'FUNDED_SINGLE_AGENT') return false
-  await runAutoAssignTask(task)
-  const currentTask = selectedTask.value || task
-  const assignedIds = currentTask?.assignedAgentIds || (currentTask?.assignedAgentId ? [currentTask.assignedAgentId] : [])
-  const assignedAgents = assignedIds
-    .map(agentId => mapAgents.value.find(agent => agent.agentId === agentId) || agents.value.find(agent => agent.agentId === agentId) || agentId)
-    .filter(Boolean)
-  markTaskAutoAssigned(currentTask, assignedAgents)
 }
 
 const archiveConfirmationPending = ref(false)
@@ -2576,6 +2562,10 @@ const assignTask = async (task, agent) => {
   if (task.funding?.mode === 'FUNDED_SINGLE_AGENT' && !economyPreviewEnabled.value) return false
   if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT' && targetAgents.some(item => !canAssign(task, item))) return false
 
+  if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT' && targetAgents.length !== 1) {
+    showToast('请核对事项报价，并选择一名承办人')
+    return false
+  }
   const oneOrdinaryTarget = task.funding?.mode !== 'FUNDED_SINGLE_AGENT' && targetAgents.length === 1
   if (oneOrdinaryTarget) {
     const started = await startPointAndStart({ task, agent: targetAgents[0] })

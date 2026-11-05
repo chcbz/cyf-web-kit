@@ -77,34 +77,14 @@
           <span>{{ task.assignedAgentName || $t('juyiting.unassigned') }}</span>
         </div>
 
-        <div class="task-actions">
-          <var-select
-            v-model="taskAssignments[task.id]"
-            class="agent-select"
-            :options="agentOptions"
-            label-key="text"
-            value-key="value"
-            :placeholder="$t('juyiting.assign_agent')"
-            :disabled="!agentOptions.length"
-          />
-          <var-button
-            type="primary"
-            size="small"
-            :loading="agentStore.assigning"
-            :disabled="!taskAssignments[task.id]"
-            @click="assign(task.id)"
-          >
-            {{ $t('juyiting.assign') }}
-          </var-button>
-        </div>
+        <p class="task-actions">请在办事页核对事项报价后选择承办人。</p>
       </article>
     </div>
   </section>
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
-import { Dialog } from '@varlet/ui'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAgentStore } from '@/stores/agent'
 
@@ -112,7 +92,6 @@ const { t } = useI18n()
 const agentStore = useAgentStore()
 const keyword = ref('')
 const taskStatus = ref('')
-const taskAssignments = reactive({})
 
 const taskStatusOptions = computed(() => [
   { text: t('juyiting.status_all'), value: '' },
@@ -123,45 +102,11 @@ const taskStatusOptions = computed(() => [
   { text: t('juyiting.task_failed'), value: 'failed' }
 ])
 
-const agentOptions = computed(() => {
-  return agentStore.availableAgents.map(agent => ({
-    text: `${agent.name} - ${agent.abilities.join('/')}`,
-    value: agent.agentId
-  }))
-})
-
-watch(
-  () => agentStore.tasks,
-  (tasks) => {
-    tasks.forEach(task => {
-      taskAssignments[task.id] = task.assignedAgentId || taskAssignments[task.id] || ''
-    })
-  },
-  { immediate: true }
-)
-
 const refresh = () => {
   agentStore.fetchRewardTasks({
     status: taskStatus.value,
     keyword: keyword.value.trim()
   })
-}
-
-const assign = async (taskId) => {
-  try {
-    await agentStore.assignTask(taskId, taskAssignments[taskId])
-    Dialog({
-      title: t('app.notify'),
-      message: t('juyiting.assign_success'),
-      confirmButtonText: t('app.confirm')
-    })
-  } catch (error) {
-    Dialog({
-      title: t('app.alert'),
-      message: error.message || t('juyiting.assign_failed'),
-      confirmButtonText: t('app.confirm')
-    })
-  }
 }
 
 const priorityLabel = (priority) => {

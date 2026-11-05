@@ -386,27 +386,6 @@
                   <span class="hall-business-label">密议</span>
                 </button>
                 <button
-                  class="assign-selected-agents hall-business-action"
-                  type="button"
-                  :aria-label="`点已选 ${selectedAssignees.length} 人领令`"
-                  :disabled="isFundedTask(detailTask) || !selectedAssignees.length"
-                  :title="`点已选 ${selectedAssignees.length} 人领令`"
-                  @click="$emit('assign-task', detailTask, selectedAssignees)"
-                >
-
-                  <span class="hall-business-label">点将已选 {{ selectedAssignees.length }}</span>
-                </button>
-                <button
-                  class="auto-assign-task hall-business-action"
-                  type="button"
-                  aria-label="宋江代为点将"
-                  :disabled="isFundedTask(detailTask) || !hasTaskAction(detailTask, 'ASSIGN') || !matterCandidates.length"
-                  title="宋江代为点将"
-                  @click="$emit('auto-assign-task', detailTask)"
-                >
-                  <span class="hall-business-label">宋江代为点将</span>
-                </button>
-                <button
                   class="discuss-task-button hall-business-action"
                   type="button"
                   aria-label="进入议事"
@@ -454,14 +433,6 @@
                 :class="{ active: selectedAgent?.agentId === agent.agentId }"
               >
                 <button class="recommended-agent-main" type="button" @click="$emit('select-agent', agent)">
-                  <input
-                    class="assignee-check"
-                    type="checkbox"
-                    :checked="selectedAssigneeIds.includes(agent.agentId)"
-                    :disabled="isFundedTask(detailTask) || !canAssign(detailTask, agent)"
-                    @click.stop
-                    @change="toggleAssignee(agent)"
-                  />
                   <span class="mini-avatar portrait-avatar" :style="portraitStyle(agent)" :title="portraitName(agent)"></span>
                   <span>
                     <strong>{{ agentDisplayName(agent) }}</strong>
@@ -535,7 +506,6 @@ const recommendationStateText = state => ({
   ERROR: '智能推荐暂不可用，可重试或手动选择承办。',
   STALE: '事项或能力已变化，请重新推荐；原推荐不再使用。'
 }[state] || '智能推荐暂不可用。')
-
 
 import { assignedTaskTarget, assigneeProviderText, assigneeAvailabilityText } from '@/composables/juyiting/hallAssigneeCandidates.js'
 import { projectHallTask } from '../../composables/juyiting/hallTaskPresentation.js'
@@ -615,7 +585,6 @@ const emit = defineEmits([
   'refresh-candidates',
   'more-candidates',
   'archive-task',
-  'auto-assign-task',
   'brief-selected-task',
   'cancel-funding',
   'cancel-task',
@@ -647,7 +616,6 @@ const emit = defineEmits([
 ])
 
 const modalTask = ref(null)
-const selectedAssigneeIds = ref([])
 const requirementCreateInputSummary = computed(() => {
   const intent = props.requirementCreateState?.intent
   const refs = (intent?.schemaVersion === 2 ? intent.body?.attachments : intent?.body?.inputRefs) || []
@@ -655,7 +623,6 @@ const requirementCreateInputSummary = computed(() => {
 })
 watch(() => [props.identityScope, props.authorizationGeneration], () => {
   modalTask.value = null
-  selectedAssigneeIds.value = []
 }, { flush: 'sync' })
 const detailTask = computed(() => modalTask.value)
 // Display only the already-validated context for this exact task revision; never grant acceptance here.
@@ -849,12 +816,6 @@ const fundedClaimBlocked = (task, agent) => {
 }
 const formatMoney = value => formatWen(typeof value === 'string' && isCanonicalWenAmount(value) ? value : '0')
 const canCancelFunding = task => isFundedTask(task) && hasTaskAction(task, 'ASSIGN') && typeof (task.version ?? task.taskVersion) === 'string'
-const selectedAssignees = computed(() => {
-  const selected = new Set(selectedAssigneeIds.value)
-  return matterCandidates.value.filter(agent =>
-    selected.has(agent.agentId) && props.canAssign(detailTask.value, agent))
-})
-
 const agentDisplayName = (agent) => agent?.displayName || agent?.name || agent?.personaName || agent?.agentId || ''
 const recommendationReason = (agent) => agent?.recommendationReason || ''
 const taskAssigneeIds = (task) => {
@@ -863,21 +824,9 @@ const taskAssigneeIds = (task) => {
   return task.assignedAgentId ? [task.assignedAgentId] : []
 }
 
-const toggleAssignee = (agent) => {
-  if (isFundedTask(detailTask.value) || !props.canAssign(detailTask.value, agent)) return
-  const id = agent?.agentId
-  if (!id) return
-  if (selectedAssigneeIds.value.includes(id)) {
-    selectedAssigneeIds.value = selectedAssigneeIds.value.filter(item => item !== id)
-  } else {
-    selectedAssigneeIds.value = [...selectedAssigneeIds.value, id]
-  }
-}
-
 const openTask = (task) => {
   if (props.embeddedHall && !props.detailAllowed && !modalTask.value) return false
   modalTask.value = task
-  selectedAssigneeIds.value = taskAssigneeIds(task)
   emit('select-task', task)
 }
 
@@ -894,7 +843,6 @@ watch(() => props.selectedTask, (task) => {
 
   if (modalTask.value?.id === task.id) {
     modalTask.value = task
-    selectedAssigneeIds.value = taskAssigneeIds(task)
   }
 })
 const canGoBack = computed(() => Boolean(modalTask.value))
@@ -983,7 +931,6 @@ button:disabled {
   color: #765f40;
   font-size: 13px;
 }
-
 
 .panel-toolbar button {
   display: inline-flex;
@@ -1312,12 +1259,6 @@ button:disabled {
   background: rgba(255, 253, 246, 0.72);
   color: #2f261c;
   text-align: left;
-}
-
-.assignee-check {
-  width: 16px;
-  height: 16px;
-  accent-color: #7c1f1b;
 }
 
 .recommended-agent-actions {

@@ -31,7 +31,7 @@ describe('economy preview wallet and funded bounty integration', () => {
     expect(bountySource).to.include("$emit('assign-task', detailTask, agent)")
     expect(bountySource).to.include("$emit('cancel-funding', detailTask)")
     expect(bountySource).to.include("$emit('load-settlement', detailTask)")
-    expect(bountySource).to.include('isFundedTask(detailTask) || !selectedAssignees.length')
+    expect(bountySource).not.to.include('assign-selected-agents')
     expect(bountySource).to.include("fundedQuotePreview.quote.priceBookVersion")
     expect(hallSource).to.include(':funded-preview-enabled="economyPreviewEnabled"')
     expect(hallSource).to.not.include('/agent/active')

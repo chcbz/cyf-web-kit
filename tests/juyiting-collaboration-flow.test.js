@@ -124,7 +124,8 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(bountySource).to.include("$emit('assign-task', detailTask, agent)")
     expect(hallSource).to.include('useHallTaskActions')
     expect(hallTaskActionsSource).to.include('const assignTask = async (task, agent')
-    expect(hallTaskActionsSource).to.include('agentId: targetAgent.agentId')
+    expect(hallSource).to.include('await startPointAndStart({ task, agent: targetAgents[0] })')
+    expect(hallTaskActionsSource).not.to.include('/assign`')
   })
 
   it('keeps funded-bounty preview wiring capability-gated without changing map and roster boundaries', () => {
@@ -241,7 +242,7 @@ describe('JuyiHall collaboration flow contract', () => {
     expect(hallSource).to.include('chatMentionAgents')
     expect(bountySource).not.to.include('new-task-button')
     expect(bountySource).not.to.include('openCreateRequirement')
-    expect(bountySource).to.include('assign-selected-agents')
+    expect(bountySource).not.to.include('assign-selected-agents')
     expect(bountySource).to.include("$emit('archive-task'")
     expect(bountySource).to.include("$emit('discuss-task'")
   })

@@ -1858,12 +1858,12 @@ describe('JuyiHall component behavior', () => {
     await actionButtons[0].trigger('click')
     await actionButtons[1].trigger('click')
     await actionButtons[2].trigger('click')
-    await wrapper.find('.auto-assign-task').trigger('click')
+    expect(wrapper.find('.auto-assign-task').exists()).to.equal(false)
 
     expect(wrapper.emitted('select-agent')[0]).to.deep.equal([agent])
     expect(wrapper.emitted('assign-task')[0]).to.deep.equal([selectedTask, agent])
     expect(wrapper.emitted('brief-selected-task')[0]).to.deep.equal([selectedTask, agent])
-    expect(wrapper.emitted('auto-assign-task')[0]).to.deep.equal([selectedTask])
+    expect(wrapper.emitted('auto-assign-task')).to.equal(undefined)
   })
 
   it('does not reopen BountyPanel detail modal from a stale selected task', async () => {
@@ -1903,7 +1903,7 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.emitted('select-task')[0]).to.deep.equal([selectedTask])
   })
 
-  it('emits multi-assign, discussion and archive actions without task creation', async () => {
+  it('keeps BountyPanel discussion and archive without multi-assign or task creation', async () => {
     const selectedTask = {
       id: 'task-1',
       title: 'Inspect the camp',
@@ -1941,14 +1941,13 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.vm.openCreateRequirement).to.equal(undefined)
     expect(wrapper.find('.task-create-form').exists()).to.equal(false)
     await wrapper.find('.task-card').trigger('click')
-    await wrapper.findAll('.assignee-check')[0].setChecked(true)
-    await wrapper.findAll('.assignee-check')[1].setChecked(true)
-    await wrapper.find('.assign-selected-agents').trigger('click')
+    expect(wrapper.find('.assignee-check').exists()).to.equal(false)
+    expect(wrapper.find('.assign-selected-agents').exists()).to.equal(false)
     await wrapper.find('.discuss-task-button').trigger('click')
     await wrapper.find('.archive-task-button').trigger('click')
 
     expect(wrapper.emitted('create-task')).to.equal(undefined)
-    expect(wrapper.emitted('assign-task')[0]).to.deep.equal([selectedTask, agents])
+    expect(wrapper.emitted('assign-task')).to.equal(undefined)
     expect(wrapper.emitted('discuss-task')[0]).to.deep.equal([selectedTask, selectedTask.assignedTarget])
     expect(wrapper.emitted('archive-task')[0]).to.deep.equal([selectedTask])
   })
