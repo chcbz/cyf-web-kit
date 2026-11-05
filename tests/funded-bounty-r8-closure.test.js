@@ -20,7 +20,7 @@ const memoryStorage = () => {
 }
 const fundedTask = (version = '8') => ({ id: 'funded', title: '资金榜', status: 'open', taskVersion: version, funding: { mode: 'FUNDED_SINGLE_AGENT' } })
 const receipt = (overrides = {}) => ({
-  taskId: 'funded', fundingStatus: 'REFUNDED', refundTransactionId: 'refund-1', refundedMicro: '100', remainingMicro: '0', taskVersion: '9', fundingVersion: '2', refundedAt: '1000', ...overrides
+  taskId: 'funded', fundingStatus: 'REFUNDED', refundTransactionId: 'refund-1', refundedWen: '100', remainingWen: '0', taskVersion: '9', fundingVersion: '2', refundedAt: '1000', ...overrides
 })
 const actionsFor = ({ api, storage = memoryStorage(), scope = () => 'actor-a', tasks = ref([]), selectedTask = ref(null) }) => useHallTaskActions({
   agentApi: api,
@@ -58,8 +58,8 @@ describe('W11/W12 R8 funded recovery closure', () => {
       requests.push({ body, key: options.headers['Idempotency-Key'] })
       return success({ id: `task-${requests.length}`, ...body })
     } } })
-    expect(await actions.createTask({ title: 'first', grossBountyAmountMicro: '1', settlementPolicy: 'GROSS_INCLUSIVE' })).to.equal(true)
-    expect(await actions.createTask({ title: 'second', grossBountyAmountMicro: '2', settlementPolicy: 'GROSS_INCLUSIVE' })).to.equal(true)
+    expect(await actions.createTask({ title: 'first', grossBountyAmountWen: '1', settlementPolicy: 'GROSS_INCLUSIVE' })).to.equal(true)
+    expect(await actions.createTask({ title: 'second', grossBountyAmountWen: '2', settlementPolicy: 'GROSS_INCLUSIVE' })).to.equal(true)
     expect(requests.map(item => item.body.title)).to.deep.equal(['first', 'second'])
   })
 
@@ -71,14 +71,14 @@ describe('W11/W12 R8 funded recovery closure', () => {
     it(`fails closed before funded create when recovery storage has ${name}`, async () => {
       let creates = 0
       const actions = actionsFor({ storage, api: { create: async () => { creates += 1; return success({}) } } })
-      expect(await actions.createTask({ title: 'must not send', grossBountyAmountMicro: '1', settlementPolicy: 'GROSS_INCLUSIVE' })).to.equal(false)
+      expect(await actions.createTask({ title: 'must not send', grossBountyAmountWen: '1', settlementPolicy: 'GROSS_INCLUSIVE' })).to.equal(false)
       expect(creates).to.equal(0)
       expect(actions.fundedCreateRecovery.value).to.equal(null)
     })
   }
 
   for (const [field, value] of [
-    ['taskId', 'other'], ['fundingStatus', 'HELD'], ['refundTransactionId', ''], ['refundedMicro', '01'], ['remainingMicro', 0], ['taskVersion', '8'], ['fundingVersion', 'x'], ['refundedAt', '-1']
+    ['taskId', 'other'], ['fundingStatus', 'HELD'], ['refundTransactionId', ''], ['refundedWen', '01'], ['remainingWen', 0], ['taskVersion', '8'], ['fundingVersion', 'x'], ['refundedAt', '-1']
   ]) {
     it(`rejects malformed full CancelReceipt field ${field}`, async () => {
       const task = fundedTask()

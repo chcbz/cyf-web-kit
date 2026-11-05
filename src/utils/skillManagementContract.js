@@ -25,7 +25,7 @@ export const utf8Compare = (a, b) => {
 }
 export const sortSkillPermissions = values => [...values].sort(utf8Compare)
 const permissions = unique(v => text(v) && v.length > 0)
-const money = shape({ amountMinor: skillRevision, currency: one(['SILVER']) })
+const money = shape({ amountMinor: skillRevision, currency: one(['WEN']) })
 const action = one(['INSTALL', 'UPGRADE', 'ENABLE', 'DISABLE', 'UNINSTALL'])
 const allowedAction = one(['VIEW', 'INSTALL', 'UPGRADE', 'ENABLE', 'DISABLE', 'UNINSTALL', 'RETRY', 'RECONCILE'])
 // Display labels only: approval, digest and wire data retain the original permission keys.

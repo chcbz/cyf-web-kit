@@ -8,14 +8,14 @@
     <p class="separate-fees"><strong>任务用量、技能购买、悬赏费用另计，不包含在托管租金内。</strong></p>
     <p v-if="rent.busy.value" role="status">正在查询租约…</p>
     <p v-if="rent.error.value" role="alert">{{ rent.error.value }}</p>
-    <p v-if="rent.wallet.value">钱袋可用：{{ money(rent.wallet.value.availableMicro) }}；已预留：{{ money(rent.wallet.value.heldMicro) }}</p>
+    <p v-if="rent.wallet.value">钱袋可用：{{ money(rent.wallet.value.available.amountMinor) }}；已预留：{{ money(rent.wallet.value.held.amountMinor) }}</p>
 
     <section v-if="receipt" class="hosting-receipt" role="status">
       <strong>{{ receiptTitle }}</strong>
       <p v-if="receipt.status === 'FUNDS_RESERVED'">租金已预留，尚未完成安顿。请查看下方租约进度。</p>
       <p v-else-if="receipt.operation === 'REPROVISION'">免费重整请求已接受，不表示服务已就绪；不会续租或重置到期日。</p>
       <p v-else>本次手动续租付款已确认；当前到期时间以最新租约为准。</p>
-      <p>订单：{{ receipt.transactionId || receipt.requestId }}；金额 {{ money(receipt.amountMicro) }}；时间 {{ timestamp(receipt.occurredAt) }}</p>
+      <p>订单：{{ receipt.transactionId || receipt.requestId }}；金额 {{ money(receipt.amountWen) }}；时间 {{ timestamp(receipt.occurredAt) }}</p>
       <p v-if="rent.state.value.refreshPending"><strong>请求已确认，租约刷新待完成；请重查，不要重复付款。</strong></p>
     </section>
 
@@ -23,7 +23,7 @@
       <p v-if="!lookup.managed">尚未开通托管。确认报价后才会收费。</p>
       <template v-else>
         <h4>{{ leaseTitle }}</h4>
-        <p>已付 {{ money(lookup.lease.amountMicro) }} / {{ period(lookup.lease.periodSeconds) }}</p>
+        <p>已付 {{ money(lookup.lease.amountWen) }} / {{ period(lookup.lease.periodSeconds) }}</p>
         <p>起租 {{ timestamp(lookup.lease.paidFrom) }}；到期 {{ timestamp(lookup.lease.paidThrough) }}</p>
         <p>到期后保留资料、技能和已有成果，正在进行的任务不受本页面影响。</p>
         <p v-if="lookup.intent">预留流水 {{ lookup.intent.reserveTransactionId }}</p>
@@ -42,13 +42,11 @@
 
     <section v-if="quote" class="hosting-quote" aria-label="租金报价确认">
       <h4>{{ quote.purpose === 'INITIAL' ? '初次安顿报价' : '手动续租报价' }}</h4>
-      <p><strong>{{ money(quote.amountMicro) }} / {{ period(quote.periodSeconds) }}</strong></p>
+      <p><strong>{{ money(quote.amountWen) }} / {{ period(quote.periodSeconds) }}</strong></p>
       <p>报价有效至 {{ timestamp(quote.expiresAt) }}</p>
       <p>初租从服务可用时起算；续租从当前时间或原到期时间中较晚者起算。</p>
       <p v-if="rent.quoteExpired.value" role="alert">报价已过期，请取消后重新预览；不会自动换价付款。</p>
-      <p v-else-if="rent.needsOnboardingGrant.value" role="status">余额不足，正在为首次山寨安顿领取一次性迎新安顿金；不会改走自家接应。</p>
       <p v-else-if="rent.wallet.value && !rent.canConfirm.value" role="status">余额不足或当前租约/选择待核对，暂不可付款。</p>
-      <button v-if="rent.needsOnboardingGrant.value" type="button" :disabled="rent.busy.value" @click="rent.claimOnboardingGrant">重试领取迎新安顿金</button>
       <button type="button" :disabled="!rent.canConfirm.value" @click="acceptedAction(rent.confirmQuote)">确认此报价并{{ quote.purpose === 'INITIAL' ? '预留租金' : '手动续租付款' }}</button>
       <button type="button" :disabled="rent.busy.value || !!rent.state.value.operation" @click="rent.cancelQuote">取消报价，不付款</button>
     </section>
@@ -69,7 +67,7 @@ import { agentApi, economyApi } from '../../composables/useHttp.js'
 import { useApiStore } from '../../stores/api.js'
 import { useHostingRent } from '../../composables/juyiting/useHostingRent.js'
 import { loadEconomyPreviewCapability } from '../../utils/economyPreviewCapability.js'
-import { formatSilverMicro, isCanonicalDecimalString, isEconomyPreviewBuildEnabled } from '../../utils/silverAmount.js'
+import { formatWen, isCanonicalDecimalString, isEconomyPreviewBuildEnabled } from '../../utils/wenAmount.js'
 
 const props = defineProps({ persona: { type: Object, required: true }, resolvePersona: { type: Function, required: true } })
 const emit = defineEmits(['close', 'hosting-changed', 'hosting-confirmed'])
@@ -88,7 +86,7 @@ const leaseTitle = computed(() => {
   if (lookup.value.admission === 'RENEWAL_REQUIRED' || BigInt(lookup.value.lease.paidThrough) <= BigInt(rent.clock.value)) return '租期已到，待手动续租'
   return '租约已生效'
 })
-const money = value => isCanonicalDecimalString(value) ? formatSilverMicro(value) : '—'
+const money = value => isCanonicalDecimalString(value) ? formatWen(value) : '—'
 const period = value => {
   if (!isCanonicalDecimalString(value)) return '—'
   return BigInt(value) % 86400n === 0n ? `${BigInt(value) / 86400n} 天` : `${value} 秒`

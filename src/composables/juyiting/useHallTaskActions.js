@@ -1,6 +1,6 @@
 import { computed, ref, unref, watch } from 'vue'
 import { useHallOrdinaryCancellation } from './useHallOrdinaryCancellation.js'
-import { isCanonicalDecimalString } from '../../utils/silverAmount.js'
+import { isCanonicalDecimalString } from '../../utils/wenAmount.js'
 import { createEconomyRequestIntentStore } from './economyRequestIntent.js'
 
 // The HTTP boundary returns business DTOs and throws on unsuccessful responses.
@@ -12,7 +12,7 @@ const taskVersion = task => {
   return isCanonicalDecimalString(version) ? version : ''
 }
 const DEFINITIVE_FUNDED_FAILURE_CODES = new Set([
-  'INSUFFICIENT_SILVER', 'IDEMPOTENCY_CONFLICT', 'FUNDED_TEAM_NOT_SUPPORTED'
+  'INSUFFICIENT_WEN', 'IDEMPOTENCY_CONFLICT', 'FUNDED_TEAM_NOT_SUPPORTED'
 ])
 const isDefinitiveFundedFailure = error => DEFINITIVE_FUNDED_FAILURE_CODES.has(error?.code)
 const defaultIdempotencyKey = () => globalThis.crypto?.randomUUID?.() || `economy-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -106,7 +106,7 @@ export const useHallTaskActions = ({
     return true
   }
   const createTask = async (payload) => {
-    const funded = Boolean(payload?.grossBountyAmountMicro)
+    const funded = Boolean(payload?.grossBountyAmountWen)
     if (!funded) {
       try {
         const task = await agentApi.create('/tasks', payload, { autoLoading: false })
@@ -170,8 +170,8 @@ export const useHallTaskActions = ({
     validString(quote.priceBookVersion) && validString(quote.recommendation) &&
     Array.isArray(quote.reasonCodes) && quote.reasonCodes.every(code => typeof code === 'string') &&
     ['input', 'cachedInput', 'output', 'reasoning'].every(key => isCanonicalDecimalString(quote.estimatedTokens?.[key])) &&
-    ['estimatedComputeMicro', 'worstComputeMicro', 'platformFeeMicro', 'estimatedAgentPayoutMicro',
-      'worstAgentPayoutMicro', 'minimumAcceptedPayoutMicro'].every(key => isCanonicalDecimalString(quote[key])) &&
+    ['estimatedComputeWen', 'worstComputeWen', 'platformFeeWen', 'estimatedAgentPayoutWen',
+      'worstAgentPayoutWen', 'minimumAcceptedPayoutWen'].every(key => isCanonicalDecimalString(quote[key])) &&
     timestamp(quote.expiresAt)
   const definitiveClaimFailures = new Set(['QUOTE_EXPIRED', 'TASK_VERSION_CONFLICT', 'AGENT_NOT_READY',
     'REQUIRED_SKILLS_MISMATCH', 'INSUFFICIENT_BOUNTY_BUDGET'])
@@ -246,7 +246,7 @@ export const useHallTaskActions = ({
           agentId,
           modelPreference: { provider: 'openai', model: 'configured-model' },
           contextRevision: version,
-          minimumAcceptedPayoutMicro: '0'
+          minimumAcceptedPayoutWen: '0'
         }
         const quote = await fundedRequest(`funded-quote:${id}:${agentId}:${version}`, key => agentApi.create(`/tasks/${encodeURIComponent(id)}/quotes`, quoteRequest, { autoLoading: false, headers: { 'Idempotency-Key': key } }))
         if (!matchingQuote(quote, id, agentId, version) || !unexpired(quote) ||
@@ -374,7 +374,7 @@ export const useHallTaskActions = ({
         expectedTaskVersion: version
       }, { autoLoading: false, headers: { 'Idempotency-Key': key } }))
       if (receipt?.taskId !== task.id || receipt?.fundingStatus !== 'REFUNDED' ||
-        !validString(receipt?.refundTransactionId) || !['refundedMicro', 'remainingMicro', 'taskVersion', 'fundingVersion', 'refundedAt'].every(field => isCanonicalDecimalString(receipt?.[field])) ||
+        !validString(receipt?.refundTransactionId) || !['refundedWen', 'remainingWen', 'taskVersion', 'fundingVersion', 'refundedAt'].every(field => isCanonicalDecimalString(receipt?.[field])) ||
         BigInt(receipt.taskVersion) <= BigInt(version)) {
         throw new Error('暂时无法确认撤销结果，请查询结果，勿重复付款。')
       }

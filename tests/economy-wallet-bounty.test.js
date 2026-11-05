@@ -18,14 +18,14 @@ describe('economy preview wallet and funded bounty integration', () => {
     expect(walletSource).to.include("isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)")
     expect(walletSource).to.include("economyApi.get('/wallet'")
     expect(walletSource).to.include("economyApi.get('/ledger', { pageSize: 50 }")
-    expect(walletSource).to.include('formatSilverMicro')
-    expect(walletSource).not.to.match(/parseFloat\(|Number\(wallet\.(availableMicro|heldMicro)/)
+    expect(walletSource).to.include('formatWen')
+    expect(walletSource).not.to.match(/parseFloat\(|Number\(wallet\.(availableWen|heldWen)/)
     expect(httpSource).to.include("export const economyApi = createApi('/economy')")
   })
 
   it('retains funded management and recovery without inline creation', () => {
     expect(bountySource).to.include('fundedPreviewEnabled')
-    expect(bountySource).to.include('grossBountyAmountMicro')
+    expect(bountySource).to.include('grossBountyAmountWen')
     expect(bountySource).not.to.include("emit('create-task'")
     expect(bountySource).to.include("fundedCreateRecovery.body.settlementPolicy")
     expect(bountySource).to.include("$emit('assign-task', detailTask, agent)")
@@ -39,7 +39,7 @@ describe('economy preview wallet and funded bounty integration', () => {
 
   it('quotes then claims a funded task for the clicked explicit agent without legacy assign or hidden selection', async () => {
     const calls = []
-    const task = { id: 'funded-1', title: 'Funded', status: 'open', version: '8', funding: { mode: 'FUNDED_SINGLE_AGENT', remainingMicro: '1000000000' } }
+    const task = { id: 'funded-1', title: 'Funded', status: 'open', version: '8', funding: { mode: 'FUNDED_SINGLE_AGENT', remainingWen: '1000000000' } }
     const clickedAgent = { agentId: 'clicked-agent', name: 'Clicked', status: 'online' }
     const hiddenAgent = ref({ agentId: 'hidden-agent', name: 'Hidden', status: 'online' })
     const selectedTask = ref(null)
@@ -58,7 +58,7 @@ describe('economy preview wallet and funded bounty integration', () => {
 
     expect(await actions.assignTask(task, clickedAgent)).to.equal(true)
     expect(calls.map(call => call.url)).to.deep.equal(['/tasks/funded-1/quotes', '/tasks/funded-1/claim'])
-    expect(calls[0].payload).to.deep.equal({ agentId: 'clicked-agent', modelPreference: { provider: 'openai', model: 'configured-model' }, contextRevision: '8', minimumAcceptedPayoutMicro: '0' })
+    expect(calls[0].payload).to.deep.equal({ agentId: 'clicked-agent', modelPreference: { provider: 'openai', model: 'configured-model' }, contextRevision: '8', minimumAcceptedPayoutWen: '0' })
     expect(calls[1].payload).to.deep.equal({ agentId: 'clicked-agent', quoteId: 'q-1', taskVersion: '8', allowQueue: false })
     expect(calls.every(call => call.options.headers['Idempotency-Key'] === 'idem-1')).to.equal(true)
     expect(calls.some(call => call.url.endsWith('/assign'))).to.equal(false)
@@ -69,16 +69,16 @@ describe('economy preview wallet and funded bounty integration', () => {
 
   it('blocks funded groups and uses frozen cancel and settlement routes', async () => {
     const calls = []
-    const task = { id: 'funded-2', title: 'Funded', status: 'open', version: '9', funding: { mode: 'FUNDED_SINGLE_AGENT', remainingMicro: '10' } }
+    const task = { id: 'funded-2', title: 'Funded', status: 'open', version: '9', funding: { mode: 'FUNDED_SINGLE_AGENT', remainingWen: '10' } }
     const actions = useHallTaskActions({
       agentApi: {
-        create: async (url, payload, options = {}) => { calls.push({ url, payload, options }); return ({ taskId: task.id, fundingStatus: 'REFUNDED', refundTransactionId: 'tx-1', refundedMicro: '10', remainingMicro: '0', taskVersion: '10', fundingVersion: '2', refundedAt: '1000' }) },
-        get: async url => { calls.push({ url }); return (url.endsWith('/settlement') ? { status: 'CANCELLED', refundMicro: '10' } : { ...task, taskVersion: '10', status: 'cancelled', funding: { ...task.funding, status: 'REFUNDED' } }) }
+        create: async (url, payload, options = {}) => { calls.push({ url, payload, options }); return ({ taskId: task.id, fundingStatus: 'REFUNDED', refundTransactionId: 'tx-1', refundedWen: '10', remainingWen: '0', taskVersion: '10', fundingVersion: '2', refundedAt: '1000' }) },
+        get: async url => { calls.push({ url }); return (url.endsWith('/settlement') ? { status: 'CANCELLED', refundWen: '10' } : { ...task, taskVersion: '10', status: 'cancelled', funding: { ...task.funding, status: 'REFUNDED' } }) }
       }, canAssign: () => true, createIdempotencyKey: () => 'idem-2', log: { warn: () => {} }, playError: () => {}, playSuccess: () => {}, selectedAgent: ref(null), selectedTask: ref(null), showToast: () => {}, tasks: ref([task])
     })
     expect(await actions.assignTask(task, [{ agentId: 'a' }, { agentId: 'b' }])).to.equal(false)
     expect(calls).to.deep.equal([])
-    expect((await actions.loadSettlement(task)).refundMicro).to.equal('10')
+    expect((await actions.loadSettlement(task)).refundWen).to.equal('10')
     expect(await actions.cancelFunding(task)).to.equal(true)
     expect(calls.map(call => call.url)).to.deep.equal(['/tasks/funded-2/settlement', '/tasks/funded-2/funding/cancel', '/tasks/funded-2'])
     expect(calls[1].payload).to.deep.equal({ expectedTaskVersion: '9' })
@@ -91,7 +91,7 @@ describe('funded bounty remediation', () => {
     title: 'Funded',
     status: 'open',
     version: '8',
-    funding: { mode: 'FUNDED_SINGLE_AGENT', remainingMicro: '100' }
+    funding: { mode: 'FUNDED_SINGLE_AGENT', remainingWen: '100' }
   })
   const actionOptions = (agentApi, overrides = {}) => {
     const values = new Map()
@@ -147,7 +147,7 @@ describe('funded bounty remediation', () => {
         return ({ id: 'created', title: 'Created' })
       }
     }))
-    const createPayload = { title: 'Created', grossBountyAmountMicro: '100', settlementPolicy: 'GROSS_INCLUSIVE' }
+    const createPayload = { title: 'Created', grossBountyAmountWen: '100', settlementPolicy: 'GROSS_INCLUSIVE' }
     expect(await createActions.createTask(createPayload)).to.equal(false)
     expect(await createActions.createTask(createPayload)).to.equal(false)
     expect(await createActions.resumeFundedCreate()).to.equal(true)
@@ -193,7 +193,7 @@ describe('funded bounty remediation', () => {
       create: async (_url, _payload, options) => {
         cancelKeys.push(options.headers['Idempotency-Key'])
         if (++cancelAttempts === 1) throw new TypeError('cancel response lost')
-        return ({ taskId: cancelTask.id, fundingStatus: 'REFUNDED', refundTransactionId: 'tx-2', refundedMicro: '100', remainingMicro: '0', taskVersion: '9', fundingVersion: '2', refundedAt: '1000' })
+        return ({ taskId: cancelTask.id, fundingStatus: 'REFUNDED', refundTransactionId: 'tx-2', refundedWen: '100', remainingWen: '0', taskVersion: '9', fundingVersion: '2', refundedAt: '1000' })
       }
     }))
     expect(await cancelActions.cancelFunding(cancelTask)).to.equal(false)
@@ -270,7 +270,7 @@ describe('funded bounty remediation', () => {
       throw new Error('expected HTTP failure')
     }
     const conflict = await actualHttpError(409, 'IDEMPOTENCY_CONFLICT')
-    const insufficient = await actualHttpError(409, 'INSUFFICIENT_SILVER')
+    const insufficient = await actualHttpError(409, 'INSUFFICIENT_WEN')
     expect(conflict).to.include({ status: 409, code: 'IDEMPOTENCY_CONFLICT' })
     expect(conflict.response).to.be.instanceOf(Response)
 
@@ -283,7 +283,7 @@ describe('funded bounty remediation', () => {
         throw new TypeError('response dropped after send')
       }
     }))
-    const payload = { title: 'HTTP shape', grossBountyAmountMicro: '1', settlementPolicy: 'GROSS_INCLUSIVE' }
+    const payload = { title: 'HTTP shape', grossBountyAmountWen: '1', settlementPolicy: 'GROSS_INCLUSIVE' }
     expect(await actions.createTask(payload)).to.equal(false)
     expect(await actions.createTask(payload)).to.equal(false)
     expect(await actions.createTask(payload)).to.equal(false)

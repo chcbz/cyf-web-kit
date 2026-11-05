@@ -63,7 +63,7 @@ describe('funded bounty explicit quote confirmation (W05 DTO)', () => {
     h.confirmation.resolve(true)
     expect(await pending).to.equal(true)
     expect(h.calls.map(item => item.url)).to.deep.equal(['/tasks/funded/quotes', '/tasks/funded/claim', '/tasks/funded'])
-    expect(h.calls[0].body).to.deep.equal({ agentId: 'explicit-agent', modelPreference: { provider: 'openai', model: 'configured-model' }, contextRevision: '8', minimumAcceptedPayoutMicro: '0' })
+    expect(h.calls[0].body).to.deep.equal({ agentId: 'explicit-agent', modelPreference: { provider: 'openai', model: 'configured-model' }, contextRevision: '8', minimumAcceptedPayoutWen: '0' })
     expect(h.calls[1].body).to.deep.equal({ agentId: 'explicit-agent', quoteId: 'q-1', taskVersion: '8', allowQueue: false })
     expect(h.task).to.include({ id: 'funded', taskVersion: '9', status: 'assigned', assignedAgentId: 'explicit-agent' })
     expect(h.task).not.to.have.property('claimedAt')
@@ -105,7 +105,7 @@ describe('funded bounty explicit quote confirmation (W05 DTO)', () => {
 
   for (const mismatch of [
     { taskId: 'other' }, { agentId: 'other' }, { taskVersion: 8 }, { taskVersion: '08' },
-    { expiresAt: '1000' }, { estimatedComputeMicro: 10 },
+    { expiresAt: '1000' }, { estimatedComputeWen: 10 },
     { estimatedTokens: { input: '1', cachedInput: '01', output: '1', reasoning: '1' } }
   ]) {
     it(`rejects invalid server quote ${JSON.stringify(mismatch)} before showing confirmation`, async () => {
@@ -331,7 +331,7 @@ describe('funded bounty explicit quote confirmation (W05 DTO)', () => {
       h.task.taskVersion = version
       expect(await h.actions.assignTask(h.task, h.agent)).to.equal(true)
       expect(requests.map(item => item.method)).to.deep.equal(['POST', 'POST', 'GET'])
-      expect(requests[0].body).to.deep.equal({ agentId: 'explicit-agent', modelPreference: { provider: 'openai', model: 'configured-model' }, contextRevision: version, minimumAcceptedPayoutMicro: '0' })
+      expect(requests[0].body).to.deep.equal({ agentId: 'explicit-agent', modelPreference: { provider: 'openai', model: 'configured-model' }, contextRevision: version, minimumAcceptedPayoutWen: '0' })
       expect(requests[1].body.taskVersion).to.equal(version)
       expect(h.task.taskVersion).to.equal(nextVersion)
     } finally {
@@ -401,7 +401,7 @@ describe('funded bounty R5 durable intent and cancellation lifecycle', () => {
   it('rejects a quote missing the canonical minimum payout before confirmation', async () => {
     let prompted = false
     const h = harness({
-      agentApi: { create: async () => success(fundedQuote({ minimumAcceptedPayoutMicro: undefined })) },
+      agentApi: { create: async () => success(fundedQuote({ minimumAcceptedPayoutWen: undefined })) },
       confirmFundedQuote: async () => { prompted = true; return true }
     })
     expect(await h.actions.assignTask(h.task, h.agent)).to.equal(false)
@@ -418,13 +418,13 @@ describe('funded bounty R5 durable intent and cancellation lifecycle', () => {
         return success({ id: `task-${requests.length}`, ...body })
       }
     }
-    const original = { title: 'original funded', grossBountyAmountMicro: '100', settlementPolicy: 'GROSS_INCLUSIVE' }
+    const original = { title: 'original funded', grossBountyAmountWen: '100', settlementPolicy: 'GROSS_INCLUSIVE' }
     const first = harness({ agentApi: api, fundedActorScopeKey: () => 'actor-a', fundedIntentStorage: storage })
     expect(await first.actions.createTask(original)).to.equal(false)
     const otherScope = harness({ agentApi: api, fundedActorScopeKey: () => 'actor-b', fundedIntentStorage: storage })
-    expect(await otherScope.actions.createTask({ title: 'other actor', grossBountyAmountMicro: '200', settlementPolicy: 'GROSS_INCLUSIVE' })).to.equal(true)
+    expect(await otherScope.actions.createTask({ title: 'other actor', grossBountyAmountWen: '200', settlementPolicy: 'GROSS_INCLUSIVE' })).to.equal(true)
     const remounted = harness({ agentApi: api, fundedActorScopeKey: () => 'actor-a', fundedIntentStorage: storage })
-    expect(await remounted.actions.createTask({ title: 'edited draft', grossBountyAmountMicro: '999', settlementPolicy: 'GROSS_INCLUSIVE' })).to.equal(false)
+    expect(await remounted.actions.createTask({ title: 'edited draft', grossBountyAmountWen: '999', settlementPolicy: 'GROSS_INCLUSIVE' })).to.equal(false)
     expect(await remounted.actions.resumeFundedCreate()).to.equal(true)
     expect(requests[2]).to.deep.equal(requests[0])
     expect(requests[2].body).to.deep.equal(original)
@@ -434,7 +434,7 @@ describe('funded bounty R5 durable intent and cancellation lifecycle', () => {
   it('reports an immutable REFUNDED receipt as confirmed when canonical cancellation readback is unavailable', async () => {
     const h = harness({
       agentApi: {
-        create: async () => success({ taskId: 'funded', fundingStatus: 'REFUNDED', refundTransactionId: 'tx-1', refundedMicro: '100', remainingMicro: '0', taskVersion: '9', fundingVersion: '2', refundedAt: '1000' }),
+        create: async () => success({ taskId: 'funded', fundingStatus: 'REFUNDED', refundTransactionId: 'tx-1', refundedWen: '100', remainingWen: '0', taskVersion: '9', fundingVersion: '2', refundedAt: '1000' }),
         get: async () => { throw new TypeError('canonical readback unavailable') }
       }
     })
@@ -446,7 +446,7 @@ describe('funded bounty R5 durable intent and cancellation lifecycle', () => {
   it('keeps a verified REFUNDED receipt confirmed when canonical readback is stale', async () => {
     const h = harness({
       agentApi: {
-        create: async () => success({ taskId: 'funded', fundingStatus: 'REFUNDED', refundTransactionId: 'tx-stale', refundedMicro: '100', remainingMicro: '0', taskVersion: '9', fundingVersion: '2', refundedAt: '1000' }),
+        create: async () => success({ taskId: 'funded', fundingStatus: 'REFUNDED', refundTransactionId: 'tx-stale', refundedWen: '100', remainingWen: '0', taskVersion: '9', fundingVersion: '2', refundedAt: '1000' }),
         get: async () => success({ id: 'funded', taskVersion: '8', status: 'open', funding: { mode: 'FUNDED_SINGLE_AGENT' } })
       }
     })

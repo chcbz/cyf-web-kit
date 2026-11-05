@@ -1,13 +1,13 @@
 import { computed, getCurrentScope, onScopeDispose, ref, unref, watch } from 'vue'
 import { agentApi as defaultAgentApi } from './useHttp.js'
 import { registerIdentityCleanup } from '../utils/identityLifecycle.js'
-import { formatSilverMoney } from '../utils/silverAmount.js'
+import { formatWenMoney } from '../utils/wenAmount.js'
 import { parseStrictJson, protocolError } from '../utils/apiEnvelope.js'
 import { parseSkillManagement as parse, skillChangeTerminal, skillId, skillPathSegment, skillPermissionsSha256, sortSkillPermissions, utf8Compare } from '../utils/skillManagementContract.js'
 
 export const codeUnitCompare = utf8Compare
 export const normalizeApprovedPermissions = permissions => sortSkillPermissions([...new Set(permissions)])
-export const formatSkillMoney = value => { try { return formatSilverMoney(value) } catch { return '—' } }
+export const formatSkillMoney = value => { try { return formatWenMoney(value) } catch { return '—' } }
 export const formatInstalledSkillFact = skill => typeof skill === 'string' ? skill : `${skill?.skillKey || '未报告技能'}@${skill?.skillVersion || '版本未报告'}`
 export const formatSkillProductIdentity = p => `${p?.skillKey || '未报告技能'}@${p?.skillVersion || p?.currentVersion?.skillVersion || '版本未报告'}/${p?.productVersionId || p?.currentVersion?.productVersionId || '商品版本未报告'}`
 export const formatEntitlementSkillFact = formatSkillProductIdentity

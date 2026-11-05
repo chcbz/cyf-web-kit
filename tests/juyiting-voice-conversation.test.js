@@ -1,3 +1,4 @@
+import { useHallCampaignGrant } from '../src/composables/juyiting/useHallCampaignGrant.js'
 import { useHallAgentAbilitiesEditor } from '../src/composables/juyiting/useHallAgentAbilitiesEditor.js'
 import { useHallSelectedOutputReview } from '../src/composables/juyiting/useHallSelectedOutputReview.js'
 import { selectionKey } from '../src/composables/juyiting/hallSelectedOutputs.js'
@@ -31,7 +32,7 @@ import { createPcm16MonoWav, validatePcm16MonoWav } from '../src/utils/pcmWavRec
 import { identityCleanupHandlerCount, stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 import { resolveLiveMapPreviewActivation } from '../src/composables/juyiting/liveMapPreviewPolicy.js'
 import { resolveHallNavigationPresentation } from '../src/composables/juyiting/useHallPanels.js'
-import { isEconomyPreviewBuildEnabled } from '../src/utils/silverAmount.js'
+import { isEconomyPreviewBuildEnabled } from '../src/utils/wenAmount.js'
 
 const flush = async () => { for (let index = 0; index < 6; index += 1) await Promise.resolve(); await Vue.nextTick() }
 const withVoiceBrowserState = async run => {
@@ -88,7 +89,7 @@ const loadActualJuyiHall = mocks => {
     .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = mocks.${name}`)
     .replace(/import\.meta\.env/g, 'mocks.env')
     .replace('export default', 'return')
-  return new Function('Vue', 'mocks', body)(Vue, { useHallSelectedOutputReview, selectionKey, useHallDeliveryReview, useHallAgentProfileCapabilities, useHallAgentAbilitiesEditor, useExternalServicePolicy, assignedTaskTarget, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
+  return new Function('Vue', 'mocks', body)(Vue, { useHallSelectedOutputReview, selectionKey, useHallDeliveryReview, useHallAgentProfileCapabilities, useHallAgentAbilitiesEditor, useExternalServicePolicy, useHallCampaignGrant, economyApi: { create: async () => ({ grants: [] }) }, assignedTaskTarget, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
 }
 const requireSource = relativePath => {
   const { readFileSync } = globalThis.__voiceFs

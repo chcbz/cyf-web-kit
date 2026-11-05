@@ -13,14 +13,14 @@ const stub = { template: '<span />' }
 const compile = async () => {
   const filename = new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url)
   const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename: filename.pathname })
-  const silver = await import('../src/utils/silverAmount.js')
+  const silver = await import('../src/utils/wenAmount.js')
   const code = compileScript(descriptor, { id: 'controlled-image-checkbox', inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_m, names, path) => `const { ${names.split(',').map(x => x.trim().replace(/\s+as\s+/, ': ')).join(', ')} } = imports[${JSON.stringify(path)}]`)
     .replace(/^import\s+([^\s]+)\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_m, name, path) => `const ${name} = imports[${JSON.stringify(path)}]`)
     .replace('export default', 'return')
   return new Function('imports', code)({ vue: Vue, '../../composables/juyiting/hallAssigneeRecommendation.js': recommendationHelpers, '@/composables/juyiting/hallAssigneeCandidates.js': assigneeCandidates, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, './BountyActionIcon.vue': stub, './WorkItemPlanPanel.vue': stub,
     './TeamRecommendationPanel.vue': stub, './HallDraftEditor.vue': stub, './HallMaterialPicker.vue': stub,
-    '@/components/personal-workspace/TaskMaterialLinks.vue': stub, '@/utils/silverAmount': silver })
+    '@/components/personal-workspace/TaskMaterialLinks.vue': stub, '@/utils/wenAmount': silver })
 }
 const task = (id, taskVersion = '6', requirementRevision = '3') => ({ id, title: id, description: '', status: 'open', taskVersion, requirementRevision })
 const props = () => ({ embeddedHall: true, tasks: [], selectedTask: task('task-a'), selectedAgent: { agentId: 'agent-a' },

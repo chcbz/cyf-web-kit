@@ -55,7 +55,7 @@ describe('exact requirement/reference create contract', () => {
     ['fake owner', [{ ...image(), owner: 'other' }]], ['latest marker', [image('latest')]],
     ['too many refs', Array.from({ length: 33 }, (_, n) => ({ ...image(), fileId: `pwf_${n}` }))]
   ]) it(`rejects ${name} rather than silently filtering material`, () => { expect(requirementReferenceInputs(refs)).to.equal(null) })
-  for (const key of ['owner', 'tenantId', 'grossBountyAmountMicro', 'grantId', 'targetAgentId', 'costAuthorizationRef'])
+  for (const key of ['owner', 'tenantId', 'grossBountyAmountWen', 'grantId', 'targetAgentId', 'costAuthorizationRef'])
     it(`cannot reinterpret ${key} as ordinary task creation authority`, () => { expect(requirementCreateBody({ ...payload(), [key]: 'fake' })).to.equal(null) })
   it('persists actual NUL-separated scope, encoding keys and isolating owners', () => {
     const storage = memoryStorage(), a = createRequirementCreateIntentStore({ storage, scope: scopeA })
@@ -192,16 +192,16 @@ describe('actual JuyiHall ordinary/funded boundary', () => {
     const h = pageHarness()
     expect(await h.create(payload(), ok => h.acknowledgements.push(ok))).to.equal(true)
     expect(h.ordinary).to.deep.equal([payload()]); expect(h.funded).to.deep.equal([]); expect(h.acknowledgements).to.deep.equal([true])
-    expect(await h.create({ title: 'funded', grossBountyAmountMicro: '5' })).to.equal(true); expect(h.funded).to.have.length(1)
+    expect(await h.create({ title: 'funded', grossBountyAmountWen: '5' })).to.equal(true); expect(h.funded).to.have.length(1)
   })
   for (const state of ['PRESENT', 'CORRUPT', 'UNAVAILABLE']) it(`cannot replace ${state} ordinary intent via funded creation`, async () => {
-    const h = pageHarness({ ordinary: { state } }); expect(await h.create({ title: 'funded', grossBountyAmountMicro: '5' })).to.equal(false)
+    const h = pageHarness({ ordinary: { state } }); expect(await h.create({ title: 'funded', grossBountyAmountWen: '5' })).to.equal(false)
     expect(h.funded).to.deep.equal([]); expect(h.ordinary).to.deep.equal([])
   })
   it('does not mix references with funding or bypass unresolved funded-create recovery', async () => {
     const h = pageHarness({ fundedRecovery: { key: 'funding-original' } })
     expect(await h.create(payload())).to.equal(false)
-    expect(await h.create({ title: 'funded', grossBountyAmountMicro: '5', inputRefs: [image()] })).to.equal(false)
+    expect(await h.create({ title: 'funded', grossBountyAmountWen: '5', inputRefs: [image()] })).to.equal(false)
     expect(h.funded).to.deep.equal([]); expect(h.ordinary).to.deep.equal([])
   })
   it('compiles actual changed SFCs and wires exact recovery handlers', () => {
@@ -235,8 +235,8 @@ describe('mounted Bounty read/manage surface and original recovery', () => {
     const TaskMaterialLinks = Vue.defineComponent({ name: 'TaskMaterialLinks', render: () => Vue.h('section', { class: 'formal-task-execution' }, '明确开始正式办理（PDF）') })
     const filename = fileURLToPath(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url))
     const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
-    const silver = await import('../src/utils/silverAmount.js')
-    const imports = new Proxy({ './HallTaskResources.vue': Vue.defineComponent({ name: 'HallTaskResources', props: ['taskId'], render: () => Vue.h('section', { class: 'hall-task-resources' }) }), vue: Vue, '@/composables/juyiting/hallAssigneeCandidates.js': assigneeCandidates, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, '@/utils/silverAmount': silver, '@/components/personal-workspace/TaskMaterialLinks.vue': TaskMaterialLinks }, {
+    const silver = await import('../src/utils/wenAmount.js')
+    const imports = new Proxy({ './HallTaskResources.vue': Vue.defineComponent({ name: 'HallTaskResources', props: ['taskId'], render: () => Vue.h('section', { class: 'hall-task-resources' }) }), vue: Vue, '@/composables/juyiting/hallAssigneeCandidates.js': assigneeCandidates, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, '@/utils/wenAmount': silver, '@/components/personal-workspace/TaskMaterialLinks.vue': TaskMaterialLinks }, {
       get: (target, name) => target[name] ?? Vue.defineComponent({ render: () => Vue.h('span') })
     })
     const code = compileScript(descriptor, { id: 'mounted-reference-intake', inlineTemplate: true }).content

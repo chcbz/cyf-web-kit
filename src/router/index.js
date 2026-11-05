@@ -1,7 +1,7 @@
 import PublicLanding from '@/components/public/PublicLanding.vue'
 import GuestDemo from '@/components/public/GuestDemo.vue'
 import OAuthCallback from '@/components/OAuthCallback.vue'
-import { isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
+import { isEconomyPreviewBuildEnabled } from '@/utils/wenAmount'
 import { assessReadOnlyPreviewCapabilities } from '@/utils/economyReadOnlyPreviewPolicy'
 import { economyReadOnlyPreviewClient } from '@/composables/economyReadOnlyPreviewApi'
 import { profilePreviewFailureTarget } from '@/utils/profileNavigation'
@@ -173,7 +173,7 @@ export default [
     component: () => import('@/components/Wallet.vue'),
     beforeEnter: economyPreviewRouteGuard,
     meta: {
-      title: 'SILVER 钱袋',
+      title: 'WEN 钱袋',
       showInMenu: false
     }
   },

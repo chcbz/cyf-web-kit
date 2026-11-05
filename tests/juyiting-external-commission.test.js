@@ -11,7 +11,7 @@ import { useHallChatContext } from '../src/composables/juyiting/useHallChatConte
 import * as candidates from '../src/composables/juyiting/hallAssigneeCandidates.js'
 import * as presentation from '../src/composables/juyiting/hallTaskPresentation.js'
 import * as cancellation from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
-import * as silver from '../src/utils/silverAmount.js'
+import * as silver from '../src/utils/wenAmount.js'
 
 const pause = () => new Promise(resolve => setImmediate(resolve))
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no }); return { promise, resolve, reject } }
@@ -239,7 +239,7 @@ const loadPanel = name => {
   const Empty = Vue.defineComponent({ render: () => Vue.h('span') })
   const imports = new Proxy({ vue: Vue, '@/composables/juyiting/hallAssigneeCandidates.js': candidates,
     '../../composables/juyiting/hallTaskPresentation.js': presentation,
-    '../../composables/juyiting/useHallOrdinaryCancellation.js': cancellation, '@/utils/silverAmount': silver }, { get: (target, key) => target[key] || Empty })
+    '../../composables/juyiting/useHallOrdinaryCancellation.js': cancellation, '@/utils/wenAmount': silver }, { get: (target, key) => target[key] || Empty })
   const code = compileScript(descriptor, { id: `d31-${name}`, inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_, names, path) => `const { ${names.replace(/\s+as\s+/g, ': ')} } = imports[${JSON.stringify(path)}]`)
     .replace(/^import\s+(\w+)\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_, name, path) => `const ${name} = imports[${JSON.stringify(path)}]`)

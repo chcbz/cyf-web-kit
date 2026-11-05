@@ -1,4 +1,4 @@
-import { isCanonicalDecimalString as decimal } from '../../utils/silverAmount.js'
+import { isCanonicalDecimalString as decimal } from '../../utils/wenAmount.js'
 
 export const text = value => typeof value === 'string' && Boolean(value.trim())
 export const positive = value => decimal(value) && BigInt(value) > 0n
@@ -12,14 +12,14 @@ const timestamp = value => Number.isSafeInteger(value) && value >= 0
 export const validQuote = (quote, purpose, personaCode, agentId, lease) =>
   ['INITIAL', 'RENEWAL'].includes(purpose) && text(quote?.quoteId) && quote.purpose === purpose && quote.personaCode === personaCode && text(quote.agentId) &&
   (!agentId || quote.agentId === agentId) && text(quote.planId) && positive(quote.planVersion) &&
-  quote.currency === 'SILVER' && positive(quote.amountMicro) && positive(quote.periodSeconds) && timestamp(quote.expiresAt) &&
+  quote.currency === 'WEN' && positive(quote.amountWen) && positive(quote.periodSeconds) && timestamp(quote.expiresAt) &&
   (purpose === 'INITIAL' ? quote.leaseId == null && quote.expectedLeaseVersion == null :
     quote.leaseId === lease?.leaseId && positive(quote.expectedLeaseVersion) && quote.expectedLeaseVersion === lease?.version)
 
 export const validLease = (lease, agentId, personaCode) => text(lease?.leaseId) && lease.agentId === agentId &&
   lease.personaCode === personaCode && text(lease.bindingId) && positive(lease.version) &&
   oneOf(lease.status, ['PROVISIONING', 'ACTIVE', 'REFUNDED']) && positive(lease.planVersion) &&
-  positive(lease.amountMicro) && positive(lease.periodSeconds) && optional(lease.paidFrom, timestamp) && optional(lease.paidThrough, timestamp) &&
+  positive(lease.amountWen) && positive(lease.periodSeconds) && optional(lease.paidFrom, timestamp) && optional(lease.paidThrough, timestamp) &&
   (lease.status !== 'ACTIVE' || (timestamp(lease.paidFrom) && timestamp(lease.paidThrough) && BigInt(lease.paidThrough) >= BigInt(lease.paidFrom)))
 
 export const validLookup = (value, agentId, personaCode) => {
@@ -55,19 +55,19 @@ export const hostingRequest = (op, personaCode) => {
   if (op.kind === 'REPROVISION') return [`/personas/${persona}/bind`, { mode: 'server', hostingAction: 'REPROVISION', agentId: op.agentId, leaseId: op.lease.leaseId, expectedLeaseVersion: op.lease.version }]
   const quote = op.quote
   const terms = { agentId: quote.agentId, quoteId: quote.quoteId, expectedPlanVersion: quote.planVersion,
-    expectedAmountMicro: quote.amountMicro, expectedPeriodSeconds: quote.periodSeconds }
+    expectedAmountWen: quote.amountWen, expectedPeriodSeconds: quote.periodSeconds }
   return op.kind === 'INITIAL' ? [`/personas/${persona}/bind`, { mode: 'server', hostingAction: 'INITIAL', ...terms }] :
     [`/hosting-leases/${leaseId}/renewals`, { ...terms, expectedLeaseVersion: op.lease.version }]
 }
 
 export const matchingHostingReceipt = (receipt, op) => {
-  if (receipt?.agentId !== op.agentId || receipt.currency !== 'SILVER' || !timestamp(receipt.occurredAt)) return false
+  if (receipt?.agentId !== op.agentId || receipt.currency !== 'WEN' || !timestamp(receipt.occurredAt)) return false
   if (op.kind === 'REPROVISION') return text(receipt.requestId) && receipt.operation === 'REPROVISION' && receipt.status === 'ACCEPTED' &&
-    receipt.leaseId === op.lease.leaseId && receipt.amountMicro === '0' && decimal(receipt.leaseVersion) &&
+    receipt.leaseId === op.lease.leaseId && receipt.amountWen === '0' && decimal(receipt.leaseVersion) &&
     BigInt(receipt.leaseVersion) === BigInt(op.lease.version) + 1n && receipt.paidThrough === op.lease.paidThrough
   return text(receipt.intentId) && text(receipt.leaseId) && text(receipt.transactionId) && receipt.quoteId === op.quote.quoteId &&
     receipt.status === (op.kind === 'INITIAL' ? 'FUNDS_RESERVED' : 'ACTIVE') &&
-    receipt.amountMicro === op.quote.amountMicro && receipt.periodSeconds === op.quote.periodSeconds &&
+    receipt.amountWen === op.quote.amountWen && receipt.periodSeconds === op.quote.periodSeconds &&
     (op.kind === 'INITIAL' || receipt.leaseId === op.lease.leaseId)
 }
 
@@ -76,7 +76,7 @@ export const lookupNotOlder = (next, previous) => {
   if (!previous?.managed) return true
   if (!next.managed || next.lease.leaseId !== previous.lease.leaseId || BigInt(next.lease.version) < BigInt(previous.lease.version)) return false
   if (previous.lease.status !== 'PROVISIONING' && next.lease.status !== previous.lease.status) return false
-  if (next.lease.version === previous.lease.version && ['status', 'bindingId', 'planVersion', 'amountMicro', 'periodSeconds', 'paidFrom', 'paidThrough']
+  if (next.lease.version === previous.lease.version && ['status', 'bindingId', 'planVersion', 'amountWen', 'periodSeconds', 'paidFrom', 'paidThrough']
     .some(key => (next.lease[key] ?? null) !== (previous.lease[key] ?? null))) return false
   for (const [key, id] of [['intent', 'intentId'], ['reprovision', 'requestId']]) {
     const old = previous[key]
@@ -100,7 +100,7 @@ export const lookupNotOlder = (next, previous) => {
 export const definitiveHostingFailure = error => new Set([
   'BAD_REQUEST', 'HOSTING_RENT_INVALID_COMMAND', 'HOSTING_RENT_UNAUTHENTICATED', 'HOSTING_RENT_FORBIDDEN',
   'HOSTING_RENT_OWNER_UNPROVEN', 'ECONOMY_PREVIEW_DISABLED', 'HOSTING_RENT_NOT_FOUND_OR_FORBIDDEN',
-  'INSUFFICIENT_SILVER', 'IDEMPOTENCY_CONFLICT', 'HOSTING_RENT_QUOTE_EXPIRED', 'HOSTING_RENT_QUOTE_ALREADY_CONSUMED',
+  'INSUFFICIENT_WEN', 'IDEMPOTENCY_CONFLICT', 'HOSTING_RENT_QUOTE_EXPIRED', 'HOSTING_RENT_QUOTE_ALREADY_CONSUMED',
   'HOSTING_RENT_LEASE_CONFLICT', 'HOSTING_RENT_INTENT_CONFLICT', 'HOSTING_RENT_CONCURRENCY_CONFLICT',
   'HOSTING_RENT_PLAN_VERSION_CONFLICT', 'HOSTING_RENT_AGENT_CONFIRMATION_REQUIRED', 'HOSTING_RENT_CONFLICT',
   'HOSTING_RENT_NOT_CONFIGURED', 'HOSTING_RENT_NOT_READY', 'HOSTING_RENT_REPROVISION_NOT_READY',

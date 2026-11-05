@@ -3,7 +3,7 @@ import { compileScript, parse } from '@vue/compiler-sfc'
 import * as Vue from 'vue'
 import * as market from '../../src/composables/useSkillMarket.js'
 import * as roster from '../../src/utils/skillMarketRoster.js'
-import * as silver from '../../src/utils/silverAmount.js'
+import * as silver from '../../src/utils/wenAmount.js'
 import { economyApi } from '../../src/composables/useHttp.js'
 import * as identity from '../../src/utils/identityLifecycle.js'
 import * as contract from '../../src/utils/skillManagementContract.js'
@@ -24,7 +24,7 @@ export const skillComponents = ({ useApiStore } = {}) => {
   const Management = compile('src/components/economy/SkillManagement.vue', 'sm-management', { '@/composables/useSkillMarket.js': market, '@/utils/skillManagementContract.js': contract })
   const Market = compile('src/components/economy/SkillMarket.vue', 'sm-market', { './SkillManagement.vue': Management })
   const AgentPanel = compile('src/components/juyiting/AgentPanel.vue', 'sm-agent-panel', { '../economy/SkillManagement.vue': Management })
-  const Route = compile('src/components/economy/SkillMarketRoute.vue', 'sm-route', { '@/stores/api': { useApiStore }, '@/utils/identityLifecycle.js': identity, './SkillMarket.vue': Market, '@/utils/skillMarketRoster.js': roster, '@/utils/silverAmount': silver, '@/utils/economyPreviewCapability': capability })
+  const Route = compile('src/components/economy/SkillMarketRoute.vue', 'sm-route', { '@/stores/api': { useApiStore }, '@/utils/identityLifecycle.js': identity, './SkillMarket.vue': Market, '@/utils/skillMarketRoster.js': roster, '@/utils/wenAmount': silver, '@/utils/economyPreviewCapability': capability })
   return { Management, Market, AgentPanel, Route }
 }
 export const settle = async () => { await new Promise(r => setTimeout(r, 5)); await Vue.nextTick() }

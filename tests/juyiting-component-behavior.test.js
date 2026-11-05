@@ -1,3 +1,4 @@
+import { useHallCampaignGrant } from '../src/composables/juyiting/useHallCampaignGrant.js'
 import * as recommendationHelpers from '../src/composables/juyiting/hallAssigneeRecommendation.js'
 import { useHallAgentAbilitiesEditor } from '../src/composables/juyiting/useHallAgentAbilitiesEditor.js'
 import * as discussionTurnHelpers from '../src/composables/juyiting/hallDiscussionTurns.js'
@@ -39,7 +40,7 @@ let PersonaCatalogPanel
 let SelectedAgentCard
 let hallGameMock
 let classifyViewportResizeMock
-let silverAmount
+let wenAmount
 
 const globalDomDescriptors = new Map()
 const windowDomDescriptors = new Map()
@@ -147,7 +148,7 @@ const loadSfc = (relativePath, runtimeAgentApi = { post: async () => { throw new
     .replace(/^import\s+HallRequirementEditor\s+from\s+['"].\/HallRequirementEditor\.vue['"];?\s*$/gm, 'var HallRequirementEditor = { template: \'<span />\', props: [\'task\', \'enabled\'] }')
     .replace(/^import\s+HallTaskResources\s+from\s+['"].\/HallTaskResources\.vue['"];?\s*$/gm, 'var HallTaskResources = { template: \'<section class="hall-task-resources-stub" />\' }')
     .replace(/^import\s+TaskMaterialLinks\s+from\s+['"](?:\.\.\/personal-workspace|@\/components\/personal-workspace)\/TaskMaterialLinks\.vue['"];?\s*$/gm, 'var TaskMaterialLinks = { template: \'<section class="task-material-links-stub" />\', props: [\'taskId\', \'identityFingerprint\'] }')
-    .replace(/^import\s+\{\s*formatSilverMicro(?:,\s*isCanonicalMicroAmount)?\s*\}\s+from\s+['"]@\/utils\/silverAmount['"];?\s*$/gm, 'var { formatSilverMicro, isCanonicalMicroAmount } = arguments[4]')
+    .replace(/^import\s+\{\s*formatWen(?:,\s*isCanonicalWenAmount)?\s*\}\s+from\s+['"]@\/utils\/wenAmount['"];?\s*$/gm, 'var { formatWen, isCanonicalWenAmount } = arguments[4]')
     .replace(/^import\s+FormalDeliveryList\s+from\s+['"]\.\.\/deliveries\/FormalDeliveryList\.vue['"];?\s*$/gm, 'var FormalDeliveryList = { name: \'FormalDeliveryList\', template: \'<section class="formal-delivery-list-stub" />\', props: [\'taskId\', \'identityFingerprint\'] }')
     .replace(/^import\s+WorkItemPlanPanel\s+from\s+['"]\.\/WorkItemPlanPanel\.vue['"];?\s*$/gm, 'var WorkItemPlanPanel = { template: \'<section class="work-item-plan-stub" />\', props: [\'task\', \'enabled\', \'authorizationGeneration\'] }')
     .replace(/^import\s+TeamRecommendationPanel\s+from\s+['"]\.\/TeamRecommendationPanel\.vue['"];?\s*$/gm, 'var TeamRecommendationPanel = { template: \'<section class="team-recommendation-stub" />\', props: [\'task\', \'authorizationGeneration\'] }')
@@ -184,7 +185,7 @@ const loadSfc = (relativePath, runtimeAgentApi = { post: async () => { throw new
   const unresolvedImports = scriptBody.match(/^import\s.+$/gm)
   if (unresolvedImports?.length) throw new SyntaxError(`Unsupported SFC imports in ${relativePath}: ${unresolvedImports.join(', ')}`)
 
-  return new Function('Vue', 'HallChatComposer', 'juyitingGame', 'classifyViewportResize', 'silverAmount', 'chatPanelDependencies', 'ordinaryCancellation', 'runtimeAgentApi', scriptBody)(Vue, HallChatComposer, hallGameMock, classifyViewportResizeMock, silverAmount, chatPanelDependencies, ordinaryCancellation, runtimeAgentApi, taskPresentation, assigneeCandidates, discussionTurnHelpers, recommendationHelpers)
+  return new Function('Vue', 'HallChatComposer', 'juyitingGame', 'classifyViewportResize', 'wenAmount', 'chatPanelDependencies', 'ordinaryCancellation', 'runtimeAgentApi', scriptBody)(Vue, HallChatComposer, hallGameMock, classifyViewportResizeMock, wenAmount, chatPanelDependencies, ordinaryCancellation, runtimeAgentApi, taskPresentation, assigneeCandidates, discussionTurnHelpers, recommendationHelpers)
 }
 
 const stubs = {
@@ -292,7 +293,7 @@ before(async () => {
   }
   Vue = await import('vue')
   chatPanelDependencies = createChatPanelDependencies()
-  silverAmount = await import('../src/utils/silverAmount.js')
+  wenAmount = await import('../src/utils/wenAmount.js')
   ;({ classifyViewportResize: classifyViewportResizeMock } = await import('../src/game/camera/resizePolicy.js'))
   hallGameMock = {
     destroy: () => {},
@@ -2862,7 +2863,7 @@ const loadActualJuyiHall = (mocks) => {
     .replace(/import\.meta\.env/g, 'mocks.env')
     .replace(/^import\s+WorkspaceWriteRecovery\s+from\s+['"][^'"]+['"];?\s*$/gm, "var WorkspaceWriteRecovery = { template: '<section />', props: ['pending'], emits: ['retry'] }")
   .replace('export default', 'return')
-  const component = new Function('Vue', 'mocks', body)(Vue, { useHallSelectedOutputReview, selectionKey, useHallDeliveryReview, useHallAgentProfileCapabilities, useHallAgentAbilitiesEditor, useExternalServicePolicy, ...assigneeCandidates, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
+  const component = new Function('Vue', 'mocks', body)(Vue, { useHallSelectedOutputReview, selectionKey, useHallDeliveryReview, useHallAgentProfileCapabilities, useHallAgentAbilitiesEditor, useExternalServicePolicy, useHallCampaignGrant, economyApi: { create: async () => ({ grants: [] }) }, ...assigneeCandidates, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
   const renderBody = template.code
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace('export function render', 'return function render')
@@ -3971,8 +3972,8 @@ describe('W11 R9 actual JuyiHall stale funded acknowledgement', () => {
         const effects = { errors: 0, successes: 0, toasts: [] }
         const actionTasks = Vue.ref([])
         const actionSelectedTask = Vue.ref(null)
-        const originalA = { title: 'A 原请求', description: 'A 原缘由', requiredAbilities: ['A 本领'], grossBountyAmountMicro: '10', settlementPolicy: 'GROSS_INCLUSIVE' }
-        const originalB = { title: 'B 草稿标题', description: 'B 草稿缘由', requiredAbilities: ['B 本领一', 'B 本领二'], grossBountyAmountMicro: '20', settlementPolicy: 'GROSS_INCLUSIVE' }
+        const originalA = { title: 'A 原请求', description: 'A 原缘由', requiredAbilities: ['A 本领'], grossBountyAmountWen: '10', settlementPolicy: 'GROSS_INCLUSIVE' }
+        const originalB = { title: 'B 草稿标题', description: 'B 草稿缘由', requiredAbilities: ['B 本领一', 'B 本领二'], grossBountyAmountWen: '20', settlementPolicy: 'GROSS_INCLUSIVE' }
         let aRequests = 0
         let keyIndex = 0
         const actions = useHallTaskActions({

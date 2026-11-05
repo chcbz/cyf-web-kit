@@ -20,7 +20,7 @@ const success = data => ({ data: { code: 'E0', data } })
 const compile = async () => {
   const filename = new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url)
   const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename: filename.pathname })
-  const silverAmount = await import('../src/utils/silverAmount.js')
+  const wenAmount = await import('../src/utils/wenAmount.js')
   const code = compileScript(descriptor, { id: 'funded-bounty-public-contract-r7', inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_match, names, path) =>
       `const { ${names.split(',').map(name => name.trim().replace(/\s+as\s+/, ': ')).join(', ')} } = imports[${JSON.stringify(path)}]`)
@@ -30,7 +30,7 @@ const compile = async () => {
   return new Function('imports', code)({
     vue: Vue, '../../composables/juyiting/hallAssigneeRecommendation.js': recommendationHelpers, '@/composables/juyiting/hallAssigneeCandidates.js': assigneeCandidates, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation,
     './BountyActionIcon.vue': Vue.defineComponent({ render: () => Vue.h('span') }),
-    '@/utils/silverAmount': silverAmount
+    '@/utils/wenAmount': wenAmount
   })
 }
 
@@ -123,7 +123,7 @@ describe('W11 funded-create public composable contract', () => {
       title: '原资金榜正文',
       description: '不可用编辑稿替换',
       requiredAbilities: ['审计', '复核'],
-      grossBountyAmountMicro: '100',
+      grossBountyAmountWen: '100',
       settlementPolicy: 'GROSS_INCLUSIVE'
     }
     const first = actionHarness({ storage, api })
@@ -153,7 +153,7 @@ describe('W11 funded-create public composable contract', () => {
     expect(recoveryText).to.include('原榜文缘由：不可用编辑稿替换')
     expect(recoveryText).to.include('原所需本领：审计、复核')
     expect(recoveryText).to.include('原结算规则：GROSS_INCLUSIVE')
-    expect(recoveryText).to.include('原总额：100 micro-SILVER')
+    expect(recoveryText).to.include('原总额：100 文')
     expect(wrapper.text()).to.include('当前编辑稿不会提交或替换原请求。')
     await actionButton(wrapper, '暂不恢复').trigger('click')
     expect(cancelled).to.equal(1)
@@ -177,8 +177,8 @@ describe('W11 funded-create public composable contract', () => {
         throw new TypeError('response lost')
       }
     }
-    const originalA = { title: 'A 原文', description: 'A 缘由', requiredAbilities: ['甲'], grossBountyAmountMicro: '10', settlementPolicy: 'GROSS_INCLUSIVE' }
-    const originalB = { title: 'B 原文', description: 'B 缘由', requiredAbilities: ['乙'], grossBountyAmountMicro: '20', settlementPolicy: 'GROSS_INCLUSIVE' }
+    const originalA = { title: 'A 原文', description: 'A 缘由', requiredAbilities: ['甲'], grossBountyAmountWen: '10', settlementPolicy: 'GROSS_INCLUSIVE' }
+    const originalB = { title: 'B 原文', description: 'B 缘由', requiredAbilities: ['乙'], grossBountyAmountWen: '20', settlementPolicy: 'GROSS_INCLUSIVE' }
     expect(await actionHarness({ storage, api, scope: () => 'actor-a' }).createTask(originalA)).to.equal(false)
     expect(await actionHarness({ storage, api, scope: () => 'actor-b' }).createTask(originalB)).to.equal(false)
 
@@ -244,8 +244,8 @@ describe('W11 funded-create public composable contract', () => {
       showToast: () => {},
       tasks
     })
-    const originalA = { title: 'A 在途原文', description: 'A 缘由', requiredAbilities: ['甲'], grossBountyAmountMicro: '10', settlementPolicy: 'GROSS_INCLUSIVE' }
-    const originalB = { title: 'B 待恢复原文', description: 'B 缘由', requiredAbilities: ['乙'], grossBountyAmountMicro: '20', settlementPolicy: 'GROSS_INCLUSIVE' }
+    const originalA = { title: 'A 在途原文', description: 'A 缘由', requiredAbilities: ['甲'], grossBountyAmountWen: '10', settlementPolicy: 'GROSS_INCLUSIVE' }
+    const originalB = { title: 'B 待恢复原文', description: 'B 缘由', requiredAbilities: ['乙'], grossBountyAmountWen: '20', settlementPolicy: 'GROSS_INCLUSIVE' }
 
     const pendingA = actions.createTask(originalA)
     await Promise.resolve()

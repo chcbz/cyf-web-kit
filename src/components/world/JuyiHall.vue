@@ -850,7 +850,8 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { useGlobalStore } from '@/stores/global'
 import { useApiStore } from '@/stores/api'
-import { agentApi, chatApi } from '@/composables/useHttp'
+import { agentApi, chatApi, economyApi } from '@/composables/useHttp'
+import { useHallCampaignGrant } from '@/composables/juyiting/useHallCampaignGrant.js'
 import { assignedTaskTarget } from '@/composables/juyiting/hallAssigneeCandidates.js'
 import { useExternalServicePolicy } from '@/composables/juyiting/useExternalServicePolicy.js'
 import { useHallChatContext, bountyInteractionTargetId } from '@/composables/juyiting/useHallChatContext'
@@ -919,7 +920,7 @@ import {
   taskStatusFilters
 } from '@/constants/juyiting'
 import { log } from '@/utils/logger'
-import { isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
+import { isEconomyPreviewBuildEnabled } from '@/utils/wenAmount'
 import { isEconomyPreviewCapability, loadEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
 import { resolveAccountDisplayName } from '@/utils/displayName'
 import { createHydratedIdentityScope, hasHydratedIdentity } from '@/utils/identityScope'
@@ -937,6 +938,12 @@ const accountDisplayName = computed(() => {
   return resolveAccountDisplayName(user, String(user.displayName || '')) || '个人中心'
 })
 const hallIdentityScope = computed(() => createHydratedIdentityScope(globalStore.user, apiStore.oauthClientId))
+useHallCampaignGrant({
+  economyApi,
+  identityScope: hallIdentityScope,
+  authorizationGeneration: () => apiStore.authorizationGeneration,
+  onError: error => log.warn('Hall campaign grant remains unconfirmed:', error?.code || error?.message)
+})
 
 // Existing unresolved draft writes are protected by the shared recovery store; new requirements never use TASK_CREATE + per-file links.
 const hallDraftRecovery = useHallDrafts({
@@ -2234,7 +2241,7 @@ const createTask = async (payload, acknowledge = () => {}) => {
       openOverviewItem({ sourceType: 'DRAFT', sourceId: pendingDraft.draftId })
       return false
     }
-    if (payload?.grossBountyAmountMicro) {
+    if (payload?.grossBountyAmountWen) {
       const original = readRequirementCreateOriginal()
       if (original.state !== 'ABSENT' || payload.attachments?.length || payload.inputRefs?.length) {
         showToast('请先核对原张榜；资金榜不提交普通榜资料。')

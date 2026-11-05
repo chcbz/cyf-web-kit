@@ -32,7 +32,7 @@ import { useApiStore } from '@/stores/api'
 import { registerIdentityCleanup } from '@/utils/identityLifecycle.js'
 import SkillMarket from './SkillMarket.vue'
 import { loadSkillMarketRoster } from '@/utils/skillMarketRoster.js'
-import { isCanonicalDecimalString } from '@/utils/silverAmount'
+import { isCanonicalDecimalString } from '@/utils/wenAmount'
 import { isSkillMarketplaceCapability, loadEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
 
 const apiStore = useApiStore()

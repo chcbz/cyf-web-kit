@@ -20,7 +20,7 @@ const harness = (overrides = {}) => {
   const rent = useHostingRent({ enabled: true, storage, now: () => 2000,
     createKey: () => `00000000-0000-4000-8000-${String(++key).padStart(12, '0')}`,
     loadCapability: async () => ({ economyPreviewEnabled: true, principalScopeSha256: 'ab8c2a4766fc37cf16c5c7265178df250d479c2edda51374bc08dda8818f25b8' }),
-    economyApi: { get: async (url, params, options) => { requests.push({ url, params, options }); return ok({ currency: 'SILVER', availableMicro: '9999999999', heldMicro: '0' }) }, create: async (url, body, options) => { requests.push({ url, body, options }); return ok({ transactionId: 'etx-welcome', status: 'POSTED', amountMicro: '1000000000', campaignRef: 'hosting-welcome-v1' }) } },
+    economyApi: { get: async (url, params, options) => { requests.push({ url, params, options }); return ok({ currency: 'WEN', available: { currency: 'WEN', amountMinor: '9999999999' }, held: { currency: 'WEN', amountMinor: '0'  }}) }, create: async (url, body, options) => { requests.push({ url, body, options }); return ok({ transactionId: 'etx-welcome', status: 'POSTED', amountWen: '1000000000', campaignRef: 'hosting-welcome-v1' }) } },
     agentApi: {
       create: async (url, body, options) => { requests.push({ url, body, options }); return ok(url.endsWith('/quotes') ? hostingQuote() : hostingReceipt()) },
       get: async (url, params, options) => { requests.push({ url, params, options }); return ok(hostingLookup()) }
@@ -44,7 +44,7 @@ describe('hosting rent frozen HTTP integration', () => {
     expect(h.rent.canConfirm.value).to.equal(true)
     expect(await h.rent.confirmQuote()).to.equal(true)
     expect(posts(h)[1].body).to.deep.equal({ mode: 'server', hostingAction: 'INITIAL', agentId: 'agt_server_proposal', quoteId: 'hq-1',
-      expectedPlanVersion: '7', expectedAmountMicro: '1234500000', expectedPeriodSeconds: '172800' })
+      expectedPlanVersion: '7', expectedAmountWen: '1234500000', expectedPeriodSeconds: '172800' })
     expect(h.rent.state.value.accepted.receipt.status).to.equal('FUNDS_RESERVED')
     expect(h.rent.state.value.lookup.admission).to.equal('PENDING')
     expect(h.rent.canInitial.value).to.equal(false)
@@ -90,7 +90,7 @@ describe('hosting rent frozen HTTP integration', () => {
   })
 
   for (const malformed of [
-    { amountMicro: 1234500000 }, { planVersion: '07' }, { periodSeconds: '0' }, { expiresAt: '01' },
+    { amountWen: 1234500000 }, { planVersion: '07' }, { periodSeconds: '0' }, { expiresAt: '01' },
     { personaCode: 'other' }, { currency: 'CNY' }, { purpose: 'OTHER' }
   ]) {
     it(`rejects malformed server quote ${JSON.stringify(malformed)}`, async () => {
@@ -102,31 +102,31 @@ describe('hosting rent frozen HTTP integration', () => {
     })
   }
 
-  it('automatically claims the one-time onboarding grant and immediately enables confirmation', async () => {
+  it('never claims a campaign from a rent quote or automatically tops up a wallet', async () => {
     let available = '0'
     const economyRequests = []
     const h = harness({ economyApi: {
-      get: async () => ok({ currency: 'SILVER', availableMicro: available, heldMicro: '0' }),
+      get: async () => ok({ currency: 'WEN', available: { currency: 'WEN', amountMinor: available }, held: { currency: 'WEN', amountMinor: '0'  }}),
       create: async (url, body) => {
         economyRequests.push({ url, body })
         available = '1234500000'
-        return ok({ transactionId: 'etx-welcome', status: 'POSTED', amountMicro: '1234500000', campaignRef: 'hosting-welcome-v1' })
+        return ok({ transactionId: 'etx-welcome', status: 'POSTED', amountWen: '1234500000', campaignRef: 'hosting-welcome-v1' })
       }
     } })
     await h.rent.open(h.persona)
     expect(await h.rent.previewInitial()).to.equal(true)
-    expect(economyRequests).to.deep.equal([{ url: '/onboarding-grant', body: {} }])
-    expect(h.rent.wallet.value.availableMicro).to.equal('1234500000')
-    expect(h.rent.canConfirm.value).to.equal(true)
+    expect(economyRequests).to.deep.equal([])
+    expect(h.rent.wallet.value.available.amountMinor).to.equal('0')
+    expect(h.rent.canConfirm.value).to.equal(false)
   })
 
   it('requires canonical wallet amounts and never sends a claim with insufficient availability', async () => {
-    const h = harness({ economyApi: { get: async () => ok({ currency: 'SILVER', availableMicro: '1', heldMicro: '0' }), create: async () => { throw new Error('grant unavailable') } } })
+    const h = harness({ economyApi: { get: async () => ok({ currency: 'WEN', available: { currency: 'WEN', amountMinor: '1' }, held: { currency: 'WEN', amountMinor: '0'  }}), create: async () => { throw new Error('grant unavailable') } } })
     await h.rent.open(h.persona)
     await h.rent.previewInitial()
     expect(await h.rent.confirmQuote()).to.equal(false)
     expect(posts(h)).to.have.length(1)
-    const malformed = harness({ economyApi: { get: async () => ok({ currency: 'SILVER', availableMicro: 9007199254740993, heldMicro: '0' }) } })
+    const malformed = harness({ economyApi: { get: async () => ok({ currency: 'WEN', available: { currency: 'WEN', amountMinor: 9007199254740993 }, held: { currency: 'WEN', amountMinor: '0'  }}) } })
     expect(await malformed.rent.open(malformed.persona)).to.equal(false)
     expect(malformed.rent.wallet.value).to.equal(null)
   })
@@ -181,7 +181,7 @@ describe('hosting rent frozen HTTP integration', () => {
     expect(await h.rent.confirmQuote()).to.equal(true)
     expect(requests[1].url).to.equal('/hosting-leases/hl-1/renewals')
     expect(requests[1].body).to.deep.equal({ agentId: 'agt_server_proposal', quoteId: 'hq-1', expectedLeaseVersion: '9007199254740993',
-      expectedPlanVersion: '7', expectedAmountMicro: '1234500000', expectedPeriodSeconds: '172800' })
+      expectedPlanVersion: '7', expectedAmountWen: '1234500000', expectedPeriodSeconds: '172800' })
     expect(h.rent.state.value.lookup.lease.version).to.equal('9007199254740994')
     expect(h.rent.state.value.lookup.lease.paidThrough).to.equal(345601000)
   })
@@ -219,7 +219,7 @@ describe('hosting rent frozen HTTP integration', () => {
     expect(await h.rent.reprovision()).to.equal(true)
     expect(requests).to.deep.equal([{ url: '/personas/linchong/bind', body: { mode: 'server', hostingAction: 'REPROVISION',
       agentId: 'agt_server_proposal', leaseId: 'hl-1', expectedLeaseVersion: '3' } }])
-    expect(h.rent.state.value.accepted.receipt.amountMicro).to.equal('0')
+    expect(h.rent.state.value.accepted.receipt.amountWen).to.equal('0')
     expect(h.rent.state.value.lookup.lease.paidThrough).to.equal(172801000)
     expect(h.rent.canReprovision.value).to.equal(false)
     expect(await h.rent.reprovision()).to.equal(false)
@@ -337,7 +337,7 @@ describe('hosting rent frozen HTTP integration', () => {
   })
 
   for (const failure of [
-    { status: 409, code: 'INSUFFICIENT_SILVER', unknown: false },
+    { status: 409, code: 'INSUFFICIENT_WEN', unknown: false },
     { status: 503, code: 'HOSTING_RENT_NOT_READY', unknown: false },
     { status: 503, code: 'HOSTING_RENT_UNAVAILABLE', unknown: true }
   ]) {
@@ -348,7 +348,7 @@ describe('hosting rent frozen HTTP integration', () => {
         const body = options.body ? JSON.parse(options.body).data : null
         requests.push({ url, method: options.method, body })
         const failed = url.endsWith('/bind')
-        const data = url.endsWith('/wallet') ? { currency: 'SILVER', availableMicro: '9999999999', heldMicro: '0' } : hostingQuote()
+        const data = url.endsWith('/wallet') ? { currency: 'WEN', available: { currency: 'WEN', amountMinor: '9999999999' }, held: { currency: 'WEN', amountMinor: '0'  }} : hostingQuote()
         return currentHttpResponse(options, failed ? { code: failure.code, msg: 'frozen rejection' } : { code: 'E0', data }, { status: failed ? failure.status : 200, headers: { 'Content-Type': 'application/json' } })
       }
       try {
@@ -374,7 +374,7 @@ describe('hosting rent frozen HTTP integration', () => {
     const requests = []
     globalThis.fetch = async (url, options) => {
       requests.push({ url, method: options.method, body: options.body ? JSON.parse(options.body).data : null, key: options.headers['Idempotency-Key'] })
-      const data = url.endsWith('/wallet') ? { currency: 'SILVER', availableMicro: '9999999999', heldMicro: '0' } :
+      const data = url.endsWith('/wallet') ? { currency: 'WEN', available: { currency: 'WEN', amountMinor: '9999999999' }, held: { currency: 'WEN', amountMinor: '0'  }} :
         url.endsWith('/quotes') ? hostingQuote() : url.endsWith('/bind') ? hostingReceipt() : hostingLookup()
       return currentHttpResponse(options, { code: 'E0', data }, { status: url.endsWith('/bind') ? 202 : 200, headers: { 'Content-Type': 'application/json' } })
     }
@@ -397,7 +397,7 @@ describe('hosting rent frozen HTTP integration', () => {
     } finally { globalThis.fetch = originalFetch }
   })
 
-  for (const mismatch of [{ agentId: 'other' }, { quoteId: 'other' }, { status: 'ACTIVE' }, { amountMicro: '1' }, { occurredAt: '1000' }]) {
+  for (const mismatch of [{ agentId: 'other' }, { quoteId: 'other' }, { status: 'ACTIVE' }, { amountWen: '1' }, { occurredAt: '1000' }]) {
     it(`does not accept mismatched immutable receipt ${JSON.stringify(mismatch)}`, async () => {
       let reads = 0
       const h = harness({ agentApi: {

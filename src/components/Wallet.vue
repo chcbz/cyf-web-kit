@@ -1,8 +1,8 @@
 <template>
   <main class="wallet-page" aria-labelledby="wallet-title">
     <header>
-      <p class="eyebrow">开发预览</p>
-      <h2 id="wallet-title">SILVER 钱袋</h2>
+      <p class="eyebrow">内测</p>
+      <h2 id="wallet-title">钱袋 · 文</h2>
       <p>查看余额和收支记录。</p>
     </header>
 
@@ -15,9 +15,9 @@
       <button type="button" @click="loadWallet">重试</button>
     </section>
     <template v-else-if="wallet">
-      <section class="wallet-balances" aria-label="SILVER 余额">
+      <section class="wallet-balances" aria-label="文余额">
         <div><small>可用</small><strong>{{ format(wallet.available) }}</strong></div>
-        <div><small>已托管</small><strong>{{ format(wallet.held) }}</strong></div>
+        <div><small>已预占</small><strong>{{ format(wallet.held) }}</strong></div>
       </section>
 
       <section class="wallet-ledger" aria-labelledby="ledger-title">
@@ -29,7 +29,7 @@
         <ol v-else>
           <li v-for="entry in ledger" :key="entry.entryId || entry.transactionId">
             <div>
-              <strong>{{ entry.businessType || 'SILVER 交易' }}</strong>
+              <strong>{{ entry.businessType || '文交易' }}</strong>
               <small>{{ entry.businessRef || entry.transactionId }}</small>
             </div>
             <div class="ledger-amount" :class="entry.direction === 'DEBIT' ? 'is-debit' : 'is-credit'">
@@ -46,7 +46,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { economyApi } from '@/composables/useHttp'
-import { formatSilverMicro, isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
+import { formatWen, isEconomyPreviewBuildEnabled } from '@/utils/wenAmount'
 import { isEconomyPreviewCapability, loadEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
 
 const previewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
@@ -57,8 +57,8 @@ const refreshing = ref(false)
 const error = ref('')
 
 const unwrap = result => result
-const validMoney = value => value?.currency === 'SILVER' && typeof value.amountMinor === 'string' && /^(0|[1-9][0-9]*)$/.test(value.amountMinor) && BigInt(value.amountMinor) <= 9223372036854775807n
-const format = value => validMoney(value) ? formatSilverMicro(value.amountMinor) : '—'
+const validMoney = value => value?.currency === 'WEN' && typeof value.amountMinor === 'string' && /^(0|[1-9][0-9]*)$/.test(value.amountMinor) && BigInt(value.amountMinor) <= 9223372036854775807n
+const format = value => validMoney(value) ? formatWen(value.amountMinor) : '—'
 const formatPostedAt = value => Number.isSafeInteger(value) && value >= 0 && Number.isFinite(new Date(value).getTime())
   ? new Date(value).toLocaleString() : ''
 

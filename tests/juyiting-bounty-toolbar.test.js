@@ -6,12 +6,12 @@ import { expect } from 'chai'
 import { parse, compileScript } from '@vue/compiler-sfc'
 import { mount } from '@vue/test-utils'
 import * as Vue from 'vue'
-import * as silver from '../src/utils/silverAmount.js'
+import * as silver from '../src/utils/wenAmount.js'
 
 const source = readFileSync(new URL('../src/components/juyiting/BountyPanel.vue', import.meta.url), 'utf8')
 const { descriptor } = parse(source)
 const Empty = Vue.defineComponent({ render: () => Vue.h('span') })
-const imports = new Proxy({ vue: Vue, '@/composables/juyiting/hallAssigneeCandidates.js': assigneeCandidates, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, '@/utils/silverAmount': silver }, { get: (target, name) => target[name] || Empty })
+const imports = new Proxy({ vue: Vue, '@/composables/juyiting/hallAssigneeCandidates.js': assigneeCandidates, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, '@/utils/wenAmount': silver }, { get: (target, name) => target[name] || Empty })
 const code = compileScript(descriptor, { id: 'bounty-toolbar-test', inlineTemplate: true }).content
   .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_, names, path) =>
     `const { ${names.replace(/\s+as\s+/g, ': ')} } = imports[${JSON.stringify(path)}]`)

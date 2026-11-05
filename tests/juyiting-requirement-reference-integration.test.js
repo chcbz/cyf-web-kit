@@ -10,7 +10,7 @@ import * as Vue from 'vue'
 import { mount } from '@vue/test-utils'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { usePersonalWorkspace } from '../src/composables/usePersonalWorkspace.js'
-import * as silver from '../src/utils/silverAmount.js'
+import * as silver from '../src/utils/wenAmount.js'
 import { useHallRequirementCreate } from '../src/composables/juyiting/useHallRequirementCreate.js'
 
 const scope = '0\u0000client-a\u0000owner-a'
@@ -77,7 +77,7 @@ function fixture (panelProps = {}) {
   const stub = Vue.defineComponent({ render: () => Vue.h('span') })
   const TaskMaterialLinks = Vue.defineComponent({ name: 'TaskMaterialLinks', render: () => Vue.h('section', { class: 'formal-material-controls' }) })
   const Panel = compileComponent('../src/components/juyiting/BountyPanel.vue', new Proxy({
-    vue: Vue, '@/composables/juyiting/hallAssigneeCandidates.js': assigneeCandidates, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, '@/utils/silverAmount': silver, './HallMaterialPicker.vue': Picker, '@/components/personal-workspace/TaskMaterialLinks.vue': TaskMaterialLinks
+    vue: Vue, '@/composables/juyiting/hallAssigneeCandidates.js': assigneeCandidates, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinaryCancellation, '@/utils/wenAmount': silver, './HallMaterialPicker.vue': Picker, '@/components/personal-workspace/TaskMaterialLinks.vue': TaskMaterialLinks
   }, { get: (target, name) => target[name] ?? stub }))
   // The task board no longer owns a create form. Exercise the actual neutral
   // picker and atomic controller directly; do not invent a replacement UI route.

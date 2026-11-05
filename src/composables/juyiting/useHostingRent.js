@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue'
-import { isCanonicalDecimalString as decimal } from '../../utils/silverAmount.js'
+import { isCanonicalDecimalString as decimal, isWenMoney } from '../../utils/wenAmount.js'
 import { registerIdentityCleanup } from '../../utils/identityLifecycle.js'
 import { definitiveHostingFailure, hostingPayload, hostingRequest, lookupNotOlder, matchingHostingReceipt,
   text, validLookup, validOperation, validQuote } from './hostingRentContract.js'
@@ -43,9 +43,7 @@ export function useHostingRent({ agentApi, economyApi, loadCapability, enabled =
     !['ACCEPTED', 'PROVISIONING_UNKNOWN'].includes(state.value.lookup.reprovision?.status))
   const quoteExpired = computed(() => !state.value.quote || BigInt(state.value.quote.expiresAt) <= BigInt(clock.value))
   const canConfirm = computed(() => Boolean(writable.value && state.value.quote && !quoteExpired.value && wallet.value &&
-    BigInt(wallet.value.availableMicro) >= BigInt(state.value.quote.amountMicro)))
-  const needsOnboardingGrant = computed(() => Boolean(ready.value && state.value.quote?.purpose === 'INITIAL' &&
-    wallet.value && BigInt(wallet.value.availableMicro) < BigInt(state.value.quote.amountMicro)))
+    BigInt(wallet.value.available.amountMinor) >= BigInt(state.value.quote.amountWen)))
 
   const save = (required = false) => {
     try {
@@ -75,23 +73,10 @@ export function useHostingRent({ agentApi, economyApi, loadCapability, enabled =
   const readWallet = async ctx => {
     const result = hostingPayload(await economyApi.get('/wallet', undefined, requestOptions(ctx)))
     if (!current(ctx)) return false
-    if (result?.currency !== 'SILVER' || !decimal(result.availableMicro) || !decimal(result.heldMicro)) throw new Error('钱袋金额不是规范服务端数据，暂不可确认租金。')
+    if (result?.currency !== 'WEN' || !isWenMoney(result.available) || !isWenMoney(result.held)) throw new Error('钱袋金额不是规范服务端数据，暂不可确认租金。')
     wallet.value = result
     return true
   }
-  const claimGrantForQuote = async ctx => {
-    if (!needsOnboardingGrant.value) return true
-    const result = hostingPayload(await economyApi.create('/onboarding-grant', {}, requestOptions(ctx)))
-    if (!current(ctx)) return false
-    if (!text(result?.transactionId) || result.status !== 'POSTED' || !decimal(result.amountMicro) || !text(result.campaignRef)) {
-      throw new Error('迎新安顿金回执不完整，未继续付款。')
-    }
-    await readWallet(ctx)
-    if (!current(ctx)) return false
-    if (needsOnboardingGrant.value) throw new Error('迎新安顿金到账后余额仍不足，未提交租金。')
-    return true
-  }
-
   const readLease = async ctx => {
     const agentId = targetAgentId.value
     if (!agentId) return false
@@ -191,13 +176,6 @@ export function useHostingRent({ agentApi, economyApi, loadCapability, enabled =
       state.value.operation = null
       state.value.quote = copy(result)
       save()
-      if (purpose === 'INITIAL' && needsOnboardingGrant.value) {
-        try {
-          await claimGrantForQuote(ctx)
-        } catch (cause) {
-          if (current(ctx)) error.value = `迎新安顿金暂未到账：${cause.message}`
-        }
-      }
       return true
     }
     if (!matchingHostingReceipt(result, operation)) throw new Error('回执与原请求不匹配；结果未知，请只核对原请求。')
@@ -279,17 +257,8 @@ export function useHostingRent({ agentApi, economyApi, loadCapability, enabled =
     if (!canReprovision.value || !selected() || state.value.quote) return Promise.resolve(false)
     return perform({ kind: 'REPROVISION', key: requestKey(), agentId: targetAgentId.value, lease: copy(state.value.lookup.lease) })
   }
-  const claimOnboardingGrant = async () => {
-    if (!ready.value || busy.value || !selected() || !needsOnboardingGrant.value) return false
-    const ctx = context()
-    busy.value = true
-    error.value = ''
-    try { return await claimGrantForQuote(ctx) }
-    catch (cause) { if (current(ctx)) error.value = `迎新安顿金暂未到账：${cause.message}`; return false }
-    finally { if (current(ctx)) busy.value = false }
-  }
   const retryUnknown = () => state.value.operation ? perform(copy(state.value.operation), true) : Promise.resolve(false)
 
-  return { target, state, wallet, busy, ready, error, clock, targetAgentId, canInitial, canRenew, canReprovision, canConfirm, needsOnboardingGrant, quoteExpired,
-    open, refresh, previewInitial, previewRenewal, confirmQuote, cancelQuote, reprovision, claimOnboardingGrant, retryUnknown, tick, invalidate, dispose }
+  return { target, state, wallet, busy, ready, error, clock, targetAgentId, canInitial, canRenew, canReprovision, canConfirm, quoteExpired,
+    open, refresh, previewInitial, previewRenewal, confirmQuote, cancelQuote, reprovision, retryUnknown, tick, invalidate, dispose }
 }

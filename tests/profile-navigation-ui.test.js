@@ -64,7 +64,7 @@ const profileComponent = ({ globalStore, apiStore, client }) => compileComponent
   '@/stores/api': { useApiStore: () => apiStore },
   '@/composables/useAccountSecuritySession': { useAccountSecuritySession: () => ({ busy: Vue.ref(false), error: Vue.ref(''), status: Vue.ref(''), signOutCurrentDevice: () => {}, signOutAllDevices: async () => true }) },
   '@/composables/useConfirmationDialog': { useConfirmationDialog: () => ({ cancelButton: Vue.ref(null), close: () => {}, confirming: Vue.ref(false), dialog: Vue.ref(null), onKeydown: () => {}, open: () => {} }) },
-  '@/utils/silverAmount': { isEconomyPreviewBuildEnabled: () => false },
+  '@/utils/wenAmount': { isEconomyPreviewBuildEnabled: () => false },
   '@/utils/economyPreviewCapability': { isEconomyPreviewCapability: () => false, isSkillMarketplaceCapability: value => value?.skillMarketplaceEnabled === true, loadEconomyPreviewCapability: client.marketCapability || (async () => ({})) },
   '@/utils/economyReadOnlyPreviewPolicy': { assessReadOnlyPreviewCapabilities },
   '@/composables/economyReadOnlyPreviewApi': { economyReadOnlyPreviewClient: client },
@@ -77,7 +77,7 @@ const profileComponent = ({ globalStore, apiStore, client }) => compileComponent
 const previewComponent = state => compileComponent('../src/components/economy/EconomyReadOnlyPreview.vue', 'preview-navigation-mounted', {
   vue: Vue,
   '@/stores/global.js': { useGlobalStore: () => ({ setTitle: () => {}, setShowBack: () => {}, setShowMore: () => {} }) },
-  '@/utils/silverAmount.js': { formatSilverMicro: value => `${value} SILVER` },
+  '@/utils/wenAmount.js': { formatWen: value => `${value} WEN` },
   '@/composables/useEconomyReadOnlyPreview.js': { useEconomyReadOnlyPreview: () => state }
 })
 

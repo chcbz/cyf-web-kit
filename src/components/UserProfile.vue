@@ -80,7 +80,7 @@
       <h3 id="economy-discovery-title">开发预览</h3>
 
       <div class="discovery-links">
-        <router-link v-if="economyPreviewAvailable" to="/wallet">查看 SILVER 钱袋</router-link>
+        <router-link v-if="economyPreviewAvailable" to="/wallet">查看钱袋（文）</router-link>
         <router-link v-if="skillMarketplaceAvailable" to="/skill-market">发现技能市场</router-link>
       </div>
     </section>
@@ -159,7 +159,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useGlobalStore } from '@/stores/global'
 import { useAccountSecuritySession } from '@/composables/useAccountSecuritySession'
 import { useConfirmationDialog } from '@/composables/useConfirmationDialog'
-import { isEconomyPreviewBuildEnabled } from '@/utils/silverAmount'
+import { isEconomyPreviewBuildEnabled } from '@/utils/wenAmount'
 import { isEconomyPreviewCapability, isSkillMarketplaceCapability, loadEconomyPreviewCapability as fetchEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
 import { assessReadOnlyPreviewCapabilities } from '@/utils/economyReadOnlyPreviewPolicy'
 import { economyReadOnlyPreviewClient } from '@/composables/economyReadOnlyPreviewApi'

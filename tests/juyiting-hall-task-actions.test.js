@@ -156,7 +156,7 @@ describe('useHallTaskActions', () => {
 
   it('routes a funded task through an explicit quote and claim instead of legacy assignment', async () => {
     const apiCalls = []
-    const funded = { id: 'funded', title: '资金榜', status: 'open', version: '8', funding: { mode: 'FUNDED_SINGLE_AGENT', remainingMicro: '100' } }
+    const funded = { id: 'funded', title: '资金榜', status: 'open', version: '8', funding: { mode: 'FUNDED_SINGLE_AGENT', remainingWen: '100' } }
     const agent = { agentId: 'explicit-agent', name: '显式好汉', status: 'online' }
     const selectedAgent = ref({ agentId: 'hidden-agent', status: 'online' })
     const selectedTask = ref(null)

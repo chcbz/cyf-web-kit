@@ -13,7 +13,7 @@ import { compileScript, parse } from '@vue/compiler-sfc'
 import { mount, flushPromises } from '@vue/test-utils'
 import * as outputs from '../src/composables/juyiting/bountyOutputCatalog.js'
 import * as ordinary from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
-import * as silver from '../src/utils/silverAmount.js'
+import * as silver from '../src/utils/wenAmount.js'
 import { useHallBountyAcceptance } from '../src/composables/juyiting/useHallBountyAcceptance.js'
 import { useHallBountyFinalization, safeFinalizationVersion } from '../src/composables/juyiting/useHallBountyFinalization.js'
 import { useHallConversationArchive } from '../src/composables/juyiting/useHallConversationArchive.js'
@@ -90,7 +90,7 @@ const panelProps = { embeddedHall: true, detailAllowed: true, identityScope: 'ow
   abilityText: () => '', canAssign: () => true, formatTime: () => '', portraitName: () => '', portraitStyle: () => ({}),
   taskAgentMatchScore: () => 0, taskStateClass: () => '', taskStatusCount: () => 0, taskStatusText }
 const panelTask = (overrides = {}) => ({ id: 'a', title: '原事项A', status: 'assigned', taskVersion: '2', funding: null, assignedAgentIds: ['old-agent'], ...overrides })
-const Panel = compile('BountyPanel', { '@/composables/juyiting/hallAssigneeCandidates.js': assigneeCandidates, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinary, '@/utils/silverAmount': silver })
+const Panel = compile('BountyPanel', { '@/composables/juyiting/hallAssigneeCandidates.js': assigneeCandidates, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': ordinary, '@/utils/wenAmount': silver })
 const DialogFixture = Vue.defineComponent({ props: ['show', 'title', 'message'], emits: ['confirm', 'cancel', 'close', 'update:show'],
   template: `<aside v-if="show" class="confirmation-fixture" role="dialog"><h3>{{title}}</h3><p>{{message}}</p><button class="confirm" @click="$emit('update:show', false); $emit('confirm')">确认取消事项</button><button class="dismiss" @click="$emit('update:show', false); $emit('cancel')">保留事项</button></aside>` })
 const openPanel = async (task = panelTask(), extra = {}) => {

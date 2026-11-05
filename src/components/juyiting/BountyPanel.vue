@@ -47,7 +47,7 @@
         <p>原榜文缘由：{{ fundedCreateRecovery.body.description || '未填写' }}</p>
         <p>原所需本领：{{ fundedRecoveryAbilities }}</p>
         <p>原结算规则：{{ fundedCreateRecovery.body.settlementPolicy || '未填写' }}</p>
-        <p>原总额：{{ fundedCreateRecovery.body.grossBountyAmountMicro }} micro-SILVER。</p>
+        <p>原总额：{{ fundedCreateRecovery.body.grossBountyAmountWen }} 文。</p>
         <p>当前编辑稿不会提交或替换原请求。</p>
         <button type="button" @click="$emit('resume-funded-create')">确认按原请求恢复</button>
         <button type="button" @click="$emit('cancel-funded-create-recovery')">暂不恢复</button>
@@ -108,7 +108,7 @@
               <span v-if="task.assignedAgentName">领令：{{ task.assignedAgentName }}</span>
               <span v-if="task.updatedAt">{{ formatTime(task.updatedAt) }}</span>
             </div>
-            <p v-if="isFundedTask(task)" class="funding-summary">已托管：{{ formatMoney(task.funding.remainingMicro || task.funding.grossBountyAmountMicro) }}</p>
+            <p v-if="isFundedTask(task)" class="funding-summary">已托管：{{ formatMoney(task.funding.remainingWen || task.funding.grossBountyAmountWen) }}</p>
             <div class="ability-tags">
               <span v-for="ability in task.requiredAbilities || []" :key="ability">{{ ability }}</span>
               <span v-if="!(task.requiredAbilities || []).length">未指定能力要求</span>
@@ -141,8 +141,8 @@
               <p>榜号 {{ fundedQuotePreview.quote.taskId }} / 好汉 {{ fundedQuotePreview.quote.agentId }} / 榜文版本 {{ fundedQuotePreview.quote.taskVersion }}</p>
               <p>价簿 {{ fundedQuotePreview.quote.priceBookVersion }} / 报价 {{ fundedQuotePreview.quote.quoteId }}</p>
               <p>输入 {{ fundedQuotePreview.quote.estimatedTokens.input }} / 缓存输入 {{ fundedQuotePreview.quote.estimatedTokens.cachedInput }} / 输出 {{ fundedQuotePreview.quote.estimatedTokens.output }} / 推理 {{ fundedQuotePreview.quote.estimatedTokens.reasoning }}</p>
-              <p>预估/最坏算力：{{ formatMoney(fundedQuotePreview.quote.estimatedComputeMicro) }} / {{ formatMoney(fundedQuotePreview.quote.worstComputeMicro) }}；平台费：{{ formatMoney(fundedQuotePreview.quote.platformFeeMicro) }}</p>
-              <p>好汉预估/最坏所得：{{ formatMoney(fundedQuotePreview.quote.estimatedAgentPayoutMicro) }} / {{ formatMoney(fundedQuotePreview.quote.worstAgentPayoutMicro) }}</p>
+              <p>预估/最坏算力：{{ formatMoney(fundedQuotePreview.quote.estimatedComputeWen) }} / {{ formatMoney(fundedQuotePreview.quote.worstComputeWen) }}；平台费：{{ formatMoney(fundedQuotePreview.quote.platformFeeWen) }}</p>
+              <p>好汉预估/最坏所得：{{ formatMoney(fundedQuotePreview.quote.estimatedAgentPayoutWen) }} / {{ formatMoney(fundedQuotePreview.quote.worstAgentPayoutWen) }}</p>
               <p>建议：{{ fundedQuotePreview.quote.recommendation }}；缘由：{{ fundedQuotePreview.quote.reasonCodes.join('、') || '无' }}</p>
               <p>到期时间：{{ formatTime(fundedQuotePreview.quote.expiresAt) }}（{{ fundedQuotePreview.quote.expiresAt }} ms）</p>
               <p v-if="fundedQuotePreview.recovery">原领令结果未知；仅重放此前确认的原报价和请求，不会重新取价。</p>
@@ -325,7 +325,7 @@
               </section>
 
               <section v-if="isFundedTask(detailTask)" class="funded-preview-details" aria-label="资金悬赏详情">
-                <p class="funding-summary">已托管：{{ formatMoney(detailTask.funding.remainingMicro || detailTask.funding.grossBountyAmountMicro) }}</p>
+                <p class="funding-summary">已托管：{{ formatMoney(detailTask.funding.remainingWen || detailTask.funding.grossBountyAmountWen) }}</p>
                 <p>仅可由一位明确好汉按报价领令；组队、宋江代点和旧式点将已禁用。</p>
                 <button
                   v-if="canCancelFunding(detailTask)"
@@ -545,7 +545,7 @@ import HallTaskResources from './HallTaskResources.vue'
 import WorkItemPlanPanel from './WorkItemPlanPanel.vue'
 import TeamRecommendationPanel from './TeamRecommendationPanel.vue'
 import TaskMaterialLinks from '@/components/personal-workspace/TaskMaterialLinks.vue'
-import { formatSilverMicro, isCanonicalMicroAmount } from '@/utils/silverAmount'
+import { formatWen, isCanonicalWenAmount } from '@/utils/wenAmount'
 
 // Native horizontal scrolling also follows keyboard focus without scrolling the page.
 const revealStatusFilter = event => {
@@ -846,7 +846,7 @@ const fundedClaimBlocked = (task, agent) => {
   }
   return !props.canAssign(task, agent)
 }
-const formatMoney = value => formatSilverMicro(typeof value === 'string' && isCanonicalMicroAmount(value) ? value : '0')
+const formatMoney = value => formatWen(typeof value === 'string' && isCanonicalWenAmount(value) ? value : '0')
 const canCancelFunding = task => isFundedTask(task) && hasTaskAction(task, 'ASSIGN') && typeof (task.version ?? task.taskVersion) === 'string'
 const selectedAssignees = computed(() => {
   const selected = new Set(selectedAssigneeIds.value)

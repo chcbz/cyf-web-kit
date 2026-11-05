@@ -53,7 +53,7 @@ describe('neutral materials v2 atomic creation and immutable dual-version recove
     ['capacity', Array.from({ length: 33 }, (_, n) => ({ fileId: `f${n}`, version: '1' }))]
   ]) it(`rejects ${name} without dropping selected material`, () => { expect(requirementMaterialInputs(list)).to.equal(null) })
   it('rejects image-only contract and execution/funding fields in v2', () => {
-    for (const key of ['inputRefs', 'grossBountyAmountMicro', 'targetAgentId', 'costAuthorizationRef'])
+    for (const key of ['inputRefs', 'grossBountyAmountWen', 'targetAgentId', 'costAuthorizationRef'])
       expect(requirementMaterialsBody({ ...draft(), [key]: [] })).to.equal(null)
     expect(requirementMaterialsBody({ ...draft(), description: '\uD800' })).to.equal(null)
   })

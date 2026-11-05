@@ -59,7 +59,7 @@ describe('SM-C1 locked fixtures → actual Web parser', () => {
     expect(() => parseStrictJson('"\\ud800"', { integerTokensOnly: true })).to.throw()
     for (const id of ['a/b', 'a\\b', 'a?b', 'a#b', 'a\0b']) expect(() => skillPathSegment(id)).to.throw()
     expect(skillPathSegment('a%2fb')).to.equal('a%252fb')
-    expect(formatSkillMoney({ amountMinor: '9223372036854775807', currency: 'SILVER' })).to.equal('9223372036854.775807 SILVER')
+    expect(formatSkillMoney({ amountMinor: '9223372036854775807', currency: 'WEN' })).to.equal('9223372036854775807文')
   })
   it('matches the approved-permissions digest vector and UTF-8 ordering', async () => {
     const vector = fixtures.digestVectors.find(v => v.domain === 'cyf.skill.permissions.v1')
@@ -291,7 +291,7 @@ describe('SM-C1 useSkillMarket lifecycle and exactly-once intent', () => {
     for (const paid of [false, true]) {
       const { market, mock } = make(); mock.list = fixture('skill-list').data; const row = mock.list.items[0]
       row.desiredEnabled = false; row.admissionEnabled = false; row.upgradeEligibility = paid ? 'PAID' : 'COVERED'
-      const price = { amountMinor: paid ? '1234567890123456' : '0', currency: 'SILVER' }
+      const price = { amountMinor: paid ? '1234567890123456' : '0', currency: 'WEN' }
       mock.accepted = { ...fixture('accepted-upgrade').data, desiredEnabled: false, price, orderId: paid ? 'order-paid' : null, fundingStatus: paid ? 'HELD' : 'NONE' }
       const post = mock.api.post
       mock.api.post = async (...args) => args[0].endsWith('/quotes') ? { ...fixture('quote-upgrade-response').data, price, coverage: paid ? 'PURCHASE' : 'ENTITLEMENT', entitlementId: paid ? null : 'se_demo', expiresAt: Date.now() + 60000 } : post(...args)

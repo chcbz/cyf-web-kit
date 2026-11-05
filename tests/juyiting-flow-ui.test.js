@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 import { parse, compileScript, compileTemplate } from '@vue/compiler-sfc'
 import { mount } from '@vue/test-utils'
 import * as Vue from 'vue'
-import * as silver from '../src/utils/silverAmount.js'
+import * as silver from '../src/utils/wenAmount.js'
 import * as cancellation from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
 import { taskStatusText, taskStateClass } from '../src/constants/juyiting.js'
 
@@ -15,7 +15,7 @@ const hall = read('world/JuyiHall')
 const Empty = Vue.defineComponent({ render: () => Vue.h('span') })
 const compile = name => {
   const { descriptor } = parse(read(name))
-  const imports = new Proxy({ vue: Vue, '@/utils/silverAmount': silver,
+  const imports = new Proxy({ vue: Vue, '@/utils/wenAmount': silver,
     './HallRequirementEditor.vue': Vue.defineComponent({ name: 'HallRequirementEditor', render: () => Vue.h('span') }),
     './HallTaskResources.vue': Vue.defineComponent({ name: 'HallTaskResources', props: ['resultCount'], render: () => Vue.h('section') }),
     '../../composables/juyiting/hallAssigneeRecommendation.js': recommendationHelpers, '@/composables/juyiting/hallAssigneeCandidates.js': assigneeCandidates, '../../composables/juyiting/hallTaskPresentation.js': taskPresentation, '../../composables/juyiting/useHallOrdinaryCancellation.js': cancellation }, { get: (target, key) => target[key] || Empty })
@@ -106,12 +106,12 @@ describe('flow gap actual UI consumers', () => {
     } finally { wrapper.unmount() }
   })
   it('funded tasks display only their own funded cancellation CTA', async () => {
-    const task = { id: 'a', status: 'open', version: '2', funding: { mode: 'FUNDED_SINGLE_AGENT', fundingStatus: 'FUNDS_HELD', remainingMicro: '100' } }
+    const task = { id: 'a', status: 'open', version: '2', funding: { mode: 'FUNDED_SINGLE_AGENT', fundingStatus: 'FUNDS_HELD', remainingWen: '100' } }
     const wrapper = mount(Panel, { props: { ...baseProps, tasks: [task], selectedTask: task } })
     try {
       wrapper.vm.openTask(task); await Vue.nextTick()
       expect(wrapper.find('.ordinary-cancellation').exists()).to.equal(false)
-      expect(wrapper.findAll('.funding-summary').every(row => row.text().includes(silver.formatSilverMicro('100')))).to.equal(true)
+      expect(wrapper.findAll('.funding-summary').every(row => row.text().includes(silver.formatWen('100')))).to.equal(true)
       expect(wrapper.get('.funded-preview-details').text()).to.include('开工前撤榜并退款')
       await wrapper.get('.funded-preview-details .funded-detail-button').trigger('click')
       expect(wrapper.emitted('cancel-funding')[0]).to.deep.equal([task])

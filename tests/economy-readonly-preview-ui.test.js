@@ -76,9 +76,9 @@ describe('economy readonly preview UI behavior', () => {
     try {
       const firstRefresh = preview.refresh(); await tick(); expect(preview.wallet.value.status).to.equal('loading')
       const later = preview.refresh(); await tick()
-      second.resolve({ currency: 'SILVER', availableMicro: '9', heldMicro: '0', version: '2' }); await later
-      first.resolve({ currency: 'SILVER', availableMicro: '1', heldMicro: '0', version: '1' }); await firstRefresh
-      expect(preview.wallet.value.data.availableMicro).to.equal('9')
+      second.resolve({ currency: 'WEN', available: { currency: 'WEN', amountMinor: '9' }, held: { currency: 'WEN', amountMinor: '0' }, version: '2' }); await later
+      first.resolve({ currency: 'WEN', available: { currency: 'WEN', amountMinor: '1' }, held: { currency: 'WEN', amountMinor: '0' }, version: '1' }); await firstRefresh
+      expect(preview.wallet.value.data.available.amountMinor).to.equal('9')
       const unavailable = scopedPreview(baseClient({ capabilities: async () => capabilities({ wallet: true }), wallet: async () => { const error = new Error('database unavailable'); error.status = 503; throw error } }))
       await unavailable.preview.refresh(); expect(unavailable.preview.wallet.value.status).to.equal('unavailable'); expect(unavailable.preview.wallet.value.data).to.equal(null); unavailable.scope.stop()
       const missing = scopedPreview(baseClient({ capabilities: async () => capabilities({ wallet: true }), wallet: async () => { const error = new Error('not found'); error.status = 404; throw error } }))
@@ -97,9 +97,9 @@ describe('economy readonly preview UI behavior', () => {
       const initial = preview.refresh(); await tick(); preview.selectedAgentId.value = 'a'; await tick(); preview.selectedAgentId.value = 'b'; await tick()
       expect(wallet.promise).to.exist
       skillA.resolve({ agentId: 'a', entitlements: [{ skillKey: 'wrong' }], installationEvidence: [] }); await tick(); expect(preview.agentSkills.value.data?.agentId).not.to.equal('a')
-      wallet.resolve({ currency: 'SILVER', availableMicro: '3', heldMicro: '0', version: '1' }); skillB.resolve({ agentId: 'b', entitlements: [], installationEvidence: [] }); await initial; expect(preview.wallet.value.data.availableMicro).to.equal('3')
+      wallet.resolve({ currency: 'WEN', available: { currency: 'WEN', amountMinor: '3' }, held: { currency: 'WEN', amountMinor: '0' }, version: '1' }); skillB.resolve({ agentId: 'b', entitlements: [], installationEvidence: [] }); await initial; expect(preview.wallet.value.data.available.amountMinor).to.equal('3')
       const staleWallet = deferred(); const api = useApiStore(); const aba = scopedPreview(baseClient({ capabilities: async () => capabilities({ wallet: true }), wallet: () => staleWallet.promise }))
-      const read = aba.preview.refresh(); await tick(); api.authorizationGeneration += 1; api.authorizationGeneration += 1; staleWallet.resolve({ currency: 'SILVER', availableMicro: '777', heldMicro: '0', version: '1' }); await read; await tick()
+      const read = aba.preview.refresh(); await tick(); api.authorizationGeneration += 1; api.authorizationGeneration += 1; staleWallet.resolve({ currency: 'WEN', available: { currency: 'WEN', amountMinor: '777' }, held: { currency: 'WEN', amountMinor: '0' }, version: '1' }); await read; await tick()
       expect(aba.preview.wallet.value.data).to.equal(null); aba.scope.stop()
     } finally { scope.stop() }
   })
@@ -152,7 +152,7 @@ describe('economy readonly preview UI behavior', () => {
     const firstCapability = deferred(); const secondCapability = deferred(); let capabilityCalls = 0; let walletCalls = 0
     const { scope, preview } = scopedPreview(baseClient({
       capabilities: () => (++capabilityCalls === 1 ? firstCapability.promise : secondCapability.promise),
-      wallet: async () => { walletCalls += 1; return { currency: 'SILVER', availableMicro: '1', heldMicro: '0', version: '1' } }
+      wallet: async () => { walletCalls += 1; return { currency: 'WEN', available: { currency: 'WEN', amountMinor: '1' }, held: { currency: 'WEN', amountMinor: '0' }, version: '1' } }
     }))
     try {
       const first = preview.refresh(); await tick()
@@ -169,18 +169,18 @@ describe('economy readonly preview UI behavior', () => {
     expect(() => compileScript(descriptor, { id: 'economy-readonly-preview' })).not.to.throw()
     const state = {
       capabilityError: ref(''), enabled: ref(true), refresh: async () => {}, canonical: value => /^\d+$/.test(value), selectedAgentId: ref('agent-a'), selectedAgent: ref({ agentId: 'agent-a' }), agents: ref([{ agentId: 'agent-a', name: 'A' }]),
-      wallet: ref({ status: 'ready', data: { currency: 'SILVER', available: { amountMinor: '0', currency: 'SILVER' }, held: { amountMinor: '0', currency: 'SILVER' }, version: '1' }, error: '' }), ledger: ref({ status: 'empty', data: { items: [] }, error: '' }), catalog: ref({ status: 'empty', data: { items: [] }, error: '' }), detail: ref({ status: 'idle', data: null, error: '' }), roster: ref({ status: 'ready', data: [], error: '' }),
+      wallet: ref({ status: 'ready', data: { currency: 'WEN', available: { amountMinor: '0', currency: 'WEN' }, held: { amountMinor: '0', currency: 'WEN' }, version: '1' }, error: '' }), ledger: ref({ status: 'empty', data: { items: [] }, error: '' }), catalog: ref({ status: 'empty', data: { items: [] }, error: '' }), detail: ref({ status: 'idle', data: null, error: '' }), roster: ref({ status: 'ready', data: [], error: '' }),
       estimate: ref({ status: 'idle', data: null, error: '' }), agentSkills: ref({ status: 'ready', data: { observedAt: '1000', entitlements: [{ skillKey: 'read', skillVersion: '1', status: 'ACTIVE' }], installationEvidence: [{ skillInstallationId: 'i-1', skillKey: 'read', skillVersion: '1', status: 'VERIFIED_INSTALLED', evidenceKind: 'ACK', verifiedAt: '1000' }] }, error: '' }),
       hostingPlan: ref({ status: 'unavailable', data: null, error: '未配置参考方案' }), hostingLease: ref({ status: 'idle', data: null, error: '' }), loadLedger: async () => {}, loadCatalog: async () => {}, loadDetail: async () => {}, loadAgentFacts: async () => {}, submitEstimate: async () => {}
     }
     const Component = loadComponent('../src/components/economy/EconomyReadOnlyPreview.vue', 'readonly-preview-mounted', {
-      vue: Vue, '@/stores/global.js': { useGlobalStore: () => ({ setTitle: () => {}, setShowBack: () => {}, setShowMore: () => {} }) }, '@/utils/silverAmount.js': { formatSilverMoney: value => `${value.amountMinor} SILVER` }, '@/composables/useEconomyReadOnlyPreview.js': { useEconomyReadOnlyPreview: () => state }
+      vue: Vue, '@/stores/global.js': { useGlobalStore: () => ({ setTitle: () => {}, setShowBack: () => {}, setShowMore: () => {} }) }, '@/utils/wenAmount.js': { formatWenMoney: value => `${value.amountMinor} WEN` }, '@/composables/useEconomyReadOnlyPreview.js': { useEconomyReadOnlyPreview: () => state }
     })
     const wrapper = mount(Component); wrappers.push(wrapper); await flushPromises()
     expect(wrapper.text()).to.include('read@1 · 已验证安装')
     expect(wrapper.text()).not.to.include('i-1')
     expect(wrapper.text()).not.to.include('（ACK）')
     expect(wrapper.text()).to.include('未配置参考方案')
-    expect(wrapper.text()).to.include('0 SILVER')
+    expect(wrapper.text()).to.include('0 WEN')
   })
 })

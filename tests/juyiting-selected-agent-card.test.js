@@ -1,3 +1,4 @@
+import { useHallCampaignGrant } from '../src/composables/juyiting/useHallCampaignGrant.js'
 import { useHallAgentAbilitiesEditor } from '../src/composables/juyiting/useHallAgentAbilitiesEditor.js'
 import { useHallSelectedOutputReview } from '../src/composables/juyiting/useHallSelectedOutputReview.js'
 import { selectionKey } from '../src/composables/juyiting/hallSelectedOutputs.js'
@@ -19,7 +20,7 @@ import { compileScript, parse } from '@vue/compiler-sfc'
 import { mount } from '@vue/test-utils'
 import * as Vue from 'vue'
 import { resolveLiveMapPreviewActivation } from '../src/composables/juyiting/liveMapPreviewPolicy.js'
-import { isEconomyPreviewBuildEnabled } from '../src/utils/silverAmount.js'
+import { isEconomyPreviewBuildEnabled } from '../src/utils/wenAmount.js'
 
 global.SVGElement = global.window?.SVGElement
 global.Element = global.window?.Element
@@ -78,7 +79,7 @@ const loadActualJuyiHall = mocks => {
     .replace(/^import\s+(\w+)\s+from\s+['"][^'"]+['"];?\s*$/gm, (_line, name) => `var ${name} = mocks.${name}`)
     .replace(/import\.meta\.env/g, 'mocks.env')
     .replace('export default', 'return')
-  return new Function('Vue', 'mocks', body)(Vue, { useHallSelectedOutputReview, selectionKey, useHallDeliveryReview, useHallAgentProfileCapabilities, useHallAgentAbilitiesEditor, useExternalServicePolicy, assignedTaskTarget, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
+  return new Function('Vue', 'mocks', body)(Vue, { useHallSelectedOutputReview, selectionKey, useHallDeliveryReview, useHallAgentProfileCapabilities, useHallAgentAbilitiesEditor, useExternalServicePolicy, useHallCampaignGrant, economyApi: { create: async () => ({ grants: [] }) }, assignedTaskTarget, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
 }
 
 const createHallMocks = ({ SelectedAgentCard, counters }) => {

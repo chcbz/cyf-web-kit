@@ -2,7 +2,7 @@ import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { useHostingRent } from '../src/composables/juyiting/useHostingRent.js'
-import * as amounts from '../src/utils/silverAmount.js'
+import * as amounts from '../src/utils/wenAmount.js'
 import { hostingPersona, hostingQuote, hostingReceipt, hostingLookup, activeHostingLookup,
   freeReprovisionReceipt, memoryHostingStorage } from './hosting-rent-fixtures.js'
 
@@ -17,7 +17,7 @@ const controller = (overrides = {}) => {
   const rent = useHostingRent({ enabled: true, storage: memoryHostingStorage(), now: () => 2000,
     createKey: () => `00000000-0000-4000-8000-${String(++key).padStart(12, '0')}`,
     loadCapability: async () => ({ economyPreviewEnabled: true, principalScopeSha256: 'c3bc3be1d84b8bfb021dd87ffae84531399c4e0c20bf1d63ebcb972325b3c755' }),
-    economyApi: { get: async () => ok({ currency: 'SILVER', availableMicro: '9999999999', heldMicro: '0' }), create: async () => ok({ transactionId: 'etx-welcome', status: 'POSTED', amountMicro: '1000000000', campaignRef: 'hosting-welcome-v1' }) },
+    economyApi: { get: async () => ok({ currency: 'WEN', available: { currency: 'WEN', amountMinor: '9999999999' }, held: { currency: 'WEN', amountMinor: '0' } }), create: async () => ok({ transactionId: 'etx-welcome', status: 'POSTED', amountWen: '1000000000', campaignRef: 'hosting-welcome-v1' }) },
     agentApi: {
       create: async (url, body) => { requests.push({ url, body }); return ok(url.endsWith('/quotes') ? hostingQuote() : hostingReceipt()) },
       get: async () => ok(hostingLookup())
@@ -49,7 +49,7 @@ describe('hosting rent actual quote/lease UI', () => {
       '../../stores/api.js': { useApiStore: () => ({ authorizationGeneration: 1 }) },
       '../../composables/juyiting/useHostingRent.js': { useHostingRent: () => makeRent() },
       '../../utils/economyPreviewCapability.js': { loadEconomyPreviewCapability: () => {} },
-      '../../utils/silverAmount.js': amounts
+      '../../utils/wenAmount.js': amounts
     }
     const source = compiled.replace(/^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_all, names, path) =>
       `const { ${names.split(',').map(name => name.trim().replace(/\s+as\s+/, ': ')).join(', ')} } = imports[${JSON.stringify(path)}]`)
@@ -61,7 +61,7 @@ describe('hosting rent actual quote/lease UI', () => {
   it('renders actual server terms/wallet/separate token fees, with no charge until the confirm click', async () => {
     const h = controller()
     const wrapper = await show()
-    expect(wrapper.text()).to.include('1234.5 SILVER')
+    expect(wrapper.text()).to.include('1234500000文')
     expect(wrapper.text()).to.include('2 天')
     expect(wrapper.text()).not.not.to.include('configured-plan / v7')
     expect(wrapper.text()).to.include('任务用量、技能购买、悬赏费用另计')
@@ -122,7 +122,7 @@ describe('hosting rent actual quote/lease UI', () => {
     await button(wrapper, '免费重整接应').trigger('click'); await flushPromises()
     expect(requests[1].body.hostingAction).to.equal('REPROVISION')
     expect(wrapper.text()).to.include('免费重整已受理，等待就绪')
-    expect(wrapper.text()).to.include('金额 0 SILVER')
+    expect(wrapper.text()).to.include('金额 0文')
     expect(wrapper.text()).to.include('不会续租或重置到期日')
   })
 })

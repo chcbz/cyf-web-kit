@@ -31,8 +31,8 @@
         <header><h2 id="estimate-title">悬赏预算试算</h2><span class="pill">示例价表</span></header>
         <p class="muted">仅纯计算，不创建任务、报价、资金冻结或订单。</p>
         <form class="estimate-form" @submit.prevent="estimate">
-          <label>悬赏预算（micro-SILVER）<input v-model="form.grossBountyAmountMicro" inputmode="numeric" /></label>
-          <label>最低预期收益（micro-SILVER）<input v-model="form.minimumAcceptedPayoutMicro" inputmode="numeric" /></label>
+          <label>悬赏预算（文）<input v-model="form.grossBountyAmountWen" inputmode="numeric" /></label>
+          <label>最低预期收益（文）<input v-model="form.minimumAcceptedPayoutWen" inputmode="numeric" /></label>
           <div class="token-grid"><div v-for="kind in tokenKinds" :key="kind"><label>预计 {{ tokenLabel(kind) }}<input v-model="form.estimatedTokens[kind]" inputmode="numeric" /></label><label>最坏 {{ tokenLabel(kind) }}<input v-model="form.worstTokens[kind]" inputmode="numeric" /></label></div></div>
           <p v-if="estimateInputError" class="card-error" role="alert">{{ estimateInputError }}</p>
           <button type="submit" :disabled="preview.estimate.status === 'loading'">{{ preview.estimate.status === 'loading' ? '正在试算…' : '重新试算（不扣款）' }}</button>
@@ -75,17 +75,17 @@
 <script setup>
 import { getCurrentInstance, onMounted, proxyRefs, reactive, ref } from 'vue'
 import { useGlobalStore } from '@/stores/global.js'
-import { formatSilverMoney } from '@/utils/silverAmount.js'
+import { formatWenMoney } from '@/utils/wenAmount.js'
 import { useEconomyReadOnlyPreview } from '@/composables/useEconomyReadOnlyPreview.js'
 
 const router = getCurrentInstance()?.proxy?.$router
 const preview = proxyRefs(useEconomyReadOnlyPreview())
 const refreshing = ref(false)
 const tokenKinds = ['input', 'cachedInput', 'output', 'reasoning']
-const form = reactive({ grossBountyAmountMicro: '0', minimumAcceptedPayoutMicro: '0', estimatedTokens: { input: '0', cachedInput: '0', output: '0', reasoning: '0' }, worstTokens: { input: '0', cachedInput: '0', output: '0', reasoning: '0' } })
+const form = reactive({ grossBountyAmountWen: '0', minimumAcceptedPayoutWen: '0', estimatedTokens: { input: '0', cachedInput: '0', output: '0', reasoning: '0' }, worstTokens: { input: '0', cachedInput: '0', output: '0', reasoning: '0' } })
 const estimateInputError = ref('')
 const displayState = value => ({ ACTIVE: '有效', PENDING: '待确认', POSTED: '已入账', COMPLETED: '已完成', REFUNDED: '已退款', EXPIRED: '已到期', REVOKED: '已撤销', TERMINATED: '已终止', FAILED: '失败', PAID: '已付款', INSTALLED: '已安装', ACCEPTED: '已受理' })[value] || '状态待确认'
-const money = value => { try { return formatSilverMoney(value) } catch { return '未报告金额' } }
+const money = value => { try { return formatWenMoney(value) } catch { return '未报告金额' } }
 const list = value => Array.isArray(value) && value.length ? value.join('、') : '未报告'
 const tokenLabel = key => ({ input: '输入 Token', cachedInput: '缓存输入 Token', output: '输出 Token', reasoning: '推理 Token' }[key])
 const timestamp = value => Number.isSafeInteger(value) && value >= 0 && Number.isFinite(new Date(value).getTime()) ? new Date(value).toLocaleString() : '未报告时间'
@@ -93,7 +93,7 @@ const period = value => typeof value === 'string' && /^(0|[1-9]\d*)$/.test(value
 const evidence = item => item?.status === 'VERIFIED_INSTALLED' && item?.evidenceKind ? '已验证安装' : '未确认'
 const returnToProfile = () => router?.replace({ name: 'UserProfile' })
 const refresh = async () => { refreshing.value = true; try { await preview.refresh() } finally { refreshing.value = false } }
-const estimate = async () => { estimateInputError.value = ''; const values = [form.grossBountyAmountMicro, form.minimumAcceptedPayoutMicro, ...tokenKinds.flatMap(key => [form.estimatedTokens[key], form.worstTokens[key]])]; if (!values.every(preview.canonical)) { estimateInputError.value = '所有金额和 Token 必须是规范非负十进制字符串。'; return }; if (tokenKinds.some(key => BigInt(form.estimatedTokens[key]) > BigInt(form.worstTokens[key]))) { estimateInputError.value = '每类预计 Token 不得大于最坏 Token。'; return }; await preview.submitEstimate({ grossBountyAmount: { amountMinor: form.grossBountyAmountMicro, currency: 'SILVER' }, minimumAcceptedPayout: { amountMinor: form.minimumAcceptedPayoutMicro, currency: 'SILVER' }, estimatedTokens: { ...form.estimatedTokens }, worstTokens: { ...form.worstTokens } }) }
+const estimate = async () => { estimateInputError.value = ''; const values = [form.grossBountyAmountWen, form.minimumAcceptedPayoutWen, ...tokenKinds.flatMap(key => [form.estimatedTokens[key], form.worstTokens[key]])]; if (!values.every(preview.canonical)) { estimateInputError.value = '所有金额和 Token 必须是规范非负十进制字符串。'; return }; if (tokenKinds.some(key => BigInt(form.estimatedTokens[key]) > BigInt(form.worstTokens[key]))) { estimateInputError.value = '每类预计 Token 不得大于最坏 Token。'; return }; await preview.submitEstimate({ grossBountyAmount: { amountMinor: form.grossBountyAmountWen, currency: 'WEN' }, minimumAcceptedPayout: { amountMinor: form.minimumAcceptedPayoutWen, currency: 'WEN' }, estimatedTokens: { ...form.estimatedTokens }, worstTokens: { ...form.worstTokens } }) }
 onMounted(() => { const store = useGlobalStore(); store.setTitle('经济预览'); store.setShowBack(true); store.setShowMore(false); void refresh() })
 </script>
 
