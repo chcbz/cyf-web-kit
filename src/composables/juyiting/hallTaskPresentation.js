@@ -38,9 +38,11 @@ export const projectHallTask = ({ task, reviewContext = null, pendingOperation =
   }
   const pending = pendingOperation || reviewContext?.pendingOperation
   const needsReconcile = phase === 'UNKNOWN' || (phase === 'PENDING_ACCEPTANCE' && !reviewContext)
-  const readOnly = terminal(rawStatus) || phase === 'UNKNOWN'
+  const historicalFunding = task?.funding?.mode === 'FUNDED_SINGLE_AGENT'
+  const readOnly = historicalFunding || terminal(rawStatus) || phase === 'UNKNOWN'
+  if (historicalFunding) reason = '旧资金榜仅供查阅，不再创建、领令、恢复或结算'
   const actions = ['VIEW']
-  if (pending) actions.push('CHECK_OPERATION')
+  if (pending && !historicalFunding) actions.push('CHECK_OPERATION')
   else if (!readOnly) {
     if (phase === 'PENDING_ASSIGNMENT') actions.push('ASSIGN')
     else actions.push('DISCUSS')

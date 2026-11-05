@@ -98,11 +98,9 @@ export const useHallData = ({
   })
   const recommendedAgents = computed(() => ['READY', 'NO_MATCH'].includes(recommendationState.value.state)
     ? recommendationState.value.result.recommendations.map(item => ({
-      ...(selectedTask.value?.funding?.mode === 'FUNDED_SINGLE_AGENT' ? item.agent : {
-        agentId: item.agent.agentId, displayName: item.agent.name,
-        providerDisplayName: item.agent.providerDisplayName ?? null, isMine: item.agent.boundToMe,
-        availability: item.agent.status
-      }), recommendationLevel: item.recommendationLevel, recommendationReason: item.reason, recommendationEvidence: item.evidence,
+      agentId: item.agent.agentId, displayName: item.agent.name,
+      providerDisplayName: item.agent.providerDisplayName ?? null, isMine: item.agent.boundToMe,
+      availability: item.agent.status, recommendationLevel: item.recommendationLevel, recommendationReason: item.reason, recommendationEvidence: item.evidence,
       recommendationGaps: item.gaps, taskQuote: item.quote
     })) : [])
 
@@ -116,9 +114,6 @@ export const useHallData = ({
   const canAssign = (task, agent) => {
     if (!task || typeof agent?.agentId !== 'string' || !agent.agentId.trim()) return false
     if (!projectHallTask({ task }).actions.includes('ASSIGN')) return false
-    // External eligibility belongs only to ordinary point-and-deliberate.
-    if (task.funding?.mode === 'FUNDED_SINGLE_AGENT') return agent.canOperate !== false &&
-      !agent.systemAgent && normalizeStatus(agent.status) === 'online'
     return (candidatesTaskId.value === task.id && !candidatesError.value &&
       assigneeCandidates.value.some(item => item.agentId === agent.agentId)) ||
       (['READY', 'NO_MATCH'].includes(recommendationState.value.state) && recommendationState.value.result.taskId === task.id &&

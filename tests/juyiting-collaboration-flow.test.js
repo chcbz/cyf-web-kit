@@ -123,16 +123,16 @@ describe('JuyiHall collaboration flow contract', () => {
   it('assigns a bounty to an explicit agent instead of hidden selectedAgent only', () => {
     expect(bountySource).to.include("$emit('assign-task', detailTask, agent)")
     expect(hallSource).to.include('useHallTaskActions')
-    expect(hallTaskActionsSource).to.include('const assignTask = async (task, agent')
+    expect(hallSource).to.include('const assignTask = async (task, agent')
     expect(hallSource).to.include('await startPointAndStart({ task, agent: targetAgents[0] })')
     expect(hallTaskActionsSource).not.to.include('/assign`')
   })
 
-  it('keeps funded-bounty preview wiring capability-gated without changing map and roster boundaries', () => {
+  it('retires funded write wiring while keeping economy discovery and map/roster boundaries', () => {
     expect(hallSource).to.include('ensureEconomyPreviewCapability')
     expect(hallSource).to.include('economyPreviewCapability.value = await loadEconomyPreviewCapability()')
     expect(hallSource).to.include('economyPreviewEnabled.value = isEconomyPreviewCapability(economyPreviewCapability.value)')
-    expect(hallSource).to.include(':funded-preview-enabled="economyPreviewEnabled"')
+    expect(hallSource).not.to.include(':funded-preview-enabled="economyPreviewEnabled"')
     expect(hallSource).not.to.include('/agent/active')
   })
 

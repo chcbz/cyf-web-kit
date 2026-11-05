@@ -23,66 +23,11 @@ describe('economy preview wallet and funded bounty integration', () => {
     expect(httpSource).to.include("export const economyApi = createApi('/economy')")
   })
 
-  it('retains funded management and recovery without inline creation', () => {
-    expect(bountySource).to.include('fundedPreviewEnabled')
-    expect(bountySource).to.include('grossBountyAmountWen')
-    expect(bountySource).not.to.include("emit('create-task'")
-    expect(bountySource).to.include("fundedCreateRecovery.body.settlementPolicy")
-    expect(bountySource).to.include("$emit('assign-task', detailTask, agent)")
-    expect(bountySource).to.include("$emit('cancel-funding', detailTask)")
-    expect(bountySource).to.include("$emit('load-settlement', detailTask)")
-    expect(bountySource).not.to.include('assign-selected-agents')
-    expect(bountySource).to.include("fundedQuotePreview.quote.priceBookVersion")
-    expect(hallSource).to.include(':funded-preview-enabled="economyPreviewEnabled"')
-    expect(hallSource).to.not.include('/agent/active')
-  })
 
-  it('quotes then claims a funded task for the clicked explicit agent without legacy assign or hidden selection', async () => {
-    const calls = []
-    const task = { id: 'funded-1', title: 'Funded', status: 'open', version: '8', funding: { mode: 'FUNDED_SINGLE_AGENT', remainingWen: '1000000000' } }
-    const clickedAgent = { agentId: 'clicked-agent', name: 'Clicked', status: 'online' }
-    const hiddenAgent = ref({ agentId: 'hidden-agent', name: 'Hidden', status: 'online' })
-    const selectedTask = ref(null)
-    const agentApi = {
-      create: async (url, payload, options = {}) => {
-        calls.push({ url, payload, options })
-        if (url.endsWith('/quotes')) return (fundedQuote({ taskId: 'funded-1', agentId: 'clicked-agent' }))
-        if (url.endsWith('/claim')) return (fundedReceipt({ taskId: 'funded-1', agentId: 'clicked-agent' }))
-        throw new Error(`unexpected ${url}`)
-      },
-      get: async () => (({ ...task, taskVersion: '9', status: 'assigned', assignedAgentId: 'clicked-agent' }))
-    }
-    const actions = useHallTaskActions({
-      agentApi, confirmFundedQuote: async () => true, canAssign: () => true, createIdempotencyKey: () => 'idem-1', log: { warn: () => {} }, playError: () => {}, playSuccess: () => {}, selectedAgent: hiddenAgent, selectedTask, showToast: () => {}, tasks: ref([task])
-    })
 
-    expect(await actions.assignTask(task, clickedAgent)).to.equal(true)
-    expect(calls.map(call => call.url)).to.deep.equal(['/tasks/funded-1/quotes', '/tasks/funded-1/claim'])
-    expect(calls[0].payload).to.deep.equal({ agentId: 'clicked-agent', modelPreference: { provider: 'openai', model: 'configured-model' }, contextRevision: '8', minimumAcceptedPayoutWen: '0' })
-    expect(calls[1].payload).to.deep.equal({ agentId: 'clicked-agent', quoteId: 'q-1', taskVersion: '8', allowQueue: false })
-    expect(calls.every(call => call.options.headers['Idempotency-Key'] === 'idem-1')).to.equal(true)
-    expect(calls.some(call => call.url.endsWith('/assign'))).to.equal(false)
-    expect(hiddenAgent.value.agentId).to.equal('hidden-agent')
-    expect(task.taskVersion).to.equal('9')
-    expect(task.status).to.equal('assigned')
-  })
 
-  it('blocks funded groups and uses frozen cancel and settlement routes', async () => {
-    const calls = []
-    const task = { id: 'funded-2', title: 'Funded', status: 'open', version: '9', funding: { mode: 'FUNDED_SINGLE_AGENT', remainingWen: '10' } }
-    const actions = useHallTaskActions({
-      agentApi: {
-        create: async (url, payload, options = {}) => { calls.push({ url, payload, options }); return ({ taskId: task.id, fundingStatus: 'REFUNDED', refundTransactionId: 'tx-1', refundedWen: '10', remainingWen: '0', taskVersion: '10', fundingVersion: '2', refundedAt: '1000' }) },
-        get: async url => { calls.push({ url }); return (url.endsWith('/settlement') ? { status: 'CANCELLED', refundWen: '10' } : { ...task, taskVersion: '10', status: 'cancelled', funding: { ...task.funding, status: 'REFUNDED' } }) }
-      }, canAssign: () => true, createIdempotencyKey: () => 'idem-2', log: { warn: () => {} }, playError: () => {}, playSuccess: () => {}, selectedAgent: ref(null), selectedTask: ref(null), showToast: () => {}, tasks: ref([task])
-    })
-    expect(await actions.assignTask(task, [{ agentId: 'a' }, { agentId: 'b' }])).to.equal(false)
-    expect(calls).to.deep.equal([])
-    expect((await actions.loadSettlement(task)).refundWen).to.equal('10')
-    expect(await actions.cancelFunding(task)).to.equal(true)
-    expect(calls.map(call => call.url)).to.deep.equal(['/tasks/funded-2/settlement', '/tasks/funded-2/funding/cancel', '/tasks/funded-2'])
-    expect(calls[1].payload).to.deep.equal({ expectedTaskVersion: '9' })
-  })
+
+
 })
 
 describe('funded bounty remediation', () => {
@@ -113,100 +58,16 @@ describe('funded bounty remediation', () => {
     })
   }
 
-  it('rejects funded claim and cancel JsonResult bodies without optimistic task mutation', async () => {
-    const task = fundedTask()
-    const agent = { agentId: 'agent-explicit', name: 'Explicit', status: 'online' }
-    const successEvents = []
-    const toast = []
-    const actions = useHallTaskActions(actionOptions({
-      create: async (url) => { throw Object.assign(new Error(url.endsWith('/quotes') ? '报价已过期' : '已开工'), { status: 409, code: url.endsWith('/quotes') ? 'QUOTE_EXPIRED' : 'CANCEL_NOT_ALLOWED' }) },
-      get: async () => (({}))
-    }, {
-      playSuccess: () => successEvents.push('success'),
-      showToast: message => toast.push(message),
-      tasks: ref([task])
-    }))
 
-    expect(await actions.assignTask(task, agent)).to.equal(false)
-    expect(task.status).to.equal('open')
-    expect(agent.status).to.equal('online')
-    expect(await actions.cancelFunding(task)).to.equal(false)
-    expect(task.funding.status).to.equal(undefined)
-    expect(successEvents).to.deep.equal([])
-    expect(toast.join(' ')).to.include('报价已过期')
-    expect(toast.join(' ')).to.include('已开工')
-  })
 
-  it('reuses funded create, quote, claim, and cancel keys after ambiguous transport failures', async () => {
-    const createKeys = []
-    let createAttempts = 0
-    const createActions = useHallTaskActions(actionOptions({
-      create: async (_url, _payload, options) => {
-        createKeys.push(options.headers['Idempotency-Key'])
-        if (++createAttempts === 1) throw new TypeError('response lost')
-        return ({ id: 'created', title: 'Created' })
-      }
-    }))
-    const createPayload = { title: 'Created', grossBountyAmountWen: '100', settlementPolicy: 'GROSS_INCLUSIVE' }
-    expect(await createActions.createTask(createPayload)).to.equal(false)
-    expect(await createActions.createTask(createPayload)).to.equal(false)
-    expect(await createActions.resumeFundedCreate()).to.equal(true)
-    expect(createKeys).to.deep.equal(['idem-1', 'idem-1'])
 
-    const task = fundedTask('funded-retry')
-    const agent = { agentId: 'agent-explicit', name: 'Explicit', status: 'online' }
-    const quoteKeys = []
-    let quoteAttempts = 0
-    const quoteActions = useHallTaskActions(actionOptions({
-      create: async (url, _payload, options) => {
-        if (url.endsWith('/quotes')) {
-          quoteKeys.push(options.headers['Idempotency-Key'])
-          if (++quoteAttempts === 1) throw new TypeError('quote response lost')
-          return (fundedQuote({ taskId: task.id, quoteId: 'q-retry', agentId: agent.agentId }))
-        }
-        return (fundedReceipt({ taskId: task.id, quoteId: 'q-retry', agentId: agent.agentId }))
-      }
-    }))
-    expect(await quoteActions.assignTask(task, agent)).to.equal(false)
-    expect(await quoteActions.assignTask(task, agent)).to.equal(true)
-    expect(quoteKeys).to.deep.equal(['idem-1', 'idem-1'])
-
-    const claimTask = fundedTask('funded-claim-retry')
-    const claimKeys = []
-    let claimAttempts = 0
-    const claimActions = useHallTaskActions(actionOptions({
-      create: async (url, _payload, options) => {
-        if (url.endsWith('/quotes')) return (fundedQuote({ taskId: claimTask.id, quoteId: 'q-claim', agentId: agent.agentId }))
-        claimKeys.push(options.headers['Idempotency-Key'])
-        if (++claimAttempts === 1) throw new TypeError('claim response lost')
-        return (fundedReceipt({ taskId: claimTask.id, quoteId: 'q-claim', agentId: agent.agentId }))
-      }
-    }))
-    expect(await claimActions.assignTask(claimTask, agent)).to.equal(false)
-    expect(await claimActions.assignTask(claimTask, agent)).to.equal(true)
-    expect(claimKeys).to.deep.equal(['idem-2', 'idem-2'])
-
-    const cancelTask = fundedTask('funded-cancel-retry')
-    const cancelKeys = []
-    let cancelAttempts = 0
-    const cancelActions = useHallTaskActions(actionOptions({
-      create: async (_url, _payload, options) => {
-        cancelKeys.push(options.headers['Idempotency-Key'])
-        if (++cancelAttempts === 1) throw new TypeError('cancel response lost')
-        return ({ taskId: cancelTask.id, fundingStatus: 'REFUNDED', refundTransactionId: 'tx-2', refundedWen: '100', remainingWen: '0', taskVersion: '9', fundingVersion: '2', refundedAt: '1000' })
-      }
-    }))
-    expect(await cancelActions.cancelFunding(cancelTask)).to.equal(false)
-    expect(await cancelActions.cancelFunding(cancelTask)).to.equal(true)
-    expect(cancelKeys).to.deep.equal(['idem-1', 'idem-1'])
-  })
 
   it('keeps original funded recovery and gates skill market discovery and direct routing by the server capability', () => {
     const profileSource = readFileSync(new URL('../src/components/UserProfile.vue', import.meta.url), 'utf8')
     const routerSource = readFileSync(new URL('../src/router/index.js', import.meta.url), 'utf8')
     expect(bountySource).not.to.include('submitCreateTask')
-    expect(bountySource).to.include("$emit('resume-funded-create')")
-    expect(bountySource).to.include('当前编辑稿不会提交或替换原请求。')
+    expect(bountySource).not.to.include("$emit('resume-funded-create')")
+    expect(bountySource).to.include('旧资金榜已停止操作；原结果仍待核对，不会重发、转换或删除此记录。')
     expect(walletSource).to.include('Number.isSafeInteger(value)')
     expect(walletSource).to.include('Number.isSafeInteger(value)')
     expect(profileSource).to.include('v-if="economyPreviewAvailable"')
@@ -253,55 +114,8 @@ describe('funded bounty remediation', () => {
     }
   })
 
-  it('classifies actual useHttp 409 error shapes by documented code while retaining ambiguous replay keys', async () => {
-    const actualHttpError = async (status, code) => {
-      const originalFetch = globalThis.fetch
-      globalThis.fetch = async (_url, options) => currentHttpResponse(options, { code, msg: code }, {
-        status,
-        headers: { 'Content-Type': 'application/json' }
-      })
-      try {
-        await createApi('/agent').post('/tasks', {}, { autoLoading: false, needAuth: false })
-      } catch (error) {
-        return error
-      } finally {
-        globalThis.fetch = originalFetch
-      }
-      throw new Error('expected HTTP failure')
-    }
-    const conflict = await actualHttpError(409, 'IDEMPOTENCY_CONFLICT')
-    const insufficient = await actualHttpError(409, 'INSUFFICIENT_WEN')
-    expect(conflict).to.include({ status: 409, code: 'IDEMPOTENCY_CONFLICT' })
-    expect(conflict.response).to.be.instanceOf(Response)
 
-    const keys = []
-    const actions = useHallTaskActions(actionOptions({
-      create: async (_url, _payload, options) => {
-        keys.push(options.headers['Idempotency-Key'])
-        if (keys.length === 1) throw conflict
-        if (keys.length === 2) throw insufficient
-        throw new TypeError('response dropped after send')
-      }
-    }))
-    const payload = { title: 'HTTP shape', grossBountyAmountWen: '1', settlementPolicy: 'GROSS_INCLUSIVE' }
-    expect(await actions.createTask(payload)).to.equal(false)
-    expect(await actions.createTask(payload)).to.equal(false)
-    expect(await actions.createTask(payload)).to.equal(false)
-    expect(keys).to.deep.equal(['idem-1', 'idem-2', 'idem-3'])
-    // An ambiguous funded create is recovered only through the public explicit resume.
-    expect(await actions.resumeFundedCreate()).to.equal(false)
-    expect(keys).to.deep.equal(['idem-1', 'idem-2', 'idem-3', 'idem-3'])
-  })
 
-  it('rejects numeric or noncanonical funded task/quote versions before a money mutation', async () => {
-    const calls = []
-    const actions = useHallTaskActions(actionOptions({
-      create: async (...args) => { calls.push(args); return ({}) }
-    }))
-    const agent = { agentId: 'agent-explicit' }
-    expect(await actions.assignTask({ ...fundedTask('unsafe'), version: 9007199254740993 }, agent)).to.equal(false)
-    expect(await actions.assignTask({ ...fundedTask('leading-zero'), version: '08' }, agent)).to.equal(false)
-    expect(calls).to.deep.equal([])
-  })
+
 
 })

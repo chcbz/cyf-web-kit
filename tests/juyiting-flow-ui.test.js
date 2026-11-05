@@ -105,16 +105,18 @@ describe('flow gap actual UI consumers', () => {
       expect(button.text()).to.equal('核对原取消结果')
     } finally { wrapper.unmount() }
   })
-  it('funded tasks display only their own funded cancellation CTA', async () => {
+  it('historical funded tasks expose read-only settlement without refund or assignment', async () => {
     const task = { id: 'a', status: 'open', version: '2', funding: { mode: 'FUNDED_SINGLE_AGENT', fundingStatus: 'FUNDS_HELD', remainingWen: '100' } }
     const wrapper = mount(Panel, { props: { ...baseProps, tasks: [task], selectedTask: task } })
     try {
       wrapper.vm.openTask(task); await Vue.nextTick()
       expect(wrapper.find('.ordinary-cancellation').exists()).to.equal(false)
       expect(wrapper.findAll('.funding-summary').every(row => row.text().includes(silver.formatWen('100')))).to.equal(true)
-      expect(wrapper.get('.funded-preview-details').text()).to.include('开工前撤榜并退款')
+      expect(wrapper.get('.funded-preview-details').text()).to.include('旧资金榜仅供查阅')
       await wrapper.get('.funded-preview-details .funded-detail-button').trigger('click')
-      expect(wrapper.emitted('cancel-funding')[0]).to.deep.equal([task])
+      expect(wrapper.emitted('load-settlement')[0]).to.deep.equal([task])
+      expect(wrapper.emitted('cancel-funding')).to.equal(undefined)
+      expect(wrapper.findAll('button').some(button => button.text().includes('退款'))).to.equal(false)
     }
     finally { wrapper.unmount() }
   })

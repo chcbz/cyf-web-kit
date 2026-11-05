@@ -339,15 +339,12 @@
             :aria-hidden="renderedPanel !== 'tasks' || formalTaskRef ? 'true' : null"
             :ability-text="abilityText"
             :can-assign="canAssign"
-            :funded-preview-enabled="economyPreviewEnabled"
             :work-item-plan-enabled="workItemPlanEnabled"
             :authorization-generation="apiStore.authorizationGeneration"
             :identity-scope="hallIdentityScope"
             :formal-task-execution-context="formalTaskExecutionContext"
-            :funded-quote-preview="fundedQuotePreview"
             :cancellation-state="cancellationState"
             :cancellation-busy="cancellationBusy"
-            :funded-claim-state="fundedClaimState"
             :funded-create-recovery="fundedCreateRecovery"
             :requirement-create-state="requirementCreateState"
             :requirement-create-busy="requirementCreateBusy"
@@ -382,9 +379,6 @@
             @refresh-candidates="loadAssigneeCandidates()"
             @more-candidates="loadAssigneeCandidates({ more: true })"
             @mark-changed="hallReadRevision += 1"
-            @confirm-funded-quote="settleFundedQuote(true)"
-            @cancel-funded-quote="settleFundedQuote(false)"
-            @refresh-funded-claim="refreshFundedClaim"
             @recruit-agent="beginHostedPointFlow"
             @assign-task="assignTask"
             @archive-task="archiveTask"
@@ -393,12 +387,9 @@
             @resume-requirement-create="resumeRequirementCreate"
             @open-formal-results="openFormalResults"
             @review-delivery="openDeliveryReview"
-            @resume-funded-create="resumeFundedCreate"
             @check-point-and-start="checkPointAndStartOriginal"
             @resume-point-and-start="resumePointAndStartOriginal"
-            @cancel-funded-create-recovery="showToast('原资金榜请求仍会保留；请在准备好后明确恢复。')"
             @cancel-task="cancelTask"
-            @cancel-funding="cancelFunding"
             @load-settlement="loadSettlement"
             @open-workspace="openBabaoBox"
             @formal-execution-created="hallReadRevision += 1"
@@ -1469,7 +1460,6 @@ const {
   markLibrarySearching,
   markRecommendedAgents,
   markTaskArchived,
-  markTaskAssigned,
   markTaskCreated,
   resetSceneFeedback,
   sceneAgents,
@@ -2100,16 +2090,9 @@ const briefSelectedTask = (task = selectedTask.value, agent = selectedAgent.valu
 
 const discussTask = (task, explicitAgent) => {
   if (isTerminalMatter(task)) return false
-  let actor
-  if (task?.funding?.mode === 'FUNDED_SINGLE_AGENT') {
-    const ids = [...new Set((Array.isArray(task.assignedAgentIds) ? task.assignedAgentIds : [task.assignedAgentId]).filter(Boolean))]
-    actor = ids.length === 1 && ids[0] === explicitAgent?.agentId
-      ? operableRosterAgents.value.find(agent => agent.agentId === ids[0]) : null
-  } else {
-    if (!projectHallTask({ task }).actions.includes('DISCUSS')) return false
-    const target = assignedTaskTarget(task)
-    actor = target?.agentId === explicitAgent?.agentId ? target : null
-  }
+  if (!projectHallTask({ task }).actions.includes('DISCUSS')) return false
+  const target = assignedTaskTarget(task)
+  const actor = target?.agentId === explicitAgent?.agentId ? target : null
   if (!task?.id || !actor || !openPanel('chat')) return false
   enterBountyDiscussion(task)
   // Clicking the task-scoped button is the user's explicit actor selection. Keep
@@ -2137,45 +2120,18 @@ const showToast = (message) => {
   }, 2200)
 }
 
-const fundedQuotePreview = ref(null)
-let fundedQuoteResolver = null
-const settleFundedQuote = (confirmed) => {
-  const resolve = fundedQuoteResolver
-  fundedQuoteResolver = null
-  fundedQuotePreview.value = null
-  resolve?.(confirmed === true)
-}
-const confirmFundedQuote = preview => new Promise(resolve => {
-  if (!economyPreviewEnabled.value || panelDisposed || renderedPanel.value !== 'tasks' || selectedTask.value?.id !== preview.quote.taskId) {
-    resolve(false)
-    return
-  }
-  settleFundedQuote(false)
-  fundedQuotePreview.value = preview
-  fundedQuoteResolver = resolve
-})
-// Closing/switching the task panel or changing a displayed selection cancels
-// only the preview. No hidden selection is ever used as the claim target.
-watch([() => selectedTask.value?.id, () => selectedTask.value?.taskVersion ?? selectedTask.value?.version,
-  () => selectedAgent.value?.agentId, () => renderedPanel.value, () => economyPreviewEnabled.value], () => settleFundedQuote(false), { flush: 'sync' })
-onUnmounted(() => settleFundedQuote(false))
-
+const requirementCreateStorage = (() => {
+  try { return typeof window !== 'undefined' ? window.localStorage : null } catch { return null }
+})()
 const {
-  fundedClaimState,
   fundedCreateRecovery,
-  refreshFundedClaim,
-  resumeFundedCreate: runResumeFundedCreate,
   archiveTask: runArchiveTask,
-  assignTask: runAssignTask,
   cancelTask,
   cancellationState,
   cancellationBusy,
-  cancelFunding: runCancelFunding,
-  createTask: runCreateTask,
   loadSettlement: runLoadSettlement
 } = useHallTaskActions({
   agentApi,
-  confirmFundedQuote,
   identityScope: hallIdentityScope,
   identityEpoch: () => apiStore.authorizationGeneration,
   actionSessionKey: () => `${panelSessionGeneration.value}:${renderedPanel.value}`,
@@ -2188,7 +2144,7 @@ const {
     syncAfterPersonaChanged()
   },
   fundedActorScopeKey: computed(() => economyPreviewCapability.value?.principalScopeSha256 || ''),
-  resolveFundedAgent: agent => agents.value.find(item => item.agentId === agent.agentId),
+  fundedIntentStorage: requirementCreateStorage,
   canAssign,
   log,
   playError,
@@ -2199,16 +2155,12 @@ const {
   tasks
 })
 
-const requirementCreateStorage = (() => {
-  try { return typeof window !== 'undefined' ? window.localStorage : null } catch { return null }
-})()
 const {
   state: requirementCreateState,
   busy: requirementCreateBusy,
   create: runRequirementCreate,
   checkOriginal: checkRequirementCreate,
   resumeOriginal: resumeRequirementCreate,
-  readOriginal: readRequirementCreateOriginal,
   dispose: disposeRequirementCreate
 } = useHallRequirementCreate({
   agentApi,
@@ -2228,8 +2180,6 @@ const {
   }
 })
 const createTask = async (payload, acknowledge = () => {}) => {
-  // Preserve the funded lane, but never let it replace a pending ordinary
-  // creation operation, or reinterpret selected materials as funding authority.
   let created = false
   try {
     const pendingDraft = hallDraftRecovery.unresolvedIntent.value
@@ -2238,29 +2188,15 @@ const createTask = async (payload, acknowledge = () => {}) => {
       openOverviewItem({ sourceType: 'DRAFT', sourceId: pendingDraft.draftId })
       return false
     }
-    if (payload?.grossBountyAmountWen) {
-      const original = readRequirementCreateOriginal()
-      if (original.state !== 'ABSENT' || payload.attachments?.length || payload.inputRefs?.length) {
-        showToast('请先核对原张榜；资金榜不提交普通榜资料。')
-      } else {
-        created = await runCreateTask(payload)
-        if (created) markTaskCreated(selectedTask.value)
-      }
-    } else if (fundedCreateRecovery.value) {
-      showToast('请先核对原资金榜；当前编辑稿未提交。')
-    } else {
-      created = await runRequirementCreate(payload)
-      if (!created && requirementCreateState.value.error) showToast(requirementCreateState.value.error)
+    if (['grossBountyAmountWen', 'settlementPolicy', 'requiredSkillRequirements'].some(key => payload?.[key] != null)) {
+      showToast('旧资金榜已停止创建；原请求不会重发或转换为新事项。')
+      return false
     }
+    created = await runRequirementCreate(payload)
+    if (!created && requirementCreateState.value.error) showToast(requirementCreateState.value.error)
   } finally { acknowledge(created) }
   return created
 }
-const resumeFundedCreate = async () => {
-  const created = await runResumeFundedCreate()
-  if (created) markTaskCreated(selectedTask.value)
-  return created
-}
-
 const archiveConfirmationPending = ref(false)
 const archiveTask = async (task) => {
   if (!task?.id || archiveConfirmationPending.value) return false
@@ -2276,12 +2212,6 @@ const archiveTask = async (task) => {
   if (selectedTask.value?.status === 'archived') {
     markTaskArchived(selectedTask.value)
   }
-}
-
-const cancelFunding = async (task) => {
-  const cancelled = await runCancelFunding(task)
-  if (cancelled) await loadTasks()
-  return cancelled
 }
 
 const loadSettlement = async (task) => runLoadSettlement(task)
@@ -2559,29 +2489,15 @@ const assignTask = async (task, agent) => {
   const targetAgents = Array.isArray(agent) ? agent : [agent].filter(Boolean)
   const hasExplicitAgentId = item => typeof item?.agentId === 'string' && Boolean(item.agentId.trim())
   if (!targetAgents.length || targetAgents.some(item => !hasExplicitAgentId(item))) return false
-  if (task.funding?.mode === 'FUNDED_SINGLE_AGENT' && !economyPreviewEnabled.value) return false
-  if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT' && targetAgents.some(item => !canAssign(task, item))) return false
-
-  if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT' && targetAgents.length !== 1) {
+  if (targetAgents.some(item => !canAssign(task, item))) return false
+  if (targetAgents.length !== 1) {
     showToast('请核对事项报价，并选择一名承办人')
     return false
   }
-  const oneOrdinaryTarget = task.funding?.mode !== 'FUNDED_SINGLE_AGENT' && targetAgents.length === 1
-  if (oneOrdinaryTarget) {
-    const started = await startPointAndStart({ task, agent: targetAgents[0] })
-    if (!started) { showToast(explainPointAndStartState()); void loadAssigneeCandidates() }
-    if (pointAndStartState.value.status === 'PREPARING') observePointAndStart(task.id)
-    return started
-  }
-
-  if (targetAgents.some(target => !operableRosterAgents.value.some(owned => owned.agentId === target.agentId && normalizeStatus(owned.status) === 'online'))) return false
-  taskWorkspaceBinding.clearExplicitActor()
-  const assignmentSucceeded = await runAssignTask(task, agent)
-  if (!assignmentSucceeded) return false
-  const canonicalTask = tasks.value.find(item => item.id === task.id) || task
-  if (task.funding?.mode !== 'FUNDED_SINGLE_AGENT' ||
-    (canonicalTask.status === 'assigned' && canonicalTask.assignedAgentId === targetAgents[0].agentId)) markTaskAssigned(canonicalTask, targetAgents)
-  return true
+  const started = await startPointAndStart({ task, agent: targetAgents[0] })
+  if (!started) { showToast(explainPointAndStartState()); void loadAssigneeCandidates() }
+  if (pointAndStartState.value.status === 'PREPARING') observePointAndStart(task.id)
+  return started
 }
 
 watch(() => [selectedTask.value?.id, selectedTask.value?.taskVersion, selectedTask.value?.requirementRevision, selectedTask.value?.revision], ([taskId, taskVersion, requirementRevision, revision]) => {

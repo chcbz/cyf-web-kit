@@ -42,15 +42,13 @@
       </section>
 
       <section v-if="fundedCreateRecovery" class="funded-create-recovery requirement-create-recovery" role="status">
-        <strong>发现原资金榜请求，结果未知</strong>
+        <strong>历史资金榜请求（仅供查阅）</strong>
         <p>原榜文名目：{{ fundedCreateRecovery.body.title }}</p>
         <p>原榜文缘由：{{ fundedCreateRecovery.body.description || '未填写' }}</p>
         <p>原所需本领：{{ fundedRecoveryAbilities }}</p>
         <p>原结算规则：{{ fundedCreateRecovery.body.settlementPolicy || '未填写' }}</p>
         <p>原总额：{{ fundedCreateRecovery.body.grossBountyAmountWen }} 文。</p>
-        <p>当前编辑稿不会提交或替换原请求。</p>
-        <button type="button" @click="$emit('resume-funded-create')">确认按原请求恢复</button>
-        <button type="button" @click="$emit('cancel-funded-create-recovery')">暂不恢复</button>
+        <p>旧资金榜已停止操作；原结果仍待核对，不会重发、转换或删除此记录。</p>
       </section>
 
       <p v-if="loading" class="task-data-state" role="status">悬赏榜读取中…</p>
@@ -129,31 +127,6 @@
           </div>
 
           <div class="bounty-modal-body">
-            <section
-              v-if="fundedQuotePreview"
-              class="funded-preview-details funded-quote-confirmation"
-              role="dialog"
-              aria-modal="false"
-              aria-label="确认资金榜报价"
-            >
-              <h3>先看报价，再决定领令</h3>
-              <p>{{ fundedQuotePreview.taskTitle }} / {{ fundedQuotePreview.agentName }}</p>
-              <p>榜号 {{ fundedQuotePreview.quote.taskId }} / 好汉 {{ fundedQuotePreview.quote.agentId }} / 榜文版本 {{ fundedQuotePreview.quote.taskVersion }}</p>
-              <p>价簿 {{ fundedQuotePreview.quote.priceBookVersion }} / 报价 {{ fundedQuotePreview.quote.quoteId }}</p>
-              <p>输入 {{ fundedQuotePreview.quote.estimatedTokens.input }} / 缓存输入 {{ fundedQuotePreview.quote.estimatedTokens.cachedInput }} / 输出 {{ fundedQuotePreview.quote.estimatedTokens.output }} / 推理 {{ fundedQuotePreview.quote.estimatedTokens.reasoning }}</p>
-              <p>预估/最坏算力：{{ formatMoney(fundedQuotePreview.quote.estimatedComputeWen) }} / {{ formatMoney(fundedQuotePreview.quote.worstComputeWen) }}；平台费：{{ formatMoney(fundedQuotePreview.quote.platformFeeWen) }}</p>
-              <p>好汉预估/最坏所得：{{ formatMoney(fundedQuotePreview.quote.estimatedAgentPayoutWen) }} / {{ formatMoney(fundedQuotePreview.quote.worstAgentPayoutWen) }}</p>
-              <p>建议：{{ fundedQuotePreview.quote.recommendation }}；缘由：{{ fundedQuotePreview.quote.reasonCodes.join('、') || '无' }}</p>
-              <p>到期时间：{{ formatTime(fundedQuotePreview.quote.expiresAt) }}（{{ fundedQuotePreview.quote.expiresAt }} ms）</p>
-              <p v-if="fundedQuotePreview.recovery">原领令结果未知；仅重放此前确认的原报价和请求，不会重新取价。</p>
-              <button type="button" @click="$emit('confirm-funded-quote')">{{ fundedQuotePreview.recovery ? '核对原领令' : '确认此报价并领令' }}</button>
-              <button type="button" @click="$emit('cancel-funded-quote')">{{ fundedQuotePreview.recovery ? '暂不核对' : '取消，不领令' }}</button>
-            </section>
-            <p v-if="fundedClaimState?.taskId === detailTask.id && fundedClaimState.status === 'confirmed'" class="funding-summary" role="status">
-              榜文 {{ fundedClaimState.taskId }} 已确认由 {{ fundedClaimState.agentId }} 领令。
-              <span v-if="fundedClaimState.refreshPending">榜文刷新待完成，请重查；勿重复领令。<button type="button" @click="$emit('refresh-funded-claim', detailTask)">重查已确认榜文</button></span>
-            </p>
-            <p v-else-if="fundedClaimState?.taskId === detailTask.id && fundedClaimState.status === 'unresolved'" role="status">原领令结果未知，请由原好汉核对，不要重新取价。</p>
             <div class="modal-task-info">
               <section v-if="embeddedHall || (pointAndStartForDetail && !isTerminalMatter(detailTask))" class="matter-advice-card" aria-label="事项进展">
                 <template v-if="embeddedHall">
@@ -327,13 +300,7 @@
 
               <section v-if="isFundedTask(detailTask)" class="funded-preview-details" aria-label="资金悬赏详情">
                 <p class="funding-summary">已托管：{{ formatMoney(detailTask.funding.remainingWen || detailTask.funding.grossBountyAmountWen) }}</p>
-                <p>仅可由一位明确好汉按报价领令；组队、宋江代点和旧式点将已禁用。</p>
-                <button
-                  v-if="canCancelFunding(detailTask)"
-                  type="button"
-                  class="funded-detail-button"
-                  @click="$emit('cancel-funding', detailTask)"
-                >开工前撤榜并退款</button>
+                <p>旧资金榜仅供查阅，不再创建、领令、恢复、退款或结算。</p>
                 <button type="button" class="funded-detail-button" @click="$emit('load-settlement', detailTask)">查看结算详情</button>
                 <pre v-if="detailTask.settlement" class="settlement-detail">{{ JSON.stringify(detailTask.settlement, null, 2) }}</pre>
               </section>
@@ -456,9 +423,9 @@
                   </button>
                   <button
                     type="button"
-                    :aria-label="isFundedTask(detailTask) ? `向 ${agentDisplayName(agent)} 预览报价` : `点 ${agentDisplayName(agent)} 领令`"
-                    :disabled="isFundedTask(detailTask) ? fundedClaimBlocked(detailTask, agent) : !canAssign(detailTask, agent)"
-                    :title="isFundedTask(detailTask) ? `向 ${agentDisplayName(agent)} 预览报价` : `点 ${agentDisplayName(agent)} 领令`"
+                    :aria-label="`点 ${agentDisplayName(agent)} 领令`"
+                    :disabled="!canAssign(detailTask, agent)"
+                    :title="`点 ${agentDisplayName(agent)} 领令`"
                     @click="$emit('assign-task', detailTask, agent)"
                    class="hall-business-action">
                     <span class="hall-business-label">点将</span>
@@ -554,13 +521,10 @@ const props = defineProps({
   taskAgentFilter: { type: String, default: '' },
   taskKeyword: { type: String, default: '' },
   taskStatusFilter: { type: String, default: '' },
-  fundedPreviewEnabled: { type: Boolean, default: false },
   workItemPlanEnabled: { type: Boolean, default: false },
   authorizationGeneration: { type: Number, default: 0 },
   identityScope: { type: String, default: '' },
   formalTaskExecutionContext: { type: Object, default: null },
-  fundedQuotePreview: { type: Object, default: null },
-  fundedClaimState: { type: Object, default: null },
   fundedCreateRecovery: { type: Object, default: null },
   requirementCreateState: { type: Object, default: null },
   requirementCreateBusy: { type: Boolean, default: false },
@@ -586,21 +550,15 @@ const emit = defineEmits([
   'more-candidates',
   'archive-task',
   'brief-selected-task',
-  'cancel-funding',
   'cancel-task',
-  'confirm-funded-quote',
-  'cancel-funded-quote',
-  'refresh-funded-claim',
   'recruit-agent',
   'check-requirement-create',
   'resume-requirement-create',
   'open-formal-results',
   'review-delivery',
   'mark-changed',
-  'resume-funded-create',
   'check-point-and-start',
   'resume-point-and-start',
-  'cancel-funded-create-recovery',
   'discuss-task',
   'view-discussion-history',
   'load-settlement',
@@ -805,17 +763,7 @@ const fundedRecoveryAbilities = computed(() => {
 })
 const unassignedDiscussHint = '此榜文尚未点将，暂不可开议'
 const isFundedTask = task => task?.funding?.mode === 'FUNDED_SINGLE_AGENT'
-const fundedClaimBlocked = (task, agent) => {
-  if (!props.fundedPreviewEnabled || props.fundedQuotePreview) return true
-  const state = props.fundedClaimState
-  if (state?.taskId === task.id) {
-    if (state.status === 'confirmed' || state.status === 'confirming') return true
-    if (state.status === 'unresolved') return state.agentId !== agent.agentId
-  }
-  return !props.canAssign(task, agent)
-}
 const formatMoney = value => formatWen(typeof value === 'string' && isCanonicalWenAmount(value) ? value : '0')
-const canCancelFunding = task => isFundedTask(task) && hasTaskAction(task, 'ASSIGN') && typeof (task.version ?? task.taskVersion) === 'string'
 const agentDisplayName = (agent) => agent?.displayName || agent?.name || agent?.personaName || agent?.agentId || ''
 const recommendationReason = (agent) => agent?.recommendationReason || ''
 const taskAssigneeIds = (task) => {
@@ -1652,7 +1600,6 @@ button:disabled {
 }
 
 /* ECO-V0 funded-preview additions; legacy bounty layout stays intact. */
-.funded-quote-confirmation { max-height: 50vh; overflow-y: auto; flex-shrink: 0; padding: 12px; }
 .funding-summary { margin: 8px 0 0; color: #75430b !important; font-weight: 700; }
 .funded-preview-details { margin: 10px 0; padding: 10px; border-radius: 8px; background: #fff3cc; color: #6b4a12; font-size: 12px; }
 .funded-preview-details p { margin: 6px 0; }
