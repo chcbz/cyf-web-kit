@@ -2534,8 +2534,8 @@ const checkPointAndStartOriginal = async (task) => {
 const resumePointAndStartOriginal = async (task) => {
   const intent = pointAndStartIntentState(task?.id)
   if (intent.state !== 'PRESENT') return checkPointAndStartOriginal(task)
-  if (pointAndStartRecoveryLane(intent) === 'CONTROLLED' || intent.record?.schemaVersion !== 2) {
-    showToast('旧图片与费用操作仅可查看历史，不再重放执行。')
+  if (pointAndStartRecoveryLane(intent) === 'CONTROLLED' || intent.record?.schemaVersion !== 3) {
+    showToast('未绑定事项报价的旧操作仅可查看历史，不再重放执行。')
     return checkPointAndStartOriginal(task)
   }
   return resumePointAndStart(task.id)
@@ -2556,7 +2556,7 @@ const handlePointAndDeliberateAgent = agent => {
 
 const assignTask = async (task, agent) => {
   if (!task?.id) return false
-  // A durable v2 original always wins over every normal lane. This check happens
+  // A durable original always wins over every normal lane. This check happens
   // before funded/multi/open eligibility so a changed current snapshot cannot
   // turn an uncertain original write into a fresh legacy assignment.
   const original = pointAndStartIntentState(task.id)

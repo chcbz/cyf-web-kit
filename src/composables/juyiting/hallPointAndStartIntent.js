@@ -6,6 +6,7 @@ import { controlledImageBridgeExtension } from './hallControlledImagePointAndSta
 const PREFIX = 'cyf.juyiting.point-and-start.v1'
 const clone = value => JSON.parse(JSON.stringify(value))
 const operations = new Set(['DELIBERATE', 'EXECUTE_SKILL'])
+const discussionIntent = intent => [2, 3].includes(intent?.schemaVersion)
 const historicalOperations = new Set(['DELIBERATE', 'GENERATE_IMAGE', 'EDIT_IMAGE', 'INSPECT_INPUTS', 'GENERATE_AUDIO', 'EDIT_AUDIO'])
 export const exactPointAndStartId = (value, max = 100) => typeof value === 'string' && value.length > 0 &&
   [...value].length <= max && value.trim() === value && [...value].every(c => {
@@ -52,13 +53,18 @@ export const pointAndStartBody = ({ agentId, taskVersion, requirementRevision, r
     requirementRevision: revision, requestedOperations: ops, initialOperation, inputRefs: refs }
 }
 // New requests are ordinary discussion, not client-selected execution/fee authority.
-export const pointAndDeliberateBody = ({ targetAgentId, expectedTaskVersion, requirementRevision }) => {
+const historicalDiscussionBody = ({ targetAgentId, expectedTaskVersion, requirementRevision }) => {
   if (!exactPointAndStartId(targetAgentId) || !pointAndStartLong(expectedTaskVersion, true) ||
     expectedTaskVersion === '9223372036854775807' || !pointAndStartLong(requirementRevision)) return null
   return { targetAgentId, expectedTaskVersion, requirementRevision }
 }
-export const pointAndStartTarget = intent => intent?.schemaVersion === 2 ? intent.body?.targetAgentId : intent?.body?.agentId
-export const pointAndStartReadPath = intent => `/tasks/${encodeURIComponent(intent.taskId)}/${intent.schemaVersion === 2
+export const pointAndDeliberateBody = body => {
+  const base = historicalDiscussionBody(body)
+  if (!base || !exactPointAndStartId(body.quoteId) || !exactPointAndStartId(body.recommendationId)) return null
+  return { ...base, quoteId: body.quoteId, recommendationId: body.recommendationId }
+}
+export const pointAndStartTarget = intent => discussionIntent(intent) ? intent.body?.targetAgentId : intent?.body?.agentId
+export const pointAndStartReadPath = intent => `/tasks/${encodeURIComponent(intent.taskId)}/${discussionIntent(intent)
   ? 'point-and-deliberate/request' : 'assignment-operation'}`
 const canonicalBody = body => pointAndStartBody({ ...body,
   taskVersion: receiptLong(body?.expectedTaskVersion, true), requirementRevision: receiptLong(body?.requirementRevision) })
@@ -74,7 +80,7 @@ const inputFacts = (list, legacy = false) => {
   return refs.map(ref => facts.find(item => equal(ref, { fileId: item.fileId, version: item.version, purpose: item.purpose })))
 }
 export const pointAndStartGrant = (value, intent) => {
-  const ops = sortedOperations(value?.permittedOperations, intent?.schemaVersion === 2 ? operations : historicalOperations)
+  const ops = sortedOperations(value?.permittedOperations, discussionIntent(intent) ? operations : historicalOperations)
   const facts = inputFacts(value?.inputs, true)
   if (!value || value.taskId !== intent.taskId || value.targetAgentId !== intent.body.agentId ||
     !exactPointAndStartId(value.grantId) || value.state !== 'ACTIVE' || !ops || !facts ||
@@ -86,9 +92,9 @@ export const pointAndStartGrant = (value, intent) => {
     grantVersion: receiptLong(value.grantVersion), inputs: facts }
 }
 export const pointAndStartProjection = (value, intent, previous = null) => {
-  const ops = sortedOperations(value?.permittedOperations, intent?.schemaVersion === 2 ? operations : historicalOperations)
+  const ops = sortedOperations(value?.permittedOperations, discussionIntent(intent) ? operations : historicalOperations)
   const facts = inputFacts(value?.inputs)
-  const generic = intent?.schemaVersion === 2
+  const generic = discussionIntent(intent)
   const states = ['PENDING', 'CLAIMED', 'RETRY', 'ADMITTED', 'DEAD']
   if (!value || value.schemaVersion !== (generic ? 2 : 1) || value.taskId !== intent.taskId ||
     value.targetAgentId !== pointAndStartTarget(intent) || value.requirementRevision !== String(intent.body.requirementRevision) ||
@@ -130,10 +136,10 @@ export const pointAndStartProjection = (value, intent, previous = null) => {
   return result
 }
 const validIntent = record => {
-  if (!record || ![1, 2].includes(record.schemaVersion) || !exactPointAndStartId(record.taskId) ||
+  if (!record || ![1, 2, 3].includes(record.schemaVersion) || !exactPointAndStartId(record.taskId) ||
     !exactPointAndStartId(record.key) || typeof record.postAcknowledged !== 'boolean' || !record.body ||
-    !equal(record.body, record.schemaVersion === 2 ? pointAndDeliberateBody(record.body) : canonicalBody(record.body))) return false
-  if (record.schemaVersion === 2 && ['grant', 'providerConsent', 'controlledImageBridge'].some(key => key in record)) return false
+    !equal(record.body, record.schemaVersion === 3 ? pointAndDeliberateBody(record.body) : record.schemaVersion === 2 ? historicalDiscussionBody(record.body) : canonicalBody(record.body))) return false
+  if (discussionIntent(record) && ['grant', 'providerConsent', 'controlledImageBridge'].some(key => key in record)) return false
   if (record.grant && (!exactPointAndStartId(record.grant.grantId) ||
     !pointAndStartLong(record.grant.assignmentRevision, true) || !pointAndStartLong(record.grant.grantVersion) ||
     !inputFacts(record.grant.inputs))) return false
@@ -161,7 +167,7 @@ export const createPointAndStartIntentStore = ({ storage, scope, taskId }) => {
     try { storage.removeItem(name); return read().state === 'ABSENT' } catch { return false }
   }, write: record => {
     const old = read()
-    if (record?.schemaVersion !== 2 || !validIntent(record) || record.taskId !== taskId || !['ABSENT', 'PRESENT'].includes(old.state)) return { state: 'UNAVAILABLE' }
+    if (!(record?.schemaVersion === 3 || record?.schemaVersion === 2 && old.state === 'PRESENT') || !validIntent(record) || record.taskId !== taskId || !['ABSENT', 'PRESENT'].includes(old.state)) return { state: 'UNAVAILABLE' }
     if (old.state === 'PRESENT' && (old.record.schemaVersion !== record.schemaVersion || old.record.key !== record.key || !equal(old.record.body, record.body) ||
       (old.record.postAcknowledged && !record.postAcknowledged) ||
       (old.record.grant && !equal(old.record.grant, record.grant)) ||

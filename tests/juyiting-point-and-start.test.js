@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { expect } from 'chai'
 import { ref } from 'vue'
 import { setImmediate } from 'node:timers'
@@ -19,9 +20,10 @@ const projection = () => ({ schemaVersion: 2, taskId: 'task-1', targetAgentId: '
   permittedOperations: ['DELIBERATE', 'EXECUTE_SKILL'], inputs: [], bootstrapId: 'bootstrap-1',
   bootstrapState: 'ADMITTED', stateVersion: '2', initialOperation: 'DELIBERATE',
   conversationId: '9007199254740993', initialRequestId: 'initial-1', currentAssignment: true })
-const args = () => ({ task: task(), agent: { agentId: 'agent-1' } })
-const record = () => ({ schemaVersion: 2, taskId: 'task-1', key: 'original-key', postAcknowledged: false,
-  body: pointAndDeliberateBody({ targetAgentId: 'agent-1', expectedTaskVersion: '6', requirementRevision: '3' }) })
+const quote = () => ({ state: 'AVAILABLE', quoteId: 'quote-1', recommendationId: 'rec-1', amount: { amountMinor: '13', currency: 'WEN' }, unavailableReason: null })
+const args = () => ({ task: task(), agent: { agentId: 'agent-1', taskQuote: quote() } })
+const record = () => ({ schemaVersion: 3, taskId: 'task-1', key: 'original-key', postAcknowledged: false,
+  body: pointAndDeliberateBody({ targetAgentId: 'agent-1', expectedTaskVersion: '6', requirementRevision: '3', quoteId: 'quote-1', recommendationId: 'rec-1' }) })
 const instances = []
 const harness = (overrides = {}) => {
   const memory = overrides.storage || storage()
@@ -71,6 +73,52 @@ describe('persisted exact point-and-start source contract', () => {
     expect(createPointAndStartIntentStore({ storage: retry.memory, scope: retry.scope.value, taskId: 'task-1' }).read().state).to.equal('PRESENT')
   })
 
+  it('produces the same selected-quote request data as the backend HTTP fixture', () => {
+    const shared = JSON.parse(readFileSync(new URL('./fixtures/billing/task-assignment-quote.json', import.meta.url), 'utf8'))
+    expect(pointAndDeliberateBody(shared)).to.deep.equal(shared)
+    expect(pointAndDeliberateBody({ ...shared, quoteId: undefined })).to.equal(null)
+    expect(pointAndDeliberateBody({ ...shared, recommendationId: undefined })).to.equal(null)
+  })
+
+  it('missing or unavailable quote never sends a new assignment', async () => {
+    for (const taskQuote of [null, { ...quote(), state: 'UNAVAILABLE', amount: null }, { ...quote(), quoteId: null }]) {
+      const h = harness()
+      expect(await h.flow.start({ task: task(), agent: { agentId: 'agent-1', taskQuote } })).to.equal(false)
+      expect(h.calls).to.have.length(0)
+      expect(h.flow.state.value.status).to.equal('REJECTED')
+    }
+  })
+
+  it('quote selection is frozen before asynchronous requirement reads', async () => {
+    const selected = args()
+    const h = harness({ api: { get: async path => {
+      if (path.endsWith('/requirements/current')) {
+        selected.agent.taskQuote.quoteId = 'new-quote'
+        selected.agent.taskQuote.recommendationId = 'new-recommendation'
+        return req()
+      }
+      return path.endsWith('/point-and-deliberate/request') ? projection() : task()
+    } } })
+    await h.flow.start(selected)
+    const sent = h.calls.find(item => item[0] === 'post')
+    expect(sent[2].quoteId).to.equal('quote-1')
+    expect(sent[2].recommendationId).to.equal('rec-1')
+  })
+
+  it('historical unquoted discussion can be read but never resent or repriced', async () => {
+    const memory = storage()
+    const old = { ...record(), schemaVersion: 2, body: { targetAgentId: 'agent-1', expectedTaskVersion: '6', requirementRevision: '3' } }
+    const key = `cyf.juyiting.point-and-start.v1.${encodeURIComponent('owner-a/client-a')}.task-1`
+    memory.setItem(key, JSON.stringify(old))
+    const h = harness({ storage: memory, api: { get: async path => path.endsWith('/point-and-deliberate/request') ? projection() : canonical() } })
+    expect(await h.flow.checkOriginal('task-1')).to.equal(true)
+    expect(h.calls.every(item => item[0] === 'get')).to.equal(true)
+    expect(h.flow.state.value.intent.body).to.deep.equal(old.body)
+    const absent = harness({ storage: memory, api: { get: async () => { throw Object.assign(new Error('not found'), { status: 404, code: 'ASSIGNMENT_OPERATION_UNAVAILABLE' }) } } })
+    expect(await absent.flow.resumeOriginal('task-1')).to.equal(false)
+    expect(absent.calls.filter(item => item[0] === 'post')).to.have.length(0)
+  })
+
   it('persists/readbacks original body before one POST, then reads exact action/task and adopts without resend', async () => {
     const { flow, calls, admitted } = harness()
     const original = args()
@@ -82,7 +130,7 @@ describe('persisted exact point-and-start source contract', () => {
     expect(admitted[0].reference.conversationId).to.equal('9007199254740993')
     expect(admitted[0].task).to.deep.equal(canonical())
     expect(original.task).to.deep.equal(task()) // grant is never assigned into TaskDTO
-    expect(original.agent).to.deep.equal({ agentId: 'agent-1' })
+    expect(original.agent).to.deep.equal({ agentId: 'agent-1', taskQuote: quote() })
   })
 
   for (const status of ['assigned', 'reviewing', 'completed']) {
@@ -430,8 +478,8 @@ describe('independent generic action/grant/root fences', () => {
     expect(pointAndStartProjection({ ...p, stateVersion: '3', bootstrapState: 'RETRY', conversationId: null, initialRequestId: null }, record(), p)).to.equal(null)
   })
   it('new body keeps long decimal versions as strings and rejects authority fields in persisted records', () => {
-    expect(pointAndDeliberateBody({ targetAgentId: 'agent-1', expectedTaskVersion: '9007199254740993', requirementRevision: '9223372036854775807' }))
-      .to.deep.equal({ targetAgentId: 'agent-1', expectedTaskVersion: '9007199254740993', requirementRevision: '9223372036854775807' })
+    expect(pointAndDeliberateBody({ targetAgentId: 'agent-1', expectedTaskVersion: '9007199254740993', requirementRevision: '9223372036854775807', quoteId: 'quote-1', recommendationId: 'rec-1' }))
+      .to.deep.equal({ targetAgentId: 'agent-1', expectedTaskVersion: '9007199254740993', requirementRevision: '9223372036854775807', quoteId: 'quote-1', recommendationId: 'rec-1' })
     const memory = storage(); const store = createPointAndStartIntentStore({ storage: memory, scope: 'owner', taskId: 'task-1' })
     for (const changed of [{ ...record(), body: { ...record().body, paidExecutionAuthorized: true } },
       { ...record(), providerConsent: {} }, { ...record(), controlledImageBridge: {} }, { ...record(), grant: null }]) {

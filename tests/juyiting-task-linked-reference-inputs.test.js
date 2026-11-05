@@ -177,11 +177,11 @@ describe('task-linked reference input resolver', () => {
       isSupported: () => true, canAssign: task => task.status === 'open', createIdempotencyKey: () => 'original-key' })
     owned.push(flow)
 
-    expect(await flow.start({ task: { id: 'task-1', taskVersion: '6', status: 'open' }, agent: { agentId: 'agent-1' },
+    expect(await flow.start({ task: { id: 'task-1', taskVersion: '6', status: 'open' }, agent: { agentId: 'agent-1', taskQuote: { state: 'AVAILABLE', quoteId: 'quote-1', recommendationId: 'rec-1', amount: { amountMinor: '13', currency: 'WEN' }, unavailableReason: null } },
       requestedOperations: ['GENERATE_IMAGE'], initialOperation: 'GENERATE_IMAGE', inputRefs: resolved.inputRefs })).to.equal(true)
     const post = calls.find(call => call.method === 'POST')
     expect(post.path).to.equal('/tasks/task-1/point-and-deliberate')
-    expect(post.body).to.deep.equal({ targetAgentId: 'agent-1', expectedTaskVersion: '6', requirementRevision: '3' })
+    expect(post.body).to.deep.equal({ targetAgentId: 'agent-1', expectedTaskVersion: '6', requirementRevision: '3', quoteId: 'quote-1', recommendationId: 'rec-1' })
     expect(calls.filter(call => call.method === 'POST')).to.have.length(1)
     expect(flow.state.value.projection.inputs).to.deep.equal(facts)
   })

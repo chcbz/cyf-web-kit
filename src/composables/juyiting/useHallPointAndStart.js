@@ -1,5 +1,6 @@
 import { computed, ref, unref, watch } from 'vue'
 import { bountyBootstrapReference } from './hallBountyBootstrap.js'
+import { isAvailableTaskQuote } from './hallAssigneeRecommendation.js'
 import { createPointAndStartIntentStore, exactPointAndStartId, exactPointAndStartScope, pointAndDeliberateBody,
   pointAndStartReadPath, pointAndStartTarget, pointAndStartLong, pointAndStartProjection } from './hallPointAndStartIntent.js'
 
@@ -84,7 +85,7 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
     return intent
   }
   const send = async (intent, captured, epoch, contextEpoch) => {
-    if (intent.schemaVersion !== 2) throw new Error('历史点将仅可核对；不会改成新的议事请求')
+    if (intent.schemaVersion !== 3) throw new Error('历史点将仅可核对；不会改成新的议事请求')
     const result = unwrap(await agentApi.create(`/tasks/${encodeURIComponent(intent.taskId)}/point-and-deliberate`, clone(intent.body), options(intent.key)))
     if (!current(captured, epoch, contextEpoch)) return null
     const projection = pointAndStartProjection(result, intent, intent.projection)
@@ -146,6 +147,7 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
     // read. Editing the draft while GET runs must never alter the admitted body.
     const taskId = task?.id
     const targetId = agent?.agentId
+    const selectedQuote = isAvailableTaskQuote(agent?.taskQuote) ? clone(agent.taskQuote) : null
     return run(taskId, async (captured, epoch, contextEpoch) => {
       if (task?.funding?.mode === 'FUNDED_SINGLE_AGENT' ||
       !exactPointAndStartId(targetId)) throw new Error('此需求须指定一个可点将的普通任务目标')
@@ -156,6 +158,7 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
           error: consentPending ? '存在费用同意意图，请使用费用意图恢复；未调用旧点将' : null }
         throw new Error(consentPending ? '存在费用同意意图，请使用费用意图恢复；未调用旧点将' : '存在原点将记录，请明确核对或恢复原操作')
       }
+      if (!selectedQuote) throw new Error('请先取得该承办人的有效事项报价；未发送承办请求')
       const requirement = await get(`/tasks/${encodeURIComponent(taskId)}/requirements/current`)
       if (!current(captured, epoch, contextEpoch)) return false
       if (task?.id !== taskId || agent?.agentId !== targetId) throw new Error('榜文或显式目标已变化；未发送点将')
@@ -169,11 +172,11 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
       canonical?.id !== taskId || canonical.taskVersion !== requirement.taskVersion ||
       canonical.status !== 'open' || canonical.funding?.mode === 'FUNDED_SINGLE_AGENT' || canAssign(canonical, agent) !== true) throw new Error('真实需求修订、榜文版本或目标准入未能核对')
       const body = pointAndDeliberateBody({ targetAgentId: targetId, expectedTaskVersion: requirement.taskVersion,
-        requirementRevision: requirement.requirementRevision })
+        requirementRevision: requirement.requirementRevision, quoteId: selectedQuote.quoteId, recommendationId: selectedQuote.recommendationId })
       if (!body) throw new Error('目标或版本无效；未发送点将')
       const key = createIdempotencyKey()
       if (!exactPointAndStartId(key)) throw new Error('原点将键无效；未发送点将')
-      const intent = persist(captured, { schemaVersion: 2, taskId, key, body, postAcknowledged: false })
+      const intent = persist(captured, { schemaVersion: 3, taskId, key, body, postAcknowledged: false })
       state.value = { status: 'SENDING', intent, projection: null, error: null }
       try { return await send(intent, captured, epoch, contextEpoch) } catch (error) {
         // Only the first POST's definitive rejection can release a new intent.
@@ -198,7 +201,7 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
     try { return await project(intent, captured, epoch, contextEpoch) } catch (error) {
       if (!current(captured, epoch, contextEpoch)) return false
       if (error?.status !== 404 || error?.code !== 'ASSIGNMENT_OPERATION_UNAVAILABLE' ||
-        intent.schemaVersion !== 2 || intent.providerConsent || intent.postAcknowledged || intent.projection) throw error
+        intent.schemaVersion !== 3 || intent.providerConsent || intent.postAcknowledged || intent.projection) throw error
       return send(intent, captured, epoch, contextEpoch)
     }
   })
