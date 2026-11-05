@@ -18,44 +18,6 @@ describe('bounty request catalog contract',() => {
 })
 import { ref } from 'vue'
 import { useHallBountyRequestCatalog } from '../src/composables/juyiting/useHallBountyRequestCatalog.js'
-it('reads every page through a fixed bound without storage', async() => {
-  const calls=[]; const context=ref({conversationId:'conversation_1',taskId:'task_1',targetAgentId:'agent_1',assignmentRevision:'0'}); const generation=ref(1)
-  const entries=Array.from({length:101},(_,i) => ({ordinal:String(i+1),request:request(`req_${i+1}`)}))
-  const api={get:async(_path,params) => {calls.push(params); const after=Number(params.after||0); const rows=entries.filter(v => Number(v.ordinal)>after).slice(0,100); return {data:{data:page(String(after),'101',rows,after===0,after===0?'100':null)}}}}
-  const lane=useHallBountyRequestCatalog({chatApi:api,enabled:() => true,identityScope:ref('owner'),authorizationGeneration:ref(1),getContext:() => context.value,getContextGeneration:() => generation.value})
-  expect(await lane.refresh()).to.equal(true); expect(lane.entries.value).to.have.length(101); expect(calls).to.deep.equal([{after:'0'},{expectedGeneration:'1',after:'100',through:'101'}]); lane.dispose()
-})
-
-it('rescans from zero for a late low ordinal without deleting the already verified page', async () => {
-  const calls=[]; const context=ref({conversationId:'conversation_1',taskId:'task_1'}); const contextGeneration=ref(1)
-  let scan=0
-  const api={get:async(_path,params) => {
-    calls.push({...params}); const late=scan++ >= 1
-    const records=late ? [{ordinal:'1',request:request('late')},{ordinal:'101',request:request('one')}] : [{ordinal:'101',request:request('one')}]
-    const after=BigInt(params.after || '0'); const rows=records.filter(row => BigInt(row.ordinal)>after)
-    return {data:{data:page(String(after),late?'101':'101',rows)}}
-  }}
-  const lane=useHallBountyRequestCatalog({chatApi:api,enabled:() => true,identityScope:ref('owner'),authorizationGeneration:ref(1),getContext:() => context.value,getContextGeneration:() => contextGeneration.value})
-  expect(await lane.refresh()).to.equal(true)
-  expect(await lane.refresh()).to.equal(true)
-  expect(calls.map(value => value.after)).to.deep.equal(['0','0'])
-  expect(lane.entries.value.map(value => value.request.requestId)).to.deep.equal(['late','one'])
-  lane.dispose()
-})
-
-it('drops a delayed read after identity, target, or generation fencing without a write', async () => {
-  const identity=ref('owner-a'); const auth=ref(1); const context=ref({conversationId:'conversation_1',taskId:'task_1',targetAgentId:'agent-a',assignmentRevision:'0'}); const contextGeneration=ref(1)
-  let resolve; let gets=0; let posts=0
-  const api={get:async() => {gets++; return new Promise(done => {resolve=done})},execute:async() => {posts++; throw new Error('catalog is read-only')}}
-  const lane=useHallBountyRequestCatalog({chatApi:api,enabled:() => true,identityScope:identity,authorizationGeneration:auth,getContext:() => context.value,getContextGeneration:() => contextGeneration.value})
-  const pending=lane.refresh()
-  identity.value='owner-b'; auth.value=2; context.value={...context.value,targetAgentId:'agent-b'}; contextGeneration.value++
-  resolve({data:{data:page('0','1',[{ordinal:'1',request:request('one')}])}})
-  expect(await pending).to.equal(false)
-  expect(gets).to.equal(1); expect(posts).to.equal(0); expect(lane.entries.value).to.deep.equal([])
-  lane.dispose()
-})
-
 it('rejects a mismatched continuation cursor and independently advances a step while request state is unchanged', () => {
   const base=request('one'); base.turns=[turn({ turnId: 'turn_one' })]
   const first=catalogPage(page('0','2',[{ordinal:'1',request:base}],true,'1'))
@@ -86,50 +48,6 @@ it('accepts the frozen nullable execution link union and rejects foreign or inco
   const badChatLink = structuredClone(chat)
   badChatLink.steps[0].executionState = 'FORGED'
   expect(catalogRequest(badChatLink, scope)).to.equal(false)
-})
-
-it('releases only its own scan slot when durable conversation generation invalidates an in-flight scan', async () => {
-  const contextGeneration=ref(1); let resolveFirst; let calls=0
-  const api={get:async() => { calls++; if(calls===1)return await new Promise(resolve => {resolveFirst=resolve}); return {data:{data:page('0','1',[{ordinal:'1',request:request('one')}])}} }}
-  const lane=useHallBountyRequestCatalog({chatApi:api,enabled:() => true,identityScope:ref('owner'),authorizationGeneration:ref(1),
-    getContext:() => ({conversationId:'conversation_1',taskId:'task_1'}),getContextGeneration:() => contextGeneration.value})
-  try {
-    const first=lane.refresh(); contextGeneration.value++
-    resolveFirst({data:{data:page('0','1',[{ordinal:'1',request:request('one')}])}})
-    expect(await first).to.equal(false)
-    expect(lane.loading.value).to.equal(false)
-    expect(await lane.refresh()).to.equal(true)
-    expect(lane.entries.value).to.have.length(1)
-  } finally { lane.dispose() }
-})
-
-it('an old scan completion cannot clear the slot or loading state of the new context scan', async () => {
-  let resolveOld; let resolveNew; let calls=0
-  const api={get:async() => await new Promise(resolve => { if(++calls===1)resolveOld=resolve; else resolveNew=resolve })}
-  const lane=useHallBountyRequestCatalog({chatApi:api,enabled:() => true,identityScope:ref('owner'),authorizationGeneration:ref(1),
-    getContext:() => ({conversationId:'conversation_1',taskId:'task_1'}),getContextGeneration:() => 1})
-  try {
-    const old=lane.refresh(); lane.reset(); const next=lane.refresh()
-    const body={data:{data:page('0','1',[{ordinal:'1',request:request('one')}])}}
-    resolveOld(body); expect(await old).to.equal(false); expect(lane.loading.value).to.equal(true)
-    resolveNew(body); expect(await next).to.equal(true); expect(lane.loading.value).to.equal(false)
-  } finally {lane.dispose()}
-})
-
-it('joins an in-flight catalog scan for send preparation and propagates its result', async () => {
-  for (const valid of [true, false]) {
-    let resolve; let calls = 0
-    const body = { data: { data: page('0','1',[{ordinal:'1',request:request('one')}]) } }
-    const lane = useHallBountyRequestCatalog({ chatApi: { get: () => ++calls === 1 ? new Promise(done => { resolve = done }) : Promise.resolve(body) },
-      enabled: () => true, identityScope: ref('owner'), authorizationGeneration: ref(1),
-      getContext: () => ({ conversationId:'conversation_1', taskId:'task_1' }), getContextGeneration: () => 1 })
-    try {
-      const first = lane.refresh(); const joined = lane.refresh()
-      expect(joined).to.equal(first); expect(calls).to.equal(1)
-      resolve(valid ? body : { data: {} })
-      expect(await first).to.equal(valid); expect(await joined).to.equal(valid)
-    } finally { lane.dispose() }
-  }
 })
 
 it('decodes the shared latest snapshot cursor without losing bigint precision', async () => {

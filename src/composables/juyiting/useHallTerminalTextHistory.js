@@ -6,8 +6,7 @@ import { completedTextItem } from './bountyOutputCatalog.js'
 
 /** Cancelled-task display only. Never a complete acceptance/delivery graph. */
 export const useHallTerminalTextHistory = ({ api, taskId, identityKey, documentRef = globalThis.document }) => {
-  const source = useHallBountyAcceptance({ api, taskId, identityKey, taskCompleted: () => true,
-    loadRequests: false, documentRef })
+  const source = useHallBountyAcceptance({ api, taskId, identityKey,  documentRef })
   const conversationId = computed(() => source.scope.value?.conversationId || '')
   const identity = computed(() => `${identityKey()}\u0000${taskId()}`)
   const messages = ref([]); const items = ref([]); const readError = ref(''); const reading = ref(false)

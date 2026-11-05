@@ -15,106 +15,63 @@ const page = (conversationId = '101', taskId = 'task-1', entries = [{ ordinal: '
 const response = value => Array.isArray(value) ? { items: value } : value
 const deferred = () => { let resolve; return { promise: new Promise(done => { resolve = done }), resolve: value => resolve(value) } }
 
-describe('task acceptance existing scoped source reads', () => {
-  const originals = new Map()
-  beforeEach(() => {
-    for (const key of ['setTimeout', 'clearTimeout']) originals.set(key, globalThis[key])
-    globalThis.setTimeout = (fn, delay, ...args) => delay === 2500 ? 999 : originals.get('setTimeout')(fn, delay, ...args)
-    globalThis.clearTimeout = id => { if (id !== 999) originals.get('clearTimeout')(id) }
-  })
-  afterEach(() => { for (const [key, value] of originals) globalThis[key] = value; originals.clear() })
-  it('defers hidden catalog discovery and resumes on visibility without replaying writes', async () => {
-    const doc = new EventTarget(); doc.visibilityState = 'hidden'; const calls = []
-    const source = useHallBountyAcceptance({ documentRef: doc, taskId: () => 'task-1', identityKey: () => 'owner-1',
-      api: { list: async path => { calls.push(path); return response([scoped()]) },
-        get: async path => { calls.push(path); return response(page()) } } })
-    try {
-      await flushPromises(); expect(calls).to.have.length(0)
-      doc.visibilityState = 'visible'; doc.dispatchEvent(new Event('visibilitychange')); await flushPromises()
-      expect(calls).to.deep.equal(['/conversation/list', '/conversations/101/requests'])
-      doc.visibilityState = 'hidden'; doc.dispatchEvent(new Event('visibilitychange'))
-      await source.refreshCatalog(); expect(calls).to.have.length(2)
-      source.dispose(); doc.visibilityState = 'visible'; doc.dispatchEvent(new Event('visibilitychange')); await flushPromises()
-      expect(calls).to.have.length(2)
-    } finally { source.dispose() }
-  })
-  it('cold-reads a unique task conversation and its durable catalogue, supporting existing callback responses without a write', async () => {
-    const calls = []; const api = {
-      list: async (path, body, options) => { calls.push([path, body, options.needAuth]); options.onSuccess({ items: [scoped()] }) },
-      get: async (path, _params, options) => { calls.push([path, options.needAuth]); return response(page()) },
-      execute: () => { throw new Error('read only') }
-    }
-    const source = useHallBountyAcceptance({ api, taskId: () => 'task-1', identityKey: () => 'owner-1' })
+describe('task acceptance original-conversation discovery', () => {
+  it('only discovers the original conversation; it never loads request or outcome history', async () => {
+    const calls = []
+    const source = useHallBountyAcceptance({ api: { list: async (path, body, options) => { calls.push(path); options.onSuccess({ items: [scoped()] }) },
+      get: async () => { throw new Error('No history reads during discovery') } }, taskId: () => 'task-1', identityKey: () => 'owner' })
     try {
       await flushPromises()
       expect(source.scope.value).to.deep.equal({ taskId: 'task-1', conversationId: '101' })
-      expect(source.catalog.entries.value).to.have.length(1); expect(source.error.value).to.equal('')
-      expect(source.legacy.value).to.equal(false)
-      expect(calls[0]).to.deep.equal(['/conversation/list', { pageNum: 1, pageSize: 2, orderBy: 'id asc',
-        search: { conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task-1' } }, true])
-      expect(calls[1]).to.deep.equal(['/conversations/101/requests', true])
+      expect(source.catalog.entries.value).to.deep.equal([]); expect(source.error.value).to.equal('')
+      expect(calls).to.deep.equal(['/conversation/list'])
+      expect(source).not.to.have.property('refreshCatalog')
     } finally { source.dispose() }
   })
-  it('searches the existing paginated history for the exact original, never substituting its first or latest row', async () => {
-    const calls = []; const api = { list: async (_path, body) => { calls.push(body.pageNum); return response(body.pageNum === 1
-      ? Array.from({ length: 100 }, (_, i) => scoped(String(i + 1))) : [scoped('999')]) },
-    get: async path => { expect(path).to.equal('/conversations/999/requests'); return response(page('999')) } }
-    const source = useHallBountyAcceptance({ api, taskId: () => 'task-1', identityKey: () => 'owner-1', conversationId: () => '999' })
+  it('defers hidden discovery and does not reread an existing scope on visibility changes', async () => {
+    const doc = new EventTarget(); doc.visibilityState = 'hidden'; let calls = 0
+    const source = useHallBountyAcceptance({ documentRef: doc, api: { list: async () => { calls++; return response([scoped()]) } }, taskId: () => 'task-1', identityKey: () => 'owner' })
+    try {
+      await flushPromises(); expect(calls).to.equal(0)
+      doc.visibilityState = 'visible'; doc.dispatchEvent(new Event('visibilitychange')); await flushPromises()
+      expect(calls).to.equal(1)
+      doc.dispatchEvent(new Event('visibilitychange')); await flushPromises(); expect(calls).to.equal(1)
+    } finally { source.dispose() }
+  })
+  it('finds the explicitly requested original on a later discovery page', async () => {
+    const calls = []
+    const source = useHallBountyAcceptance({ api: { list: async (_path, body) => { calls.push(body.pageNum); return response(body.pageNum === 1
+      ? Array.from({ length: 100 }, (_, i) => scoped(String(i + 1))) : [scoped('999')]) } },
+      taskId: () => 'task-1', identityKey: () => 'owner', conversationId: () => '999' })
     try { await flushPromises(); expect(calls).to.deep.equal([1, 2]); expect(source.scope.value.conversationId).to.equal('999') }
     finally { source.dispose() }
   })
   for (const [label, rows, wanted] of [['ambiguous', [scoped('101'), scoped('102')], ''], ['foreign', [scoped('101', 'foreign')], ''],
-    ['missing original', [scoped('102')], '101'], ['unsafe id', [scoped('9007199254740992')], 'bad-id']]) {
-    it(`refuses ${label} sources without catalogue access, writes, or a legacy bypass`, async () => {
-      let gets = 0
-      const source = useHallBountyAcceptance({ api: { list: async () => response(rows), get: async () => { gets++ } },
-        taskId: () => 'task-1', identityKey: () => 'owner-1', conversationId: () => wanted })
-      try { await flushPromises(); expect(source.scope.value).to.equal(null); expect(source.error.value).not.to.equal(''); expect(gets).to.equal(0); expect(source.legacy.value).to.equal(false) }
+    ['missing original', [scoped('102')], '101'], ['unsafe id', [scoped('1')], 'bad-id']]) {
+    it(`rejects ${label} without substituting another conversation`, async () => {
+      const source = useHallBountyAcceptance({ api: { list: async () => response(rows) }, taskId: () => 'task-1', identityKey: () => 'owner', conversationId: () => wanted })
+      try { await flushPromises(); expect(source.scope.value).to.equal(null); expect(source.error.value).not.to.equal(''); expect(source.legacy.value).to.equal(false) }
       finally { source.dispose() }
     })
   }
-  it('retains the old formal domain only for verified absence of native requests, not malformed or failed catalogue reads', async () => {
-    for (const [data, legacy] of [[page('101', 'task-1', []), true], [{ schemaVersion: 999 }, false]]) {
-      const source = useHallBountyAcceptance({ api: { list: async () => response([scoped()]), get: async () => response(data) },
-        taskId: () => 'task-1', identityKey: () => 'owner-1' })
-      try { await flushPromises(); expect(source.legacy.value).to.equal(legacy); if (!legacy) expect(source.error.value).not.to.equal('') }
-      finally { source.dispose() }
-    }
-    const absent = useHallBountyAcceptance({ api: { list: async () => response([]) }, taskId: () => 'task-1', identityKey: () => 'owner-1' })
-    try { await flushPromises(); expect(absent.legacy.value).to.equal(true) } finally { absent.dispose() }
-  })
-  it('surfaces a catalog read error instead of clearing it on the acceptance page', async () => {
-    const source = useHallBountyAcceptance({ api: { list: async () => response([scoped()]), get: async () => { throw new Error('read unavailable') } },
-      taskId: () => 'task-1', identityKey: () => 'owner-1' })
+  it('marks verified absence separately from a failed discovery and allows retry', async () => {
+    let failed = true
+    const source = useHallBountyAcceptance({ api: { list: async () => { if (failed) throw new Error('offline'); return response([]) } }, taskId: () => 'task-1', identityKey: () => 'owner' })
     try {
-      await flushPromises(); expect(source.error.value).to.equal('read unavailable')
-      expect(source.legacy.value).to.equal(false)
+      await flushPromises(); expect(source.error.value).to.equal('offline'); expect(source.legacy.value).to.equal(false)
+      failed = false; expect(await source.refresh()).to.equal(true); expect(source.legacy.value).to.equal(true)
     } finally { source.dispose() }
   })
-  it('clears old visible sources on identity/task switches and fences delayed previous-owner responses', async () => {
-    const pending = deferred(); const owner = Vue.ref('a'); const task = Vue.ref('task-1'); let first = true; let oldSignal
-    const source = useHallBountyAcceptance({ api: {
-      list: async (_path, _body, options) => { if (first) { first = false; oldSignal = options.signal; return pending.promise }; return response([scoped('202', 'task-2')]) },
-      get: async () => response(page('202', 'task-2'))
-    }, taskId: () => task.value, identityKey: () => owner.value })
+  it('aborts and fences delayed discovery after identity/task changes', async () => {
+    const pending = deferred(); const owner = Vue.ref('a'); const task = Vue.ref('task-1'); let first = true; let signal
+    const source = useHallBountyAcceptance({ api: { list: async (_path, _body, options) => {
+      if (first) { first = false; signal = options.signal; return pending.promise }
+      return response([scoped('202', 'task-2')])
+    } }, taskId: () => task.value, identityKey: () => owner.value })
     try {
-      task.value = 'task-2'; owner.value = 'b'; await flushPromises()
-      expect(oldSignal.aborted).to.equal(true); expect(source.scope.value.conversationId).to.equal('202')
+      owner.value = 'b'; task.value = 'task-2'; await flushPromises(); expect(signal.aborted).to.equal(true)
       pending.resolve(response([scoped()])); await flushPromises()
-      expect(source.scope.value).to.deep.equal({ taskId: 'task-2', conversationId: '202' })
-      expect(source.catalog.entries.value[0].request.conversationId).to.equal('202'); expect(source.loading.value).to.equal(false)
-    } finally { source.dispose() }
-  })
-  it('fences an old in-flight catalogue and reloads when the explicit conversation changes', async () => {
-    const pending = deferred(); const conversation = Vue.ref('101')
-    const source = useHallBountyAcceptance({ api: { list: async () => response([scoped('101'), scoped('202')]),
-      get: async path => path.includes('/101/') ? pending.promise : response(page('202')) },
-    taskId: () => 'task-1', identityKey: () => 'owner-1', conversationId: () => conversation.value })
-    try {
-      await flushPromises(); conversation.value = '202'; await flushPromises()
-      expect(source.scope.value.conversationId).to.equal('202'); expect(source.catalog.entries.value[0].request.conversationId).to.equal('202')
-      pending.resolve(response(page())); await flushPromises()
-      expect(source.catalog.entries.value[0].request.conversationId).to.equal('202'); expect(source.catalog.loading.value).to.equal(false)
+      expect(source.scope.value).to.deep.equal({ conversationId: '202', taskId: 'task-2' })
     } finally { source.dispose() }
   })
 })

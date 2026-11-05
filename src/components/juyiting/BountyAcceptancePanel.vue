@@ -51,9 +51,7 @@ const props = defineProps({
 defineEmits(['open-history', 'load-history', 'continue-modification', 'review-delivery', 'refresh-review', 'preview-output'])
 const source = useHallBountyAcceptance({ api: createApi('/chat'), taskId: () => props.taskId,
   // The parent owns formal review facts; only discover the original conversation here.
-  loadRequests: false,
-  identityKey: () => props.identityKey, conversationId: () => props.conversationId, enabled: () => props.enabled,
-  taskCompleted: () => props.taskCompleted })
+  identityKey: () => props.identityKey, conversationId: () => props.conversationId, enabled: () => props.enabled })
 </script>
 <style scoped>
 .bounty-acceptance-panel { flex: 1; min-height: 0; overflow: auto; padding: 12px; background: var(--hall-surface, #fffefa); color: var(--hall-text, #242e2b); }

@@ -236,7 +236,7 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       expect(assignment()).to.equal('4'); expect(generation()).to.equal('1')
       expect(await sameRefresh).to.equal(true)
       expect(recoveries).to.deep.equal([])
-      expect(await env.bountyRequestCatalog.refresh()).to.equal(true)
+      expect(env.bountyRequestCatalog).not.to.have.property('refresh')
       // Browsing another task is not a discussion switch.
       selectedTask.value = { id: 'other-task', taskVersion: '99' }
       expect(followupContextGeneration.value).to.equal(originalGeneration)

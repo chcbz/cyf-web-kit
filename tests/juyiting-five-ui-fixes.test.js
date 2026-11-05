@@ -238,28 +238,24 @@ describe('five fixes poll lifecycle and projection hints', () => {
       await wrapper.setProps({ enabled: true }); await settle(); expect(h.counts().request).to.equal(3)
     } finally { wrapper?.unmount(); clock.restore() }
   })
-  it('aborts an in-flight catalog on disable and never admits its late response', async () => {
+  it('aborts in-flight original-conversation discovery on disable and fences its response', async () => {
     const clock = timers(); const enabled = Vue.ref(true); let resolve, signal
     const source = useHallBountyAcceptance({ taskId: () => 'task', identityKey: () => 'owner-abort', enabled: () => enabled.value,
-      api: { list: async () => ({ items: [{ id: raw.conversationId, conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }], nextCursor: null, hasMore: false }),
-        get: (_path, _params, options) => { signal = options.signal; return new Promise(done => { resolve = done }) } } })
+      api: { list: (_path, _params, options) => { signal = options.signal; return new Promise(done => { resolve = done }) } } })
     try {
       await settle(); enabled.value = false; expect(signal.aborted).to.equal(true)
-      resolve(({})); await settle(); expect(source.scope.value).to.equal(null); expect(source.catalog.entries.value).to.deep.equal([])
+      resolve({ items: [] }); await settle(); expect(source.scope.value).to.equal(null); expect(source.catalog.entries.value).to.deep.equal([])
       expect(clock.jobs.size).to.equal(0)
     } finally { source.dispose(); clock.restore() }
   })
-  it('does not lose a stateVersion refresh hint while the original catalogue read is in flight', async () => {
-    const clock = timers(); const version = Vue.ref('1'); let resolve, reads = 0
-    const entryPage = snapshot => (({ schemaVersion: 1, scope: { conversationId: '42', conversationGeneration: '1', taskId: 'task' },
-      after: '0', through: '1', nextAfter: null, hasMore: false, entries: [{ ordinal: '1', request: snapshot }] }))
+  it('does not attach a whole-request-history refresh to task version changes', async () => {
+    const clock = timers(); const version = Vue.ref('1'); let reads = 0
     const source = useHallBountyAcceptance({ taskId: () => 'task', identityKey: () => 'version-inflight', stateVersion: () => version.value,
-      api: { list: async () => ({ items: [{ id: '42', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }], nextCursor: null, hasMore: false }),
-        get: async () => { reads++; return reads === 1 ? new Promise(done => { resolve = done }) : entryPage({ ...request(), state: 'RUNNING', stateVersion: '2', turns: [] }) } } })
+      api: { list: async () => ({ items: [{ id: '42', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }] }),
+        get: async () => { reads++; throw new Error('No request history scan') } } })
     try {
-      await settle(); version.value = '2'
-      resolve(entryPage(request())); await settle()
-      expect(reads).to.equal(2); expect(source.catalog.entries.value[0].request.stateVersion).to.equal('2')
+      await settle(); version.value = '2'; await settle()
+      expect(reads).to.equal(0); expect(source.scope.value.conversationId).to.equal('42')
       expect(clock.jobs.size).to.equal(0)
     } finally { source.dispose(); clock.restore() }
   })
@@ -295,7 +291,7 @@ describe('five fixes poll lifecycle and projection hints', () => {
       api: { list: async () => ({ items: [{ id: '42', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }], nextCursor: null, hasMore: false }),
         get: async () => { reads++; return ({ schemaVersion: 1, scope: { conversationId: '42', conversationGeneration: '1', taskId: 'task' },
           after: '0', through: '1', nextAfter: null, hasMore: false, entries: [{ ordinal: '1', request: { ...request(), state: 'RUNNING', turns: [] } }] }) } } })
-    try { await settle(); for (let i = 0; i < 3; i++) await clock.tick(); expect(reads).to.equal(1); expect(clock.jobs.size).to.equal(0) }
+    try { await settle(); for (let i = 0; i < 3; i++) await clock.tick(); expect(reads).to.equal(0); expect(clock.jobs.size).to.equal(0) }
     finally { source.dispose(); clock.restore() }
   })
 })
