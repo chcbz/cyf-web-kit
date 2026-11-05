@@ -42,7 +42,7 @@ describe('SSE interrupted typed round terminal recovery', () => {
             if (contentOverride) return contentOverride(pageOptions)
             return pageOptions.onSuccess(currentView.state === 'COMPLETED' ? [{ id: '187', messageType: 'AGENT', senderType: 'agent', senderName: '吴用', content: '同一原请求的持久最终答复' }] : [])
           }
-          if (path === '/conversations/101/requests') return { schemaVersion: 1, scope: { taskId: '474', conversationId: '101', conversationGeneration: '1' }, after: '0', through: '0', nextAfter: null, hasMore: false, entries: [] }
+          if (path === '/conversations/101/requests') return { schemaVersion: 1, scope: { taskId: '474', conversationId: '101', conversationGeneration: '1' }, after: '0', through: '0', nextAfter: null, hasMore: false, entries: [], eventCursor: '0' }
           expect(path).to.equal('/requests/request-186'); reads++
           return readOverride ? readOverride() : structuredClone(currentView)
         },

@@ -17,7 +17,7 @@ import { currentChatStreamMock } from './fixtures/current-chat-stream-mock.js'
 const useHallConversation = options => actualHallConversation({ ...options, chatApi: currentChatStreamMock({ ...options.chatApi,
   get: async (path, ...args) => /^\/conversations\/[^/]+\/requests$/.test(path)
     ? { schemaVersion: 1, scope: { conversationId: path.split('/')[2], conversationGeneration: '1', taskId: options.chatContext.value.taskId },
-      after: '0', through: '0', nextAfter: null, hasMore: false, entries: [] }
+      after: '0', through: '0', nextAfter: null, hasMore: false, entries: [], eventCursor: '0' }
     : options.chatApi.get(path, ...args)
 }) })
 import { compileScript } from '@vue/compiler-sfc'
@@ -195,7 +195,7 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       env.typedAssignmentRevision = evaluate(handler('typedAssignmentRevision'))
       env.typedConversationGeneration = evaluate(handler('typedConversationGeneration'))
       env.bountyRequestCatalog = useHallBountyRequestCatalog({ chatApi: { get: async () => ({ schemaVersion: 1,
-        scope: { conversationId: '7', conversationGeneration: '1', taskId: 'task-1' }, after: '0', through: '0', nextAfter: null, hasMore: false, entries: [] }) },
+        scope: { conversationId: '7', conversationGeneration: '1', taskId: 'task-1' }, after: '0', through: '0', nextAfter: null, hasMore: false, entries: [], eventCursor: '0' }) },
         identityScope: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
         getContext: evaluate(option('useHallBountyRequestCatalog', 'getContext')),
         getContextGeneration: () => followupContextGeneration.value, enabled: () => true })

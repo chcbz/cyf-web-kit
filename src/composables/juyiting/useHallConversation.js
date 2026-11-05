@@ -25,7 +25,7 @@ import {
   validateBountyBootstrapRequest, bootstrapReadbackIsCurrent
 } from './hallBountyBootstrap.js'
 import { typedId } from './hallTypedDeliberation.js'
-import { catalogPage } from './bountyRequestCatalog.js'
+import { catalogLong, catalogPage } from './bountyRequestCatalog.js'
 import { bountyInteractionTargetId } from './useHallChatContext.js'
 import {
   cancellationTarget,
@@ -1023,12 +1023,16 @@ export const useHallConversation = ({
           { autoLoading: false, needAuth: true, signal: lifecycleController.signal })
         if (!isCurrentContentLoad() || activeRequest.value?.requestId) return false
         const page = catalogPage(apiData(response), { conversationId: exactId, taskId, after: '0' })
-        if (!page || page.hasMore || page.entries.length > 1 ||
+        if (!page || !catalogLong(page.eventCursor, true) || page.hasMore || page.entries.length > 1 ||
           (page.entries.length ? page.entries[0].ordinal !== page.through : page.through !== '0')) {
           throw new Error('原回话最新轮次范围不一致，请重试。')
         }
         const latest = page.entries[0]?.request
         if (latest && !applyRequestView(latest, latest.requestId)) throw new Error('原回话状态暂不可核实，请重试。')
+        // This cursor shares the restored request's database snapshot. The subsequent
+        // message page may be newer; events committed after the snapshot are replayed.
+        // Never advance an already-running/reconnecting stream from a display reload.
+        if (!eventCursors.has(exactId) && hallEventConversationId !== exactId) eventCursors.set(exactId, page.eventCursor)
       }
       await chatApi.get('/conversation/messages', { id: exactId }, {
         autoLoading: false,

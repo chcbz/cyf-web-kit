@@ -14,9 +14,9 @@ const entry = (ordinal, state) => {
       state, stateVersion: '2776', lastDeltaSeq: '2775', terminalReason: state === 'CANCELLED' ? 'USER_REQUESTED' : null,
       finalMessageId: null, createdAt: '1', updatedAt: '2' }] } }
 }
-const page = (entries, extra = {}) => ({ schemaVersion: 1, scope, after: '0', through: '185', nextAfter: null, hasMore: false, entries, ...extra })
+const page = (entries, extra = {}) => ({ schemaVersion: 1, scope, after: '0', through: '185', eventCursor: '0', nextAfter: null, hasMore: false, entries, ...extra })
 const instances = []
-const setup = (read = async () => page([entry('185', 'STREAMING')]), options = {}) => {
+const setup = (read = async () => page([entry('185', 'STREAMING')]), options = {}, messageItems = []) => {
   const calls = []; const context = ref({ taskId: '474', conversationScopeType: 'bounty', conversationScopeKey: 'task:474', mode: 'bounty', participantAgentIds: ['wuyong'], targetAgentIds: ['wuyong'] })
   const apiStore = { authorizationGeneration: 1, token: async () => null }
   const hall = useHallConversation({ apiStore, chatContext: context,
@@ -26,7 +26,7 @@ const setup = (read = async () => page([entry('185', 'STREAMING')]), options = {
       list: async () => ({ items: [{ id: '101', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:474' }] }),
       get: async (path, params, options) => {
         calls.push({ path, params })
-        if (path === '/conversation/messages') return options.onSuccess({ items: [], hasMore: false, nextCursor: null })
+        if (path === '/conversation/messages') return options.onSuccess({ items: messageItems, hasMore: false, nextCursor: null })
         return read(path, params)
       },
       post: async (path, body) => { calls.push({ path, body }); return { ...entry('185', 'CANCELLED').request.turns[0], stateVersion: '2777' } }
@@ -46,6 +46,34 @@ describe('exact-conversation current round restoration', () => {
     const write = calls.find(c => c.body)
     expect(write.path).to.equal('/turns/turn-185/cancel')
     expect(write.body).to.deep.equal({ expectedStateVersion: '2776' })
+  })
+  it('subscribes after the request snapshot and receives a reply committed before connection without replaying old history', async () => {
+    const originalFetch = global.fetch; let transportRequestId; let controller; let cursor
+    const { hall, apiStore } = setup(async () => page([entry('185', 'STREAMING')], { eventCursor: '9007199254740993' }), {},
+      Array.from({ length: 50 }, (_, index) => ({ id: String(index + 500), messageType: 'USER', content: `page-message-${index}`, createTime: 1000 })))
+    apiStore.token = async () => 'test-token'
+    global.fetch = async (_url, options) => {
+      const headers = new Headers(options.headers)
+      cursor = headers.get('Last-Event-ID'); transportRequestId = headers.get('X-Request-Id')
+      return new Response(new ReadableStream({ start(value) { controller = value } }), { status: 200,
+        headers: { 'Content-Type': 'text/event-stream', 'X-Request-Id': transportRequestId } })
+    }
+    const flush = async () => { for (let i = 0; i < 3; i++) await new Promise(resolve => setImmediate(resolve)) }
+    try {
+      expect(await hall.loadHallMessages()).to.equal(true); await flush()
+      expect(cursor).to.equal('conversation:101:9007199254740993')
+      expect(hall.messages.value).to.have.length(50)
+      // This delta committed after the restored snapshot, before the live subscription.
+      controller.enqueue(new TextEncoder().encode(conversationFrame({ type: 'agent_message_delta', conversationId: '101',
+        requestId: 'request-185', turnId: 'turn-185', deltaSeq: '2776', stateVersion: '2777', content: 'gap-reply' }, '9007199254740994', transportRequestId)))
+      controller.enqueue(new TextEncoder().encode(conversationFrame({ type: 'stream_ready', conversationId: '101',
+        cursor: '9007199254740994', nextCursor: '9007199254740994' }, '9007199254740994', transportRequestId)))
+      await flush()
+      expect(hall.activeTurns.value[0].lastDeltaSeq).to.equal('2776')
+      expect(hall.messages.value.some(message => message.content.includes('gap-reply'))).to.equal(true)
+      expect(hall.messages.value).to.have.length(51)
+      expect(hall.eventStreamRecovering.value).to.equal(false)
+    } finally { hall.disposeHallConversation(); global.fetch = originalFetch }
   })
   it('consumes unloaded historical status/delta replay without changing the restored round or reconnecting', async () => {
     const originalFetch = global.fetch; let controller; let transportRequestId; let fetches = 0
@@ -90,13 +118,15 @@ describe('exact-conversation current round restoration', () => {
     expect(await hall.loadHallMessages()).to.equal(true)
     expect(hall.activeRequest.value).to.equal(null)
   })
-  for (const mutation of ['foreign-task', 'foreign-conversation', 'boundary', 'multiple', 'has-more']) it(`rejects latest ${mutation} without restoring a partial older request`, async () => {
+  for (const mutation of ['foreign-task', 'foreign-conversation', 'boundary', 'multiple', 'has-more', 'missing-event-cursor', 'invalid-event-cursor']) it(`rejects latest ${mutation} without restoring a partial older request`, async () => {
     const { hall, calls } = setup(async () => {
       const next = page([entry('185', 'STREAMING')], { scope: { ...scope } })
       if (mutation === 'boundary') next.through = '186'
       else if (mutation === 'foreign-task') next.scope.taskId = '999'
       else if (mutation === 'foreign-conversation') next.scope.conversationId = '999'
       else if (mutation === 'multiple') next.entries.unshift(entry('184', 'CANCELLED'))
+      else if (mutation === 'missing-event-cursor') delete next.eventCursor
+      else if (mutation === 'invalid-event-cursor') next.eventCursor = 42
       else { next.through = '186'; next.hasMore = true; next.nextAfter = '185' }
       return next
     })

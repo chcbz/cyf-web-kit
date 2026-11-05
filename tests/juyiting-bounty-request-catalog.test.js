@@ -198,3 +198,13 @@ it('consumes the shared full event-targeted response fixture through the existin
     expect(calls).to.deep.equal([{ requestId: 'r7', expectedGeneration: '1' }])
   } finally { lane.dispose() }
 })
+
+it('decodes the shared latest snapshot cursor without losing bigint precision', async () => {
+  const { readFileSync } = await import('node:fs')
+  const { decodeHttpResponse } = await import('../src/utils/apiEnvelope.js')
+  const fixture = JSON.parse(readFileSync(new URL('./fixtures/hall-request-latest.json', import.meta.url), 'utf8'))
+  const decoded = decodeHttpResponse(JSON.stringify(fixture), { status: 200, requestId: fixture.requestId }).value
+  expect(catalogPage(decoded, { conversationId: '101', taskId: 'task' }).eventCursor).to.equal('9007199254740993')
+  expect(catalogPage({ ...decoded, eventCursor: 9007199254740993 })).to.equal(null)
+  expect(catalogPage({ ...decoded, eventCursor: '-1' })).to.equal(null)
+})
