@@ -14,9 +14,17 @@ describe('Agent private profile closed projection', () => {
     expect(result.abilities).to.deep.equal([]); expect(result.skills.catalogRevision).to.equal(raw.skills.catalogRevision)
     expect(Object.isFrozen(result.skills.items[0])).to.equal(true)
   })
-  it('rejects wrong identity, extra fields, unsafe times and impossible ready', () => {
-    const changes = [raw => { raw.agentId = 'b' }, raw => { raw.extra = true }, raw => { raw.observedAt = 9007199254740992 }, raw => { raw.skills.catalogRevision = '01' }, raw => { raw.skills.items[0].skillVersion = 1 }, raw => { raw.skills.items[0].installationVerified = false }, raw => { raw.skills.items.push(item()) }, raw => { raw.skills.items[0].reasonCode = 'UNAVAILABLE' }]
+  it('rejects wrong identity, unsafe times and impossible ready', () => {
+    const changes = [raw => { raw.agentId = 'b' }, raw => { raw.observedAt = 9007199254740992 }, raw => { raw.skills.catalogRevision = '01' }, raw => { raw.skills.items[0].skillVersion = 1 }, raw => { raw.skills.items[0].installationVerified = false }, raw => { raw.skills.items.push(item()) }, raw => { raw.skills.items[0].reasonCode = 'UNAVAILABLE' }]
     for (const change of changes) { const raw = fixture(); change(raw); expect(project(raw, 'a')).to.equal(null) }
+  })
+  it('projects model data and ignores harmless additions without forwarding arbitrary fields', () => {
+    const raw = { ...fixture(), executionModel: 'gpt-6-luna', extra: 'not part of this view' }
+    expect(project(raw, 'a').executionModel).to.equal('gpt-6-luna')
+    expect(project(raw, 'a')).not.to.have.property('extra')
+    expect(project(fixture(), 'a').executionModel).to.equal(null)
+    raw.executionModel = { unexpected: true }
+    expect(project(raw, 'a').executionModel).to.equal(null)
   })
   it('distinguishes partial failure, empty directory and unknown safe reason', () => {
     const raw = fixture(); raw.skills = { status: 'UNAVAILABLE', catalogRevision: null, reasonCode: 'SKILL_DESCRIPTOR_SOURCE_UNAVAILABLE', items: [] }

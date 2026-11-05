@@ -7,7 +7,8 @@ const reasonCode = value => typeof value === 'string' && /^[A-Z][A-Z0-9_]{0,63}$
 
 /** Closed, browser-safe DTO only; the HTTP client has already decoded the common envelope. */
 export const agentProfileCapabilitiesProjection = (raw, expectedAgentId) => {
-  if (!exactKeys(raw, ['agentId', 'observedAt', 'abilities', 'lastSeenAt', 'skills']) || raw.agentId !== expectedAgentId || !safeTime(raw.observedAt) || !(raw.lastSeenAt === null || safeTime(raw.lastSeenAt)) || !Array.isArray(raw.abilities) || !raw.abilities.every(text)) return null
+  if (!(raw !== null && typeof raw === 'object' && !Array.isArray(raw) && ['agentId', 'observedAt', 'abilities', 'lastSeenAt', 'skills'].every(key => Object.hasOwn(raw, key))) || raw.agentId !== expectedAgentId || !safeTime(raw.observedAt) || !(raw.lastSeenAt === null || safeTime(raw.lastSeenAt)) || !Array.isArray(raw.abilities) || !raw.abilities.every(text)) return null
+  const executionModel = text(raw.executionModel) ? raw.executionModel : null
   const directory = raw.skills
   if (!exactKeys(directory, ['status', 'catalogRevision', 'reasonCode', 'items']) || !Array.isArray(directory.items)) return null
   if (directory.catalogRevision !== null && !(typeof directory.catalogRevision === 'string' && /^(0|[1-9][0-9]*)$/.test(directory.catalogRevision))) return null
@@ -26,7 +27,7 @@ export const agentProfileCapabilitiesProjection = (raw, expectedAgentId) => {
     identities.add(key)
     items.push(Object.freeze({ ...item }))
   }
-  return Object.freeze({ ...raw, abilities: Object.freeze([...raw.abilities]), skills: Object.freeze({ ...directory, items: Object.freeze(items) }) })
+  return Object.freeze({ agentId: raw.agentId, observedAt: raw.observedAt, lastSeenAt: raw.lastSeenAt, executionModel, abilities: Object.freeze([...raw.abilities]), skills: Object.freeze({ ...directory, items: Object.freeze(items) }) })
 }
 
 const reasons = {

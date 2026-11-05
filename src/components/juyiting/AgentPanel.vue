@@ -99,6 +99,15 @@
                 @click="$emit('refresh-external-policy')"
               >重查设置</button>
             </div>
+            <section class="profile-section" aria-label="使用模型">
+              <div class="profile-heading"><h3>使用模型</h3></div>
+              <p v-if="!canReadProfile" role="status">仅拥有者可查看模型</p>
+              <p v-else-if="profileCapabilitiesLoading" role="status">正在读取模型…</p>
+              <p v-else-if="profileCapabilitiesError" class="profile-error" role="status">模型读取失败，可刷新重试</p>
+              <p v-else-if="profile" class="profile-model" role="status">{{ profile.executionModel || '暂未上报' }}</p>
+              <p v-else role="status">模型资料尚未读取</p>
+              <p class="profile-note">最近上报的默认执行模型；不代表某次调用或工具模型，离线时仍保留最近记录。</p>
+            </section>
             <section class="profile-section" aria-label="技能">
               <div class="profile-heading">
                 <h3>技能</h3>
@@ -172,7 +181,7 @@
               <p v-if="!abilityEditor?.editing.value" class="profile-note">由你维护的能力介绍，仅供参考，不代表已安装技能或运行就绪。</p>
             </section>
             <div v-if="canReadProfile" class="profile-refresh">
-              <button type="button" :disabled="profileCapabilitiesLoading" @click="$emit('refresh-profile-capabilities')" class="hall-tool" :aria-busy="profileCapabilitiesLoading" aria-label="刷新技能与本领" title="刷新技能与本领"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M4 16l2 3a7 7 0 0 0 12-2"/></svg></button>
+              <button type="button" :disabled="profileCapabilitiesLoading" @click="$emit('refresh-profile-capabilities')" class="hall-tool" :aria-busy="profileCapabilitiesLoading" aria-label="刷新好汉详情" title="刷新好汉详情"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M4 16l2 3a7 7 0 0 0 12-2"/></svg></button>
               <small v-if="profile" role="status">最近读取 {{ new Date(profile.observedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }) }}</small>
             </div>
             <p v-if="canReadProfile" class="profile-note">只刷新当前好汉详情；读取最新已上报记录，不触发重新扫描或重注册。</p>
@@ -570,6 +579,7 @@ button {
   overscroll-behavior: contain;
   overflow-wrap: anywhere;
 }
+.profile-model { overflow-wrap: anywhere; }
 .profile-section { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--hall-border, #e3e5dc); }
 .profile-heading, .skill-title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .profile-heading h3 { margin: 0; font-size: 14px; font-weight: 600; }

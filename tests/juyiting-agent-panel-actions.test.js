@@ -268,9 +268,9 @@ describe('AgentPanel semantic controls', () => {
       const manage = wrapper.get('[aria-label="管理技能"]')
       expect(manage.text()).to.equal('')
       expect(manage.get('svg').attributes('aria-hidden')).to.equal('true')
-      const refresh = wrapper.get('[aria-label="刷新技能与本领"]')
+      const refresh = wrapper.get('[aria-label="刷新好汉详情"]')
       expect(refresh.text()).to.equal('')
-      expect(refresh.attributes('title')).to.equal('刷新技能与本领')
+      expect(refresh.attributes('title')).to.equal('刷新好汉详情')
       for (const button of wrapper.findAll('.agent-detail-actions button')) {
         expect(button.text()).not.to.equal('')
         expect(button.find('svg').exists()).to.equal(false)
@@ -308,6 +308,29 @@ describe('AgentPanel semantic controls', () => {
       expect(wrapper.get('.external-policy-recovery').text()).to.include('查询结果').and.include('继续核对')
       await wrapper.setProps({ selectedAgent: { ...owner, boundToMe: false, canOperate: false } })
       expect(wrapper.find('[role="switch"]').exists()).to.equal(false)
+    } finally { wrapper.unmount() }
+  })
+})
+
+
+describe('AgentPanel reported execution model', () => {
+  it('shows the reported model, never a hardcoded target, and clears it on agent switch or refresh', async () => {
+    const target = { ...agent, boundToMe: true }
+    const profile = { agentId: agent.agentId, observedAt: 10000, executionModel: 'fixture-model/v2', abilities: [], skills: { status: 'AVAILABLE', items: [] } }
+    const wrapper = mount(AgentPanel, { props: { ...props, selectedAgent: target, profileCapabilities: profile } })
+    try {
+      const text = () => wrapper.get('[aria-label="使用模型"]').text()
+      expect(text()).to.include('fixture-model/v2')
+      await wrapper.setProps({ profileCapabilitiesLoading: true })
+      expect(text()).to.include('正在读取模型').and.not.include('fixture-model/v2')
+      await wrapper.setProps({ profileCapabilitiesLoading: false, profileCapabilitiesError: 'offline' })
+      expect(text()).to.include('模型读取失败').and.not.include('fixture-model/v2')
+      await wrapper.setProps({ profileCapabilitiesError: '', selectedAgent: { ...target, agentId: 'other' } })
+      expect(text()).to.include('尚未读取').and.not.include('fixture-model/v2')
+      await wrapper.setProps({ selectedAgent: target, profileCapabilities: { ...profile, executionModel: null } })
+      expect(text()).to.include('暂未上报').and.not.include('gpt-6-luna')
+      await wrapper.setProps({ selectedAgent: { ...target, boundToMe: false }, profileCapabilities: profile })
+      expect(text()).to.include('仅拥有者').and.not.include('fixture-model/v2')
     } finally { wrapper.unmount() }
   })
 })
