@@ -47,7 +47,7 @@ describe('actual Hall conversation adopts the exact admitted bounty bootstrap', 
   it('reads exact request and exact history, preserving long IDs, without list/send/write', async () => {
     const { hall, calls } = harness()
     expect(await hall.adoptBountyBootstrap(reference())).to.equal(true)
-    expect(calls).to.deep.equal([['get', '/requests/initial-request-1'], ['content', '/conversation/content', '9007199254740993']])
+    expect(calls).to.deep.equal([['get', '/requests/initial-request-1'], ['content', '/conversation/messages', '9007199254740993']])
     expect(hall.conversationId.value).to.equal('9007199254740993')
     expect(hall.selectedHallConversationId.value).to.equal('9007199254740993')
     expect(hall.activeRequest.value.steps[0].assignmentRevision).to.equal('7')
@@ -69,7 +69,7 @@ describe('actual Hall conversation adopts the exact admitted bounty bootstrap', 
     expect(await h.hall.adoptBountyBootstrap({ ...reference(), initialOperation: 'DELIBERATE' })).to.equal(true)
     expect(h.hall.activeRequest.value.steps).to.deep.equal([])
     expect(h.hall.activeTurns.value[0].route).to.equal('CHAT')
-    expect(h.calls).to.deep.equal([['get', '/requests/initial-request-1'], ['content', '/conversation/content', '9007199254740993']])
+    expect(h.calls).to.deep.equal([['get', '/requests/initial-request-1'], ['content', '/conversation/messages', '9007199254740993']])
   })
   for (const [label, mutate] of [
     ['wrong target', v => { v.turns[0].targetAgentId = 'foreign' }],

@@ -24,8 +24,11 @@ const setup = (read = async () => page([entry('184', 'CANCELLED'), entry('185', 
     globalStore: { getJiacn: 'owner', user: {} }, log: { warn() {}, error() {} }, openPanel() {}, portraitShortName: () => '', showToast() {},
     chatApi: {
       list: async () => ({ items: [{ id: '101', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:474' }] }),
-      get: async (path, params) => { calls.push({ path, params }); return read(path, params) },
-      getById: async (path, id, options) => { calls.push({ path, id }); options.onSuccess([]) },
+      get: async (path, params, options) => {
+        calls.push({ path, params })
+        if (path === '/conversation/messages') return options.onSuccess({ items: [], hasMore: false, nextCursor: null })
+        return read(path, params)
+      },
       post: async (path, body) => { calls.push({ path, body }); return { ...entry('185', 'CANCELLED').request.turns[0], stateVersion: '2777' } }
     } })
   instances.push(hall); return { hall, calls, context, apiStore }
@@ -37,7 +40,7 @@ describe('exact-conversation current round restoration', () => {
     expect(await hall.loadHallMessages()).to.equal(true)
     expect(hall.activeRequest.value.requestId).to.equal('request-185')
     expect(hall.durableCancelTarget.value).to.deep.equal({ turnId: 'turn-185' })
-    expect(calls.map(c => c.path)).to.deep.equal(['/conversations/101/requests', '/conversation/content'])
+    expect(calls.map(c => c.path)).to.deep.equal(['/conversations/101/requests', '/conversation/messages'])
     await hall.cancelDeliberation(hall.durableCancelTarget.value)
     const write = calls.find(c => c.body)
     expect(write.path).to.equal('/turns/turn-185/cancel')
@@ -86,7 +89,7 @@ describe('exact-conversation current round restoration', () => {
     expect(await hall.loadHallMessages()).to.equal(false)
     expect(hall.activeRequest.value).to.equal(null)
     expect(hall.conversationLoadError.value).not.to.equal('')
-    expect(calls.some(c => c.path === '/conversation/content')).to.equal(false)
+    expect(calls.some(c => c.path === '/conversation/messages')).to.equal(false)
   })
   it('does not reapply a request after the task scope changes during its read', async () => {
     let finish; const pending = new Promise(resolve => { finish = resolve })
@@ -162,12 +165,12 @@ describe('restored EXECUTE request terminal readback', () => {
     const { hall, calls, context } = setup(async path => path === '/requests/execute-185'
       ? new Promise(resolve => { finish = resolve }) : page([execute()]))
     await hall.loadHallMessages()
-    const before = calls.filter(c => c.path === '/conversation/content').length
+    const before = calls.filter(c => c.path === '/conversation/messages').length
     const retry = hall.retryHallConversation(); await tick()
     context.value = { ...context.value, taskId: '999', conversationScopeKey: 'task:999' }
     finish(execute('RESULT_COMMITTED', '1').request)
     expect(await retry).to.equal(false)
-    expect(calls.filter(c => c.path === '/conversation/content')).to.have.length(before)
+    expect(calls.filter(c => c.path === '/conversation/messages')).to.have.length(before)
     expect(hall.activeRequest.value?.state).not.to.equal('RESULT_COMMITTED')
   })
 

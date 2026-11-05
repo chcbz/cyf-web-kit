@@ -619,6 +619,10 @@
             :is-awaiting-reply="isAwaitingReply || manualSendPending"
             :is-streaming="isStreaming"
             :messages="messages"
+            :message-page-has-more="messagePageHasMore"
+            :message-page-loading="messagePageLoading"
+            :message-page-error="messagePageError"
+            @load-older-messages="loadOlderHallMessages"
             :mention-label="portraitShortName"
             :pending-agent-name="pendingAgentName"
             :selected-agent="conversationAgent"
@@ -689,6 +693,10 @@
             :is-awaiting-reply="isAwaitingReply || manualSendPending"
             :is-streaming="isStreaming"
             :messages="messages"
+            :message-page-has-more="messagePageHasMore"
+            :message-page-loading="messagePageLoading"
+            :message-page-error="messagePageError"
+            @load-older-messages="loadOlderHallMessages"
             :mention-label="portraitShortName"
             :pending-agent-name="pendingAgentName"
             :selected-agent="conversationAgent"
@@ -741,6 +749,10 @@
             :is-awaiting-reply="isAwaitingReply || manualSendPending"
             :is-streaming="isStreaming"
             :messages="messages"
+            :message-page-has-more="messagePageHasMore"
+            :message-page-loading="messagePageLoading"
+            :message-page-error="messagePageError"
+            @load-older-messages="loadOlderHallMessages"
             :mention-label="portraitShortName"
             :pending-agent-name="pendingAgentName"
             :selected-agent="conversationAgent"
@@ -2326,6 +2338,10 @@ const {
   loadHallConversationHistory,
   loadHallMessages,
   loadMoreHallConversationHistory,
+  loadOlderHallMessages,
+  messagePageHasMore,
+  messagePageLoading,
+  messagePageError,
   mentionAgent,
   messages,
   newHallConversation,

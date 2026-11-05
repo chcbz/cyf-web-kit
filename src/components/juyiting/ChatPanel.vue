@@ -71,6 +71,12 @@
     </div>
 
     <div ref="messageBoxRef" class="hall-messages" @scroll.passive="trackMessageScroll">
+      <div v-if="messagePageHasMore || messagePageError" class="message-history-page">
+        <button type="button" :disabled="messagePageLoading" @click="loadOlderMessages">
+          {{ messagePageLoading ? '正在加载…' : messagePageError ? '重试加载更早消息' : '加载更早消息' }}
+        </button>
+        <p v-if="messagePageError" role="alert">{{ messagePageError }}</p>
+      </div>
       <div
         v-for="message in displayedMessages"
         :key="message.localId || message.timestamp"
@@ -346,6 +352,9 @@ const props = defineProps({
   identityScope: { type: String, default: '' },
   mentionLabel: { type: Function, required: true },
   messages: { type: Array, default: () => [] },
+  messagePageHasMore: { type: Boolean, default: false },
+  messagePageLoading: { type: Boolean, default: false },
+  messagePageError: { type: String, default: '' },
   pendingAgentName: { type: String, default: '' },
   placeholder: { type: String, default: '向聚义厅传话，或 @某位好汉' },
   selectedAgent: { type: Object, default: null },
@@ -371,6 +380,7 @@ const emit = defineEmits([
   'load-history',
   'load-more-history',
   'load-messages',
+  'load-older-messages',
   'mention-agent',
   'new-conversation',
   'open-workspace',
@@ -598,6 +608,21 @@ const pendingLabel = computed(() => {
 })
 const renderMarkdown = (content = '') => DOMPurify.sanitize(marked(String(content || '')))
 
+let olderPageAnchor = null
+const loadOlderMessages = () => {
+  const box = messageBoxRef.value
+  if (!box || props.messagePageLoading) return
+  olderPageAnchor = { height: box.scrollHeight, top: box.scrollTop, first: props.messages[0]?.localId }
+  emit('load-older-messages')
+}
+watch(() => props.messagePageLoading, async loading => {
+  if (loading || !olderPageAnchor) return
+  await nextTick()
+  const box = messageBoxRef.value
+  const anchor = olderPageAnchor
+  if (box && anchor) box.scrollTop = anchor.top + box.scrollHeight - anchor.height
+  olderPageAnchor = null
+})
 const followingMessages = ref(true)
 const hasUnseenMessages = ref(false)
 const trackMessageScroll = () => {
@@ -615,10 +640,12 @@ const followLatestMessages = () => {
   if (box) box.scrollTop = box.scrollHeight
 }
 watch(() => props.messages, () => {
+  if (olderPageAnchor) return
   if (!followingMessages.value) { hasUnseenMessages.value = true; return }
   nextTick(() => { if (followingMessages.value) followLatestMessages() })
 }, { deep: true })
 watch(() => `${materialIdentityKey.value}\u0000${taskId.value}\u0000${props.conversationId}`, () => {
+  olderPageAnchor = null
   followingMessages.value = true
   hasUnseenMessages.value = false
   nextTick(followLatestMessages)

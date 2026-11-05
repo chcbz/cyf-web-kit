@@ -2085,6 +2085,33 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.emitted('discuss-task')).to.equal(undefined)
   })
 
+  it('loads one older message page on demand and preserves the scroll anchor', async () => {
+    const wrapper = mount(ChatPanel, { global: { stubs }, props: {
+      agents: [], draft: '', conversationId: '100', messagePageHasMore: true,
+      mentionLabel: agent => agent.name, senderText: message => message.sender,
+      messages: [{ localId: '3', sender: 'USER', content: 'latest' }]
+    } })
+    const box = wrapper.get('.hall-messages').element
+    let height = 400
+    Object.defineProperty(box, 'scrollHeight', { configurable: true, get: () => height })
+    box.scrollTop = 25
+    const button = wrapper.get('.message-history-page button')
+    await button.trigger('click')
+    expect(wrapper.emitted('load-older-messages')).to.have.length(1)
+    await wrapper.setProps({ messagePageLoading: true })
+    expect(button.attributes('disabled')).not.to.equal(undefined)
+    height = 700
+    await wrapper.setProps({ messages: [{ localId: '1', sender: 'USER', content: 'older' }, ...wrapper.props('messages')], messagePageLoading: false })
+    await Vue.nextTick()
+    expect(box.scrollTop).to.equal(325)
+    expect(wrapper.emitted('send-message')).to.equal(undefined)
+    await wrapper.setProps({ messagePageError: '读取失败' })
+    expect(button.text()).to.equal('重试加载更早消息')
+    expect(wrapper.get('[role="alert"]').text()).to.equal('读取失败')
+    await wrapper.setProps({ messagePageHasMore: false, messagePageError: '' })
+    expect(wrapper.find('.message-history-page').exists()).to.equal(false)
+  })
+
   it('shows exact attachment cards for blank task messages without adding user prose or leaking into private chat', async () => {
     const wrapper = mount(ChatPanel, { global: { stubs }, props: {
       agents: [], draft: '', discussionVariant: 'bounty', selectedTask: { id: 'task-1' },

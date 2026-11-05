@@ -35,16 +35,17 @@ describe('SSE interrupted typed round terminal recovery', () => {
       onRequestCatalogHint: event => { catalogHints.push(event); return catalogResult },
       chatApi: {
         list: async () => ({ items: [{ id: '101', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:474' }] }),
-        get: async path => {
+        get: async (path, params, options) => {
+          if (path === '/conversation/messages') {
+            expect(params.id).to.equal('101'); contentReads++
+            const pageOptions = { ...options, onSuccess: messages => options.onSuccess({ items: messages, hasMore: false, nextCursor: null }) }
+            if (contentOverride) return contentOverride(pageOptions)
+            return pageOptions.onSuccess(currentView.state === 'COMPLETED' ? [{ id: '187', messageType: 'AGENT', senderType: 'agent', senderName: '吴用', content: '同一原请求的持久最终答复' }] : [])
+          }
           if (path === '/conversations/101/requests') return { schemaVersion: 1, scope: { taskId: '474', conversationId: '101', conversationGeneration: '1' }, after: '0', through: '0', nextAfter: null, hasMore: false, entries: [] }
           expect(path).to.equal('/requests/request-186'); reads++
           return readOverride ? readOverride() : structuredClone(currentView)
         },
-        getById: async (_path, id, options) => {
-          expect(id).to.equal('101'); contentReads++
-          if (contentOverride) return contentOverride(options)
-          options.onSuccess(currentView.state === 'COMPLETED' ? [{ id: '187', messageType: 'AGENT', senderType: 'agent', senderName: '吴用', content: '同一原请求的持久最终答复' }] : [])
-        }
       } })
     expect(await hall.loadHallMessages()).to.equal(true)
     expect(await hall.adoptTypedDiscussionReceipt({ receipt, context })).to.equal(true)

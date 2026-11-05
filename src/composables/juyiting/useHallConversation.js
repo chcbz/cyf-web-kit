@@ -1,3 +1,4 @@
+import { useHallMessagePages } from './useHallMessagePages.js'
 import { createHallRequestReadbackScheduler } from './hallRequestReadbackScheduler.js'
 import { createChatStreamDecoder } from '../../utils/chatStreamWire.js'
 import { computed, reactive, ref, unref, watch } from 'vue'
@@ -947,9 +948,17 @@ export const useHallConversation = ({
     browserWindow()?.removeEventListener?.('focus', handleHallEventFocus)
     stopScopeWatch()
     stopDraftAdoptionWatch()
+    messagePages.dispose()
     clearHallConversationIdentityState()
     unregisterIdentityCleanup()
   }
+
+  const messagePages = useHallMessagePages({
+    chatApi, messages, conversationId,
+    identityKey: () => identityScope ? unref(identityScope) : globalStore.getJiacn,
+    captureGuard, guardCurrent,
+    normalize: item => normalizeHallMessage(item, globalStore.getJiacn)
+  })
 
   const loadHallConversationContent = async (id = conversationId.value, guard = {}) => {
     const exactId = exactRuntimeId(id)
@@ -1016,15 +1025,14 @@ export const useHallConversation = ({
         const latest = entries.at(-1)?.request
         if (latest && !applyRequestView(latest, latest.requestId)) throw new Error('原回话状态暂不可核实，请重试。')
       }
-      await chatApi.getById('/conversation/content', exactId, {
+      await chatApi.get('/conversation/messages', { id: exactId }, {
         autoLoading: false,
         signal: lifecycleController.signal,
         onSuccess: (contentResult) => {
           if (!isCurrentContentLoad()) return
-          messages.value = (Array.isArray(contentResult) ? contentResult : [])
-            .map(item => normalizeHallMessage(item, globalStore.getJiacn)).filter(Boolean)
+          const latestMessages = messagePages.applyLatest(contentResult)
           const recovery = recoveringReplyTurn?.conversationId === exactId ? recoveringReplyTurn : null
-          const finalAgentReplies = messages.value.filter(message => message.sender === 'AGENT' && !message.streaming &&
+          const finalAgentReplies = latestMessages.filter(message => message.sender === 'AGENT' && !message.streaming &&
             String(message.content || '').trim() && (!recovery || !recovery.baselineMessageIds.has(exactMessageId(message))))
           loadedConversationScopeSignature = scopeSignature(expectedScope)
           const activeTurnForConversation = Boolean(activeBuiltInTurn && activeBuiltInTurn.conversationId === exactId)
@@ -2294,6 +2302,10 @@ export const useHallConversation = ({
     loadHallConversationHistory,
     loadHallMessages,
     loadMoreHallConversationHistory,
+    loadOlderHallMessages: messagePages.loadOlder,
+    messagePageHasMore: messagePages.hasMore,
+    messagePageLoading: messagePages.loading,
+    messagePageError: messagePages.error,
     mentionAgent,
     messages,
     newHallConversation,

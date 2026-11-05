@@ -13,6 +13,7 @@
       @delete-conversation="$emit('delete-conversation', $event)"
       @load-history="$emit('load-history')"
       @load-more-history="$emit('load-more-history')"
+      @load-older-messages="$emit('load-older-messages')"
       @load-messages="$emit('load-messages')"
       @mention-agent="$emit('mention-agent', $event)"
       @new-conversation="$emit('new-conversation')"
