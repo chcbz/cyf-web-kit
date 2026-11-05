@@ -11,6 +11,10 @@
     previous();
     document.body.classList.add('model-recommendation-page');
     const card = document.querySelector('.matter-advice-card'); if (!card) return;
+    if (params.get('fundedHistory') === 'true') {
+      card.innerHTML = '<div class="matter-advice-heading"><span>历史资金榜</span><strong>仅供查阅</strong></div><h3>原资金榜事项</h3><p>旧资金榜已停止创建、领令、恢复、退款和结算操作；历史记录仍可查阅。</p><p>原请求结果未知时，不会自动重发，不会按新规则补价执行。</p><button type="button" data-history-settlement>查看历史结算示例</button><p data-history-receipt hidden>原始历史结算：总额100文，成本3文，平台费2文，好汉所得95文。仅为离线示例。</p>';
+      return;
+    }
     const candidates = stage === 'NO_CANDIDATES' ? [] : [{name:'林冲',quote:13,mine:true,status:'在线',level:'高',reason:'具备识图能力，适合读取成绩图片并整理统计。'},{name:'吴用',quote:null,mine:false,status:'离线',level:'资料不足',reason:'尚无公开能力介绍，可自行选择后交办。'}];
     const visible = candidates;
     const selected = manual || (stage === 'READY' ? '林冲' : '');
