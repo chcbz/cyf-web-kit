@@ -2974,6 +2974,128 @@ describe('archive multi-book data-driven shelf', () => {
     } finally { oldNotes.resolve(response({ items: [], nextCursor: null })); mounted.wrapper.unmount() }
   })
 
+  it('recovers a failed progress CAS on explicit book selection without losing the old position', async () => {
+    const api = multiApi()
+    const get = api.get
+    const put = api.put
+    let version = '0'
+    let fail = true
+    api.get = async (path, params, options) => path === `/me/progress/${editionId}` && version !== '0'
+      ? { editionId, version, location: point(preface, preface.paragraphs[1]) }
+      : get(path, params, options)
+    api.put = async (path, body, options) => {
+      if (path === `/me/progress/${editionId}`) {
+        api.calls.push({ method: 'put', path, body, options })
+        if (fail) { version = '7'; throw Object.assign(new Error('conflict'), { status: 409 }) }
+        expect(body.expectedVersion).to.equal('7')
+        return { editionId, version: '8', location: body.location }
+      }
+      return put(path, body, options)
+    }
+    const mounted = mountReader(api)
+    try {
+      await mounted.reader.initialize()
+      mounted.reader.setCurrentParagraph(preface.paragraphs[0], 3)
+      const position = { ...mounted.reader.currentLocation.value }
+      await mounted.reader.flushProgress()
+      expect(mounted.reader.saveState.value).to.equal('error')
+      const failedPuts = api.calls.filter(call => call.method === 'put').length
+      await mounted.reader.flushProgress()
+      expect(api.calls.filter(call => call.method === 'put')).to.have.length(failedPuts)
+      fail = false
+      await mounted.reader.openBook(secondCatalog.workId)
+      expect(mounted.reader.catalog.value.workId).to.equal(secondCatalog.workId)
+      const saves = api.calls.filter(call => call.method === 'put' && call.path === `/me/progress/${editionId}`)
+      expect(saves).to.have.length(2)
+      expect(saves[1].body.location).to.deep.equal(position)
+      expect(saves[1].options.headers['Idempotency-Key']).not.to.equal(saves[0].options.headers['Idempotency-Key'])
+    } finally { mounted.wrapper.unmount() }
+  })
+
+  it('shows failed switching on the shelf and retries progress before allowing another book', async () => {
+    const api = multiApi()
+    const put = api.put
+    let fail = true
+    api.put = (path, body, options) => {
+      if (fail && path.startsWith('/me/progress/')) throw Object.assign(new Error('unavailable'), { status: 503 })
+      return put(path, body, options)
+    }
+    const wrapper = mountArchiveReader(api, { initialView: 'catalog' })
+    try {
+      await waitFor(() => wrapper.findAll('.archive-book-open').length === 2)
+      await wrapper.findAll('.archive-book-open')[0].trigger('click')
+      await waitFor(() => wrapper.find('.reader-exit').exists())
+      const state = wrapper.readerState
+      state.setCurrentParagraph(preface.paragraphs[0], 0)
+      await state.flushProgress()
+      await wrapper.get('.reader-exit').trigger('click')
+      await wrapper.findAll('.archive-book-open')[1].trigger('click')
+      await waitFor(() => wrapper.find('.archive-shelf-error').exists() && state.saveState.value === 'error')
+      expect(wrapper.find('.archive-reader-fullscreen').exists()).to.equal(false)
+      expect(wrapper.get('.archive-shelf-error').attributes('role')).to.equal('alert')
+      expect(wrapper.get('.archive-shelf-error').text()).to.include('阅读进度')
+      expect(state.catalog.value.workId).to.equal(catalog.workId)
+      fail = false
+      await wrapper.get('.archive-progress-retry').trigger('click')
+      await waitFor(() => state.saveState.value === 'saved')
+      expect(wrapper.find('.archive-shelf-error').exists()).to.equal(false)
+      await wrapper.findAll('.archive-book-open')[1].trigger('click')
+      await waitFor(() => state.chapter.value?.editionId === secondEdition)
+    } finally { wrapper.unmount() }
+  })
+
+  it('shares an in-flight explicit progress retry and keeps CAS failure recoverable', async () => {
+    const api = multiApi()
+    const get = api.get
+    const pending = deferred()
+    let retrying = false
+    let writes = 0
+    api.get = (path, params, options) => retrying && path === `/me/progress/${editionId}`
+      ? pending.promise : get(path, params, options)
+    api.put = async () => { writes += 1; throw Object.assign(new Error('conflict'), { status: 409 }) }
+    const mounted = mountReader(api)
+    try {
+      await mounted.reader.initialize()
+      mounted.reader.setCurrentParagraph(preface.paragraphs[0], 0)
+      await mounted.reader.flushProgress()
+      retrying = true
+      const first = mounted.reader.flushProgress({ retryFailed: true })
+      const second = mounted.reader.openBook(secondCatalog.workId).catch(error => error)
+      expect(mounted.reader.saveState.value).to.equal('saving')
+      pending.resolve(null)
+      await first
+      expect((await second).message).to.include('暂未保存')
+      expect(writes).to.equal(2)
+      expect(mounted.reader.catalog.value.workId).to.equal(catalog.workId)
+      expect(mounted.reader.saveState.value).to.equal('error')
+    } finally { pending.resolve(null); mounted.wrapper.unmount() }
+  })
+
+  it('does not write a failed progress retry after identity changes during reconciliation', async () => {
+    const api = multiApi()
+    const get = api.get
+    const pending = deferred()
+    let retrying = false
+    let writes = 0
+    api.get = (path, params, options) => retrying && path === `/me/progress/${editionId}`
+      ? pending.promise : get(path, params, options)
+    api.put = async () => { writes += 1; throw Object.assign(new Error('unavailable'), { status: 503 }) }
+    const mounted = mountReader(api)
+    try {
+      await mounted.reader.initialize()
+      mounted.reader.setCurrentParagraph(preface.paragraphs[0], 0)
+      await mounted.reader.flushProgress()
+      retrying = true
+      const retry = mounted.reader.flushProgress({ retryFailed: true })
+      stopIdentityBoundWork()
+      pending.resolve({ editionId, version: '3', location: point(preface, preface.paragraphs[0]) })
+      await retry
+      expect(writes).to.equal(1)
+      expect(mounted.reader.currentLocation.value).to.equal(null)
+      expect(mounted.reader.progress.value).to.equal(null)
+    } finally { pending.resolve(null); mounted.wrapper.unmount() }
+  })
+
   it('keeps the current book and reports a failed progress save instead of discarding it on switch', async () => {
     const api = multiApi()
     const put = api.put

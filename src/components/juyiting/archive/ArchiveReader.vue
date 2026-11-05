@@ -38,6 +38,23 @@
           <span class="archive-shelf-count">共 {{ reader.works.length }} 部</span>
         </header>
 
+        <div
+          v-if="actionMessage || reader.errorMessage"
+          class="archive-error archive-shelf-error"
+          role="alert"
+        >
+          <p>{{ actionMessage || reader.errorMessage }}</p>
+          <button
+            v-if="reader.saveState === 'error' || reader.saveState === 'saving'"
+            type="button"
+            class="archive-progress-retry"
+            :disabled="reader.saveState === 'saving'"
+            @click="retryProgress"
+          >
+            {{ reader.saveState === 'saving' ? '正在保存…' : '重试保存进度' }}
+          </button>
+        </div>
+
         <p v-if="reader.works.length === 0" class="archive-state">暂无已发布典籍。</p>
         <article v-for="book in reader.works" :key="book.workId" class="archive-book-card">
           <div class="archive-book-cover" aria-hidden="true">
@@ -461,6 +478,11 @@ const openBlock = async (block) => {
 const retryCatalog = () => runAction(
   () => reader.initialize({ openChapter: false }),
   '典籍重试失败。'
+)
+
+const retryProgress = () => runAction(
+  () => reader.flushProgress({ retryFailed: true }),
+  '阅读进度暂未保存，请重试。'
 )
 
 const enterReading = async (book, event, editionId = null) => {
