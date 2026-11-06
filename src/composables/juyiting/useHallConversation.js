@@ -30,6 +30,7 @@ import { bountyInteractionTargetId } from './useHallChatContext.js'
 import {
   cancellationTarget,
   deliberationBusy,
+  deliberationReplyActive,
   deliberationStatusText,
   isPendingTurn,
   isTerminalTurnState,
@@ -402,12 +403,12 @@ export const useHallConversation = ({
     for (const message of messages.value) {
       if (!message.streaming || !message.turnId) continue
       const turn = activeTurns.value.find(item => item.turnId === message.turnId)
-      if (!turn || !['CANCELLED', 'FAILED'].includes(turn.state)) continue
+      if (!turn || !['CANCELLED', 'FAILED', 'RECOVERY_REQUIRED'].includes(turn.state)) continue
       message.streaming = false
-      message.statusText = turn.state === 'CANCELLED' ? '已停止（未完成）' : '回复失败（未完成）'
+      message.statusText = turn.state === 'RECOVERY_REQUIRED' ? '需要恢复核对（已暂停）' : turn.state === 'CANCELLED' ? '已停止（未完成）' : '回复失败（未完成）'
     }
     const busy = hasPendingSendSession.value || deliberationBusy(activeRequest.value, activeTurns.value)
-    isAwaitingReply.value = busy
+    isAwaitingReply.value = hasPendingSendSession.value || deliberationReplyActive(activeRequest.value, activeTurns.value)
     isStreaming.value = activeTurns.value.some(turn => ['STREAMING', 'GENERATING'].includes(String(turn.state || '').toUpperCase()))
     deliberationStatus.value = deliberationStatusText(activeRequest.value, activeTurns.value) ||
       (busy ? '等待回话' : String(activeRequest.value.state || '').toUpperCase() === 'PARTIAL' ? '部分回话已完成' : '')

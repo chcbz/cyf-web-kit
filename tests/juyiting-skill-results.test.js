@@ -80,6 +80,18 @@ describe('SE2 scoped directory and generic data-only result consumers', () => {
     resolve((directory)); await drain(); assert.equal(service.projection.value.items[0].state, 'CALLABLE')
     service.dispose(); scope.stop()
   })
+  it('does not cancel the skill directory when unrelated conversation fields settle', async () => {
+    const context = ref({ taskId: 'task', targetAgentId: 'agent' })
+    const calls = []; const scope = effectScope(); let service
+    scope.run(() => { service = useHallSkillCapabilities({ api: { get: (...args) => { calls.push(args); return Promise.resolve(directory) } },
+      getContext: () => context.value, identityKey: () => 'owner:auth', enabled: () => true }) })
+    context.value = { ...context.value, conversationId: 'conv', assignmentRevision: '2', conversationGeneration: '1' }
+    await drain()
+    assert.equal(calls.length, 1); assert.equal(calls[0][2].signal.aborted, false)
+    context.value = { ...context.value, targetAgentId: 'other' }; await drain()
+    assert.equal(calls.length, 2)
+    service.dispose(); scope.stop()
+  })
   it('reads execution before catalog and discards completed data when identity switches', async () => {
     const identity = ref('owner:a'); let resolve; const calls = []; const scope = effectScope(); let service
     scope.run(() => { service = useHallSkillResults({ api: { get: (...args) => { calls.push(args); return new Promise(done => { resolve = done }) } },

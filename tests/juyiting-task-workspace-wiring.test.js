@@ -66,10 +66,10 @@ describe('C07A task workspace wiring', () => {
     const { binding, selectedAgent, selectedTask, taskWorkspace } = bindingHarness()
     try {
       const agent = { agentId: 'map-agent-a', name: 'A' }
-      selectedTask.value = { id: 'task-a', title: 'A' }
+      selectedTask.value = { assignedAgentIds: ['map-agent-a', 'requested-agent', 'agent-a', 'non-mentionable', 'old-actor', 'first-agent', 'direct-agent'], id: 'task-a', title: 'A' }
       binding.selectExplicitActor(agent)
       await nextTick()
-      selectedTask.value = { id: 'task-a', title: 'replacement' }
+      selectedTask.value = { assignedAgentIds: ['map-agent-a', 'requested-agent', 'agent-a', 'non-mentionable', 'old-actor', 'first-agent', 'direct-agent'], id: 'task-a', title: 'replacement' }
       selectedAgent.value = { agentId: 'map-agent-a', name: 'replacement' }
       await nextTick()
       expect(openCalls(taskWorkspace)).to.deep.equal([{ type: 'open', taskId: 'task-a', actorAgentId: 'map-agent-a' }])
@@ -84,7 +84,7 @@ describe('C07A task workspace wiring', () => {
       : agent)
     const { binding, selectedTask, taskWorkspace } = bindingHarness({ selectedAgent })
     try {
-      selectedTask.value = { id: 'task-a' }
+      selectedTask.value = { assignedAgentIds: ['map-agent-a', 'requested-agent', 'agent-a', 'non-mentionable', 'old-actor', 'first-agent', 'direct-agent'], id: 'task-a' }
       binding.selectExplicitActor({ agentId: 'requested-agent' })
       await nextTick()
       expect(binding.explicitActorAgentId.value).to.equal(null)
@@ -101,7 +101,7 @@ describe('C07A task workspace wiring', () => {
     const { binding, selectedAgent, selectedTask, taskWorkspace } = bindingHarness()
     try {
       const explicit = { agentId: 'agent-a' }
-      selectedTask.value = { id: 'task-a' }
+      selectedTask.value = { assignedAgentIds: ['map-agent-a', 'requested-agent', 'agent-a', 'non-mentionable', 'old-actor', 'first-agent', 'direct-agent'], id: 'task-a' }
       binding.selectExplicitActor(explicit)
       await nextTick()
       fallBackToRoster(selectedAgent, { agentId: 'agent-a', name: 'roster fallback' })
@@ -122,7 +122,7 @@ describe('C07A task workspace wiring', () => {
   it('clears a valid conversation provenance when its chat flow falls back from a non-mentionable actor', async () => {
     const { binding, selectedAgent, selectedTask, taskWorkspace } = bindingHarness()
     try {
-      selectedTask.value = { id: 'task-a' }
+      selectedTask.value = { assignedAgentIds: ['map-agent-a', 'requested-agent', 'agent-a', 'non-mentionable', 'old-actor', 'first-agent', 'direct-agent'], id: 'task-a' }
       binding.selectExplicitActor({ agentId: 'non-mentionable' })
       fallBackToRoster(selectedAgent, { agentId: 'roster-agent' })
       await nextTick()
@@ -136,7 +136,7 @@ describe('C07A task workspace wiring', () => {
   it('clears before a failed assignment and never re-arms from a late assignment completion', async () => {
     const { binding, selectedAgent, selectedTask, taskWorkspace } = bindingHarness()
     try {
-      selectedTask.value = { id: 'task-a' }
+      selectedTask.value = { assignedAgentIds: ['map-agent-a', 'requested-agent', 'agent-a', 'non-mentionable', 'old-actor', 'first-agent', 'direct-agent'], id: 'task-a' }
       binding.selectExplicitActor({ agentId: 'old-actor' })
       await nextTick()
 
@@ -147,11 +147,11 @@ describe('C07A task workspace wiring', () => {
       expect(openCalls(taskWorkspace)).to.have.length(1)
 
       // The user makes a fresh explicit U/C selection before an older assignment resolves.
-      selectedTask.value = { id: 'task-u' }
+      selectedTask.value = { assignedAgentIds: ['user-c'], id: 'task-u' }
       binding.selectExplicitActor({ agentId: 'user-c' })
       await nextTick()
       fallBackToRoster(selectedAgent, { agentId: 'assignment-c' })
-      selectedTask.value = { id: 'task-a' }
+      selectedTask.value = { assignedAgentIds: ['map-agent-a', 'requested-agent', 'agent-a', 'non-mentionable', 'old-actor', 'first-agent', 'direct-agent'], id: 'task-a' }
       await nextTick()
 
       expect(binding.explicitActorAgentId.value).to.equal(null)
@@ -167,7 +167,7 @@ describe('C07A task workspace wiring', () => {
   it('cannot reuse a cleared token when a multi-assignment later selects its same first agent id', async () => {
     const { binding, selectedAgent, selectedTask, taskWorkspace } = bindingHarness()
     try {
-      selectedTask.value = { id: 'task-a' }
+      selectedTask.value = { assignedAgentIds: ['map-agent-a', 'requested-agent', 'agent-a', 'non-mentionable', 'old-actor', 'first-agent', 'direct-agent'], id: 'task-a' }
       binding.selectExplicitActor({ agentId: 'first-agent' })
       await nextTick()
       binding.clearExplicitActor()
@@ -183,10 +183,10 @@ describe('C07A task workspace wiring', () => {
   it('supports direct selection and a valid conversation selection as the only ways to open', async () => {
     const { binding, selectedTask, taskWorkspace } = bindingHarness()
     try {
-      selectedTask.value = { id: 'task-a' }
+      selectedTask.value = { assignedAgentIds: ['map-agent-a', 'requested-agent', 'agent-a', 'non-mentionable', 'old-actor', 'first-agent', 'direct-agent'], id: 'task-a' }
       binding.selectExplicitActor({ agentId: 'direct-agent' })
       await nextTick()
-      selectedTask.value = { id: 'task-b' }
+      selectedTask.value = { assignedAgentIds: ['conversation-agent'], id: 'task-b' }
       binding.selectExplicitActor({ agentId: 'conversation-agent' })
       await nextTick()
       expect(openCalls(taskWorkspace)).to.deep.equal([
@@ -196,6 +196,22 @@ describe('C07A task workspace wiring', () => {
     } finally {
       binding.dispose()
     }
+  })
+
+  it('does not query an unassigned task or inherit an actor across tasks', async () => {
+    const { binding, selectedTask, taskWorkspace } = bindingHarness()
+    try {
+      selectedTask.value = { id: 'one', assignedAgentIds: ['a'] }
+      binding.selectExplicitActor({ agentId: 'a' }); await nextTick()
+      selectedTask.value = { id: 'two', assignedAgentIds: ['b'] }; await nextTick()
+      expect(binding.explicitActorAgentId.value).to.equal(null)
+      binding.selectExplicitActor({ agentId: 'a' }); await nextTick()
+      selectedTask.value = { id: 'unassigned', assignedAgentIds: [] }
+      binding.selectExplicitActor({ agentId: 'a' }); await nextTick()
+      expect(openCalls(taskWorkspace)).to.deep.equal([{ type: 'open', taskId: 'one', actorAgentId: 'a' }])
+      selectedTask.value = { id: 'unassigned', assignedAgentIds: ['a'] }; await nextTick()
+      expect(openCalls(taskWorkspace).at(-1)).to.deep.equal({ type: 'open', taskId: 'unassigned', actorAgentId: 'a' })
+    } finally { binding.dispose() }
   })
 
   it('uses atomic explicit JuyiHall action inputs, never brief/default or assignment completion, and disposes the real binding on unmount', () => {

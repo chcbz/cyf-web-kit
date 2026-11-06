@@ -118,6 +118,13 @@ export const deliberationBusy = (request, turns) => {
   return Boolean(request?.requestId) && !isTerminalRequestState(request.state)
 }
 
+// Recovery remains unresolved/cancellable, but is not an actively generating reply.
+export const deliberationReplyActive = (request, turns) => {
+  const active = state => normalizeDeliberationState(state) !== 'RECOVERY_REQUIRED'
+  if (Array.isArray(turns) && turns.length) return turns.some(turn => isPendingTurn(turn) && active(turn.state))
+  return deliberationBusy(request, turns) && active(request?.state)
+}
+
 export const cancellationTarget = (request, turns) => {
   if (!request?.requestId) return null
   const pending = (turns || []).filter(isPendingTurn)
