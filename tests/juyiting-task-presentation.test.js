@@ -54,7 +54,7 @@ describe('shared Hall task presentation and authoritative phase counts', () => {
       const wait = pending(); calls.push({ url, params, options, wait }); await wait.promise
     } }, { identityScope: identity })
     const complete = (start, id) => {
-      calls[start].options.onSuccess({ items: [{ id, status: 'open' }] }); calls[start].wait.resolve()
+      calls[start].options.onSuccess({ items: [{ id, status: 'open' }], total: '1' }); calls[start].wait.resolve()
       calls[start + 1].options.onSuccess(counts()); calls[start + 1].wait.resolve()
     }
     const a = model.loadTasks()

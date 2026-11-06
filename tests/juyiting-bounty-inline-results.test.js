@@ -1,3 +1,4 @@
+import * as historyWindowHelpers from '../src/composables/juyiting/hallHistoryWindow.js'
 import { displayFixture } from './fixtures/juyiting/interface-display-fixture.mjs'
 import { richDocumentKind } from '../src/utils/richDocumentPreview.js'
 import { projectHallTask } from '../src/composables/juyiting/hallTaskPresentation.js'
@@ -32,7 +33,7 @@ const directory = () => ({ items: Vue.ref([]), links: Vue.ref([]), pendingWrites
   actionState: Vue.ref('idle'), writeNotice: Vue.ref(''), refresh: async () => true, load: async () => true,
   dispose: () => {}, retryWrite: () => {} })
 const createComponents = api => {
-  const deps = { richDocumentKind, RichDocumentPreview: noRender, projectHallTask, PdfDocumentPreview: { props: ['blob'], template: '<section class="pdf-preview-stub" />' }, ...discussionTurnHelpers, useHallExecutionAbandonment, ...outputCatalog, ...discussionContract, bountyDeliberationPresentation, useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults,
+  const deps = { ...historyWindowHelpers, richDocumentKind, RichDocumentPreview: noRender, projectHallTask, PdfDocumentPreview: { props: ['blob'], template: '<section class="pdf-preview-stub" />' }, ...discussionTurnHelpers, useHallExecutionAbandonment, ...outputCatalog, ...discussionContract, bountyDeliberationPresentation, useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults,
     revisionProgressPending, conversationAssetContentPath, safeMediaKind, safeAssetPreviewKind, revisionOf, createApi: () => api, saveOutputBlob: () => {},
     useHallConversationArchive: () => ({ statusFor: () => ({}), save: () => {}, check: () => {} }),
     marked: Object.assign(value => value, { setOptions: () => {} }), DOMPurify: { sanitize: value => value },
@@ -40,7 +41,7 @@ const createComponents = api => {
     BountyTextSelectionArchive: noRender, BountyTypedOutcomeCard: noRender, HallConversationHistory: { props: ['readOnly'], render: () => null },
     WorkspaceWriteRecovery: noRender, HallChatComposer: noRender, HallMaterialPicker: noRender,
     TaskSkillCapabilities: noRender, BountyDeliberationStatus: noRender, BountyExecutionTermination: noRender }
-  for (const name of ['HallMessageMedia', 'HallMessageParts', 'BountyExecutionOutputs', 'ChatPanel', 'BountyDiscussionPanel']) deps[name] = load(name, deps)
+  for (const name of ['HallMessageWindow', 'HallMessageMedia', 'HallMessageParts', 'BountyExecutionOutputs', 'ChatPanel', 'BountyDiscussionPanel']) deps[name] = load(name, deps)
   return deps
 }
 const part = (n, changes = {}) => ({ partId: `part-${n}`, kind: 'image', state: 'ready', assetId: `asset-${n}`, revision: '1', filename: `版本${n}.png`, mime: 'image/png', ...changes })

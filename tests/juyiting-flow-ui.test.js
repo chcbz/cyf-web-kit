@@ -138,7 +138,7 @@ describe('flow gap actual UI consumers', () => {
   })
   it('completed and accepted still route to the existing acceptance receipt panel, not the new cancellation history', () => {
     const template = parse(hall).descriptor.template.content
-    const history = template.match(/<section\s+v-if="([^"]+)"\s+class="terminal-task-history"/)[1]
+    const history = template.match(/<section\s+v-if="([^"]+)"\s+(?:ref="[^"]+"\s+)?class="terminal-task-history"/)[1]
     const acceptance = template.match(/<BountyAcceptancePanel\s+v-else-if="([^"]+)"/)[1]
     const evaluate = (condition, status) => new Function('renderedPanel', 'formalTaskRef', 'hallIdentityScope',
       'multimediaDeliberationUiEnabled', 'taskReviewRef', `return Boolean(${condition})`)('tasks', { id: 'a', status }, 'owner', true, null)

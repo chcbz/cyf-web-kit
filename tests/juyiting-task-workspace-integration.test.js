@@ -1,3 +1,4 @@
+import { useHallTerminalTextHistory } from '../src/composables/juyiting/useHallTerminalTextHistory.js'
 import { useHallAgentAbilitiesEditor } from '../src/composables/juyiting/useHallAgentAbilitiesEditor.js'
 import { useHallSelectedOutputReview } from '../src/composables/juyiting/useHallSelectedOutputReview.js'
 import { selectionKey } from '../src/composables/juyiting/hallSelectedOutputs.js'
@@ -105,7 +106,7 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
     useHallDrafts,
     useHallRequirementCreate: () => ({ state: Vue.ref({ error: '' }), busy: Vue.ref(false), create: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, readOriginal: () => ({ state: 'ABSENT' }), dispose: noop }),
     // Real read adapters stay inert without a cancelled-task source.
-    useOutputs, useHallBountyAcceptance,
+    useOutputs, useHallBountyAcceptance, useHallTerminalTextHistory,
     useHallBountyAssignmentContext: () => ({ projection: Vue.ref(null), error: Vue.ref(''), refresh: async () => false, dispose: noop }),
     useHallBountyRequestCatalog: () => ({ entries: Vue.ref([]), hint: noop, reset: noop, refresh: asyncNoop, dispose: noop }),
     useHallBountyFollowup: () => ({ state: Vue.ref({}), busy: Vue.ref(false), prepareGenerate: async () => false, prepareEdit: async () => false, confirm: async () => false, checkOriginal: async () => false, invalidate: noop, dispose: noop }),
