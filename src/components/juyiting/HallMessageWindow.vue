@@ -149,7 +149,9 @@ watch(() => props.pinnedIds, schedule)
 // Capture against the old DOM before a prepend/reload changes page geometry.
 // Keep that page mounted until scroll restoration; retention must not evict it first.
 watch(() => props.pages.map(page => `${page.key}:${page.loaded}`).join('|'), async () => {
-  const anchor = captureAnchor()
+  // A parent can remove the older-page control before this child updates.
+  // Preserve the pre-layout scroll anchor, rather than recapturing shifted rows.
+  const anchor = savedAnchor || captureAnchor()
   settlingAnchor.value = anchor
   savedAnchor = anchor
   await nextTick()

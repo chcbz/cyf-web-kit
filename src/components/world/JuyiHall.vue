@@ -2714,7 +2714,10 @@ const refreshFollowupContext = async event => {
   if (!await bountyAssignmentContext.refresh() || captured !== followupContextGeneration.value) return false
   // A live state change refreshes the current page, never walks historical request IDs.
   if (event && !await refreshHallMessagePage()) return false
-  if (captured !== followupContextGeneration.value || !adoptMessagePresentation()) return false
+  if (captured !== followupContextGeneration.value) return false
+  // Local initialization can finish before the message loader. Its page watcher
+  // owns adoption; absence of that page is not a failed server projection.
+  if (event && !adoptMessagePresentation()) return false
   return await typedDeliberation.refreshDeliveryChoices()
 }
 // Historical pages only enrich display; they never restore a historical active request.

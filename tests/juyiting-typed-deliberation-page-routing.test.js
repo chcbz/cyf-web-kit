@@ -424,12 +424,12 @@ describe('actual message-page follow-up wiring', () => {
     expect(h.calls).to.deep.equal(['message-page', ['catalog', h.requestPage.value], ['outcomes', []], 'choices'])
   })
   it('binding initialization does not invent a live resync or reload the message page', async () => {
-    const h = build(); const hints = []
+    const h = build(); h.requestPage.value = null; const hints = []
     const reset = new Function('invalidateFollowupContext', 'bountyRequestCatalog', 'refreshHallProjections',
       `return (${handler('resetFollowupContext')})`)(() => {}, { reset() {} }, event => { hints.push(event); return h.actual(event) })
     reset(); await new Promise(resolve => setImmediate(resolve))
     expect(hints).to.deep.equal([undefined])
-    expect(h.calls).to.deep.equal([['catalog', h.requestPage.value], ['outcomes', []], 'choices'])
+    expect(h.calls).to.deep.equal(['choices'])
   })
   it('refreshes current acceptance from live hints, not local initialization or rendered cards', async () => {
     const assignment = program.body.find(node => node.type === 'ExpressionStatement' &&

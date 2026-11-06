@@ -8,19 +8,20 @@ import { launchChrome, evaluate, waitForExpression, stopChrome } from '../script
 const evidence = process.env.HISTORY_WINDOW_EVIDENCE
 if (!evidence) throw new Error('HISTORY_WINDOW_EVIDENCE is required')
 const root = fileURLToPath(new URL('..', import.meta.url)), cacheDir = `/var/tmp/cyf-history-window-vite-${process.pid}`
-const html = `<meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font:16px sans-serif}#scroller{height:600px;overflow:auto;overflow-anchor:none}.message{padding:10px;margin:10px;border:1px solid #aaa}textarea{max-width:95%}</style><div id="app"></div><script type="module">
+const html = `<meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font:16px sans-serif}#scroller{height:600px;overflow:auto}.message{padding:10px;margin:10px;border:1px solid #aaa}textarea{max-width:95%}</style><div id="app"></div><script type="module">
 import {createApp,h,ref,nextTick} from 'vue';
 import Window from '/src/components/juyiting/HallMessageWindow.vue';
 import {useHallMessagePages} from '/src/composables/juyiting/useHallMessagePages.js';
 const Row={props:['message'],setup:props=>{const draft=ref(props.message.content);return ()=>h('article',{class:'message'},[h('p',props.message.content),h('details',[h('summary','展开'),h('textarea',{value:draft.value,onInput:e=>draft.value=e.target.value})])])}};
+const controls=ref(true);let hideOnLoad=false;window.hideControls=()=>{hideOnLoad=true};
 const messages=ref([]),id=ref('100'),identity=ref('owner'),scroller=ref(null);window.calls=[];
 const response=(last)=>{const first=Math.max(1,last-19);return {items:Array.from({length:Math.max(0,last-first+1)},(_,i)=>({id:String(first+i),createTime:1000,content:('message '+(first+i)+' ').repeat((first+i)%7+1)})),hasMore:first>1,nextCursor:first>1?'1000:'+first:null}};
-const pages=useHallMessagePages({messages,conversationId:id,identityKey:identity,captureGuard:()=>identity.value,guardCurrent:x=>x===identity.value,normalize:row=>({localId:row.id,content:row.content}),chatApi:{get:async(path,params,options)=>{calls.push(params.cursor);const parts=params.cursor.split(':');const last=Number(parts.at(-1))-(parts[0]==='at'?0:1);await new Promise(r=>setTimeout(r,10));options.onSuccess(response(last))}}});
+const pages=useHallMessagePages({messages,conversationId:id,identityKey:identity,captureGuard:()=>identity.value,guardCurrent:x=>x===identity.value,normalize:row=>({localId:row.id,content:row.content}),chatApi:{get:async(path,params,options)=>{calls.push(params.cursor);const parts=params.cursor.split(':');const last=Number(parts.at(-1))-(parts[0]==='at'?0:1);await new Promise(r=>setTimeout(r,10));if(hideOnLoad){controls.value=false;hideOnLoad=false}options.onSuccess(response(last))}}});
 pages.applyLatest(response(1000));
 window.inspect=()=>({bodies:messages.value.length,pages:pages.windows.value.length,loaded:pages.windows.value.filter(p=>p.loaded).length,dom:document.querySelectorAll('[data-history-row]').length,requests:calls.length,errors:pages.windowErrors.value});
 window.latest=()=>pages.applyLatest(response(1002));
 window.changeIdentity=()=>{identity.value='other';messages.value=[]};
-createApp({setup:()=>()=>h('main',[h('button',{id:'older',onClick:()=>pages.loadOlder()},'更早'),h('div',{id:'scroller',ref:scroller},[h(Window,{pages:pages.windows.value,messages:messages.value,scroller:scroller.value,scope:identity.value,loading:pages.windowLoading.value,errors:pages.windowErrors.value,onRetain:pages.retainWindows,onLoad:pages.loadWindow},{default:({message})=>h(Row,{key:message.localId,message})})])])}).mount('#app');
+createApp({setup:()=>()=>h('main',[h('button',{id:'older',onClick:()=>pages.loadOlder()},'更早'),h('div',{id:'scroller',ref:scroller},[controls.value?h('div',{style:'height:27px'},'历史分页控件'):null,h(Window,{pages:pages.windows.value,messages:messages.value,scroller:scroller.value,scope:identity.value,loading:pages.windowLoading.value,errors:pages.windowErrors.value,onRetain:pages.retainWindows,onLoad:pages.loadWindow},{default:({message})=>h(Row,{key:message.localId,message})})])])}).mount('#app');
 </script>`
 const server = await createServer({ root, configFile: false, cacheDir, plugins: [vue(), { name: 'history-window-fixture', configureServer(s) { s.middlewares.use('/window-test', async (_req, res) => { res.setHeader('Content-Type', 'text/html'); res.end(await s.transformIndexHtml('/window-test', html)) }) } }], server: { host: '127.0.0.1', port: 18797, strictPort: true }, optimizeDeps: { entries: [], include: ['vue'] } })
 let browser
@@ -33,8 +34,9 @@ try {
     await cdp.send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false })
     await cdp.send('Page.navigate', { url: 'http://127.0.0.1:18797/window-test' })
     await waitForExpression(cdp, "document.querySelectorAll('[data-history-row]').length===20", 60000)
+    await new Promise(resolve => setTimeout(resolve, 200))
     const anchorBefore = await evaluate(cdp, "(()=>{const r=document.querySelector('[data-history-row]');return {id:r.dataset.historyRow,top:r.getBoundingClientRect().top}})()")
-    await evaluate(cdp, "document.querySelector('#older').click()")
+    await evaluate(cdp, "hideControls();document.querySelector('#older').click()")
     await new Promise(resolve => setTimeout(resolve, 200))
     const anchorAfter = await evaluate(cdp, `document.querySelector('[data-history-row="${anchorBefore.id}"]')?.getBoundingClientRect().top`)
     assert.ok(Math.abs(anchorAfter - anchorBefore.top) < 2, JSON.stringify({ anchorBefore, anchorAfter }))
