@@ -71,11 +71,11 @@ describe('1.13.6 Babao-box modal-stack hall presentation', () => {
     assert.match(library, /\.library-search \{ display:grid; grid-template-columns:minmax\(180px,1fr\) 132px auto; gap:10px; padding:12px; border:1px solid var\(--library-line\); border-radius:10px; background:var\(--library-paper\); \}/)
   })
 
-  it('keeps archive citation text readable and makes the nested return action match workbench navigation', () => {
-    assert.match(archiveReader, /class="reader-cite-action"/)
-    assert.match(archiveReader, /\.reader-actions \.reader-cite-action \{[\s\S]*?grid-column: span 2;[\s\S]*?white-space: normal;/)
-    assert.match(archiveReader, /← 返回/)
-    assert.match(archiveReader, /\.reader-header-button\.reader-exit \{[\s\S]*?background: transparent;[\s\S]*?color: var\(--archive-brand\);/)
+  it('keeps archive citation and return icon actions accessible in the workbench', () => {
+    assert.match(archiveReader, /class="reader-icon-button reader-cite-action"/)
+    assert.match(archiveReader, /aria-label="引用当前段落起草交办"[\s\S]*?title="引用当前段落起草交办"[\s\S]*?@click="citeParagraph"/)
+    assert.match(archiveReader, /class="reader-icon-button reader-header-button reader-exit"[\s\S]*?aria-label="返回典籍列表"[\s\S]*?@click="closeReading"/)
+    assert.match(archiveReader, /\.reader-actions \.reader-cite-action \{[\s\S]*?background: var\(--archive-brand\);[\s\S]*?color: var\(--archive-paper\);/)
   })
 
   it('aligns the fixed-version selector and download action on one control row', () => {
