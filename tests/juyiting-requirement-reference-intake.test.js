@@ -156,15 +156,16 @@ describe('exact requirement/reference create contract', () => {
 })
 
 const page = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
-const actualCreate = page.match(/const createTask = async \(payload, acknowledge = \(\) => \{\}\) => \{([\s\S]*?)\n\}\nconst resumeFundedCreate/)?.[1]
+const actualCreate = page.match(/const createTask = async \(payload, acknowledge = \(\) => \{\}\) => \{([\s\S]*?)\n\}\nconst archiveConfirmationPending/)?.[1]
 if (!actualCreate) throw new Error('Actual JuyiHall create closure missing')
 const actualDefaultRequirementEntry = page.match(/const openDefaultRequirementCreate = \(\) => \{([\s\S]*?)\n\}\nconst openReferencedRequirement/)?.[1]
 if (!actualDefaultRequirementEntry) throw new Error('Actual JuyiHall default requirement entry missing')
-const pageHarness = ({ ordinary = { state: 'ABSENT' }, fundedRecovery = null } = {}) => {
-  const h = { ordinary: [], funded: [], toasts: [], acknowledgements: [] }
-  const deps = { hallDraftRecovery: { unresolvedIntent: ref(null) }, openOverviewItem: () => {}, readRequirementCreateOriginal: () => ordinary, showToast: text => h.toasts.push(text), runCreateTask: async p => { h.funded.push(p); return true },
-    markTaskCreated: () => {}, selectedTask: ref({ id: 'funded-task' }), fundedCreateRecovery: ref(fundedRecovery),
-    runRequirementCreate: async p => { h.ordinary.push(p); return true }, requirementCreateState: ref({ error: null }) }
+const pageHarness = ({ pendingDraft = null, created = true, error = null } = {}) => {
+  const h = { ordinary: [], toasts: [], acknowledgements: [], opened: [] }
+  const deps = { hallDraftRecovery: { unresolvedIntent: ref(pendingDraft) },
+    openOverviewItem: item => h.opened.push(item), showToast: text => h.toasts.push(text),
+    runRequirementCreate: async p => { h.ordinary.push(p); return created },
+    requirementCreateState: ref({ error }) }
   h.create = new Function(...Object.keys(deps), `return async (payload, acknowledge = () => {}) => {${actualCreate}}`)(...Object.values(deps))
   return h
 }
@@ -187,22 +188,32 @@ describe('actual JuyiHall default requirement entry', () => {
   })
 })
 
-describe('actual JuyiHall ordinary/funded boundary', () => {
-  it('uses atomic ordinary creation and separate funded route with definitive acknowledgements', async () => {
+describe('actual JuyiHall creation and retired funding boundary', () => {
+  it('uses atomic requirement creation with a definitive acknowledgement', async () => {
     const h = pageHarness()
     expect(await h.create(payload(), ok => h.acknowledgements.push(ok))).to.equal(true)
-    expect(h.ordinary).to.deep.equal([payload()]); expect(h.funded).to.deep.equal([]); expect(h.acknowledgements).to.deep.equal([true])
-    expect(await h.create({ title: 'funded', grossBountyAmountWen: '5' })).to.equal(true); expect(h.funded).to.have.length(1)
+    expect(h.ordinary).to.deep.equal([payload()]); expect(h.acknowledgements).to.deep.equal([true])
   })
-  for (const state of ['PRESENT', 'CORRUPT', 'UNAVAILABLE']) it(`cannot replace ${state} ordinary intent via funded creation`, async () => {
-    const h = pageHarness({ ordinary: { state } }); expect(await h.create({ title: 'funded', grossBountyAmountWen: '5' })).to.equal(false)
-    expect(h.funded).to.deep.equal([]); expect(h.ordinary).to.deep.equal([])
+  for (const key of ['grossBountyAmountWen', 'settlementPolicy', 'requiredSkillRequirements']) {
+    it(`rejects retired ${key} without reinterpreting it as a new requirement`, async () => {
+      const h = pageHarness()
+      expect(await h.create({ ...payload(), [key]: 'legacy' }, ok => h.acknowledgements.push(ok))).to.equal(false)
+      expect(h.ordinary).to.deep.equal([]); expect(h.acknowledgements).to.deep.equal([false])
+      expect(h.toasts[0]).to.include('旧资金榜已停止创建')
+      expect(page).not.to.include('const resumeFundedCreate')
+    })
+  }
+  it('opens an unresolved draft instead of creating another task', async () => {
+    const h = pageHarness({ pendingDraft: { kind: 'TASK_CREATE', draftId: 'original' } })
+    expect(await h.create(payload(), ok => h.acknowledgements.push(ok))).to.equal(false)
+    expect(h.ordinary).to.deep.equal([]); expect(h.acknowledgements).to.deep.equal([false])
+    expect(h.opened).to.deep.equal([{ sourceType: 'DRAFT', sourceId: 'original' }])
   })
-  it('does not mix references with funding or bypass unresolved funded-create recovery', async () => {
-    const h = pageHarness({ fundedRecovery: { key: 'funding-original' } })
-    expect(await h.create(payload())).to.equal(false)
-    expect(await h.create({ title: 'funded', grossBountyAmountWen: '5', inputRefs: [image()] })).to.equal(false)
-    expect(h.funded).to.deep.equal([]); expect(h.ordinary).to.deep.equal([])
+  it('preserves the requirement coordinator failure and does not claim successful creation', async () => {
+    const h = pageHarness({ created: false, error: '原操作待核对' })
+    expect(await h.create(payload(), ok => h.acknowledgements.push(ok))).to.equal(false)
+    expect(h.ordinary).to.deep.equal([payload()]); expect(h.acknowledgements).to.deep.equal([false])
+    expect(h.toasts).to.deep.equal(['原操作待核对'])
   })
   it('compiles actual changed SFCs and wires exact recovery handlers', () => {
     for (const name of ['world/JuyiHall.vue', 'juyiting/BountyPanel.vue', 'juyiting/HallMaterialPicker.vue']) {
