@@ -72,10 +72,11 @@ describe('1.13.6 Babao-box modal-stack hall presentation', () => {
   })
 
   it('keeps archive citation and return icon actions accessible in the workbench', () => {
-    assert.match(archiveReader, /class="reader-icon-button reader-cite-action"/)
+    assert.match(archiveReader, /class="reader-icon-button reader-cite-action hall-tool"/)
     assert.match(archiveReader, /aria-label="引用当前段落起草交办"[\s\S]*?title="引用当前段落起草交办"[\s\S]*?@click="citeParagraph"/)
     assert.match(archiveReader, /class="reader-icon-button reader-header-button reader-exit"[\s\S]*?aria-label="返回典籍列表"[\s\S]*?@click="closeReading"/)
-    assert.match(archiveReader, /\.reader-actions \.reader-cite-action \{[\s\S]*?background: var\(--archive-brand\);[\s\S]*?color: var\(--archive-paper\);/)
+    assert.match(archiveReader, /class="reader-icon-button reader-continue hall-tool"/)
+    assert.doesNotMatch(archiveReader, /\.reader-actions \.reader-cite-action \{[\s\S]*?background: var\(--archive-brand\);/)
   })
 
   it('aligns the fixed-version selector and download action on one control row', () => {
