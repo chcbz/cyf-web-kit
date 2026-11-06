@@ -128,7 +128,7 @@ const statusText = item => item.ref.sourceType === 'TASK'
   ? taskStatusText({ id: item.ref.sourceId, status: item.status.code, phase: item.phase })
   : item.review ? '交付待验收' : ({
     EDITING: '尚未交办', SUBMITTED: '已交办', QUEUED: '等待执行', OUTPUT_COMMITTED: '成果可查看',
-    FAILED: '执行未完成', INPUTS_REVOKED: '资料授权已撤销'
+    FAILED: '执行未完成', CANCELLED: '事项已取消', INPUTS_REVOKED: '资料授权已撤销'
   })[item.status.code] || '状态待核对'
 
 const sortedRowsFor = view => sourcesFor(view).flatMap(source => model.sections.value[view].partitions[source].items).sort((a, b) => b.updatedAt - a.updatedAt)

@@ -30,6 +30,14 @@ const executionMock = () => {
 }
 
 describe('formal TASK execution boundary', () => {
+  it('shows task cancellation without promising external calls are free', () => {
+    const mock = executionMock()
+    mock.state.execution.value = executionRecord({ state: 'CANCELLED' })
+    const formal = useFormalTaskExecution({ taskId: ref('task_1'), conversationId: ref('conversation_1'), targetAgentId: ref('agent_1'), conversationConfirmed: ref(true), executionAuthorized: ref(false), identityEpoch: ref(1), identityScope: ref('owner_a'), executionFactory: () => mock.state })
+    assert.equal(formal.activeExecution.value?.state, 'CANCELLED')
+    assert.match(formal.stateText.value, /取消/)
+    assert.match(formal.stateText.value, /费用/)
+  })
   it('refuses incomplete formal scope and sends only exact TASK/PDF inputs after explicit confirmation', async () => {
     const taskId = ref('task_1')
     const conversationId = ref('')

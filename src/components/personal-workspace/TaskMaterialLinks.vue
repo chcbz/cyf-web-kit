@@ -196,7 +196,7 @@ const executionFact = computed(() => {
   return '尚未确认本悬赏有正式交付；资料关联本身不表示已执行。'
 })
 
-const executionLabel = state => ({ QUEUED: '等待办理', OUTPUT_COMMITTED: '成果已生成', INPUTS_REVOKED: '资料授权已撤销', FAILED: '办理失败' })[state] || '状态待确认'
+const executionLabel = state => ({ QUEUED: '等待办理', OUTPUT_COMMITTED: '成果已生成', CANCELLED: '事项已取消', INPUTS_REVOKED: '资料授权已撤销', FAILED: '办理失败' })[state] || '状态待确认'
 const roleText = role => ({ INPUT: '输入资料', REFERENCE: '参考资料', OUTPUT: '成果引用' })[role] || '未知用途'
 const materialName = link => linkNames.value[link.fileId] || workspace.items.value.find(file => file.fileId === link.fileId)?.displayName || `资料 ${link.fileId}`
 const resolveLinkNames = async operationKey => {

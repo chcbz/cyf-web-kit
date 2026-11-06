@@ -206,7 +206,7 @@ const resultExecution = executionId => drafts.caseView.value?.executions?.find(i
 const startRevision = item => { const executionId = drafts.executionResults.value?.executionId; if (!executionId || !drafts.caseView.value?.caseId || item?.availability !== 'AVAILABLE' || !canCreateRevision.value) return; revisionSource.value = { executionId, outputId: item.outputId, fileId: item.fileId, fileVersion: item.fileVersion }; fill({ title: `修改：${item.filename}`, instruction: '', targetAgentId: resultExecution(executionId)?.targetAgentId || '', outputMime: item.mime, inputs: [] }); view.value = 'draft' }
 const openFormalTask = async () => { const task = await drafts.loadFormalTask(); if (task) emit('open-task', task) }
 const sourceTypeLabel = value => ({ PRIVATE_CASE: '私人事项', LEGACY_EXECUTION: '原私人交办', TASK: '正式事项' })[value] || '事项'
-const executionText = state => ({ QUEUED: '等待执行', OUTPUT_COMMITTED: '已有已归档输出', INPUTS_REVOKED: '输入授权已撤销', FAILED: '执行未完成' })[state] || '状态待核对'
+const executionText = state => ({ QUEUED: '等待执行', OUTPUT_COMMITTED: '已有已归档输出', CANCELLED: '事项已取消', INPUTS_REVOKED: '输入授权已撤销', FAILED: '执行未完成' })[state] || '状态待核对'
 const executionSummary = execution => execution?.state === 'OUTPUT_COMMITTED' ? '成果已保存，可以查看。' : execution ? '已受理，尚未取得成果。' : '暂时无法确认办理进度，请查询结果。'
 const saveBeforeLeave = async () => { if (busy.value) return false; if (!needsSave.value) return true; return persist() }
 const discardLocalChanges = () => { invalidateDownload(); revisionSource.value = null; materialLabels.value = {}; resultPreviewItem.value = null; resultPreviewVersion.value = null; view.value = 'draft'; fill(drafts.draft.value?.editableFields || {}) }

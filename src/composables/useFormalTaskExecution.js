@@ -84,7 +84,7 @@ export function useFormalTaskExecution ({
   watch(() => [scopeKey.value, valueOf(identityEpoch)], () => { revoking.value = false }, { flush: 'sync' })
   watch(activeExecution, value => {
     const intent = revokeIntent.value
-    if (value && value.executionId === intent?.executionId && ['INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'FAILED'].includes(value.state)) clearRevokeIntent()
+    if (value && value.executionId === intent?.executionId && ['INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'FAILED', 'CANCELLED'].includes(value.state)) clearRevokeIntent()
   }, { flush: 'sync' })
   const readyReason = computed(() => {
     const scope = currentScope.value
@@ -110,6 +110,7 @@ export function useFormalTaskExecution ({
     if (!value) return '尚未确认本正式任务的执行记录。'
     if (value.state === 'QUEUED') return '已提交，正在等待办理。'
     if (value.state === 'OUTPUT_COMMITTED') return '成果已生成，请查看交付记录和验收状态。'
+    if (value.state === 'CANCELLED') return '事项已取消，后续执行已关闭；不代表已发出的外部调用没有费用。'
     if (value.state === 'INPUTS_REVOKED') return '本次 TASK 输入授权已撤销，后续读取和提交将被拒绝；不代表已取消外部调用或免除费用。'
     if (value.state === 'FAILED') return value.failureMessage || '本次 TASK 执行已报告失败。'
     return `执行状态 ${value.state} 尚待核对。`

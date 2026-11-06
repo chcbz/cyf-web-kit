@@ -51,7 +51,7 @@ const validDraft = value => value && typeof value === 'object' && ID(value.draft
 const editableDraft = value => validDraft(value) && value.state === 'EDITING'
 const validRef = value => value && typeof value === 'object' && ['PRIVATE_CASE', 'TASK'].includes(value.sourceType) && ID(value.sourceId)
 const validExecution = value => value && typeof value === 'object' && ID(value.executionId) && ID(value.targetAgentId) &&
-  ['QUEUED', 'INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'FAILED'].includes(value.state)
+  ['QUEUED', 'INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'FAILED', 'CANCELLED'].includes(value.state)
 // SUBMISSION-v1: TASK_ACTION runs an execution; TASK_CREATE creates only a formal task.
 const validReceipt = (value, kind = null) => {
   if (!value || typeof value !== 'object' || !validRef(value.ref) ||
@@ -70,7 +70,7 @@ const validResultItem = value => value && typeof value === 'object' && ID(value.
   DECIMAL(value.byteLength) && typeof value.sha256 === 'string' &&
   /^[a-f0-9]{64}$/i.test(value.sha256) && ['AVAILABLE', 'UNAVAILABLE'].includes(value.availability)
 const validResults = value => value && typeof value === 'object' && ID(value.executionId) &&
-  ['QUEUED', 'INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'FAILED'].includes(value.state) &&
+  ['QUEUED', 'INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'FAILED', 'CANCELLED'].includes(value.state) &&
   Array.isArray(value.items) && value.items.every(validResultItem) &&
   Array.isArray(value.allowedActions) && value.allowedActions.every(action => ['VIEW', 'CREATE_REVISION'].includes(action)) &&
   (value.state === 'OUTPUT_COMMITTED'

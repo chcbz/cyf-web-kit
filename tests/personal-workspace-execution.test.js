@@ -23,6 +23,23 @@ const timers = () => {
 }
 
 describe('personal workspace execution adapter', () => {
+  for (const mode of ['TASK', 'CONVERSATION']) it(`treats cancelled ${mode} as terminal without losing the record`, () => {
+    const timerApi = timers()
+    const adapter = usePersonalWorkspaceExecution({ identityEpoch: ref('owner-a'), timerApi, api: { execute: async () => { throw new Error('unexpected poll') } } })
+    const value = executionView({ state: 'CANCELLED', executionMode: mode, businessTaskId: 'task_1', conversationId: 'conversation_1', workItemId: 'work_1', workItemState: 'cancelled' })
+    assert.equal(adapter.adoptExecution(value)?.state, 'CANCELLED')
+    assert.equal(adapter.execution.value.executionId, 'exec_1')
+    assert.equal(timerApi.scheduled.length, 0)
+    assert.match(adapter.completionNotice.value, /事项已取消/)
+    assert.match(adapter.completionNotice.value, /仍保留/)
+    adapter.dispose()
+  })
+  it('does not introduce task cancellation into PRIVATE execution semantics', () => {
+    const adapter = usePersonalWorkspaceExecution({ identityEpoch: ref('owner-a'), timerApi: timers(), api: {} })
+    assert.equal(adapter.adoptExecution(executionView({ state: 'CANCELLED' })), null)
+    assert.equal(adapter.execution.value, null)
+    adapter.dispose()
+  })
   it('recovers an exact known execution by read-only GET without requiring a paginated history row', async () => {
     const calls = []
     const adapter = usePersonalWorkspaceExecution({ identityEpoch: ref('owner-a'), timerApi: timers(), api: { execute: async options => {

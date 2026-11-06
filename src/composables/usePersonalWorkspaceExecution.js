@@ -41,11 +41,11 @@ const validCapabilities = value => value && typeof value === 'object' && Array.i
 export const validPersonalWorkspaceExecutionCapabilities = validCapabilities
 const validInput = value => validSelection(value) && ID(value.inputRef)
 const PRIVATE_STATES = new Set(['QUEUED', 'INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'FAILED'])
-const TASK_STATES = new Set([...PRIVATE_STATES, 'OUTPUT_STAGED'])
-const CONVERSATION_STATES = new Set([...PRIVATE_STATES, 'RESULT_COMMITTED'])
+const TASK_STATES = new Set([...PRIVATE_STATES, 'OUTPUT_STAGED', 'CANCELLED'])
+const CONVERSATION_STATES = new Set([...PRIVATE_STATES, 'RESULT_COMMITTED', 'CANCELLED'])
 const EXECUTION_STATES = new Set([...TASK_STATES, ...CONVERSATION_STATES])
 const modeState = value => ({ PRIVATE: PRIVATE_STATES, TASK: TASK_STATES, CONVERSATION: CONVERSATION_STATES })[value.executionMode]?.has(value.state) === true
-const TERMINAL_EXECUTION_STATES = new Set(['INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'RESULT_COMMITTED', 'FAILED'])
+const TERMINAL_EXECUTION_STATES = new Set(['INPUTS_REVOKED', 'OUTPUT_COMMITTED', 'RESULT_COMMITTED', 'FAILED', 'CANCELLED'])
 const validRuntimeCommand = value => value == null || (value && typeof value === 'object' && ID(value.taskId) && ID(value.runId) && Array.isArray(value.inputManifest) && Array.isArray(value.outputManifest))
 const validFailure = value => value?.state !== 'FAILED'
   ? value?.failureCode == null && value?.failureMessage == null
@@ -186,7 +186,7 @@ export function usePersonalWorkspaceExecution ({ api = createApi('/agent'), iden
     if (!validExecution(value)) throw new Error('执行状态返回格式无效，未将其显示为成功。')
     execution.value = value; receipt.value = value; executionState.value = 'ready'
     clearMatchedTerminalIntent(value)
-    if (value.state === 'OUTPUT_COMMITTED') { stopPolling(); completionNotice.value = '成果已保存到资料空间，可刷新文件列表查看。' } else if (value.state === 'INPUTS_REVOKED') { stopPolling(); completionNotice.value = '输入授权已撤销，后续读取和提交将被拒绝；不代表已取消外部调用或免除费用。' } else if (value.state === 'FAILED') { stopPolling(); completionNotice.value = ''; error.value = value.failureMessage } else completionNotice.value = ''
+    if (value.state === 'OUTPUT_COMMITTED') { stopPolling(); completionNotice.value = '成果已保存到资料空间，可刷新文件列表查看。' } else if (value.state === 'INPUTS_REVOKED') { stopPolling(); completionNotice.value = '输入授权已撤销，后续读取和提交将被拒绝；不代表已取消外部调用或免除费用。' } else if (value.state === 'CANCELLED') { stopPolling(); completionNotice.value = '事项已取消，后续执行已关闭；已产生的调用记录和成果仍保留。' } else if (value.state === 'FAILED') { stopPolling(); completionNotice.value = ''; error.value = value.failureMessage } else completionNotice.value = ''
     return value
   }
   const loadCapabilities = async () => {
