@@ -12,6 +12,23 @@ const item = overrides => ({
 })
 
 describe('RB05 output directory boundary', () => {
+  it('uses page-provided fixed outputs without listing and fences removed items', async () => {
+    const source = ref({ type: 'task', id: 'task-1' }); const identity = ref('owner')
+    const fixed = Object.freeze({ artifactRef: { artifactId: 'fixed', artifactVersion: '2' }, canDownload: true, canPreview: true, mimeType: 'text/plain' })
+    const provided = ref([fixed]); const lists = []; const downloads = []
+    const outputs = useOutputs({ source, identityFingerprint: identity, providedItems: provided,
+      adapter: { list: async request => { lists.push(request); return { items: [] } }, download: async request => downloads.push(request), preview: async () => {} } })
+    try {
+      await tick(); expect(outputs.items.value).to.have.length(1); expect(lists).to.have.length(0)
+      await outputs.download(outputs.items.value[0]); expect(downloads[0]).to.include({ artifactId: 'fixed', artifactVersion: '2', sourceId: 'task-1' })
+      const stale = outputs.items.value[0]; provided.value = []; await tick()
+      let error; try { await outputs.download(stale) } catch (cause) { error = cause }
+      expect(error?.name).to.equal('AbortError'); expect(downloads).to.have.length(1)
+      await outputs.refresh(); expect(lists).to.have.length(0)
+      identity.value = ''; await tick(); expect(outputs.items.value).to.have.length(0)
+    } finally { outputs.dispose() }
+  })
+
   it('keys each directory by identity plus source and never calls a legacy actor endpoint', async () => {
     const source = ref({ type: 'task', id: 'task-1' })
     const identity = ref('user-a:client-a:1')

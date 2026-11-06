@@ -373,6 +373,8 @@
             :task-status-text="taskStatusText"
             :tasks="tasks"
             :loading="tasksLoading"
+            :has-more="tasksHasMore"
+            @load-more-tasks="loadMoreTasks"
             :error-message="tasksError"
             :counts-loading="taskCountsLoading"
             :counts-error-message="taskCountsError"
@@ -404,6 +406,7 @@
 
           <section
             v-if="renderedPanel === 'tasks' && formalTaskRef?.status === 'cancelled' && hallIdentityScope"
+            ref="terminalHistoryScroller"
             class="terminal-task-history"
             aria-label="事项历史成果"
           >
@@ -412,7 +415,7 @@
             <p v-else role="status">{{ terminalHistory.message.value }}</p>
             <div class="terminal-history-actions" role="group" aria-label="重新读取历史成果">
               <button type="button" @click="refreshTerminalHistory">重新读取历史成果</button>
-              <button type="button" @click="terminalConversationHistory.refresh">重新读取议事文字成果</button>
+              <button type="button" @click="terminalTextHistory.refresh">重新读取议事文字成果</button>
             </div>
             <article v-for="item in terminalHistory.items.value" :key="`${item.artifactId}:${item.artifactVersion}`">
               <strong>{{ item.title }}</strong>
@@ -425,38 +428,70 @@
             </article>
             <button v-if="terminalHistory.nextCursor.value" type="button" @click="terminalHistory.loadMore">读取更多历史成果</button>
             <p v-if="terminalHistoryDownloadError" role="alert">{{ terminalHistoryDownloadError }}</p>
-            <p v-if="terminalConversationHistory.error.value || terminalConversationHistory.catalog.error.value || terminalTextError" role="alert">
-              {{ terminalConversationHistory.error.value || terminalConversationHistory.catalog.error.value || terminalTextError }}
+            <p role="status">仅显示已加载消息中的文字成果；不会自动读取全部历史。</p>
+            <p v-if="terminalTextHistory.loading.value" role="status">正在读取历史文字成果…</p>
+            <p v-if="terminalTextHistory.error.value" role="alert">
+              {{ terminalTextHistory.error.value }}
+              <button
+                type="button"
+                :disabled="terminalTextHistory.loading.value"
+                @click="terminalTextHistory.retry"
+              >重试当前页</button>
             </p>
-            <article v-for="item in terminalTextItems" :key="`${item.requestId}:${item.outcomeId}`">
-              <strong>历史文字成果</strong>
-              <pre v-text="item.text"></pre>
-            </article>
+            <HallMessageWindow
+              :pages="terminalTextHistory.windows.value" :messages="terminalTextHistory.windowItems.value"
+              :scroller="terminalHistoryScroller" :scope="`${hallIdentityScope}:${formalTaskRef.id}`"
+              :loading="terminalTextHistory.windowLoading.value" :errors="terminalTextHistory.windowErrors.value"
+              empty-page-text="这一页消息中没有文字成果。"
+              @retain="terminalTextHistory.retainWindows" @load="terminalTextHistory.loadWindow"
+            >
+              <template #default="{ message: item }">
+                <article><strong>历史文字成果</strong><pre v-text="item.text"></pre></article>
+              </template>
+            </HallMessageWindow>
+            <p v-if="!terminalTextHistory.loading.value && !terminalTextHistory.error.value && !terminalTextHistory.items.value.length" role="status">已加载的消息中暂无文字成果。</p>
+            <button
+              v-if="terminalTextHistory.hasMore.value && !terminalTextHistory.error.value"
+              type="button"
+              :disabled="terminalTextHistory.loading.value"
+              @click="terminalTextHistory.loadOlder"
+            >加载更早的议事记录</button>
           </section>
           <HallCompletedRecords
             v-else-if="renderedPanel === 'tasks' && ['completed', 'archived'].includes(formalTaskRef?.status) && hallIdentityScope"
             :key="`${apiStore.authorizationGeneration}:${hallIdentityScope}:${formalTaskRef.id}`"
             :task-id="String(formalTaskRef.id)"
             :task-version="formalTaskRef.taskVersion ?? formalTaskRef.version"
+            :history-loaded="deliveryReview.historyLoaded.value"
+            :history-loading="deliveryReview.historyLoading.value"
+            :history-has-more="deliveryReview.historyHasMore.value"
+            :history-error="deliveryReview.historyError.value"
             :identity-key="`${apiStore.authorizationGeneration}\u0000${hallIdentityScope}`"
             :title="formalTaskRef.title"
             :archived="formalTaskRef.status === 'archived'"
-            :context="deliveryReview.context.value"
+            :context="deliveryReview.historyContext.value"
             :loading="deliveryReview.loading.value"
             :error="deliveryReview.error.value"
+            @open-history="deliveryReview.ensureHistory"
+            @load-history="deliveryReview.loadHistory"
             @refresh="deliveryReview.refresh"
           />
           <BountyAcceptancePanel
             v-else-if="renderedPanel === 'tasks' && formalTaskRef && hallIdentityScope"
             :key="formalTaskRef.id"
             :task-id="formalTaskRef.id"
-            :event-source="acceptanceEventSource"
+            :history-loaded="deliveryReview.historyLoaded.value"
+            :history-loading="deliveryReview.historyLoading.value"
+            :history-has-more="deliveryReview.historyHasMore.value"
+            :history-error="deliveryReview.historyError.value"
             :identity-key="`${apiStore.authorizationGeneration}\u0000${hallIdentityScope}`"
             :task-version="formalTaskRef.taskVersion ?? formalTaskRef.version"
             :task-completed="formalTaskRef.status === 'completed'"
             :conversation-id="chatMode === 'bounty' && conversationTask?.id === formalTaskRef.id ? conversationId : ''"
-            :review-context="deliveryReview.context.value" :review-loading="deliveryReview.loading.value"
+            :review-context="deliveryReview.historyContext.value" :review-loading="deliveryReview.loading.value"
             :review-busy="deliveryReview.operation.value.busy" :review-error="deliveryReview.error.value"
+            @open-history="deliveryReview.ensureHistory"
+            @load-history="deliveryReview.loadHistory"
             @review-delivery="openDeliveryReview()" @refresh-review="deliveryReview.refresh"
             @preview-output="previewReviewOutput"
             @continue-modification="continueBountyModification(formalTaskRef, $event)"
@@ -609,6 +644,15 @@
             :is-awaiting-reply="isAwaitingReply || manualSendPending"
             :is-streaming="isStreaming"
             :messages="messages"
+            :message-windows="messageWindows"
+            :message-window-loading="messageWindowLoading"
+            :message-window-errors="messageWindowErrors"
+            @retain-message-windows="retainMessageWindows"
+            @load-message-window="loadMessageWindow"
+            :message-page-has-more="messagePageHasMore"
+            :message-page-loading="messagePageLoading"
+            :message-page-error="messagePageError"
+            @load-older-messages="loadOlderHallMessages"
             :mention-label="portraitShortName"
             :pending-agent-name="pendingAgentName"
             :selected-agent="conversationAgent"
@@ -644,12 +688,9 @@
           />
 
           <BountyDiscussionPanel
-            ref="bountyDiscussionRef"
-            @outputs-change="selectedOutputCandidates = $event"
-            @accept-output="openSelectedOutputReview($event)"
-            @preview-ready="acceptSelectedOutputPreview"
             v-if="panelFrames.includes('chat') && chatMode === 'bounty'"
             v-show="renderedPanel === 'chat'"
+            ref="bountyDiscussionRef"
             :inert="renderedPanel !== 'chat' ? '' : null"
             :aria-hidden="renderedPanel !== 'chat' ? 'true' : null"
             :active-request="activeRequest"
@@ -660,25 +701,32 @@
             :review-context="deliveryReview.context.value"
             :review-busy="deliveryReview.operation.value.busy || deliveryReview.loading.value || selectedOutputReview.busy.value"
             :typed-outcomes="typedDeliberation.cards.value"
+            :delivery-has-more="typedDeliberation.deliveryHasMore.value"
+            :delivery-loading="typedDeliberation.deliveryLoading.value"
+            :delivery-error="typedDeliberation.deliveryError.value"
             :delivery-choices="typedDeliberation.deliveryChoices.value"
             :selected-delivery-id="typedDeliberation.selectedDeliveryId.value"
-            @choose-delivery="typedDeliberation.chooseDelivery"
             :conversation-generation="typedConversationGeneration()"
             :typed-pending-question="typedDeliberation.selectedPending.value"
             :typed-enabled="typedDeliberationEnabled"
             :skill-directory="taskSkillDirectory.projection.value" :skill-directory-error="taskSkillDirectory.error.value" :skill-directory-loading="taskSkillDirectory.loading.value"
-            @skill-directory-refresh="taskSkillDirectory.refresh"
             :typed-recovery-available="typedDeliberation.recoveryAvailable.value"
             :typed-inspection-status="typedDeliberation.inspectionStatus.value"
             :draft="draft"
             :voice="hallVoice"
-            @update:draft="setDraft"
-            @voice-apply="applyVoiceTranscript"
             :agents="chatMentionAgents"
             :event-stream-recovering="eventStreamRecovering"
             :is-awaiting-reply="isAwaitingReply || manualSendPending"
             :is-streaming="isStreaming"
             :messages="messages"
+            :message-windows="messageWindows"
+            :message-window-loading="messageWindowLoading"
+            :message-window-errors="messageWindowErrors"
+            @retain-message-windows="retainMessageWindows"
+            @load-message-window="loadMessageWindow"
+            :message-page-has-more="messagePageHasMore"
+            :message-page-loading="messagePageLoading"
+            :message-page-error="messagePageError"
             :mention-label="portraitShortName"
             :pending-agent-name="pendingAgentName"
             :selected-agent="conversationAgent"
@@ -700,6 +748,16 @@
             :conversation-load-error="conversationLoadError"
             :target-text="chatTargetText"
             :scope-hint="chatContext.conversationScopeKey"
+            @outputs-change="selectedOutputCandidates = $event"
+            @accept-output="openSelectedOutputReview($event)"
+            @preview-ready="acceptSelectedOutputPreview"
+            @load-more-deliveries="typedDeliberation.loadMoreDeliveryChoices"
+            @refresh-deliveries="typedDeliberation.refreshDeliveryChoices()"
+            @choose-delivery="typedDeliberation.chooseDelivery"
+            @skill-directory-refresh="taskSkillDirectory.refresh"
+            @update:draft="setDraft"
+            @voice-apply="applyVoiceTranscript"
+            @load-older-messages="loadOlderHallMessages"
             @execution-settled="refreshExecutionRequest"
             @cancel-deliberation="cancelDeliberation"
             @clear-target="handleClearChatTarget"
@@ -731,6 +789,15 @@
             :is-awaiting-reply="isAwaitingReply || manualSendPending"
             :is-streaming="isStreaming"
             :messages="messages"
+            :message-windows="messageWindows"
+            :message-window-loading="messageWindowLoading"
+            :message-window-errors="messageWindowErrors"
+            @retain-message-windows="retainMessageWindows"
+            @load-message-window="loadMessageWindow"
+            :message-page-has-more="messagePageHasMore"
+            :message-page-loading="messagePageLoading"
+            :message-page-error="messagePageError"
+            @load-older-messages="loadOlderHallMessages"
             :mention-label="portraitShortName"
             :pending-agent-name="pendingAgentName"
             :selected-agent="conversationAgent"
@@ -827,8 +894,8 @@
 
 <script setup>
 import { Dialog } from '@varlet/ui'
-import { useHallBountyAcceptance } from '@/composables/juyiting/useHallBountyAcceptance'
-import { completedTextItem } from '@/composables/juyiting/bountyOutputCatalog'
+import HallMessageWindow from '../juyiting/HallMessageWindow.vue'
+import { useHallTerminalTextHistory } from '@/composables/juyiting/useHallTerminalTextHistory'
 import { useOutputs } from '@/composables/useOutputs'
 import { saveOutputBlob } from '@/utils/outputDownload'
 import OutputPreview from '@/components/outputs/OutputPreview.vue'
@@ -1303,6 +1370,7 @@ const {
   loadPersonaCatalog,
   loadRosterAgents,
   loadTasks,
+  loadMoreTasks,
   loadTaskDetail,
   loadTaskRecommendations,
   mapAgents,
@@ -1323,6 +1391,7 @@ const {
   tasks,
   tasksError,
   tasksLoading,
+  tasksHasMore,
   taskStatusCount,
   taskStatusFilter,
   unbindPersona,
@@ -2219,7 +2288,6 @@ const loadSettlement = async (task) => runLoadSettlement(task)
 let notifyBountyRequestCatalog = () => {}
 
 const {
-  acceptanceEventSource,
   activeRequest,
   activeTurns,
   adoptBountyBootstrap,
@@ -2249,6 +2317,18 @@ const {
   loadHallConversationHistory,
   loadHallMessages,
   loadMoreHallConversationHistory,
+  loadOlderHallMessages,
+  messageWindows,
+  messageWindowLoading,
+  messageWindowErrors,
+  retainMessageWindows,
+  loadMessageWindow,
+  messageRequestPage,
+  messageTypedOutcomes,
+  refreshHallMessagePage,
+  messagePageHasMore,
+  messagePageLoading,
+  messagePageError,
   mentionAgent,
   messages,
   newHallConversation,
@@ -2305,9 +2385,14 @@ const bountyRequestCatalog = useHallBountyRequestCatalog({
     conversationGeneration: typedConversationGeneration() }),
   getContextGeneration: () => followupContextGeneration.value, enabled: () => multimediaDeliberationUiEnabled && chatMode.value === 'bounty'
 })
-notifyBountyRequestCatalog = async () => {
-  if (!typedDeliberationEnabled.value) return true
-  return refreshFollowupContext()
+notifyBountyRequestCatalog = async event => {
+  // Current acceptance follows business events, never historical-card rendering.
+  // Its own composable owns the initial task/identity load and review operations.
+  const [refreshed] = await Promise.all([
+    typedDeliberationEnabled.value ? refreshFollowupContext(event) : true,
+    event && reviewTaskId.value ? deliveryReview.refresh() : true
+  ])
+  return refreshed
 }
 const invalidateFollowupContext = () => { followupContextGeneration.value++; typedDeliberation?.invalidate?.() }
 // Only the authenticated binding owns these values. A newly adopted request or
@@ -2321,14 +2406,14 @@ const typedDeliberationStorage = (() => { try { return typeof window !== 'undefi
 typedDeliberation = useHallTypedDeliberation({
   chatApi, actorScopeKey: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
   getContext: typedDeliberationContext, getContextGeneration: () => followupContextGeneration.value,
-  getCatalogEntries: () => bountyRequestCatalog.entries.value, prepareCatalog: () => bountyRequestCatalog.refresh(), storage: typedDeliberationStorage,
+  getCatalogEntries: () => bountyRequestCatalog.entries.value, storage: typedDeliberationStorage,
   enabled: () => typedDeliberationEnabled.value,
   onAccepted: async ({ receipt, purpose, context, isCurrent }) => {
     if (!isCurrent?.()) return false
-    if (purpose === 'INSPECT') { bountyRequestCatalog.hint(); showToast('Agent 正在处理资料。'); return true }
+    if (purpose === 'INSPECT') { void refreshHallProjections({ type: 'request_accepted', conversationId: context.conversationId, requestId: receipt.requestId }); showToast('Agent 正在处理资料。'); return true }
     const adopted = await adoptTypedDiscussionReceipt({ receipt, context, isCurrent })
     if (!isCurrent?.()) return false
-    bountyRequestCatalog.hint()
+    void refreshHallProjections({ type: 'request_accepted', conversationId: context.conversationId, requestId: receipt.requestId })
     showToast(adopted
       ? (receipt.intent === 'CLARIFICATION_REPLY' ? '已发送补充。' : '已发送。')
       : '消息已提交，正在确认处理状态。')
@@ -2535,18 +2620,31 @@ const retryHallConversation = async () => {
   }
   return reloadHallConversation()
 }
-const refreshFollowupContext = async () => {
+// Message pages own their request/outcome display data; no ID-set or per-request補查.
+const adoptMessagePresentation = () => {
+  if (!typedDeliberationEnabled.value || !messageRequestPage.value) return false
+  return bountyRequestCatalog.adoptPage(messageRequestPage.value) && typedDeliberation.adoptPage(messageTypedOutcomes.value)
+}
+const refreshFollowupContext = async event => {
   if (!typedDeliberationEnabled.value || !conversationId.value) return false
   if (!await refreshCurrentConversationTask()) return false
   const captured = followupContextGeneration.value
   if (!await bountyAssignmentContext.refresh() || captured !== followupContextGeneration.value) return false
-  if (!await bountyRequestCatalog.refresh() || captured !== followupContextGeneration.value) return false
-  return await typedDeliberation.refresh()
+  // A live state change refreshes the current page, never walks historical request IDs.
+  if (event && !await refreshHallMessagePage()) return false
+  if (captured !== followupContextGeneration.value) return false
+  // Local initialization can finish before the message loader. Its page watcher
+  // owns adoption; absence of that page is not a failed server projection.
+  if (event && !adoptMessagePresentation()) return false
+  return await typedDeliberation.refreshDeliveryChoices()
 }
+// Historical pages only enrich display; they never restore a historical active request.
+watch([messageRequestPage, typedDeliberationEnabled], adoptMessagePresentation)
 const resetFollowupContext = () => {
   invalidateFollowupContext()
   bountyRequestCatalog.reset()
-  void refreshHallProjections({ type: 'resync_required', conversationId: conversationId.value })
+  // Binding initialization is not a server resync; message loading has its own owner.
+  void refreshHallProjections()
 }
 watch([followupTaskFence, () => apiStore.authorizationGeneration, hallIdentityScope, () => conversationId.value,
   () => bountyInteractionTargetId(chatContext.value), () => chatMode.value], resetFollowupContext, { flush: 'sync' })
@@ -2567,51 +2665,17 @@ const terminalHistory = useOutputs({
   identityFingerprint: () => `${hallIdentityScope.value}:${apiStore.authorizationGeneration}`,
   pageSize: 100
 })
-// Reuse the existing owner/task-scoped catalog and validated text projection,
-// but render no acceptance, continuation, or execution component for terminal tasks.
-const terminalConversationHistory = useHallBountyAcceptance({
+// Read-only text history uses the existing message cursor, never a full request scan.
+const terminalHistoryScroller = ref(null)
+const terminalTextHistory = useHallTerminalTextHistory({
   api: chatApi,
   taskId: () => renderedPanel.value === 'tasks' && formalTaskRef.value?.status === 'cancelled' ? formalTaskRef.value.id : '',
-  taskCompleted: () => true,
-  stateVersion: () => formalTaskRef.value?.taskVersion ?? formalTaskRef.value?.version,
   identityKey: () => hallIdentityScope.value ? `${hallIdentityScope.value}:${apiStore.authorizationGeneration}` : ''
 })
 const refreshTerminalHistory = () => {
-  void terminalConversationHistory.refresh()
+  void terminalTextHistory.refresh()
   return terminalHistory.refresh()
 }
-const terminalTextItems = ref([])
-const terminalTextError = ref('')
-watch([() => terminalHistory.cacheKey.value, () => terminalConversationHistory.scope.value,
-  () => terminalConversationHistory.catalog.entries.value], async (_value, _old, onCleanup) => {
-  terminalTextItems.value = []; terminalTextError.value = ''
-  const controller = new AbortController()
-  onCleanup(() => controller.abort())
-  const key = terminalHistory.cacheKey.value
-  const scope = terminalConversationHistory.scope.value
-  if (!key || !scope || formalTaskRef.value?.status !== 'cancelled') return
-  const taskId = formalTaskRef.value.id
-  try {
-    const items = []
-    for (const entry of terminalConversationHistory.catalog.entries.value) {
-      const requestId = entry.request?.requestId
-      if (!requestId) continue
-      const response = await chatApi.get(`/requests/${encodeURIComponent(requestId)}`, {}, { autoLoading: false, signal: controller.signal })
-      const request = response
-      if (request?.requestId !== requestId || request.conversationId !== scope.conversationId) throw new Error('历史议事来源不匹配')
-      for (const turn of request.turns || []) {
-        if (turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state)) continue
-        const outcome = await chatApi.get(`/conversations/${encodeURIComponent(scope.conversationId)}/requests/${encodeURIComponent(requestId)}/typed-outcome`, {},
-          { autoLoading: false, signal: controller.signal })
-        const item = await completedTextItem(outcome?.data?.data ?? outcome?.data, request, turn, taskId)
-        if (item) items.push(item)
-      }
-    }
-    if (!controller.signal.aborted && key === terminalHistory.cacheKey.value) terminalTextItems.value = items
-  } catch (error) {
-    if (!controller.signal.aborted && key === terminalHistory.cacheKey.value) terminalTextError.value = error.message || '历史文字成果读取未成'
-  }
-}, { flush: 'sync' })
 
 const terminalHistoryDownloadError = ref('')
 watch(() => terminalHistory.cacheKey.value, () => { terminalHistoryDownloadError.value = '' })
@@ -2783,8 +2847,7 @@ watch(() => deliveryReview.operation.value.receipt, receipt => {
   hallReadRevision.value += 1
   void loadTasks({ refreshTaskId: receipt.taskId, minimumTaskVersion: receipt.taskVersion })
 })
-watch(() => [conversationTask.value?.taskVersion, selectedTask.value?.taskVersion, formalTaskRef.value?.taskVersion,
-  typedDeliberation.cards.value.map(card => `${card.outcome?.outcomeId}:${card.state}:${card.submissionProgress?.state}:${card.submissionProgress?.dispatchVersion}:${card.submissionProgress?.operationStateVersion}:${card.reviewProgress?.state}:${card.reviewProgress?.stateVersion}`).join('|')].join('\u0000'), () => { if (reviewTaskId.value) void deliveryReview.refresh() })
+
 
 const accountEntryDisabled = computed(() => isPanelSessionActive.value || voiceInteractionLocked.value)
 const hallLeaveHasMeaningfulWork = computed(() => hasMeaningfulHallLeaveWork({

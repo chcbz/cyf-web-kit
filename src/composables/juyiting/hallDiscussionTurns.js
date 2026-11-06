@@ -27,6 +27,7 @@ export const discussionTurns = ({ messages = [], projections = [], conversationI
   }
   for (const row of rows) {
     if (!agentMessage(row)) continue
+    if (row.typedDisplayUnavailable) { row.turnAwaitingType = false; continue }
     const typed = projections.find(projection => projection?.conversationId === conversationId &&
       projection?.outcome?.taskId === taskId && projection.outcome.assistantMessageId === row.localId)
     const knownKind = typed?.outcome?.kind || (row.typedOutcomeTaskId === taskId ? row.typedOutcomeKind : '')

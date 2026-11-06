@@ -1,3 +1,5 @@
+import * as historyWindowHelpers from '../src/composables/juyiting/hallHistoryWindow.js'
+import { displayFixture } from './fixtures/juyiting/interface-display-fixture.mjs'
 import { richDocumentKind } from '../src/utils/richDocumentPreview.js'
 import { projectHallTask } from '../src/composables/juyiting/hallTaskPresentation.js'
 import * as discussionTurnHelpers from '../src/composables/juyiting/hallDiscussionTurns.js'
@@ -31,7 +33,7 @@ const directory = () => ({ items: Vue.ref([]), links: Vue.ref([]), pendingWrites
   actionState: Vue.ref('idle'), writeNotice: Vue.ref(''), refresh: async () => true, load: async () => true,
   dispose: () => {}, retryWrite: () => {} })
 const createComponents = api => {
-  const deps = { richDocumentKind, RichDocumentPreview: noRender, projectHallTask, PdfDocumentPreview: { props: ['blob'], template: '<section class="pdf-preview-stub" />' }, ...discussionTurnHelpers, useHallExecutionAbandonment, ...outputCatalog, ...discussionContract, bountyDeliberationPresentation, useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults,
+  const deps = { ...historyWindowHelpers, richDocumentKind, RichDocumentPreview: noRender, projectHallTask, PdfDocumentPreview: { props: ['blob'], template: '<section class="pdf-preview-stub" />' }, ...discussionTurnHelpers, useHallExecutionAbandonment, ...outputCatalog, ...discussionContract, bountyDeliberationPresentation, useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults,
     revisionProgressPending, conversationAssetContentPath, safeMediaKind, safeAssetPreviewKind, revisionOf, createApi: () => api, saveOutputBlob: () => {},
     useHallConversationArchive: () => ({ statusFor: () => ({}), save: () => {}, check: () => {} }),
     marked: Object.assign(value => value, { setOptions: () => {} }), DOMPurify: { sanitize: value => value },
@@ -39,7 +41,7 @@ const createComponents = api => {
     BountyTextSelectionArchive: noRender, BountyTypedOutcomeCard: noRender, HallConversationHistory: { props: ['readOnly'], render: () => null },
     WorkspaceWriteRecovery: noRender, HallChatComposer: noRender, HallMaterialPicker: noRender,
     TaskSkillCapabilities: noRender, BountyDeliberationStatus: noRender, BountyExecutionTermination: noRender }
-  for (const name of ['HallMessageMedia', 'HallMessageParts', 'BountyExecutionOutputs', 'ChatPanel', 'BountyDiscussionPanel']) deps[name] = load(name, deps)
+  for (const name of ['HallMessageWindow', 'HallMessageMedia', 'HallMessageParts', 'BountyExecutionOutputs', 'ChatPanel', 'BountyDiscussionPanel']) deps[name] = load(name, deps)
   return deps
 }
 const part = (n, changes = {}) => ({ partId: `part-${n}`, kind: 'image', state: 'ready', assetId: `asset-${n}`, revision: '1', filename: `版本${n}.png`, mime: 'image/png', ...changes })
@@ -100,6 +102,47 @@ describe('scoped bounty output actions live on the actual message cards', () => 
       expect(f.wrapper.find('[aria-label="统一验收"]').exists()).to.equal(false)
       expect(f.wrapper.emitted('review-delivery')).to.equal(undefined)
       expect(f.wrapper.emitted('outputs-change').at(-1)[0]).to.have.length(2)
+    } finally { f.wrapper.unmount() }
+  })
+  it('inline gallery reuses parent request snapshots and does not fetch them again', async () => {
+    const f = setup()
+    try {
+      await settle()
+      expect(f.calls.some(call => /^\/requests\/[^/]+$/.test(call.path) || call.path?.endsWith('/typed-outcome'))).to.equal(false)
+      expect(f.calls.filter(call => call.path?.endsWith('/outputs'))).to.have.length(2)
+    } finally { f.wrapper.unmount() }
+  })
+  it('reuses a validated typed card for text acceptance without re-reading its final', async () => {
+    const raw = displayFixture(JSON.parse(readFileSync(new URL('./fixtures/juyiting/completed-message-delivery-v3.json', import.meta.url), 'utf8')))
+    const requests = { requestId: raw.requestId, requestRevision: raw.requestRevision, conversationId: raw.conversationId,
+      conversationGeneration: raw.conversationGeneration, state: 'COMPLETED', stateVersion: '1', steps: [], turns: [{
+        turnId: raw.turnId, requestId: raw.requestId, requestRevision: raw.requestRevision, conversationId: raw.conversationId,
+        conversationGeneration: raw.conversationGeneration, route: 'CHAT', state: 'PUBLISHED',
+        finalMessageId: raw.outcome.assistantMessageId, contextSnapshotId: raw.outcome.messageSource.snapshotId }] }
+    const calls = []; const components = createComponents({ get: async path => { calls.push(path); throw new Error('must reuse parent projections') } })
+    const wrapper = mount(components.BountyExecutionOutputs, { props: { inline: true, enabled: true, taskId: raw.outcome.taskId,
+      conversationId: raw.conversationId, identityKey: 'owner', catalog: [{ request: requests }],
+      typedOutcomes: [{ ...raw, purpose: 'CHAT', key: 'card-key' }] } })
+    try {
+      for (let n = 0; n < 20 && !wrapper.emitted('outputs-change')?.at(-1)?.[0]?.length; n++) {
+        await new Promise(resolve => setTimeout(resolve, 5)); await settle()
+      }
+      const result = wrapper.emitted('outputs-change').at(-1)[0]
+      expect(result).to.have.length(1); expect(result[0].messageSource).to.deep.equal(raw.outcome.messageSource)
+      expect(result[0].text).to.equal(raw.outcome.text); expect(calls).to.deep.equal([])
+    } finally { wrapper.unmount() }
+  })
+  it('current-delivery selection emits only the selected ID and paging uses separate events', async () => {
+    const f = setup()
+    try {
+      await f.wrapper.setProps({ typedEnabled: true, deliveryHasMore: true, deliveryChoices: [
+        { outcomeId: 'one', label: '成果一' }, { outcomeId: 'two', label: '成果二' }
+      ] })
+      await f.wrapper.get('select[aria-label="本轮成果"]').setValue('two')
+      expect(f.wrapper.emitted('choose-delivery')).to.deep.equal([['two']])
+      const more = f.wrapper.findAll('button').find(button => button.text() === '加载更多成果')
+      await more.trigger('click'); expect(f.wrapper.emitted('load-more-deliveries')).to.deep.equal([[]])
+      expect(f.wrapper.emitted('choose-delivery')).to.have.length(1)
     } finally { f.wrapper.unmount() }
   })
   it('merged reply retains the exact child asset preview and acceptance identity', async () => {

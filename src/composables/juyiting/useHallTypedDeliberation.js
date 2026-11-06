@@ -1,6 +1,5 @@
 import { computed, ref, unref, watch } from 'vue'
-import { mediaDeliveryChoices } from './hallMediaDeliveryBasis.js'
-import { textDeliveryProjection } from './bountyOutputCatalog.js'
+import { readDeliveryContextPage } from './hallDeliveryContext.js'
 import { actionProgressAdvances, submissionProgressAdvances, reviewProgressAdvances, discussionAccepted, discussionBody, inspectionOutcomeProjection, outcomeCardKey, typedId, typedLong, typedOutcomeProjection } from './hallTypedDeliberation.js'
 
 const unwrap = response => response
@@ -12,7 +11,7 @@ const cancelledWithoutOutput = entry => {
   const request = entry?.request
   return request?.state === 'CANCELLED' && Array.isArray(request.steps) && request.steps.length === 0 &&
     Array.isArray(request.turns) && request.turns.length > 0 && request.turns.every(turn =>
-      turn.state === 'CANCELLED' && turn.finalMessageId === null && String(turn.lastDeltaSeq) === '0')
+    turn.state === 'CANCELLED' && turn.finalMessageId === null && String(turn.lastDeltaSeq) === '0')
 }
 
 const secureKey = () => {
@@ -62,11 +61,16 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   const scope = computed(() => unref(typeof actorScopeKey === 'function' ? actorScopeKey() : actorScopeKey))
   const projections = ref([]); const selectedPending = ref(null); const error = ref(''); const busy = ref(false); const storageRevision = ref(0)
   const selectedDelivery = ref(null)
-  const deliveryChoices = computed(() => {
-    try { return mediaDeliveryChoices(projections.value, getCatalogEntries?.() || [], getContext?.() || {}) }
-    catch { return [] }
-  })
+  const deliveryItems = ref([]); const deliveryPage = ref(null)
+  const deliveryLoading = ref(false); const deliveryError = ref('')
+  const deliveryControllers = new Set()
+  let deliveryFlight = null
+  const deliveryHasMore = computed(() => deliveryPage.value?.hasMore === true)
+  // Keep an explicit later-page choice visible; submit rechecks its exact ID/digest.
+  const deliveryChoices = computed(() => selectedDelivery.value && !deliveryItems.value.some(item => item.outcomeId === selectedDelivery.value.outcomeId)
+    ? [...deliveryItems.value, selectedDelivery.value] : deliveryItems.value)
   const chooseDelivery = outcomeId => {
+    if (busy.value) return
     const choice = deliveryChoices.value.find(item => item.outcomeId === outcomeId)
     selectedDelivery.value = choice ? { ...choice, context: { ...(getContext?.() || {}) }, scope: scope.value,
       authorization: unref(typeof authorizationGeneration === 'function' ? authorizationGeneration() : authorizationGeneration) } : null
@@ -74,23 +78,52 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   const selectedDeliveryId = computed(() => {
     const selected = selectedDelivery.value
     return selected && selected.scope === scope.value && sameContext(selected.context, getContext?.() || {}) &&
-      selected.authorization === unref(typeof authorizationGeneration === 'function' ? authorizationGeneration() : authorizationGeneration) &&
-      deliveryChoices.value.some(item => item.outcomeId === selected.outcomeId && item.finalSha256 === selected.finalSha256) ? selected.outcomeId : ''
+      selected.authorization === unref(typeof authorizationGeneration === 'function' ? authorizationGeneration() : authorizationGeneration) ? selected.outcomeId : ''
   })
   const failedReads = new Set()
-  const ordinaryChatRequests = new Set()
   const emptyCancellation = entry => cancelledWithoutOutput(entry) &&
     !projections.value.some(value => value.requestId === entry.request.requestId && value.state === 'READY')
 
-  let generation = 0; let disposed = false; let queued = false; let refreshFlight = null
+  let generation = 0; let disposed = false
   const capture = () => Object.freeze({ generation, scope: scope.value,
     authorization: unref(typeof authorizationGeneration === 'function' ? authorizationGeneration() : authorizationGeneration),
     contextGeneration: getContextGeneration?.(), context: { ...(getContext?.() || {}) } })
   const current = captured => !disposed && enabled?.() && captured.generation === generation && captured.scope === scope.value &&
     captured.authorization === unref(typeof authorizationGeneration === 'function' ? authorizationGeneration() : authorizationGeneration) &&
     captured.contextGeneration === getContextGeneration?.() && sameContext(captured.context, getContext?.() || {})
+  const fetchDeliveryPage = async (captured, options = {}) => {
+    const controller = new AbortController()
+    deliveryControllers.add(controller)
+    try { return await readDeliveryContextPage({ chatApi, context: captured.context, ...options, signal: controller.signal }) }
+    finally { deliveryControllers.delete(controller) }
+  }
+  const refreshDeliveryChoices = (more = false) => {
+    if (deliveryFlight) return deliveryFlight
+    const captured = capture()
+    if (!current(captured) || (more && !deliveryHasMore.value)) return Promise.resolve(false)
+    const before = more ? { assistantMessageId: deliveryPage.value.nextBeforeMessageId, outcomeId: deliveryPage.value.nextBeforeOutcomeId } : null
+    deliveryLoading.value = true; deliveryError.value = ''
+    const flight = (async () => {
+      try {
+        const page = await fetchDeliveryPage(captured, { before })
+        if (!current(captured)) return false
+        const items = more ? [...deliveryItems.value, ...page.items] : page.items
+        deliveryItems.value = [...new Map(items.map(item => [item.outcomeId, item])).values()]
+        deliveryPage.value = page
+        return true
+      } catch (cause) {
+        if (current(captured)) deliveryError.value = cause.message || '暂时无法读取当前成果。'
+        return false
+      } finally {
+        if (deliveryFlight === flight) { deliveryFlight = null; deliveryLoading.value = false }
+      }
+    })()
+    deliveryFlight = flight
+    return flight
+  }
+  const loadMoreDeliveryChoices = () => refreshDeliveryChoices(true)
   const path = (context, requestId = '', purpose = 'CHAT') => `/conversations/${encodeURIComponent(context.conversationId)}/requests/${encodeURIComponent(requestId)}/${purpose === 'INSPECT' ? 'inspection-outcome' : 'typed-outcome'}`
-  const sorted = values => [...values].sort((a, b) => a.requestId.localeCompare(b.requestId))
+  const sorted = values => [...values].sort((a, b) => a.requestId.localeCompare(b.requestId) || a.turnId.localeCompare(b.turnId))
   const compareLong = (one, two) => one.length - two.length || (one < two ? -1 : one > two ? 1 : 0)
   const sameFinalBinding = (one, two) => one?.requestId === two?.requestId && one?.turnId === two?.turnId &&
     one?.outcome?.outcomeId === two?.outcome?.outcomeId && one?.outcome?.finalSha256 === two?.outcome?.finalSha256 &&
@@ -104,7 +137,7 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
   }
   const apply = (projection, captured) => {
     if (!current(captured)) return false
-    const previous = projections.value.find(item => item.requestId === projection.requestId)
+    const previous = projections.value.find(item => item.requestId === projection.requestId && item.turnId === projection.turnId)
     // A delayed read cannot downgrade an authoritative final or create a false read failure.
     if (previous && previous.state !== 'PENDING' && projection.state === 'PENDING' &&
       previous.turnId === projection.turnId && previous.requestRevision === projection.requestRevision) return true
@@ -122,11 +155,27 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       if (version < 0 || (previousClarification.state === 'ANSWERED' && clarification.state === 'OPEN')) return false
       if (version === 0 && JSON.stringify(previous.outcome) !== JSON.stringify(projection.outcome)) return false
     }
-    const next = projections.value.filter(item => item.requestId !== projection.requestId).concat(projection)
+    const next = projections.value.filter(item => item.requestId !== projection.requestId || item.turnId !== projection.turnId).concat(projection)
     projections.value = sorted(next)
     const selected = selectedPending.value
     if (clarification && selected && selected.pendingQuestionId === clarification.pendingQuestionId &&
       (clarification.state === 'ANSWERED' || selected.expectedPendingQuestionStateVersion !== clarification.stateVersion)) selectedPending.value = null
+    return true
+  }
+  const adoptPage = values => {
+    const captured = capture()
+    if (!current(captured) || !Array.isArray(values)) return false
+    for (const raw of values) {
+      const context = { conversationId: captured.context.conversationId, conversationGeneration: captured.context.conversationGeneration,
+        taskId: captured.context.taskId, requestId: raw.requestId }
+      const projection = raw.route === 'INSPECT' ? inspectionOutcomeProjection(raw, context) : typedOutcomeProjection(raw, context)
+      if (!projection || !apply(projection, captured)) { error.value = '答复展示数据不匹配，请重试当前页。'; return false }
+      failedReads.delete(projection.requestId)
+    }
+    const pageKeys = new Set(values.map(value => `${value.requestId}\u0000${value.turnId}`))
+    projections.value = projections.value.filter(value => pageKeys.has(`${value.requestId}\u0000${value.turnId}`) ||
+      value.outcome?.clarification?.pendingQuestionId === selectedPending.value?.pendingQuestionId && selectedPending.value != null)
+    error.value = ''
     return true
   }
   const readOne = async (requestId, captured = capture(), requestedPurpose = '', visited = new Set()) => {
@@ -136,8 +185,8 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       return null
     }
     visited.add(requestId)
-    const record = readRecords(storage, captured.scope, captured.context).find(item => item.receipt?.requestId === requestId)
-    const purpose = requestedPurpose || recordPurpose(record)
+    const purpose = requestedPurpose || recordPurpose(readRecords(storage, captured.scope, captured.context)
+      .find(item => item.receipt?.requestId === requestId))
     try {
       const raw = unwrap(await chatApi.get(path(captured.context, requestId, purpose), {}, { autoLoading: false, needAuth: true }))
       if (!current(captured)) return null
@@ -150,55 +199,17 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
         return null
       }
       failedReads.delete(requestId)
-      ordinaryChatRequests.delete(requestId)
-      const child = projection.reviewProgress?.state === 'COMMITTED' ? projection.reviewProgress.childRequestId : null
-      if (child && child !== requestId) await readOne(child, captured, 'CHAT', visited)
       return projection
     } catch (cause) {
       // 404 means this catalog request is ordinary durable CHAT; it is not a typed UI failure.
       if (current(captured)) {
         if ((cause?.status ?? cause?.response?.status) === 404) {
           failedReads.delete(requestId)
-          if (purpose === 'CHAT' && !projections.value.some(item => item.requestId === requestId) && !record?.receipt) ordinaryChatRequests.add(requestId)
         }
         else { failedReads.add(requestId); error.value = '暂时无法读取答复，请刷新状态。' }
       }
       return null
     }
-  }
-  const refresh = () => {
-    // Read hints and send preparation join one exact in-flight projection read.
-    // Joining is not an unsuccessful read and must not reject every prepared send.
-    if (refreshFlight) { queued = true; return refreshFlight }
-    const captured = capture()
-    if (!current(captured) || !typedId(captured.context.conversationId) || !typedId(captured.context.taskId) ||
-      !typedLong(captured.context.assignmentRevision, { allowZero: true })) return Promise.resolve(false)
-    error.value = ''
-    const read = async () => {
-      const visited = new Set()
-      const catalogEntries = getCatalogEntries?.() || []
-      const catalogInspectionIds = catalogEntries.filter(entry => entry?.request?.turns?.some(turn => turn?.route === 'INSPECT'))
-        .map(entry => entry.request.requestId).filter(typedId)
-      const catalogChatIds = catalogEntries.filter(entry => !entry?.request?.turns?.some(turn => turn?.route === 'INSPECT') &&
-        !(entry?.request?.steps?.some(step => step.kind === 'EXECUTE') && !entry?.request?.turns?.some(turn => turn.route === 'CHAT')))
-        .map(entry => entry?.request?.requestId).filter(typedId)
-      const storedRecords = readRecords(storage, captured.scope, captured.context).filter(record => sameContext(record.context, captured.context))
-      const storedChatIds = storedRecords.filter(record => recordPurpose(record) === 'CHAT')
-        .map(record => record.receipt?.requestId).filter(typedId)
-      const storedInspectionIds = storedRecords.filter(record => recordPurpose(record) === 'INSPECT')
-        .map(record => record.receipt?.requestId).filter(typedId)
-      const inspectionRequestIds = [...new Set([...catalogInspectionIds, ...storedInspectionIds])]
-      await Promise.all([...new Set([...catalogChatIds, ...storedChatIds])].map(requestId => readOne(requestId, captured, 'CHAT', visited))
-        .concat(inspectionRequestIds.map(requestId => readOne(requestId, captured, 'INSPECT', visited))))
-      return current(captured) && failedReads.size === 0
-    }
-    const flight = read().finally(() => {
-      if (refreshFlight !== flight) return
-      refreshFlight = null
-      if (queued) { queued = false; void refresh() }
-    })
-    refreshFlight = flight
-    return flight
   }
   const choosePending = projection => {
     const clarification = projection?.outcome?.kind === 'CLARIFY' ? projection.outcome.clarification : null
@@ -208,8 +219,8 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       expectedPendingQuestionStateVersion: clarification.stateVersion, question: clarification.question, purpose: projection.purpose || 'CHAT' })
     return true
   }
-  // A single explicit manifest/edit chain supplies context, not delivery intent or tool authority.
-  // Independent roots, pending projections and late assets remain unresolved; never pick latest MIME.
+  // Server-selected heads supply context, not delivery intent or tool authority.
+  // Never rebuild a history graph here or pick the newest item by MIME.
   const submit = async ({ content, sourceSelectors = [], materialScope = 'TASK_DEFAULT', inspection = false } = {}) => {
     if (inspection) { error.value = '资料在原议事回合使用，请直接发送需求。'; return false }
     if (busy.value || !enabled?.()) return false
@@ -226,45 +237,44 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       if (current(captured)) error.value = '请选择要添加的资料。'
       return false
     }
-    let deliveryParent = null
-    const catalog = clone(getCatalogEntries?.() || [])
-    const unresolved = catalog.some(entry => !emptyCancellation(entry) && !ordinaryChatRequests.has(entry?.request?.requestId) && !entry?.request?.turns?.some(turn => turn.route === 'INSPECT') &&
-      !(entry?.request?.steps?.some(step => step.kind === 'EXECUTE') && !entry?.request?.turns?.some(turn => turn.route === 'CHAT')) &&
-      !projections.value.some(value => value.requestId === entry?.request?.requestId && ['READY', 'FAILED', 'CANCELLED'].includes(value.state)))
-    if (!pending && purpose === 'CHAT') {
-      try {
-        const choices = mediaDeliveryChoices(projections.value, catalog, context)
-        if (choices.length) {
-          if (unresolved || failedReads.size) { error.value = '成果上下文尚未完整读取，请刷新后重试。'; return false }
-          deliveryParent = choices.length === 1 ? choices[0] : choices.find(item => item.outcomeId === selectedDeliveryId.value)
-          if (!deliveryParent) { error.value = '存在多份独立成果，请先选择本轮成果。'; return false }
-        }
-      } catch (cause) { error.value = cause.message; return false }
-    }
-    if (!deliveryParent && !pending && purpose === 'CHAT' && !unresolved && !catalog.some(entry => entry?.request?.steps?.some(step => step.kind === 'EXECUTE'))) {
-      const finals = projections.value.filter(value => value.schemaVersion === 6 && value.state === 'READY' && value.route === 'CHAT' &&
-        value.outcome?.deliverable === true && value.outcome.assignmentRevision === context.assignmentRevision)
-      try {
-        deliveryParent = textDeliveryProjection(finals.map(value => ({ outcomeId: value.outcome.outcomeId,
-          messageSource: value.outcome.messageSource, deliveryRelation: value.outcome.deliveryRelation }))).basis
-      } catch { /* Multiple independent roots or branches are not a parent choice. */ }
-    }
-    const body = discussionBody(pending ? { intent: 'CLARIFICATION_REPLY', taskId: context.taskId, assignmentRevision: context.assignmentRevision,
+    let body = discussionBody(pending ? { intent: 'CLARIFICATION_REPLY', taskId: context.taskId, assignmentRevision: context.assignmentRevision,
       content, parentOutcomeId: pending.parentOutcomeId, expectedParentStateVersion: pending.expectedParentStateVersion,
       pendingQuestionId: pending.pendingQuestionId, expectedPendingQuestionStateVersion: pending.expectedPendingQuestionStateVersion, sourceSelectors, materialScope }
       : { intent: 'DISCUSSION', taskId: context.taskId, assignmentRevision: context.assignmentRevision, content, sourceSelectors, materialScope,
-        parentOutcomeId: deliveryParent?.outcomeId ?? null, expectedParentStateVersion: deliveryParent ? '0' : null })
-    // A definitive startup refusal is not UNKNOWN. Reuse the same key on an
-    // explicit retry of the same body, including concurrent/late receipt races.
-    const records = readRecords(storage, captured.scope, context)
-    const refused = records.find(item => item.status === 'NOT_READY' && sameContext(item.context, context) && JSON.stringify(item.body) === JSON.stringify(body))
-    const key = refused?.key || secureKey()
-    if (!body || !key) { if (current(captured)) error.value = '暂时无法发送，请检查内容和资料后重试。'; return false }
-    const record = { key, purpose, body: clone(body), context: clone(context), status: 'POSTING' }
-    if (!persistRecords(captured, [...records.filter(item => item.key !== key), record])) { if (current(captured)) error.value = '无法保存发送状态，请稍后重试。'; return false }
+        parentOutcomeId: null, expectedParentStateVersion: null })
+    if (!body) { error.value = '暂时无法发送，请检查内容和资料后重试。'; return false }
     busy.value = true; error.value = ''
-    try { return await postOriginal(record, captured) }
-    finally { if (current(captured)) busy.value = false }
+    try {
+      let deliveryParent = null
+      if (!pending) {
+        const selected = selectedDeliveryId.value ? selectedDelivery.value : null
+        const page = await fetchDeliveryPage(captured, { outcomeId: selected?.outcomeId })
+        if (!current(captured) || selectedPending.value !== pending) return false
+        if (selected) {
+          deliveryParent = page.items.find(item => item.outcomeId === selected.outcomeId && item.finalSha256 === selected.finalSha256)
+          if (!deliveryParent) { error.value = '所选成果已变化，请重新选择本轮成果。'; return false }
+        } else {
+          deliveryItems.value = page.items; deliveryPage.value = page
+          if (!page.pendingExecution) {
+            if (page.items.length > 1 || page.hasMore) { error.value = '存在多份独立成果，请先选择本轮成果。'; return false }
+            deliveryParent = page.items[0] || null
+          }
+        }
+      }
+      if (!pending && deliveryParent) body = Object.freeze({ ...body, parentOutcomeId: deliveryParent.outcomeId, expectedParentStateVersion: '0' })
+      // A definitive startup refusal is not UNKNOWN. Reuse the same key on an
+      // explicit retry of the same body, including concurrent/late receipt races.
+      const records = readRecords(storage, captured.scope, context)
+      const refused = records.find(item => item.status === 'NOT_READY' && sameContext(item.context, context) && JSON.stringify(item.body) === JSON.stringify(body))
+      const key = refused?.key || secureKey()
+      if (!body || !key) { if (current(captured)) error.value = '暂时无法发送，请检查内容和资料后重试。'; return false }
+      const record = { key, purpose, body: clone(body), context: clone(context), status: 'POSTING' }
+      if (!persistRecords(captured, [...records.filter(item => item.key !== key), record])) { if (current(captured)) error.value = '无法保存发送状态，请稍后重试。'; return false }
+      return await postOriginal(record, captured)
+    } catch (cause) {
+      if (current(captured)) error.value = cause.message || '暂时无法读取当前成果，未发送消息。'
+      return false
+    } finally { if (current(captured)) busy.value = false }
   }
   const postOriginal = async (record, captured) => {
     const context = captured.context
@@ -316,10 +326,13 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
     return readRecords(storage, scope.value, getContext?.() || {}).some(record => recordPurpose(record) === 'INSPECT' && record.status === 'ACCEPTED' && !ready.has(record.receipt?.requestId))
       ? '等待查阅资料…' : ''
   })
-  const invalidate = () => { generation++; failedReads.clear(); ordinaryChatRequests.clear(); busy.value = false; projections.value = []; selectedPending.value = null; selectedDelivery.value = null; error.value = '' }
+  const invalidate = () => {
+    for (const controller of deliveryControllers) controller.abort()
+    deliveryControllers.clear(); deliveryFlight = null; deliveryLoading.value = false
+    deliveryItems.value = []; deliveryPage.value = null; deliveryError.value = ''
+    generation++; failedReads.clear(); busy.value = false; projections.value = []; selectedPending.value = null; selectedDelivery.value = null; error.value = '' }
   const stopScope = watch(scope, invalidate, { flush: 'sync' })
-  const stopCatalog = typeof getCatalogEntries === 'function' ? watch(getCatalogEntries, () => { void refresh() }, { deep: true }) : () => {}
   const recoveryAvailable = computed(() => { storageRevision.value; return readRecords(storage, scope.value, getContext?.() || {}).some(record => record.status === 'UNKNOWN') })
-  return { deliveryChoices, selectedDeliveryId, chooseDelivery, projections, cards, selectedPending, error, busy, recoveryAvailable, inspectionStatus, refresh, readOne, submit, recover, resumeUnknown, choosePending, confirmProposal,
-    invalidate, dispose: () => { disposed = true; invalidate(); stopScope(); stopCatalog() } }
+  return { adoptPage, deliveryHasMore, deliveryLoading, deliveryError, refreshDeliveryChoices, loadMoreDeliveryChoices, deliveryChoices, selectedDeliveryId, chooseDelivery, projections, cards, selectedPending, error, busy, recoveryAvailable, inspectionStatus, readOne, submit, recover, resumeUnknown, choosePending, confirmProposal,
+    invalidate, dispose: () => { disposed = true; invalidate(); stopScope() } }
 }

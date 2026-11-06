@@ -1,4 +1,6 @@
 import { useHallCampaignGrant } from '../src/composables/juyiting/useHallCampaignGrant.js'
+import { useHallTerminalTextHistory } from '../src/composables/juyiting/useHallTerminalTextHistory.js'
+import * as historyWindowHelpers from '../src/composables/juyiting/hallHistoryWindow.js'
 import * as recommendationHelpers from '../src/composables/juyiting/hallAssigneeRecommendation.js'
 import { useHallAgentAbilitiesEditor } from '../src/composables/juyiting/useHallAgentAbilitiesEditor.js'
 import * as discussionTurnHelpers from '../src/composables/juyiting/hallDiscussionTurns.js'
@@ -31,6 +33,7 @@ let Vue
 let BottomDock
 let BountyPanel
 let ChatPanel
+let HallMessageWindow
 let CommandPanel
 let CoordinationPanel
 let HallChatComposer
@@ -140,6 +143,8 @@ const loadSfc = (relativePath, runtimeAgentApi = { post: async () => { throw new
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]\.\.\/\.\.\/composables\/juyiting\/useHallOrdinaryCancellation\.js['"];?\s*$/gm, (_line, names) => `var { ${names} } = ordinaryCancellation`)
     .replace(/^import\s+\{\s*agentApi\s*\}\s+from\s+['"]\.\.\/\.\.\/composables\/useHttp\.js['"];?\s*$/gm, 'var agentApi = runtimeAgentApi')
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
+    .replace(/^import\s+HallMessageWindow\s+from\s+['"]\.\/HallMessageWindow\.vue['"];?\s*$/gm, 'var HallMessageWindow = arguments[12]')
+    .replace(/^import\s+\{([^}]+)\}\s+from\s+['"][^'"]*hallHistoryWindow\.js['"];?\s*$/gm, (_, names) => `var { ${names} } = arguments[13]`)
     .replace(/^import\s+AgentToken\s+from\s+['"]@\/components\/juyiting\/AgentToken\.vue['"];?\s*$/gm, 'var AgentToken = { template: \'<button class="agent-token" type="button" @click="$emit(\\\'select-agent\\\', agent)"></button>\', props: [\'agent\'] }')
     .replace(/^import\s+\{\s*juyitingGame\s*\}\s+from\s+['"]@\/game\/index\.js['"];?\s*$/gm, 'var juyitingGame = arguments[2]')
     .replace(/^import\s+\{\s*classifyViewportResize\s*\}\s+from\s+['"]@\/game\/camera\/resizePolicy\.js['"];?\s*$/gm, 'var classifyViewportResize = arguments[3]')
@@ -156,8 +161,8 @@ const loadSfc = (relativePath, runtimeAgentApi = { post: async () => { throw new
     .replace(/^import\s+HallMaterialPicker\s+from\s+['"]\.\/HallMaterialPicker\.vue['"];?\s*$/gm, `var HallMaterialPicker = { data: () => ({ opened: false }), methods: { open() { this.opened = true } }, template: '<section class="hall-material-picker-stub" :data-open="opened" />', props: ['modelValue', 'identityScope', 'identityEpoch', 'disabled'], emits: ['update:modelValue'] }`)
     .replace(/^import\s+HallMaterialThumbnail\s+from\s+['"]\.\/HallMaterialThumbnail\.vue['"];?\s*$/gm, `var HallMaterialThumbnail = { template: '<span class="material-thumbnail-stub" />' }`)
     .replace(/^import\s+HostingRentPanel\s+from\s+['"].\/HostingRentPanel\.vue['"];?\s*$/gm, 'var HostingRentPanel = { template: \'<section class="hosting-rent-stub" />\', props: [\'persona\', \'resolvePersona\'] }')
-    // Dedicated archive-maintenance tests cover this child; keep the hall fixture scoped to its parent.
-    .replace(/^import\s+ArchiveMaintenance\s+from\s+['"].\/archive\/ArchiveMaintenance\.vue['"];?\s*$/gm, 'var ArchiveMaintenance = Vue.defineComponent({render: () => null})')
+    // Dedicated archive-positions tests cover this child; keep the hall fixture scoped to its parent.
+    .replace(/^import\s+ArchivePositions\s+from\s+['"].\/archive\/ArchivePositions\.vue['"];?\s*$/gm, 'var ArchivePositions = Vue.defineComponent({render: () => null})')
     .replace(/^import\s+ArchiveReader\s+from\s+['"].\/archive\/ArchiveReader\.vue['"];?\s*$/gm, 'var ArchiveReader = { template: \'<section class="archive-reader-stub">典籍阅读</section>\' }')
     .replace(/^import\s+(\w+)\s+from\s+['"]@\/assets\/juyiting\/[^'"]+['"];?\s*$/gm, 'var $1 = \'/mock-juyiting-asset.png\'')
     .replace(/^import\s+\{\s*hallPhysicalScene,\s*hallRoomPropVisuals\s*\}\s+from\s+['"]@\/constants\/juyiting['"];?\s*$/gm, 'var hallRoomPropVisuals = []; var hallPhysicalScene = { interactiveZones: [{ key: \'main\', panel: \'chat\', title: \'忠义堂公议\', subtitle: \'厅前公议 / 众好汉\', x: 50, y: 36, w: 12, h: 7, object: \'plaque\', hitShape: \'plaque\' }, { key: \'agents\', panel: \'agents\', title: \'点将册\', subtitle: \'点将调遣\', x: 21, y: 32, w: 13, h: 7, object: \'ledger\' }, { key: \'tasks\', panel: \'tasks\', title: \'悬赏榜\', subtitle: \'榜文\', x: 76, y: 47, w: 19, h: 18, object: \'notice-rack\' }, { key: \'catalog\', panel: \'catalog\', title: \'招贤令\', subtitle: \'遍请豪杰\', x: 14, y: 68, w: 12, h: 7, object: \'banner-flag\' }, { key: \'library\', panel: \'library\', title: \'案卷阁\', subtitle: \'查卷问典\', x: 82, y: 76, w: 22, h: 18, object: \'scroll-shelf\' }, { key: \'back\', panel: null, title: \'整装处\', subtitle: \'兵甲行囊\', x: 67, y: 26, w: 12, h: 8, object: \'rear-gear\' }] }')
@@ -185,7 +190,7 @@ const loadSfc = (relativePath, runtimeAgentApi = { post: async () => { throw new
   const unresolvedImports = scriptBody.match(/^import\s.+$/gm)
   if (unresolvedImports?.length) throw new SyntaxError(`Unsupported SFC imports in ${relativePath}: ${unresolvedImports.join(', ')}`)
 
-  return new Function('Vue', 'HallChatComposer', 'juyitingGame', 'classifyViewportResize', 'wenAmount', 'chatPanelDependencies', 'ordinaryCancellation', 'runtimeAgentApi', scriptBody)(Vue, HallChatComposer, hallGameMock, classifyViewportResizeMock, wenAmount, chatPanelDependencies, ordinaryCancellation, runtimeAgentApi, taskPresentation, assigneeCandidates, discussionTurnHelpers, recommendationHelpers)
+  return new Function('Vue', 'HallChatComposer', 'juyitingGame', 'classifyViewportResize', 'wenAmount', 'chatPanelDependencies', 'ordinaryCancellation', 'runtimeAgentApi', scriptBody)(Vue, HallChatComposer, hallGameMock, classifyViewportResizeMock, wenAmount, chatPanelDependencies, ordinaryCancellation, runtimeAgentApi, taskPresentation, assigneeCandidates, discussionTurnHelpers, recommendationHelpers, HallMessageWindow, historyWindowHelpers)
 }
 
 const stubs = {
@@ -307,6 +312,7 @@ before(async () => {
   BottomDock = loadSfc('../src/components/juyiting/BottomDock.vue')
   BountyPanel = loadSfc('../src/components/juyiting/BountyPanel.vue')
   HallChatComposer = loadSfc('../src/components/juyiting/HallChatComposer.vue')
+  HallMessageWindow = loadSfc('../src/components/juyiting/HallMessageWindow.vue')
   ChatPanel = loadSfc('../src/components/juyiting/ChatPanel.vue')
   CommandPanel = loadSfc('../src/components/juyiting/CommandPanel.vue')
   CoordinationPanel = loadSfc('../src/components/juyiting/CoordinationPanel.vue')
@@ -2096,6 +2102,35 @@ describe('JuyiHall component behavior', () => {
     expect(wrapper.emitted('discuss-task')).to.equal(undefined)
   })
 
+  it('loads one older message page on demand without a competing panel scroll correction', async () => {
+    const wrapper = mount(ChatPanel, { global: { stubs }, props: {
+      agents: [], draft: '', conversationId: '100', messagePageHasMore: true,
+      mentionLabel: agent => agent.name, senderText: message => message.sender,
+      messages: [{ localId: '3', sender: 'USER', content: 'latest' }]
+    } })
+    const box = wrapper.get('.hall-messages').element
+    let height = 400
+    Object.defineProperty(box, 'scrollHeight', { configurable: true, get: () => height })
+    box.scrollTop = 25
+    const button = wrapper.get('.message-history-page button')
+    await button.trigger('click')
+    expect(wrapper.emitted('load-older-messages')).to.have.length(1)
+    await wrapper.setProps({ messagePageLoading: true })
+    expect(button.attributes('disabled')).not.to.equal(undefined)
+    height = 700
+    await wrapper.setProps({ messages: [{ localId: '1', sender: 'USER', content: 'older' }, ...wrapper.props('messages')], messagePageLoading: false })
+    await Vue.nextTick()
+    // Real variable-height anchoring is owned by HallMessageWindow and exercised in
+    // juyiting-history-window-browser.mjs; this panel must not apply a second correction.
+    expect(box.scrollTop).to.equal(25)
+    expect(wrapper.emitted('send-message')).to.equal(undefined)
+    await wrapper.setProps({ messagePageError: '读取失败' })
+    expect(button.text()).to.equal('重试加载更早消息')
+    expect(wrapper.get('[role="alert"]').text()).to.equal('读取失败')
+    await wrapper.setProps({ messagePageHasMore: false, messagePageError: '' })
+    expect(wrapper.find('.message-history-page').exists()).to.equal(false)
+  })
+
   it('shows exact attachment cards for blank task messages without adding user prose or leaking into private chat', async () => {
     const wrapper = mount(ChatPanel, { global: { stubs }, props: {
       agents: [], draft: '', discussionVariant: 'bounty', selectedTask: { id: 'task-1' },
@@ -2562,7 +2597,7 @@ describe('JuyiHall component behavior', () => {
     })
     const readerTab = wrapper.get('#library-reader-tab')
     const searchTab = wrapper.get('#library-search-tab')
-    const maintenanceTab = wrapper.get('#library-maintenance-tab')
+    const positionsTab = wrapper.get('#library-positions-tab')
 
     expect(readerTab.attributes('tabindex')).to.equal('0')
     expect(searchTab.attributes('tabindex')).to.equal('-1')
@@ -2572,9 +2607,9 @@ describe('JuyiHall component behavior', () => {
     await searchTab.trigger('keydown', { key: 'Home' })
     expect(document.activeElement).to.equal(readerTab.element)
     await readerTab.trigger('keydown', { key: 'End' })
-    expect(document.activeElement).to.equal(maintenanceTab.element)
-    expect(maintenanceTab.attributes('tabindex')).to.equal('0')
-    await maintenanceTab.trigger('keydown', { key: 'ArrowLeft' })
+    expect(document.activeElement).to.equal(positionsTab.element)
+    expect(positionsTab.attributes('tabindex')).to.equal('0')
+    await positionsTab.trigger('keydown', { key: 'ArrowLeft' })
     expect(document.activeElement).to.equal(searchTab.element)
     await searchTab.trigger('keydown', { key: 'ArrowLeft' })
     expect(document.activeElement).to.equal(readerTab.element)
@@ -2873,7 +2908,7 @@ const loadActualJuyiHall = (mocks) => {
     .replace(/import\.meta\.env/g, 'mocks.env')
     .replace(/^import\s+WorkspaceWriteRecovery\s+from\s+['"][^'"]+['"];?\s*$/gm, "var WorkspaceWriteRecovery = { template: '<section />', props: ['pending'], emits: ['retry'] }")
   .replace('export default', 'return')
-  const component = new Function('Vue', 'mocks', body)(Vue, { useHallSelectedOutputReview, selectionKey, useHallDeliveryReview, useHallAgentProfileCapabilities, useHallAgentAbilitiesEditor, useExternalServicePolicy, useHallCampaignGrant, economyApi: { create: async () => ({ grants: [] }) }, ...assigneeCandidates, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
+  const component = new Function('Vue', 'mocks', body)(Vue, { useHallTerminalTextHistory, HallMessageWindow, useHallSelectedOutputReview, selectionKey, useHallDeliveryReview, useHallAgentProfileCapabilities, useHallAgentAbilitiesEditor, useExternalServicePolicy, useHallCampaignGrant, economyApi: { create: async () => ({ grants: [] }) }, ...assigneeCandidates, useHallSkillCapabilities, currentBountyAssignmentRevision, ...mocks })
   const renderBody = template.code
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace('export function render', 'return function render')
@@ -2940,15 +2975,15 @@ const createActualHallMocks = ({ mode, mounts, counters = {}, taskActions = null
     useHallScene: () => ({ markAgentSpeaking: noop, markDiscussionStarted: noop, markLibraryCitation: noop, markLibrarySearching: noop, markRecommendedAgents: noop, markTaskArchived: noop, markTaskAssigned: noop, markTaskAutoAssigned: noop, markTaskCreated: task => { counters.markedTasks ||= []; counters.markedTasks.push(task) }, resetSceneFeedback: noop, sceneAgents: value, sceneAgentStyle: () => ({}), sceneHotspots: value, syncAfterPersonaChanged: noop }),
     useHallTaskActions: () => taskActions || ({ archiveTask: asyncNoop, autoAssignTask: asyncNoop, assignTask: async () => true, cancelFunding: async () => false, createTask: asyncNoop, fundedClaimState: Vue.ref(null), fundedCreateRecovery: Vue.ref(null), loadSettlement: async () => null, refreshFundedClaim: asyncNoop, resumeFundedCreate: asyncNoop }),
     useHallDrafts: () => ({ unresolvedIntent: Vue.ref(null) }),
-    useHallConversation: () => { counters.owners.conversation += 1; return ({ activeRequest: Vue.ref(null), activeTurns: Vue.ref([]), adoptBountyBootstrap: async () => false, adoptTypedDiscussionReceipt: async () => false, capabilityState: scalar, cancelDeliberation: asyncNoop, cancelHallReplyTurn: noop, chatConnectionStatus: scalar, conversationHistory: value, conversationHistoryDeletingId: scalar, conversationHistoryError: scalar, conversationHistoryHasMore: Vue.ref(false), conversationHistoryLoading: Vue.ref(false), conversationId: counters.refs.conversationId, conversationLoadError: scalar, deleteHallConversation: asyncNoop, draft: counters.refs.draft, draftRevision: Vue.ref(0), durableCancelTarget: Vue.ref(null), eventStreamRecovering: Vue.ref(false), insertAgentMention: noop, isAwaitingReply: Vue.ref(false), isConversationBusy: Vue.ref(false), isSubmitting: Vue.ref(false), isStreaming: Vue.ref(false), loadHallConversationHistory: asyncNoop, loadHallMessages: async () => { counters.loads.messages += 1 }, loadMoreHallConversationHistory: asyncNoop, mentionAgent: noop, messages: counters.refs.messages, newHallConversation: noop, pendingAgentName: scalar, replyEventSequence: Vue.ref(0), retryHallConversation: asyncNoop, refreshHallProjections: asyncNoop, selectHallConversation: asyncNoop, sendHallMessage: asyncNoop, senderText: scalar, setDraft: value => { counters.refs.draft.value = value }, disposeHallConversation: noop, stopHallEventStream: noop, stopHallReplyPolling: noop, stopHallReplyStreaming: noop }) },
+    useHallConversation: () => { counters.owners.conversation += 1; return ({ messageWindows: Vue.ref([]), messageWindowLoading: Vue.ref(new Set()), messageWindowErrors: Vue.ref({}), messageRequestPage: Vue.ref(null), messageTypedOutcomes: Vue.ref([]), messagePageHasMore: Vue.ref(false), messagePageLoading: Vue.ref(false), messagePageError: Vue.ref(''), retainMessageWindows: noop, loadMessageWindow: asyncNoop, refreshHallMessagePage: asyncNoop, activeRequest: Vue.ref(null), activeTurns: Vue.ref([]), adoptBountyBootstrap: async () => false, adoptTypedDiscussionReceipt: async () => false, capabilityState: scalar, cancelDeliberation: asyncNoop, cancelHallReplyTurn: noop, chatConnectionStatus: scalar, conversationHistory: value, conversationHistoryDeletingId: scalar, conversationHistoryError: scalar, conversationHistoryHasMore: Vue.ref(false), conversationHistoryLoading: Vue.ref(false), conversationId: counters.refs.conversationId, conversationLoadError: scalar, deleteHallConversation: asyncNoop, draft: counters.refs.draft, draftRevision: Vue.ref(0), durableCancelTarget: Vue.ref(null), eventStreamRecovering: Vue.ref(false), insertAgentMention: noop, isAwaitingReply: Vue.ref(false), isConversationBusy: Vue.ref(false), isSubmitting: Vue.ref(false), isStreaming: Vue.ref(false), loadHallConversationHistory: asyncNoop, loadHallMessages: async () => { counters.loads.messages += 1 }, loadMoreHallConversationHistory: asyncNoop, mentionAgent: noop, messages: counters.refs.messages, newHallConversation: noop, pendingAgentName: scalar, replyEventSequence: Vue.ref(0), retryHallConversation: asyncNoop, refreshHallProjections: asyncNoop, selectHallConversation: asyncNoop, sendHallMessage: asyncNoop, senderText: scalar, setDraft: value => { counters.refs.draft.value = value }, disposeHallConversation: noop, stopHallEventStream: noop, stopHallReplyPolling: noop, stopHallReplyStreaming: noop }) },
     useHallVoiceConversation: () => ({ supported: false, voiceInteractionLocked: navigation?.voiceInteractionLocked ?? false, voiceTurnActive: navigation?.voiceTurnActive ?? false, cancel: noop, dispose: noop, applyTranscript: noop }),
     createHallVoiceReplyCorrelation: () => ({ start: () => true, observe: noop, resolveConversation: () => true, close: noop }),
     useHallLibrary: () => ({ citeLibraryItem: noop, libraryErrorMessage: scalar, libraryHasSearched: Vue.ref(false), libraryKeyword: scalar, libraryLoading: Vue.ref(false), libraryResults: value, librarySourceType: scalar, searchLibrary: asyncNoop }),
     useHallRequirementCreate: () => ({ state: Vue.ref({ error: '' }), busy: Vue.ref(false), create: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, readOriginal: () => ({ state: 'ABSENT' }), dispose: noop }),
     useHallBountyAssignmentContext: () => ({ projection: Vue.ref(null), error: Vue.ref(''), refresh: async () => false, dispose: noop }),
-    useHallBountyRequestCatalog: () => ({ entries: Vue.ref([]), hint: noop, reset: noop, dispose: noop }),
+    useHallBountyRequestCatalog: () => ({ entries: Vue.ref([]), adoptPage: () => true, hint: noop, reset: noop, dispose: noop }),
     useHallBountyFollowup: () => ({ state: Vue.ref({}), busy: Vue.ref(false), prepareGenerate: async () => false, prepareEdit: async () => false, confirm: async () => false, checkOriginal: async () => false, invalidate: noop, dispose: noop }),
-    useHallTypedDeliberation: () => ({ deliveryChoices: Vue.ref([]), selectedDeliveryId: Vue.ref(''), chooseDelivery: noop, cards: Vue.ref([]), selectedPending: Vue.ref(null), recoveryAvailable: Vue.ref(false), inspectionStatus: Vue.ref(''), refresh: asyncNoop, readOne: asyncNoop, invalidate: noop, dispose: noop }), typedLong: () => '',
+    useHallTypedDeliberation: () => ({ deliveryHasMore: Vue.ref(false), deliveryLoading: Vue.ref(false), deliveryError: Vue.ref(''), loadMoreDeliveries: asyncNoop, adoptPage: () => true, deliveryChoices: Vue.ref([]), selectedDeliveryId: Vue.ref(''), chooseDelivery: noop, cards: Vue.ref([]), selectedPending: Vue.ref(null), recoveryAvailable: Vue.ref(false), inspectionStatus: Vue.ref(''), refresh: asyncNoop, readOne: asyncNoop, invalidate: noop, dispose: noop }), typedLong: () => '',
     createControlledImageCapabilityObservationFence: () => ({ capture: () => ({ isCurrent: () => true }), invalidate: noop }), capabilityOffersControlledImageConsent: () => false, loadControlledImageBountyCapability: async () => null,
     useHallTaskLinkedReferenceInputs: () => ({ resolve: async () => ({ state: 'STALE', inputRefs: [] }), invalidate: noop, dispose: noop }), createPointAndStartIntentStore: () => ({ read: () => ({ state: 'ABSENT' }) }), pointAndStartRecoveryLane: () => 'NONE', providerConsentAcknowledgement: {},
     createNativeCapabilityObservationFence: () => ({ capture: () => ({ identityScope: '', authorizationGeneration: 0, isCurrent: () => true }), invalidate: noop }), loadNativeBountyCapability: async () => null, capabilityAllowsNewStart: () => false, capabilityAllowsOriginalReplay: () => false, pointAndStartIntentReadLane: () => 'ABSENT',

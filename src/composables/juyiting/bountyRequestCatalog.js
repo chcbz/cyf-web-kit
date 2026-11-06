@@ -33,7 +33,9 @@ export const catalogRequest = (value, scope) => keys(value, ['requestId', 'reque
   long(value.stateVersion, true) && Array.isArray(value.turns) && value.turns.every(turn => validTurn(turn, value)) && Array.isArray(value.steps) &&
   value.steps.every(step => validStep(step, scope))
 export const catalogPage = (value, expected = {}) => {
-  if (!keys(value, ['schemaVersion', 'scope', 'after', 'through', 'nextAfter', 'hasMore', 'entries']) || value.schemaVersion !== 1 || !catalogScope(value.scope) ||
+  const fields = ['schemaVersion', 'scope', 'after', 'through', 'nextAfter', 'hasMore', 'entries']
+  if (object(value) && Object.hasOwn(value, 'eventCursor')) fields.push('eventCursor')
+  if (!keys(value, fields) || (value.eventCursor != null && !long(value.eventCursor, true)) || value.schemaVersion !== 1 || !catalogScope(value.scope) ||
       !long(value.after, true) || !long(value.through, true) || BigInt(value.after) > BigInt(value.through) || typeof value.hasMore !== 'boolean' || !Array.isArray(value.entries)) return null
   if (expected.conversationId && value.scope.conversationId !== expected.conversationId) return null
   if (expected.taskId && value.scope.taskId !== expected.taskId) return null

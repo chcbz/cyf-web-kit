@@ -1,7 +1,7 @@
 import { batchMatchesSelection } from './hallSelectedOutputs.js'
 import { computed, getCurrentInstance, onBeforeUnmount, ref, unref, watch } from 'vue'
 import { createApi } from '../useHttp.js'
-import { batchDigest, freezeReviewIntent, freezeReviewValue, reviewId, validateContext, validateReceipt, validReviewIntent } from './hallDeliveryReviewIntent.js'
+import { batchDigest, freezeReviewIntent, freezeReviewValue, reviewId, validateContext, validateHistoryPage, validateReceipt, validReviewIntent } from './hallDeliveryReviewIntent.js'
 const read = value => typeof value === 'function' ? value() : unref(value)
 const browserStorage = () => { try { return globalThis.sessionStorage || globalThis.window?.sessionStorage || null } catch { return null } }
 const keyFactory = () => { if (!globalThis.crypto?.randomUUID) throw new Error('无法生成验收标识，未提交。'); return `review-${globalThis.crypto.randomUUID()}` }
@@ -9,6 +9,16 @@ const keyFactory = () => { if (!globalThis.crypto?.randomUUID) throw new Error('
 /** One instance per task projection in the page shell; reads and remounts never submit. */
 export function useHallDeliveryReview ({ api = createApi('/agent'), taskId, identityScope, authorizationGeneration = 0, enabled = true, storage = browserStorage(), idempotencyKeyFactory = keyFactory } = {}) {
   const context = ref(null); const loading = ref(false); const error = ref(''); const dialogOpen = ref(false); const frozenContext = ref(null)
+  const history = ref([]); const historyLoaded = ref(false); const historyLoading = ref(false)
+  const historyError = ref(''); const historyHasMore = ref(false)
+  let historyCursor = null; let historyEpoch = 0; let historyController = null
+  const historyContext = computed(() => context.value ? { ...context.value,
+    history: history.value.filter(batch => batch.deliveryId !== context.value.currentDelivery?.deliveryId) } : null)
+  const resetHistory = () => {
+    historyEpoch++; historyController?.abort(); historyController = null
+    history.value = []; historyLoaded.value = false; historyLoading.value = false
+    historyError.value = ''; historyHasMore.value = false; historyCursor = null
+  }
   const operation = ref({ state: 'idle', busy: false, intent: null, receipt: null, message: '' })
   const scope = computed(() => read(identityScope)); const task = computed(() => read(taskId))
   const slot = computed(() => read(enabled) && typeof scope.value === 'string' && scope.value && scope.value.length <= 1024 && reviewId(task.value)
@@ -45,6 +55,9 @@ export function useHallDeliveryReview ({ api = createApi('/agent'), taskId, iden
       if (frozen && JSON.stringify([frozen.taskVersion, frozen.assignmentRevision, frozen.currentDelivery]) !== JSON.stringify([next.taskVersion, next.assignmentRevision, next.currentDelivery])) {
         dialogOpen.value = false; frozenContext.value = null; error.value = '成果或事项已更新，请重新查看后再验收。'
       }
+      if (!context.value || context.value.taskVersion !== next.taskVersion || context.value.schemaVersion !== next.schemaVersion) resetHistory()
+      // Explicit v1 compatibility: its history was already included by the old endpoint.
+      if (next.schemaVersion === 1) { history.value = next.history; historyLoaded.value = true; historyHasMore.value = false }
       context.value = next
       return next
     } catch (cause) {
@@ -52,6 +65,29 @@ export function useHallDeliveryReview ({ api = createApi('/agent'), taskId, iden
       return null
     } finally { controllers.delete(c); if (current(version, c) && serial === readEpoch) loading.value = false }
   }
+  const loadHistory = async () => {
+    if (!context.value || loading.value || historyLoading.value || (historyLoaded.value && !historyHasMore.value) || disposed) return false
+    const version = epoch; const serial = historyEpoch; const c = controller(); historyController = c
+    const id = task.value; const before = historyCursor
+    historyLoading.value = true; historyError.value = ''
+    try {
+      const raw = await api.get(`/tasks/${encodeURIComponent(id)}/delivery-review-history`, before ? { beforeRevision: before } : {}, options(c))
+      const page = validateHistoryPage(raw)
+      if (before && page.nextCursor && BigInt(page.nextCursor) >= BigInt(before)) throw new Error('历史分页游标未前进，请重试。')
+      for (const batch of page.items) if (await batchDigest(id, batch) !== batch.batchSha256) throw new Error('历史批次摘要不一致，请重试。')
+      if (!current(version, c) || serial !== historyEpoch) return false
+      history.value = [...new Map([...history.value, ...page.items].map(batch => [batch.deliveryId, batch])).values()]
+      historyCursor = page.nextCursor; historyHasMore.value = page.hasMore; historyLoaded.value = true
+      return true
+    } catch (cause) {
+      if (current(version, c) && serial === historyEpoch) historyError.value = cause.message || '历史交付读取失败，请重试当前页。'
+      return false
+    } finally {
+      controllers.delete(c)
+      if (current(version, c) && serial === historyEpoch) { historyLoading.value = false; historyController = null }
+    }
+  }
+  const ensureHistory = () => historyLoaded.value ? Promise.resolve(true) : loadHistory()
   const apply = (raw, intent) => {
     const receipt = validateReceipt(raw, intent, operation.value.receipt)
     const next = freezeReviewValue({ ...intent, operationId: receipt.operationId, receiptVersion: receipt.stateVersion })
@@ -118,6 +154,7 @@ export function useHallDeliveryReview ({ api = createApi('/agent'), taskId, iden
   const close = () => { if (operation.value.busy) return; dialogOpen.value = false; frozenContext.value = null }
   const reset = () => {
     epoch++; readEpoch++; for (const c of controllers) c.abort(); controllers.clear()
+    resetHistory()
     context.value = null; error.value = ''; loading.value = false; dialogOpen.value = false; frozenContext.value = null
     operation.value = { state: 'idle', busy: false, intent: null, receipt: null, message: '' }
     if (slot.value && !disposed) { recover(); void refresh(); if (operation.value.intent) void checkOriginal() }
@@ -137,5 +174,5 @@ export function useHallDeliveryReview ({ api = createApi('/agent'), taskId, iden
       next.currentDelivery?.deliveryId === receipt.deliveryId && next.currentDelivery?.state === 'ACCEPTED' &&
       BigInt(next.currentDelivery.deliveryVersion) >= BigInt(receipt.deliveryVersion))
   })
-  return { recoveryNeeded, context, loading, error, dialogOpen, frozenContext, operation, canReview, refresh, openConfirmation, confirmAcceptance, checkOriginal, resumeOriginal, settleOriginal, close, dispose }
+  return { recoveryNeeded, context, historyContext, historyLoaded, historyLoading, historyError, historyHasMore, loadHistory, ensureHistory, loading, error, dialogOpen, frozenContext, operation, canReview, refresh, openConfirmation, confirmAcceptance, checkOriginal, resumeOriginal, settleOriginal, close, dispose }
 }

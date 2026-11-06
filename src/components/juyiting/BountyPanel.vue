@@ -112,6 +112,14 @@
               <span v-if="!(task.requiredAbilities || []).length">未指定能力要求</span>
             </div>
           </article>
+          <p v-if="errorMessage" class="task-pagination-status"><button type="button" :disabled="loading" @click="$emit(hasMore ? 'load-more-tasks' : 'load-tasks')">重试加载</button></p>
+          <p
+            v-else-if="hasMore"
+            ref="taskListEnd"
+            class="task-pagination-status"
+            role="status"
+          >{{ loading ? '正在加载更多事项…' : '向下滚动自动加载' }}</p>
+          <p v-else-if="!loading && tasks.length" class="task-pagination-status" role="status">已显示全部事项</p>
           <div v-if="!loading && !errorMessage && !tasks.length" class="empty-list">{{ taskKeyword || taskAgentFilter || (taskStatusFilter && taskStatusFilter !== 'all') ? '没有符合当前筛选条件的事项，请调整筛选后刷新。' : '还没有事项，先提出一个需求吧。' }}</div>
         </div>
       </div>
@@ -503,6 +511,7 @@ const props = defineProps({
   detailAllowed: { type: Boolean, default: true },
   tasks: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
+  hasMore: { type: Boolean, default: false },
   errorMessage: { type: String, default: '' },
   countsLoading: { type: Boolean, default: false },
   countsErrorMessage: { type: String, default: '' },
@@ -566,6 +575,7 @@ const emit = defineEmits([
   'formal-execution-created',
   'formal-execution-recovered',
   'load-tasks',
+  'load-more-tasks',
   'select-agent',
   'select-task',
   'set-status-filter',
@@ -583,6 +593,22 @@ watch(() => [props.identityScope, props.authorizationGeneration], () => {
   modalTask.value = null
 }, { flush: 'sync' })
 const detailTask = computed(() => modalTask.value)
+const taskListEnd = ref(null)
+let taskListObserver = null
+const stopTaskListObserver = () => { taskListObserver?.disconnect(); taskListObserver = null }
+watch([taskListEnd, () => props.loading, () => props.hasMore, () => props.errorMessage, () => props.resourcesActive, detailTask], () => {
+  stopTaskListObserver()
+  if (!taskListEnd.value || props.loading || !props.hasMore || props.errorMessage || !props.resourcesActive || detailTask.value) return
+  if (typeof IntersectionObserver === 'undefined') return
+  const observer = new IntersectionObserver(entries => {
+    if (taskListObserver !== observer || !entries.some(entry => entry.isIntersecting)) return
+    stopTaskListObserver()
+    emit('load-more-tasks')
+  }, { rootMargin: '0px 0px 120px 0px' })
+  taskListObserver = observer
+  observer.observe(taskListEnd.value)
+}, { flush: 'post' })
+onBeforeUnmount(stopTaskListObserver)
 // Display only the already-validated context for this exact task revision; never grant acceptance here.
 const matterResultCount = computed(() => {
   const task = detailTask.value, context = props.resourceReviewContext
@@ -802,6 +828,7 @@ const back = () => {
 defineExpose({ openTask, canGoBack, back })
 </script>
 <style scoped>
+.task-pagination-status { padding: 16px; text-align: center; color: var(--hall-text-muted, #68716b); }
 .bounty-panel {
   position: relative;
   display: flex;

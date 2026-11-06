@@ -15,10 +15,12 @@ import { currentChatStreamMock } from './fixtures/current-chat-stream-mock.js'
 // These receipt-adoption fixtures start with an empty existing conversation. The
 // mandatory restoration read must return its real empty catalog, not a RequestView.
 const useHallConversation = options => actualHallConversation({ ...options, chatApi: currentChatStreamMock({ ...options.chatApi,
-  get: async (path, ...args) => /^\/conversations\/[^/]+\/requests$/.test(path)
-    ? { schemaVersion: 1, scope: { conversationId: path.split('/')[2], conversationGeneration: '1', taskId: options.chatContext.value.taskId },
-      after: '0', through: '0', nextAfter: null, hasMore: false, entries: [] }
-    : options.chatApi.get(path, ...args)
+  getById: undefined,
+  get: async (path, params, callbacks) => path === '/conversation/messages'
+    ? options.chatApi.getById(path, params.id, { ...callbacks, onSuccess: items => callbacks.onSuccess({ items, hasMore: false, nextCursor: null,
+      requestPage: { schemaVersion: 1, scope: { conversationId: params.id, conversationGeneration: '1', taskId: options.chatContext.value.taskId },
+        after: '0', through: '0', nextAfter: null, hasMore: false, entries: [], eventCursor: '0' }, outcomeSummaries: [] }) })
+    : options.chatApi.get(path, params, callbacks)
 }) })
 import { compileScript } from '@vue/compiler-sfc'
 const require = createRequire(import.meta.url)
@@ -28,6 +30,9 @@ const source = readFileSync(new URL('../src/components/world/JuyiHall.vue', impo
 const script = parse(source, { filename: 'JuyiHall.vue' }).descriptor.scriptSetup.content
 const program = babel.parse(script, { sourceType: 'module' }).program
 const declarations = program.body.flatMap(node => node.declarations || [])
+// Extracted handlers must use bindings actually imported by the page.
+const pageTypedImport = program.body.find(node => node.type === 'ImportDeclaration' && node.source.value === '@/composables/juyiting/hallTypedDeliberation')
+if (!pageTypedImport?.specifiers.some(node => node.local.name === 'typedLong')) throw new Error('page missing typedLong import')
 const handler = name => { const node = declarations.find(item => item.id?.name === name); if (!node) throw new Error(`missing ${name}`); return script.slice(node.init.start, node.init.end) }
 const option = (callee, name) => {
   let call = declarations.find(item => item.init?.callee?.name === callee)?.init
@@ -132,7 +137,7 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       globalStore: { getJiacn: 'owner', user: {} }, log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}), portraitShortName: agent => agent?.name || '', selectedAgent, selectedTask, showToast: () => {} })
     try {
       expect(await conversation.loadHallMessages()).to.equal(true)
-      const pageAccepted = new Function('adoptTypedDiscussionReceipt', 'bountyRequestCatalog', 'showToast', `return (${option('useHallTypedDeliberation', 'onAccepted')})`)(conversation.adoptTypedDiscussionReceipt, { hint: () => calls.push('HINT') }, text => calls.push(`TOAST:${text}`))
+      const pageAccepted = new Function('adoptTypedDiscussionReceipt', 'refreshHallProjections', 'showToast', `return (${option('useHallTypedDeliberation', 'onAccepted')})`)(conversation.adoptTypedDiscussionReceipt, () => calls.push('HINT'), text => calls.push(`TOAST:${text}`))
       expect(await pageAccepted({ receipt: typedReceipt(), context: { conversationId: '7', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4', conversationGeneration: '1' }, isCurrent: () => true })).to.equal(true)
       expect(conversation.activeRequest.value).to.include({ requestId: 'request-typed-1', state: 'RUNNING', stateVersion: '0' })
       expect(conversation.activeTurns.value[0]).to.include({ turnId: 'turn-typed-1', state: 'RECEIVED', stateVersion: '0' })
@@ -155,7 +160,7 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       globalStore: { getJiacn: 'owner', user: {} }, log: { warn: () => {}, error: () => {} }, openPanel: () => {}, outgoingMetadata: ref({}), portraitShortName: agent => agent?.name || '', selectedAgent, selectedTask, showToast: () => {} })
     try {
       expect(await conversation.loadHallMessages()).to.equal(true)
-      const pageAccepted = new Function('adoptTypedDiscussionReceipt', 'bountyRequestCatalog', 'showToast', `return (${option('useHallTypedDeliberation', 'onAccepted')})`)(conversation.adoptTypedDiscussionReceipt, { hint: () => calls.push('HINT') }, text => calls.push(`TOAST:${text}`))
+      const pageAccepted = new Function('adoptTypedDiscussionReceipt', 'refreshHallProjections', 'showToast', `return (${option('useHallTypedDeliberation', 'onAccepted')})`)(conversation.adoptTypedDiscussionReceipt, () => calls.push('HINT'), text => calls.push(`TOAST:${text}`))
       expect(await pageAccepted({ receipt: typedReceipt(), context: { conversationId: '7', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4', conversationGeneration: '1' }, isCurrent: () => true })).to.equal(true)
       expect(conversation.activeRequest.value).to.include({ requestId: 'request-typed-1', state: 'RUNNING', stateVersion: '0' })
       expect(conversation.activeTurns.value[0]).to.include({ turnId: 'turn-typed-1', state: 'RECEIVED', stateVersion: '0' })
@@ -182,7 +187,7 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       const apiStore = Vue.reactive({ authorizationGeneration: 1 })
       const hallIdentityScope = ref('owner'); const chatMode = ref('bounty')
       const followupContextGeneration = ref(0); const conversationTask = ref({ id: 'task-1', taskVersion: '1' })
-      const recoveries = []; const typedDeliberation = { refresh: async () => true, invalidate() { recoveries.push('INVALIDATE') }, recover: async () => { recoveries.push('RECOVER'); return true } }
+      const recoveries = []; const typedDeliberation = { refreshDeliveryChoices: async () => true, invalidate() { recoveries.push('INVALIDATE') }, recover: async () => { recoveries.push('RECOVER'); return true } }
       const env = { computed: Vue.computed, watch: Vue.watch, conversationTask, apiStore, hallIdentityScope,
         conversationId: conversation.conversationId, activeRequest: conversation.activeRequest,
         bountyInteractionTargetId: () => 'agent-1', chatContext, chatMode, followupContextGeneration,
@@ -195,13 +200,15 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       env.typedAssignmentRevision = evaluate(handler('typedAssignmentRevision'))
       env.typedConversationGeneration = evaluate(handler('typedConversationGeneration'))
       env.bountyRequestCatalog = useHallBountyRequestCatalog({ chatApi: { get: async () => ({ schemaVersion: 1,
-        scope: { conversationId: '7', conversationGeneration: '1', taskId: 'task-1' }, after: '0', through: '0', nextAfter: null, hasMore: false, entries: [] }) },
+        scope: { conversationId: '7', conversationGeneration: '1', taskId: 'task-1' }, after: '0', through: '0', nextAfter: null, hasMore: false, entries: [], eventCursor: '0' }) },
         identityScope: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
         getContext: evaluate(option('useHallBountyRequestCatalog', 'getContext')),
         getContextGeneration: () => followupContextGeneration.value, enabled: () => true })
       env.invalidateFollowupContext = evaluate(handler('invalidateFollowupContext'))
       env.followupTaskFence = evaluate(handler('followupTaskFence'))
       env.refreshCurrentConversationTask = async () => true
+      env.adoptMessagePresentation = () => true
+      env.refreshHallMessagePage = async () => true
       env.refreshFollowupContext = evaluate(handler('refreshFollowupContext'))
       env.refreshHallProjections = () => env.refreshFollowupContext()
       env.resetFollowupContext = evaluate(handler('resetFollowupContext'))
@@ -210,7 +217,7 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       const stops = watchers.map(node => evaluate(script.slice(node.expression.start, node.expression.end)))
       stopFence = () => { stops.forEach(stop => stop()); env.bountyAssignmentContext.dispose(); env.bountyRequestCatalog.dispose() }
       const originalGeneration = followupContextGeneration.value
-      const pageAccepted = new Function('adoptTypedDiscussionReceipt', 'bountyRequestCatalog', 'showToast', `return (${option('useHallTypedDeliberation', 'onAccepted')})`)(conversation.adoptTypedDiscussionReceipt, { hint: () => calls.push('HINT') }, text => calls.push(`TOAST:${text}`))
+      const pageAccepted = new Function('adoptTypedDiscussionReceipt', 'refreshHallProjections', 'showToast', `return (${option('useHallTypedDeliberation', 'onAccepted')})`)(conversation.adoptTypedDiscussionReceipt, () => calls.push('HINT'), text => calls.push(`TOAST:${text}`))
       expect(await pageAccepted({ receipt: typedReceipt(), context: { conversationId: '7', taskId: 'task-1', targetAgentId: 'agent-1', assignmentRevision: '4', conversationGeneration: '1' }, isCurrent: () => followupContextGeneration.value === originalGeneration })).to.equal(true)
       expect(conversation.activeRequest.value).to.include({ requestId: 'request-typed-1', state: 'RUNNING', stateVersion: '0' })
       expect(conversation.activeTurns.value[0]).to.include({ turnId: 'turn-typed-1', state: 'RECEIVED', stateVersion: '0' })
@@ -229,7 +236,7 @@ describe('actual JuyiHall typed natural follow-up routing', () => {
       expect(assignment()).to.equal('4'); expect(generation()).to.equal('1')
       expect(await sameRefresh).to.equal(true)
       expect(recoveries).to.deep.equal([])
-      expect(await env.bountyRequestCatalog.refresh()).to.equal(true)
+      expect(env.bountyRequestCatalog).not.to.have.property('refresh')
       // Browsing another task is not a discussion switch.
       selectedTask.value = { id: 'other-task', taskVersion: '99' }
       expect(followupContextGeneration.value).to.equal(originalGeneration)
@@ -392,5 +399,60 @@ describe('actual JuyiHall exact acceptance preview', () => {
     await view.run({ ...item, artifactId: 'other' })
     finish(); await first
     expect(view.preview.value.artifactId).to.equal('other')
+  })
+})
+
+
+describe('actual message-page follow-up wiring', () => {
+  const build = () => {
+    const calls = []; const generation = ref(1); const enabled = ref(true)
+    const requestPage = ref({ entries: [] }); const outcomes = ref([])
+    const catalog = { adoptPage: value => { calls.push(['catalog', value]); return true } }
+    const typed = { adoptPage: value => { calls.push(['outcomes', value]); return true },
+      refreshDeliveryChoices: async () => { calls.push('choices'); return true } }
+    const adopt = new Function('typedDeliberationEnabled', 'messageRequestPage', 'messageTypedOutcomes', 'bountyRequestCatalog', 'typedDeliberation',
+      `return (${handler('adoptMessagePresentation')})`)(enabled, requestPage, outcomes, catalog, typed)
+    const actual = new Function('typedDeliberationEnabled', 'conversationId', 'refreshCurrentConversationTask',
+      'followupContextGeneration', 'bountyAssignmentContext', 'typedDeliberation', 'refreshHallMessagePage', 'adoptMessagePresentation',
+      `return (${handler('refreshFollowupContext')})`)(enabled, ref('7'), async () => true,
+      generation, { refresh: async () => true }, typed, async () => { calls.push('message-page'); return true }, adopt)
+    return { actual, adopt, calls, generation, requestPage, outcomes }
+  }
+  it('a live hint refreshes one message page rather than request-ID batches or outcome GETs', async () => {
+    const h = build()
+    expect(await h.actual({ type: 'action_started', requestId: 'parent' })).to.equal(true)
+    expect(h.calls).to.deep.equal(['message-page', ['catalog', h.requestPage.value], ['outcomes', []], 'choices'])
+  })
+  it('binding initialization does not invent a live resync or reload the message page', async () => {
+    const h = build(); h.requestPage.value = null; const hints = []
+    const reset = new Function('invalidateFollowupContext', 'bountyRequestCatalog', 'refreshHallProjections',
+      `return (${handler('resetFollowupContext')})`)(() => {}, { reset() {} }, event => { hints.push(event); return h.actual(event) })
+    reset(); await new Promise(resolve => setImmediate(resolve))
+    expect(hints).to.deep.equal([undefined])
+    expect(h.calls).to.deep.equal(['choices'])
+  })
+  it('refreshes current acceptance from live hints, not local initialization or rendered cards', async () => {
+    const assignment = program.body.find(node => node.type === 'ExpressionStatement' &&
+      node.expression?.type === 'AssignmentExpression' && node.expression.left?.name === 'notifyBountyRequestCatalog').expression.right
+    const calls = []; const enabled = ref(true)
+    const notify = new Function('typedDeliberationEnabled', 'refreshFollowupContext', 'reviewTaskId', 'deliveryReview',
+      `return (${script.slice(assignment.start, assignment.end)})`)(enabled,
+      async event => { calls.push(event?.type || 'binding'); return true }, ref('task-1'),
+      { refresh: async () => { calls.push('review'); return {} } })
+    await notify(); expect(calls).to.deep.equal(['binding']); calls.length = 0
+    await notify({ type: 'delivery_review_changed' })
+    expect(calls).to.deep.equal(['delivery_review_changed', 'review']); calls.length = 0
+    enabled.value = false
+    await notify({ type: 'resync_required' }); expect(calls).to.deep.equal(['review'])
+    const reviewWatchers = program.body.filter(node => node.type === 'ExpressionStatement' &&
+      node.expression?.callee?.name === 'watch' && script.slice(node.start, node.end).includes('deliveryReview.refresh'))
+    expect(reviewWatchers).to.deep.equal([])
+  })
+  it('older-page adoption performs no HTTP reads and never adopts an active request', () => {
+    const h = build()
+    expect(h.adopt()).to.equal(true)
+    expect(h.calls).to.deep.equal([['catalog', h.requestPage.value], ['outcomes', []]])
+    expect(source).not.to.include('readDisplayedProjections')
+    expect(source).not.to.include('bountyRequestCatalog.refreshWindow')
   })
 })

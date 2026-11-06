@@ -156,7 +156,8 @@ const list = async () => {
   try {
     const ids = [...new Set(catalogRequests.value.map(request => request.requestId))]
     const snapshots = []
-    for (const id of ids) snapshots.push(await fetchRequest(id, controller))
+    if (props.inline) snapshots.push(...catalogRequests.value)
+    else for (const id of ids) snapshots.push(await fetchRequest(id, controller))
     if (generation !== epoch || controller.signal.aborted) return
     requestSnapshots.value = snapshots
     const catalog = []; const deliveries = []
@@ -164,7 +165,14 @@ const list = async () => {
       for (const turn of request.turns || []) {
         if (turn.route !== 'CHAT' || !['FINAL_PERSISTED', 'PUBLISHED'].includes(turn.state)) continue
         let response
-        try {
+        if (props.inline) {
+          response = props.typedOutcomes.find(value => value.requestId === request.requestId && value.turnId === turn.turnId)
+          // The parent owns these reads. An ordinary CHAT or not-yet-loaded typed
+          // projection is not a reason for a second historical scanner.
+          if (!response) continue
+          // Remove only the two presentation annotations added by the parent.
+          response = Object.fromEntries(Object.entries(response).filter(([key]) => !['purpose', 'key'].includes(key)))
+        } else try {
           response = await api.get(`/conversations/${encodeURIComponent(props.conversationId)}/requests/${encodeURIComponent(request.requestId)}/typed-outcome`, {},
             { autoLoading: false, needAuth: true, signal: controller.signal })
         } catch (cause) {
@@ -176,8 +184,10 @@ const list = async () => {
         const text = await completedTextItem(outcome, request, turn, props.taskId)
         if (controller.signal.aborted || generation !== epoch) return
         if (text) catalog.push(text)
-        const delivery = completedExecutionDelivery(response, request, turn, snapshots, props.taskId)
-        if (delivery) deliveries.push(delivery)
+        if (!props.inline) {
+          const delivery = completedExecutionDelivery(response, request, turn, snapshots, props.taskId)
+          if (delivery) deliveries.push(delivery)
+        }
       }
     }
     for (const step of scopedSteps.value) {

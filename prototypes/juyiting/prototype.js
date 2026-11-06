@@ -148,8 +148,16 @@ function renderChat(){
  const panel=$('.chat-panel');if(!panel)return;$$('.mmd-composer-extra',panel).forEach(e=>e.remove());
  $$('.context-summary strong,.discussion-brief strong').forEach(e=>e.textContent=isPrivate?'密议':isPublic?'厅前公议':'事项议事');$$('.context-summary small,.discussion-brief small').forEach(e=>e.textContent=isPrivate?(ctx.agent?.name||'请选择好汉'):taskTitle()+' / '+(ctx.agent?.name||'尚未点将'));const em=$('.context-summary em');if(em)em.textContent=isPrivate?(ctx.pending?'正在回复':'与好汉单独聊聊'):status();if(!isPrivate){const back=$('.panel-return');if(back)back.dataset.prototypePage=isPublic?'map':'detail';}if(isPrivate){const back=$('.panel-return');if(back)back.dataset.prototypePage='agents';const heading=$('#juyiting-floating-panel-title');if(heading)heading.textContent='密议';}
  $$('.discussion-brief').forEach(e=>e.remove());
- const messages=$('.hall-messages');messages.setAttribute('aria-live','polite');messages.innerHTML=ctx.messages.map((m,index)=>`<div class="hall-message ${m.role}"><div class="message-head"><strong>${m.role==='USER'?'你':esc(ctx.agent?.name||'好汉')}</strong></div><div class="message-content"><p>${esc(m.text)}</p>${m.submissionNotice?`<p class="submission-notice" role="status">${esc(m.submissionNotice)}</p>`:''}</div>${m.quote?`<div class="mmd mmd-quote">引用：${esc(asset(m.quote)?.name)}</div>`:''}${files(m.files||[],'message',false)}<details data-v-4c0df501 class="text-selection-archive"><summary data-v-4c0df501>保存文字片段</summary><label data-v-4c0df501>要保存的文字<textarea data-v-4c0df501 data-message-text="${index}" rows="3">${esc(m.text)}</textarea></label><button data-v-4c0df501 type="button" data-action="save-text" data-message="${index}">保存到工作空间</button></details>${m.outputs?.length?`<div class="mmd mmd-results">${m.outputs.map(id=>result(asset(id))).join('')}</div>`:''}</div>`).join('')+(ctx.error?`<div class="mmd mmd-interaction-error" role="alert">${esc(ctx.error)} ${button('核对回复状态','complete-reply-status')}</div>`:'')+(ctx.pending?`<p class="mmd-pending" role="status">${isPrivate||isPublic?'正在回复…':'正在处理…'}</p>`:'');scoped(messages,'data-v-8f1da78a');
+ const messages=$('.hall-messages');messages.setAttribute('aria-live','polite');messages.innerHTML=(ctx.olderMessagesLoaded||!ctx.messages.length?'':button('加载更早消息','older-messages','aria-label="加载更早消息"'))+ctx.messages.map((m,index)=>`<div class="hall-message ${m.role}"><div class="message-head"><strong>${m.role==='USER'?'你':esc(ctx.agent?.name||'好汉')}</strong></div><div class="message-content"><p>${esc(m.text)}</p>${m.submissionNotice?`<p class="submission-notice" role="status">${esc(m.submissionNotice)}</p>`:''}</div>${m.quote?`<div class="mmd mmd-quote">引用：${esc(asset(m.quote)?.name)}</div>`:''}${files(m.files||[],'message',false)}<details data-v-4c0df501 class="text-selection-archive"><summary data-v-4c0df501>保存文字片段</summary><label data-v-4c0df501>要保存的文字<textarea data-v-4c0df501 data-message-text="${index}" rows="3">${esc(m.text)}</textarea></label><button data-v-4c0df501 type="button" data-action="save-text" data-message="${index}">保存到工作空间</button></details>${m.outputs?.length?`<div class="mmd mmd-results">${m.outputs.map(id=>result(asset(id))).join('')}</div>`:''}</div>`).join('')+(ctx.error?`<div class="mmd mmd-interaction-error" role="alert">${esc(ctx.error)} ${button('核对回复状态','complete-reply-status')}</div>`:'')+(ctx.pending?`<p class="mmd-pending" role="status">${isPrivate||isPublic?'正在回复…':'正在处理…'}</p>`:'');scoped(messages,'data-v-8f1da78a');
+ if(new URLSearchParams(location.search).get('outcomeUnavailable')==='1')insert(messages,'<p class="mmd-muted" role="status">结构化成果暂不可用，原回复正文仍可阅读。</p>');
  if(!ctx.messages.length)insert(messages,`<p class="mmd-pending">${isPrivate?'想聊什么，直接说吧。密议不会创建或更改事项。':isPublic?'这里是公共议事，可继续讨论，不会自动创建事项。':ctx.task?'这是此事项的新话头。请继续补充需求，无需重新提交事项。':'请先提出需求，确认承办后在这里继续沟通。'}</p>`);
+ if(new URLSearchParams(location.search).get('deliveryChoices')==='1'){
+   $$('.prototype-delivery-choices',panel).forEach(e=>e.remove());
+   const picker=document.createElement('div');picker.className='mmd prototype-delivery-choices';
+   const count=ctx.deliveryChoiceCount||50;
+   picker.innerHTML='<label>本轮成果 <select aria-label="本轮成果">'+Array.from({length:count},(_,i)=>'<option value="'+(i+1)+'">独立成果 '+(i+1)+'</option>').join('')+'</select></label> '+(count===50?button('加载更多成果','delivery-choice-more'):'<span>已加载全部成果</span>');
+   $('.composer-submit')?.before(picker);
+ }
  const input=$('.composer-textarea');input.disabled=!!(ctx.task?.complete||ctx.task?.cancelled);input.value=ctx.chatDraft;input.placeholder=ctx.task?.cancelled?'事项已取消，仅查看议事记录':ctx.task?.complete?'事项已完成':'补充需求，或告诉好汉哪里需要调整…';
  $$('.composer-context,.composer-meta,.hall-voice-controls',panel).forEach(e=>e.remove());input.rows=2;input.style.height='';
  $('.composer-execute')?.remove();const send=$('.composer-send');send.innerHTML='发送';send.ariaLabel='发送';send.title='发送';send.disabled=ctx.pending||!!(ctx.task?.complete||ctx.task?.cancelled)||(!ctx.chatDraft.trim()&&!ctx.chatFiles.length)||(!ctx.agent&&page!=='public');
@@ -179,6 +187,7 @@ function renderChat(){
  panel.classList.toggle('discussion-readonly',!!(ctx.task?.complete||ctx.task?.cancelled||ctx.task?.archived));
  renderTaskSkills(panel);
  renderReplyControl(panel,ctx);
+ renderHistoryWindowPrototype();
  const scrollEnd=()=>{if(messages.isConnected)messages.scrollTop=messages.scrollHeight;};requestAnimationFrame(scrollEnd);$$('img',messages).forEach(img=>img.addEventListener('load',scrollEnd,{once:true}));
 }
 function renderWorkspace(){const list=$('.treasure-file-list');if(!list)return;const all=[...catalog,...state.localFiles,...state.saved.map(asset)].filter((a,i,arr)=>arr.findIndex(x=>x.id===a.id)===i),filter=state.workspaceFilter||'全部';const items=all.filter(a=>filter==='回收站'?state.fileMeta[a.id]?.recycled:!state.fileMeta[a.id]?.recycled&&(filter==='全部'||filter==='资料'&&!state.saved.includes(a.id)||filter==='成果'&&state.saved.includes(a.id)));
@@ -236,8 +245,10 @@ document.addEventListener('change',e=>{const t=e.target;if(t.name==='picker-scop
 document.addEventListener('click',e=>{
  const t=e.target.closest('[data-action],button,a,[data-prototype-page]');if(!t||t.disabled||t.matches('a[download]'))return;
  if(t.type==='submit'&&t.closest('form'))return;e.preventDefault();const action=t.dataset.action,id=t.dataset.id;
+ if(action==='delivery-choice-more'){conversation().deliveryChoiceCount=51;renderChat();persist();return;}
  if(action==='composer-more'){dialog('更多',`<div class="mmd-more-menu">${button('添加资料','composer-materials')}${button('语音输入','voice-record')}${button('语音设置','voice-settings')}</div>`);return;}
  if(action==='composer-materials'){t.closest('dialog').close();openMaterials('chat');return;}
+ if(action==='older-messages'){const ctx=conversation(),box=$('.hall-messages'),height=box.scrollHeight,top=box.scrollTop;ctx.olderMessagesLoaded=true;ctx.messages.unshift({role:'USER',text:'更早的一页议事记录（原型示例）'});renderChat();box.scrollTop=top+box.scrollHeight-height;return;}
  if(action==='voice-record'){t.closest('dialog').close();dialog('语音输入','<p role="status">正在录音…</p><p class="mmd-muted">交互演示，不会启用麦克风。</p>',button('取消','close-dialog')+button('结束录音','voice-stop','class="mmd-primary"'));return;}
  if(action==='voice-stop'){t.closest('dialog').close();dialog('确认语音文字','<label class="mmd-voice-transcript">识别内容（可修改）<textarea rows="3" aria-label="识别内容">请把画面调整得明亮一些。</textarea></label><p class="mmd-muted">以上为示例转写，不是真实录音识别。</p>',button('取消','close-dialog')+button('放入输入框','voice-use','class="mmd-primary"'));return;}
  if(action==='voice-use'){const text=$('.mmd-voice-transcript textarea').value.trim();if(!text){feedback('请输入要使用的文字');return;}const ctx=conversation();ctx.chatDraft=[ctx.chatDraft,text].filter(Boolean).join('\n');t.closest('dialog').close();renderChat();$('.composer-textarea').focus();return;}
@@ -290,3 +301,54 @@ seedBaseline();
 render();
 for(const ctx of [state,state.publicChat,...Object.values(state.privateChats)])if(ctx.pending&&ctx.replyStop&&['submitting','unknown'].includes(ctx.replyStop.stage)){ctx.replyStop.stage='unknown';ctx.replyStop.text='停止结果尚未确认，请核对原请求；不会重复提交。（离线示例）';persist();if(['chat','private','public'].includes(page))renderChat();}else if(ctx.pending&&['reply','unified-reply'].includes(ctx.pendingReason)){ctx.pending=false;ctx.error='示例：刷新时回复状态待核对，不自动重发。';if(ctx.task?.unified)ctx.task.phase='需核对';persist();if(['chat','private','public'].includes(page))renderChat();}
 if(state.operation?.stage==='pending')setTimeout(resolveOperation,350);
+
+// Delivery choices are explicitly paged; this offline scenario does not load API history.
+
+// Offline continuous history: only viewport pages own body nodes; other pages retain cursors/heights.
+function renderHistoryWindowPrototype() {
+ if(new URLSearchParams(location.search).get('historyWindow') !== '1')return;
+ const box = document.querySelector('.hall-messages');
+ if (box) {
+  const pages = [{key:981,start:981,end:1000,height:0}], resident = new Map();
+  box.innerHTML = '<button type="button" data-window-older>加载更早消息</button><div data-window-rows></div><p role="status" data-window-count></p>';
+  const rows = box.querySelector('[data-window-rows]'), status = box.querySelector('[data-window-count]');
+  const row = id => `<div class="hall-message ${id % 2 ? 'USER' : 'AGENT'}" data-window-row="${id}"><div class="message-head"><strong>历史消息 ${id}</strong></div><div class="message-content"><p>${esc(('可变高度的议事正文，第 ' + id + ' 条。').repeat(id % 7 + 1))}</p></div><details><summary>展开原文</summary><textarea aria-label="编辑文字片段">${id} 的文字片段</textarea></details></div>`;
+  const anchor = () => { const node = [...rows.querySelectorAll('[data-window-row]')].find(n => n.getBoundingClientRect().bottom > box.getBoundingClientRect().top); return node ? {id:node.dataset.windowRow,top:node.getBoundingClientRect().top} : null; };
+  const restore = saved => { const node = saved && rows.querySelector(`[data-window-row="${saved.id}"]`); if(node)box.scrollTop += node.getBoundingClientRect().top - saved.top; };
+  let updating = false;
+  const update = () => {
+   if(updating)return; updating = true;
+   const saved = anchor(), viewport = Math.max(1,box.clientHeight), top = Math.max(0,box.scrollTop - rows.offsetTop + box.offsetTop);
+   const parts = [], keep = new Set(); let offset = 0;
+   for(const page of pages){
+    const size = page.height || viewport, node = resident.get(page.key);
+    const pinned = node && (node.querySelector('details[open]') || node.contains(document.activeElement));
+    if(pinned || (offset + size >= top - viewport && offset <= top + viewport*2)){
+     let element = node;
+     if(!element){element = document.createElement('section');element.dataset.windowPage=page.key;element.innerHTML=Array.from({length:page.end-page.start+1},(_,i)=>row(page.start+i)).join('');resident.set(page.key,element);}
+     parts.push(element);keep.add(page.key);
+    }else{
+     const previous=parts.at(-1);
+     if(previous?.dataset.windowSpacer==='true')previous.style.height=(parseFloat(previous.style.height)+size)+'px';
+     else{const spacer=document.createElement('div');spacer.dataset.windowSpacer='true';spacer.style.height=size+'px';spacer.setAttribute('aria-hidden','true');parts.push(spacer);}
+    }
+    offset+=size;
+   }
+   for(const [key,node] of resident){if(!keep.has(key)){node.remove();resident.delete(key);}}
+   rows.replaceChildren(...parts);
+   for(const page of pages){const node=resident.get(page.key);if(node)page.height=node.getBoundingClientRect().height;}
+   restore(saved);
+   status.textContent=`当前正文页 ${resident.size} / 已访问 ${pages.length} 页；每次读取20条`;
+   box.querySelector('[data-window-older]').disabled=pages[0].start===1;
+   updating=false;
+  };
+  box.querySelector('[data-window-older]').onclick=()=>{
+   if(pages[0].start===1)return;
+   const saved=anchor(),end=pages[0].start-1,start=Math.max(1,end-19);
+   pages.unshift({key:start,start,end,height:0});update();restore(saved);
+  };
+  let frame=0;box.addEventListener('scroll',()=>{if(!frame)frame=requestAnimationFrame(()=>{frame=0;update();});});
+  box.addEventListener('toggle',()=>update(),true);
+  update();
+ }
+}

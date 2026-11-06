@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { flushPromises } from '@vue/test-utils'
 import { readFileSync } from 'node:fs'
 import { webcrypto } from 'node:crypto'
-import { batchDigest, freezeReviewIntent, reviewBody, validateContext, validateReceipt } from '../src/composables/juyiting/hallDeliveryReviewIntent.js'
+import { batchDigest, freezeReviewIntent, reviewBody, validateContext, validateHistoryPage, validateReceipt } from '../src/composables/juyiting/hallDeliveryReviewIntent.js'
 import { useHallDeliveryReview } from '../src/composables/juyiting/useHallDeliveryReview.js'
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/juyiting/delivery-review-contract.json', import.meta.url), 'utf8'))
 const clone = value => JSON.parse(JSON.stringify(value))
@@ -31,6 +31,15 @@ describe('explicit whole-batch review contract and immutable recovery', () => {
     c.currentDelivery.items.reverse(); expect(await batchDigest(c.taskId, c.currentDelivery)).to.equal(fixture.batchDigestVector.expectedSha256)
     c.currentDelivery.items.pop(); expect(await batchDigest(c.taskId, c.currentDelivery)).not.to.equal(fixture.batchDigestVector.expectedSha256)
     expect(reviewBody(context())).to.deep.equal(fixture.acceptRequest.data)
+  })
+  it('accepts additive display metadata without changing immutable digest or acceptance commands', async () => {
+    const c = context(); const original = reviewBody(c); const digest = await batchDigest(c.taskId, c.currentDelivery)
+    c.currentDelivery.items[0].display = { title: '固定版本.txt', contentMimeType: 'text/plain', contentByteLength: 12, unavailableReason: null }
+    expect(validateContext(c, c.taskId).currentDelivery.items[0].display.title).to.equal('固定版本.txt')
+    expect(await batchDigest(c.taskId, c.currentDelivery)).to.equal(digest)
+    expect(reviewBody(c)).to.deep.equal(original)
+    c.currentDelivery.items[0].display.unavailableReason = 'VERSION_UNAVAILABLE'
+    expect(validateContext(c, c.taskId).currentDelivery.items[0].display.unavailableReason).to.equal('VERSION_UNAVAILABLE')
   })
   it('does not coerce decimal versions or admit unknown fields/source unions/partial batches', () => {
     for (const mutate of [c => { c.taskVersion = 7 }, c => { c.taskVersion = '07' }, c => { c.assignmentRevision = '9223372036854775808' },
@@ -150,4 +159,101 @@ describe('explicit whole-batch review contract and immutable recovery', () => {
     } finally { s.client.dispose() }
   })
 
+})
+
+describe('current-only formal review and explicit history keyset pages', () => {
+  it('consumes the exact shared public-envelope fixture and immutable batch digest', async () => {
+    const fixture = JSON.parse(readFileSync(new URL('./fixtures/juyiting/delivery-review-pages.json', import.meta.url), 'utf8'))
+    const c = validateContext(fixture.currentResponse.data, 'task_fixture')
+    const page = validateHistoryPage(fixture.historyResponse.data)
+    expect(c.schemaVersion).to.equal(2); expect(c.history).to.deep.equal([])
+    expect(await batchDigest(c.taskId, c.currentDelivery)).to.equal(c.currentDelivery.batchSha256)
+    expect(await batchDigest(c.taskId, page.items[0])).to.equal(page.items[0].batchSha256)
+    expect(page.items[0].allowedActions).to.deep.equal(['VIEW'])
+  })
+  const current = () => ({ ...context(), schemaVersion: 2 })
+  const historical = async id => {
+    const batch = { ...context().currentDelivery, deliveryId: id, allowedActions: ['VIEW'] }
+    batch.batchSha256 = await batchDigest('task_fixture', batch)
+    return batch
+  }
+  it('loads no history on current reads or confirmation, and only one page for explicit opening', async () => {
+    const calls = []; const b = await historical('old-1')
+    const s = setup({ api: { get: async (url, params) => { calls.push({ url, params }); return url.endsWith('/delivery-review-history') ? { items: [b], nextCursor: '81', hasMore: true } : current() } } })
+    try {
+      await ready(s.client); await s.client.openConfirmation()
+      expect(calls.filter(c => c.url.endsWith('/delivery-review-history'))).to.have.length(0)
+      expect(s.client.canReview.value).to.equal(true)
+      await s.client.ensureHistory(); await s.client.ensureHistory()
+      expect(calls.filter(c => c.url.endsWith('/delivery-review-history'))).to.have.length(1)
+      expect(s.client.historyContext.value.history).to.deep.equal([b]); expect(s.client.context.value.history).to.deep.equal([])
+    } finally { s.client.dispose() }
+  })
+  it('retains loaded pages and current acceptance when an older page fails, retrying the same cursor', async () => {
+    const b = await historical('old-1'); const c = await historical('old-2'); const cursors = []; let fail = true
+    const s = setup({ api: { get: async (url, params) => {
+      if (!url.endsWith('/delivery-review-history')) return current()
+      cursors.push(params.beforeRevision || null)
+      if (!params.beforeRevision) return { items: [b], nextCursor: '81', hasMore: true }
+      if (fail) throw new Error('history unavailable')
+      return { items: [c], nextCursor: null, hasMore: false }
+    } } })
+    try {
+      await ready(s.client); await s.client.loadHistory(); expect(await s.client.loadHistory()).to.equal(false)
+      expect(s.client.historyError.value).to.equal('history unavailable'); expect(s.client.canReview.value).to.equal(true)
+      expect(s.client.historyContext.value.history).to.deep.equal([b]); fail = false
+      expect(await s.client.loadHistory()).to.equal(true); expect(cursors).to.deep.equal([null, '81', '81'])
+      expect(s.client.historyContext.value.history).to.deep.equal([b, c]); expect(s.client.historyHasMore.value).to.equal(false)
+    } finally { s.client.dispose() }
+  })
+  it('keeps more than 100 explicitly loaded batches without using them as acceptance authority', async () => {
+    const batches = await Promise.all(Array.from({ length: 125 }, (_, i) => historical(`old-${125 - i}`)))
+    let pages = 0
+    const s = setup({ api: { get: async url => {
+      if (!url.endsWith('/delivery-review-history')) return current()
+      const items = batches.slice(pages * 20, ++pages * 20); const more = pages * 20 < batches.length
+      return { items, nextCursor: more ? String(126 - pages * 20) : null, hasMore: more }
+    } } })
+    try {
+      await ready(s.client); await s.client.loadHistory()
+      expect(pages).to.equal(1)
+      while (s.client.historyHasMore.value) await s.client.loadHistory()
+      expect(pages).to.equal(7); expect(s.client.historyContext.value.history).to.have.length(125)
+      expect(s.client.context.value.history).to.deep.equal([]); expect(s.client.canReview.value).to.equal(true)
+      await s.client.refresh(); expect(pages).to.equal(7); expect(s.client.historyContext.value.history).to.have.length(125)
+    } finally { s.client.dispose() }
+  })
+  it('does not skip a corrupt digest or nonadvancing cursor', async () => {
+    const b = await historical('old-1'); let response = { items: [b], nextCursor: '81', hasMore: true }
+    const s = setup({ api: { get: async url => url.endsWith('/delivery-review-history') ? response : current() } })
+    try {
+      await ready(s.client); await s.client.loadHistory()
+      expect(await s.client.loadHistory()).to.equal(false)
+      response = { items: [{ ...b, batchSha256: '0'.repeat(64) }], nextCursor: '61', hasMore: true }
+      expect(await s.client.loadHistory()).to.equal(false)
+      expect(s.client.historyContext.value.history).to.deep.equal([b]); expect(s.client.historyHasMore.value).to.equal(true)
+    } finally { s.client.dispose() }
+  })
+  for (const boundary of ['version', 'identity', 'dispose']) it(`cancels an in-flight page on ${boundary} change and fences its late result`, async () => {
+    let resolve; let signal; let c = current(); let reads = 0
+    const s = setup({ api: { get: async (url, _params, options) => {
+      if (!url.endsWith('/delivery-review-history')) return c
+      reads++; signal = options.signal; return new Promise(done => { resolve = done })
+    } } })
+    try {
+      await ready(s.client); const pending = s.client.loadHistory(); expect(await s.client.loadHistory()).to.equal(false)
+      expect(reads).to.equal(1)
+      if (boundary === 'version') { c = { ...c, taskVersion: '8' }; await s.client.refresh() }
+      else if (boundary === 'identity') { s.scope.value = 'other'; await ready(s.client) }
+      else s.client.dispose()
+      expect(signal.aborted).to.equal(true)
+      resolve({ items: [await historical('old-1')], nextCursor: null, hasMore: false }); await pending
+      expect(s.client.historyLoaded.value).to.equal(false); expect(s.client.historyContext.value?.history || []).to.deep.equal([])
+    } finally { s.client.dispose() }
+  })
+  it('uses explicit legacy v1 complete history without probing a new endpoint', async () => {
+    const s = setup()
+    try { await ready(s.client); const count = s.calls.length; await s.client.loadHistory(); expect(s.calls).to.have.length(count); expect(s.client.historyLoaded.value).to.equal(true) }
+    finally { s.client.dispose() }
+  })
 })

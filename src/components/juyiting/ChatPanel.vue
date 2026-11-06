@@ -15,7 +15,18 @@
           :disabled="conversationBusy || voice?.voiceInteractionLocked"
           @click="$emit('load-messages')"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 11-2l3 3M4 16l3 3a7 7 0 0 0 11-2" /></svg>
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          ><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 11-2l3 3M4 16l3 3a7 7 0 0 0 11-2" /></svg>
         </button>
         <button
           ref="historyButtonRef"
@@ -27,7 +38,18 @@
           :disabled="Boolean(conversationHistoryDeletingId) || voice?.voiceInteractionLocked"
           @click="toggleHistory"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5v5h5M3 10a9 9 0 1 1 2 8M12 7v5l3 2" /></svg>
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          ><path d="M3 5v5h5M3 10a9 9 0 1 1 2 8M12 7v5l3 2" /></svg>
         </button>
         <button
           v-if="!serverTaskCompleted && !isTaskDiscussion"
@@ -38,7 +60,18 @@
           :disabled="conversationBusy || voice?.voiceInteractionLocked"
           @click="$emit('new-conversation')"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14" /></svg>
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          ><path d="M12 5v14M5 12h14" /></svg>
         </button>
 
       </div>
@@ -71,104 +104,133 @@
     </div>
 
     <div ref="messageBoxRef" class="hall-messages" @scroll.passive="trackMessageScroll">
-      <div
-        v-for="message in displayedMessages"
-        :key="message.localId || message.timestamp"
-        class="hall-message"
-        :class="[message.sender, { 'is-streaming': message.streaming }]"
-      >
-        <div class="message-head">
-          <strong>{{ senderText(message) }}</strong>
-          <span v-if="message.streaming" class="message-state">正在回复…</span>
-        </div>
-        <div
-          v-if="discussionReplyStatus(message)"
-          class="discussion-turn-progress"
-          role="status"
-          aria-live="polite"
-        >
-          <span>{{ discussionReplyStatus(message) }}</span>
-        </div>
-        <p v-if="message.turnAwaitingType && !message.streaming" role="status">正在读取答复…</p>
-        <div v-if="discussionMessageText(message)" class="message-content" v-html="renderMarkdown(discussionMessageText(message))"></div>
-        <div v-if="isTaskDiscussion && message.typedTaskId === taskId && message.typedSourceSelectors?.length" class="message-parts" aria-label="本条消息资料">
-          <article v-for="(source, index) in message.typedSourceSelectors" :key="index" class="task-material-reference">
-            <template v-if="source.kind === 'TASK_LINKED_WORKSPACE_VERSION'">
-              <strong>{{ materialName(source) }}</strong><span>版本 {{ source.version }} · {{ source.purpose === 'INPUT' ? '输入资料' : '参考资料' }}</span>
-            </template>
-            <template v-else><strong>会话资料</strong><span>修订 {{ source.assetRevision }}</span></template>
-          </article>
-        </div>
-        <BountyTextSelectionArchive
-          v-if="isTaskDiscussion && discussionMessageText(message)"
-          :conversation-id="conversationId"
-          :identity-key="materialIdentityKey"
-          :message="message.turnOriginal || message"
-        />
-        <template v-for="delivery in message.turnDeliveries || []" :key="delivery.localId">
-          <div v-if="discussionDeliveryText(delivery)" class="message-content" v-html="renderMarkdown(discussionDeliveryText(delivery))"></div>
-          <BountyTextSelectionArchive
-            v-if="discussionDeliveryText(delivery)"
-            :conversation-id="conversationId"
-            :identity-key="materialIdentityKey"
-            :message="delivery.turnOriginal || delivery"
-          />
-        </template>
-        <HallMessageParts
-          :parts="message.parts"
-          :conversation-id="conversationId"
-          :identity-key="materialIdentityKey"
-          :identity-scope="identityScope"
-        >
-          <template #output-actions="{ part }">
-            <button
-              v-if="canReviewMessageOutputs && outputForPart(message, part)"
-              type="button"
-              class="message-output-accept"
-              :disabled="outputReviewBusy || conversationBusy || voice?.voiceInteractionLocked"
-              @click="reviewMessageOutput(outputForPart(message, part))"
-            >验收此版</button>
-          </template>
-        </HallMessageParts>
-        <div
-          v-for="output in textOutputsFor(message)"
-          :key="`${output.requestId}:${output.messageSource.turnId}:${output.messageSource.messageId}`"
-          class="message-output-actions"
-          role="group"
-          aria-label="文字成果操作"
-        >
-          <button type="button" @click="textOutputPreview = output" aria-label="预览文字成果" title="预览文字成果">预览</button>
-          <button
-            v-if="canReviewMessageOutputs"
-            type="button"
-            class="message-output-accept"
-            :disabled="outputReviewBusy || conversationBusy || voice?.voiceInteractionLocked"
-            @click="reviewMessageOutput(output)"
-          >验收此版</button>
-        </div>
-        <BountyTypedOutcomeCard
-          v-for="projection in typedForMessage(message)"
-          :key="projection.key"
-          :projection="projection"
-          :body-rendered="typedBodyRendered(message, projection)"
-          :read-only="serverTaskCompleted"
-          @reply="!serverTaskCompleted && $emit('typed-reply', $event)"
-        />
-        <slot name="turn-actions" :request-ids="message.turnRequestIds || []"></slot>
-        <small v-if="message.statusText && !message.turnProjections?.length && !message.turnControlRequest && !message.turnActionRequest && !message.turnAwaitingType" class="message-status">{{ message.statusText }}</small>
+      <div v-if="messagePageHasMore || messagePageError" class="message-history-page">
+        <button type="button" :disabled="messagePageLoading" @click="loadOlderMessages">
+          {{ messagePageLoading ? '正在加载…' : messagePageError ? '重试加载更早消息' : '加载更早消息' }}
+        </button>
+        <p v-if="messagePageError" role="alert">{{ messagePageError }}</p>
       </div>
+      <HallMessageWindow
+        :pages="messageWindows"
+        :messages="displayedMessages"
+        :pinned-ids="pinnedHistoryMessageIds"
+        :scroller="messageBoxRef"
+        :scope="`${materialIdentityKey}\u0000${conversationId}`"
+        :loading="messageWindowLoading"
+        :errors="messageWindowErrors"
+        @retain="$emit('retain-message-windows', $event)"
+        @load="$emit('load-message-window', $event)"
+      >
+        <template #default="{ message }">
+          <div
+            class="hall-message"
+            :class="[message.sender, { 'is-streaming': message.streaming }]"
+          >
+            <div class="message-head">
+              <strong>{{ senderText(message) }}</strong>
+              <span v-if="message.streaming" class="message-state">正在回复…</span>
+            </div>
+            <div
+              v-if="discussionReplyStatus(message)"
+              class="discussion-turn-progress"
+              role="status"
+              aria-live="polite"
+            >
+              <span>{{ discussionReplyStatus(message) }}</span>
+            </div>
+            <p v-if="message.typedDisplayUnavailable" role="status">结构化成果暂不可用，原回复正文仍可阅读。</p>
+            <p v-if="message.turnAwaitingType && !message.streaming" role="status">正在读取答复…</p>
+            <div v-if="discussionMessageText(message)" class="message-content" v-html="renderMarkdown(discussionMessageText(message))"></div>
+            <div v-if="isTaskDiscussion && message.typedTaskId === taskId && message.typedSourceSelectors?.length" class="message-parts" aria-label="本条消息资料">
+              <article v-for="(source, index) in message.typedSourceSelectors" :key="index" class="task-material-reference">
+                <template v-if="source.kind === 'TASK_LINKED_WORKSPACE_VERSION'">
+                  <strong>{{ materialName(source) }}</strong><span>版本 {{ source.version }} · {{ source.purpose === 'INPUT' ? '输入资料' : '参考资料' }}</span>
+                </template>
+                <template v-else><strong>会话资料</strong><span>修订 {{ source.assetRevision }}</span></template>
+              </article>
+            </div>
+            <BountyTextSelectionArchive
+              v-if="isTaskDiscussion && discussionMessageText(message)"
+              :conversation-id="conversationId"
+              :identity-key="materialIdentityKey"
+              :message="message.turnOriginal || message"
+            />
+            <template v-for="delivery in message.turnDeliveries || []" :key="delivery.localId">
+              <div v-if="discussionDeliveryText(delivery)" class="message-content" v-html="renderMarkdown(discussionDeliveryText(delivery))"></div>
+              <BountyTextSelectionArchive
+                v-if="discussionDeliveryText(delivery)"
+                :conversation-id="conversationId"
+                :identity-key="materialIdentityKey"
+                :message="delivery.turnOriginal || delivery"
+              />
+            </template>
+            <HallMessageParts
+              :parts="message.parts"
+              :conversation-id="conversationId"
+              :identity-key="materialIdentityKey"
+              :identity-scope="identityScope"
+            >
+              <template #output-actions="{ part }">
+                <button
+                  v-if="canReviewMessageOutputs && outputForPart(message, part)"
+                  type="button"
+                  class="message-output-accept"
+                  :disabled="outputReviewBusy || conversationBusy || voice?.voiceInteractionLocked"
+                  @click="reviewMessageOutput(outputForPart(message, part))"
+                >验收此版</button>
+              </template>
+            </HallMessageParts>
+            <div
+              v-for="output in textOutputsFor(message)"
+              :key="`${output.requestId}:${output.messageSource.turnId}:${output.messageSource.messageId}`"
+              class="message-output-actions"
+              role="group"
+              aria-label="文字成果操作"
+            >
+              <button
+                type="button"
+                aria-label="预览文字成果"
+                title="预览文字成果"
+                @click="textOutputPreview = output"
+              >预览</button>
+              <button
+                v-if="canReviewMessageOutputs"
+                type="button"
+                class="message-output-accept"
+                :disabled="outputReviewBusy || conversationBusy || voice?.voiceInteractionLocked"
+                @click="reviewMessageOutput(output)"
+              >验收此版</button>
+            </div>
+            <BountyTypedOutcomeCard
+              v-for="projection in typedForMessage(message)"
+              :key="projection.key"
+              :projection="projection"
+              :body-rendered="typedBodyRendered(message, projection)"
+              :read-only="serverTaskCompleted"
+              @reply="!serverTaskCompleted && $emit('typed-reply', $event)"
+            />
+            <slot name="turn-actions" :request-ids="message.turnRequestIds || []"></slot>
+            <small v-if="message.statusText && !message.turnProjections?.length && !message.turnControlRequest && !message.turnActionRequest && !message.turnAwaitingType" class="message-status">{{ message.statusText }}</small>
+          </div>
+        </template>
+      </HallMessageWindow>
       <slot name="bounty-results"></slot>
       <p v-if="discussionFooterStatus(deliberationStatus, isTaskDiscussion) && !serverTaskCompleted" class="deliberation-status" :role="deliberationStatus.startsWith('停止失败') ? 'alert' : 'status'">{{ deliberationStatus }}</p>
       <div v-if="isAwaitingReply && !serverTaskCompleted" class="hall-message SYSTEM is-pending">
         <strong>{{ pendingAuthor }}</strong>
         <div class="message-content" v-html="renderMarkdown(pendingLabel)"></div>
       </div>
-      <div v-if="!messages.length" class="empty-list">{{ emptyText }}</div>
+      <div v-if="!messages.length && !messageWindows.length" class="empty-list">{{ emptyText }}</div>
 
 
     </div>
 
-    <button v-if="hasUnseenMessages" type="button" class="new-messages-button" @click="followLatestMessages">查看新消息 ↓</button>
+    <button
+      v-if="hasUnseenMessages"
+      type="button"
+      class="new-messages-button"
+      @click="followLatestMessages"
+    >查看新消息 ↓</button>
 
     <Teleport to="body">
       <dialog
@@ -227,13 +289,45 @@
           <article v-for="link in activeMaterialLinks" :key="link.relationId" class="composer-attachment-card">
             <HallMaterialThumbnail :file-id="link.fileId" :version="link.version" :identity-key="materialIdentityKey" />
             <span class="composer-attachment-name"><strong :title="materialName(link)">{{ materialName(link) }}</strong><small>固定版本 v{{ link.version }}</small></span>
-            <button type="button" :aria-label="`预览 ${materialName(link)}`" @click="previewMaterial(link)" class="hall-tool" :title="`预览 ${materialName(link)}`"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+            <button
+              type="button"
+              :aria-label="`预览 ${materialName(link)}`"
+              class="hall-tool"
+              :title="`预览 ${materialName(link)}`"
+              @click="previewMaterial(link)"
+            ><svg
+              class="hall-control-icon"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              focusable="false"
+            ><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg></button>
             <button
               type="button"
               :disabled="materialSelectionBusy || materialActionBusy || materialUploadBusy || conversationBusy || serverTaskCompleted"
               :aria-label="`移除 ${materialName(link)}`"
+              class="hall-tool"
+              :title="`移除 ${materialName(link)}`"
               @click="removeMaterialReference(link)"
-             class="hall-tool" :title="`移除 ${materialName(link)}`"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+            ><svg
+              class="hall-control-icon"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              focusable="false"
+            ><path d="m6 6 12 12M18 6 6 18" /></svg></button>
           </article>
         </div>
       </template>
@@ -299,6 +393,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import HallMessageParts from './HallMessageParts.vue'
+import HallMessageWindow from './HallMessageWindow.vue'
 import { projectHallTask } from '../../composables/juyiting/hallTaskPresentation.js'
 import BountyTextSelectionArchive from './BountyTextSelectionArchive.vue'
 import { marked } from 'marked'
@@ -346,6 +441,12 @@ const props = defineProps({
   identityScope: { type: String, default: '' },
   mentionLabel: { type: Function, required: true },
   messages: { type: Array, default: () => [] },
+  messageWindows: { type: Array, default: () => [] },
+  messageWindowLoading: { type: Object, default: () => new Set() },
+  messageWindowErrors: { type: Object, default: () => ({}) },
+  messagePageHasMore: { type: Boolean, default: false },
+  messagePageLoading: { type: Boolean, default: false },
+  messagePageError: { type: String, default: '' },
   pendingAgentName: { type: String, default: '' },
   placeholder: { type: String, default: '向聚义厅传话，或 @某位好汉' },
   selectedAgent: { type: Object, default: null },
@@ -371,6 +472,9 @@ const emit = defineEmits([
   'load-history',
   'load-more-history',
   'load-messages',
+  'load-older-messages',
+  'retain-message-windows',
+  'load-message-window',
   'mention-agent',
   'new-conversation',
   'open-workspace',
@@ -424,6 +528,9 @@ const reviewMessageOutput = item => {
   if (canReviewMessageOutputs.value && !props.outputReviewBusy && !props.conversationBusy && !props.voice?.voiceInteractionLocked && props.outputCandidates.includes(item)) emit('accept-output', item)
 }
 const textOutputPreview = ref(null)
+const pinnedHistoryMessageIds = computed(() => props.typedOutcomes.filter(projection =>
+  props.typedPendingQuestion && projection.outcome?.outcomeId === props.typedPendingQuestion?.parentOutcomeId
+).map(projection => projection.outcome.assistantMessageId).concat(textOutputPreview.value?.messageSource?.messageId || []))
 const textOutputDialog = ref(null)
 let textPreviewReturnFocus = null
 const closeTextOutputPreview = event => { if (event.target === textOutputDialog.value) textOutputPreview.value = null }
@@ -598,6 +705,11 @@ const pendingLabel = computed(() => {
 })
 const renderMarkdown = (content = '') => DOMPurify.sanitize(marked(String(content || '')))
 
+const loadOlderMessages = () => {
+  if (props.messagePageLoading) return
+  followingMessages.value = false
+  emit('load-older-messages')
+}
 const followingMessages = ref(true)
 const hasUnseenMessages = ref(false)
 const trackMessageScroll = () => {
@@ -615,6 +727,7 @@ const followLatestMessages = () => {
   if (box) box.scrollTop = box.scrollHeight
 }
 watch(() => props.messages, () => {
+  if (props.messagePageLoading) return
   if (!followingMessages.value) { hasUnseenMessages.value = true; return }
   nextTick(() => { if (followingMessages.value) followLatestMessages() })
 }, { deep: true })

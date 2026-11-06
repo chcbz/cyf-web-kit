@@ -35,16 +35,17 @@ describe('SSE interrupted typed round terminal recovery', () => {
       onRequestCatalogHint: event => { catalogHints.push(event); return catalogResult },
       chatApi: {
         list: async () => ({ items: [{ id: '101', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:474' }] }),
-        get: async path => {
-          if (path === '/conversations/101/requests') return { schemaVersion: 1, scope: { taskId: '474', conversationId: '101', conversationGeneration: '1' }, after: '0', through: '0', nextAfter: null, hasMore: false, entries: [] }
+        get: async (path, params, options) => {
+          if (path === '/conversation/messages') {
+            expect(params.id).to.equal('101'); contentReads++
+            const pageOptions = { ...options, onSuccess: messages => options.onSuccess({ items: messages, hasMore: false, nextCursor: null, outcomeSummaries: [], requestPage: { schemaVersion: 1, scope: { taskId: '474', conversationId: '101', conversationGeneration: '1' }, after: '0', through: '0', nextAfter: null, hasMore: false, entries: [], eventCursor: '0' } }) }
+            if (contentOverride) return contentOverride(pageOptions)
+            return pageOptions.onSuccess(currentView.state === 'COMPLETED' ? [{ id: '187', messageType: 'AGENT', senderType: 'agent', senderName: '吴用', content: '同一原请求的持久最终答复' }] : [])
+          }
+          if (path === '/conversations/101/requests') return { schemaVersion: 1, scope: { taskId: '474', conversationId: '101', conversationGeneration: '1' }, after: '0', through: '0', nextAfter: null, hasMore: false, entries: [], eventCursor: '0' }
           expect(path).to.equal('/requests/request-186'); reads++
           return readOverride ? readOverride() : structuredClone(currentView)
         },
-        getById: async (_path, id, options) => {
-          expect(id).to.equal('101'); contentReads++
-          if (contentOverride) return contentOverride(options)
-          options.onSuccess(currentView.state === 'COMPLETED' ? [{ id: '187', messageType: 'AGENT', senderType: 'agent', senderName: '吴用', content: '同一原请求的持久最终答复' }] : [])
-        }
       } })
     expect(await hall.loadHallMessages()).to.equal(true)
     expect(await hall.adoptTypedDiscussionReceipt({ receipt, context })).to.equal(true)
@@ -56,10 +57,9 @@ describe('SSE interrupted typed round terminal recovery', () => {
   const disconnect = async () => { streams.at(-1).error(new TypeError('network error: ERR_HTTP2_PROTOCOL_ERROR')); await flush() }
   const reconnect = async () => { expect(timers.size).to.equal(1); const [id, callback] = [...timers][0]; timers.delete(id); await callback(); await flush() }
 
-  it('shares the real chat connection with acceptance through replay, live updates and reconnection', async () => {
+  it('keeps original-conversation discovery independent of chat replay and reconnects', async () => {
     let catalogueReads = 0
     const acceptance = useHallBountyAcceptance({ taskId: () => '474', identityKey: () => 'owner',
-      eventSource: () => hall.acceptanceEventSource,
       api: { list: async () => ({ items: [{ id: '101', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:474' }] }),
         get: async () => { catalogueReads++; return { schemaVersion: 1, scope: { taskId: '474', conversationId: '101', conversationGeneration: '1' },
           after: '0', through: '1', nextAfter: null, hasMore: false, entries: [{ ordinal: '1', request: { ...structuredClone(currentView),
@@ -72,19 +72,41 @@ describe('SSE interrupted typed round terminal recovery', () => {
       streams.at(-1).enqueue(new TextEncoder().encode(`event: ${m.messageType}\nid: ${m.messageId}\ndata: ${JSON.stringify(m)}\n\n`))
     }
     try {
-      await flush(); expect(streams).to.have.length(1); expect(catalogueReads).to.equal(1)
+      await flush(); expect(streams).to.have.length(1); expect(catalogueReads).to.equal(0)
       expect(acceptance.catalog.error.value).to.equal('')
-      emit('delivery_submission_completed', 9201); await flush(); expect(catalogueReads).to.equal(1)
-      emit('stream_ready', 9201); await flush(); expect(catalogueReads).to.equal(2)
+      emit('delivery_submission_completed', 9201); await flush(); expect(catalogueReads).to.equal(0)
+      emit('stream_ready', 9201); await flush(); expect(catalogueReads).to.equal(0)
       currentView = view('COMPLETED'); emit('delivery_submission_completed', 9202); await flush()
-      expect(catalogueReads).to.equal(3); expect(acceptance.catalog.entries.value[0].request.state).to.equal('COMPLETED')
-      expect(hall.acceptanceEventSource.sharedEvent()).to.deep.equal({ type: 'delivery_submission_completed', conversationId: '101' })
-      await disconnect(); expect(hall.acceptanceEventSource.sharedConversationId()).to.equal('101')
-      expect(acceptance.error.value).not.to.equal(''); expect(streams).to.have.length(1)
+      expect(catalogueReads).to.equal(0); expect(acceptance.catalog.entries.value).to.deep.equal([])
+      expect(hall).not.to.have.property('acceptanceEventSource')
+      await disconnect(); expect(hall).not.to.have.property('acceptanceEventSource')
+      expect(acceptance.error.value).to.equal(''); expect(streams).to.have.length(1)
       await reconnect(); expect(streams).to.have.length(2)
-      emit('stream_ready', 9202); await flush(); expect(catalogueReads).to.equal(4); expect(acceptance.error.value).to.equal('')
+      emit('stream_ready', 9202); await flush(); expect(catalogueReads).to.equal(0); expect(acceptance.error.value).to.equal('')
     } finally { acceptance.dispose() }
-    expect(hall.acceptanceEventSource.sharedConversationId()).to.equal('101')
+    expect(hall).not.to.have.property('acceptanceEventSource')
+  })
+  for (const active of [true, false]) it(`retains replay changes across disconnect with active request=${active}`, async () => {
+    if (!active) hall.activeRequest.value = null
+    const emit = (type, sequence) => {
+      const ready = type === 'stream_ready'
+      const m = eventMessage(streamHeaders.at(-1).get('X-Request-Id'), ready ? 'conversation.stream.ready' : 'conversation.event',
+        `conversation:101:${ready ? 'ready:fixture' : sequence}`, { type, conversationId: '101',
+          ...(ready ? { cursor: String(sequence), nextCursor: String(sequence) } : { requestId: 'historical-review', eventSequence: String(sequence), occurredAt: 1000 }) })
+      streams.at(-1).enqueue(new TextEncoder().encode(`event: ${m.messageType}\nid: ${m.messageId}\ndata: ${JSON.stringify(m)}\n\n`))
+    }
+    const before = catalogHints.length
+    emit('delivery_review_changed', 9201); await flush()
+    expect(catalogHints).to.have.length(before)
+    await disconnect(); await reconnect()
+    expect(streamHeaders.at(-1).get('Last-Event-ID')).to.equal('conversation:101:9201')
+    expect(catalogHints).to.have.length(before + (active ? 1 : 0))
+    // The server does not replay the acknowledged event again.
+    emit('stream_ready', 9201); await flush()
+    expect(catalogHints.slice(before).map(hint => hint.type)).to.deep.equal(['resync_required'])
+    emit('delivery_review_changed', 9202); await flush()
+    expect(catalogHints.at(-1).requestId).to.equal('historical-review')
+    expect(catalogHints).to.have.length(before + 2)
   })
   it('reads the exact terminal request and persistent final before the existing reconnect, without a second send or listener', async () => {
     currentView = view('COMPLETED'); await disconnect(); await reconnect()

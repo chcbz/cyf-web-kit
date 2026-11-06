@@ -23,7 +23,7 @@ describe('message-origin v5 revision strict reader', () => {
 })
 
 // Exercise the real read adapter: a child already projected as PENDING must still advance.
-import { useHallTypedDeliberation } from '../src/composables/juyiting/useHallTypedDeliberation.js'
+import { useHallTypedDeliberation } from './fixtures/juyiting/delivery-context-api.mjs'
 import { effectScope } from 'vue'
 describe('revision feedback and existing refresh continuation', () => {
   it('keeps queued/running revisions live without treating child completion as acceptance', () => {
@@ -51,7 +51,7 @@ describe('revision feedback and existing refresh continuation', () => {
       assert.equal(reviewProgressAdvances(value.reviewProgress, { ...value.reviewProgress, childState: 'COMPLETED', childStateVersion: '4' }), true)
     }
   })
-  it('re-reads the committed child on later parent refresh without any POST or new listener', async () => {
+  it('does not recursively read review descendants; reads a child only when explicitly displayed or hinted', async () => {
     const parent = fixture()
     parent.reviewProgress = { ...parent.reviewProgress, operationId: 'review', state: 'COMMITTED', stateVersion: '2', childRequestId: 'child', childState: 'RUNNING', childStateVersion: '0' }
     const child = { ...fixture(), requestId: 'child', turnId: 'child-turn', state: 'PENDING', outcome: null, reviewProgress: null }
@@ -64,10 +64,12 @@ describe('revision feedback and existing refresh continuation', () => {
     }, actorScopeKey: 'owner', authorizationGeneration: 1, getContext: () => context, getContextGeneration: () => 1,
     getCatalogEntries: () => [{ request: { requestId: parent.requestId, turns: [{ route: 'CHAT' }] } }], enabled: () => true }))
     try {
-      await adapter.refresh(); assert.equal(adapter.projections.value.find(p => p.requestId === 'child')?.state, 'PENDING')
-      completed = true; await adapter.refresh()
+      assert.equal(adapter.adoptPage([parent]), true); assert.equal(adapter.projections.value.find(p => p.requestId === 'child'), undefined)
+      assert.equal(calls.filter(p => p.includes('/child/')).length, 0)
+      assert.equal(adapter.adoptPage([child]), true); assert.equal(adapter.projections.value.find(p => p.requestId === 'child')?.state, 'PENDING')
+      completed = true; assert.equal(adapter.adoptPage([{ ...child, state: 'READY', outcome: { ...parent.outcome, outcomeId: 'child-outcome', kind: 'ANSWER', text: '修改后答复', revision: null } }]), true)
       assert.equal(adapter.projections.value.find(p => p.requestId === 'child')?.state, 'READY')
-      assert.equal(calls.filter(p => p.includes('/child/')).length, 2)
+      assert.equal(calls.length, 0)
     } finally { adapter.dispose(); scope.stop() }
   })
 })

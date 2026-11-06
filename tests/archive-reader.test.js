@@ -1,4 +1,5 @@
 import { useHallCampaignGrant } from '../src/composables/juyiting/useHallCampaignGrant.js'
+import { useHallTerminalTextHistory } from '../src/composables/juyiting/useHallTerminalTextHistory.js'
 import { useHallAgentAbilitiesEditor } from '../src/composables/juyiting/useHallAgentAbilitiesEditor.js'
 import { useHallSelectedOutputReview } from '../src/composables/juyiting/useHallSelectedOutputReview.js'
 import { selectionKey } from '../src/composables/juyiting/hallSelectedOutputs.js'
@@ -344,7 +345,7 @@ const createHallIntegrationMocks = ({ mode, LibraryPanel, TaskWorkspacePanel, wo
     useHallDrafts,
     useHallRequirementCreate: () => ({ state: Vue.ref({ error: '' }), busy: Vue.ref(false), create: async () => false, checkOriginal: async () => false, resumeOriginal: async () => false, readOriginal: () => ({ state: 'ABSENT' }), dispose: noop }),
     // Real read adapters stay inert without a cancelled-task source.
-    useOutputs, useHallBountyAcceptance,
+    useOutputs, useHallBountyAcceptance, useHallTerminalTextHistory,
     useHallBountyAssignmentContext: () => ({ projection: Vue.ref(null), error: Vue.ref(''), refresh: async () => false, dispose: noop }),
     useHallBountyRequestCatalog: () => ({ entries: Vue.ref([]), hint: noop, reset: noop, refresh: asyncNoop, dispose: noop }),
     useHallBountyFollowup: () => ({ state: Vue.ref({}), busy: Vue.ref(false), prepareGenerate: async () => false, prepareEdit: async () => false, confirm: async () => false, checkOriginal: async () => false, invalidate: noop, dispose: noop }),
@@ -396,7 +397,7 @@ const loadLibraryPanelSfc = (ArchiveReader) => {
   const body = compileScript(descriptor, { id: 'archive-library-integration', inlineTemplate: true }).content
     .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar)
     .replace(/^import\s+ArchiveReader\s+from\s+['"].\/archive\/ArchiveReader\.vue['"];?\s*$/gm, 'var ArchiveReader = arguments[1]')
-    .replace(/^import\s+ArchiveMaintenance\s+from\s+['"].\/archive\/ArchiveMaintenance\.vue['"];?\s*$/gm, 'var ArchiveMaintenance = Vue.defineComponent({render: () => null})')
+    .replace(/^import\s+ArchivePositions\s+from\s+['"].\/archive\/ArchivePositions\.vue['"];?\s*$/gm, 'var ArchivePositions = Vue.defineComponent({render: () => null})')
     .replace('export default', 'return')
   return new Function('Vue', 'ArchiveReader', body)(Vue, ArchiveReader)
 }
@@ -741,11 +742,16 @@ describe('archive reader contract behavior', () => {
 
     const source = readFileSync(new URL('../src/components/juyiting/archive/ArchiveReader.vue', import.meta.url), 'utf8')
     expect(source).to.match(/@media \(max-width: 900px\) \{[\s\S]*?\.reader-layout\.notes-open \.reader-notes\s*\{[\s\S]*?display:\s*block;/)
-    expect(source).to.match(/@media \(max-width: 900px\) and \(orientation: portrait\) \{[\s\S]*?\.reader-exit-long,[\s\S]*?\.reader-exit-short \{[\s\S]*?display:\s*inline;/)
+    expect(wrapper.get('.reader-exit').attributes('aria-label')).to.equal('返回典籍列表')
+    expect(wrapper.get('.reader-exit').text()).to.equal('')
+    expect(source).not.to.include("content: '目录'")
     expect(source).to.match(/\.reader-notes\s*\{[\s\S]*?display:\s*none;/)
     expect(source).to.match(/\.is-virtual-landscape-reader \.reader-notes\s*\{[\s\S]*?position:\s*static;[\s\S]*?display:\s*block;/)
     expect(source).to.match(/@media \(max-height: 540px\) and \(orientation: landscape\)[\s\S]*?\.reader-notes\s*\{[\s\S]*?position:\s*static;[\s\S]*?display:\s*block;/)
-    expect(source).to.match(/\.reader-actions\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/)
+    expect(source).to.match(/\.reader-actions\s*\{[\s\S]*?display:\s*flex;[\s\S]*?flex-wrap:\s*nowrap;/)
+    // The actual 320px host leaves only 222px for five 44px controls.
+    expect(source).to.match(/\.reader-actions\s*\{[^}]*gap:\s*0;/)
+    expect(source).to.match(/@media \(max-width: 900px\) and \(orientation: portrait\)[\s\S]*?\.reader-actions\s*\{[^}]*gap:\s*0;/)
     expect(source).to.match(/\.reader-actions button\s*\{[\s\S]*?min-height:\s*40px;/)
     expect(source).to.match(/\.has-reader-capsule:not\(\.is-virtual-landscape-reader\) \.reader-header\s*\{[\s\S]*?padding-right:\s*112px;/)
     wrapper.unmount()
@@ -783,7 +789,7 @@ describe('archive reader contract behavior', () => {
     { name: 'invalid native route with SDK', query: '?nativeOrientation=auto', sdk: true, capsule: false }
   ]) {
     for (const virtualLandscape of [false, true]) {
-      it(`binds capsule protection on the teleported ${virtualLandscape ? 'rotated' : 'unrotated'} reader in a ${environment.name}`, async () => {
+      it(`reserves capsule space only on the teleported ${virtualLandscape ? 'rotated' : 'unrotated'} reader in a ${environment.name}`, async () => {
         const originalUrl = window.location.href
         const originals = [
           [globalThis.navigator, 'userAgent'],
@@ -813,6 +819,13 @@ describe('archive reader contract behavior', () => {
           await wrapper.setProps({ virtualLandscape: !virtualLandscape })
           expect(dialog.classList.contains('has-reader-capsule')).to.equal(environment.capsule)
           expect(dialog.classList.contains('is-virtual-landscape-reader')).to.equal(!virtualLandscape)
+
+          wrapper.unmount()
+          wrapper = mountArchiveReader(makeApi(), { initialView: 'reader', embedded: true, virtualLandscape })
+          await waitFor(() => !wrapper.readerState.loading.value && wrapper.find('.archive-reader-fullscreen').exists())
+          expect(wrapper.get('.archive-reader-fullscreen').classes()).not.to.include('has-reader-capsule')
+          await wrapper.setProps({ virtualLandscape: !virtualLandscape })
+          expect(wrapper.get('.archive-reader-fullscreen').classes()).not.to.include('has-reader-capsule')
         } finally {
           wrapper?.unmount()
           window.history.replaceState(null, '', originalUrl)
@@ -2786,7 +2799,7 @@ describe('archive reader contract behavior', () => {
         expect(readerUnmounts).to.equal(0)
       }
       const hall = wrapper.vm
-      await wrapper.findAll('button').find(button => button.text() === '引用当前段落起草交办').trigger('click')
+      await wrapper.get('button[aria-label="引用当前段落起草交办"]').trigger('click')
       await settle()
       expect(hall.panelDepth).to.equal(3)
       expect(hall.panelFrames).to.deep.equal(['library', 'formalDraft'])
@@ -2847,7 +2860,7 @@ describe('W04 explicit reading citation continuity', () => {
       await wrapper.findAll('.reader-paragraph')[1].trigger('click')
       const location = { ...reader.currentLocation.value }
       const chapter = reader.chapter.value
-      await wrapper.findAll('button').find(button => button.text() === '引用当前段落起草交办').trigger('click')
+      await wrapper.get('button[aria-label="引用当前段落起草交办"]').trigger('click')
       const context = wrapper.emitted('start-draft')[0][0]
       expect(context.originRef).to.equal('juyiting:archive')
       expect(context.instruction).to.include(editionId).and.include(location.paragraphId).and.include('引首第二段')
@@ -2975,6 +2988,128 @@ describe('archive multi-book data-driven shelf', () => {
     } finally { oldNotes.resolve(response({ items: [], nextCursor: null })); mounted.wrapper.unmount() }
   })
 
+  it('recovers a failed progress CAS on explicit book selection without losing the old position', async () => {
+    const api = multiApi()
+    const get = api.get
+    const put = api.put
+    let version = '0'
+    let fail = true
+    api.get = async (path, params, options) => path === `/me/progress/${editionId}` && version !== '0'
+      ? { editionId, version, location: point(preface, preface.paragraphs[1]) }
+      : get(path, params, options)
+    api.put = async (path, body, options) => {
+      if (path === `/me/progress/${editionId}`) {
+        api.calls.push({ method: 'put', path, body, options })
+        if (fail) { version = '7'; throw Object.assign(new Error('conflict'), { status: 409 }) }
+        expect(body.expectedVersion).to.equal('7')
+        return { editionId, version: '8', location: body.location }
+      }
+      return put(path, body, options)
+    }
+    const mounted = mountReader(api)
+    try {
+      await mounted.reader.initialize()
+      mounted.reader.setCurrentParagraph(preface.paragraphs[0], 3)
+      const position = { ...mounted.reader.currentLocation.value }
+      await mounted.reader.flushProgress()
+      expect(mounted.reader.saveState.value).to.equal('error')
+      const failedPuts = api.calls.filter(call => call.method === 'put').length
+      await mounted.reader.flushProgress()
+      expect(api.calls.filter(call => call.method === 'put')).to.have.length(failedPuts)
+      fail = false
+      await mounted.reader.openBook(secondCatalog.workId)
+      expect(mounted.reader.catalog.value.workId).to.equal(secondCatalog.workId)
+      const saves = api.calls.filter(call => call.method === 'put' && call.path === `/me/progress/${editionId}`)
+      expect(saves).to.have.length(2)
+      expect(saves[1].body.location).to.deep.equal(position)
+      expect(saves[1].options.headers['Idempotency-Key']).not.to.equal(saves[0].options.headers['Idempotency-Key'])
+    } finally { mounted.wrapper.unmount() }
+  })
+
+  it('shows failed switching on the shelf and retries progress before allowing another book', async () => {
+    const api = multiApi()
+    const put = api.put
+    let fail = true
+    api.put = (path, body, options) => {
+      if (fail && path.startsWith('/me/progress/')) throw Object.assign(new Error('unavailable'), { status: 503 })
+      return put(path, body, options)
+    }
+    const wrapper = mountArchiveReader(api, { initialView: 'catalog' })
+    try {
+      await waitFor(() => wrapper.findAll('.archive-book-open').length === 2)
+      await wrapper.findAll('.archive-book-open')[0].trigger('click')
+      await waitFor(() => wrapper.find('.reader-exit').exists())
+      const state = wrapper.readerState
+      state.setCurrentParagraph(preface.paragraphs[0], 0)
+      await state.flushProgress()
+      await wrapper.get('.reader-exit').trigger('click')
+      await wrapper.findAll('.archive-book-open')[1].trigger('click')
+      await waitFor(() => wrapper.find('.archive-shelf-error').exists() && state.saveState.value === 'error')
+      expect(wrapper.find('.archive-reader-fullscreen').exists()).to.equal(false)
+      expect(wrapper.get('.archive-shelf-error').attributes('role')).to.equal('alert')
+      expect(wrapper.get('.archive-shelf-error').text()).to.include('阅读进度')
+      expect(state.catalog.value.workId).to.equal(catalog.workId)
+      fail = false
+      await wrapper.get('.archive-progress-retry').trigger('click')
+      await waitFor(() => state.saveState.value === 'saved')
+      expect(wrapper.find('.archive-shelf-error').exists()).to.equal(false)
+      await wrapper.findAll('.archive-book-open')[1].trigger('click')
+      await waitFor(() => state.chapter.value?.editionId === secondEdition)
+    } finally { wrapper.unmount() }
+  })
+
+  it('shares an in-flight explicit progress retry and keeps CAS failure recoverable', async () => {
+    const api = multiApi()
+    const get = api.get
+    const pending = deferred()
+    let retrying = false
+    let writes = 0
+    api.get = (path, params, options) => retrying && path === `/me/progress/${editionId}`
+      ? pending.promise : get(path, params, options)
+    api.put = async () => { writes += 1; throw Object.assign(new Error('conflict'), { status: 409 }) }
+    const mounted = mountReader(api)
+    try {
+      await mounted.reader.initialize()
+      mounted.reader.setCurrentParagraph(preface.paragraphs[0], 0)
+      await mounted.reader.flushProgress()
+      retrying = true
+      const first = mounted.reader.flushProgress({ retryFailed: true })
+      const second = mounted.reader.openBook(secondCatalog.workId).catch(error => error)
+      expect(mounted.reader.saveState.value).to.equal('saving')
+      pending.resolve(null)
+      await first
+      expect((await second).message).to.include('暂未保存')
+      expect(writes).to.equal(2)
+      expect(mounted.reader.catalog.value.workId).to.equal(catalog.workId)
+      expect(mounted.reader.saveState.value).to.equal('error')
+    } finally { pending.resolve(null); mounted.wrapper.unmount() }
+  })
+
+  it('does not write a failed progress retry after identity changes during reconciliation', async () => {
+    const api = multiApi()
+    const get = api.get
+    const pending = deferred()
+    let retrying = false
+    let writes = 0
+    api.get = (path, params, options) => retrying && path === `/me/progress/${editionId}`
+      ? pending.promise : get(path, params, options)
+    api.put = async () => { writes += 1; throw Object.assign(new Error('unavailable'), { status: 503 }) }
+    const mounted = mountReader(api)
+    try {
+      await mounted.reader.initialize()
+      mounted.reader.setCurrentParagraph(preface.paragraphs[0], 0)
+      await mounted.reader.flushProgress()
+      retrying = true
+      const retry = mounted.reader.flushProgress({ retryFailed: true })
+      stopIdentityBoundWork()
+      pending.resolve({ editionId, version: '3', location: point(preface, preface.paragraphs[0]) })
+      await retry
+      expect(writes).to.equal(1)
+      expect(mounted.reader.currentLocation.value).to.equal(null)
+      expect(mounted.reader.progress.value).to.equal(null)
+    } finally { pending.resolve(null); mounted.wrapper.unmount() }
+  })
+
   it('keeps the current book and reports a failed progress save instead of discarding it on switch', async () => {
     const api = multiApi()
     const put = api.put
@@ -3048,5 +3183,67 @@ describe('archive question foreground recovery', () => {
       expect(reader.question.value.status).to.equal('SUCCEEDED')
       expect(api.calls.filter(call => ['put', 'post'].includes(call.method))).to.have.length(0)
     } finally { wrapper.unmount(); await settle() }
+  })
+})
+
+describe('archive reader icon commands', () => {
+  it('renders all five footer commands as named icons and preserves citation, navigation and bookmark actions', async () => {
+    const api = makeApi()
+    const wrapper = mountArchiveReader(api, { embedded: true })
+    try {
+      await waitFor(() => wrapper.readerState.chapter.value?.blockId === preface.blockId)
+      const footer = wrapper.get('.reader-actions')
+      const labels = ['引用当前段落起草交办', '继续阅读', '上一回', '下一回', '添加书签']
+      expect(footer.findAll('button').map(button => button.attributes('aria-label'))).to.deep.equal(labels)
+      for (const button of footer.findAll('button')) {
+        expect(button.text()).to.equal('')
+        expect(button.attributes('title')).to.equal(button.attributes('aria-label'))
+        expect(button.get('svg').attributes('aria-hidden')).to.equal('true')
+        expect(button.classes()).to.include('reader-icon-button')
+        expect(button.classes()).to.include('hall-tool')
+      }
+      expect(footer.get('[aria-label="上一回"]').element.disabled).to.equal(true)
+      await footer.get('[aria-label="引用当前段落起草交办"]').trigger('click')
+      expect(wrapper.emitted('start-draft')).to.have.length(1)
+      await footer.get('[aria-label="下一回"]').trigger('click')
+      await waitFor(() => wrapper.readerState.chapter.value?.blockId === chapterOne.blockId)
+      expect(footer.get('[aria-label="上一回"]').element.disabled).to.equal(false)
+      await footer.get('[aria-label="添加书签"]').trigger('click')
+      await waitFor(() => wrapper.readerState.bookmarks.value.length === 1)
+      const bookmark = wrapper.get('[aria-label^="跳转书签："]')
+      expect(bookmark.text()).to.equal('')
+      expect(bookmark.find('svg').exists()).to.equal(true)
+      expect(wrapper.get('.bookmark-location').text()).not.to.equal('')
+      await bookmark.trigger('click')
+      await footer.get('[aria-label="继续阅读"]').trigger('click')
+      await settle()
+      expect(wrapper.readerState.chapter.value.blockId).to.equal(chapterOne.blockId)
+    } finally { wrapper.unmount() }
+  })
+
+  it('keeps icon-only note save disabled and announces its pending state until the write completes', async () => {
+    const pending = deferred()
+    const api = makeApi({ putHandler: call => {
+      if (call.path.startsWith('/me/notes/')) return pending.promise
+      return response({ editionId, location: call.body.location, state: 'IN_PROGRESS', version: '1' })
+    } })
+    const wrapper = mountArchiveReader(api, { embedded: true })
+    try {
+      await waitFor(() => !!wrapper.readerState.currentLocation.value)
+      const save = wrapper.get('.note-save')
+      expect(save.element.disabled).to.equal(true)
+      await wrapper.get('textarea[aria-label="当前段落私人阅读笔记"]').setValue('图标按钮回归')
+      expect(save.element.disabled).to.equal(false)
+      await save.trigger('click')
+      expect(save.text()).to.equal('')
+      expect(save.find('svg').exists()).to.equal(true)
+      expect(save.attributes('aria-label')).to.equal('保存中…')
+      expect(save.attributes('aria-busy')).to.equal('true')
+      expect(save.element.disabled).to.equal(true)
+      pending.resolve(response({ noteId: 'icon-note', text: '图标按钮回归', version: '1', location: wrapper.readerState.currentLocation.value }))
+      await waitFor(() => !wrapper.readerState.notePending.value)
+      expect(save.attributes('aria-label')).to.equal('保存笔记')
+      expect(save.attributes('aria-busy')).to.equal('false')
+    } finally { pending.resolve(null); wrapper.unmount() }
   })
 })

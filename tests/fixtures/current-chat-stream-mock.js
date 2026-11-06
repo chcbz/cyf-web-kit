@@ -1,7 +1,18 @@
 // Maintained business tests use the current transport, independently of production codecs.
 // The public envelope decoder has its own malformed/association/EOF regressions.
 export function currentChatStreamMock(api) {
-  if (!api?.create) return api
+  if (!api) return api
+  // Existing business fixtures supply message arrays. Adapt those fixtures to the
+  // explicit page contract; dedicated message-page tests exercise the real GET.
+  const fixture = api
+  api = Object.assign(Object.create(fixture), { get: (path, params, options) => {
+    if (path === '/conversation/messages' && fixture.getById) {
+      return fixture.getById(path, params.id, { ...options,
+        onSuccess: messages => options.onSuccess({ items: messages, hasMore: false, nextCursor: null }) })
+    }
+    return fixture.get?.(path, params, options)
+  } })
+  if (!api.create) return api
   return Object.assign(Object.create(api), { create: (path, body, options = {}) => {
     if (path !== '/stream') return api.create(path, body, options)
     const requestId = 'test-transport'; let sequence = 0; let started = false; let conversationId; let opened = false; let ended = false
@@ -38,8 +49,8 @@ export function currentChatStreamMock(api) {
 }
 
 export function conversationFrame(event, sequence, requestId = 'test-events') {
-  const data = { ...event, occurredAt: Number(event.occurredAt || 1000) }
   const ready = event.type === 'stream_ready'
+  const data = ready ? { ...event } : { ...event, occurredAt: Number(event.occurredAt || 1000) }
   const messageType = ready ? 'conversation.stream.ready' : 'conversation.event'
   const messageId = `conversation:${event.conversationId}:${ready ? 'ready:fixture' : sequence}`
   return `event: ${messageType}\nid: ${messageId}\ndata: ${JSON.stringify({ protocolVersion: 1, requestId, messageType, messageId, data })}\n\n`

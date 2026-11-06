@@ -75,13 +75,13 @@ describe('five fixes real mounted output consumers', () => {
     const clock = timers(); const h = acceptanceHarness(); let wrapper
     try {
       wrapper = mount(h.Panel, { props: { taskId: 'task', identityKey: 'owner-five', taskVersion: '9', taskCompleted: true } }); await settle()
-      expect(wrapper.text()).to.include('事项已完成')
+      expect(wrapper.text()).to.include('事项成果')
       const initial = h.counts()
       for (let i = 0; i < 3; i++) await clock.tick()
-      const expected = 1
+      const expected = 0
       expect(h.counts()).to.deep.equal({ catalog: expected, request: expected, typed: expected })
       if (process.env.JYT_FIVE_EVIDENCE) writeFileSync(`${process.env.JYT_FIVE_EVIDENCE}/poll-after.json`,
-        JSON.stringify({ mounted: 'real BountyAcceptancePanel + useHallBountyAcceptance + real BountyExecutionOutputs', cycles: 3, initial, final: h.counts(), reads: h.reads }, null, 2))
+        JSON.stringify({ mounted: 'real BountyAcceptancePanel + conversation discovery only', cycles: 3, initial, final: h.counts(), reads: h.reads }, null, 2))
     } finally { wrapper?.unmount(); clock.restore() }
   })
 })
@@ -157,47 +157,42 @@ describe('five fixes cancellation thin confirmation layer', () => {
 
 describe('five fixes poll lifecycle and projection hints', () => {
   beforeEach(() => window.sessionStorage.clear())
-  it('quiets a terminal request even before domain acceptance, but preserves manual refresh', async () => {
+  it('does not read any conversation requests on mount, idle or task version changes', async () => {
     const clock = timers(); const h = acceptanceHarness(); let wrapper
     try {
       wrapper = mount(h.Panel, { props: { taskId: 'task', identityKey: 'owner-refresh', taskVersion: '9' } }); await settle()
       for (let i = 0; i < 3; i++) await clock.tick()
-      expect(h.counts()).to.deep.equal({ catalog: 1, request: 1, typed: 1 })
-      await wrapper.get('.output-refresh').trigger('click'); await settle()
-      expect(h.counts()).to.deep.equal({ catalog: 2, request: 2, typed: 2 })
       await wrapper.setProps({ taskVersion: '10' }); await settle()
-      expect(h.counts().catalog).to.equal(3)
-      expect(wrapper.find('.finalize-button').exists()).to.equal(false)
+      expect(h.counts()).to.deep.equal({ catalog: 0, request: 0, typed: 0 })
+      expect(wrapper.find('.output-refresh').exists()).to.equal(false)
+      expect(wrapper.find('.bounty-output-gallery').exists()).to.equal(false)
       expect(wrapper.emitted('task-completed')).to.equal(undefined)
     } finally { wrapper?.unmount(); clock.restore() }
   })
-  it('keeps verified outputs visible during a shared transport interruption without rereading their content', async () => {
+  it('shows authoritative current and historical deliveries without fetching their conversation history', async () => {
     const h = acceptanceHarness(); let wrapper
+    const item = { artifactId: 'artifact', artifactVersion: '2', displayRole: 'RESULT', purpose: '固定版本成果', unavailableReason: null }
+    const context = { currentDelivery: { summary: '当前正式交付', items: [item], allowedActions: ['ACCEPT'] },
+      history: [{ deliveryId: 'old', summary: '原正式交付', state: 'SUPERSEDED', items: [] }] }
     try {
-      wrapper = mount(h.Panel, { props: { taskId: 'task', identityKey: 'owner-disconnected', eventSource: h.eventSource } }); await settle()
-      expect(wrapper.find('.bounty-output-text').exists()).to.equal(true)
-      const initial = h.counts(); h.notify('stream_disconnected'); await settle()
-      expect(wrapper.find('[role="alert"]').exists()).to.equal(true)
-      expect(wrapper.find('.bounty-output-text').exists()).to.equal(true); expect(h.counts()).to.deep.equal(initial)
-      h.notify('stream_ready'); await settle()
-      expect(wrapper.find('[role="alert"]').exists()).to.equal(false)
-      expect(wrapper.find('.bounty-output-text').exists()).to.equal(true)
-      expect(h.counts()).to.deep.equal({ ...initial, catalog: initial.catalog + 1 })
+      wrapper = mount(h.Panel, { props: { taskId: 'task', identityKey: 'owner-formal', reviewContext: context } }); await settle()
+      expect(wrapper.text()).to.include('当前正式交付').and.include('原正式交付').and.include('固定版本成果')
+      await wrapper.findAll('button').find(button => button.text() === '预览').trigger('click')
+      expect(wrapper.emitted('preview-output')).to.deep.equal([[item]])
+      await wrapper.findAll('button').find(button => button.text() === '查看成果并验收').trigger('click')
+      expect(wrapper.emitted('review-delivery')).to.have.length(1)
+      expect(h.counts()).to.deep.equal({ catalog: 0, request: 0, typed: 0 })
     } finally { wrapper?.unmount() }
   })
-  it('uses shared completion events instead of either catalogue or gallery polling', async () => {
-    const clock = timers(); const h = acceptanceHarness(); let wrapper
+  it('updates from the parent formal projection, not a second stream or derived output graph', async () => {
+    const h = acceptanceHarness(); let wrapper
     try {
-      const active = { ...request(), state: 'RUNNING', stateVersion: '2', turns: [] }
-      h.setSnapshot(active)
-      wrapper = mount(h.Panel, { props: { taskId: 'task', identityKey: 'owner-active', eventSource: h.eventSource } }); await settle()
-      for (let i = 0; i < 3; i++) await clock.tick()
-      expect(h.counts().catalog).to.equal(1); expect(h.counts().request).to.equal(1)
-      h.setSnapshot({ ...request(), stateVersion: '3' }); h.notify(); await settle()
-      const settled = h.counts(); expect(settled.request).to.equal(2); expect(wrapper.find('.bounty-output-text').exists()).to.equal(true)
-      for (let i = 0; i < 3; i++) await clock.tick()
-      expect(h.counts()).to.deep.equal(settled); expect(clock.jobs.size).to.equal(0)
-    } finally { wrapper?.unmount(); clock.restore() }
+      wrapper = mount(h.Panel, { props: { taskId: 'task', identityKey: 'owner-active', reviewContext: { currentDelivery: null, history: [] } } }); await settle()
+      expect(wrapper.text()).to.include('暂无当前正式交付')
+      await wrapper.setProps({ reviewContext: { currentDelivery: { summary: '新正式交付', items: [], allowedActions: ['ACCEPT'] }, history: [] } }); await settle()
+      expect(wrapper.text()).to.include('新正式交付').and.not.include('暂无当前正式交付')
+      expect(h.counts()).to.deep.equal({ catalog: 0, request: 0, typed: 0 })
+    } finally { wrapper?.unmount() }
   })
   it('does not mistake a completed parent with a live EXECUTE step or pending turn for stable terminal history', () => {
     expect(outputs.outputRequestPending({ ...request(), steps: [{ kind: 'EXECUTE', executionState: 'RUNNING' }] })).to.equal(true)
@@ -205,19 +200,15 @@ describe('five fixes poll lifecycle and projection hints', () => {
     expect(outputs.outputRequestPending({ ...request(), steps: [{ kind: 'EXECUTE', executionState: 'OUTPUT_COMMITTED' }] })).to.equal(false)
     expect(outputs.outputRequestPending({ ...request(), state: 'PARTIAL', turns: [{ state: 'STREAMING' }] })).to.equal(true)
   })
-  it('refreshes a finalized parent gallery on OUTPUT_COMMITTED without polling unchanged outcomes', async () => {
-    const clock = timers(); const h = acceptanceHarness(); let wrapper
+  it('delegates formal read errors to the existing parent retry without scanning chat', async () => {
+    const h = acceptanceHarness(); let wrapper
     try {
-      const step = { stepId: 'step', stepNumber: '1', taskId: 'task', assignmentRevision: '3', targetAgentId: 'agent', kind: 'EXECUTE',
-        state: 'ADMITTED', stateVersion: '1', executionIntentId: 'intent', executionId: 'execution', executionState: 'RUNNING' }
-      h.setSnapshot({ ...request(), steps: [step] })
-      wrapper = mount(h.Panel, { props: { taskId: 'task', identityKey: 'owner-child', eventSource: h.eventSource } }); await settle()
-      for (let i = 0; i < 3; i++) await clock.tick()
-      expect(h.counts()).to.deep.equal({ catalog: 1, request: 1, typed: 1 })
-      h.setSnapshot({ ...request(), steps: [{ ...step, state: 'OUTPUT_COMMITTED', stateVersion: '2', executionState: 'OUTPUT_COMMITTED' }] })
-      h.notify(); await settle(); const terminal = h.counts(); expect(terminal.request).to.equal(2); expect(terminal.typed).to.equal(2); for (let i = 0; i < 3; i++) await clock.tick()
-      expect(h.counts()).to.deep.equal(terminal); expect(clock.jobs.size).to.equal(0)
-    } finally { wrapper?.unmount(); clock.restore() }
+      wrapper = mount(h.Panel, { props: { taskId: 'task', identityKey: 'owner-error', reviewError: '正式交付读取失败' } }); await settle()
+      expect(wrapper.text()).to.include('正式交付读取失败')
+      await wrapper.findAll('button').find(button => button.text() === '重新读取').trigger('click')
+      expect(wrapper.emitted('refresh-review')).to.have.length(1)
+      expect(h.counts()).to.deep.equal({ catalog: 0, request: 0, typed: 0 })
+    } finally { wrapper?.unmount() }
   })
   it('hides/stops and reopens a live consumer, then disposes without a remaining timer or late scope write', async () => {
     const clock = timers(); const h = acceptanceHarness(); let wrapper
@@ -228,7 +219,7 @@ describe('five fixes poll lifecycle and projection hints', () => {
       await wrapper.setProps({ enabled: false }); await settle()
       const hidden = h.counts(); for (let i = 0; i < 3; i++) await clock.tick()
       expect(h.counts()).to.deep.equal(hidden); expect(clock.jobs.size).to.equal(0)
-      await wrapper.setProps({ enabled: true }); await settle(); expect(h.counts().catalog).to.equal(hidden.catalog + 1)
+      await wrapper.setProps({ enabled: true }); await settle(); expect(h.counts()).to.deep.equal(hidden)
       wrapper.unmount(); wrapper = null
       const final = h.counts(); await clock.tick(); expect(h.counts()).to.deep.equal(final); expect(clock.jobs.size).to.equal(0)
     } finally { wrapper?.unmount(); clock.restore() }
@@ -247,28 +238,24 @@ describe('five fixes poll lifecycle and projection hints', () => {
       await wrapper.setProps({ enabled: true }); await settle(); expect(h.counts().request).to.equal(3)
     } finally { wrapper?.unmount(); clock.restore() }
   })
-  it('aborts an in-flight catalog on disable and never admits its late response', async () => {
+  it('aborts in-flight original-conversation discovery on disable and fences its response', async () => {
     const clock = timers(); const enabled = Vue.ref(true); let resolve, signal
     const source = useHallBountyAcceptance({ taskId: () => 'task', identityKey: () => 'owner-abort', enabled: () => enabled.value,
-      api: { list: async () => ({ items: [{ id: raw.conversationId, conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }], nextCursor: null, hasMore: false }),
-        get: (_path, _params, options) => { signal = options.signal; return new Promise(done => { resolve = done }) } } })
+      api: { list: (_path, _params, options) => { signal = options.signal; return new Promise(done => { resolve = done }) } } })
     try {
       await settle(); enabled.value = false; expect(signal.aborted).to.equal(true)
-      resolve(({})); await settle(); expect(source.scope.value).to.equal(null); expect(source.catalog.entries.value).to.deep.equal([])
+      resolve({ items: [] }); await settle(); expect(source.scope.value).to.equal(null); expect(source.catalog.entries.value).to.deep.equal([])
       expect(clock.jobs.size).to.equal(0)
     } finally { source.dispose(); clock.restore() }
   })
-  it('does not lose a stateVersion refresh hint while the original catalogue read is in flight', async () => {
-    const clock = timers(); const version = Vue.ref('1'); let resolve, reads = 0
-    const entryPage = snapshot => (({ schemaVersion: 1, scope: { conversationId: '42', conversationGeneration: '1', taskId: 'task' },
-      after: '0', through: '1', nextAfter: null, hasMore: false, entries: [{ ordinal: '1', request: snapshot }] }))
+  it('does not attach a whole-request-history refresh to task version changes', async () => {
+    const clock = timers(); const version = Vue.ref('1'); let reads = 0
     const source = useHallBountyAcceptance({ taskId: () => 'task', identityKey: () => 'version-inflight', stateVersion: () => version.value,
-      api: { list: async () => ({ items: [{ id: '42', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }], nextCursor: null, hasMore: false }),
-        get: async () => { reads++; return reads === 1 ? new Promise(done => { resolve = done }) : entryPage({ ...request(), state: 'RUNNING', stateVersion: '2', turns: [] }) } } })
+      api: { list: async () => ({ items: [{ id: '42', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }] }),
+        get: async () => { reads++; throw new Error('No request history scan') } } })
     try {
-      await settle(); version.value = '2'
-      resolve(entryPage(request())); await settle()
-      expect(reads).to.equal(2); expect(source.catalog.entries.value[0].request.stateVersion).to.equal('2')
+      await settle(); version.value = '2'; await settle()
+      expect(reads).to.equal(0); expect(source.scope.value.conversationId).to.equal('42')
       expect(clock.jobs.size).to.equal(0)
     } finally { source.dispose(); clock.restore() }
   })
@@ -304,7 +291,7 @@ describe('five fixes poll lifecycle and projection hints', () => {
       api: { list: async () => ({ items: [{ id: '42', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:task' }], nextCursor: null, hasMore: false }),
         get: async () => { reads++; return ({ schemaVersion: 1, scope: { conversationId: '42', conversationGeneration: '1', taskId: 'task' },
           after: '0', through: '1', nextAfter: null, hasMore: false, entries: [{ ordinal: '1', request: { ...request(), state: 'RUNNING', turns: [] } }] }) } } })
-    try { await settle(); for (let i = 0; i < 3; i++) await clock.tick(); expect(reads).to.equal(1); expect(clock.jobs.size).to.equal(0) }
+    try { await settle(); for (let i = 0; i < 3; i++) await clock.tick(); expect(reads).to.equal(0); expect(clock.jobs.size).to.equal(0) }
     finally { source.dispose(); clock.restore() }
   })
 })

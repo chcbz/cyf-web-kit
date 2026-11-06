@@ -5,7 +5,7 @@ import * as Vue from 'vue'
 import { mount } from '@vue/test-utils'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { typedOutcomeProjection, inspectionOutcomeProjection, revisionProgressHint } from '../src/composables/juyiting/hallTypedDeliberation.js'
-import { useHallTypedDeliberation } from '../src/composables/juyiting/useHallTypedDeliberation.js'
+import { useHallTypedDeliberation } from './fixtures/juyiting/delivery-context-api.mjs'
 
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/juyiting/action-final-projection-v3.json', import.meta.url)))
 const clone = value => JSON.parse(JSON.stringify(value))

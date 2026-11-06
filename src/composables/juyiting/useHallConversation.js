@@ -1,3 +1,4 @@
+import { useHallMessagePages } from './useHallMessagePages.js'
 import { createHallRequestReadbackScheduler } from './hallRequestReadbackScheduler.js'
 import { createChatStreamDecoder } from '../../utils/chatStreamWire.js'
 import { computed, reactive, ref, unref, watch } from 'vue'
@@ -24,7 +25,7 @@ import {
   validateBountyBootstrapRequest, bootstrapReadbackIsCurrent
 } from './hallBountyBootstrap.js'
 import { typedId } from './hallTypedDeliberation.js'
-import { catalogPage, mergeCatalogEntries } from './bountyRequestCatalog.js'
+import { catalogLong, catalogPage } from './bountyRequestCatalog.js'
 import { bountyInteractionTargetId } from './useHallChatContext.js'
 import {
   cancellationTarget,
@@ -64,8 +65,6 @@ export const useHallConversation = ({
   const messages = ref([])
   const conversationId = ref('')
   // A page-local notification, not another connection or a retained reply body.
-  const acceptanceEvent = ref(null)
-  const hallEventOwnerId = ref('')
   const conversationHistory = ref([])
   const conversationHistoryDeletingId = ref('')
   const conversationHistoryLoading = ref(false)
@@ -96,7 +95,6 @@ export const useHallConversation = ({
   const isAdoptingBountyBootstrap = ref(false)
   const eventStreamRecovering = ref(false)
   const deliberationStatus = ref('')
-  const restoredRequestIds = new Set()
   const activeRequest = ref(null)
   const activeTurns = ref([])
   const capabilityState = ref({ loaded: false, v2: false })
@@ -418,9 +416,7 @@ export const useHallConversation = ({
   const applyDeliberationEvent = event => {
     if (!event || typeof event !== 'object') return false
     if (activeRequest.value?.requestId && event.requestId && event.requestId !== activeRequest.value.requestId) {
-      // Known historical status frames advance the replay cursor, never the active round.
-      return event.conversationId === conversationId.value && restoredRequestIds.has(event.requestId) &&
-        ['interaction.state_changed', 'chat_request_replay'].includes(event.type)
+      return false
     }
     const session = activeSendSession?.roundCloseout ? activeSendSession : null
     if (session && event.requestId === session.requestId) {
@@ -457,24 +453,30 @@ export const useHallConversation = ({
   }
 
   let projectionsDirty = false
+  let replayProjectionDirty = false
   let projectionFlight = null
-  let projectionRevision = 0
   const refreshHallProjections = event => {
     if (!onRequestCatalogHint || disposed || !conversationId.value) return Promise.resolve(true)
     projectionsDirty = true
-    projectionRevision++
     const guard = captureGuard(); const id = conversationId.value
-    if (projectionFlight && projectionFlight.id === id && guardCurrent(projectionFlight.guard)) return projectionFlight.promise
-    const flight = { guard, id }; projectionFlight = flight
+    const key = [event?.type, event?.requestId, event?.childRequestId, event?.replyRequestId, event?.parentOutcomeId].join('\u0000')
+    if (projectionFlight && projectionFlight.id === id && guardCurrent(projectionFlight.guard)) {
+      projectionFlight.pending.set(key, event)
+      return projectionFlight.promise
+    }
+    const flight = { guard, id, pending: new Map([[key, event]]) }; projectionFlight = flight
     flight.promise = (async () => {
-      // Coalesce live hints in one read; new hints while awaiting need another read.
-      let revision
       let success = false
       do {
-        revision = projectionRevision
-        try { success = await onRequestCatalogHint(event) !== false } catch { success = false }
+        const events = [...flight.pending.values()]
+        flight.pending.clear()
+        const hint = events.length === 1 ? events[0] : { type: 'request_changes', conversationId: id, events }
+        // A full recovery already covers replay hints received before this read.
+        // Later replay events set the flag again; failure remains projectionsDirty.
+        if (events.some(item => item?.type === 'resync_required')) replayProjectionDirty = false
+        try { success = await onRequestCatalogHint(hint) !== false } catch { success = false }
         if (!guardCurrent(guard) || conversationId.value !== id) return false
-      } while (success && revision !== projectionRevision)
+      } while (success && flight.pending.size)
       projectionsDirty = !success
       if (!success) {
         hallEventReconnectFailures++
@@ -485,37 +487,46 @@ export const useHallConversation = ({
     return flight.promise
   }
 
-  const refreshExecutionRequest = event => {
+  const refreshExecutionRequest = (event, { refreshProjection = true } = {}) => {
     if (disposed || event?.conversationId !== conversationId.value || !typedId(event?.requestId)) return false
-    void refreshHallProjections(event)
+    if (refreshProjection) void refreshHallProjections(event)
     if (event.requestId === activeRequest.value?.requestId) scheduleAuthoritativeRequestReadback(event.requestId, { immediate: true })
     return true
   }
 
-  const appendHallEventMessage = (event, { deferServerResync = false } = {}) => {
-    if (event?.type === 'delivery_submission_completed' && event.conversationId === conversationId.value && typedId(event.requestId)) {
+  const appendHallEventMessage = (event, { deferServerResync = false, deferProjectionHint = false } = {}) => {
+    const refreshProjection = () => { if (!deferProjectionHint) void refreshHallProjections(event) }
+    if (['delivery_submission_completed', 'delivery_review_changed'].includes(event?.type) && event.conversationId === conversationId.value && typedId(event.requestId)) {
       onTypedOutcome?.(event)
-      void refreshHallProjections(event)
+      refreshProjection()
       return true
     }
     // Receipt/journal events never replace a request projection or create a successful deliverable.
-    if (['execution_abandoned', 'execution_terminal', 'action_started', 'action_failed', 'target_capability_unavailable', 'cancel_requested'].includes(event?.type)) return refreshExecutionRequest(event)
+    if (['execution_abandoned', 'execution_terminal', 'action_started', 'action_failed', 'target_capability_unavailable', 'cancel_requested'].includes(event?.type)) return refreshExecutionRequest(event, { refreshProjection: !deferProjectionHint })
     // Historical replay may contain deltas from an earlier cancelled request.
     // Only the active request owns live bubbles; persisted historical finals still render.
     if (event?.type === 'agent_message_delta' && activeRequest.value?.requestId &&
         event.requestId && event.requestId !== activeRequest.value.requestId) return true
     const needsReadback = needsUnversionedTurnReadback(event)
+    if (event.conversationId === conversationId.value && activeRequest.value?.requestId &&
+      event.requestId && event.requestId !== activeRequest.value.requestId &&
+      ['interaction.state_changed', 'chat_request_replay'].includes(event.type)) {
+      // Authenticated conversation replay does not need a preloaded history ID list.
+      // A live non-current status still invalidates its own projection, never the active round.
+      refreshProjection()
+      return true
+    }
     const durableHandled = applyDeliberationEvent(event)
     const messageEvent = event?.type === 'agent_message_delta' || event?.type === 'agent_message' || event?.type === 'resync_required' || ['part.processing', 'part.ready', 'part.failed'].includes(event?.type)
     // Keep the active-request reducer closed. A non-active media event can only ask the
     // independent read-only catalog to re-read its owner-scoped index.
-    if (['part.ready', 'agent_message', 'resync_required'].includes(event?.type) && event.requestId && event.conversationId === conversationId.value) void refreshHallProjections(event)
+    if (['part.ready', 'agent_message', 'resync_required'].includes(event?.type) && event.requestId && event.conversationId === conversationId.value) refreshProjection()
     const typedRequestId = event?.type === 'agent_message' && event?.typedOutcome ? event.requestId :
       event?.type === 'typed_question_answered' ? (event.requestId || event.replyRequestId) : ''
     if (typedRequestId && event.conversationId === conversationId.value) {
       onTypedOutcome?.({ ...event, requestId: typedRequestId })
       // agent_message already requested the same catalog refresh above.
-      if (event.type !== 'agent_message') void refreshHallProjections(event)
+      if (event.type !== 'agent_message') refreshProjection()
     }
     if (!messageEvent) {
       if (typedRequestId && event.conversationId === conversationId.value) return true
@@ -673,7 +684,6 @@ export const useHallConversation = ({
 
   const failHallEventStream = (generation, error) => {
     if (disposed || generation !== lifecycleGeneration || error?.name === 'AbortError') return
-    acceptanceEvent.value = { type: 'stream_disconnected', conversationId: conversationId.value }
     if (error?.status === 400 || error?.status === 409 || error?.status === 410 || error?.status === 501) {
       void authoritativeResync(conversationId.value, `sse_${error.status}`, { restartStream: error.status !== 501 })
       return
@@ -697,7 +707,6 @@ export const useHallConversation = ({
     const streamGuard = { generation, authEpoch: authEpoch(), scope: streamScope, signature: scopeSignature(streamScope) }
     const id = conversationId.value
     if (typeof id !== 'string' || !id || hallEventConversationId === id) return
-    hallEventOwnerId.value = id
     stopHallEventTransport()
     hallEventConversationId = id
     hallEventController = new AbortController()
@@ -715,7 +724,6 @@ export const useHallConversation = ({
       if (!guardCurrent(streamGuard) || !response) {
         if (!response && guardCurrent(streamGuard)) {
           hallEventTerminal = true
-          acceptanceEvent.value = { type: 'stream_disconnected', conversationId: id }
         }
         hallEventController = null
         return
@@ -730,18 +738,18 @@ export const useHallConversation = ({
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let pendingServerResyncCursor = ''
-      let acceptanceReady = false
+      let streamReplayReady = false
       const parser = createHallSseParser({
         conversationId: id, requestId: response.headers.get('X-Request-Id'),
         onEvent: (event, candidateCursor) => {
           if (!guardCurrent(streamGuard)) return false
           if (event.type === 'stream_ready') {
-            acceptanceReady = true
-            acceptanceEvent.value = { type: event.type, conversationId: id }
+            streamReplayReady = true
+            if (replayProjectionDirty || projectionsDirty && !projectionFlight) {
+              replayProjectionDirty = false
+              void refreshHallProjections({ type: 'resync_required', conversationId: id })
+            }
             hallEventReconnectFailures = 0; return true
-          }
-          if (acceptanceReady && isAcceptanceProjectionEvent(event)) {
-            acceptanceEvent.value = { type: event.type, conversationId: id }
           }
           if (event.type === 'resync_required') {
             const currentCursor = eventCursors.get(id)
@@ -749,7 +757,8 @@ export const useHallConversation = ({
               ? candidateCursor
               : ''
           }
-          const accepted = appendHallEventMessage(event, { deferServerResync: event.type === 'resync_required' })
+          if (!streamReplayReady && isAcceptanceProjectionEvent(event)) replayProjectionDirty = true
+          const accepted = appendHallEventMessage(event, { deferServerResync: event.type === 'resync_required', deferProjectionHint: !streamReplayReady })
           if (accepted) hallEventReconnectFailures = 0
           return accepted
         },
@@ -804,7 +813,6 @@ export const useHallConversation = ({
   }
 
   const stopHallEventStream = () => {
-    hallEventOwnerId.value = ''
     stopHallEventTransport()
     resetHallEventRecovery()
   }
@@ -833,7 +841,6 @@ export const useHallConversation = ({
     capabilityState.value = { loaded: false, v2: false }
     deliberationStatus.value = ''
     activeRequest.value = null
-    restoredRequestIds.clear()
     activeTurns.value = []
     cancellationJobs.clear()
     turnStates.clear()
@@ -847,8 +854,6 @@ export const useHallConversation = ({
   }
 
   const resetLifecycle = ({ keepBootstrapAdoption = false } = {}) => {
-    hallEventOwnerId.value = ''
-    acceptanceEvent.value = null
     if (!keepBootstrapAdoption) {
       bootstrapAdoptionToken = null
       isAdoptingBountyBootstrap.value = false
@@ -859,8 +864,8 @@ export const useHallConversation = ({
     recoveringReplyTurn = null
     lifecycleController.abort(new DOMException('Hall identity lifecycle reset', 'AbortError'))
     projectionsDirty = false
+    replayProjectionDirty = false
     projectionFlight = null
-    projectionRevision++
     resetDurableState()
     if (!disposed) lifecycleController = new AbortController()
   }
@@ -947,9 +952,17 @@ export const useHallConversation = ({
     browserWindow()?.removeEventListener?.('focus', handleHallEventFocus)
     stopScopeWatch()
     stopDraftAdoptionWatch()
+    messagePages.dispose()
     clearHallConversationIdentityState()
     unregisterIdentityCleanup()
   }
+
+  const messagePages = useHallMessagePages({
+    chatApi, messages, conversationId,
+    identityKey: () => identityScope ? unref(identityScope) : globalStore.getJiacn,
+    captureGuard, guardCurrent,
+    normalize: item => normalizeHallMessage(item, globalStore.getJiacn)
+  })
 
   const loadHallConversationContent = async (id = conversationId.value, guard = {}) => {
     const exactId = exactRuntimeId(id)
@@ -988,43 +1001,27 @@ export const useHallConversation = ({
       conversationLoadError.value = ''
     }
     try {
-      // Restore the current round from the exact conversation's durable ordered snapshot,
-      // before replay starts. The first historical SSE event is not the current request.
-      // Accepted bootstrap/typed receipts already own an exact request and skip this read.
-      if (restoreRequest) {
-        const taskId = expectedScope.key.startsWith('task:') ? expectedScope.key.slice(5) : ''
-        if (!typedId(taskId)) throw new Error('原事项范围无效，未恢复回话。')
-        let after = '0'; let through = null; let requestGeneration = null; let entries = []; const seen = new Set()
-        for (;;) {
-          const params = { after, ...(through !== null ? { through, expectedGeneration: requestGeneration } : {}) }
-          const response = await chatApi.get(`/conversations/${encodeURIComponent(exactId)}/requests`, params,
-            { autoLoading: false, needAuth: true, signal: lifecycleController.signal })
-          if (!isCurrentContentLoad() || activeRequest.value?.requestId) return false
-          const page = catalogPage(apiData(response), { conversationId: exactId, taskId, after, through, generation: requestGeneration })
-          if (!page) throw new Error('原回话索引范围或分页边界不一致，请重试。')
-          for (const entry of page.entries) {
-            if (seen.has(entry.request.requestId)) throw new Error('原回话索引重复，请重试。')
-            seen.add(entry.request.requestId)
-          }
-          const merged = mergeCatalogEntries(entries, page)
-          if (!merged) throw new Error('原回话索引冲突，请重试。')
-          entries = merged; through = page.through; requestGeneration = page.scope.conversationGeneration
-          if (!page.hasMore) break
-          after = page.nextAfter
-        }
-        for (const entry of entries) restoredRequestIds.add(entry.request.requestId)
-        const latest = entries.at(-1)?.request
-        if (latest && !applyRequestView(latest, latest.requestId)) throw new Error('原回话状态暂不可核实，请重试。')
-      }
-      await chatApi.getById('/conversation/content', exactId, {
+      await chatApi.get('/conversation/messages', { id: exactId }, {
         autoLoading: false,
         signal: lifecycleController.signal,
         onSuccess: (contentResult) => {
           if (!isCurrentContentLoad()) return
-          messages.value = (Array.isArray(contentResult) ? contentResult : [])
-            .map(item => normalizeHallMessage(item, globalStore.getJiacn)).filter(Boolean)
+          if (restoreRequest && !activeRequest.value?.requestId) {
+            const taskId = expectedScope.key.startsWith('task:') ? expectedScope.key.slice(5) : ''
+            const page = catalogPage(contentResult.requestPage, { conversationId: exactId, taskId, after: '0' })
+            if (!typedId(taskId) || !page || !catalogLong(page.eventCursor, true) || page.hasMore ||
+                (page.entries.length ? page.entries.at(-1).ordinal !== page.through : page.through !== '0')) {
+              throw new Error('原回话最新轮次范围不一致，请重试。')
+            }
+            const latest = page.entries.at(-1)?.request
+            if (latest && !applyRequestView(latest, latest.requestId)) throw new Error('原回话状态暂不可核实，请重试。')
+            // Messages, request state and cursor share one database snapshot. Older-page
+            // adoption never enters this branch or advances an existing event stream.
+            if (!eventCursors.has(exactId) && hallEventConversationId !== exactId) eventCursors.set(exactId, page.eventCursor)
+          }
+          const latestMessages = messagePages.applyLatest(contentResult)
           const recovery = recoveringReplyTurn?.conversationId === exactId ? recoveringReplyTurn : null
-          const finalAgentReplies = messages.value.filter(message => message.sender === 'AGENT' && !message.streaming &&
+          const finalAgentReplies = latestMessages.filter(message => message.sender === 'AGENT' && !message.streaming &&
             String(message.content || '').trim() && (!recovery || !recovery.baselineMessageIds.has(exactMessageId(message))))
           loadedConversationScopeSignature = scopeSignature(expectedScope)
           const activeTurnForConversation = Boolean(activeBuiltInTurn && activeBuiltInTurn.conversationId === exactId)
@@ -2251,14 +2248,6 @@ export const useHallConversation = ({
   }
 
   return {
-    acceptanceEventSource: {
-      sharedConversationId: () => hallEventOwnerId.value === conversationId.value ? hallEventOwnerId.value : '',
-      sharedEvent: () => acceptanceEvent.value,
-      connect: ({ conversationId: id, signal, cursor }) => fetchHallConversationEvents({
-        apiStore, url: apiStreamUrl('/chat/conversation/events', { id }), signal,
-        headers: cursor ? { 'Last-Event-ID': `conversation:${id}:${cursor}` } : {}
-      })
-    },
     adoptBountyBootstrap,
     refreshExecutionRequest,
     refreshHallProjections,
@@ -2294,6 +2283,18 @@ export const useHallConversation = ({
     loadHallConversationHistory,
     loadHallMessages,
     loadMoreHallConversationHistory,
+    loadOlderHallMessages: messagePages.loadOlder,
+    messageWindows: messagePages.windows,
+    messageWindowLoading: messagePages.windowLoading,
+    messageWindowErrors: messagePages.windowErrors,
+    retainMessageWindows: messagePages.retainWindows,
+    loadMessageWindow: messagePages.loadWindow,
+    messageRequestPage: messagePages.requestPage,
+    messageTypedOutcomes: messagePages.typedOutcomes,
+    refreshHallMessagePage: () => loadHallConversationContent(),
+    messagePageHasMore: messagePages.hasMore,
+    messagePageLoading: messagePages.loading,
+    messagePageError: messagePages.error,
     mentionAgent,
     messages,
     newHallConversation,

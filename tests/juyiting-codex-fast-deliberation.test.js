@@ -352,6 +352,7 @@ describe('Juyi Hall Codex durable deliberation web contract', () => {
     const conversation = base({ chatApi: {
       get: async path => {
         if (path === '/capabilities') return ((capabilityV2))
+        if (path === '/conversation/messages') return { items: [], hasMore: false, nextCursor: null }
         requestLookups += 1
         return requestLookups === 1 ? stale.promise : fresh.promise
       },

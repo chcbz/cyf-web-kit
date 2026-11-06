@@ -1,7 +1,6 @@
 <template>
   <section class="private-discussion-panel discussion-panel">
     <ChatPanel
-      @update:draft="$emit('update:draft', $event)"
       discussion-variant="private"
       empty-text="可以向这位好汉提问或讨论想法。"
       placeholder="向这位好汉提问或讨论想法…"
@@ -9,11 +8,15 @@
       :subtitle="privateSubtitle"
       title="密议"
       v-bind="props"
+      @update:draft="$emit('update:draft', $event)"
       @cancel-deliberation="$emit('cancel-deliberation', $event)"
       @clear-target="$emit('clear-target', $event)"
       @delete-conversation="$emit('delete-conversation', $event)"
       @load-history="$emit('load-history')"
       @load-more-history="$emit('load-more-history')"
+      @load-older-messages="$emit('load-older-messages')"
+      @retain-message-windows="$emit('retain-message-windows', $event)"
+      @load-message-window="$emit('load-message-window', $event)"
       @load-messages="$emit('load-messages')"
       @mention-agent="$emit('mention-agent', $event)"
       @new-conversation="$emit('new-conversation')"

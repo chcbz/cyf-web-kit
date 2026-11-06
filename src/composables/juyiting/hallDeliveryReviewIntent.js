@@ -23,11 +23,18 @@ const validSource = source => {
   return source.kind === 'FORMAL_ARTIFACT' && exact(source, ['kind', 'sourceDeliveryId', 'sourceArtifactId', 'sourceArtifactVersion']) &&
     reviewId(source.sourceDeliveryId) && reviewId(source.sourceArtifactId) && reviewVersion(source.sourceArtifactVersion) && source.sourceArtifactVersion !== '0'
 }
+const validDisplay = display => display === null || (exact(display, ['title', 'contentMimeType', 'contentByteLength', 'unavailableReason']) &&
+  (display.title === null || typeof display.title === 'string') &&
+  (display.contentMimeType === null || typeof display.contentMimeType === 'string') &&
+  (display.contentByteLength === null || (Number.isSafeInteger(display.contentByteLength) && display.contentByteLength >= 0)) &&
+  (display.unavailableReason === null || ['VERSION_UNAVAILABLE', 'METADATA_UNAVAILABLE'].includes(display.unavailableReason)))
+const validItemFields = item => exact(item, ['artifactId', 'artifactVersion', 'contentHash', 'purpose', 'displayRole', 'source', 'unavailableReason']) ||
+  (exact(item, ['artifactId', 'artifactVersion', 'contentHash', 'purpose', 'displayRole', 'source', 'unavailableReason', 'display']) && validDisplay(item.display))
 const taskStates = ['OPEN', 'PLANNING', 'ASSIGNED', 'RUNNING', 'BLOCKED', 'REVIEWING', 'COMPLETED', 'FAILED', 'CANCELLED', 'ARCHIVED']
 const validBatch = batch => exact(batch, ['deliveryId', 'deliveryVersion', 'state', 'batchSha256', 'summary', 'submittedAt', 'items', 'allowedActions']) &&
   reviewId(batch.deliveryId) && reviewVersion(batch.deliveryVersion) && oneOf(batch.state, ['SUBMITTED', 'ACCEPTED', 'CHANGES_REQUESTED']) && hash(batch.batchSha256) &&
   typeof batch.summary === 'string' && Number.isSafeInteger(batch.submittedAt) && batch.submittedAt >= 0 && Array.isArray(batch.items) && batch.items.length > 0 && batch.items.length <= 100 &&
-  batch.items.every(item => exact(item, ['artifactId', 'artifactVersion', 'contentHash', 'purpose', 'displayRole', 'source', 'unavailableReason']) &&
+  batch.items.every(item => validItemFields(item) &&
     reviewId(item.artifactId) && reviewVersion(item.artifactVersion) && item.artifactVersion !== '0' && BigInt(item.artifactVersion) <= 2147483647n && hash(item.contentHash) &&
     typeof item.purpose === 'string' && item.purpose.length > 0 && oneOf(item.displayRole, ['RESULT', 'MANIFEST']) &&
     (item.source === null || validSource(item.source)) &&
@@ -37,7 +44,7 @@ const validBatch = batch => exact(batch, ['deliveryId', 'deliveryVersion', 'stat
   batch.allowedActions.every(a => oneOf(a, ['VIEW', 'ACCEPT', 'REQUEST_CHANGES', 'CHECK_OPERATION']))
 export function validateContext (raw, taskId) {
   if (!exact(raw, ['schemaVersion', 'taskId', 'taskVersion', 'taskState', 'assignmentRevision', 'currentDelivery', 'history', 'pendingOperation']) ||
-    raw.schemaVersion !== 1 || !reviewId(taskId) || raw.taskId !== taskId || !reviewVersion(raw.taskVersion) || !reviewVersion(raw.assignmentRevision) ||
+    ![1, 2].includes(raw.schemaVersion) || !reviewId(taskId) || raw.taskId !== taskId || !reviewVersion(raw.taskVersion) || !reviewVersion(raw.assignmentRevision) ||
     !taskStates.includes(raw.taskState) || (raw.currentDelivery !== null && !validBatch(raw.currentDelivery)) || !Array.isArray(raw.history) ||
     raw.history.length > 100 || !raw.history.every(validBatch)) fail()
   const batches = [...raw.history, ...(raw.currentDelivery ? [raw.currentDelivery] : [])]
@@ -104,5 +111,14 @@ export function validateReceipt (raw, intent, previous = null) {
   if (previous && (previous.operationId !== raw.operationId || BigInt(raw.stateVersion) < BigInt(previous.stateVersion) ||
     (previous.state !== 'PROCESSING' && receiptFields.some(field => previous[field] !== raw[field])) ||
     (previous.stateVersion === raw.stateVersion && receiptFields.some(field => previous[field] !== raw[field])))) fail()
+  return freezeReviewValue(clone(raw))
+}
+
+// Separate display page: every batch is read-only, never acceptance authority.
+export function validateHistoryPage (raw) {
+  if (!exact(raw, ['items', 'nextCursor', 'hasMore']) || !Array.isArray(raw.items) || raw.items.length > 20 ||
+    !raw.items.every(batch => validBatch(batch) && batch.allowedActions.length === 1 && batch.allowedActions[0] === 'VIEW') ||
+    new Set(raw.items.map(batch => batch.deliveryId)).size !== raw.items.length || typeof raw.hasMore !== 'boolean' ||
+    (raw.hasMore ? !raw.items.length || !reviewVersion(raw.nextCursor) || raw.nextCursor === '0' : raw.nextCursor !== null)) fail()
   return freezeReviewValue(clone(raw))
 }

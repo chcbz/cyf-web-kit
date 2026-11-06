@@ -118,6 +118,14 @@ describe('typed discussion live and reload rendering', () => {
     expect(discussionMessageText(project([answer], [])[0])).to.equal(answer.content)
     expect(discussionMessageText(streamed)).to.equal(streamed.content) // non-bounty/private retains streaming
   })
+  it('keeps the original text readable when only its structured history is unavailable', async () => {
+    const { discussionMessageText } = await import('../src/composables/juyiting/hallDiscussionTurns.js')
+    const message = { ...normalizeHallMessage({ id: 'reply-1', messageType: 'ASSISTANT', content: '历史原文', metadata: { outcomeId: 'outcome-1', turnId: 'turn-1' } }, ''), typedDisplayUnavailable: true }
+    const displayed = project([message], [])[0]
+    expect(displayed.turnAwaitingType).to.equal(false)
+    expect(discussionMessageText(displayed)).to.equal('历史原文')
+    expect(message.turnId).to.equal('turn-1')
+  })
   it('holds persisted typed prose until the exact scoped outcome is available', async () => {
     const { discussionMessageText } = await import('../src/composables/juyiting/hallDiscussionTurns.js')
     const message = normalizeHallMessage({ id: 'reply-1', messageType: 'ASSISTANT', content: '请生成一张鸟的图片。', metadata: { outcomeId: 'outcome-1' } }, '')

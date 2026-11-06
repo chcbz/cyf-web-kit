@@ -492,7 +492,7 @@ describe('D3.1 assigned list rows versus authoritative detail', () => {
     const hall = useHallData({ selectedTask, selectedAgent: ref(null), log: { warn() {} }, normalizeStatus: value => value,
       agentApi: {
         get: async path => { reads.push(path); return { ...row, assignedTarget } },
-        search: async (path, _params, options) => options.onSuccess(path.endsWith('/status-counts') ? null : { items: [row] })
+        search: async (path, _params, options) => options.onSuccess(path.endsWith('/status-counts') ? null : { items: [row], pageNum: 1, pageSize: 30, total: '1' })
       } })
     try {
       await hall.loadTasks()
@@ -537,7 +537,7 @@ describe('useHallData actual assignee filter', () => {
     const hall = make({ search: async (url, params, options) => {
       if (url === '/roster') return options.onSuccess({ items: [{ agentId: '0', name: '同名' }, { agentId: 'a', name: '同名' }] })
       if (url === '/tasks/status-counts') return options.onSuccess(zeroCounts)
-      options.onSuccess({ items: phase++ === 0 ? [{ id: 'external-task', assignedAgentIds: ['external'], assignedAgentName: '外部承接者', requiredAbilities: ['never-an-agent'] }] : [] })
+      options.onSuccess({ items: phase++ === 0 ? [{ id: 'external-task', assignedAgentIds: ['external'], assignedAgentName: '外部承接者', requiredAbilities: ['never-an-agent'] }] : [], pageNum: 1, pageSize: 30, total: phase === 1 ? '1' : '0' })
     }, get: async (_url, _params, options) => options.onSuccess([]) }, identity)
     try {
       await hall.loadAgents()
@@ -560,10 +560,10 @@ describe('useHallData actual assignee filter', () => {
       const old = hall.loadTasks()
       hall.taskAgentFilter.value = 'new'
       const fresh = hall.loadTasks()
-      pending[2].finish({ items: [{ id: 'new-task' }] })
+      pending[2].finish({ items: [{ id: 'new-task' }], pageNum: 1, pageSize: 30, total: '1' })
       pending[3].finish(zeroCounts)
       await fresh
-      pending[0].finish({ items: [{ id: 'old-task' }] })
+      pending[0].finish({ items: [{ id: 'old-task' }], pageNum: 1, pageSize: 30, total: '1' })
       pending[1].finish(zeroCounts)
       await old
       expect(hall.tasks.value.map(task => task.id)).to.deep.equal(['new-task'])

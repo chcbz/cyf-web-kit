@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { displayFixtures } from './fixtures/juyiting/interface-display-fixture.mjs'
 import { mediaDeliveryChoices } from '../src/composables/juyiting/hallMediaDeliveryBasis.js'
 import { typedOutcomeProjection } from '../src/composables/juyiting/hallTypedDeliberation.js'
-import { useHallTypedDeliberation } from '../src/composables/juyiting/useHallTypedDeliberation.js'
+import { useHallTypedDeliberation, contextPage, serverChoice } from './fixtures/juyiting/delivery-context-api.mjs'
 const context = { conversationId: '42', conversationGeneration: '1', taskId: 'task', targetAgentId: 'agent', assignmentRevision: '3' }
 const fixture = () => {
   const mixed = displayFixtures(JSON.parse(readFileSync(new URL('./fixtures/juyiting/media-basis-delivery-v3.json', import.meta.url), 'utf8')))
@@ -57,28 +57,28 @@ describe('current v5 media follow-up basis', () => {
       expect(mediaDeliveryChoices(values, entries, context)).to.deep.equal([])
     }
   })
-  it('allows media follow-up after confirmed empty cancellation, but not unknown or nonempty history', async () => {
+  it('does not let unrelated failed history reads override an authoritative server choice', async () => {
     for (const mode of ['cancelled', 'unknown', 'partial', 'final', 'execution', 'missing']) {
       const { values, entries } = fixture(); values.splice(1); entries.splice(2)
       const old = { requestId: 'old-cancelled', state: 'RUNNING', steps: [],
         turns: [{ route: 'CHAT', state: 'RUNNING', lastDeltaSeq: '0', finalMessageId: null }] }
       entries.unshift({ request: old }); const calls = []
-      const lane = useHallTypedDeliberation({ chatApi: {
+      const lane = useHallTypedDeliberation({ serverDeliveryContext: () => contextPage(context, [serverChoice(values[0])]), chatApi: {
         get: async path => values.find(v => path.includes(`/requests/${v.requestId}/`)),
         create: async (_path, body) => { calls.push(body); throw new Error('unknown ACK') }
       }, actorScopeKey: ref('owner'), authorizationGeneration: ref(1), getContext: () => context,
       getContextGeneration: () => 1, getCatalogEntries: () => entries,
       storage: { getItem: () => null, setItem: () => {} }, enabled: () => true })
       try {
-        expect(await lane.refresh()).to.equal(false) // A previous failed read must not poison a confirmed cancellation.
+        expect(await lane.readOne('old-cancelled', undefined, 'CHAT')).to.equal(null) // A previous failed read must not poison a confirmed cancellation.
         old.state = 'CANCELLED'; old.turns[0].state = 'CANCELLED'
         if (mode === 'unknown') old.state = 'UNKNOWN'
         if (mode === 'partial') old.turns[0].lastDeltaSeq = '1'
         if (mode === 'final') old.turns[0].finalMessageId = '999'
         if (mode === 'execution') old.steps = [{ kind: 'EXECUTE' }]
         if (mode === 'missing') delete old.turns[0].lastDeltaSeq
-        await lane.refresh(); await lane.submit({ content: '识别刚才生成的图片' })
-        expect(calls.length, mode).to.equal(mode === 'cancelled' ? 1 : 0)
+        lane.adoptPage(values); await lane.submit({ content: '识别刚才生成的图片' })
+        expect(calls.length, mode).to.equal(1)
         if (calls.length) expect(calls[0].parentOutcomeId).to.equal(values[0].outcome.outcomeId)
       } finally { lane.dispose() }
     }
@@ -87,12 +87,12 @@ describe('current v5 media follow-up basis', () => {
     const { values, entries } = fixture(); const calls = []; const gets = []; const identity = ref('owner'); const auth = ref(1)
     entries.push({ request: { requestId: 'ordinary-chat', turns: [{ route: 'CHAT', state: 'PUBLISHED' }], steps: [] } })
     const memory = new Map(); const storage = { getItem: key => memory.get(key) || null, setItem: (key, value) => memory.set(key, value) }
-    const lane = useHallTypedDeliberation({ chatApi: { get: async path => { gets.push(path); if (path.includes('/requests/ordinary-chat/')) throw { response: { status: 404 } }; return values.find(v => path.includes(`/requests/${v.requestId}/`)) },
+    const lane = useHallTypedDeliberation({ serverDeliveryContext: params => contextPage(context, values.filter(v => !params.outcomeId || v.outcome.outcomeId === params.outcomeId).map(serverChoice).sort((a, b) => Number(BigInt(b.assistantMessageId) - BigInt(a.assistantMessageId)) || b.outcomeId.localeCompare(a.outcomeId))), chatApi: { get: async path => { gets.push(path); if (path.includes('/requests/ordinary-chat/')) throw { response: { status: 404 } }; return values.find(v => path.includes(`/requests/${v.requestId}/`)) },
       create: async (_path, body, options) => { calls.push(structuredClone({ body, key: options.headers['Idempotency-Key'] })); throw new Error('unknown ACK') } },
     actorScopeKey: identity, authorizationGeneration: auth, getContext: () => context, getContextGeneration: () => 1,
     getCatalogEntries: () => entries, storage, enabled: () => true })
     try {
-      expect(await lane.refresh()).to.equal(true); expect(gets).to.have.length(3)
+      expect(lane.adoptPage(values)).to.equal(true); expect(gets).to.have.length(0)
       await lane.submit({ content: '提交这一份成果' }); expect(calls).to.have.length(0); expect(lane.error.value).to.include('先选择')
       lane.chooseDelivery(values[0].outcome.outcomeId); await lane.submit({ content: '提交这一份成果' })
       expect(calls).to.have.length(1); expect(calls[0].body.parentOutcomeId).to.equal(values[0].outcome.outcomeId)

@@ -292,9 +292,9 @@ describe('personal workspace execution receipt presentation', () => {
     const click = async text => { await wrapper.findAll('button').find(b => b.text() === text).trigger('click'); await Vue.nextTick(); await Vue.nextTick() }
     try {
       await Vue.nextTick(); await click('成果')
-      assert.match(wrapper.text(), /已读取的文件中暂无此分类/)
+      assert.match(wrapper.text(), /向下滚动自动加载/)
       assert.equal(wrapper.find('.treasure-file-row').exists(), false)
-      await click('读取更多文件'); assert.match(wrapper.text(), /成果.pdf/)
+      await workspace.loadMore(); await Vue.nextTick(); assert.match(wrapper.text(), /成果.pdf/)
       await wrapper.get('.treasure-file-row button[aria-label^="查看文件"]').trigger('click'); await flushPromises(); await Vue.nextTick(); assert.equal(wrapper.vm.logicalDepth, 2)
       await wrapper.get('[aria-label="更多文件管理"]').trigger('click'); await Vue.nextTick(); assert.equal(wrapper.vm.logicalDepth, 3)
       assert.equal(wrapper.find('.treasure-preview').exists(), false)
@@ -342,4 +342,71 @@ describe('workspace download view lifetime', () => {
     await flushPromises(); assert.equal(h.workspace.error.value, 'new view error'); assert.equal(saves, stage === 'download' ? 0 : 1)
     if (change !== 'unmount') h.wrapper.unmount()
   })
+})
+
+// The four embedded tabs share one pagination boundary and the existing request owner.
+describe('personal workspace automatic file pagination', () => {
+  const mountList = workspace => mount(new Function('Vue', 'deps', script)(Vue, {
+    workspaceByteText, validMaterialVersion, deliveryTypeText,
+    useApiStore: () => ({ authorizationGeneration: 1, oauthClientId: 'web-client' }),
+    useGlobalStore: () => ({ user: { id: 'owner-a', tenantId: 'tenant-a' } }),
+    usePersonalWorkspace: () => workspace, usePersonalWorkspaceExecution: executionMock,
+    savePersonalWorkspaceBlob: () => {}
+  }), { props: { embedded: true } })
+
+  for (const label of ['全部', '资料', '成果', '回收站']) {
+    it(`automatically appends, pauses on error and retries the same cursor in ${label}`, async () => {
+      const previous = globalThis.IntersectionObserver
+      const observers = []
+      globalThis.IntersectionObserver = class {
+        constructor (callback) { this.callback = callback; this.disconnected = false; observers.push(this) }
+        observe (target) { this.target = target }
+        disconnect () { this.disconnected = true }
+      }
+      const workspace = workspaceMock()
+      workspace.nextCursor.value = 'cursor-next'
+      const calls = []
+      workspace.loadMore = async filters => { calls.push(filters); workspace.loading.value = true; return true }
+      let wrapper
+      try {
+        wrapper = mountList(workspace)
+        await flushPromises()
+        const tab = wrapper.findAll('.treasure-tabs button').find(button => button.text() === label)
+        await tab.trigger('click'); await flushPromises()
+        assert.equal(wrapper.text().includes('读取更多文件'), false)
+        assert.equal(wrapper.find('.treasure-empty').exists(), false)
+        const first = observers.at(-1)
+        first.callback([{ isIntersecting: false }]); assert.equal(calls.length, 0)
+        first.callback([{ isIntersecting: true }])
+        first.callback([{ isIntersecting: true }])
+        await flushPromises()
+        assert.equal(calls.length, 1)
+        assert.equal(calls[0].state, label === '回收站' ? 'TRASHED' : 'ACTIVE')
+        assert.equal(first.disconnected, true)
+        assert.equal(wrapper.get('.treasure-list-status').text(), '正在加载更多资料…')
+        workspace.listState.value = 'error'; workspace.loading.value = false
+        await flushPromises()
+        assert.equal(wrapper.find('.treasure-list-status').exists(), false)
+        assert.ok(wrapper.text().includes('案卷.txt') || label === '成果')
+        const count = observers.length
+        await Vue.nextTick(); assert.equal(observers.length, count)
+        await wrapper.get('[role="alert"] button').trigger('click')
+        assert.equal(calls.length, 2)
+        assert.equal(workspace.nextCursor.value, 'cursor-next')
+        workspace.listState.value = 'ready'; workspace.loading.value = false
+        await flushPromises()
+        assert.ok(observers.length > count, 're-arms the observer to fill a still-visible list end')
+        // No matching category is a genuine empty state only after the last page.
+        workspace.nextCursor.value = null
+        await flushPromises()
+        if (label === '成果') assert.equal(wrapper.find('.treasure-empty').exists(), true)
+        else assert.equal(wrapper.get('.treasure-list-status').text(), '已显示全部资料')
+      } finally {
+        wrapper?.unmount()
+        assert.ok(observers.every(observer => observer.disconnected))
+        if (previous === undefined) delete globalThis.IntersectionObserver
+        else globalThis.IntersectionObserver = previous
+      }
+    })
+  }
 })

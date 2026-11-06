@@ -1,18 +1,21 @@
 <template>
   <section class="public-discussion-panel discussion-panel">
     <ChatPanel
-      @update:draft="$emit('update:draft', $event)"
       discussion-variant="public"
       empty-text="向好汉提问，或用 @ 指定回复对象。"
       placeholder="向好汉提问，或 @ 指定回复对象…"
       subtitle="厅前公议"
       title="厅前公议"
       v-bind="props"
+      @update:draft="$emit('update:draft', $event)"
       @cancel-deliberation="$emit('cancel-deliberation', $event)"
       @clear-target="$emit('clear-target', $event)"
       @delete-conversation="$emit('delete-conversation', $event)"
       @load-history="$emit('load-history')"
       @load-more-history="$emit('load-more-history')"
+      @load-older-messages="$emit('load-older-messages')"
+      @retain-message-windows="$emit('retain-message-windows', $event)"
+      @load-message-window="$emit('load-message-window', $event)"
       @load-messages="$emit('load-messages')"
       @mention-agent="$emit('mention-agent', $event)"
       @new-conversation="$emit('new-conversation')"
