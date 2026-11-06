@@ -86,7 +86,7 @@
           class="archive-reader-fullscreen"
           :class="{
             'is-virtual-landscape-reader': virtualLandscape,
-            'has-reader-capsule': hasReaderCapsule
+            'has-reader-capsule': !embedded && hasReaderCapsule
           }"
           :role="embedded ? 'region' : 'dialog'"
           :aria-modal="embedded ? undefined : 'true'"
@@ -433,7 +433,7 @@
               v-if="embedded"
               type="button"
               :disabled="!citationParagraph"
-              class="reader-icon-button reader-cite-action"
+              class="reader-icon-button reader-cite-action hall-tool"
               aria-label="引用当前段落起草交办"
               title="引用当前段落起草交办"
               @click="citeParagraph"
@@ -456,7 +456,7 @@
             </button>
             <button
               type="button"
-              class="reader-icon-button reader-continue"
+              class="reader-icon-button reader-continue hall-tool"
               :disabled="!reader.continueLocation || reader.chapterLoading"
               aria-label="继续阅读"
               title="继续阅读"
@@ -533,6 +533,7 @@ const { disableTeleport, initialView, virtualLandscape, embedded, active, detail
 const emit = defineEmits(['navigation-state', 'start-draft'])
 
 // The SDK also exposes wx.miniProgram in ordinary browsers; use host markers only.
+// Embedded readers use host spacing; only standalone readers reserve capsule space.
 const hasReaderCapsule = /MicroMessenger/i.test(globalThis.navigator?.userAgent || '')
   || globalThis.window?.__wxjs_environment === 'miniprogram'
   || nativeOrientationFromLocation(globalThis.window?.location) !== null
@@ -1714,11 +1715,6 @@ onBeforeUnmount(() => {
   border-color: var(--archive-line);
   background: var(--archive-paper);
   color: var(--archive-ink);
-}
-.archive-reader.is-embedded-reader .reader-actions .reader-cite-action {
-  background: var(--archive-brand);
-  border-color: var(--archive-brand);
-  color: var(--archive-paper);
 }
 
 </style>

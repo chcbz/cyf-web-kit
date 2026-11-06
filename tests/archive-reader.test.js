@@ -788,7 +788,7 @@ describe('archive reader contract behavior', () => {
     { name: 'invalid native route with SDK', query: '?nativeOrientation=auto', sdk: true, capsule: false }
   ]) {
     for (const virtualLandscape of [false, true]) {
-      it(`binds capsule protection on the teleported ${virtualLandscape ? 'rotated' : 'unrotated'} reader in a ${environment.name}`, async () => {
+      it(`reserves capsule space only on the teleported ${virtualLandscape ? 'rotated' : 'unrotated'} reader in a ${environment.name}`, async () => {
         const originalUrl = window.location.href
         const originals = [
           [globalThis.navigator, 'userAgent'],
@@ -818,6 +818,13 @@ describe('archive reader contract behavior', () => {
           await wrapper.setProps({ virtualLandscape: !virtualLandscape })
           expect(dialog.classList.contains('has-reader-capsule')).to.equal(environment.capsule)
           expect(dialog.classList.contains('is-virtual-landscape-reader')).to.equal(!virtualLandscape)
+
+          wrapper.unmount()
+          wrapper = mountArchiveReader(makeApi(), { initialView: 'reader', embedded: true, virtualLandscape })
+          await waitFor(() => !wrapper.readerState.loading.value && wrapper.find('.archive-reader-fullscreen').exists())
+          expect(wrapper.get('.archive-reader-fullscreen').classes()).not.to.include('has-reader-capsule')
+          await wrapper.setProps({ virtualLandscape: !virtualLandscape })
+          expect(wrapper.get('.archive-reader-fullscreen').classes()).not.to.include('has-reader-capsule')
         } finally {
           wrapper?.unmount()
           window.history.replaceState(null, '', originalUrl)
@@ -3192,6 +3199,7 @@ describe('archive reader icon commands', () => {
         expect(button.attributes('title')).to.equal(button.attributes('aria-label'))
         expect(button.get('svg').attributes('aria-hidden')).to.equal('true')
         expect(button.classes()).to.include('reader-icon-button')
+        expect(button.classes()).to.include('hall-tool')
       }
       expect(footer.get('[aria-label="上一回"]').element.disabled).to.equal(true)
       await footer.get('[aria-label="引用当前段落起草交办"]').trigger('click')
