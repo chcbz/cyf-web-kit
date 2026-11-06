@@ -32,7 +32,7 @@
     if(b.hasAttribute('data-model-alternatives')){alternatives=b.getAttribute('aria-expanded')!=='true';render();document.querySelector('[data-model-alternatives]')?.focus();}
     if(b.dataset.modelCandidate){manual=b.dataset.modelCandidate;alternatives=false;render();document.querySelector('[data-model-alternatives]')?.focus();}
     if(b.hasAttribute('data-model-retry')){stage='LOADING';render();}
-    if(b.hasAttribute('data-model-confirm'))toast('离线演示：仅确认选择，未发送真实任务。');
+    if(b.hasAttribute('data-model-confirm'))toast(params.get('funds') === 'insufficient' ? '可用文余额不足，无法确认承办；本次未预占费用。' : '离线演示：仅确认选择，未发送真实任务。');
   }, true);
   state.task={title:'统计一下成绩',description:'请根据上传的成绩图片整理统计。',files:[],complete:false};
   state.agent=null; render();

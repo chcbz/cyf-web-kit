@@ -931,7 +931,7 @@ import { useHallSceneDebugBridge } from '@/composables/juyiting/useHallSceneDebu
 import { useHallSound } from '@/composables/juyiting/useHallSound'
 import { useHallTaskActions } from '@/composables/juyiting/useHallTaskActions'
 import { useHallRequirementCreate } from '@/composables/juyiting/useHallRequirementCreate'
-import { useHallPointAndStart } from '@/composables/juyiting/useHallPointAndStart'
+import { useHallPointAndStart, pointAndStartFeedback } from '@/composables/juyiting/useHallPointAndStart'
 import { useHallBountyAssignmentContext } from '@/composables/juyiting/useHallBountyAssignmentContext'
 import { createPointAndStartIntentStore } from '@/composables/juyiting/hallPointAndStartIntent'
 import { pointAndStartRecoveryLane } from '@/composables/juyiting/hallPointAndStartRecoveryLane'
@@ -2518,14 +2518,7 @@ const taskSkillDirectory = useHallSkillCapabilities({ api: agentApi, getContext:
   enabled: () => typedDeliberationEnabled.value })
 
 const pointAndStartPresentationState = pointAndStartState
-const explainPointAndStartState = () => ({
-  UNKNOWN: '正在确认点将结果，请刷新状态。',
-  PREPARING: '正在准备会话。',
-  ADMITTED: '需求已发送，正在进入会话。',
-  HISTORICAL: '本次指派已结束，可查看历史记录。',
-  FAILED: '点将未完成，请刷新状态查看详情。',
-  REJECTED: '委派未受理，候选已重新核对；请确认目标和事项状态。'
-}[pointAndStartState.value.status] || '正在确认点将结果。')
+const explainPointAndStartState = () => pointAndStartFeedback(pointAndStartState.value)
 const checkPointAndStartOriginal = async (task) => {
   if (!task?.id) return false
   const result = await checkPointAndStart(task.id)

@@ -10,6 +10,22 @@ const initialState = () => ({ status: 'IDLE', intent: null, projection: null, er
 const statusForProjection = projection => !projection ? 'UNKNOWN' : !projection.currentAssignment ? 'HISTORICAL' :
   projection.bootstrapState === 'ADMITTED' ? 'ADMITTED' : projection.bootstrapState === 'DEAD' ? 'FAILED' : 'PREPARING'
 
+/** Only a definitive first rejection can promise that this attempt did not reserve funds.
+ * Recovery/unknown results keep their existing guidance regardless of a later error code. */
+export const pointAndStartFeedback = state => {
+  if (state.status === 'REJECTED' && state.errorCode === 'TASK_FUNDS_INSUFFICIENT') {
+    return '可用文余额不足，无法确认承办；本次未预占费用。'
+  }
+  return ({
+    UNKNOWN: '正在确认点将结果，请刷新状态。',
+    PREPARING: '正在准备会话。',
+    ADMITTED: '需求已发送，正在进入会话。',
+    HISTORICAL: '本次指派已结束，可查看历史记录。',
+    FAILED: '点将未完成，请刷新状态查看详情。',
+    REJECTED: '委派未受理，候选已重新核对；请确认目标和事项状态。'
+  }[state.status] || '正在确认点将结果。')
+}
+
 /** Ordinary point-and-deliberate only. Existing records remain readable in their
  * original slot; new requests never negotiate a drawing lane or paid authority. */
 export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
@@ -102,7 +118,7 @@ export const useHallPointAndStart = ({ agentApi, actorScopeKey, storage = null,
     busy.value = true
     try { return Boolean(await action(captured, epoch, contextEpoch)) } catch (error) {
       if (current(captured, epoch, contextEpoch)) state.value = { ...state.value,
-        status: state.value.intent?.postAcknowledged || state.value.projection ? state.value.status : state.value.intent ? 'UNKNOWN' : 'REJECTED', error: error.message }
+        status: state.value.intent?.postAcknowledged || state.value.projection ? state.value.status : state.value.intent ? 'UNKNOWN' : 'REJECTED', error: error.message, errorCode: error.code || null }
       return false
     } finally { if (current(captured, epoch, contextEpoch)) busy.value = false }
   }

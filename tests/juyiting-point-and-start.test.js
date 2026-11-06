@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { expect } from 'chai'
 import { ref } from 'vue'
 import { setImmediate } from 'node:timers'
-import { useHallPointAndStart } from '../src/composables/juyiting/useHallPointAndStart.js'
+import { useHallPointAndStart, pointAndStartFeedback } from '../src/composables/juyiting/useHallPointAndStart.js'
 import { createPointAndStartIntentStore, pointAndStartBody, pointAndDeliberateBody, pointAndStartProjection } from '../src/composables/juyiting/hallPointAndStartIntent.js'
 
 const copy = value => JSON.parse(JSON.stringify(value))
@@ -60,6 +60,26 @@ const pause = () => new Promise(resolve => setImmediate(resolve))
 
 describe('persisted exact point-and-start source contract', () => {
   afterEach(() => instances.splice(0).forEach(flow => flow.dispose()))
+
+  it('explains definitive insufficient funds without claiming unknown or recovered writes are free', async () => {
+    let posts = 0
+    const h = harness({ api: { create: async () => {
+      posts++
+      throw Object.assign(new Error('Available balance is insufficient'), { status: 409, code: 'TASK_FUNDS_INSUFFICIENT' })
+    } } })
+    expect(await h.flow.start(args())).to.equal(false)
+    expect(h.flow.state.value.status).to.equal('REJECTED')
+    expect(h.flow.state.value.errorCode).to.equal('TASK_FUNDS_INSUFFICIENT')
+    expect(pointAndStartFeedback(h.flow.state.value)).to.equal('可用文余额不足，无法确认承办；本次未预占费用。')
+    expect(createPointAndStartIntentStore({ storage: h.memory, scope: h.scope.value, taskId: 'task-1' }).read().state).to.equal('ABSENT')
+    expect(posts).to.equal(1)
+    for (const status of ['UNKNOWN', 'PREPARING', 'ADMITTED', 'FAILED', 'HISTORICAL']) {
+      expect(pointAndStartFeedback({ status, errorCode: 'TASK_FUNDS_INSUFFICIENT' })).not.to.include('未预占')
+    }
+    expect(pointAndStartFeedback({ status: 'REJECTED', errorCode: 'OTHER_REASON' })).to.include('委派未受理')
+    h.scope.value = 'other-owner/client-a'
+    expect(h.flow.state.value.errorCode).not.to.equal('TASK_FUNDS_INSUFFICIENT')
+  })
 
   it('first 409 releases a definitively rejected candidate but timeout/replay 409 preserves the original', async () => {
     const rejected = () => { throw Object.assign(new Error('target closed'), { status: 409 }) }
