@@ -1180,7 +1180,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   flex-wrap: nowrap;
-  gap: 8px;
+  gap: 0;
 }
 
 .reader-actions button {
@@ -1661,7 +1661,7 @@ onBeforeUnmount(() => {
   }
 
   .reader-actions {
-    gap: 4px;
+    gap: 0;
   }
 
   .reader-actions button {

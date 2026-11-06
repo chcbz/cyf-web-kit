@@ -753,5 +753,5 @@ body[data-ui-revision] .material-picker-dialog .material-selection-summary butto
 .all-reader .reader-icon-button{display:inline-flex!important;align-items:center;justify-content:center;flex:0 0 44px;box-sizing:border-box;width:44px;min-width:44px;height:44px;padding:0!important;line-height:1}
 .all-reader .reader-icon-button:focus-visible{outline:2px solid #923f30;outline-offset:2px}
 .all-reader .reader-icon-button:disabled{opacity:.45;cursor:not-allowed}
-.all-reader .reader-footer{display:flex!important;flex-wrap:nowrap!important;align-items:center;justify-content:space-between;gap:8px!important;min-height:44px}
+.all-reader .reader-footer{display:flex!important;flex-wrap:nowrap!important;align-items:center;justify-content:space-between;gap:0!important;min-height:44px}
 .all-reader .reader-header{flex-wrap:nowrap!important}.all-reader .reader-heading{min-width:0;flex:1}.all-reader .reader-header-actions{flex-wrap:nowrap!important}

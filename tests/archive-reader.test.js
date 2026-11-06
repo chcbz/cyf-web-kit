@@ -748,6 +748,9 @@ describe('archive reader contract behavior', () => {
     expect(source).to.match(/\.is-virtual-landscape-reader \.reader-notes\s*\{[\s\S]*?position:\s*static;[\s\S]*?display:\s*block;/)
     expect(source).to.match(/@media \(max-height: 540px\) and \(orientation: landscape\)[\s\S]*?\.reader-notes\s*\{[\s\S]*?position:\s*static;[\s\S]*?display:\s*block;/)
     expect(source).to.match(/\.reader-actions\s*\{[\s\S]*?display:\s*flex;[\s\S]*?flex-wrap:\s*nowrap;/)
+    // The actual 320px host leaves only 222px for five 44px controls.
+    expect(source).to.match(/\.reader-actions\s*\{[^}]*gap:\s*0;/)
+    expect(source).to.match(/@media \(max-width: 900px\) and \(orientation: portrait\)[\s\S]*?\.reader-actions\s*\{[^}]*gap:\s*0;/)
     expect(source).to.match(/\.reader-actions button\s*\{[\s\S]*?min-height:\s*40px;/)
     expect(source).to.match(/\.has-reader-capsule:not\(\.is-virtual-landscape-reader\) \.reader-header\s*\{[\s\S]*?padding-right:\s*112px;/)
     wrapper.unmount()
