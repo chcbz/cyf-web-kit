@@ -117,7 +117,7 @@ document.addEventListener('click',event=>{
   if(action==='ui-rename'){dialog('重命名',`<label>名称<input aria-label="文件名称" value="${esc(asset(state.fileId||'ref-brief')?.name)}"></label>`,button('取消','close-dialog')+button('保存','ui-rename-save'));return;}
   if(action==='ui-rename-save'){const a=asset(state.fileId||'ref-brief'),name=$('dialog[open] input').value.trim();if(!name)return;a.name=name;target.closest('dialog').close();render();return;}
   if(action==='ui-recycle'){state.fileRecycled=!state.fileRecycled;render();feedback(state.fileRecycled?'示例文件已标记回收':'示例文件已恢复');return;}
-  if(action==='ui-hosting'){dialog('接入 / 山寨安顿','<p>沿用现有接入说明、报价与确认入口。此基准只冻结入口；付费、租期恢复、授权和真实安装均不执行。</p>');return;}
+  if(action==='ui-hosting'){dialog('接入 / 山寨安顿','<p>沿用现有接入说明、报价与确认入口。此基准只冻结入口；付费、租期恢复、授权和真实安装均不执行。</p><p>保留的托管权益：身份与原到期日不变，本次不扣费。旧资金不兑换、不退款；续租按新报价以文支付。</p><p>原结算记录已归档，不展示为新的文付款流水。已到期显示“租期已到，待手动续租”。</p>');return;}
   if(action==='ui-toc'){dialog('目录',`<ol><li>${button('第一回','close-dialog')}</li><li>${button('第二回','close-dialog')}</li></ol>`);return;}
   if(action==='ui-bookmarks'){dialog('书签','<p>当前章节 · 示例书签</p>',button('添加书签','ui-bookmark-save'));return;}
   if(action==='ui-bookmark-save'){target.closest('dialog').close();feedback('示例书签已保存');return;}

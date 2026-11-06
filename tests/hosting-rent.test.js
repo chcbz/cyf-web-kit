@@ -1,3 +1,4 @@
+import { validLookup, validOperation } from '../src/composables/juyiting/hostingRentContract.js'
 import { currentHttpResponse } from './fixtures/current-http-response.js'
 import { expect } from 'chai'
 import { ref } from 'vue'
@@ -444,5 +445,26 @@ describe('hosting rent frozen HTTP integration', () => {
     expect(hall).to.include('@hosting-changed="refreshHall({ silent: true })"')
     expect(panel).to.include('<HostingRentPanel')
     expect(panel).to.include("if (mode === 'server')")
+  })
+})
+
+
+describe('retained hosting terms have no current wallet receipt', () => {
+  const retained = () => activeHostingLookup({ lease: { settlementKind: 'RETAINED', amountWen: '0' },
+    intent: { reserveTransactionId: null, captureTransactionId: null, refundTransactionId: null } })
+  it('accepts explicit retained terms and keeps renewal/reprovision available without changing expiry', () => {
+    const value = retained()
+    expect(validLookup(value, 'agt_server_proposal', 'linchong')).to.equal(true)
+    for (const kind of ['RENEWAL_QUOTE', 'REPROVISION']) expect(validOperation({ kind,
+      key: '00000000-0000-4000-8000-000000000001', agentId: 'agt_server_proposal', lease: value.lease }, 'linchong')).to.equal(true)
+    expect(value.lease.paidThrough).to.equal(172801000)
+  })
+  it('does not infer retained rights from zero price or accept fictitious current receipts', () => {
+    const value = retained()
+    delete value.lease.settlementKind
+    expect(validLookup(value, 'agt_server_proposal', 'linchong')).to.equal(false)
+    value.lease.settlementKind = 'RETAINED'
+    value.intent.captureTransactionId = 'old-capture'
+    expect(validLookup(value, 'agt_server_proposal', 'linchong')).to.equal(false)
   })
 })

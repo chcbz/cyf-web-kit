@@ -23,10 +23,11 @@
       <p v-if="!lookup.managed">尚未开通托管。确认报价后才会收费。</p>
       <template v-else>
         <h4>{{ leaseTitle }}</h4>
-        <p>已付 {{ money(lookup.lease.amountWen) }} / {{ period(lookup.lease.periodSeconds) }}</p>
+        <p v-if="lookup.lease.settlementKind === 'RETAINED'">原结算记录已归档；保留身份及原租期，本次不扣费。续租按新报价以文支付。</p>
+        <p v-else>已付 {{ money(lookup.lease.amountWen) }} / {{ period(lookup.lease.periodSeconds) }}</p>
         <p>起租 {{ timestamp(lookup.lease.paidFrom) }}；到期 {{ timestamp(lookup.lease.paidThrough) }}</p>
         <p>到期后保留资料、技能和已有成果，正在进行的任务不受本页面影响。</p>
-        <p v-if="lookup.intent">预留流水 {{ lookup.intent.reserveTransactionId }}</p>
+        <p v-if="lookup.intent?.reserveTransactionId">预留流水 {{ lookup.intent.reserveTransactionId }}</p>
         <p v-if="lookup.intent?.captureTransactionId">收租流水：{{ lookup.intent.captureTransactionId }}</p>
         <p v-if="lookup.intent?.refundTransactionId">原单退款流水：{{ lookup.intent.refundTransactionId }}</p>
         <p v-if="lookup.intent?.status === 'FAILED_NO_EFFECT'">安顿未成功，请核对退款状态和退款流水。</p>
@@ -81,10 +82,10 @@ const receipt = computed(() => rent.state.value.accepted?.receipt)
 const receiptTitle = computed(() => receipt.value?.operation === 'REPROVISION' ? '免费重整已受理，等待就绪' :
   receipt.value?.status === 'FUNDS_RESERVED' ? '租金已预留' : '续租付款已确认')
 const leaseTitle = computed(() => {
-  if (lookup.value?.lease?.status === 'REFUNDED') return '安顿未生效，租金已退回'
+  if (lookup.value?.lease?.status === 'REFUNDED') return lookup.value.lease.settlementKind === 'RETAINED' ? '原安顿未生效，历史退款已归档' : '安顿未生效，租金已退回'
   if (lookup.value?.lease?.status !== 'ACTIVE') return '安顿待确认 / 待就绪，不重复付款'
   if (lookup.value.admission === 'RENEWAL_REQUIRED' || BigInt(lookup.value.lease.paidThrough) <= BigInt(rent.clock.value)) return '租期已到，待手动续租'
-  return '租约已生效'
+  return lookup.value.lease.settlementKind === 'RETAINED' ? '保留的托管权益' : '租约已生效'
 })
 const money = value => isCanonicalDecimalString(value) ? formatWen(value) : '—'
 const period = value => {
