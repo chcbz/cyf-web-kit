@@ -474,7 +474,7 @@ function handleSyncedAction(action,t){
  const r=state.runtimeDemo;
  if(action==='complete-runtime-open')r.open=true;
  if(action==='complete-runtime-close'){r.open=false;renderRuntimeCatalog();persist();return true;}
- if(action==='complete-runtime-hosted'){dialog('山寨安顿','<p>保留已有付费安顿边界；本原型不报价、不付款、不绑定好汉。</p>');return true;}
+ if(action==='complete-runtime-hosted'){dialog('山寨安顿','<p>保留已有付费安顿边界；本原型不报价、不付款、不绑定好汉。</p><p>保留的托管权益：身份与原到期日不变，本次不扣费。旧资金不兑换、不退款；续租按新报价以文支付。</p><p>原结算记录已归档，不展示为新的文付款流水。已到期显示“租期已到，待手动续租”。</p>');return true;}
  if(action==='complete-runtime-mode'){Object.assign(r,{mode:t.dataset.mode,error:''});}
  if(action==='complete-runtime-import'){
   r.error=selectedScenario==='runtime-invalid'?'示例作用域不匹配或材料已过期；不登记安装。':'';r.imported=!r.error;
