@@ -27,7 +27,7 @@ export function useHostingRent({ agentApi, economyApi, loadCapability, enabled =
   let disposed = false
   let signature = ''
   let authGeneration
-  const scopeKey = () => `cyf-hosting-rent-v1:${encodeURIComponent(scope)}:${encodeURIComponent(target.value.personaCode)}`
+  const scopeKey = () => `cyf-hosting-rent-wen-v1:${encodeURIComponent(scope)}:${encodeURIComponent(target.value.personaCode)}`
   const context = () => ({ generation, auth: authGeneration, signal: controller.signal, personaCode: target.value?.personaCode })
   const current = ctx => !disposed && ctx.generation === generation && ctx.auth === getAuthorizationGeneration() && !ctx.signal.aborted
   const selected = () => target.value && targetSignature(resolvePersona(target.value)) === signature

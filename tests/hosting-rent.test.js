@@ -33,6 +33,20 @@ const posts = h => h.requests.filter(request => request.body)
 const owned = () => hostingPersona({ bound: true, boundToMe: true, agentId: 'agt_server_proposal' })
 
 describe('hosting rent frozen HTTP integration', () => {
+  it('does not replay retired-currency browser recovery when reading retained rights', async () => {
+    const storage = memoryHostingStorage()
+    const oldKey = 'cyf-hosting-rent-v1:ab8c2a4766fc37cf16c5c7265178df250d479c2edda51374bc08dda8818f25b8:linchong'
+    storage.setItem(oldKey, JSON.stringify({ operation: { kind: 'INITIAL', quote: { amountMicro: '1000000000' } } }))
+    const h = harness({ storage, agentApi: { get: async () => activeHostingLookup({
+      lease: { settlementKind: 'RETAINED', amountWen: '0' },
+      intent: { reserveTransactionId: null, captureTransactionId: null, refundTransactionId: null }
+    }), create: async () => { throw Error('old payment must not be replayed') } } })
+    expect(await h.rent.open(owned())).to.equal(true)
+    expect(h.rent.error.value).to.equal('')
+    expect(posts(h)).to.have.length(0)
+    expect(storage.getItem(oldKey)).to.include('amountMicro')
+  })
+
   afterEach(() => { for (const rent of rents.splice(0)) rent.dispose() })
 
   it('uses only the server quote before explicit confirmation; 202 reservation is not ready', async () => {
