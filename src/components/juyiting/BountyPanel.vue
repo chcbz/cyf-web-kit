@@ -282,18 +282,18 @@
               />
 
               <section
-                v-if="(canActOnTask(detailTask) && canCancelOrdinaryTask(detailTask)) || cancellationUnresolved"
+                v-if="canCancelOrdinaryTask(detailTask) || cancellationUnresolved"
                 class="ordinary-cancellation"
                 aria-label="普通事项取消"
               >
-                <p>仅支持取消尚未开工、且不涉及资金的事项；最终以系统核验为准。取消后保留历史指派记录与成果。</p>
+                <p>取消事项将释放全部预占费用，关闭后续执行；已有记录和成果保留。已发出的外部调用可能仍产生平台成本，不会向你补扣。</p>
                 <button
                   type="button"
                   class="ordinary-cancel-action"
                   :disabled="cancellationBusy || showCancellationDialog || cancellationSubmitting"
                   @click="requestCancellation"
                 >
-                  {{ cancellationState?.taskId === detailTask.id && cancellationState.status === 'unresolved' ? '核对原取消结果' : '取消未开工事项' }}
+                  {{ cancellationState?.taskId === detailTask.id && cancellationState.status === 'unresolved' ? '核对原取消结果' : '取消事项' }}
                 </button>
                 <p v-if="cancellationState?.taskId === detailTask.id && cancellationState.status === 'unresolved'" role="status">结果尚未确认；只核对原事项，不重复提交取消。</p>
               </section>
@@ -451,8 +451,8 @@
     </transition>
     <var-dialog
       v-model:show="showCancellationDialog"
-      title="确认取消未开工事项？"
-      :message="`即将申请取消“${cancellationCandidate?.task.title || '原事项'}”。仅限未产生费用、尚未开始的事项；记录和成果会保留。确认后不会继续办理；若结果未确认，只核对原结果，不重复提交。`"
+      title="确认取消事项？"
+      :message="`即将申请取消“${cancellationCandidate?.task.title || '原事项'}”。全部预占费用将释放，记录和成果保留；已发出的外部调用不保证立即停止。确认后关闭后续执行；若结果未确认，只核对原结果，不重复提交。`"
       confirm-button-text="确认取消事项"
       cancel-button-text="保留事项"
       confirm-button-text-type="danger"

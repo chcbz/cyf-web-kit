@@ -30,7 +30,7 @@ const rejected = (status, code) => { throw Object.assign(new Error('rejected'), 
 
 describe('ordinary cancellation scoped existing API', () => {
   afterEach(() => { for (const actions of disposables.splice(0)) actions.dispose() })
-  for (const status of ['open', 'planning', 'assigned']) it(`cancels ${status} with only a canonical string version and preserves historical assignment`, async () => {
+  for (const status of ['open', 'planning', 'assigned', 'running', 'reviewing', 'blocked', 'failed']) it(`cancels ${status} with only a canonical string version and preserves historical assignment`, async () => {
     const h = harness({ task: { status, assignedAgentIds: ['old-agent'] } })
     expect(await h.actions.cancelTask(h.selectedTask.value)).to.equal(true)
     expect(posts(h)[0]).to.include({ url: '/tasks/a/cancel' })
@@ -129,19 +129,18 @@ describe('ordinary cancellation scoped existing API', () => {
       expect(await h.actions.cancelTask(h.selectedTask.value)).to.equal(false); expect(h.requests).to.have.length(0)
     }
   })
-  it('keeps the existing funding/cancel route and string version independent', async () => {
+  it('does not restore retired funding cancellation through task actions', async () => {
     const h = harness({ task: { funding: { mode: 'FUNDED_SINGLE_AGENT' } } })
     const actions = useHallTaskActions({ ...h.deps, canAssign: () => false, selectedAgent: ref(null), fundedIntentStorage: null })
     disposables.push(actions)
-    await actions.cancelFunding(h.selectedTask.value)
-    expect(posts(h)[0].url).to.equal('/tasks/a/funding/cancel')
-    expect(posts(h)[0].body).to.deep.equal({ expectedTaskVersion: '2' })
+    expect(actions.cancelFunding).to.equal(undefined)
+    expect(posts(h)).to.have.length(0)
     expect(await actions.cancelTask(h.selectedTask.value)).to.equal(false)
   })
   it('accepts only canonical int64 string versions and preliminarily supported states', () => {
     for (const version of [null, true, '02', '2.0', '', -1, 0, 2, 1.1, Number.MAX_SAFE_INTEGER, '9223372036854775808', ' 2', '+2', '2e1']) expect(ordinaryTaskVersion({ taskVersion: version })).to.equal(null)
-    for (const status of ['running', 'cancelled', 'completed', 'queued']) expect(canCancelOrdinaryTask(task({ status }))).to.equal(false)
-    expect(canCancelOrdinaryTask(task({ startedAt: 0 }))).to.equal(false)
+    for (const status of ['cancelled', 'completed', 'archived', 'queued']) expect(canCancelOrdinaryTask(task({ status }))).to.equal(false)
+    expect(canCancelOrdinaryTask(task({ status: 'running', startedAt: 123 }))).to.equal(true)
     expect(canCancelOrdinaryTask(task({ reward: 1 }))).to.equal(false)
     expect(canCancelOrdinaryTask(task())).to.equal(true)
   })

@@ -1,4 +1,3 @@
-import { projectHallTask } from './hallTaskPresentation.js'
 import { computed, getCurrentScope, onScopeDispose, ref, unref, watch } from 'vue'
 
 import { parseTaskEventVersion, compareTaskEventVersions, nextTaskEventVersion } from './taskEventVersion.js'
@@ -6,9 +5,9 @@ import { parseTaskEventVersion, compareTaskEventVersions, nextTaskEventVersion }
 // Requests and receipts share the canonical decimal-string Java Long contract.
 export const ordinaryTaskVersion = task => parseTaskEventVersion(task?.taskVersion)
 export const isTerminalMatter = task => ['cancelled', 'completed', 'accepted', 'archived', 'failed'].includes(task?.status)
-export const canCancelOrdinaryTask = task => Boolean(task?.id && !projectHallTask({ task }).readOnly && !task.funding &&
+export const canCancelOrdinaryTask = task => Boolean(task?.id && !task.funding &&
   (task.reward == null || task.reward === 0 || task.reward === '0') &&
-  ['open', 'planning', 'assigned'].includes(task.status) && task.startedAt == null && task.completedAt == null &&
+  ['open', 'planning', 'assigned', 'running', 'reviewing', 'blocked', 'failed'].includes(task.status) &&
   ordinaryTaskVersion(task) !== null && nextTaskEventVersion(ordinaryTaskVersion(task)) !== null)
 
 export const cancellationPayload = result => {
@@ -116,7 +115,7 @@ export const useHallOrdinaryCancellation = ({ agentApi, selectedTask, tasks, ide
     }
     if (!current()) return false
     playSuccess()
-    showToast(refreshed ? '事项已取消，历史指派与成果保留。' : '事项已取消确认；刷新待完成，请重查，勿重复取消。')
+    showToast(refreshed ? '事项已取消，预占费用已释放，历史指派与成果保留。' : '事项已取消确认；刷新待完成，请重查，勿重复取消。')
     return true
   }
   return { cancelTask, cancellationState: state, cancellationBusy: busy, dispose }
