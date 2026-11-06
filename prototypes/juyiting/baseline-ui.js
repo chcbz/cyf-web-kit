@@ -21,7 +21,7 @@ function seedBaseline() {
   }
 }
 function uiIcon(name) {
-  const paths = {acceptance:'M9 4H5v17h14V4h-4M9 2h6v4H9ZM8 13l3 3 5-6',close:'M6 6l12 12M18 6 6 18',download:'M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5',refresh:'M19 8a7 7 0 1 0 1 6M19 3v5h-5',history:'M3 11a9 9 0 1 1 3 8M3 5v6h6M12 7v5l3 2',plus:'M12 4v16M4 12h16',send:'m9 5 7 7-7 7',mic:'M9 3a3 3 0 0 1 6 0v8a3 3 0 0 1-6 0ZM5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8'};
+  const paths = {back:'M19 12H5m6-6-6 6 6 6',list:'M9 5h12M9 12h12M9 19h12M3 5h1M3 12h1M3 19h1',note:'M14 3H5v18h14V8ZM14 3v5h5M8 12h8M8 16h6',quote:'M4 7h6v6H5c0 3 2 4 4 4M14 7h6v6h-5c0 3 2 4 4 4',save:'M4 3h14l3 3v15H3V3ZM7 3v6h9V3M7 21v-8h10v8',play:'m8 4 13 8-13 8Z',chevronLeft:'m15 5-7 7 7 7',chevronRight:'m9 5 7 7-7 7',bookmark:'M6 3h12v18l-6-4-6 4Z',acceptance:'M9 4H5v17h14V4h-4M9 2h6v4H9ZM8 13l3 3 5-6',close:'M6 6l12 12M18 6 6 18',download:'M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5',refresh:'M19 8a7 7 0 1 0 1 6M19 3v5h-5',history:'M3 11a9 9 0 1 1 3 8M3 5v6h6M12 7v5l3 2',plus:'M12 4v16M4 12h16',send:'m9 5 7 7-7 7',mic:'M9 3a3 3 0 0 1 6 0v8a3 3 0 0 1-6 0ZM5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8'};
   return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name]}"></path></svg>`;
 }
 function syncCurrentComposer(panel) {

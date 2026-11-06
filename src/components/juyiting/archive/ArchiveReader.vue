@@ -96,11 +96,26 @@
           <header class="reader-header">
             <button
               type="button"
-              class="reader-header-button reader-exit"
+              class="reader-icon-button reader-header-button reader-exit"
+              aria-label="返回典籍列表"
+              title="返回典籍列表"
               @click="closeReading"
             >
-              <span class="reader-exit-long">← 返回典籍列表</span>
-              <span class="reader-exit-short">← 返回</span>
+              <svg
+                class="hall-control-icon"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path d="M19 12H5m6-6-6 6 6 6" />
+              </svg>
             </button>
             <div class="reader-heading">
               <p class="reader-kicker">典籍阅读</p>
@@ -115,14 +130,14 @@
               </p>
               <button
                 type="button"
-                class="reader-header-button reader-catalog-toggle hall-tool"
+                class="reader-icon-button reader-header-button reader-catalog-toggle hall-tool"
                 :aria-expanded="catalogOpen"
                 aria-controls="archive-reader-catalog"
                 @click="toggleCatalog"
                aria-label="典籍目录" title="典籍目录"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 5h12M9 12h12M9 19h12M3 5h1M3 12h1M3 19h1"/></svg></button>
               <button
                 type="button"
-                class="reader-header-button reader-notes-toggle hall-tool"
+                class="reader-icon-button reader-header-button reader-notes-toggle hall-tool"
                 :aria-expanded="notesOpen"
                 aria-controls="archive-reader-notes"
                 @click="toggleNotes"
@@ -208,11 +223,28 @@
               </p>
               <button
                 type="button"
-                class="note-save"
+                class="reader-icon-button note-save"
                 :disabled="!noteText.trim() || !reader.currentLocation || noteBytes > 20000 || reader.notePending"
+                :aria-label="reader.notePending ? '保存中…' : '保存笔记'"
+                :title="reader.notePending ? '保存中…' : '保存笔记'"
+                :aria-busy="reader.notePending"
                 @click="saveNote"
               >
-                {{ reader.notePending ? '保存中…' : '保存笔记' }}
+                <svg
+                  class="hall-control-icon"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path d="M4 3h14l3 3v15H3V3ZM7 3v6h9V3M7 21v-8h10v8" />
+                </svg>
               </button>
               <p
                 v-if="reader.noteAnchorNotice"
@@ -243,13 +275,13 @@
                   <p>{{ note.text }}</p>
                   <button
                     type="button"
-                    class="note-edit hall-tool"
+                    class="reader-icon-button note-edit hall-tool"
                     :disabled="reader.notePending"
                     @click="editNote(note)"
                    aria-label="编辑笔记" title="编辑笔记"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m16 3 5 5M4 20l4-1L21 6l-3-3L5 16Z"/></svg></button>
                   <button
                     type="button"
-                    class="note-delete hall-tool"
+                    class="reader-icon-button note-delete hall-tool"
                     :disabled="reader.notePending"
                     @click="removeNote(note)"
                    aria-label="删除笔记" title="删除笔记"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/></svg></button>
@@ -269,11 +301,28 @@
                 ></textarea>
                 <button
                   type="button"
-                  class="question-create"
+                  class="reader-icon-button question-create"
                   :disabled="!questionText.trim() || reader.questionPending"
+                  :aria-label="reader.questionPending ? '递交中…' : '向案卷书吏提问'"
+                  :title="reader.questionPending ? '递交中…' : '向案卷书吏提问'"
+                  :aria-busy="reader.questionPending"
                   @click="askSelectedText"
                 >
-                  {{ reader.questionPending ? '递交中…' : '向案卷书吏提问' }}
+                  <svg
+                    class="hall-control-icon"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <path d="M3 3h18v14H9l-6 4ZM8 8h8M8 12h5" />
+                  </svg>
                 </button>
                 <article
                   v-if="reader.question"
@@ -287,18 +336,52 @@
                   <button
                     v-if="reader.question.status === 'FAILED_RETRYABLE'"
                     type="button"
-                    class="question-retry"
+                    class="reader-icon-button question-retry"
                     :disabled="reader.questionPending"
+                    :aria-label="reader.questionPending ? '重试中…' : '重试提问'"
+                    :title="reader.questionPending ? '重试中…' : '重试提问'"
+                    :aria-busy="reader.questionPending"
                     @click="retryQuestion"
                   >
-                    重试
+                    <svg
+                      class="hall-control-icon"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path d="M19 8a7 7 0 1 0 1 6M19 3v5h-5" />
+                    </svg>
                   </button>
                   <button
                     v-if="reader.question.status === 'SUCCEEDED' || reader.question.status === 'FAILED_FINAL'"
+                    class="reader-icon-button"
                     type="button"
+                    aria-label="关闭问答"
+                    title="关闭问答"
                     @click="reader.closeQuestion"
                   >
-                    关闭问答
+                    <svg
+                      class="hall-control-icon"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path d="M6 6l12 12M18 6 6 18" />
+                    </svg>
                   </button>
                 </article>
                 <p v-if="reader.questionError" class="archive-error" role="alert">{{ reader.questionError }}</p>
@@ -311,14 +394,32 @@
                   :key="bookmark.bookmarkId"
                 >
                   <button
+                    class="reader-icon-button"
                     type="button"
+                    :aria-label="`跳转书签：${bookmark.location?.paragraphId || bookmark.location?.blockId}`"
+                    :title="`跳转书签：${bookmark.location?.paragraphId || bookmark.location?.blockId}`"
                     @click="openBookmark(bookmark)"
                   >
-                    {{ bookmark.location?.paragraphId || bookmark.location?.blockId }}
+                    <svg
+                      class="hall-control-icon"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path d="M6 3h12v18l-6-4-6 4Z" />
+                    </svg>
                   </button>
+                  <span class="bookmark-location">{{ bookmark.location?.paragraphId || bookmark.location?.blockId }}</span>
                   <button
                     type="button"
-                    class="bookmark-delete hall-tool"
+                    class="reader-icon-button bookmark-delete hall-tool"
                     aria-label="删除书签"
                     @click="removeBookmark(bookmark)"
                    title="删除书签"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/></svg></button>
@@ -332,31 +433,66 @@
               v-if="embedded"
               type="button"
               :disabled="!citationParagraph"
-              class="reader-cite-action"
+              class="reader-icon-button reader-cite-action"
+              aria-label="引用当前段落起草交办"
+              title="引用当前段落起草交办"
               @click="citeParagraph"
-            >引用当前段落起草交办</button>
+            >
+              <svg
+                class="hall-control-icon"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path d="M4 7h6v6H5c0 3 2 4 4 4M14 7h6v6h-5c0 3 2 4 4 4" />
+              </svg>
+            </button>
             <button
               type="button"
+              class="reader-icon-button reader-continue"
               :disabled="!reader.continueLocation || reader.chapterLoading"
+              aria-label="继续阅读"
+              title="继续阅读"
               @click="continueReading"
             >
-              继续阅读
+              <svg
+                class="hall-control-icon"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path d="m8 4 13 8-13 8Z" />
+              </svg>
             </button>
             <button
               type="button"
               :disabled="!reader.canGoPrevious || reader.chapterLoading"
               aria-label="上一回"
               @click="runAction(reader.goPrevious, '上一回暂无法读取。')"
-             class="hall-tool" title="上一回"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 5-7 7 7 7"/></svg></button>
+             class="reader-icon-button hall-tool" title="上一回"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 5-7 7 7 7"/></svg></button>
             <button
               type="button"
               :disabled="!reader.canGoNext || reader.chapterLoading"
               aria-label="下一回"
               @click="runAction(reader.goNext, '下一回暂无法读取。')"
-             class="hall-tool" title="下一回"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7"/></svg></button>
+             class="reader-icon-button hall-tool" title="下一回"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 5 7 7-7 7"/></svg></button>
             <button
               type="button"
-              class="bookmark-create hall-tool"
+              class="reader-icon-button bookmark-create hall-tool"
               :disabled="!reader.currentLocation || reader.bookmarkPending"
               @click="createBookmark"
              aria-label="添加书签" title="添加书签"><svg class="hall-control-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 3h12v18l-6-4-6 4Z"/></svg></button>
@@ -1021,10 +1157,6 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid rgba(98, 66, 34, 0.18);
 }
 
-.reader-exit-short {
-  display: none;
-}
-
 .reader-kicker,
 .save-state {
   color: #765f40;
@@ -1043,9 +1175,11 @@ onBeforeUnmount(() => {
 }
 
 .reader-actions {
-  display: grid;
+  display: flex;
   flex: 0 0 auto;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
   gap: 8px;
 }
 
@@ -1057,10 +1191,39 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.reader-actions .reader-cite-action {
-  grid-column: span 2;
-  white-space: normal;
-  line-height: 1.3;
+
+.archive-reader-fullscreen .reader-icon-button {
+  display: inline-flex;
+  box-sizing: border-box;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  flex: 0 0 44px;
+  align-items: center;
+  justify-content: center;
+}
+
+.reader-icon-button:focus-visible {
+  outline: 2px solid var(--archive-brand);
+  outline-offset: 2px;
+}
+
+.reader-icon-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.reader-heading h3 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bookmark-location {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .reader-header-button {
@@ -1472,14 +1635,9 @@ onBeforeUnmount(() => {
     gap: 4px;
   }
 
-  .reader-exit-long,
   .reader-kicker,
   .save-state {
     display: none;
-  }
-
-  .reader-exit-short {
-    display: inline;
   }
 
   .reader-heading {
@@ -1500,15 +1658,6 @@ onBeforeUnmount(() => {
   .reader-header-button {
     padding: 7px;
     white-space: nowrap;
-  }
-
-  .reader-catalog-toggle {
-    font-size: 0;
-  }
-
-  .reader-catalog-toggle::after {
-    content: '目录';
-    font-size: 14px;
   }
 
   .reader-actions {

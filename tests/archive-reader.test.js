@@ -741,11 +741,13 @@ describe('archive reader contract behavior', () => {
 
     const source = readFileSync(new URL('../src/components/juyiting/archive/ArchiveReader.vue', import.meta.url), 'utf8')
     expect(source).to.match(/@media \(max-width: 900px\) \{[\s\S]*?\.reader-layout\.notes-open \.reader-notes\s*\{[\s\S]*?display:\s*block;/)
-    expect(source).to.match(/@media \(max-width: 900px\) and \(orientation: portrait\) \{[\s\S]*?\.reader-exit-long,[\s\S]*?\.reader-exit-short \{[\s\S]*?display:\s*inline;/)
+    expect(wrapper.get('.reader-exit').attributes('aria-label')).to.equal('返回典籍列表')
+    expect(wrapper.get('.reader-exit').text()).to.equal('')
+    expect(source).not.to.include("content: '目录'")
     expect(source).to.match(/\.reader-notes\s*\{[\s\S]*?display:\s*none;/)
     expect(source).to.match(/\.is-virtual-landscape-reader \.reader-notes\s*\{[\s\S]*?position:\s*static;[\s\S]*?display:\s*block;/)
     expect(source).to.match(/@media \(max-height: 540px\) and \(orientation: landscape\)[\s\S]*?\.reader-notes\s*\{[\s\S]*?position:\s*static;[\s\S]*?display:\s*block;/)
-    expect(source).to.match(/\.reader-actions\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/)
+    expect(source).to.match(/\.reader-actions\s*\{[\s\S]*?display:\s*flex;[\s\S]*?flex-wrap:\s*nowrap;/)
     expect(source).to.match(/\.reader-actions button\s*\{[\s\S]*?min-height:\s*40px;/)
     expect(source).to.match(/\.has-reader-capsule:not\(\.is-virtual-landscape-reader\) \.reader-header\s*\{[\s\S]*?padding-right:\s*112px;/)
     wrapper.unmount()
@@ -2786,7 +2788,7 @@ describe('archive reader contract behavior', () => {
         expect(readerUnmounts).to.equal(0)
       }
       const hall = wrapper.vm
-      await wrapper.findAll('button').find(button => button.text() === '引用当前段落起草交办').trigger('click')
+      await wrapper.get('button[aria-label="引用当前段落起草交办"]').trigger('click')
       await settle()
       expect(hall.panelDepth).to.equal(3)
       expect(hall.panelFrames).to.deep.equal(['library', 'formalDraft'])
@@ -2847,7 +2849,7 @@ describe('W04 explicit reading citation continuity', () => {
       await wrapper.findAll('.reader-paragraph')[1].trigger('click')
       const location = { ...reader.currentLocation.value }
       const chapter = reader.chapter.value
-      await wrapper.findAll('button').find(button => button.text() === '引用当前段落起草交办').trigger('click')
+      await wrapper.get('button[aria-label="引用当前段落起草交办"]').trigger('click')
       const context = wrapper.emitted('start-draft')[0][0]
       expect(context.originRef).to.equal('juyiting:archive')
       expect(context.instruction).to.include(editionId).and.include(location.paragraphId).and.include('引首第二段')
@@ -3170,5 +3172,66 @@ describe('archive question foreground recovery', () => {
       expect(reader.question.value.status).to.equal('SUCCEEDED')
       expect(api.calls.filter(call => ['put', 'post'].includes(call.method))).to.have.length(0)
     } finally { wrapper.unmount(); await settle() }
+  })
+})
+
+describe('archive reader icon commands', () => {
+  it('renders all five footer commands as named icons and preserves citation, navigation and bookmark actions', async () => {
+    const api = makeApi()
+    const wrapper = mountArchiveReader(api, { embedded: true })
+    try {
+      await waitFor(() => wrapper.readerState.chapter.value?.blockId === preface.blockId)
+      const footer = wrapper.get('.reader-actions')
+      const labels = ['引用当前段落起草交办', '继续阅读', '上一回', '下一回', '添加书签']
+      expect(footer.findAll('button').map(button => button.attributes('aria-label'))).to.deep.equal(labels)
+      for (const button of footer.findAll('button')) {
+        expect(button.text()).to.equal('')
+        expect(button.attributes('title')).to.equal(button.attributes('aria-label'))
+        expect(button.get('svg').attributes('aria-hidden')).to.equal('true')
+        expect(button.classes()).to.include('reader-icon-button')
+      }
+      expect(footer.get('[aria-label="上一回"]').element.disabled).to.equal(true)
+      await footer.get('[aria-label="引用当前段落起草交办"]').trigger('click')
+      expect(wrapper.emitted('start-draft')).to.have.length(1)
+      await footer.get('[aria-label="下一回"]').trigger('click')
+      await waitFor(() => wrapper.readerState.chapter.value?.blockId === chapterOne.blockId)
+      expect(footer.get('[aria-label="上一回"]').element.disabled).to.equal(false)
+      await footer.get('[aria-label="添加书签"]').trigger('click')
+      await waitFor(() => wrapper.readerState.bookmarks.value.length === 1)
+      const bookmark = wrapper.get('[aria-label^="跳转书签："]')
+      expect(bookmark.text()).to.equal('')
+      expect(bookmark.find('svg').exists()).to.equal(true)
+      expect(wrapper.get('.bookmark-location').text()).not.to.equal('')
+      await bookmark.trigger('click')
+      await footer.get('[aria-label="继续阅读"]').trigger('click')
+      await settle()
+      expect(wrapper.readerState.chapter.value.blockId).to.equal(chapterOne.blockId)
+    } finally { wrapper.unmount() }
+  })
+
+  it('keeps icon-only note save disabled and announces its pending state until the write completes', async () => {
+    const pending = deferred()
+    const api = makeApi({ putHandler: call => {
+      if (call.path.startsWith('/me/notes/')) return pending.promise
+      return response({ editionId, location: call.body.location, state: 'IN_PROGRESS', version: '1' })
+    } })
+    const wrapper = mountArchiveReader(api, { embedded: true })
+    try {
+      await waitFor(() => !!wrapper.readerState.currentLocation.value)
+      const save = wrapper.get('.note-save')
+      expect(save.element.disabled).to.equal(true)
+      await wrapper.get('textarea[aria-label="当前段落私人阅读笔记"]').setValue('图标按钮回归')
+      expect(save.element.disabled).to.equal(false)
+      await save.trigger('click')
+      expect(save.text()).to.equal('')
+      expect(save.find('svg').exists()).to.equal(true)
+      expect(save.attributes('aria-label')).to.equal('保存中…')
+      expect(save.attributes('aria-busy')).to.equal('true')
+      expect(save.element.disabled).to.equal(true)
+      pending.resolve(response({ noteId: 'icon-note', text: '图标按钮回归', version: '1', location: wrapper.readerState.currentLocation.value }))
+      await waitFor(() => !wrapper.readerState.notePending.value)
+      expect(save.attributes('aria-label')).to.equal('保存笔记')
+      expect(save.attributes('aria-busy')).to.equal('false')
+    } finally { pending.resolve(null); wrapper.unmount() }
   })
 })
