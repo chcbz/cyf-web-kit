@@ -60,7 +60,6 @@ describe('SSE interrupted typed round terminal recovery', () => {
   it('keeps original-conversation discovery independent of chat replay and reconnects', async () => {
     let catalogueReads = 0
     const acceptance = useHallBountyAcceptance({ taskId: () => '474', identityKey: () => 'owner',
-      eventSource: () => hall.acceptanceEventSource,
       api: { list: async () => ({ items: [{ id: '101', conversationType: 'juyiting', conversationScopeType: 'bounty', conversationScopeKey: 'task:474' }] }),
         get: async () => { catalogueReads++; return { schemaVersion: 1, scope: { taskId: '474', conversationId: '101', conversationGeneration: '1' },
           after: '0', through: '1', nextAfter: null, hasMore: false, entries: [{ ordinal: '1', request: { ...structuredClone(currentView),
@@ -79,13 +78,13 @@ describe('SSE interrupted typed round terminal recovery', () => {
       emit('stream_ready', 9201); await flush(); expect(catalogueReads).to.equal(0)
       currentView = view('COMPLETED'); emit('delivery_submission_completed', 9202); await flush()
       expect(catalogueReads).to.equal(0); expect(acceptance.catalog.entries.value).to.deep.equal([])
-      expect(hall.acceptanceEventSource.sharedEvent()).to.deep.equal({ type: 'delivery_submission_completed', conversationId: '101' })
-      await disconnect(); expect(hall.acceptanceEventSource.sharedConversationId()).to.equal('101')
+      expect(hall).not.to.have.property('acceptanceEventSource')
+      await disconnect(); expect(hall).not.to.have.property('acceptanceEventSource')
       expect(acceptance.error.value).to.equal(''); expect(streams).to.have.length(1)
       await reconnect(); expect(streams).to.have.length(2)
       emit('stream_ready', 9202); await flush(); expect(catalogueReads).to.equal(0); expect(acceptance.error.value).to.equal('')
     } finally { acceptance.dispose() }
-    expect(hall.acceptanceEventSource.sharedConversationId()).to.equal('101')
+    expect(hall).not.to.have.property('acceptanceEventSource')
   })
   for (const active of [true, false]) it(`retains replay changes across disconnect with active request=${active}`, async () => {
     if (!active) hall.activeRequest.value = null
