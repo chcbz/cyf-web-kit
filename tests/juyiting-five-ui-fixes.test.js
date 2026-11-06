@@ -103,7 +103,7 @@ describe('five fixes cancellation thin confirmation layer', () => {
     const task = panelTask(); const wrapper = await openPanel(task)
     try {
       await wrapper.get('.ordinary-cancel-action').trigger('click')
-      expect(wrapper.get('[role="dialog"]').text()).to.include('原事项A').and.include('未产生费用、尚未开始')
+      expect(wrapper.get('[role="dialog"]').text()).to.include('原事项A').and.include('全部预占费用将释放')
       expect(wrapper.emitted('cancel-task')).to.equal(undefined)
       await wrapper.get('.dismiss').trigger('click'); expect(wrapper.emitted('cancel-task')).to.equal(undefined)
       await wrapper.get('.ordinary-cancel-action').trigger('click')

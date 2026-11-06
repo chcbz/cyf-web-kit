@@ -600,7 +600,7 @@ const cancellationSubmitting = ref(false)
 const cancellationUnresolved = computed(() => props.cancellationState?.taskId === detailTask.value?.id && props.cancellationState?.status === 'unresolved')
 const cancellationFence = computed(() => JSON.stringify([props.identityScope, props.authorizationGeneration,
   props.detailAllowed, props.selectedTask?.id, detailTask.value?.id, ordinaryTaskVersion(detailTask.value),
-  detailTask.value?.status, detailTask.value?.startedAt, detailTask.value?.completedAt,
+  detailTask.value?.status, detailTask.value?.phase, detailTask.value?.startedAt, detailTask.value?.completedAt,
   detailTask.value?.funding, detailTask.value?.reward]))
 const dismissCancellation = () => { showCancellationDialog.value = false; cancellationCandidate.value = null }
 watch(cancellationFence, () => { dismissCancellation(); cancellationSubmitting.value = false }, { flush: 'sync' })

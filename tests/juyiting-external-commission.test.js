@@ -1,3 +1,4 @@
+import * as recommendationHelpers from '../src/composables/juyiting/hallAssigneeRecommendation.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
 import { setImmediate } from 'node:timers'
@@ -237,7 +238,7 @@ describe('D3.1 unified candidates and persistent task target', () => {
 const loadPanel = name => {
   const { descriptor } = parse(readFileSync(new URL(`../src/components/juyiting/${name}.vue`, import.meta.url), 'utf8'))
   const Empty = Vue.defineComponent({ render: () => Vue.h('span') })
-  const imports = new Proxy({ vue: Vue, '@/composables/juyiting/hallAssigneeCandidates.js': candidates,
+  const imports = new Proxy({ vue: Vue, '../../composables/juyiting/hallAssigneeRecommendation.js': recommendationHelpers, '@/composables/juyiting/hallAssigneeCandidates.js': candidates,
     '../../composables/juyiting/hallTaskPresentation.js': presentation,
     '../../composables/juyiting/useHallOrdinaryCancellation.js': cancellation, '@/utils/wenAmount': silver }, { get: (target, key) => target[key] || Empty })
   const code = compileScript(descriptor, { id: `d31-${name}`, inlineTemplate: true }).content
@@ -266,7 +267,7 @@ describe('D3.1 actual detail surfaces', () => {
   it('uses inline confirmation, provider/availability, pagination and assignedTarget without operable roster', async () => {
     const task = { id: 'task', title: '需求', description: '内容', status: 'open', taskVersion: '1' }
     const wrapper = mount(loadPanel('BountyPanel'), { props: { embeddedHall: true, selectedTask: task,
-      assigneeCandidates: [summary()], candidatesNextAfterAgentId: 'external', canAssign: () => true,
+      assigneeCandidates: [{ ...summary(), taskQuote: { state: 'AVAILABLE', quoteId: 'quote-test', recommendationId: 'recommendation-test', amount: { amountMinor: '10', currency: 'WEN' }, unavailableReason: null } }], candidatesNextAfterAgentId: 'external', canAssign: () => true,
       abilityText: () => '', formatTime: () => '', portraitName: () => '', portraitStyle: () => ({}),
       taskStatusText: () => '', taskStateClass: () => '', taskStatusCount: () => '0', taskAgentMatchScore: () => 0 } })
     mounted.push(() => wrapper.unmount())

@@ -303,8 +303,8 @@ describe('C07 JuyiHall task workspace integration', () => {
     expect(hallDataSource).to.include("agentApi.get('/map'")
     expect(hallDataSource).to.include("agentApi.search('/roster'")
     expect(hallDataSource).not.to.include("'/active'")
-    expect(hallSource).to.include('await runAssignTask(task, agent)')
-    expect(taskActionsSource).to.include('agentId: targetAgent.agentId')
+    expect(hallSource).to.include('await startPointAndStart({ task, agent: targetAgents[0] })')
+    expect(taskActionsSource).not.to.include('const assignTask')
   })
 
   it('retains actual-JuyiHall TaskWorkspacePanel identity and byte-exact state for five cycles', async () => {

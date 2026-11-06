@@ -2486,6 +2486,11 @@ const assignTask = async (task, agent) => {
     return false
   }
 
+  if (task.funding?.mode === 'FUNDED_SINGLE_AGENT') {
+    showToast('历史资金榜仅供查阅，不再发起新委派。')
+    return false
+  }
+
   const targetAgents = Array.isArray(agent) ? agent : [agent].filter(Boolean)
   const hasExplicitAgentId = item => typeof item?.agentId === 'string' && Boolean(item.agentId.trim())
   if (!targetAgents.length || targetAgents.some(item => !hasExplicitAgentId(item))) return false

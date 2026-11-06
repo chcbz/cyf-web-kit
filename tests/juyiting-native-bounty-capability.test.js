@@ -217,10 +217,10 @@ describe('actual page generic point routing', () => {
     }
     expect(h.calls).to.deep.equal([])
   })
-  it('funded stays separate and multi-agent cannot bypass quoted ordinary grants', async () => {
+  it('historical funding and multi-agent cannot enter new quoted ordinary grants', async () => {
     const h = pageHarness({ economy: true }); const a = target()
-    expect(await h.assign({ ...task(), funding: { mode: 'FUNDED_SINGLE_AGENT' } }, a)).to.equal(true)
+    expect(await h.assign({ ...task(), funding: { mode: 'FUNDED_SINGLE_AGENT' } }, a)).to.equal(false)
     expect(await h.assign(task(), [a, { agentId: 'second' }])).to.equal(false)
-    expect(h.calls.map(c => c[0])).to.deep.equal(['other-workflow', 'toast'])
+    expect(h.calls.map(c => c[0])).to.deep.equal(['toast', 'toast'])
   })
 })

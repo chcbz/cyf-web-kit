@@ -5,7 +5,7 @@ import { parseTaskEventVersion, compareTaskEventVersions, nextTaskEventVersion }
 // Requests and receipts share the canonical decimal-string Java Long contract.
 export const ordinaryTaskVersion = task => parseTaskEventVersion(task?.taskVersion)
 export const isTerminalMatter = task => ['cancelled', 'completed', 'accepted', 'archived', 'failed'].includes(task?.status)
-export const canCancelOrdinaryTask = task => Boolean(task?.id && !task.funding &&
+export const canCancelOrdinaryTask = task => Boolean(task?.id && !task.funding && task.phase !== 'UNKNOWN' &&
   (task.reward == null || task.reward === 0 || task.reward === '0') &&
   ['open', 'planning', 'assigned', 'running', 'reviewing', 'blocked', 'failed'].includes(task.status) &&
   ordinaryTaskVersion(task) !== null && nextTaskEventVersion(ordinaryTaskVersion(task)) !== null)

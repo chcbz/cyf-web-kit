@@ -24,7 +24,7 @@ const compile = async () => {
 }
 const task = (id, taskVersion = '6', requirementRevision = '3') => ({ id, title: id, description: '', status: 'open', taskVersion, requirementRevision })
 const props = () => ({ embeddedHall: true, tasks: [], selectedTask: task('task-a'), selectedAgent: { agentId: 'agent-a' },
-  assigneeCandidates: [{ agentId: 'agent-a', displayName: '吴用', providerDisplayName: null, isMine: true, availability: 'offline' }],
+  assigneeCandidates: [{ agentId: 'agent-a', displayName: '吴用', providerDisplayName: null, isMine: true, availability: 'offline', taskQuote: { state: 'AVAILABLE', quoteId: 'quote-test', recommendationId: 'recommendation-test', amount: { amountMinor: '10', currency: 'WEN' }, unavailableReason: null } }],
   operableAgents: [{ agentId: 'agent-a', name: '吴用', canOperate: true, status: 'online' }], recommendedAgents: [],
   taskAgentOptions: [], taskStatusFilters: [], abilityText: () => '', canAssign: () => true,
   formatTime: () => '', portraitName: () => '', portraitStyle: () => ({}), taskAgentMatchScore: () => 0,
