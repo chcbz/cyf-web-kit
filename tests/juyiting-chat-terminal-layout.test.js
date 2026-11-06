@@ -1,4 +1,5 @@
 import * as taskPresentation from '../src/composables/juyiting/hallTaskPresentation.js'
+import * as historyWindowHelpers from '../src/composables/juyiting/hallHistoryWindow.js'
 import * as discussionTurnHelpers from '../src/composables/juyiting/hallDiscussionTurns.js'
 import { expect } from 'chai'
 import { readFileSync } from 'node:fs'
@@ -34,8 +35,14 @@ const Picker = Vue.defineComponent({
 })
 let taskDirectory
 const Card = Vue.defineComponent({ props: ['readOnly', 'projection'], emits: ['reply'], render() { return Vue.h('button', { disabled: this.readOnly, onClick: () => this.$emit('reply', this.projection) }, '回答此问') } })
+const windowDescriptor = parse(readFileSync(new URL('../src/components/juyiting/HallMessageWindow.vue', import.meta.url), 'utf8')).descriptor
+const windowScript = compileScript(windowDescriptor, { id: 'history-window', inlineTemplate: true }).content
+  .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_, names) => `var { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
+  .replace(/^import\s+\{([^}]+)\}\s+from\s+['"][^'"]+['"];?\s*$/gm, (_, names) => `var { ${names} } = deps`)
+  .replace('export default', 'return')
+const ActualWindow = new Function('Vue', 'deps', windowScript)(Vue, historyWindowHelpers)
 const Panel = new Function('Vue', 'deps', script)(Vue, {
-  ...taskPresentation, ...discussionTurnHelpers,
+  ...taskPresentation, ...discussionTurnHelpers, HallMessageWindow: ActualWindow,
   usePersonalWorkspace: directory, usePersonalWorkspaceTaskLinks: () => (taskDirectory = directory()), usePersonalWorkspaceConversationLinks: directory,
   marked: Object.assign(value => value, { setOptions: () => {} }), DOMPurify: { sanitize: value => value }, HallChatComposer: Composer, HallMaterialPicker: Picker,
   HallMessageParts: { render: () => null }, BountyTextSelectionArchive: { render: () => null },

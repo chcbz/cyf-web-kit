@@ -66,6 +66,30 @@ describe('contextual message outcome summaries', () => {
       expect(h.calls()).to.equal(0)
     } finally { pages.dispose(); h.lane.dispose() }
   })
+  it('releases evicted turn projections even when another turn of the same request remains visible', async () => {
+    const latest = JSON.parse(readFileSync(new URL('./fixtures/hall-message-outcome-page.json', import.meta.url), 'utf8')).data
+    latest.hasMore = true; latest.nextCursor = '2:9'
+    const turn = latest.requestPage.entries[0].request.turns[0]
+    latest.requestPage.entries[0].request.turns.unshift({ ...turn, turnId: 'old-turn', finalMessageId: '7' })
+    const older = structuredClone(latest)
+    older.items = [{ ...older.items[0], id: '7', content: 'older-body' }]
+    older.hasMore = false; older.nextCursor = null; older.requestPage.eventCursor = null
+    older.outcomeSummaries[0].turnId = 'old-turn'
+    older.outcomeSummaries[0].outcome.assistantMessageId = '7'
+    const messages = ref([])
+    const pages = useHallMessagePages({ messages, conversationId: ref('42'), identityKey: ref('owner'),
+      captureGuard: () => 1, guardCurrent: () => true, normalize: item => ({ localId: item.id, content: item.content }),
+      chatApi: { get: async (_path, _params, options) => options.onSuccess(older) } })
+    try {
+      pages.applyLatest(latest)
+      await pages.loadOlder()
+      expect(pages.typedOutcomes.value).to.have.length(2)
+      pages.retainWindows([pages.windows.value[0].key])
+      expect(pages.typedOutcomes.value.map(value => value.turnId)).to.deep.equal(['old-turn'])
+      expect(pages.requestPage.value.entries).to.have.length(1)
+      expect(messages.value.map(value => value.localId)).to.deep.equal(['7'])
+    } finally { pages.dispose() }
+  })
   it('hydrates the standalone presentation from the single same-page message body', () => {
     const value = page()
     expect(messagePageOutcomes(value)).to.deep.equal([fixture.data])

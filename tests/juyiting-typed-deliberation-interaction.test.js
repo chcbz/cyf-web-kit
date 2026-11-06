@@ -493,10 +493,12 @@ describe('aggregate-page typed presentation updates', () => {
       expect(lane.adoptPage([clarify('one'), clarify('two')])).to.equal(true)
       const answered = clarify('one')
       Object.assign(answered.outcome.clarification, { state: 'ANSWERED', stateVersion: '1', replyRequestId: 'reply' })
-      expect(lane.adoptPage([answered])).to.equal(true)
+      expect(lane.adoptPage([answered, clarify('two')])).to.equal(true)
       expect(lane.projections.value).to.have.length(2)
       expect(lane.projections.value.find(p => p.requestId === 'one').outcome.clarification.state).to.equal('ANSWERED')
       expect(lane.adoptPage([clarify('one')])).to.equal(false)
+      expect(lane.adoptPage([answered])).to.equal(true)
+      expect(lane.projections.value.map(value => value.requestId)).to.deep.equal(['one'])
       expect(lane).not.to.have.property('refreshRequests')
       expect(lane).not.to.have.property('relatedRequestIds')
     } finally { lane.dispose() }

@@ -186,6 +186,7 @@ function renderChat(){
  panel.classList.toggle('discussion-readonly',!!(ctx.task?.complete||ctx.task?.cancelled||ctx.task?.archived));
  renderTaskSkills(panel);
  renderReplyControl(panel,ctx);
+ renderHistoryWindowPrototype();
  const scrollEnd=()=>{if(messages.isConnected)messages.scrollTop=messages.scrollHeight;};requestAnimationFrame(scrollEnd);$$('img',messages).forEach(img=>img.addEventListener('load',scrollEnd,{once:true}));
 }
 function renderWorkspace(){const list=$('.treasure-file-list');if(!list)return;const all=[...catalog,...state.localFiles,...state.saved.map(asset)].filter((a,i,arr)=>arr.findIndex(x=>x.id===a.id)===i),filter=state.workspaceFilter||'全部';const items=all.filter(a=>filter==='回收站'?state.fileMeta[a.id]?.recycled:!state.fileMeta[a.id]?.recycled&&(filter==='全部'||filter==='资料'&&!state.saved.includes(a.id)||filter==='成果'&&state.saved.includes(a.id)));
@@ -301,3 +302,52 @@ for(const ctx of [state,state.publicChat,...Object.values(state.privateChats)])i
 if(state.operation?.stage==='pending')setTimeout(resolveOperation,350);
 
 // Delivery choices are explicitly paged; this offline scenario does not load API history.
+
+// Offline continuous history: only viewport pages own body nodes; other pages retain cursors/heights.
+function renderHistoryWindowPrototype() {
+ if(new URLSearchParams(location.search).get('historyWindow') !== '1')return;
+ const box = document.querySelector('.hall-messages');
+ if (box) {
+  const pages = [{key:981,start:981,end:1000,height:0}], resident = new Map();
+  box.innerHTML = '<button type="button" data-window-older>加载更早消息</button><div data-window-rows></div><p role="status" data-window-count></p>';
+  const rows = box.querySelector('[data-window-rows]'), status = box.querySelector('[data-window-count]');
+  const row = id => `<div class="hall-message ${id % 2 ? 'USER' : 'AGENT'}" data-window-row="${id}"><div class="message-head"><strong>历史消息 ${id}</strong></div><div class="message-content"><p>${esc(('可变高度的议事正文，第 ' + id + ' 条。').repeat(id % 7 + 1))}</p></div><details><summary>展开原文</summary><textarea aria-label="编辑文字片段">${id} 的文字片段</textarea></details></div>`;
+  const anchor = () => { const node = [...rows.querySelectorAll('[data-window-row]')].find(n => n.getBoundingClientRect().bottom > box.getBoundingClientRect().top); return node ? {id:node.dataset.windowRow,top:node.getBoundingClientRect().top} : null; };
+  const restore = saved => { const node = saved && rows.querySelector(`[data-window-row="${saved.id}"]`); if(node)box.scrollTop += node.getBoundingClientRect().top - saved.top; };
+  let updating = false;
+  const update = () => {
+   if(updating)return; updating = true;
+   const saved = anchor(), viewport = Math.max(1,box.clientHeight), top = Math.max(0,box.scrollTop - rows.offsetTop + box.offsetTop);
+   const parts = [], keep = new Set(); let offset = 0;
+   for(const page of pages){
+    const size = page.height || viewport, node = resident.get(page.key);
+    const pinned = node && (node.querySelector('details[open]') || node.contains(document.activeElement));
+    if(pinned || (offset + size >= top - viewport && offset <= top + viewport*2)){
+     let element = node;
+     if(!element){element = document.createElement('section');element.dataset.windowPage=page.key;element.innerHTML=Array.from({length:page.end-page.start+1},(_,i)=>row(page.start+i)).join('');resident.set(page.key,element);}
+     parts.push(element);keep.add(page.key);
+    }else{
+     const previous=parts.at(-1);
+     if(previous?.dataset.windowSpacer==='true')previous.style.height=(parseFloat(previous.style.height)+size)+'px';
+     else{const spacer=document.createElement('div');spacer.dataset.windowSpacer='true';spacer.style.height=size+'px';spacer.setAttribute('aria-hidden','true');parts.push(spacer);}
+    }
+    offset+=size;
+   }
+   for(const [key,node] of resident){if(!keep.has(key)){node.remove();resident.delete(key);}}
+   rows.replaceChildren(...parts);
+   for(const page of pages){const node=resident.get(page.key);if(node)page.height=node.getBoundingClientRect().height;}
+   restore(saved);
+   status.textContent=`当前正文页 ${resident.size} / 已访问 ${pages.length} 页；每次读取20条`;
+   box.querySelector('[data-window-older]').disabled=pages[0].start===1;
+   updating=false;
+  };
+  box.querySelector('[data-window-older]').onclick=()=>{
+   if(pages[0].start===1)return;
+   const saved=anchor(),end=pages[0].start-1,start=Math.max(1,end-19);
+   pages.unshift({key:start,start,end,height:0});update();restore(saved);
+  };
+  let frame=0;box.addEventListener('scroll',()=>{if(!frame)frame=requestAnimationFrame(()=>{frame=0;update();});});
+  box.addEventListener('toggle',()=>update(),true);
+  update();
+ }
+}

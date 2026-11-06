@@ -16,7 +16,8 @@ export const useHallBountyRequestCatalog = ({ enabled = () => false, identitySco
     if (!page || page.hasMore) { error.value = '消息页的议事范围不匹配，请重试。'; return false }
     const merged = mergeCatalogEntries(entries.value, page)
     if (!merged) { error.value = '议事状态已变化，请重试。'; return false }
-    entries.value = merged; initialized.value = true; error.value = ''
+    const pageIds = new Set(page.entries.map(entry => entry.request.requestId))
+    entries.value = merged.filter(entry => pageIds.has(entry.request.requestId)); initialized.value = true; error.value = ''
     return true
   }
   const executionSteps = computed(() => catalogExecutionSteps(entries.value, getContext?.() || {}))

@@ -36,6 +36,37 @@ describe('hall message display pages', () => {
     h.pages.dispose()
   })
 
+  for (const change of ['evict', 'identity']) it(`ignores a late reloaded window after ${change}`, async () => {
+    let complete
+    const h = setup((_path, _params, options) => new Promise(resolve => {
+      complete = () => { options.onSuccess(page([3, 4], '1000:3')); resolve() }
+    }))
+    h.pages.applyLatest(page([3, 4], '1000:3'))
+    const key = h.pages.windows.value[0].key
+    h.pages.retainWindows([])
+    const flight = h.pages.loadWindow(key)
+    if (change === 'identity') h.identityKey.value = 'another-owner'
+    else h.pages.retainWindows([])
+    complete()
+    expect(await flight).to.equal(false)
+    expect(h.messages.value).to.deep.equal([])
+    expect(h.pages.windowLoading.value.size).to.equal(0)
+    expect(h.pages.windows.value.some(page => page.loaded)).to.equal(false)
+    h.pages.dispose()
+  })
+  it('reloads an evicted page once by its inclusive anchor and never advances the older cursor', async () => {
+    const h = setup(async (_path, _params, options) => options.onSuccess(page([3, 4], '1000:3')))
+    h.pages.applyLatest(page([3, 4], '1000:3'))
+    const key = h.pages.windows.value[0].key
+    h.pages.retainWindows([])
+    expect(h.messages.value).to.deep.equal([])
+    expect(await h.pages.loadWindow(key)).to.equal(true)
+    expect(h.calls).to.deep.equal([['/conversation/messages', { id: '100', cursor: 'at:1000:4' }]])
+    expect(h.messages.value.map(row => row.localId)).to.deep.equal(['3', '4'])
+    expect(await h.pages.loadWindow(key)).to.equal(false)
+    expect(h.calls).to.have.length(1)
+    h.pages.dispose()
+  })
   it('consumes the exact shared HTTP fixture after the existing envelope boundary', () => {
     const wire = JSON.parse(readFileSync(new URL('./fixtures/hall-message-page.json', import.meta.url), 'utf8'))
     expect(wire.protocolVersion).to.equal(1)

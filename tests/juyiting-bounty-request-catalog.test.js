@@ -63,12 +63,12 @@ it('decodes the shared latest snapshot cursor without losing bigint precision', 
 describe('aggregate message-page request adoption', () => {
   const build = (identity = ref('owner')) => useHallBountyRequestCatalog({ chatApi: { get: () => { throw new Error('Display adoption must not GET') } },
     enabled: () => true, identityScope: identity, authorizationGeneration: ref(1), getContext: () => scope })
-  it('adopts the supplied page without ID-set or single-request follow-up reads', () => {
+  it('replaces the supplied retained window without ID-set or single-request follow-up reads', () => {
     const lane = build()
     try {
       expect(lane.adoptPage(page('0', '2', [{ ordinal: '2', request: request('two') }]))).to.equal(true)
       expect(lane.adoptPage(page('0', '1', [{ ordinal: '1', request: request('one') }]))).to.equal(true)
-      expect(lane.entries.value.map(value => value.request.requestId)).to.deep.equal(['one', 'two'])
+      expect(lane.entries.value.map(value => value.request.requestId)).to.deep.equal(['one'])
       expect(lane.initialized.value).to.equal(true)
       expect(lane).not.to.have.property('refreshRequests')
       expect(lane).not.to.have.property('refreshWindow')

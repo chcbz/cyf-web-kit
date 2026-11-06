@@ -416,6 +416,7 @@
 
           <section
             v-if="renderedPanel === 'tasks' && formalTaskRef?.status === 'cancelled' && hallIdentityScope"
+            ref="terminalHistoryScroller"
             class="terminal-task-history"
             aria-label="事项历史成果"
           >
@@ -447,10 +448,17 @@
                 @click="terminalTextHistory.retry"
               >重试当前页</button>
             </p>
-            <article v-for="item in terminalTextHistory.items.value" :key="`${item.requestId}:${item.outcomeId}`">
-              <strong>历史文字成果</strong>
-              <pre v-text="item.text"></pre>
-            </article>
+            <HallMessageWindow
+              :pages="terminalTextHistory.windows.value" :messages="terminalTextHistory.windowItems.value"
+              :scroller="terminalHistoryScroller" :scope="`${hallIdentityScope}:${formalTaskRef.id}`"
+              :loading="terminalTextHistory.windowLoading.value" :errors="terminalTextHistory.windowErrors.value"
+              empty-page-text="这一页消息中没有文字成果。"
+              @retain="terminalTextHistory.retainWindows" @load="terminalTextHistory.loadWindow"
+            >
+              <template #default="{ message: item }">
+                <article><strong>历史文字成果</strong><pre v-text="item.text"></pre></article>
+              </template>
+            </HallMessageWindow>
             <p v-if="!terminalTextHistory.loading.value && !terminalTextHistory.error.value && !terminalTextHistory.items.value.length" role="status">已加载的消息中暂无文字成果。</p>
             <button
               v-if="terminalTextHistory.hasMore.value && !terminalTextHistory.error.value"
@@ -646,6 +654,11 @@
             :is-awaiting-reply="isAwaitingReply || manualSendPending"
             :is-streaming="isStreaming"
             :messages="messages"
+            :message-windows="messageWindows"
+            :message-window-loading="messageWindowLoading"
+            :message-window-errors="messageWindowErrors"
+            @retain-message-windows="retainMessageWindows"
+            @load-message-window="loadMessageWindow"
             :message-page-has-more="messagePageHasMore"
             :message-page-loading="messagePageLoading"
             :message-page-error="messagePageError"
@@ -716,6 +729,11 @@
             :is-awaiting-reply="isAwaitingReply || manualSendPending"
             :is-streaming="isStreaming"
             :messages="messages"
+            :message-windows="messageWindows"
+            :message-window-loading="messageWindowLoading"
+            :message-window-errors="messageWindowErrors"
+            @retain-message-windows="retainMessageWindows"
+            @load-message-window="loadMessageWindow"
             :message-page-has-more="messagePageHasMore"
             :message-page-loading="messagePageLoading"
             :message-page-error="messagePageError"
@@ -781,6 +799,11 @@
             :is-awaiting-reply="isAwaitingReply || manualSendPending"
             :is-streaming="isStreaming"
             :messages="messages"
+            :message-windows="messageWindows"
+            :message-window-loading="messageWindowLoading"
+            :message-window-errors="messageWindowErrors"
+            @retain-message-windows="retainMessageWindows"
+            @load-message-window="loadMessageWindow"
             :message-page-has-more="messagePageHasMore"
             :message-page-loading="messagePageLoading"
             :message-page-error="messagePageError"
@@ -881,6 +904,7 @@
 
 <script setup>
 import { Dialog } from '@varlet/ui'
+import HallMessageWindow from '../juyiting/HallMessageWindow.vue'
 import { useHallTerminalTextHistory } from '@/composables/juyiting/useHallTerminalTextHistory'
 import { useOutputs } from '@/composables/useOutputs'
 import { saveOutputBlob } from '@/utils/outputDownload'
@@ -2371,6 +2395,11 @@ const {
   loadHallMessages,
   loadMoreHallConversationHistory,
   loadOlderHallMessages,
+  messageWindows,
+  messageWindowLoading,
+  messageWindowErrors,
+  retainMessageWindows,
+  loadMessageWindow,
   messageRequestPage,
   messageTypedOutcomes,
   refreshHallMessagePage,
@@ -2710,6 +2739,7 @@ const terminalHistory = useOutputs({
   pageSize: 100
 })
 // Read-only text history uses the existing message cursor, never a full request scan.
+const terminalHistoryScroller = ref(null)
 const terminalTextHistory = useHallTerminalTextHistory({
   api: chatApi,
   taskId: () => renderedPanel.value === 'tasks' && formalTaskRef.value?.status === 'cancelled' ? formalTaskRef.value.id : '',

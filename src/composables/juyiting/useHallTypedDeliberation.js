@@ -172,6 +172,9 @@ export const useHallTypedDeliberation = ({ chatApi, actorScopeKey, authorization
       if (!projection || !apply(projection, captured)) { error.value = '答复展示数据不匹配，请重试当前页。'; return false }
       failedReads.delete(projection.requestId)
     }
+    const pageKeys = new Set(values.map(value => `${value.requestId}\u0000${value.turnId}`))
+    projections.value = projections.value.filter(value => pageKeys.has(`${value.requestId}\u0000${value.turnId}`) ||
+      value.outcome?.clarification?.pendingQuestionId === selectedPending.value?.pendingQuestionId && selectedPending.value != null)
     error.value = ''
     return true
   }

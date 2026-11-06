@@ -19,6 +19,8 @@ export const useHallTerminalTextHistory = ({ api, taskId, identityKey, documentR
   const syncItems = () => { items.value = source.catalog.entries.value.flatMap(entry => entry.request.turns.flatMap(turn => resolved.get(`${entry.request.requestId}\u0000${turn.turnId}`) || [])) }
   const readWindow = async captured => {
     if (!current(captured) || !pages.requestPage.value || !source.catalog.adoptPage(pages.requestPage.value)) return false
+    const retained = new Set(pages.typedOutcomes.value.map(outcome => `${outcome.requestId}\u0000${outcome.turnId}`))
+    for (const key of resolved.keys()) if (!retained.has(key)) resolved.delete(key)
     const entries = new Map(source.catalog.entries.value.map(entry => [entry.request.requestId, entry.request]))
     for (const outcome of pages.typedOutcomes.value) {
       const request = entries.get(outcome.requestId)
@@ -29,7 +31,7 @@ export const useHallTerminalTextHistory = ({ api, taskId, identityKey, documentR
       if (resolved.has(key)) continue
       const item = await completedTextItem(outcome, request, turn, taskId())
       if (!current(captured)) return false
-      resolved.set(key, item ? [item] : [])
+      if (pages.typedOutcomes.value.some(value => `${value.requestId}\u0000${value.turnId}` === key)) resolved.set(key, item ? [item] : [])
     }
     return current(captured)
   }
@@ -65,7 +67,21 @@ export const useHallTerminalTextHistory = ({ api, taskId, identityKey, documentR
   // Retry the failed window before allowing another page to advance its cursor.
   const loadOlder = () => error.value ? retry() : read('older')
   const retry = () => source.error.value ? source.refresh() : read(pages.error.value ? 'older' : messages.value.length ? 'retry' : 'latest')
+  const retainWindows = keys => {
+    pages.retainWindows(keys)
+    if (pages.requestPage.value) source.catalog.adoptPage(pages.requestPage.value)
+    const retained = new Set(pages.typedOutcomes.value.map(value => `${value.requestId}\u0000${value.turnId}`))
+    for (const key of resolved.keys()) if (!retained.has(key)) resolved.delete(key)
+    syncItems()
+  }
+  const loadWindow = async key => {
+    const captured = generation
+    if (!await pages.loadWindow(key) || !current(captured)) return false
+    try { const applied = await readWindow(captured); if (current(captured)) syncItems(); return applied }
+    catch (cause) { if (current(captured)) readError.value = cause?.message || '历史文字成果读取失败，请重试当前页。'; return false }
+  }
+  const windowItems = computed(() => items.value.map(item => ({ ...item, localId: item.messageSource.messageId })))
   const dispose = () => { disposed = true; stop(); reset(); pages.dispose(); source.dispose() }
   if (getCurrentInstance()) onBeforeUnmount(dispose)
-  return { items, error, loading, hasMore: pages.hasMore, refresh: source.refresh, retry, loadOlder, dispose }
+  return { items, windowItems, windows: pages.windows, windowLoading: pages.windowLoading, windowErrors: pages.windowErrors, retainWindows, loadWindow, error, loading, hasMore: pages.hasMore, refresh: source.refresh, retry, loadOlder, dispose }
 }

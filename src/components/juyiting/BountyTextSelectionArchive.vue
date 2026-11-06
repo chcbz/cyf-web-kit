@@ -1,5 +1,5 @@
 <template>
-  <details v-if="eligible" class="text-selection-archive">
+  <details v-if="eligible" class="text-selection-archive" :data-history-pin="selection || state.busy || ['unknown', 'pending'].includes(state.state) ? '' : null">
     <summary>保存文字片段</summary>
     <label>选择要保存的原文片段
       <textarea

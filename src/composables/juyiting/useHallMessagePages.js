@@ -1,5 +1,7 @@
-import { ref, watch } from 'vue'
+import { ref, shallowRef, watch } from 'vue'
 import { catalogPage, mergeCatalogEntries } from './bountyRequestCatalog.js'
+import { isTerminalRequestState } from './hallDeliberationState.js'
+import { HallHistoryPageCache } from './hallHistoryPageCache.js'
 import { canonicalWireString } from './hallConversationMessages.js'
 
 export const hallMessagePage = value => {
@@ -30,6 +32,14 @@ export const messagePageOutcomes = page => {
 
 /** Display pagination only: loading old pages must never replay final replies or restart SSE. */
 export const useHallMessagePages = ({ chatApi, messages, conversationId, identityKey, captureGuard, guardCurrent, normalize }) => {
+  const cache = new HallHistoryPageCache()
+  const windows = shallowRef([])
+  const windowLoading = ref(new Set())
+  const windowErrors = ref({})
+  const windowFlights = new Map()
+  let latestRequestId = null
+  let retentionEnabled = false
+  const publishWindows = () => { windows.value = cache.pages.map(page => ({ ...page, loaded: cache.bodies.has(page.key) })) }
   const requestPage = ref(null)
   const typedOutcomes = ref([])
   const hasMore = ref(false)
@@ -42,6 +52,9 @@ export const useHallMessagePages = ({ chatApi, messages, conversationId, identit
   let controller = null
   const reset = () => {
     revision++
+    for (const flight of windowFlights.values()) flight.abort()
+    windowFlights.clear(); windowLoading.value = new Set(); windowErrors.value = {}
+    cache.reset(); publishWindows(); latestRequestId = null; retentionEnabled = false
     controller?.abort()
     controller = null
     before = null
@@ -85,6 +98,10 @@ export const useHallMessagePages = ({ chatApi, messages, conversationId, identit
   const applyLatest = value => {
     const page = hallMessagePage(value)
     adoptRequests(page)
+    const latestRequest = page.requestPage?.entries.at(-1)?.request
+    latestRequestId = latestRequest && !isTerminalRequestState(latestRequest.state) ? latestRequest.requestId : null
+    cache.latest(page)
+    publishWindows()
     const latest = page.items.map(item => normalizeStored(item, page)).filter(Boolean)
     // Retain explicitly loaded older pages; replace the latest window and transient
     // placeholders using the existing authoritative recovery path.
@@ -95,8 +112,9 @@ export const useHallMessagePages = ({ chatApi, messages, conversationId, identit
     const finalTurns = new Set(latest.filter(item => !item.streaming).map(item => item.turnId).filter(Boolean))
     const live = messages.value.filter(item => item.streaming && item.turnId && !finalTurns.has(item.turnId))
     messages.value = older.concat(latest, live)
-    if (!initialized || !olderLoaded) { before = page.nextCursor; hasMore.value = page.hasMore }
+    if (!initialized) { before = page.nextCursor; hasMore.value = page.hasMore }
     initialized = true
+    if (retentionEnabled) { syncRetainedMessages(); prunePresentation() }
     return latest
   }
   const loadOlder = async () => {
@@ -119,6 +137,8 @@ export const useHallMessagePages = ({ chatApi, messages, conversationId, identit
           const page = hallMessagePage(value)
           if (page.hasMore && page.nextCursor === cursor) throw new Error('消息分页未前进，请重试。')
           adoptRequests(page)
+          cache.prepend(page)
+          publishWindows()
           const existing = new Set(messages.value.map(item => item.localId))
           const earlier = page.items.map(item => normalizeStored(item, page)).filter(item => item && !existing.has(item.localId))
           messages.value = earlier.concat(messages.value)
@@ -137,5 +157,68 @@ export const useHallMessagePages = ({ chatApi, messages, conversationId, identit
     }
     return applied && current()
   }
-  return { requestPage, typedOutcomes, hasMore, loading, error, applyLatest, loadOlder, reset, dispose: () => { stop(); reset() } }
+  const prunePresentation = () => {
+    const allowed = new Set(cache.pages.filter(page => cache.bodies.has(page.key)).flatMap(page => page.requestIds || []))
+    if (latestRequestId) allowed.add(latestRequestId)
+    // One direct child belongs to its retained parent card; no historical recursive walk.
+    for (const value of typedOutcomes.value) if (allowed.has(value.requestId)) {
+      for (const progress of [value.actionProgress, value.reviewProgress]) if (progress?.childRequestId) allowed.add(progress.childRequestId)
+    }
+    const retainedOutcomes = new Set([...cache.bodies.values()].flatMap(body =>
+      (body.outcomeSummaries || []).map(value => `${value.requestId}\u0000${value.turnId}`)))
+    typedOutcomes.value = typedOutcomes.value.filter(value => retainedOutcomes.has(`${value.requestId}\u0000${value.turnId}`) ||
+      (value.requestId === latestRequestId && value.state !== 'READY'))
+    if (requestPage.value) requestPage.value = { ...requestPage.value, entries: requestPage.value.entries.filter(entry => allowed.has(entry.request.requestId)) }
+  }
+  const syncRetainedMessages = () => {
+    const rows = cache.pages.flatMap(page => {
+      const body = cache.bodies.get(page.key)
+      return body ? body.items.filter(item => page.ids.includes(String(item.id))).map(item => normalizeStored(item, body)).filter(Boolean) : []
+    })
+    const known = new Set(cache.pages.flatMap(page => page.ids))
+    const finalTurns = new Set(rows.map(row => row.turnId).filter(Boolean))
+    const transient = messages.value.filter(row => !known.has(row.localId) && (!row.streaming || !finalTurns.has(row.turnId)))
+    messages.value = rows.concat(transient)
+  }
+  const retainWindows = keys => {
+    retentionEnabled = true
+    const retained = new Set(keys)
+    // Active streams are external to persisted-page ownership and remain in messages.
+    cache.retain(retained)
+    for (const [key, abort] of windowFlights) if (!retained.has(key)) { abort.abort(); windowFlights.delete(key) }
+    windowLoading.value = new Set(windowFlights.keys())
+    syncRetainedMessages(); prunePresentation(); publishWindows()
+  }
+  const loadWindow = async key => {
+    const descriptor = cache.pages.find(page => page.key === key)
+    if (!descriptor || cache.bodies.has(key) || windowFlights.has(key) || !conversationId.value) return false
+    const id = conversationId.value, captured = captureGuard(), generation = revision
+    const abort = new AbortController()
+    windowFlights.set(key, abort); windowLoading.value = new Set(windowFlights.keys())
+    windowErrors.value = { ...windowErrors.value, [key]: '' }
+    const current = () => !abort.signal.aborted && generation === revision && guardCurrent(captured) && id === conversationId.value
+    let applied = false
+    try {
+      await chatApi.get('/conversation/messages', { id, cursor: descriptor.cursor }, {
+        autoLoading: false, signal: abort.signal,
+        onSuccess: value => {
+          if (!current()) return
+          const page = hallMessagePage(value)
+          if (descriptor.gap && page.hasMore && page.nextCursor === descriptor.cursor) throw new Error('消息分页未前进，请重试。')
+          adoptRequests(page)
+          applied = cache.load(key, page)
+          syncRetainedMessages(); prunePresentation(); publishWindows()
+        },
+        onError: cause => { if (current()) windowErrors.value = { ...windowErrors.value, [key]: cause?.message || '历史页读取失败，请重试。' } }
+      })
+      if (current() && !applied && !windowErrors.value[key]) throw new Error('历史页读取失败，请重试。')
+    } catch (cause) {
+      if (current() && cause?.name !== 'AbortError') windowErrors.value = { ...windowErrors.value, [key]: cause?.message || '历史页读取失败，请重试。' }
+    } finally {
+      if (windowFlights.get(key) === abort) { windowFlights.delete(key); windowLoading.value = new Set(windowFlights.keys()) }
+    }
+    return applied && current()
+  }
+  return { requestPage, typedOutcomes, hasMore, loading, error, windows, windowLoading, windowErrors,
+    retainWindows, loadWindow, applyLatest, loadOlder, reset, dispose: () => { stop(); reset() } }
 }

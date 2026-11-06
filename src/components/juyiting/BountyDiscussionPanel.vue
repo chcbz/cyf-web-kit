@@ -26,6 +26,8 @@
       @load-history="$emit('load-history')"
       @load-more-history="$emit('load-more-history')"
       @load-older-messages="$emit('load-older-messages')"
+      @retain-message-windows="$emit('retain-message-windows', $event)"
+      @load-message-window="$emit('load-message-window', $event)"
       @load-messages="refreshMessages"
       @mention-agent="$emit('mention-agent', $event)"
       @new-conversation="$emit('new-conversation')"
@@ -59,7 +61,13 @@
           {{ deliveryError }}
           <button type="button" :disabled="deliveryLoading" @click="$emit('refresh-deliveries')">重试</button>
         </p>
-        <TaskSkillCapabilities v-if="typedEnabled" :projection="skillDirectory" :error="skillDirectoryError" :loading="skillDirectoryLoading" @refresh="$emit('skill-directory-refresh')" />
+        <TaskSkillCapabilities
+          v-if="typedEnabled"
+          :projection="skillDirectory"
+          :error="skillDirectoryError"
+          :loading="skillDirectoryLoading"
+          @refresh="$emit('skill-directory-refresh')"
+        />
       </template>
       <template #turn-actions="{ requestIds }">
         <BountyExecutionTermination
