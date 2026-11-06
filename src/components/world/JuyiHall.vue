@@ -2463,8 +2463,13 @@ const bountyRequestCatalog = useHallBountyRequestCatalog({
   getContextGeneration: () => followupContextGeneration.value, enabled: () => multimediaDeliberationUiEnabled && chatMode.value === 'bounty'
 })
 notifyBountyRequestCatalog = async event => {
-  if (!typedDeliberationEnabled.value) return true
-  return refreshFollowupContext(event)
+  // Current acceptance follows business events, never historical-card rendering.
+  // Its own composable owns the initial task/identity load and review operations.
+  const [refreshed] = await Promise.all([
+    typedDeliberationEnabled.value ? refreshFollowupContext(event) : true,
+    event && reviewTaskId.value ? deliveryReview.refresh() : true
+  ])
+  return refreshed
 }
 const invalidateFollowupContext = () => { followupContextGeneration.value++; typedDeliberation?.invalidate?.() }
 // Only the authenticated binding owns these values. A newly adopted request or
@@ -2717,7 +2722,8 @@ watch([messageRequestPage, typedDeliberationEnabled], adoptMessagePresentation)
 const resetFollowupContext = () => {
   invalidateFollowupContext()
   bountyRequestCatalog.reset()
-  void refreshHallProjections({ type: 'resync_required', conversationId: conversationId.value })
+  // Binding initialization is not a server resync; message loading has its own owner.
+  void refreshHallProjections()
 }
 watch([followupTaskFence, () => apiStore.authorizationGeneration, hallIdentityScope, () => conversationId.value,
   () => bountyInteractionTargetId(chatContext.value), () => chatMode.value], resetFollowupContext, { flush: 'sync' })
@@ -2920,8 +2926,7 @@ watch(() => deliveryReview.operation.value.receipt, receipt => {
   hallReadRevision.value += 1
   void loadTasks({ refreshTaskId: receipt.taskId, minimumTaskVersion: receipt.taskVersion })
 })
-watch(() => [conversationTask.value?.taskVersion, selectedTask.value?.taskVersion, formalTaskRef.value?.taskVersion,
-  typedDeliberation.cards.value.map(card => `${card.outcome?.outcomeId}:${card.state}:${card.submissionProgress?.state}:${card.submissionProgress?.dispatchVersion}:${card.submissionProgress?.operationStateVersion}:${card.reviewProgress?.state}:${card.reviewProgress?.stateVersion}`).join('|')].join('\u0000'), () => { if (reviewTaskId.value) void deliveryReview.refresh() })
+
 
 const accountEntryDisabled = computed(() => isPanelSessionActive.value || voiceInteractionLocked.value)
 const hallLeaveHasMeaningfulWork = computed(() => hasMeaningfulHallLeaveWork({

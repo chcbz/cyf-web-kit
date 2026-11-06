@@ -423,6 +423,31 @@ describe('actual message-page follow-up wiring', () => {
     expect(await h.actual({ type: 'action_started', requestId: 'parent' })).to.equal(true)
     expect(h.calls).to.deep.equal(['message-page', ['catalog', h.requestPage.value], ['outcomes', []], 'choices'])
   })
+  it('binding initialization does not invent a live resync or reload the message page', async () => {
+    const h = build(); const hints = []
+    const reset = new Function('invalidateFollowupContext', 'bountyRequestCatalog', 'refreshHallProjections',
+      `return (${handler('resetFollowupContext')})`)(() => {}, { reset() {} }, event => { hints.push(event); return h.actual(event) })
+    reset(); await new Promise(resolve => setImmediate(resolve))
+    expect(hints).to.deep.equal([undefined])
+    expect(h.calls).to.deep.equal([['catalog', h.requestPage.value], ['outcomes', []], 'choices'])
+  })
+  it('refreshes current acceptance from live hints, not local initialization or rendered cards', async () => {
+    const assignment = program.body.find(node => node.type === 'ExpressionStatement' &&
+      node.expression?.type === 'AssignmentExpression' && node.expression.left?.name === 'notifyBountyRequestCatalog').expression.right
+    const calls = []; const enabled = ref(true)
+    const notify = new Function('typedDeliberationEnabled', 'refreshFollowupContext', 'reviewTaskId', 'deliveryReview',
+      `return (${script.slice(assignment.start, assignment.end)})`)(enabled,
+      async event => { calls.push(event?.type || 'binding'); return true }, ref('task-1'),
+      { refresh: async () => { calls.push('review'); return {} } })
+    await notify(); expect(calls).to.deep.equal(['binding']); calls.length = 0
+    await notify({ type: 'delivery_review_changed' })
+    expect(calls).to.deep.equal(['delivery_review_changed', 'review']); calls.length = 0
+    enabled.value = false
+    await notify({ type: 'resync_required' }); expect(calls).to.deep.equal(['review'])
+    const reviewWatchers = program.body.filter(node => node.type === 'ExpressionStatement' &&
+      node.expression?.callee?.name === 'watch' && script.slice(node.start, node.end).includes('deliveryReview.refresh'))
+    expect(reviewWatchers).to.deep.equal([])
+  })
   it('older-page adoption performs no HTTP reads and never adopts an active request', () => {
     const h = build()
     expect(h.adopt()).to.equal(true)
