@@ -9,6 +9,8 @@ export function useTaskWorkspaceBinding ({ selectedTask, selectedAgent, taskWork
   const clearExplicitActor = () => {
     explicitActorAgentId.value = null
   }
+  const assignedActors = () => [...new Set([selectedTask.value?.assignedAgentId, ...(selectedTask.value?.assignedAgentIds || [])].filter(Boolean))]
+  const stopTaskProvenance = watch(() => selectedTask.value?.id, clearExplicitActor, { flush: 'sync' })
   const stopActorProvenance = watch(
     () => selectedAgent.value?.agentId,
     selectedAgentId => {
@@ -17,9 +19,9 @@ export function useTaskWorkspaceBinding ({ selectedTask, selectedAgent, taskWork
     { flush: 'sync' }
   )
   const stopWorkspace = watch(
-    [() => selectedTask.value?.id, () => selectedAgent.value?.agentId, () => explicitActorAgentId.value],
+    [() => selectedTask.value?.id, () => selectedAgent.value?.agentId, () => explicitActorAgentId.value, () => JSON.stringify(assignedActors())],
     ([taskId, selectedAgentId, actorAgentId]) => {
-      if (taskId && selectedAgentId && selectedAgentId === actorAgentId) {
+      if (taskId && selectedAgentId && selectedAgentId === actorAgentId && assignedActors().includes(actorAgentId)) {
         void taskWorkspace.open({ taskId, actorAgentId })
         return
       }
@@ -37,6 +39,7 @@ export function useTaskWorkspaceBinding ({ selectedTask, selectedAgent, taskWork
   const dispose = () => {
     stopWorkspace()
     stopActorProvenance()
+    stopTaskProvenance()
     taskWorkspace.dispose()
   }
 

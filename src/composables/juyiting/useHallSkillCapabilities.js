@@ -5,7 +5,10 @@ import { typedId } from './hallTypedDeliberation.js'
 export const useHallSkillCapabilities = ({ api, getContext, identityKey, enabled = () => false }) => {
   const projection = ref(null); const error = ref(''); const loading = ref(false)
   let disposed = false; let controller = null; let epoch = 0
-  const fingerprint = () => JSON.stringify([identityKey(), enabled(), getContext()])
+  const fingerprint = () => {
+    const context = getContext() || {}
+    return JSON.stringify([identityKey(), enabled(), context.taskId, context.targetAgentId])
+  }
   const reset = () => { epoch++; controller?.abort(); controller = null; projection.value = null; error.value = ''; loading.value = false }
   const refresh = async () => {
     reset(); const generation = epoch; const scope = fingerprint(); const context = { ...getContext() }

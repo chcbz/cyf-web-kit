@@ -1,3 +1,4 @@
+import { isTerminalMatter } from '../src/composables/juyiting/useHallOrdinaryCancellation.js'
 import { discussionTurns } from '../src/composables/juyiting/hallDiscussionTurns.js'
 import { useHallExecutionAbandonment } from '../src/composables/juyiting/useHallExecutionAbandonment.js'
 import * as discussionContract from '../src/components/juyiting/discussionPanelContract.js'
@@ -414,8 +415,9 @@ describe('actual message-page follow-up wiring', () => {
       `return (${handler('adoptMessagePresentation')})`)(enabled, requestPage, outcomes, catalog, typed)
     const actual = new Function('typedDeliberationEnabled', 'conversationId', 'refreshCurrentConversationTask',
       'followupContextGeneration', 'bountyAssignmentContext', 'typedDeliberation', 'refreshHallMessagePage', 'adoptMessagePresentation',
+      'isTerminalMatter', 'conversationTask',
       `return (${handler('refreshFollowupContext')})`)(enabled, ref('7'), async () => true,
-      generation, { refresh: async () => true }, typed, async () => { calls.push('message-page'); return true }, adopt)
+      generation, { refresh: async () => true }, typed, async () => { calls.push('message-page'); return true }, adopt, isTerminalMatter, ref({ status: 'running' }))
     return { actual, adopt, calls, generation, requestPage, outcomes }
   }
   it('a live hint refreshes one message page rather than request-ID batches or outcome GETs', async () => {

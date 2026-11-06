@@ -2376,7 +2376,7 @@ const bountyAssignmentContext = useHallBountyAssignmentContext({
   chatApi, identityScope: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
   getContext: () => ({ conversationId: conversationId.value, taskId: conversationTask.value?.id || '',
     targetAgentId: bountyInteractionTargetId(chatContext.value), taskVersion: conversationTask.value?.taskVersion || '' }),
-  enabled: () => typedDeliberationEnabled.value
+  enabled: () => typedDeliberationEnabled.value && !isTerminalMatter(conversationTask.value)
 })
 const bountyRequestCatalog = useHallBountyRequestCatalog({
   chatApi, identityScope: hallIdentityScope, authorizationGeneration: () => apiStore.authorizationGeneration,
@@ -2514,7 +2514,7 @@ onUnmounted(() => { agentAbilityEditor.dispose()
   agentProfile.dispose(); externalPolicy.dispose() })
 
 const taskSkillDirectory = useHallSkillCapabilities({ api: agentApi, getContext: typedDeliberationContext,
-  identityKey: () => `${hallIdentityScope.value}\u0000${apiStore.authorizationGeneration}\u0000${followupContextGeneration.value}`,
+  identityKey: () => `${hallIdentityScope.value}\u0000${apiStore.authorizationGeneration}`,
   enabled: () => typedDeliberationEnabled.value })
 
 const pointAndStartPresentationState = pointAndStartState
@@ -2621,6 +2621,11 @@ const adoptMessagePresentation = () => {
 const refreshFollowupContext = async event => {
   if (!typedDeliberationEnabled.value || !conversationId.value) return false
   if (!await refreshCurrentConversationTask()) return false
+  if (isTerminalMatter(conversationTask.value)) {
+    // Completed history is readable without an executable assignment or delivery choices.
+    if (event) await refreshHallMessagePage()
+    return true
+  }
   const captured = followupContextGeneration.value
   if (!await bountyAssignmentContext.refresh() || captured !== followupContextGeneration.value) return false
   // A live state change refreshes the current page, never walks historical request IDs.

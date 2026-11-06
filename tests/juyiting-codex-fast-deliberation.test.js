@@ -6,7 +6,7 @@ import { currentChatStreamMock, conversationFrame } from './fixtures/current-cha
 const useHallConversation = options => actualHallConversation({ ...options, chatApi: currentChatStreamMock(options.chatApi) })
 import { appendHallEventMessage } from '../src/composables/juyiting/hallConversationMessages.js'
 import { createHallSseParser } from '../src/composables/juyiting/hallConversationSse.js'
-import { cancellationTarget, deliberationBusy, isTerminalTurnState, reduceDeliberationEvent } from '../src/composables/juyiting/hallDeliberationState.js'
+import { cancellationTarget, deliberationBusy, deliberationReplyActive, isTerminalTurnState, reduceDeliberationEvent } from '../src/composables/juyiting/hallDeliberationState.js'
 import { stopIdentityBoundWork } from '../src/utils/identityLifecycle.js'
 
 import { hallCapabilities as capabilityV2 } from './fixtures/hall-current-protocol.js'
@@ -1329,4 +1329,16 @@ describe('HALL-ROUND-WEB-20261011 request-scoped closeout', () => {
     } finally { h.conversation.disposeHallConversation() }
   })
 
+})
+
+
+describe('paused recovery presentation', () => {
+  it('keeps recovery unresolved and cancellable without claiming a reply is running', () => {
+    const request = { requestId: 'r', state: 'RUNNING' }
+    const turns = [{ turnId: 't', state: 'RECOVERY_REQUIRED', stateVersion: '2' }]
+    expect(deliberationBusy(request, turns)).to.equal(true)
+    expect(deliberationReplyActive(request, turns)).to.equal(false)
+    expect(cancellationTarget(request, turns)).to.deep.equal({ turnId: 't' })
+    expect(deliberationReplyActive(request, [...turns, { turnId: 'other', state: 'STREAMING' }])).to.equal(true)
+  })
 })
