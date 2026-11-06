@@ -240,7 +240,7 @@ describe('completed matter records display over fixed acceptance facts', () => {
 
 describe('completed detail shell confirmation and original read-only navigation', () => {
   const hall = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
-  const archiveCode = hall.slice(hall.indexOf('const archiveTask = async'), hall.indexOf('const cancelFunding ='))
+  const archiveCode = hall.slice(hall.indexOf('const archiveTask = async'), hall.indexOf('const loadSettlement ='))
   const archiveHarness = dialog => {
     const task = { id: 'task-1', status: 'completed', taskVersion: '8' }, selectedTask = Vue.ref(task), store = { authorizationGeneration: 1 }
     const pending = Vue.ref(false), calls = []

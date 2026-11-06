@@ -34,7 +34,7 @@ export const useHallTaskActions = ({
       const settlement = await agentApi.get(`/tasks/${encodeURIComponent(task.id)}/settlement`, undefined, { autoLoading: false })
       if (!current()) return null
       task.settlement = settlement
-      if (selectedTask.value?.id === task.id) selectedTask.value = task
+      if (selectedTask.value?.id === task.id) selectedTask.value = { ...selectedTask.value, settlement }
       return settlement
     } catch (error) {
       if (!current()) return null

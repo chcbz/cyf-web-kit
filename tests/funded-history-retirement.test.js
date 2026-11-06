@@ -84,6 +84,25 @@ describe('funded history retirement', () => {
     } finally { h.dispose() }
   })
 
+  for (const mode of ['shared-object', 'separate-selected']) {
+    it(`does not replace a newer ${mode} task snapshot when historical settlement arrives`, async () => {
+      let finish
+      const h = createHarness({ read: () => new Promise(resolve => { finish = resolve }) })
+      const task = { id: 'old', status: 'running', taskVersion: '8', funding: { mode: 'FUNDED_SINGLE_AGENT' } }
+      h.selectedTask.value = task
+      try {
+        const pending = h.actions.loadSettlement(task)
+        if (mode === 'shared-object') Object.assign(task, { status: 'completed', taskVersion: '10' })
+        else h.selectedTask.value = { ...task, status: 'completed', taskVersion: '10' }
+        finish({ status: 'SETTLED' })
+        expect(await pending).to.deep.equal({ status: 'SETTLED' })
+        expect(h.selectedTask.value).to.include({ status: 'completed', taskVersion: '10' })
+        expect(h.selectedTask.value.settlement).to.deep.equal({ status: 'SETTLED' })
+        expect(h.calls.map(call => call[0])).to.deep.equal(['GET'])
+      } finally { h.dispose() }
+    })
+  }
+
   it('keeps every old funding phase read-only without changing server phase or amount facts', () => {
     for (const status of ['open', 'assigned', 'running', 'reviewing', 'completed', 'cancelled']) {
       const task = { id: 'old', status, funding: { mode: 'FUNDED_SINGLE_AGENT', grossBountyAmountWen: '100' } }
