@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { it as test } from 'mocha'
 import { fileURLToPath } from 'node:url'
-import { loadEnv } from 'vite'
+import { loadEnv, loadConfigFromFile } from 'vite'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 const keys = [
@@ -48,4 +48,22 @@ test('explicit candidate overrides retain precedence for all multimedia UI flags
     VITE_JUYITING_TYPED_DELIBERATION_UI: 'true'
   }
   withFlags(overrides, flags => assert.deepEqual(flags, overrides))
+})
+
+
+test('runner loading preserves config-relative aliases and LESS imports with shared dependencies', async () => {
+  const loaded = await loadConfigFromFile(
+    { command: 'build', mode: 'production' },
+    fileURLToPath(new URL('../vite.config.js', import.meta.url)), root,
+    'silent', undefined, 'runner'
+  )
+  assert.ok(loaded)
+  for (const [alias, folder] of Object.entries({
+    '@': 'src', '@assets': 'src/assets', '@components': 'src/components',
+    '@stores': 'src/stores', '@router': 'src/router', '@i18n': 'src/i18n'
+  })) {
+    assert.equal(loaded.config.resolve.alias[alias], fileURLToPath(new URL(`../${folder}`, import.meta.url)))
+  }
+  assert.equal(loaded.config.css.preprocessorOptions.less.additionalData,
+    `@import "${fileURLToPath(new URL('../src/styles/theme.less', import.meta.url))}";`)
 })

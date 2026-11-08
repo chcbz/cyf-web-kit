@@ -2,12 +2,16 @@ import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueJsx from '@vitejs/plugin-vue-jsx'
 import path from 'path'
+import { fileURLToPath } from 'node:url'
 import fs from 'fs'
 import yaml from '@rollup/plugin-yaml'
 import { visualizer } from 'rollup-plugin-visualizer'
 import legacy from '@vitejs/plugin-legacy'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
+
+// Explicit ESM location works with both bundled and runner config loaders.
+const configDir = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
@@ -52,12 +56,12 @@ export default defineConfig(({ mode }) => {
     ].filter(Boolean),
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './src'),
-        '@assets': path.resolve(__dirname, './src/assets'),
-        '@components': path.resolve(__dirname, './src/components'),
-        '@stores': path.resolve(__dirname, './src/stores'),
-        '@router': path.resolve(__dirname, './src/router'),
-        '@i18n': path.resolve(__dirname, './src/i18n')
+        '@': path.resolve(configDir, './src'),
+        '@assets': path.resolve(configDir, './src/assets'),
+        '@components': path.resolve(configDir, './src/components'),
+        '@stores': path.resolve(configDir, './src/stores'),
+        '@router': path.resolve(configDir, './src/router'),
+        '@i18n': path.resolve(configDir, './src/i18n')
       },
       extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json', '.vue']
     },
@@ -69,7 +73,7 @@ export default defineConfig(({ mode }) => {
       preprocessorOptions: {
         less: {
           javascriptEnabled: true,
-          additionalData: `@import "${path.resolve(__dirname, 'src/styles/theme.less')}";`
+          additionalData: `@import "${path.resolve(configDir, 'src/styles/theme.less')}";`
         }
       }
     },
