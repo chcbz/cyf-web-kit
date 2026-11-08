@@ -43,6 +43,7 @@ describe('personal center wallet', () => {
     const pending = deferred()
     let fail = true
     setup({ capability: () => pending.promise, get: path => fail ? Promise.reject(new Error('读取失败')) : Promise.resolve(path === '/wallet' ? balance('3499') : { items: [] }) })
+    await Vue.nextTick()
     expect(wrapper.text()).to.include('正在核对钱袋')
     pending.resolve(true)
     await flushPromises()
