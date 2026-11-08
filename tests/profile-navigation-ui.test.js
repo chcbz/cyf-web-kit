@@ -92,7 +92,7 @@ describe('profile navigation mounted behavior', () => {
     wrappers.push(wrapper)
     await flushPromises()
     expect(wrapper.find('a[href="/skill-market"]').exists()).to.equal(true)
-    expect(wrapper.find('a[href="/wallet"]').exists()).to.equal(false)
+    expect(wrapper.find('a[href="/wallet"]').exists()).to.equal(true)
     enabled = false
     apiStore.authorizationGeneration += 1
     await flushPromises()

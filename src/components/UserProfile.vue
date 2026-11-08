@@ -36,6 +36,12 @@
       </div>
     </section>
 
+    <section class="economy-discovery" aria-labelledby="wallet-entry-title">
+      <h3 id="wallet-entry-title">我的钱袋</h3>
+      <p>查看可用文、事项预占和收支记录。</p>
+      <div class="discovery-links"><router-link to="/wallet">查看钱袋（文）</router-link></div>
+    </section>
+
     <section class="profile-details">
       <h3>基本资料</h3>
       <dl>
@@ -76,11 +82,10 @@
       </div>
     </section>
 
-    <section v-if="economyPreviewAvailable || skillMarketplaceAvailable" class="economy-discovery" aria-labelledby="economy-discovery-title">
+    <section v-if="skillMarketplaceAvailable" class="economy-discovery" aria-labelledby="economy-discovery-title">
       <h3 id="economy-discovery-title">开发预览</h3>
 
       <div class="discovery-links">
-        <router-link v-if="economyPreviewAvailable" to="/wallet">查看钱袋（文）</router-link>
         <router-link v-if="skillMarketplaceAvailable" to="/skill-market">发现技能市场</router-link>
       </div>
     </section>
@@ -159,8 +164,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useGlobalStore } from '@/stores/global'
 import { useAccountSecuritySession } from '@/composables/useAccountSecuritySession'
 import { useConfirmationDialog } from '@/composables/useConfirmationDialog'
-import { isEconomyPreviewBuildEnabled } from '@/utils/wenAmount'
-import { isEconomyPreviewCapability, isSkillMarketplaceCapability, loadEconomyPreviewCapability as fetchEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
+import { isSkillMarketplaceCapability, loadEconomyPreviewCapability as fetchEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
 import { assessReadOnlyPreviewCapabilities } from '@/utils/economyReadOnlyPreviewPolicy'
 import { economyReadOnlyPreviewClient } from '@/composables/economyReadOnlyPreviewApi'
 import { commandObservabilityClient } from '@/composables/commandObservabilityApi'
@@ -173,8 +177,6 @@ const router = useRouter()
 const route = useRoute()
 const apiStore = useApiStore()
 const economyReadOnlyPreviewBuildEnabled = import.meta.env.VITE_ECONOMY_READONLY_PREVIEW_ENABLED === 'true'
-const economyPreviewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
-const economyPreviewAvailable = ref(false)
 const skillMarketplaceAvailable = ref(false)
 const avatarFailed = ref(false)
 const identityLoading = ref(false)
@@ -226,7 +228,6 @@ const clearPreviewFailureQuery = () => {
 
 const resetPreviewCapabilityState = () => {
   economyPreviewRequest += 1
-  economyPreviewAvailable.value = false
   skillMarketplaceAvailable.value = false
   readOnlyPreviewRequest += 1
   readOnlyPreviewState.value = 'idle'
@@ -329,12 +330,10 @@ const loadEconomyPreviewCapability = async () => {
   try {
     const capability = await fetchEconomyPreviewCapability()
     if (disposed || request !== economyPreviewRequest || authGeneration !== apiStore.authorizationGeneration) return
-    economyPreviewAvailable.value = economyPreviewBuildEnabled && isEconomyPreviewCapability(capability)
     skillMarketplaceAvailable.value = isSkillMarketplaceCapability(capability)
   } catch {
     if (disposed || request !== economyPreviewRequest || authGeneration !== apiStore.authorizationGeneration) return
-    economyPreviewAvailable.value = false
-    skillMarketplaceAvailable.value = false
+      skillMarketplaceAvailable.value = false
   }
 }
 

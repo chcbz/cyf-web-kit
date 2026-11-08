@@ -14,8 +14,8 @@ const httpSource = readFileSync(new URL('../src/composables/useHttp.js', import.
 const skillMarketRouteSource = readFileSync(new URL('../src/components/economy/SkillMarketRoute.vue', import.meta.url), 'utf8')
 
 describe('economy preview wallet and funded bounty integration', () => {
-  it('keeps wallet presentation default-off and formats canonical amounts without number money conversion', () => {
-    expect(walletSource).to.include("isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)")
+  it('keeps wallet in the regular personal center and formats canonical amounts without number money conversion', () => {
+    expect(walletSource).not.to.include("VITE_ECONOMY_PREVIEW_ENABLED")
     expect(walletSource).to.include("economyApi.get('/wallet'")
     expect(walletSource).to.include("economyApi.get('/ledger', { pageSize: 50 }")
     expect(walletSource).to.include('formatWen')
@@ -70,7 +70,7 @@ describe('funded bounty remediation', () => {
     expect(bountySource).to.include('旧资金榜已停止操作；原结果仍待核对，不会重发、转换或删除此记录。')
     expect(walletSource).to.include('Number.isSafeInteger(value)')
     expect(walletSource).to.include('Number.isSafeInteger(value)')
-    expect(profileSource).to.include('v-if="economyPreviewAvailable"')
+    expect(profileSource).to.include('id="wallet-entry-title"')
     expect(profileSource).to.include('fetchEconomyPreviewCapability')
     expect(profileSource).not.to.include("economyApi.get('/wallet'")
     expect(routerSource).to.include("path: '/skill-market'")

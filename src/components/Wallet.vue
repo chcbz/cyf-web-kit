@@ -4,12 +4,10 @@
       <p class="eyebrow">内测</p>
       <h2 id="wallet-title">钱袋 · 文</h2>
       <p>查看余额和收支记录。</p>
+      <router-link to="/profile">返回个人中心</router-link>
     </header>
 
-    <section v-if="!previewBuildEnabled" class="wallet-state" role="status">
-      经济预览当前未启用。
-    </section>
-    <section v-else-if="loading" class="wallet-state" role="status">正在核对钱袋…</section>
+    <section v-if="loading" class="wallet-state" role="status">正在核对钱袋…</section>
     <section v-else-if="error" class="wallet-state is-error" role="alert">
       {{ error }}
       <button type="button" @click="loadWallet">重试</button>
@@ -20,16 +18,17 @@
         <div><small>已预占</small><strong>{{ format(wallet.held) }}</strong></div>
       </section>
 
+      <p class="wallet-state">已预占的文暂不能用于其他事项；验收后扣除，取消事项后退回。</p>
       <section class="wallet-ledger" aria-labelledby="ledger-title">
         <div class="section-heading">
-          <h3 id="ledger-title">不可变流水</h3>
+          <h3 id="ledger-title">收支记录</h3>
           <button type="button" :disabled="refreshing" @click="loadWallet">{{ refreshing ? '刷新中…' : '刷新' }}</button>
         </div>
-        <p v-if="!ledger.length" class="wallet-state">暂无流水。</p>
+        <p v-if="!ledger.length" class="wallet-state">暂无收支记录。</p>
         <ol v-else>
           <li v-for="entry in ledger" :key="entry.entryId || entry.transactionId">
             <div>
-              <strong>{{ entry.businessType || '文交易' }}</strong>
+              <strong>{{ transactionLabel(entry.businessType) }}</strong>
               <small>{{ entry.businessRef || entry.transactionId }}</small>
             </div>
             <div class="ledger-amount" :class="entry.direction === 'DEBIT' ? 'is-debit' : 'is-credit'">
@@ -44,12 +43,16 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { economyApi } from '@/composables/useHttp'
-import { formatWen, isEconomyPreviewBuildEnabled } from '@/utils/wenAmount'
+import { formatWen } from '@/utils/wenAmount'
 import { isEconomyPreviewCapability, loadEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
 
-const previewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
+import { useApiStore } from '@/stores/api'
+
+const apiStore = useApiStore()
+let requestId = 0
+const transactionLabel = type => ({ ISSUE_WEN: '活动赠送', RESERVE_BOUNTY: '事项预占', CAPTURE_TASK: '事项扣款', REFUND_BOUNTY: '取消退回' })[type] || type || '文交易'
 const wallet = ref(null)
 const ledger = ref([])
 const loading = ref(false)
@@ -63,33 +66,49 @@ const formatPostedAt = value => Number.isSafeInteger(value) && value >= 0 && Num
   ? new Date(value).toLocaleString() : ''
 
 const loadWallet = async () => {
-  if (!previewBuildEnabled) return
+  const request = ++requestId
+  const generation = apiStore.authorizationGeneration
+  const current = () => request === requestId && generation === apiStore.authorizationGeneration
   loading.value = !wallet.value
   refreshing.value = Boolean(wallet.value)
   error.value = ''
   try {
-    if (!isEconomyPreviewCapability(await loadEconomyPreviewCapability())) {
+    const capability = await loadEconomyPreviewCapability()
+    if (!current()) return
+    if (!isEconomyPreviewCapability(capability)) {
       throw new Error('钱包暂未开放')
     }
     const [walletResult, ledgerResult] = await Promise.all([
       economyApi.get('/wallet', undefined, { autoLoading: false }),
       economyApi.get('/ledger', { pageSize: 50 }, { autoLoading: false })
     ])
+    if (!current()) return
     const nextWallet = unwrap(walletResult)
     const nextLedger = unwrap(ledgerResult)
     if (!nextWallet || !validMoney(nextWallet.available) || !validMoney(nextWallet.held)) {
-      throw new Error('经济预览能力未提供钱包数据')
+      throw new Error('暂未取得有效的钱袋数据，请重试')
     }
     wallet.value = nextWallet
     ledger.value = Array.isArray(nextLedger?.items) ? nextLedger.items : []
   } catch (cause) {
+    if (!current()) return
+    wallet.value = null
+    ledger.value = []
     error.value = cause?.message || '钱包暂不可用'
   } finally {
-    loading.value = false
-    refreshing.value = false
+    if (current()) {
+      loading.value = false
+      refreshing.value = false
+    }
   }
 }
 
+watch(() => apiStore.authorizationGeneration, () => {
+  wallet.value = null
+  ledger.value = []
+  void loadWallet()
+}, { flush: 'sync' })
+onBeforeUnmount(() => { requestId += 1 })
 onMounted(loadWallet)
 </script>
 

@@ -1,7 +1,6 @@
 import PublicLanding from '@/components/public/PublicLanding.vue'
 import GuestDemo from '@/components/public/GuestDemo.vue'
 import OAuthCallback from '@/components/OAuthCallback.vue'
-import { isEconomyPreviewBuildEnabled } from '@/utils/wenAmount'
 import { assessReadOnlyPreviewCapabilities } from '@/utils/economyReadOnlyPreviewPolicy'
 import { economyReadOnlyPreviewClient } from '@/composables/economyReadOnlyPreviewApi'
 import { profilePreviewFailureTarget } from '@/utils/profileNavigation'
@@ -17,21 +16,15 @@ const economyReadOnlyPreviewRouteGuard = async () => {
     return profilePreviewFailureTarget('PREVIEW_UNAVAILABLE')
   }
 }
-import { isEconomyPreviewCapability, isSkillMarketplaceCapability, loadEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
+import { isSkillMarketplaceCapability, loadEconomyPreviewCapability } from '@/utils/economyPreviewCapability'
 import { redirectLoggedInHome } from './homeLoginRedirect.js'
 
-const economyPreviewBuildEnabled = isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED)
 const capabilityRouteGuard = async requiredCapability => {
   try {
     return requiredCapability(await loadEconomyPreviewCapability()) ? true : { name: 'UserProfile' }
   } catch {
     return { name: 'UserProfile' }
   }
-}
-
-const economyPreviewRouteGuard = () => {
-  if (!economyPreviewBuildEnabled) return { name: 'UserProfile' }
-  return capabilityRouteGuard(isEconomyPreviewCapability)
 }
 
 export default [
@@ -171,9 +164,8 @@ export default [
     path: '/wallet',
     name: 'Wallet',
     component: () => import('@/components/Wallet.vue'),
-    beforeEnter: economyPreviewRouteGuard,
     meta: {
-      title: 'WEN 钱袋',
+      title: '钱袋 · 文',
       showInMenu: false
     }
   },
