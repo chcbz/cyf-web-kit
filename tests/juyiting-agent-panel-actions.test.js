@@ -70,7 +70,8 @@ describe('AgentPanel D4 profile and mobile layers', () => {
     try {
       const text = wrapper.get('[aria-label="技能"]').text()
       expect(text).to.include('已核验安装 1 项').and.include('原生执行环境未就绪')
-      expect(text).not.to.include('运行就绪').and.not.to.include('重新安装')
+      expect(wrapper.find('.skill-badges .is-ready').exists()).to.equal(false)
+      expect(text).not.to.include('重新安装')
     } finally { wrapper.unmount() }
   })
 
