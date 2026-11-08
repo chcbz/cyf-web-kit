@@ -49,7 +49,7 @@ describe('public PWA beta entry packet', () => {
     expect(app).to.include('route.meta?.publicEntry === true')
     expect(app).to.include("defineAsyncComponent(() => import('@/components/SideMenu'))")
     expect(app).to.include('<side-menu v-if="!isPublicEntry"')
-    expect(app).to.include('v-if="showAppBar && !isPublicEntry"')
+    expect(app).to.include('v-if="showAppBar && !isPublicEntry && !route.meta?.standaloneHeader"')
     expect(app).to.include('.app-content.public-entry > *')
     expect(app).to.include('min-width: 0;')
     expect(demo).to.include('box-sizing: border-box;')
