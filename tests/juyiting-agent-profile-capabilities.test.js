@@ -36,6 +36,17 @@ describe('Agent private profile closed projection', () => {
   })
 })
 
+describe('Native readiness display', () => {
+  it('retains verified installation without promoting an unready native runtime', () => {
+    const raw = fixture()
+    Object.assign(raw.skills.items[0], { installationVerified: true, runtimeState: 'UNAVAILABLE', reasonCode: 'NATIVE_EXECUTION_NOT_READY' })
+    const value = project(raw, 'a').skills.items[0]
+    expect(value.installationVerified).to.equal(true)
+    expect(value.runtimeState).to.equal('UNAVAILABLE')
+    expect(agentProfileReasonText(value.reasonCode)).to.equal('原生执行环境未就绪')
+  })
+})
+
 describe('Agent profile read lifecycle', () => {
   const setup = () => {
     const agent = ref({ agentId: 'a', boundToMe: true, systemAgent: false })

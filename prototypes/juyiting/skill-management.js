@@ -29,7 +29,7 @@
     const section = $('.agent-profile-section[aria-label="技能"]');
     if (!section || !own(id) || agentSkillExample(state.selectedAgent.name) === 'noauth') return;
     const m = model(id);
-    if (!agentProfileRead.loading && installedCount(m)) {
+    if (!agentProfileRead.loading && agentSkillExample(state.selectedAgent.name) !== 'native-unready' && installedCount(m)) {
       $$('.agent-skill-item,.agent-skill-empty', section).forEach(el => el.remove());
       $('.agent-skill-heading', section).insertAdjacentHTML('afterend', products.filter(p => entry(m, p.key)).map(p => {
         const r = entry(m, p.key), busy = locked(m) && operationKey(m.operation) === p.key;
@@ -38,7 +38,7 @@
     }
     const heading = $('.agent-skill-heading', section);
     const count = $('small', heading);
-    if (count?.textContent.trim()) count.textContent = `已核验安装 ${installedCount(m)} 项`;
+    if (agentSkillExample(state.selectedAgent.name) !== 'native-unready' && count?.textContent.trim()) count.textContent = `已核验安装 ${installedCount(m)} 项`;
     heading.insertAdjacentHTML('beforeend', action('管理技能', 'open', 'class="skill-inline-manage"'));
   };
   function open(id) {

@@ -62,6 +62,17 @@ describe('AgentPanel prototype actions', () => {
 
 describe('AgentPanel D4 profile and mobile layers', () => {
   const ready = () => ({ agentId: agent.agentId, observedAt: 10000, abilities: [], skills: { status: 'AVAILABLE', items: [{ skillKey: 'image-edit', skillVersion: '1.0.0', title: '图片修改', installationVerified: true, runtimeState: 'RUNTIME_READY', reasonCode: null }] } })
+  it('keeps installed badge when native execution is not ready and does not suggest reinstall', () => {
+    const profile = ready()
+    Object.assign(profile.skills.items[0], { runtimeState: 'UNAVAILABLE', reasonCode: 'NATIVE_EXECUTION_NOT_READY' })
+    const wrapper = mount(AgentPanel, { props: { ...props, selectedAgent: { ...agent, boundToMe: true }, profileCapabilities: profile } })
+    try {
+      const text = wrapper.get('[aria-label="技能"]').text()
+      expect(text).to.include('已核验安装 1 项').and.include('原生执行环境未就绪')
+      expect(text).not.to.include('运行就绪').and.not.to.include('重新安装')
+    } finally { wrapper.unmount() }
+  })
+
   it('separates skill, installation, runtime and literal empty abilities without mutating props', () => {
     const target = { ...agent, boundToMe: true, abilities: ['旧本领'] }
     const wrapper = mount(AgentPanel, { props: { ...props, selectedAgent: target, profileCapabilities: ready() } })

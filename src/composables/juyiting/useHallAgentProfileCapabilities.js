@@ -31,6 +31,7 @@ export const agentProfileCapabilitiesProjection = (raw, expectedAgentId) => {
 }
 
 const reasons = {
+  NATIVE_EXECUTION_NOT_READY: '原生执行环境未就绪',
   SKILL_RUNTIME_UNAVAILABLE: '运行状态待核验',
   SKILL_RUNTIME_DISCONNECTED: 'Runtime已断开',
   SKILL_RUNTIME_NOT_DECLARED: '当前Runtime尚未报告此技能',
