@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { expect } from 'chai'
 import { ref } from 'vue'
 import { useHallData } from '../src/composables/juyiting/useHallData.js'
-import { parseAssigneeRecommendation } from '../src/composables/juyiting/hallAssigneeRecommendation.js'
+import { parseAssigneeRecommendation, taskQuoteText, isAvailableTaskQuote } from '../src/composables/juyiting/hallAssigneeRecommendation.js'
 
 const task = () => ({ id: 'task-r1', taskVersion: '7', title: '写一份说明', description: '说明使用方式', status: 'open' })
 const agent = { agentId: 'a', name: '好汉', status: 'online', canOperate: true, boundToMe: true, abilities: ['写作'] }
@@ -174,4 +174,36 @@ describe('single-track model assignee recommendation R1', () => {
     }
   })
 
+})
+
+
+describe('task quotation availability explanations', () => {
+  const unavailable = reason => ({ state: 'UNAVAILABLE', quoteId: null, recommendationId: 'rec', amount: null, unavailableReason: reason })
+  for (const [reason, message] of Object.entries({
+    BILLING_ROUTE_MISSING: '计费配置尚未就绪', MODEL_PRICE_MISSING: '模型单价尚未登记',
+    TOKEN_PRICE_MISSING: '模型用量单价不完整', TOOL_PRICE_MISSING: '收费工具尚未登记单价',
+    QUOTE_AMOUNT_OVERFLOW: '预估费用超出支持范围'
+  })) it(`explains ${reason} without suggesting a paid retry or free assignment`, () => {
+    const quote = unavailable(reason)
+    expect(taskQuoteText(quote)).to.include(message)
+    expect(taskQuoteText(quote)).not.to.include('稍后重试')
+    expect(taskQuoteText(quote)).not.to.include('0文')
+    expect(isAvailableTaskQuote(quote)).to.equal(false)
+    const response = result(); response.recommendations[0].quote = quote
+    expect(parseAssigneeRecommendation(response, task())).to.equal(response)
+  })
+  for (const reason of ['NEW_REASON', 'constructor', '__proto__']) it(`keeps unknown reason ${reason} readable without rejecting the whole recommendation`, () => {
+    const quote = unavailable(reason)
+    expect(taskQuoteText(quote)).to.equal('暂无法报价：费用信息未就绪，请联系平台核查。')
+    const response = result(); response.recommendations[0].quote = quote
+    expect(parseAssigneeRecommendation(response, task())).to.equal(response)
+  })
+  it('keeps an absent quote distinct from an explicitly available zero or positive quote', () => {
+    expect(taskQuoteText(null)).to.equal('尚无报价，请刷新推荐')
+    for (const amount of ['0', '1', '13']) {
+      const quote = { ...result().recommendations[0].quote, amount: { currency: 'WEN', amountMinor: amount } }
+      expect(taskQuoteText(quote)).to.equal(`事项报价 ${amount}文`)
+      expect(isAvailableTaskQuote(quote)).to.equal(true)
+    }
+  })
 })
