@@ -1,3 +1,4 @@
+import { agentProfileReasonText } from '../src/composables/juyiting/useHallAgentProfileCapabilities.js'
 import { useHallAgentAbilitiesEditor } from '../src/composables/juyiting/useHallAgentAbilitiesEditor.js'
 import { skillComponents } from './helpers/skill-management-components.js'
 import { readFileSync } from 'node:fs'
@@ -65,7 +66,7 @@ describe('AgentPanel D4 profile and mobile layers', () => {
   it('keeps installed badge when native execution is not ready and does not suggest reinstall', () => {
     const profile = ready()
     Object.assign(profile.skills.items[0], { runtimeState: 'UNAVAILABLE', reasonCode: 'NATIVE_EXECUTION_NOT_READY' })
-    const wrapper = mount(AgentPanel, { props: { ...props, selectedAgent: { ...agent, boundToMe: true }, profileCapabilities: profile } })
+    const wrapper = mount(AgentPanel, { props: { ...props, selectedAgent: { ...agent, boundToMe: true }, profileCapabilities: profile, profileReasonText: agentProfileReasonText } })
     try {
       const text = wrapper.get('[aria-label="技能"]').text()
       expect(text).to.include('已核验安装 1 项').and.include('原生执行环境未就绪')
