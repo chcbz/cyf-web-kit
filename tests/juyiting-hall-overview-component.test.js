@@ -667,6 +667,61 @@ describe('page parity fixes: home draft and picker uploads', () => {
     Object.defineProperty(input.element, 'files', { configurable: true, value: names.map(name => new File(['hello'], name, { type: 'text/plain' })) })
     await input.trigger('change'); await settle()
   }
+  it('offers unrestricted files, single rear-camera capture and multi-image album selection', async () => {
+    const wrapper = mount(loadMaterialPicker(uploadWorkspace()), { props: { ...props, modelValue: [] }, global: { stubs: { teleport: true } } })
+    try {
+      await wrapper.get('.quick-material-open').trigger('click'); await settle()
+      const inputs = wrapper.findAll('input[type=file]')
+      expect(inputs.map(input => ({ label: input.attributes('aria-label'), accept: input.attributes('accept'), capture: input.attributes('capture'), multiple: input.element.multiple })))
+        .to.deep.equal([
+          { label: '上传资料', accept: undefined, capture: undefined, multiple: true },
+          { label: '拍照', accept: 'image/*', capture: 'environment', multiple: false },
+          { label: '从相册选择', accept: 'image/*', capture: undefined, multiple: true }
+        ])
+      await wrapper.get('input[aria-label="拍照"]').trigger('change'); await settle()
+      expect(wrapper.get('.quick-material-count').text()).to.include('已选 0')
+      expect(wrapper.emitted('update:modelValue')).to.equal(undefined)
+    } finally { wrapper.unmount() }
+  })
+  for (const source of ['拍照', '从相册选择']) {
+    it(`${source} shares receipt staging and only emits fixed materials on completion`, async () => {
+      const workspace = uploadWorkspace(), received = []
+      workspace.upload = async file => { received.push(file); return { operation: { state: 'COMMITTED' }, file: { fileId: file.name, displayName: file.name }, version: { fileId: file.name, version: '2', contentMimeType: file.type } } }
+      const wrapper = mount(loadMaterialPicker(workspace), { props: { ...props, modelValue: [] }, global: { stubs: { teleport: true } } })
+      try {
+        await wrapper.get('.quick-material-open').trigger('click'); await settle()
+        const input = wrapper.get(`input[aria-label="${source}"]`)
+        const files = (source === '拍照' ? ['camera.jpg'] : ['album-a.jpg', 'album-b.png']).map(name => new File(['photo'], name, { type: name.endsWith('.png') ? 'image/png' : 'image/jpeg' }))
+        Object.defineProperty(input.element, 'files', { configurable: true, value: files })
+        await input.trigger('change'); await settle()
+        expect(received).to.deep.equal(files)
+        expect(wrapper.get('.quick-material-count').text()).to.include(`已选 ${files.length}`)
+        expect(input.element.value).to.equal('')
+        expect(wrapper.emitted('update:modelValue')).to.equal(undefined)
+        await wrapper.get('.quick-material-confirm').trigger('click')
+        expect(wrapper.emitted('update:modelValue')[0][0]).to.deep.equal(files.map(file => ({ fileId: file.name, version: '2', displayName: file.name, contentMimeType: file.type })))
+      } finally { wrapper.unmount() }
+    })
+  }
+  it('locks all three sources during upload and unresolved writes, retaining original-operation recovery', async () => {
+    const workspace = uploadWorkspace(); let finish
+    workspace.upload = () => new Promise(resolve => { finish = resolve })
+    const wrapper = mount(loadMaterialPicker(workspace), { props: { ...props, modelValue: [] }, global: { stubs: { teleport: true } } })
+    try {
+      await wrapper.get('.quick-material-open').trigger('click'); await settle()
+      const input = wrapper.get('input[aria-label="拍照"]')
+      Object.defineProperty(input.element, 'files', { configurable: true, value: [new File(['photo'], 'camera.jpg', { type: 'image/jpeg' })] })
+      const change = input.trigger('change'); await Vue.nextTick()
+      expect(wrapper.findAll('input[type=file]').every(input => input.element.disabled)).to.equal(true)
+      workspace.pendingWrites.value = [{ target: 'CREATE' }]
+      finish(null); await change; await settle()
+      expect(wrapper.findAll('input[type=file]').every(input => input.element.disabled)).to.equal(true)
+      expect(wrapper.text()).to.include('核对原上传')
+      expect(wrapper.get('.quick-material-count').text()).to.include('已选 0')
+      workspace.pendingWrites.value = []; await settle()
+      expect(wrapper.findAll('input[type=file]').every(input => !input.element.disabled)).to.equal(true)
+    } finally { wrapper.unmount() }
+  })
   it('uploads multiple files, auto-selects receipt versions and permits attachment-only creation', async () => {
     const wrapper = mount(load({ execute: async () => response() }, uploadWorkspace()), { props, global: { stubs: { teleport: true } } })
     try {

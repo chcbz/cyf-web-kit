@@ -130,6 +130,62 @@
                 @change="uploadQuickMaterials"
               />
             </label>
+            <label
+              class="quick-material-upload hall-tool"
+              title="拍照"
+            >
+              <svg
+                class="hall-control-icon"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path d="M4 7h4l2-3h4l2 3h4v13H4Z" /><circle cx="12" cy="13" r="4" />
+              </svg>
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                aria-label="拍照"
+                :disabled="uploading || uploadUnresolved"
+                @change="uploadQuickMaterials"
+              />
+            </label>
+            <label
+              class="quick-material-upload hall-tool"
+              title="相册"
+            >
+              <svg
+                class="hall-control-icon"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path d="M4 3h16v18H4ZM4 17l5-6 4 4 3-3 4 5M8 7h.01" />
+              </svg>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                aria-label="从相册选择"
+                :disabled="uploading || uploadUnresolved"
+                @change="uploadQuickMaterials"
+              />
+            </label>
           </div>
           <p v-if="uploading || uploadMessage" class="quick-material-upload-status" :role="uploading ? 'status' : 'alert'">{{ uploading ? '正在上传资料…' : (uploadMessage || '上传结果尚未确认，请核对原上传。') }}</p>
           <button v-if="uploadUnresolved" type="button" :disabled="uploading" @click="retryQuickUpload">核对原上传</button>
@@ -293,6 +349,7 @@ const importImages = files => {
 const uploadQuickMaterials = event => {
   const input = event.target, files = [...(input.files || [])]
   if (!files.length) return
+  if (uploading.value || uploadUnresolved.value) { input.value = ''; return }
   if (files.length + (directUpload.value ? selectedMaterials.value.length : draftMaterials.value.length) > 32) { uploadMessage.value = '最多选择32份资料，请减少本次文件数量。'; input.value = ''; return }
   return runPickerUpload(async current => {
     for (const file of files) {
@@ -488,9 +545,9 @@ onBeforeUnmount(() => { pickerGeneration += 1; mobileQuery?.removeEventListener?
 .quick-material-empty { margin: auto !important; color: var(--material-muted); }
 .quick-material-picker footer { position:relative; display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--material-line); background: var(--material-paper); }
 .quick-material-selection { position:absolute; bottom:100%; left:12px; right:12px; padding:8px 12px; border:1px solid var(--material-line); border-radius:8px 8px 0 0; background:var(--material-paper); min-width:0; box-shadow:0 -6px 20px #242e2b15; }
-.quick-material-selection-row { display:flex; align-items:center; gap:12px; margin-right:auto; min-width:0; }
-.quick-material-picker .quick-material-count { border:0; background:transparent; padding:6px 0; font-size:13px; color:var(--material-muted); }
-.quick-material-upload { position:relative; display:inline-flex; align-items:center; justify-content:center; height:36px; box-sizing:border-box; flex:none; padding:0 12px; border:1px solid var(--material-line); border-radius:7px; background:var(--material-ground); font-size:13px; cursor:pointer; overflow:hidden; }
+.quick-material-selection-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-right:auto; min-width:0; }
+.quick-material-picker .quick-material-count { white-space:nowrap; border:0; background:transparent; padding:6px 0; font-size:13px; color:var(--material-muted); }
+.quick-material-upload { position:relative; display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; min-height:44px; box-sizing:border-box; flex:none; padding:0; border:0; border-radius:7px; background:transparent; color:var(--material-muted); font-size:13px; cursor:pointer; overflow:hidden; }
 .quick-material-upload input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
 .quick-material-upload:focus-within { outline:2px solid var(--material-brand); outline-offset:2px; }
 .quick-material-upload:has(input:disabled) { opacity:.55; cursor:wait; }
@@ -540,7 +597,6 @@ onBeforeUnmount(() => { pickerGeneration += 1; mobileQuery?.removeEventListener?
   .quick-material-picker button:not(.quick-material-files button):not(.quick-material-footer-actions button) { min-height: 40px; }
   .quick-material-selection-row, .quick-material-footer-actions { width:100%; }
   .quick-material-footer-actions button { flex:1; min-width:0; }
-  .quick-material-upload { height:40px; }
   .quick-material-standalone .quick-material-preview { display: flex; }
 }
 </style>
