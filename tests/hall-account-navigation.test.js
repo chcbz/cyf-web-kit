@@ -87,6 +87,29 @@ describe('V1-8 hall account navigation', () => {
     expect(stageSource).to.include("emitStageAction('open-profile')")
   })
 
+  it('opens mine and normal workbench pages while preserving modal and voice locks', async () => {
+    const expression = hallSource.match(/const accountEntryDisabled = computed\(\(\) => (.*)\)/)[1]
+    const blocked = (panel, voice = false) => new Function('isPanelSessionActive', 'workbenchPrimaryPanelSet', 'renderedPanel', 'voiceInteractionLocked', `return ${expression}`)(
+      Vue.ref(Boolean(panel)), new Set(['overview', 'tasks', 'treasure', 'mine']), Vue.ref(panel), Vue.ref(voice))
+    for (const panel of ['', 'mine', 'tasks', 'treasure', 'overview']) expect(blocked(panel), panel).to.equal(false)
+    expect(blocked('chat')).to.equal(true)
+    expect(blocked('agents')).to.equal(true)
+    expect(blocked('mine', true)).to.equal(true)
+    const filename = new URL('../src/components/juyiting/HallMinePage.vue', import.meta.url)
+    const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename: filename.pathname })
+    const body = compileScript(descriptor, { id: 'mine-profile-regression', inlineTemplate: true }).content
+      .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, vueImportToVar).replace('export default', 'return')
+    const Mine = new Function('Vue', body)(Vue)
+    const wrapper = mount(Mine, { props: { accountEntryDisabled: blocked('mine') }, global: { stubs: { 'var-icon': true } } })
+    const button = wrapper.findAll('button').find(b => b.text().includes('个人中心'))
+    expect(button.element.disabled).to.equal(false)
+    await button.trigger('click')
+    expect(wrapper.emitted('profile')).to.have.length(1)
+    await wrapper.setProps({ accountEntryDisabled: blocked('mine', true) })
+    expect(button.element.disabled).to.equal(true)
+    wrapper.unmount()
+  })
+
   it('requires an explicit leave decision only for draft, reply, or voice activity', () => {
     expect(hasMeaningfulHallLeaveWork()).to.equal(false)
     expect(hasMeaningfulHallLeaveWork({ draft: '  ' })).to.equal(false)

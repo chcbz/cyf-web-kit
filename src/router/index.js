@@ -166,6 +166,7 @@ export default [
     component: () => import('@/components/Wallet.vue'),
     meta: {
       title: '钱袋 · 文',
+      standaloneHeader: true,
       showInMenu: false
     }
   },
@@ -194,6 +195,7 @@ export default [
     component: () => import('@/components/UserProfile'),
     meta: {
       title: '个人中心',
+      standaloneHeader: true,
       showInMenu: true,
       menuOrder: 0,
       icon: 'account-circle',

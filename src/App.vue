@@ -1,6 +1,6 @@
 <template>
   <div class="app-container">
-    <var-app-bar v-if="showAppBar && !isPublicEntry" :title="title">
+    <var-app-bar v-if="showAppBar && !isPublicEntry && !route.meta?.standaloneHeader" :title="title">
       <template #left>
         <var-icon
           v-if="leftOptions.showBack"

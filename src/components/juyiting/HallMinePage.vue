@@ -6,7 +6,7 @@
       <button type="button" @click="$emit('open', 'library')"><var-icon name="notebook" /><span><strong>典籍阁</strong><small>阅读典籍、案卷与个人进度</small></span></button>
       <button type="button" @click="$emit('open', 'messages')"><var-icon name="bell-outline" /><span><strong>待办提醒</strong><small>查看需要你处理的事项</small></span></button>
       <button type="button" @click="$emit('map')"><var-icon name="map-marker-outline" /><span><strong>厅中实景</strong><small>进入梁山场景与地图</small></span></button>
-      <button type="button" :disabled="accountEntryDisabled" @click="$emit('profile')"><var-icon name="account-circle-outline" /><span><strong>个人中心</strong><small>查看个人中心</small></span></button>
+      <button type="button" :disabled="accountEntryDisabled" @click="$emit('profile')"><var-icon name="account-circle-outline" /><span><strong>个人中心</strong><small>钱袋、资料与账号安全</small></span></button>
     </div>
     <nav class="mine-help"><button type="button" @click="$emit('help', $event.currentTarget)">使用帮助</button></nav>
   </section>

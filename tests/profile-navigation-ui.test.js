@@ -91,6 +91,9 @@ describe('profile navigation mounted behavior', () => {
     const wrapper = mount(profileComponent({ globalStore, apiStore, client }), { global: { plugins: [router], stubs: { 'var-icon': true } } })
     wrappers.push(wrapper)
     await flushPromises()
+    expect(wrapper.find('.profile-wallet a[href="/wallet"]').exists()).to.equal(true)
+    expect(wrapper.find('.command-observability-discovery').exists()).to.equal(false)
+    expect(wrapper.find('details.profile-tools').attributes('open')).to.equal(undefined)
     expect(wrapper.find('a[href="/skill-market"]').exists()).to.equal(true)
     expect(wrapper.find('a[href="/wallet"]').exists()).to.equal(true)
     enabled = false

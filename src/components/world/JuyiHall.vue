@@ -2847,7 +2847,7 @@ watch(() => deliveryReview.operation.value.receipt, receipt => {
 })
 
 
-const accountEntryDisabled = computed(() => isPanelSessionActive.value || voiceInteractionLocked.value)
+const accountEntryDisabled = computed(() => (isPanelSessionActive.value && !workbenchPrimaryPanelSet.has(renderedPanel.value)) || voiceInteractionLocked.value)
 const hallLeaveHasMeaningfulWork = computed(() => hasMeaningfulHallLeaveWork({
   draft: draft.value,
   isAwaitingReply: isAwaitingReply.value || Boolean(isSubmitting?.value),

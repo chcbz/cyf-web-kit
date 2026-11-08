@@ -2,7 +2,9 @@
   <div class="user-profile">
     <header class="profile-page-header">
       <div class="profile-page-heading">
+        <p class="profile-eyebrow">聚义厅 · 我的</p>
         <h1>个人中心</h1>
+        <p class="profile-intro">管好钱袋，安心办事。</p>
       </div>
       <button class="return-to-hall" type="button" @click="returnToHall">
         <var-icon name="chevron-left" aria-hidden="true" />
@@ -34,12 +36,14 @@
         <h2>{{ displayName }}</h2>
         <p>{{ accountName || '暂未设置账号' }}</p>
       </div>
+      <span class="profile-seal" aria-hidden="true">聚义</span>
     </section>
 
-    <section class="economy-discovery" aria-labelledby="wallet-entry-title">
+    <section class="economy-discovery profile-wallet" aria-labelledby="wallet-entry-title">
       <h3 id="wallet-entry-title">我的钱袋</h3>
+      <p class="wallet-headline">每一文，都有来处。</p>
       <p>查看可用文、事项预占和收支记录。</p>
-      <div class="discovery-links"><router-link to="/wallet">查看钱袋（文）</router-link></div>
+      <div class="discovery-links"><router-link to="/wallet">查看钱袋（文）<span aria-hidden="true"> →</span></router-link></div>
     </section>
 
     <section class="profile-details">
@@ -58,36 +62,6 @@
           <dd>{{ user.id || '暂未同步' }}</dd>
         </div>
       </dl>
-    </section>
-
-    <section class="economy-discovery command-observability-discovery" aria-labelledby="command-observability-title">
-      <h3 id="command-observability-title">协作运行看板</h3>
-      <p>仅内部只读查看投递、死信和已有操作审计；命令投递不等同于 Agent 任务完成。</p>
-      <p v-if="commandObservabilityState === 'loading'" class="capability-status" role="status">正在确认协作运行看板是否可用…</p>
-      <p v-else-if="commandObservabilityState === 'error' || commandObservabilityState === 'unavailable'" class="capability-error" role="alert">{{ commandObservabilityError }}</p>
-      <div class="discovery-links">
-        <button v-if="commandObservabilityState === 'error'" type="button" @click="loadCommandObservabilityCapability">重试</button>
-        <router-link v-else-if="commandObservabilityState === 'ready'" :to="commandObservabilityTarget()">进入协作运行看板</router-link>
-      </div>
-    </section>
-
-    <section v-if="economyReadOnlyPreviewBuildEnabled" class="economy-discovery" aria-labelledby="economy-readonly-preview-title">
-      <h3 id="economy-readonly-preview-title">经济预览</h3>
-      <p>仅供查看，不会产生费用。</p>
-      <p v-if="readOnlyPreviewState === 'loading'" class="capability-status" role="status">正在确认经济预览是否可用…</p>
-      <p v-else-if="readOnlyPreviewError" class="capability-error" role="alert">{{ readOnlyPreviewError }}</p>
-      <div class="discovery-links">
-        <button v-if="readOnlyPreviewError" type="button" @click="loadReadOnlyPreviewCapability">重试</button>
-        <router-link v-else-if="readOnlyPreviewState === 'ready'" :to="economyPreviewTarget()">进入经济预览</router-link>
-      </div>
-    </section>
-
-    <section v-if="skillMarketplaceAvailable" class="economy-discovery" aria-labelledby="economy-discovery-title">
-      <h3 id="economy-discovery-title">开发预览</h3>
-
-      <div class="discovery-links">
-        <router-link v-if="skillMarketplaceAvailable" to="/skill-market">发现技能市场</router-link>
-      </div>
     </section>
 
     <section class="account-security" aria-labelledby="account-security-title">
@@ -155,6 +129,39 @@
         role="alert"
       >{{ error }}</p>
     </section>
+    <details v-if="skillMarketplaceAvailable || economyReadOnlyPreviewBuildEnabled || commandObservabilityState === 'ready' || commandObservabilityState === 'error'" class="profile-tools">
+      <summary>更多功能</summary>
+    <section v-if="commandObservabilityState === 'ready' || commandObservabilityState === 'error'" class="economy-discovery command-observability-discovery" aria-labelledby="command-observability-title">
+      <h3 id="command-observability-title">协作运行看板</h3>
+      <p>仅内部只读查看投递、死信和已有操作审计；命令投递不等同于 Agent 任务完成。</p>
+      <p v-if="commandObservabilityState === 'loading'" class="capability-status" role="status">正在确认协作运行看板是否可用…</p>
+      <p v-else-if="commandObservabilityState === 'error' || commandObservabilityState === 'unavailable'" class="capability-error" role="alert">{{ commandObservabilityError }}</p>
+      <div class="discovery-links">
+        <button v-if="commandObservabilityState === 'error'" type="button" @click="loadCommandObservabilityCapability">重试</button>
+        <router-link v-else-if="commandObservabilityState === 'ready'" :to="commandObservabilityTarget()">进入协作运行看板</router-link>
+      </div>
+    </section>
+
+    <section v-if="economyReadOnlyPreviewBuildEnabled" class="economy-discovery" aria-labelledby="economy-readonly-preview-title">
+      <h3 id="economy-readonly-preview-title">经济预览</h3>
+      <p>仅供查看，不会产生费用。</p>
+      <p v-if="readOnlyPreviewState === 'loading'" class="capability-status" role="status">正在确认经济预览是否可用…</p>
+      <p v-else-if="readOnlyPreviewError" class="capability-error" role="alert">{{ readOnlyPreviewError }}</p>
+      <div class="discovery-links">
+        <button v-if="readOnlyPreviewError" type="button" @click="loadReadOnlyPreviewCapability">重试</button>
+        <router-link v-else-if="readOnlyPreviewState === 'ready'" :to="economyPreviewTarget()">进入经济预览</router-link>
+      </div>
+    </section>
+
+    <section v-if="skillMarketplaceAvailable" class="economy-discovery" aria-labelledby="economy-discovery-title">
+      <h3 id="economy-discovery-title">技能市场</h3>
+
+      <div class="discovery-links">
+        <router-link v-if="skillMarketplaceAvailable" to="/skill-market">发现技能市场</router-link>
+      </div>
+    </section>
+
+    </details>
   </div>
 </template>
 
@@ -333,7 +340,7 @@ const loadEconomyPreviewCapability = async () => {
     skillMarketplaceAvailable.value = isSkillMarketplaceCapability(capability)
   } catch {
     if (disposed || request !== economyPreviewRequest || authGeneration !== apiStore.authorizationGeneration) return
-      skillMarketplaceAvailable.value = false
+    skillMarketplaceAvailable.value = false
   }
 }
 
@@ -374,266 +381,20 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.user-profile {
-  flex: 1;
-  overflow: auto;
-  padding: 16px;
-  background: var(--color-body);
-}
-
-.profile-page-header,
-.profile-card,
-.profile-details,
-.economy-discovery,
-.account-security {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 4px 16px rgba(35, 28, 20, 0.08);
-}
-
-.profile-page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
-  padding: 12px 14px 12px 18px;
-  border: 1px solid #e8e8f5;
-}
-
-.profile-page-heading {
-  min-width: 0;
-}
-
-.profile-page-header h1 {
-  margin: 0;
-  color: var(--color-text);
-  font-size: 22px;
-}
-
-.profile-page-header button,
-.discovery-links button {
-  min-height: 40px;
-  padding: 0 12px;
-  border: 1px solid #4f46e5;
-  border-radius: 8px;
-  background: #fff;
-  color: #4338ca;
-  cursor: pointer;
-}
-
-.return-to-hall {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  white-space: nowrap;
-  font-weight: 600;
-  line-height: 1;
-  box-shadow: 0 1px 2px rgba(67, 56, 202, 0.1);
-}
-
-.return-to-hall:hover {
-  background: #f5f3ff;
-}
-
-.return-to-hall:focus-visible {
-  outline: 3px solid rgba(79, 70, 229, 0.28);
-  outline-offset: 2px;
-}
-
-.return-to-hall :deep(.var-icon) {
-  font-size: 18px;
-}
-
-@media (max-width: 380px) {
-  .profile-page-header {
-    padding-left: 14px;
-  }
-
-  .profile-page-header h1 {
-    font-size: 20px;
-  }
-
-  .return-to-hall {
-    min-height: 36px;
-    padding: 0 10px;
-    font-size: 13px;
-  }
-}
-
-.navigation-notice,
-.capability-status,
-.capability-error {
-  margin: 0 0 16px;
-  padding: 12px;
-  border-radius: 8px;
-}
-
-.navigation-notice,
-.capability-error {
-  background: #fff0f0;
-  color: #a32d2d;
-}
-
-.capability-status {
-  background: #fff7df;
-  color: #855d12;
-}
-
-.profile-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 24px;
-  margin-bottom: 16px;
-}
-
-.profile-avatar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 72px;
-  height: 72px;
-  overflow: hidden;
-  flex: 0 0 72px;
-  border-radius: 50%;
-  background: #e0e7ff;
-  color: #4f46e5;
-  font-size: 72px;
-}
-
-.profile-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.profile-summary h2,
-.profile-details h3,
-.account-security h3 {
-  margin: 0;
-  color: var(--color-text);
-}
-
-.profile-summary p,
-.account-security p {
-  margin: 6px 0 0;
-  color: var(--color-text-secondary);
-}
-
-.profile-details,
-.economy-discovery,
-.account-security {
-  padding: 20px;
-}
-
-.profile-details h3,
-.account-security h3 {
-  font-size: 17px;
-}
-
-.profile-details dl {
-  margin: 12px 0 0;
-}
-
-.profile-details dl div {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 0;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.profile-details dl div:last-child {
-  border-bottom: 0;
-}
-
-.profile-details dt {
-  color: var(--color-text-secondary);
-}
-
-.profile-details dd {
-  margin: 0;
-  color: var(--color-text);
-  text-align: right;
-  word-break: break-all;
-}
-
-.economy-discovery,
-.account-security {
-  margin-top: 16px;
-}
-
-.economy-discovery {
-  padding: 20px;
-}
-
-.economy-discovery h3 { margin: 0; color: var(--color-text); font-size: 17px; }
-
-.economy-discovery p { color: var(--color-text-secondary); }
-
-.discovery-links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
-
-.discovery-links a { padding: 9px 12px; border-radius: 8px; background: #fff3cc; color: #75430b; text-decoration: none; }
-
-.all-devices,
-.confirmation {
-  margin-top: 18px;
-  padding-top: 18px;
-  border-top: 1px solid #f1f5f9;
-}
-
-.security-button,
-.confirmation-actions button {
-  min-height: 42px;
-  margin-top: 14px;
-  padding: 0 16px;
-  border: 1px solid #4f46e5;
-  border-radius: 8px;
-  background: #4f46e5;
-  color: #fff;
-  cursor: pointer;
-}
-
-.security-button:disabled,
-.confirmation-actions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.security-button.danger {
-  border-color: #b42318;
-  background: #b42318;
-}
-
-.confirmation {
-  border-color: #fecaca;
-}
-
-.confirmation h4 {
-  margin: 0;
-  color: var(--color-text);
-}
-
-.confirmation-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.confirmation-actions button {
-  margin-top: 0;
-}
-
-.security-status,
-.security-error {
-  min-height: 1.4em;
-  margin-top: 16px !important;
-}
-
-.security-error {
-  color: #b42318 !important;
-}
+.user-profile { --profile-paper: #fffefa; --profile-ink: #242e2b; --profile-muted: #68716b; --profile-accent: #923f30; flex: 1; overflow: auto; padding: 32px max(20px, calc((100% - 840px) / 2)); background: #f7f6f2; color: var(--profile-ink); }
+.user-profile *, .user-profile *::before, .user-profile *::after { box-sizing: border-box; }
+.profile-page-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.profile-page-heading { min-width: 0; }.profile-page-header h1 { font: 500 28px/1.5 "Noto Serif CJK SC", "Songti SC", serif; margin: 4px 0; }
+.profile-eyebrow { color: var(--profile-accent); font-size: 12px; letter-spacing: .12em; margin: 0; }.profile-intro { color: var(--profile-muted); margin: 6px 0; font-size: 14px; }
+.return-to-hall { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.user-profile button { min-height: 44px; padding: 10px 14px; border: 1px solid #d9dcd3; border-radius: 8px; color: var(--profile-accent); background: var(--profile-paper); cursor: pointer; font: inherit; }
+.user-profile button:disabled { opacity: .6; cursor: not-allowed; }.user-profile :is(button,a,summary):focus-visible { outline: 2px solid var(--profile-accent); outline-offset: 3px; }
+.profile-card { display: flex; align-items: center; gap: 16px; padding: 16px 0 24px; }.profile-avatar { width: 64px; height: 64px; flex: 0 0 64px; background: #eee6d5; color: var(--profile-accent); border-radius: 14px; overflow: hidden; display: grid; place-items: center; }.profile-avatar img { width: 100%; height: 100%; object-fit: cover; }.profile-avatar .var-icon { font-size: 40px; }
+.profile-summary { min-width: 0; }.profile-summary h2 { font-size: 20px; margin: 0; overflow-wrap: anywhere; }.profile-summary p { color: var(--profile-muted); margin: 6px 0 0; overflow-wrap: anywhere; }.profile-seal { margin-left: auto; border: 1px solid var(--profile-accent); color: var(--profile-accent); padding: 6px; flex-shrink: 0; font-family: serif; }
+.profile-details, .account-security, .profile-tools { background: var(--profile-paper); border: 1px solid #e3e5dc; border-radius: 12px; padding: 24px; margin-top: 20px; }.user-profile h3 { font-size: 17px; margin: 0 0 12px; }.user-profile p { line-height: 1.7; }.account-security p, .economy-discovery p { color: var(--profile-muted); font-size: 14px; }
+.profile-wallet { position: relative; padding: 24px; border: 1px solid #ded2c2; border-radius: 14px; background: #f1e8dc; }.profile-wallet h3 { font-size: 13px; font-weight: 500; }.profile-wallet .wallet-headline { color: var(--profile-ink); font: 500 23px/1.5 "Noto Serif CJK SC", "Songti SC", serif; margin: 8px 0; }.discovery-links { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }.discovery-links a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; border: 1px solid #e3e5dc; border-radius: 8px; color: var(--profile-accent); background: var(--profile-paper); text-decoration: none; }.profile-wallet .discovery-links a { border-color: var(--profile-accent); background: var(--profile-accent); color: var(--profile-paper); gap: 16px; }
+.profile-details dl { margin: 0; }.profile-details dl div { display: flex; justify-content: space-between; gap: 20px; padding: 14px 0; border-bottom: 1px solid #eeeee6; }.profile-details dl div:last-child { border: 0; }.profile-details dt { color: var(--profile-muted); flex-shrink: 0; }.profile-details dd { margin: 0; text-align: right; overflow-wrap: anywhere; min-width: 0; }
+.all-devices, .confirmation { margin-top: 20px; padding-top: 18px; border-top: 1px solid #e3e5dc; }.confirmation { border-color: #dbbdb5; }.confirmation h4 { margin: 0; }.confirmation-actions { display: flex; flex-wrap: wrap; gap: 12px; }.security-button.danger { border-color: #dbbdb5; color: #923f30; }.confirmation-actions .security-button.danger { color: #fffefa; background: #923f30; }.security-error, .capability-error, .navigation-notice { color: #923f30 !important; }.security-status:empty, .security-error:empty { display: none; }.profile-tools summary { min-height: 24px; cursor: pointer; color: var(--profile-muted); }.profile-tools .economy-discovery { padding-top: 20px; margin-top: 16px; border-top: 1px solid #e3e5dc; }
+@media (min-width: 760px) { .profile-wallet { padding-right: 240px; }.profile-wallet .discovery-links { position: absolute; right: 24px; top: 50%; transform: translateY(-50%); margin: 0; } }
+@media (max-width: 600px) { .user-profile { padding: 22px 16px; }.profile-page-header { align-items: flex-start; }.profile-page-header h1 { font-size: 25px; }.return-to-hall { padding: 8px !important; font-size: 13px !important; }.profile-details, .account-security, .profile-tools, .profile-wallet { padding: 20px; }.profile-wallet .discovery-links a { width: 100%; justify-content: space-between; }.confirmation-actions button { flex: 1; }.profile-tools summary { min-height: 28px; } }
 </style>
