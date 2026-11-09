@@ -77,3 +77,30 @@ test('concurrent metadata does not use a shared last-response slot', async () =>
     assert.deepEqual(observed, [['second', 'second', '"second"'], ['first', 'first', '"first"']])
   } finally { globalThis.fetch = original }
 })
+
+
+test('explicit file contract preserves JSON bytes, even envelope-shaped document content', async () => {
+  const original = globalThis.fetch
+  try {
+    for (const raw of ['[ { "title": "示例", "status": 200 } ]\n', '{"protocolVersion":1,"requestId":"historical","code":"E0","msg":"document","data":42}']) {
+      globalThis.fetch = async () => new Response(raw, { headers: { 'content-type': 'application/json' } })
+      const blob = await run({ responseType: 'blob' }).execute()
+      assert.ok(blob instanceof Blob)
+      assert.equal(blob.type, 'application/json')
+      assert.deepEqual(new Uint8Array(await blob.arrayBuffer()), new TextEncoder().encode(raw))
+    }
+  } finally { globalThis.fetch = original }
+})
+
+test('file mode still decodes authenticated HTTP errors and rejects malformed errors', async () => {
+  const original = globalThis.fetch
+  try {
+    let successes = 0
+    globalThis.fetch = async (_url, config) => reply(null, config.headers['X-Request-Id'], 404, 'BOUNTY_MEDIA_UNAVAILABLE')
+    await assert.rejects(run({ responseType: 'blob', onSuccess: () => { successes++ } }).execute(),
+      error => error.status === 404 && error.code === 'BOUNTY_MEDIA_UNAVAILABLE')
+    globalThis.fetch = async () => new Response('{"private":"not a valid error envelope"}', { status: 403, headers: { 'content-type': 'application/json' } })
+    await assert.rejects(run({ responseType: 'blob' }).execute(), error => error.code === 'PROTOCOL_INVALID_RESPONSE')
+    assert.equal(successes, 0)
+  } finally { globalThis.fetch = original }
+})

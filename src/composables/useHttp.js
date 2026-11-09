@@ -289,15 +289,13 @@ export function useHttp (options = {}) {
         config: fetchConfig
       }
 
-      // Binary is an explicit, authenticated httpResponse mode. Do not feed it through the
-      // text/stream decoders: callers receive the exact Blob returned by the server.
+      // The caller selects the response contract, not its MIME: a JSON document can
+      // also be a file. HTTP failures were decoded above; successful file reads
+      // preserve bytes for the consumer's manifest/MIME/integrity checks.
       responseMetadata.requestId = rumRequestId
       if (config.method === 'HEAD' || httpResponse.status === 204 || httpResponse.status === 304) {
         result = null
       } else if (responseType === 'blob') {
-        if (/\bjson\b/i.test(httpResponse.headers.get('content-type') || '')) {
-          throw protocolError('PROTOCOL_EXPECTED_BINARY', { status: httpResponse.status, requestId: rumRequestId })
-        }
         result = await httpResponse.blob()
       } else if (responseType === 'text') {
         result = await httpResponse.text()
