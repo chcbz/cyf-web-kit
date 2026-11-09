@@ -198,3 +198,30 @@ describe('JUYITING-HELP-20261109 shared feedback boundary', () => {
     resolve({}); await settle()
   })
 })
+
+
+describe('usage help entry card consistency', () => {
+  it('uses the same mine-grid card and preserves the help focus invoker', async () => {
+    const filename = new URL('../src/components/juyiting/HallMinePage.vue', import.meta.url).pathname
+    const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
+    const code = compileScript(descriptor, { id: 'mine-help-card-test', inlineTemplate: true }).content
+      .replace(/^import\s+\{([^}]+)\}\s+from\s+['"]vue['"];?\s*$/gm, (_line, names) => `const { ${names.replace(/\s+as\s+/g, ': ')} } = Vue`)
+      .replace('export default', 'return')
+    const component = new Function('Vue', code)(Vue)
+    const w = mount(component, { props: { accountEntryDisabled: true }, global: { stubs: { 'var-icon': true } } })
+    try {
+      const cards = w.findAll('.mine-grid > button')
+      expect(cards).to.have.length(6)
+      const help = cards[5]
+      expect(help.find('strong').text()).to.equal('使用帮助')
+      expect(help.find('small').text()).to.equal('新手入门、操作指南与常见问题')
+      expect(help.findAll('var-icon-stub')).to.have.length(1)
+      expect(w.find('.mine-help').exists()).to.equal(false)
+      expect(descriptor.styles.map(style => style.content).join('')).not.to.include('.mine-help')
+      await help.trigger('click')
+      expect(w.emitted('help')[0][0]).to.equal(help.element)
+      expect(cards[4].attributes('disabled')).not.to.equal(undefined)
+      expect(help.attributes('disabled')).to.equal(undefined)
+    } finally { w.unmount() }
+  })
+})
