@@ -87,6 +87,21 @@ describe('JUYITING-HELP-20261109 help content and navigation', () => {
       expect(w.emitted('navigate')).to.equal(undefined)
     } finally { w.unmount() }
   })
+  it('does not spend the business detail layer when navigating out of help', () => {
+    const hall = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+    const code = hall.slice(hall.indexOf('const navigateFromHelp ='), hall.indexOf('const openWorkbenchMap ='))
+    for (const [frames, target, expected] of [
+      [['mine', 'help'], 'agents', { root: true, restore: false }],
+      [['mine', 'help'], 'tasks', { root: true, restore: false }],
+      [['tasks', 'help'], 'tasks', { root: false, restore: true }]
+    ]) {
+      const calls = []
+      const navigate = new Function('panelFrames', 'openPanel', code + '; return navigateFromHelp')({ value: frames }, (...args) => calls.push(args))
+      navigate(target)
+      expect(calls).to.deep.equal([[target, expected]])
+    }
+  })
+
   it('gives the existing Hall header sole ownership of article and feedback return', () => {
     for (const mobile of [true, false]) {
       for (const panelReturnPanel of ['', 'mine']) {

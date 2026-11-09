@@ -1789,7 +1789,12 @@ const openHelp = invoker => openPanel('help', { returnFocusTarget: invoker })
 const navigateFromHelp = target => {
   if (target === 'account') return !accountEntryDisabled.value && openProfile()
   if (target === 'overview') return openWorkbenchPage('overview')
-  if (['tasks', 'treasure', 'agents', 'messages'].includes(target)) return openPanel(target)
+  if (['tasks', 'treasure', 'agents', 'messages'].includes(target)) {
+    // Return to an existing source frame, or start at the destination's root.
+    // Help must not consume the business detail's limited navigation depth.
+    const returning = panelFrames.value.includes(target)
+    return openPanel(target, { root: !returning, restore: returning })
+  }
   return false
 }
 
