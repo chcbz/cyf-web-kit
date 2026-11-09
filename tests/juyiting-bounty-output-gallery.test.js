@@ -47,7 +47,7 @@ describe('bounty output gallery live owner scope', () => {
   it('previews committed JSON in a terminal file-only gallery using reads only, and discards it on scope change', async () => {
     const text = '[{"title":"Example Domain"}]'
     const bytes = Buffer.from(text)
-    const artifact = { ...item('step-1'), contentMimeType: 'application/json', byteLength: String(bytes.length),
+    const artifact = { ...item('step-1'), contentMimeType: 'application/json', previewUrl: null, byteLength: String(bytes.length),
       sha256: createHash('sha256').update(bytes).digest('hex') }
     const calls = []
     const mockApi = { get: async path => {
@@ -71,7 +71,7 @@ describe('bounty output gallery live owner scope', () => {
       expect(wrapper.findAll('.bounty-output')).to.have.length(1)
       expect(wrapper.text()).not.to.match(/验收|继续办理|重新执行/)
       await wrapper.findAll('button').find(button => button.text() === '预览').trigger('click')
-      await flushPromises()
+      for (let i = 0; i < 50 && !wrapper.find('.bounty-output-text').exists(); i++) { await new Promise(resolve => setTimeout(resolve, 5)); await flushPromises() }
       expect(wrapper.find('.bounty-output-text').text()).to.equal(text)
       expect(wrapper.find('[role="alert"]').exists()).to.equal(false)
       await wrapper.setProps({ catalog: [], identityKey: 'next-owner' }); await flushPromises()
@@ -863,7 +863,7 @@ describe('RB-01/D01 real gallery native execution consumer', () => {
 
 describe('authenticated output downloads', () => {
   for (const [mime, extension] of [['text/html', 'html'], ['text/markdown', 'md'], ['application/json', 'json'], ['image/svg+xml', 'bin']]) {
-    it(`downloads verified ${mime} as an attachment and exposes static preview only for HTML/MD`, async () => {
+    it(`downloads verified ${mime} as an attachment and exposes safe previews for HTML/MD/JSON`, async () => {
       const payload = 'safe fixture'; const digest = createHash('sha256').update(payload).digest('hex')
       const url = '/chat/requests/request-1/steps/step-1/outputs/file'
       const output = { outputId: 'file', contentMimeType: mime, sha256: digest, byteLength: String(Buffer.byteLength(payload)), previewUrl: null, downloadUrl: `${url}?download=true` }
@@ -879,7 +879,7 @@ describe('authenticated output downloads', () => {
         request: { requestId: 'request-1', conversationId: 'conversation-1' }, taskCompleted: true } })
       try {
         await flushPromises()
-        expect(wrapper.findAll('button').some(button => button.text() === '预览')).to.equal(Boolean(richDocumentKind(mime)))
+        expect(wrapper.findAll('button').some(button => button.text() === '预览')).to.equal(Boolean(richDocumentKind(mime)) || mime === 'application/json')
         await wrapper.findAll('button').find(button => button.text() === '下载').trigger('click')
         for (let i = 0; i < 50 && !saved.length; i++) { await new Promise(resolve => setTimeout(resolve, 5)); await flushPromises() }
         expect(calls).to.have.length(1)

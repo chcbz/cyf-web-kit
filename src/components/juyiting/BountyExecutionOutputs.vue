@@ -30,7 +30,7 @@
       <strong>{{ previewKind(item.contentMimeType) === 'image' ? '图片' : previewKind(item.contentMimeType) === 'audio' ? '音频' : previewKind(item.contentMimeType) === 'text' ? '文本' : '文件' }}</strong>
       <p v-if="item.messageSource" class="bounty-output-text">{{ item.text }}</p>
       <span>{{ item.contentMimeType }} · {{ item.byteLength }} 字节</span>
-      <button v-if="(item.previewUrl && previewKind(item.contentMimeType) !== 'file') || richDocumentKind(item.contentMimeType)" type="button" @click="loadPreview(item)">预览</button>
+      <button v-if="(item.previewUrl && previewKind(item.contentMimeType) !== 'file') || richDocumentKind(item.contentMimeType) || (previewKind(item.contentMimeType) === 'text' && item.downloadUrl)" type="button" @click="loadPreview(item)">预览</button>
       <button v-if="item.downloadUrl" type="button" @click="downloadOutput(item)">下载</button>
       <p v-if="itemErrors[outputItemKey(item)]" role="alert">{{ itemErrors[outputItemKey(item)] }}</p>
       <RichDocumentPreview
@@ -231,11 +231,11 @@ const bytes = async (item, url, mime) => {
   } finally { inFlight.delete(controller) }
 }
 const loadPreview = async item => {
-  const key = outputItemKey(item); if ((!item.previewUrl && !richDocumentKind(item.contentMimeType)) || previewUrls.value[key]) return
+  const key = outputItemKey(item); if ((!item.previewUrl && !richDocumentKind(item.contentMimeType) && !(previewKind(item.contentMimeType) === 'text' && item.downloadUrl)) || previewUrls.value[key]) return
   const generation = epoch
   try {
     const documentKind = richDocumentKind(item.contentMimeType)
-    const blob = await bytes(item, documentKind ? item.downloadUrl : item.previewUrl, documentKind ? downloadMimeType(item.contentMimeType) : item.contentMimeType); if (!blob) return
+    const blob = await bytes(item, documentKind ? item.downloadUrl : (item.previewUrl || item.downloadUrl), documentKind ? downloadMimeType(item.contentMimeType) : item.contentMimeType); if (!blob) return
     if (documentKind || previewKind(item.contentMimeType) === 'text') { if (blob.size > 2 * 1024 * 1024) throw new Error('文本较大，暂不支持在议事中预览'); const text = await blob.text(); if (generation === epoch) { patchMap(textPreviews, key, text); patchMap(itemErrors, key, '') }; return }
     if (generation === epoch && previewKind(item.contentMimeType) !== 'file') patchMap(previewUrls, key, URL.createObjectURL(blob))
     patchMap(itemErrors, key, '')

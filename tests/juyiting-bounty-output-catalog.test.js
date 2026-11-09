@@ -46,6 +46,7 @@ describe('scoped bounty output catalog', () => {
     expect(previewKind('image/png')).to.equal('image')
     expect(previewKind('audio/mpeg')).to.equal('audio')
     expect(previewKind('text/plain')).to.equal('text')
+    expect(previewKind('application/json')).to.equal('text')
     expect(previewKind('text/html')).to.equal('file')
     expect(previewKind('image/svg+xml')).to.equal('file')
   })

@@ -83,7 +83,7 @@ export function outputItemKey (item) {
 export function previewKind (mime) {
   if (/^image\/(?:png|jpeg|webp|gif)$/.test(mime)) return 'image'
   if (/^audio\/(?:mpeg|wav|ogg|mp4|webm)$/.test(mime)) return 'audio'
-  if (mime === 'text/plain') return 'text'
+  if (['text/plain', 'application/json'].includes(mime)) return 'text'
   return 'file'
 }
 
