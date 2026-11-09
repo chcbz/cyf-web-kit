@@ -151,6 +151,7 @@ export const resolveHallNavigationPresentation = ({
   bountyCanGoBack = false,
   treasureCanGoBack = false,
   libraryCanGoBack = false,
+  helpCanGoBack = false,
   portraitTaskDetailOpen = false,
   isKeyboardActive = false,
   externalRootModalOpen = false
@@ -169,6 +170,7 @@ export const resolveHallNavigationPresentation = ({
     formalTaskDetail ||
     (renderedPanel === 'treasure' && treasureCanGoBack) ||
     renderedPanel === 'workspace' ||
+    (renderedPanel === 'help' && helpCanGoBack) ||
     (!selfOwnedDetail && hasFrameParent)
   )
   const hasChildDetail = selfOwnedDetail || hallOwnedDetail

@@ -9,7 +9,7 @@
       <div class="workbench-sidebar-bottom">
         <button class="workbench-map-entry" type="button" @click="openWorkbenchMap"><var-icon name="map-marker-outline" /><span>厅中实景<small>去梁山走一走</small></span><var-icon name="chevron-right" /></button>
         <nav class="workbench-side-nav workbench-side-utility" aria-label="工作台辅助导航">
-          <button type="button" @click="emit('open-onboarding', $event.currentTarget)"><var-icon name="help-circle-outline" /><span>使用帮助</span></button>
+          <button type="button" @click="openHelp($event.currentTarget)"><var-icon name="help-circle-outline" /><span>使用帮助</span></button>
         </nav>
         <button class="workbench-sidebar-account" type="button" :disabled="accountEntryDisabled" aria-label="个人中心" @click="openProfile"><img v-if="accountAvatar" :src="accountAvatar" alt="" /><var-icon v-else name="account-circle-outline" aria-hidden="true" /><span>{{ accountDisplayName }}<small>个人中心</small></span><var-icon name="chevron-right" aria-hidden="true" /></button>
       </div>
@@ -31,7 +31,7 @@
         <button v-for="tab in workbenchPrimaryTabs" :key="tab.panel" type="button" @click="openWorkbenchPage(tab.panel, $event)"><var-icon :name="tab.icon" aria-hidden="true" /><span>{{ tab.label }}</span></button>
         <button type="button" @click="openWorkbenchMap"><var-icon name="map-marker-outline" aria-hidden="true" /><span>厅中实景</span></button>
         <button type="button" :disabled="accountEntryDisabled" @click="workbenchMenuOpen = false; openProfile()"><var-icon name="account-circle-outline" aria-hidden="true" /><span>个人中心</span></button>
-        <button type="button" @click="workbenchMenuOpen = false; emit('open-onboarding', $event.currentTarget)"><var-icon name="help-circle-outline" aria-hidden="true" /><span>使用帮助</span></button>
+        <button type="button" @click="workbenchMenuOpen = false; openHelp($event.currentTarget)"><var-icon name="help-circle-outline" aria-hidden="true" /><span>使用帮助</span></button>
       </nav>
     </header>
     <div v-show="!isImmersiveMap" class="hall-mode-toolbar" :inert="isPanelSessionActive || voiceInteractionLocked ? '' : null" :aria-hidden="isPanelSessionActive ? 'true' : null">
@@ -212,7 +212,7 @@
     />
 
     <transition name="panel" @after-leave="handlePanelAfterLeave">
-      <div v-if="activePanel" :key="panelSessionGeneration" class="panel-overlay" :class="{ 'is-full-window': panelLayout === 'full-window', 'is-agent-overlay': renderedPanel === 'agents', 'is-low-height': isLowHeightPanel, 'is-chat-overlay': renderedPanel === 'chat', 'is-compact-chat-overlay': renderedPanel === 'chat' && isCompactChat, 'theme-workbench': isOverviewHome, 'is-workbench-panel': isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel), 'is-workbench-page': isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) }" :data-panel-generation="panelSessionGeneration" @pointerdown.self="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? null : closePanel()">
+      <div v-if="activePanel" v-show="!helpReplayVisible" :key="panelSessionGeneration" class="panel-overlay" :class="{ 'is-full-window': panelLayout === 'full-window', 'is-agent-overlay': renderedPanel === 'agents', 'is-low-height': isLowHeightPanel, 'is-chat-overlay': renderedPanel === 'chat', 'is-compact-chat-overlay': renderedPanel === 'chat' && isCompactChat, 'theme-workbench': isOverviewHome, 'is-workbench-panel': isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel), 'is-workbench-page': isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) }" :data-panel-generation="panelSessionGeneration" @pointerdown.self="isOverviewHome && workbenchPrimaryPanelSet.has(renderedPanel) ? null : closePanel()">
         <section
           ref="panelRef"
           class="floating-panel"
@@ -530,6 +530,18 @@
             />
           </template>
 
+          <HallHelpCenter
+            v-if="panelFrames.includes('help')"
+            ref="helpPanelRef"
+            v-show="renderedPanel === 'help'"
+            :active="renderedPanel === 'help'"
+            :inert="renderedPanel !== 'help' ? '' : null"
+            :aria-hidden="renderedPanel !== 'help' ? 'true' : null"
+            :account-entry-disabled="accountEntryDisabled"
+            @navigate="navigateFromHelp"
+            @replay="emit('open-onboarding', $event)"
+          />
+
           <HallMinePage
             v-if="panelFrames.includes('mine')"
             v-show="renderedPanel === 'mine'"
@@ -539,7 +551,7 @@
             @open="openPanel($event, { root: true })"
             @map="openWorkbenchMap"
             @profile="openProfile"
-            @help="emit('open-onboarding', $event)"
+            @help="openHelp"
           />
 
           <HallOverview
@@ -913,6 +925,7 @@ import OutputPreview from '@/components/outputs/OutputPreview.vue'
 import { isTerminalMatter } from '@/composables/juyiting/useHallOrdinaryCancellation'
 import HallOverview from '@/components/juyiting/HallOverview.vue'
 import HallMinePage from '@/components/juyiting/HallMinePage.vue'
+import HallHelpCenter from '@/components/juyiting/HallHelpCenter.vue'
 import HallDraftEditor from '@/components/juyiting/HallDraftEditor.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
@@ -1054,7 +1067,7 @@ const personaSetupResult = ref(null)
 const hostedPointFlow = ref(null)
 let hostedPointWaitTimer = null
 const toast = ref('')
-const panelWhitelist = new Set(['agents', 'catalog', 'tasks', 'workspace', 'treasure', 'chat', 'library', 'messages', 'mine', 'item', 'formalDraft', 'draft'])
+const panelWhitelist = new Set(['agents', 'catalog', 'tasks', 'workspace', 'treasure', 'chat', 'library', 'messages', 'mine', 'help', 'item', 'formalDraft', 'draft'])
 const activePanel = ref('')
 const renderedPanel = ref('')
 const panelSessionGeneration = ref(0)
@@ -1113,6 +1126,7 @@ const guardPanelLeave = action => {
 const overviewItemRef = ref(null)
 const taskReviewRef = ref(null)
 const hallReadRevision = ref(0)
+const helpPanelRef = ref(null)
 const agentPanelRef = ref(null)
 const agentPanelSessionKey = ref(0)
 watch(() => panelFrames.value.includes('agents'), (present, previous) => { if (present && !previous) agentPanelSessionKey.value++ }, { flush: 'sync' })
@@ -1129,12 +1143,14 @@ const panelDepth = computed(() => panelFrames.value.length
 const canOpenPanelDetail = computed(() => panelDepth.value < 3)
 const panelChildCanReturn = computed(() => {
   if (activeDraftEditor()) return Boolean(activeDraftEditor().canGoBack)
+  if (renderedPanel.value === 'help') return Boolean(helpPanelRef.value?.canGoBack)
   if (renderedPanel.value === 'agents') return Boolean(agentPanelRef.value?.canGoBack)
   if (renderedPanel.value === 'tasks') return Boolean(formalTaskRef.value || bountyPanelRef.value?.canGoBack)
   if (renderedPanel.value === 'treasure') return Boolean(treasurePanelRef.value?.canGoBack)
   if (renderedPanel.value === 'library') return Boolean(libraryPanelRef.value?.canGoBack)
   return false
 })
+const helpReplayVisible = computed(() => props.onboardingVisible && renderedPanel.value === 'help')
 const isPanelSessionActive = computed(() => Boolean(renderedPanel.value))
 const hallRefreshing = ref(false)
 const experienceReady = ref(false)
@@ -1193,14 +1209,15 @@ const navigationPresentation = computed(() => resolveHallNavigationPresentation(
   isMobileCoarse: isMobileCoarse.value,
   experienceMode: experienceMode.value,
   isOverviewHome: isOverviewHome.value,
-  renderedPanel: renderedPanel.value,
-  panelReturnPanel: panelReturnPanel.value,
+  renderedPanel: helpReplayVisible.value ? '' : renderedPanel.value,
+  panelReturnPanel: helpReplayVisible.value ? '' : panelReturnPanel.value,
   formalTaskRef: formalTaskRef.value,
   draftCanGoBack: Boolean(activeDraftEditor()?.canGoBack),
   bountyCanGoBack: Boolean(bountyPanelRef.value?.canGoBack),
   treasureCanGoBack: Boolean(treasurePanelRef.value?.canGoBack),
   libraryCanGoBack: Boolean(libraryPanelRef.value?.canGoBack),
   portraitTaskDetailOpen: portraitTaskDetailOpen.value,
+  helpCanGoBack: Boolean(helpPanelRef.value?.canGoBack),
   // Guidance highlights navigation; unlike business modals it must not hide the dock.
   isKeyboardActive: hallKeyboardActive.value
 }))
@@ -1318,6 +1335,7 @@ const activePanelTitle = computed(() => {
   if (renderedPanel.value === 'draft') return '提出需求'
   if (renderedPanel.value === 'tasks' && formalTaskRef.value) return ['completed', 'archived'].includes(formalTaskRef.value.status) ? '成果与验收记录' : '正式成果与验收'
   if (renderedPanel.value === 'formalDraft') return '提出需求'
+  if (renderedPanel.value === 'help') return '使用帮助'
   if (renderedPanel.value === 'messages') return '消息'
   if (renderedPanel.value === 'item') return overviewItemRef.value?.sourceType === 'DRAFT' ? '继续草稿' : '事项进展'
   if (renderedPanel.value === 'agents') return '好汉名册'
@@ -1767,6 +1785,14 @@ const openPanel = (panel, options = {}) => {
   return true
 }
 
+const openHelp = invoker => openPanel('help', { returnFocusTarget: invoker })
+const navigateFromHelp = target => {
+  if (target === 'account') return !accountEntryDisabled.value && openProfile()
+  if (target === 'overview') return openWorkbenchPage('overview')
+  if (['tasks', 'treasure', 'agents', 'messages'].includes(target)) return openPanel(target)
+  return false
+}
+
 const openWorkbenchMap = () => {
   workbenchMenuOpen.value = false
   if (activePanel.value && guardPanelLeave(openWorkbenchMap)) return false
@@ -2067,7 +2093,7 @@ const returnPanel = () => {
   if (guardPanelLeave(() => returnPanel() || closePanel())) return true
   if (renderedPanel.value === 'tasks' && formalTaskRef.value) { formalTaskRef.value = null; return true }
   if (panelChildCanReturn.value) {
-    const child = renderedPanel.value === 'agents' ? agentPanelRef.value : renderedPanel.value === 'tasks' ? bountyPanelRef.value
+    const child = renderedPanel.value === 'help' ? helpPanelRef.value : renderedPanel.value === 'agents' ? agentPanelRef.value : renderedPanel.value === 'tasks' ? bountyPanelRef.value
       : renderedPanel.value === 'treasure' ? treasurePanelRef.value : libraryPanelRef.value
     return child.back()
   }
@@ -5157,4 +5183,9 @@ button.hall-room {
   .home-overview .panel-overlay.theme-workbench.is-agent-overlay .panel-title > span { display: block; }
 }
 .selected-output-preview img{display:block;max-width:100%;max-height:280px;object-fit:contain}.selected-output-preview pre{white-space:pre-wrap;overflow-wrap:anywhere}.selected-output-preview audio{max-width:100%}
+.floating-panel.panel-help.layout-center-modal { width: min(960px, calc(100vw - 48px)); max-width: 960px; }
+@media (max-width: 600px) {
+  .panel-overlay:has(.panel-help) { padding: 0; }
+  .floating-panel.panel-help { width: 100%; max-width: 100%; height: 100%; max-height: 100%; border-radius: 0; }
+}
 </style>

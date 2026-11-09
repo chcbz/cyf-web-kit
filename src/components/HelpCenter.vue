@@ -55,7 +55,9 @@
         </div>
       </header>
 
-      <div class="feedback-form">
+      <fieldset class="feedback-form" :disabled="submitting || feedbackStatus === 'unknown'">
+        <p v-if="feedbackError" role="alert">{{ feedbackError }}</p>
+        <p v-else-if="feedbackStatus === 'success'" role="status">{{ $t('help.feedback_success') }}</p>
         <var-input
           v-model="form.title"
           :placeholder="$t('help.feedback_subject')"
@@ -92,18 +94,20 @@
         >
           {{ $t('help.submit_feedback') }}
         </var-button>
-      </div>
+      </fieldset>
     </section>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { Dialog } from '@varlet/ui'
 import { useI18n } from 'vue-i18n'
 import { kefuApi } from '@/composables/useHttp'
 import { useGlobalStore } from '@/stores/global'
 import { log } from '@/utils/logger'
+import { useApiStore } from '@/stores/api'
+import { useHelpFeedback } from '@/composables/useHelpFeedback'
 
 const { t } = useI18n()
 const globalStore = useGlobalStore()
@@ -112,17 +116,12 @@ const keyword = ref('')
 const faqs = ref([])
 const faqLoading = ref(false)
 const faqError = ref('')
-const submitting = ref(false)
-
-const form = reactive({
-  title: '',
-  content: '',
-  name: '',
-  phone: '',
-  email: ''
+const apiStore = useApiStore()
+const { form, submitting, canSubmit, status: feedbackStatus, error: feedbackError, submit } = useHelpFeedback({
+  post: kefuApi.post,
+  subject: computed(() => globalStore.getJiacn),
+  identity: computed(() => apiStore.authorizationGeneration)
 })
-
-const canSubmit = computed(() => form.title.trim() && form.content.trim())
 
 const filteredFaqs = computed(() => {
   const query = keyword.value.trim().toLowerCase()
@@ -158,43 +157,10 @@ const loadFaqs = async () => {
   }
 }
 
-const resetForm = () => {
-  form.title = ''
-  form.content = ''
-  form.name = ''
-  form.phone = ''
-  form.email = ''
-}
-
 const submitFeedback = async () => {
-  if (!canSubmit.value || submitting.value) return
-
-  submitting.value = true
-  const formData = new FormData()
-  formData.append('resourceId', 'help-center')
-  formData.append('jiacn', globalStore.getJiacn || '')
-  formData.append('title', form.title.trim())
-  formData.append('content', form.content.trim())
-  formData.append('name', form.name.trim())
-  formData.append('phone', form.phone.trim())
-  formData.append('email', form.email.trim())
-
-  try {
-    await kefuApi.post('/message/create', formData, { autoLoading: false })
-    resetForm()
-    Dialog({
-      title: t('app.notify'),
-      message: t('help.feedback_success'),
-      confirmButtonText: t('app.confirm')
-    })
-  } catch (error) {
-    Dialog({
-      title: t('app.alert'),
-      message: error.message || t('help.feedback_failed'),
-      confirmButtonText: t('app.confirm')
-    })
-  } finally {
-    submitting.value = false
+  const success = await submit()
+  if (success) {
+    Dialog({ title: t('app.notify'), message: t('help.feedback_success'), confirmButtonText: t('app.confirm') })
   }
 }
 
@@ -273,6 +239,10 @@ onMounted(() => {
 }
 
 .feedback-form {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
