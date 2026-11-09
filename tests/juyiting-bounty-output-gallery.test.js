@@ -44,6 +44,41 @@ const item = stepId => {
 const step = id => ({ stepId: id, kind: 'EXECUTE', executionId: `execution-${id}` })
 
 describe('bounty output gallery live owner scope', () => {
+  it('previews committed JSON in a terminal file-only gallery using reads only, and discards it on scope change', async () => {
+    const text = '[{"title":"Example Domain"}]'
+    const bytes = Buffer.from(text)
+    const artifact = { ...item('step-1'), contentMimeType: 'application/json', byteLength: String(bytes.length),
+      sha256: createHash('sha256').update(bytes).digest('hex') }
+    const calls = []
+    const mockApi = { get: async path => {
+      calls.push(path)
+      if (path === '/requests/request-1') return { requestId: 'request-1', conversationId: 'conversation-1', steps: [step('step-1')] }
+      if (path.endsWith('/steps/step-1/outputs')) return [artifact]
+      throw new Error(`unexpected read ${path}`)
+    }, execute: async options => {
+      expect(options.method).to.equal('GET'); expect(options.responseType).to.equal('blob')
+      return new Blob([bytes], { type: 'application/json' })
+    } }
+    const Component = new Function('Vue', 'deps', script)(Vue, { richDocumentKind, revisionProgressPending,
+      useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults, createApi: () => mockApi,
+      exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType,
+      outputDownloadName, currentOutputDelivery, completedTextItem, completedExecutionDelivery, saveOutputBlob: () => {} })
+    const wrapper = mount(Component, { props: { enabled: true, filesOnly: true, taskCompleted: true,
+      taskId: 'task', conversationId: 'conversation-1', identityKey: 'owner',
+      catalog: [{ request: { requestId: 'request-1', conversationId: 'conversation-1' } }] } })
+    try {
+      await flushPromises()
+      expect(wrapper.findAll('.bounty-output')).to.have.length(1)
+      expect(wrapper.text()).not.to.match(/验收|继续办理|重新执行/)
+      await wrapper.findAll('button').find(button => button.text() === '预览').trigger('click')
+      await flushPromises()
+      expect(wrapper.find('.bounty-output-text').text()).to.equal(text)
+      expect(wrapper.find('[role="alert"]').exists()).to.equal(false)
+      await wrapper.setProps({ catalog: [], identityKey: 'next-owner' }); await flushPromises()
+      expect(wrapper.text()).not.to.include('Example Domain')
+      expect(calls.every(path => path.startsWith('/requests/'))).to.equal(true)
+    } finally { wrapper.unmount() }
+  })
   beforeEach(() => window.sessionStorage.clear())
   afterEach(() => window.sessionStorage.clear())
   const previous = new Map()

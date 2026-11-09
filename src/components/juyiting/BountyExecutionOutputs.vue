@@ -21,7 +21,7 @@
     <p v-if="error" role="alert">{{ error }} <button type="button" @click="refreshFromUser">重新读取</button></p>
     <p v-else-if="!displayItems.length && (loading || !effectiveTaskCompleted)" role="status">{{ loading ? '正在读取已提交成果…' : deliveryMessage || '结果完成后会显示在这里。' }}</p>
     <p v-if="skillResults.error.value" role="alert">{{ skillResults.error.value }} <button type="button" @click="skillResults.refresh">重新读取</button></p>
-    <article v-for="result in skillResults.results.value" :key="result.executionId" class="bounty-output">
+    <article v-for="result in (filesOnly ? [] : skillResults.results.value)" :key="result.executionId" class="bounty-output">
       <span role="status">{{ skillResultStatus(result) }}</span>
       <pre v-if="result.complete && result.data !== null" class="bounty-output-text">{{ skillResultDataText(result.data) }}</pre>
       <small v-if="result.complete && result.data !== null">结果已记录；事项是否完成，请以验收状态为准。</small>
@@ -87,6 +87,7 @@ import { skillResultDataText, skillResultStatus, inlineSkillResults } from '../.
 const emit = defineEmits(['catalog-refresh-needed', 'outputs-change', 'accept-output', 'preview-ready'])
 const props = defineProps({
   acceptance: { type: Boolean, default: false },
+  filesOnly: { type: Boolean, default: false },
   inline: { type: Boolean, default: false },
   representedExecutionIds: { type: Array, default: () => [] },
   reviewBusy: { type: Boolean, default: false },
@@ -127,7 +128,9 @@ const deliveryProjection = computed(() => {
   try { return { items: currentOutputDelivery(allItems.value, allDeliveries.value), message: '' } }
   catch (cause) { return { items: [], message: cause.message } }
 })
-const displayItems = computed(() => deliveryProjection.value.items)
+const displayItems = computed(() => props.filesOnly
+  ? deliveryProjection.value.items.filter(item => !item.messageSource)
+  : deliveryProjection.value.items)
 const deliveryMessage = computed(() => deliveryProjection.value.message)
 watch(allItems, value => emit('outputs-change', value), { immediate: true })
 let abort = null; let epoch = 0; let refreshQueued = false

@@ -44,6 +44,28 @@ const settle = async h => {
 const reads = h => h.calls.filter(call => call.path.endsWith('/typed-outcome'))
 
 describe('cancelled task text history window', () => {
+  it('exposes only the loaded request window to the read-only file gallery and clears it on identity change', async () => {
+    const h = setup()
+    try {
+      await settle(h)
+      expect(h.history.scope.value).to.deep.equal({ taskId: 'task', conversationId: '42' })
+      expect(h.history.catalog.value.map(e => e.request.requestId)).to.deep.equal(['r101', 'r102'])
+      expect(h.history.typedOutcomes.value).to.have.length(2)
+      h.identity.value = 'next-owner'
+      expect(h.history.catalog.value).to.have.length(0)
+      expect(h.history.typedOutcomes.value).to.have.length(0)
+      await settle(h)
+      expect(h.calls.some(call => call.path.startsWith('/requests/'))).to.equal(false)
+    } finally { h.history.dispose() }
+  })
+  it('uses the shared file-only gallery without enabling acceptance or execution', () => {
+    const source = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
+    const section = source.slice(source.indexOf('class="terminal-task-history"'), source.indexOf('<HallCompletedRecords'))
+    expect(section).to.include('enabled files-only task-completed')
+    expect(section).to.include(':catalog="terminalTextHistory.catalog.value"')
+    expect(section).not.to.include('@accept-output')
+    expect(section).not.to.include(' acceptance')
+  })
   it('receives twenty messages and their outcomes in one page request, with no follow-up GETs', async () => {
     const h = setup({ latest: messagePage(Array.from({ length: 20 }, (_, i) => 9981 + i), '1000:19962') })
     try {

@@ -83,5 +83,5 @@ export const useHallTerminalTextHistory = ({ api, taskId, identityKey, documentR
   const windowItems = computed(() => items.value.map(item => ({ ...item, localId: item.messageSource.messageId })))
   const dispose = () => { disposed = true; stop(); reset(); pages.dispose(); source.dispose() }
   if (getCurrentInstance()) onBeforeUnmount(dispose)
-  return { items, windowItems, windows: pages.windows, windowLoading: pages.windowLoading, windowErrors: pages.windowErrors, retainWindows, loadWindow, error, loading, hasMore: pages.hasMore, refresh: source.refresh, retry, loadOlder, dispose }
+  return { scope: source.scope, catalog: source.catalog.entries, typedOutcomes: pages.typedOutcomes, items, windowItems, windows: pages.windows, windowLoading: pages.windowLoading, windowErrors: pages.windowErrors, retainWindows, loadWindow, error, loading, hasMore: pages.hasMore, refresh: source.refresh, retry, loadOlder, dispose }
 }

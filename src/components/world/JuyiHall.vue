@@ -438,6 +438,17 @@
                 @click="terminalTextHistory.retry"
               >重试当前页</button>
             </p>
+            <p>议事文件仅显示已加载记录关联的已提交成果；可加载更早记录查看其他版本。</p>
+            <BountyExecutionOutputs
+              v-if="terminalTextHistory.scope.value"
+              :key="`${hallIdentityScope}:${formalTaskRef.id}`"
+              enabled files-only task-completed
+              :conversation-id="terminalTextHistory.scope.value.conversationId"
+              :task-id="String(formalTaskRef.id)"
+              :identity-key="`${hallIdentityScope}:${apiStore.authorizationGeneration}`"
+              :catalog="terminalTextHistory.catalog.value"
+              :typed-outcomes="terminalTextHistory.typedOutcomes.value"
+            />
             <HallMessageWindow
               :pages="terminalTextHistory.windows.value" :messages="terminalTextHistory.windowItems.value"
               :scroller="terminalHistoryScroller" :scope="`${hallIdentityScope}:${formalTaskRef.id}`"
@@ -956,6 +967,7 @@ import AgentPanel from '@/components/juyiting/AgentPanel.vue'
 import BountyDiscussionPanel from '@/components/juyiting/BountyDiscussionPanel.vue'
 import BountyAcceptancePanel from '@/components/juyiting/BountyAcceptancePanel.vue'
 import HallCompletedRecords from '@/components/juyiting/HallCompletedRecords.vue'
+import BountyExecutionOutputs from '@/components/juyiting/BountyExecutionOutputs.vue'
 import HallDeliveryReviewDialog from '@/components/juyiting/HallDeliveryReviewDialog.vue'
 import { useHallSelectedOutputReview } from '@/composables/juyiting/useHallSelectedOutputReview.js'
 import { selectionKey } from '@/composables/juyiting/hallSelectedOutputs.js'
