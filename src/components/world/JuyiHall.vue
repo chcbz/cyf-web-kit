@@ -442,7 +442,7 @@
             <BountyExecutionOutputs
               v-if="terminalTextHistory.scope.value"
               :key="`${hallIdentityScope}:${formalTaskRef.id}`"
-              enabled files-only task-completed
+              enabled files-only read-only
               :conversation-id="terminalTextHistory.scope.value.conversationId"
               :task-id="String(formalTaskRef.id)"
               :identity-key="`${hallIdentityScope}:${apiStore.authorizationGeneration}`"

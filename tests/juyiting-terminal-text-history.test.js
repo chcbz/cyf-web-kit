@@ -61,7 +61,7 @@ describe('cancelled task text history window', () => {
   it('uses the shared file-only gallery without enabling acceptance or execution', () => {
     const source = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
     const section = source.slice(source.indexOf('class="terminal-task-history"'), source.indexOf('<HallCompletedRecords'))
-    expect(section).to.include('enabled files-only task-completed')
+    expect(section).to.include('enabled files-only read-only')
     expect(section).to.include(':catalog="terminalTextHistory.catalog.value"')
     expect(section).not.to.include('@accept-output')
     expect(section).not.to.include(' acceptance')

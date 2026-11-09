@@ -19,7 +19,7 @@
       >重新读取成果</button>
     </header>
     <p v-if="error" role="alert">{{ error }} <button type="button" @click="refreshFromUser">重新读取</button></p>
-    <p v-else-if="!displayItems.length && (loading || !effectiveTaskCompleted)" role="status">{{ loading ? '正在读取已提交成果…' : deliveryMessage || '结果完成后会显示在这里。' }}</p>
+    <p v-else-if="!displayItems.length && (loading || readOnly || !effectiveTaskCompleted)" role="status">{{ loading ? '正在读取已提交成果…' : readOnly ? '当前已加载记录中暂无文件成果。' : deliveryMessage || '结果完成后会显示在这里。' }}</p>
     <p v-if="skillResults.error.value" role="alert">{{ skillResults.error.value }} <button type="button" @click="skillResults.refresh">重新读取</button></p>
     <article v-for="result in (filesOnly ? [] : skillResults.results.value)" :key="result.executionId" class="bounty-output">
       <span role="status">{{ skillResultStatus(result) }}</span>
@@ -56,11 +56,11 @@
         ></audio>
         <span v-else>此内容暂不支持在议事中预览。</span>
       </template>
-      <button v-if="!effectiveTaskCompleted" type="button" class="hall-output-action primary" :disabled="reviewBusy || loading" @click="$emit('accept-output', item)">验收此版</button>
+      <button v-if="!readOnly && !effectiveTaskCompleted" type="button" class="hall-output-action primary" :disabled="reviewBusy || loading" @click="$emit('accept-output', item)">验收此版</button>
       <small v-if="item.replaces">改稿关联：{{ item.replaces.outputId }}（原稿仍保留）</small>
-      <small v-if="!effectiveTaskCompleted">需要调整？直接在会话中告诉 Agent。</small>
+      <small v-if="!readOnly && !effectiveTaskCompleted">需要调整？直接在会话中告诉 Agent。</small>
     </div>
-    <p v-if="effectiveTaskCompleted" role="status">事项已完成，此处仅供查看成果。</p>
+    <p v-if="readOnly || effectiveTaskCompleted" role="status">{{ readOnly ? '历史成果仅供查看；事项状态以上方为准。' : '事项已完成，此处仅供查看成果。' }}</p>
     <div
       v-if="expandedUrl"
       class="image-overlay"
@@ -88,6 +88,7 @@ const emit = defineEmits(['catalog-refresh-needed', 'outputs-change', 'accept-ou
 const props = defineProps({
   acceptance: { type: Boolean, default: false },
   filesOnly: { type: Boolean, default: false },
+  readOnly: { type: Boolean, default: false },
   inline: { type: Boolean, default: false },
   representedExecutionIds: { type: Array, default: () => [] },
   reviewBusy: { type: Boolean, default: false },

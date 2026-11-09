@@ -63,13 +63,13 @@ describe('bounty output gallery live owner scope', () => {
       useHallSkillResults, skillResultDataText, skillResultStatus, inlineSkillResults, createApi: () => mockApi,
       exactOutputId, outputCatalogItems, outputItemKey, previewKind, scopedExecutionSteps, downloadMimeType,
       outputDownloadName, currentOutputDelivery, completedTextItem, completedExecutionDelivery, saveOutputBlob: () => {} })
-    const wrapper = mount(Component, { props: { enabled: true, filesOnly: true, taskCompleted: true,
+    const wrapper = mount(Component, { props: { enabled: true, filesOnly: true, readOnly: true,
       taskId: 'task', conversationId: 'conversation-1', identityKey: 'owner',
       catalog: [{ request: { requestId: 'request-1', conversationId: 'conversation-1' } }] } })
     try {
       await flushPromises()
       expect(wrapper.findAll('.bounty-output')).to.have.length(1)
-      expect(wrapper.text()).not.to.match(/验收|继续办理|重新执行/)
+      expect(wrapper.text()).not.to.match(/验收|继续办理|重新执行|事项已完成/)
       await wrapper.findAll('button').find(button => button.text() === '预览').trigger('click')
       for (let i = 0; i < 50 && !wrapper.find('.bounty-output-text').exists(); i++) { await new Promise(resolve => setTimeout(resolve, 5)); await flushPromises() }
       expect(wrapper.find('.bounty-output-text').text()).to.equal(text)
