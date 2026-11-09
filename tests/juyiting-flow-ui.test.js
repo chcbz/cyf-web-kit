@@ -232,7 +232,8 @@ const confirmationHarness = (action = 'confirm') => {
   const deps = { personaUnbindBusy: Vue.ref(false), hallIdentityScope: Vue.ref('owner-a'), apiStore: { authorizationGeneration: 1 },
     panelSessionGeneration: Vue.ref(1), panelDisposed: false, renderedPanel: Vue.ref('catalog'),
     portraitShortName: item => item.name, Dialog: async options => { dialogs.push(options); return typeof action === 'function' ? action() : action },
-    personaCatalog: Vue.ref([persona]), unbindPersona: async item => { deleted.push(item); return true },
+    personaCatalog: Vue.ref([persona]), preparePersonaRemoval: async item => Object.freeze({ agentId: item.agentId, personaCode: item.personaCode, leaseId: 'confirmed-lease' }),
+    unbindPersona: async (item, removal) => { deleted.push({ item, removal }); return true },
     selectedAgent: Vue.ref(null), personaSetupResult: Vue.ref(null), syncAfterPersonaChanged() {}, playSuccess() {}, playError() {},
     showToast: message => toasts.push(message), log: { warn() {} } }
   const keys = Object.keys(deps)
@@ -241,14 +242,15 @@ const confirmationHarness = (action = 'confirm') => {
 describe('actual JuyiHall destructive confirmation handler', () => {
   for (const action of ['cancel', 'close']) it(`${action} cannot delete the binding`, async () => {
     const h = confirmationHarness(action); expect(await h.run(h.persona)).to.equal(false); expect(h.deleted).to.have.length(0)
-    expect(h.dialogs[0].message).to.include('不会自动承接剩余租期')
-    expect(h.dialogs[0].message).to.include('重新报价并收费')
-    expect(h.dialogs[0].message).to.include('免费重整')
-    expect(h.dialogs[0].message).to.include('不能认定没有租约或没有成本')
+    expect(h.dialogs[0].message).to.include('停止自动续费')
+    expect(h.dialogs[0].message).to.include('当期不退款')
+    expect(h.dialogs[0].message).to.include('已有事项仍可继续')
+    expect(h.dialogs[0].message).to.include('不能重新邀请')
   })
   it('deletes once only after explicit confirmation', async () => {
     const h = confirmationHarness(); expect(await h.run(h.persona)).to.equal(true)
     expect(h.deleted).to.have.length(1); expect(h.deps.personaUnbindBusy.value).to.equal(false)
+    expect(h.deleted[0].removal.leaseId).to.equal('confirmed-lease')
   })
   for (const boundary of ['identity', 'epoch', 'panel', 'binding']) it(`does not delete after ${boundary} changed during confirmation`, async () => {
     const h = confirmationHarness(() => {

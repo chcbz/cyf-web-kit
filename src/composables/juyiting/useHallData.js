@@ -462,14 +462,35 @@ export const useHallData = ({
     return bindResult
   }
 
-  const unbindPersona = async (persona) => {
-    if (!persona?.personaCode || persona.boundToMe !== true || persona.systemAgent) return false
-    const response = await agentApi.delete(`/personas/${persona.personaCode}/bind`, {
-      autoLoading: false
-    })
+  const preparePersonaRemoval = async persona => {
+    if (!persona?.personaCode || !persona.agentId || persona.boundToMe !== true || persona.systemAgent) return null
+    const identity = identityFingerprint()
+    const { agentId, personaCode } = persona
+    const lookup = await agentApi.get(`/${encodeURIComponent(agentId)}/hosting-lease`, undefined, { autoLoading: false })
+    if (identity !== identityFingerprint()) return null
+    const lease = lookup?.lease
+    if (!lookup?.managed || lease?.agentId !== agentId || lease?.personaCode !== personaCode ||
+      typeof lease.leaseId !== 'string' || !lease.leaseId || !['ACTIVE', 'LOCKED', 'FINISHING'].includes(lease.status)) {
+      throw new Error('暂无法核对可移除的租约，请稍后重试；不会执行旧式解绑。')
+    }
+    return Object.freeze({ agentId, personaCode, leaseId: lease.leaseId, identity })
+  }
 
-    await Promise.all([loadPersonaCatalog(), loadRosterAgents({ derive: false }), loadMapAgents()])
-    deriveRosterProjections()
+  const unbindPersona = async (persona, removal) => {
+    if (!persona?.personaCode || persona.boundToMe !== true || persona.systemAgent ||
+      !removal?.leaseId || removal.agentId !== persona.agentId || removal.personaCode !== persona.personaCode ||
+      removal.identity !== identityFingerprint()) return false
+    const response = await agentApi.delete(`/personas/${encodeURIComponent(persona.personaCode)}/bind`, {
+      autoLoading: false,
+      data: { agentId: removal.agentId, leaseId: removal.leaseId }
+    })
+    if (response?.agentId !== removal.agentId || response?.leaseId !== removal.leaseId || response?.status !== 'FINISHING') {
+      throw new Error('移除结果尚未确认，请刷新租约后重试。')
+    }
+    if (removal.identity === identityFingerprint()) {
+      await Promise.all([loadPersonaCatalog(), loadRosterAgents({ derive: false }), loadMapAgents()])
+      deriveRosterProjections()
+    }
     return true
   }
 
@@ -639,6 +660,7 @@ export const useHallData = ({
     tasksError,
     tasksLoading,
     tasksHasMore,
+    preparePersonaRemoval,
     unbindPersona,
     visibleAgents
   }

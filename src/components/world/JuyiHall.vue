@@ -1424,6 +1424,7 @@ const {
   tasksHasMore,
   taskStatusCount,
   taskStatusFilter,
+  preparePersonaRemoval,
   unbindPersona,
   visibleAgents
 } = useHallData({
@@ -3128,17 +3129,19 @@ const handleUnbindPersona = async (persona) => {
     generation === panelSessionGeneration.value && renderedPanel.value === 'catalog'
   personaUnbindBusy.value = true
   try {
+    const removal = await preparePersonaRemoval(persona)
+    if (!removal || !current()) return false
     const action = await Dialog({
       title: `确认将${portraitShortName(persona)}除名下山？`,
-      message: '除名会解除当前绑定。如有托管租约，重新入伙不会自动承接剩余租期，可能需要重新报价并收费；本操作不会退款或迁移租约。若只是接应故障，宜保留绑定，先在“重整接应 → 山寨安顿”核对租约并使用可用的免费重整（不续租、不延长到期日）。尚未核对租约时，不能认定没有租约或没有成本。',
-      confirmButtonText: '仍要除名',
-      cancelButtonText: '保留绑定，先核对',
+      message: '确认后停止自动续费，当期不退款。已有事项仍可继续议事、执行、验收或取消；收尾和私有交接完成前不能重新邀请。此次操作仅针对刚刚核对的租约，不会删除实例或中断旧事项。',
+      confirmButtonText: '停止续费并移除',
+      cancelButtonText: '保留好汉',
       confirmButtonTextType: 'danger'
     })
     if (action !== 'confirm' || !current()) return false
     const latest = personaCatalog.value.find(item => item.personaCode === persona.personaCode)
     if (!latest || latest.boundToMe !== true || latest.systemAgent || latest.agentId !== agentId) return false
-    const unbound = await unbindPersona(latest)
+    const unbound = await unbindPersona(latest, removal)
     if (!current()) return false
     if (!unbound) {
       showToast('该好汉未在当前名册中，未执行除名')
@@ -3148,7 +3151,7 @@ const handleUnbindPersona = async (persona) => {
     if (personaSetupResult.value?.agent?.personaCode === persona.personaCode) personaSetupResult.value = null
     syncAfterPersonaChanged()
     playSuccess()
-    showToast(`${portraitShortName(persona)} 已除名下山`)
+    showToast(`${portraitShortName(persona)} 已停止续费，正在收尾`)
     return true
   } catch (error) {
     if (!current()) return false

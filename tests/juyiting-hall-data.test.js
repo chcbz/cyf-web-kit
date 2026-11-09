@@ -195,7 +195,7 @@ describe('useHallData operable roster', () => {
     const agentApi = {
       delete: async (url) => {
         calls.push(url)
-        throw Object.assign(new Error('Agent cannot be unbound while it has durable active work'), { status: 409, code: 'AGENT_BUSY' })
+        throw Object.assign(new Error('Confirmed lease no longer belongs to this binding'), { status: 404, code: 'HOSTING_RENT_NOT_FOUND_OR_FORBIDDEN' })
       },
       get: async () => { throw new Error('refresh must not run after rejected DELETE') },
       search: async () => { throw new Error('refresh must not run after rejected DELETE') }
@@ -211,19 +211,19 @@ describe('useHallData operable roster', () => {
 
     let failure
     try {
-      await hallData.unbindPersona({ personaCode: 'huyanzhuo', boundToMe: true })
+      await hallData.unbindPersona({ personaCode: 'huyanzhuo', agentId: 'agent-hyz', boundToMe: true }, { personaCode: 'huyanzhuo', agentId: 'agent-hyz', leaseId: 'lease-old', identity: '0\u0000' })
     } catch (error) {
       failure = error
     }
-    expect(failure?.message).to.equal('Agent cannot be unbound while it has durable active work')
-    expect(failure?.code).to.equal('AGENT_BUSY')
-    expect(failure?.status).to.equal(409)
+    expect(failure?.message).to.equal('Confirmed lease no longer belongs to this binding')
+    expect(failure?.code).to.equal('HOSTING_RENT_NOT_FOUND_OR_FORBIDDEN')
+    expect(failure?.status).to.equal(404)
     expect(calls).to.deep.equal(['/personas/huyanzhuo/bind'])
   })
 
   it('does not refresh after the HTTP boundary rejects an application error', async () => {
     const agentApi = {
-      delete: async () => { throw Object.assign(new Error('still busy'), { status: 409, code: 'AGENT_BUSY' }) },
+      delete: async () => { throw Object.assign(new Error('stale lease'), { status: 404, code: 'HOSTING_RENT_NOT_FOUND_OR_FORBIDDEN' }) },
       get: async () => { throw new Error('refresh must not run after rejected DELETE') },
       search: async () => { throw new Error('refresh must not run after rejected DELETE') }
     }
@@ -238,18 +238,18 @@ describe('useHallData operable roster', () => {
 
     let failure
     try {
-      await hallData.unbindPersona({ personaCode: 'huyanzhuo', boundToMe: true })
+      await hallData.unbindPersona({ personaCode: 'huyanzhuo', agentId: 'agent-hyz', boundToMe: true }, { personaCode: 'huyanzhuo', agentId: 'agent-hyz', leaseId: 'lease-old', identity: '0\u0000' })
     } catch (error) {
       failure = error
     }
-    expect(failure?.code).to.equal('AGENT_BUSY')
-    expect(failure?.status).to.equal(409)
+    expect(failure?.code).to.equal('HOSTING_RENT_NOT_FOUND_OR_FORBIDDEN')
+    expect(failure?.status).to.equal(404)
   })
 
   it('reports an unbind no-op truthfully and refreshes every roster projection after DELETE', async () => {
     const calls = []
     const agentApi = {
-      delete: async (url, options) => calls.push({ options, url }),
+      delete: async (url, options) => { calls.push({ options, url }); return { ...options.data, status: 'FINISHING' } },
       get: async (_url, _params, options) => options.onSuccess(([])),
       search: async (url, _params, options) => {
         calls.push({ url })
@@ -267,8 +267,9 @@ describe('useHallData operable roster', () => {
 
     expect(await hallData.unbindPersona({ personaCode: 'huyanzhuo', boundToMe: false })).to.equal(false)
     expect(calls).to.deep.equal([])
-    expect(await hallData.unbindPersona({ personaCode: 'huyanzhuo', boundToMe: true })).to.equal(true)
+    expect(await hallData.unbindPersona({ personaCode: 'huyanzhuo', agentId: 'agent-hyz', boundToMe: true }, { personaCode: 'huyanzhuo', agentId: 'agent-hyz', leaseId: 'lease-old', identity: '0\u0000' })).to.equal(true)
     expect(calls[0].url).to.equal('/personas/huyanzhuo/bind')
+    expect(calls[0].options.data).to.deep.equal({ agentId: 'agent-hyz', leaseId: 'lease-old' })
     expect(calls.filter(call => call.url === '/roster')).to.have.length(1)
   })
 })
@@ -569,5 +570,50 @@ describe('useHallData actual assignee filter', () => {
       expect(hall.tasks.value.map(task => task.id)).to.deep.equal(['new-task'])
       expect(hall.taskAgentFilter.value).to.equal('new')
     } finally { hall.dispose() }
+  })
+})
+
+
+describe('exact rental removal snapshot', () => {
+  const persona = { personaCode: 'wuyong', agentId: 'agent-wy', boundToMe: true }
+  const lookup = leaseId => ({ managed: true, lease: { ...persona, leaseId, status: 'ACTIVE' } })
+  const create = (agentApi, extra = {}) => useHallData({ agentApi, log: { warn() {} },
+    normalizeStatus: value => value, selectedAgent: ref(null), selectedTask: ref(null), ...extra })
+  it('freezes the read lease and submits it without substituting a later lease', async () => {
+    const calls = []
+    const data = create({ get: async (url, _params, options) => {
+      if (url.endsWith('/hosting-lease')) { calls.push(url); return lookup('lease-before-confirmation') }
+      options.onSuccess([])
+    }, delete: async (url, options) => { calls.push(options.data); return { ...options.data, status: 'FINISHING' } },
+    search: async (_url, _params, options) => options.onSuccess({ items: [], pageNum: 1, pageSize: 100, total: '0' }) })
+    const snapshot = await data.preparePersonaRemoval(persona)
+    expect(Object.isFrozen(snapshot)).to.equal(true)
+    expect(await data.unbindPersona(persona, snapshot)).to.equal(true)
+    expect(calls).to.deep.equal(['/agent-wy/hosting-lease', { agentId: 'agent-wy', leaseId: 'lease-before-confirmation' }])
+  })
+  it('never falls back to destructive unbind for unavailable or unmanaged rental', async () => {
+    for (const result of [{ managed: false }, lookup(''), { ...lookup('lease'), lease: { ...lookup('lease').lease, agentId: 'different' } }]) {
+      let deletes = 0
+      const data = create({ get: async () => result, delete: async () => { deletes++ } })
+      let error
+      try { await data.preparePersonaRemoval(persona) } catch (cause) { error = cause }
+      expect(error).to.be.instanceOf(Error)
+      expect(await data.unbindPersona(persona)).to.equal(false)
+      expect(deletes).to.equal(0)
+    }
+  })
+  it('discards a late read and a confirmed snapshot after identity changes', async () => {
+    const identity = ref('first'); let resolve
+    const data = create({ get: () => new Promise(done => { resolve = done }) }, { identityScope: identity })
+    const reading = data.preparePersonaRemoval(persona); identity.value = 'second'; resolve(lookup('lease'))
+    expect(await reading).to.equal(null)
+    expect(await data.unbindPersona(persona, { ...persona, leaseId: 'lease', identity: '0\u0000first' })).to.equal(false)
+  })
+  it('does not report success for a mismatched removal receipt', async () => {
+    const data = create({ get: async () => lookup('lease'), delete: async () => ({ agentId: 'agent-wy', leaseId: 'other', status: 'FINISHING' }) })
+    const snapshot = await data.preparePersonaRemoval(persona)
+    let error
+    try { await data.unbindPersona(persona, snapshot) } catch (cause) { error = cause }
+    expect(error?.message).to.include('尚未确认')
   })
 })
