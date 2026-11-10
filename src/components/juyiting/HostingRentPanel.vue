@@ -4,7 +4,7 @@
       <h3>{{ persona.name || persona.personaName || persona.personaCode }} · 山寨安顿</h3>
       <button type="button" @click="$emit('close')">关闭（未确认报价不付款）</button>
     </header>
-    <p>每位好汉独立租约，按期预付、仅手动续租，不自动续扣、不追收历史费用。自家接应不收托管租金。</p>
+    <p>每位好汉独立租约，每期30天，余额足够时自动续费；平台托管500文/期，自行部署50文/期，不追收历史费用。</p>
     <p class="separate-fees"><strong>任务用量、技能购买、悬赏费用另计，不包含在托管租金内。</strong></p>
     <p v-if="rent.busy.value" role="status">正在查询租约…</p>
     <p v-if="rent.error.value" role="alert">{{ rent.error.value }}</p>
@@ -43,7 +43,10 @@
 
     <section v-if="quote" class="hosting-quote" aria-label="租金报价确认">
       <h4>{{ quote.purpose === 'INITIAL' ? '初次安顿报价' : '手动续租报价' }}</h4>
-      <p><strong>{{ money(quote.amountWen) }} / {{ period(quote.periodSeconds) }}</strong></p>
+      <p><strong>本次合计：{{ money(quote.amountWen) }} / {{ period(quote.periodSeconds) }}</strong></p>
+      <p>正常租费：{{ money(quote.recurringAmountWen) }} / {{ period(quote.periodSeconds) }}</p>
+      <p v-if="quote.purpose === 'INITIAL'">已有技能：{{ quote.initialSkillCount }}种（含停用未卸载技能），首次费用 {{ money(quote.initialSkillAmountWen) }}；后续每期 {{ money(quote.recurringAmountWen) }}。</p>
+      <p v-if="quote.purpose === 'INITIAL'">技能清单变化须重新报价；未确认不付款。</p>
       <p>报价有效至 {{ timestamp(quote.expiresAt) }}</p>
       <p>初租从服务可用时起算；续租从当前时间或原到期时间中较晚者起算。</p>
       <p v-if="rent.quoteExpired.value" role="alert">报价已过期，请取消后重新预览；不会自动换价付款。</p>
@@ -84,7 +87,7 @@ const receiptTitle = computed(() => receipt.value?.operation === 'REPROVISION' ?
 const leaseTitle = computed(() => {
   if (lookup.value?.lease?.status === 'REFUNDED') return lookup.value.lease.settlementKind === 'RETAINED' ? '原安顿未生效，历史退款已归档' : '安顿未生效，租金已退回'
   if (lookup.value?.lease?.status !== 'ACTIVE') return '安顿待确认 / 待就绪，不重复付款'
-  if (lookup.value.admission === 'RENEWAL_REQUIRED' || BigInt(lookup.value.lease.paidThrough) <= BigInt(rent.clock.value)) return '租期已到，待手动续租'
+  if (lookup.value.admission === 'RENEWAL_REQUIRED' || BigInt(lookup.value.lease.paidThrough) <= BigInt(rent.clock.value)) return '租期已到，请核对余额与续费状态'
   return lookup.value.lease.settlementKind === 'RETAINED' ? '保留的托管权益' : '租约已生效'
 })
 const money = value => isCanonicalDecimalString(value) ? formatWen(value) : '—'
@@ -93,8 +96,8 @@ const period = value => {
   return BigInt(value) % 86400n === 0n ? `${BigInt(value) / 86400n} 天` : `${value} 秒`
 }
 const timestamp = value => {
-  if (!isCanonicalDecimalString(value) || BigInt(value) > 8640000000000000n) return '待确认'
-  return new Date(Number(value)).toLocaleString()
+  if (!Number.isSafeInteger(value) || value < 0 || value > 8640000000000000) return '待确认'
+  return new Date(value).toLocaleString()
 }
 const openPersona = async () => {
   const opened = await rent.open(props.persona)

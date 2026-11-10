@@ -482,3 +482,29 @@ describe('retained hosting terms have no current wallet receipt', () => {
     expect(validLookup(value, 'agt_server_proposal', 'linchong')).to.equal(false)
   })
 })
+
+
+describe('first-fee inventory rejection recovery', () => {
+  it('clears a definitively stale initial quote and permits a new explicit preview without retrying payment', async () => {
+    let calls = 0
+    const h = harness({ agentApi: {
+      create: async url => {
+        calls++
+        if (url.endsWith('/quotes')) return hostingQuote()
+        throw Object.assign(new Error('changed inventory'), { code: 'HOSTING_RENT_QUOTE_STALE' })
+      },
+      get: async () => hostingLookup()
+    } })
+    try {
+      await h.rent.open(h.persona)
+      await h.rent.previewInitial()
+      expect(await h.rent.confirmQuote()).to.equal(false)
+      expect(calls).to.equal(2)
+      expect(h.rent.state.value.operation).to.equal(null)
+      expect(h.rent.state.value.quote).to.equal(null)
+      expect(h.rent.state.value.refreshPending).to.equal(false)
+      expect(h.rent.canInitial.value).to.equal(true)
+      expect(h.rent.error.value).to.include('本次未新增预占')
+    } finally { h.rent.dispose() }
+  })
+})

@@ -1,7 +1,7 @@
 export const hostingPersona = (overrides = {}) => ({ personaCode: 'linchong', name: '林冲', canBind: true, bound: false, boundToMe: false, ...overrides })
 export const hostingQuote = (overrides = {}) => ({ quoteId: 'hq-1', purpose: 'INITIAL', personaCode: 'linchong', agentId: 'agt_server_proposal',
   leaseId: null, expectedLeaseVersion: null, planId: 'configured-plan', planVersion: '7', currency: 'WEN',
-  amountWen: '1234500000', periodSeconds: '172800', expiresAt: 9999999999999, ...overrides })
+  amountWen: '1234500000', recurringAmountWen: '1234500000', initialSkillCount: '0', initialSkillAmountWen: '0', periodSeconds: '172800', expiresAt: 9999999999999, ...overrides })
 export const hostingReceipt = (overrides = {}) => ({ agentId: 'agt_server_proposal', intentId: 'hi-1', leaseId: 'hl-1', quoteId: 'hq-1',
   transactionId: 'tx-reserve', status: 'FUNDS_RESERVED', currency: 'WEN', amountWen: '1234500000', periodSeconds: '172800', occurredAt: 1000, ...overrides })
 export const hostingLookup = ({ lease = {}, intent = {}, ...overrides } = {}) => ({ managed: true,

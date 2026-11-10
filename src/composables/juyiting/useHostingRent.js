@@ -144,7 +144,7 @@ export function useHostingRent({ agentApi, economyApi, loadCapability, enabled =
     error.value = ''
     if (!enabled || !text(persona?.personaCode) || persona.systemAgent || (persona.bound && !persona.boundToMe) ||
       (persona.boundToMe && !ownedAgentId(persona)) || (!persona.boundToMe && !persona.canBind)) {
-      error.value = '当前未启用租金预览，或缺少明确的可操作好汉。自家接应不收托管租金。'
+      error.value = '当前未启用租金预览，或缺少明确的可操作好汉。'
       return false
     }
     busy.value = true
@@ -215,7 +215,8 @@ export function useHostingRent({ agentApi, economyApi, loadCapability, enabled =
           if (targetAgentId.value) state.value.refreshPending = true
           save()
         }
-        error.value = state.value.operation ? `结果未知，请只核对原请求（不重新取价/扣款）：${cause.message}` : `${cause.code || ''} ${cause.message}`
+        error.value = cause.code === 'HOSTING_RENT_QUOTE_STALE' ? '已有技能清单或接应主机已变化，请重新查询并确认报价；本次未新增预占。' :
+          state.value.operation ? `结果未知，请只核对原请求（不重新取价/扣款）：${cause.message}` : `${cause.code || ''} ${cause.message}`
       }
       return false
     } finally { if (current(ctx)) busy.value = false }

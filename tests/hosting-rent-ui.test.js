@@ -58,6 +58,26 @@ describe('hosting rent actual quote/lease UI', () => {
   })
   afterEach(() => { for (const wrapper of wrappers.splice(0)) wrapper.unmount() })
 
+  it('shows first-fee breakdown from the quote and numeric expiry without charging on preview', async () => {
+    const writes = []
+    controller({ agentApi: {
+      create: async (url, body) => { writes.push({ url, body }); return ok(hostingQuote({ amountWen: '650', recurringAmountWen: '500',
+        initialSkillCount: '3', initialSkillAmountWen: '150', periodSeconds: '2592000', expiresAt: 1800000000000 })) },
+      get: async () => ok(hostingLookup())
+    } })
+    const wrapper = await show()
+    expect(wrapper.text()).to.include('本次合计：650文 / 30 天')
+    expect(wrapper.text()).to.include('正常租费：500文 / 30 天')
+    expect(wrapper.text()).to.include('已有技能：3种')
+    expect(wrapper.text()).to.include('首次费用 150文；后续每期 500文')
+    expect(wrapper.text()).to.include(new Date(1800000000000).toLocaleString())
+    expect(wrapper.text()).to.include('余额足够时自动续费')
+    expect(wrapper.text()).not.to.include('仅手动续租')
+    expect(writes).to.have.length(1)
+    await button(wrapper, '取消报价').trigger('click'); await flushPromises()
+    expect(writes).to.have.length(1)
+  })
+
   it('renders actual server terms/wallet/separate token fees, with no charge until the confirm click', async () => {
     const h = controller()
     const wrapper = await show()
