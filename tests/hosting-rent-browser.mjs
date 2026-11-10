@@ -25,7 +25,7 @@ return hostingReceipt({amountWen:'650',periodSeconds:'2592000',occurredAt:Date.n
 },get:async()=>hostingLookup({lease:{amountWen:'650',periodSeconds:'2592000'}})};`
 const page = `<meta name="viewport" content="width=device-width,initial-scale=1"><div id="app"></div><script type="module">
 import {createApp,h} from 'vue';import Panel from '/src/components/juyiting/HostingRentPanel.vue';import {hostingPersona} from '/tests/hosting-rent-fixtures.js';
-sessionStorage.clear();window.closed=false;const persona=hostingPersona();createApp({render:()=>h(Panel,{persona,resolvePersona:()=>persona,onClose:()=>{window.closed=true}})}).mount('#app');</script>`
+sessionStorage.clear();window.panelClosed=false;const persona=hostingPersona();createApp({render:()=>h(Panel,{persona,resolvePersona:()=>persona,onClose:()=>{window.panelClosed=true}})}).mount('#app');</script>`
 const server = await createServer({ root, configFile: false, cacheDir: `${evidence}/vite-cache`,
   define: { 'import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED': JSON.stringify('true') },
   plugins: [{ name: 'hosting-http-fixtures', enforce: 'pre',
