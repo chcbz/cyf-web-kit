@@ -2859,7 +2859,11 @@ describe('O04 shared panel session contract', () => {
     const source = readFileSync(new URL('../src/components/world/JuyiHall.vue', import.meta.url), 'utf8')
     const { capturePanelReturnTarget, isCurrentPanelGeneration, resolvePanelReturnTarget } = await import('../src/composables/juyiting/useHallPanels.js')
 
-    expect(source).to.include('v-if="activePanel" :key="panelSessionGeneration"')
+    // Assert both fences on the same overlay, independent of intervening help-replay attributes.
+    const overlay = source.match(/<div\b[^>]*class="panel-overlay"[^>]*>/)?.[0]
+    expect(overlay).to.be.a('string')
+    expect(overlay).to.include('v-if="activePanel"')
+    expect(overlay).to.include(':key="panelSessionGeneration"')
     expect(source).to.include(':data-panel-generation="panelSessionGeneration"')
     expect(source).to.include(':interaction-locked="isPanelSessionActive || voiceInteractionLocked"')
     expect(source).to.include(':inert="isPanelSessionActive ? \'\' : null"')
