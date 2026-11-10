@@ -94,7 +94,7 @@ try {
     await cdp.send('Page.navigate', { url: `http://127.0.0.1:${address.port}/rent-check?lifecycle` })
     await waitForExpression(cdp, `document.body.innerText.includes('租约已生效')`)
     for (const [status, version, title] of [['LOCKED', '4', '欠费锁定，等待自动续费'], ['ACTIVE', '5', '租约已生效'], ['FINISHING', '6', '正在解除收尾，暂不可重新邀请']]) {
-      await evaluate(cdp, `window.rentSnapshot={...window.rentSnapshot,admission:${JSON.stringify(status === 'ACTIVE' ? 'ALLOWED' : status)},lease:{...window.rentSnapshot.lease,status:${JSON.stringify(status)},version:${JSON.stringify(version)}}`)
+      await evaluate(cdp, `window.rentSnapshot={...window.rentSnapshot,admission:${JSON.stringify(status === 'ACTIVE' ? 'ALLOWED' : status)},lease:{...window.rentSnapshot.lease,status:${JSON.stringify(status)},version:${JSON.stringify(version)}}}`)
       await click('重查租约与余额')
       await waitForExpression(cdp, `document.body.innerText.includes(${JSON.stringify(title)})`)
       assert.equal(await evaluate(cdp, `document.querySelector('[role="alert"]')===null`), true)
