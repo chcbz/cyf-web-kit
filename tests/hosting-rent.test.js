@@ -1,4 +1,4 @@
-import { validLookup, validOperation } from '../src/composables/juyiting/hostingRentContract.js'
+import { validLookup, validOperation, lookupNotOlder } from '../src/composables/juyiting/hostingRentContract.js'
 import { currentHttpResponse } from './fixtures/current-http-response.js'
 import { expect } from 'chai'
 import { ref } from 'vue'
@@ -506,5 +506,30 @@ describe('first-fee inventory rejection recovery', () => {
       expect(h.rent.canInitial.value).to.equal(true)
       expect(h.rent.error.value).to.include('本次未新增预占')
     } finally { h.rent.dispose() }
+  })
+})
+
+
+describe('rent lifecycle authoritative snapshots', () => {
+  const active = activeHostingLookup()
+  const locked = activeHostingLookup({ lease: { status: 'LOCKED', version: '4' }, admission: 'LOCKED' })
+  const restored = activeHostingLookup({ lease: { version: '5', paidFrom: 3000, paidThrough: 2592003000 } })
+  const finishing = activeHostingLookup({ lease: { status: 'FINISHING', version: '6' }, admission: 'FINISHING' })
+  it('accepts lifecycle snapshots without rewriting original capture facts', () => {
+    for (const value of [active, locked, restored, finishing]) {
+      expect(validLookup(value, value.lease.agentId, value.lease.personaCode)).to.equal(true)
+      expect(value.intent.captureTransactionId).to.equal('tx-capture')
+    }
+    for (const [next, previous] of [[locked, active], [restored, locked], [finishing, restored], [finishing, active]]) {
+      expect(lookupNotOlder(next, previous)).to.equal(true)
+    }
+  })
+  it('does not revive terminal leases or accept stale or same-version conflicting snapshots', () => {
+    expect(lookupNotOlder(active, locked)).to.equal(false)
+    expect(lookupNotOlder({ ...locked, lease: { ...locked.lease, version: active.lease.version } }, active)).to.equal(false)
+    expect(lookupNotOlder(activeHostingLookup({ lease: { version: '7' } }), finishing)).to.equal(false)
+    const refunded = hostingLookup({ lease: { status: 'REFUNDED', version: '4' }, admission: 'INITIAL_REQUIRED' })
+    expect(lookupNotOlder(restored, refunded)).to.equal(false)
+    expect(lookupNotOlder(hostingLookup({ lease: { version: '7' } }), active)).to.equal(false)
   })
 })

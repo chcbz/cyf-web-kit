@@ -18,14 +18,14 @@ export const validQuote = (quote, purpose, personaCode, agentId, lease) =>
 
 export const validLease = (lease, agentId, personaCode) => text(lease?.leaseId) && lease.agentId === agentId &&
   lease.personaCode === personaCode && text(lease.bindingId) && positive(lease.version) &&
-  oneOf(lease.status, ['PROVISIONING', 'ACTIVE', 'REFUNDED']) && positive(lease.planVersion) &&
-  (lease.settlementKind === 'RETAINED' ? lease.amountWen === '0' && ['ACTIVE', 'REFUNDED'].includes(lease.status) : positive(lease.amountWen)) && positive(lease.periodSeconds) && optional(lease.paidFrom, timestamp) && optional(lease.paidThrough, timestamp) &&
+  oneOf(lease.status, ['PROVISIONING', 'ACTIVE', 'LOCKED', 'FINISHING', 'REFUNDED']) && positive(lease.planVersion) &&
+  (lease.settlementKind === 'RETAINED' ? lease.amountWen === '0' && ['ACTIVE', 'LOCKED', 'FINISHING', 'REFUNDED'].includes(lease.status) : positive(lease.amountWen)) && positive(lease.periodSeconds) && optional(lease.paidFrom, timestamp) && optional(lease.paidThrough, timestamp) &&
   (lease.status !== 'ACTIVE' || (timestamp(lease.paidFrom) && timestamp(lease.paidThrough) && BigInt(lease.paidThrough) >= BigInt(lease.paidFrom)))
 
 export const validLookup = (value, agentId, personaCode) => {
   if (typeof value?.managed !== 'boolean') return false
   if (!value.managed) return value.admission === 'NOT_MANAGED' && value.lease == null && value.intent == null && value.reprovision == null
-  if (!validLease(value.lease, agentId, personaCode) || !oneOf(value.admission, ['PENDING', 'ALLOWED', 'RENEWAL_REQUIRED', 'INITIAL_REQUIRED'])) return false
+  if (!validLease(value.lease, agentId, personaCode) || !oneOf(value.admission, ['PENDING', 'ALLOWED', 'RENEWAL_REQUIRED', 'INITIAL_REQUIRED', 'LOCKED', 'FINISHING'])) return false
   const intent = value.intent
   if (intent != null && !(text(intent.intentId) && positive(intent.version) &&
     oneOf(intent.status, ['FUNDS_RESERVED', 'PROVISIONING_UNKNOWN', 'SERVICE_READY', 'FAILED_NO_EFFECT', 'ACTIVE', 'REFUNDED']) &&
@@ -77,7 +77,10 @@ export const matchingHostingReceipt = (receipt, op) => {
 export const lookupNotOlder = (next, previous) => {
   if (!previous?.managed) return true
   if (!next.managed || next.lease.leaseId !== previous.lease.leaseId || BigInt(next.lease.version) < BigInt(previous.lease.version)) return false
-  if (previous.lease.status !== 'PROVISIONING' && next.lease.status !== previous.lease.status) return false
+  if (next.lease.status !== previous.lease.status) {
+    const transitions = { PROVISIONING: ['ACTIVE', 'LOCKED', 'FINISHING', 'REFUNDED'], ACTIVE: ['LOCKED', 'FINISHING'], LOCKED: ['ACTIVE', 'FINISHING'] }
+    if (!transitions[previous.lease.status]?.includes(next.lease.status)) return false
+  }
   if (next.lease.version === previous.lease.version && ['status', 'bindingId', 'planVersion', 'amountWen', 'settlementKind', 'periodSeconds', 'paidFrom', 'paidThrough']
     .some(key => (next.lease[key] ?? null) !== (previous.lease[key] ?? null))) return false
   for (const [key, id] of [['intent', 'intentId'], ['reprovision', 'requestId']]) {

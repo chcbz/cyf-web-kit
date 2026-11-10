@@ -58,6 +58,24 @@ describe('hosting rent actual quote/lease UI', () => {
   })
   afterEach(() => { for (const wrapper of wrappers.splice(0)) wrapper.unmount() })
 
+  for (const [status, title] of [['LOCKED', '欠费锁定，等待自动续费'], ['FINISHING', '正在解除收尾，暂不可重新邀请']]) {
+    it(`shows ${status} without offering payment or re-invitation`, async () => {
+      const h = controller({ agentApi: { get: async () => activeHostingLookup({ lease: { status, version: '4' }, admission: status }),
+        create: async () => { throw Error('lifecycle display must not write') } } })
+      const wrapper = await show(hostingPersona({ bound: true, boundToMe: true, agentId: 'agt_server_proposal' }))
+      expect(wrapper.text()).to.include(title)
+      expect(wrapper.text()).to.include('tx-capture')
+      expect(wrapper.text()).not.to.include('安顿待确认')
+      expect(h.rent.canInitial.value).to.equal(false)
+      expect(h.rent.canRenew.value).to.equal(false)
+      expect(h.rent.canReprovision.value).to.equal(false)
+      expect(button(wrapper, '重查租约与余额')).not.to.equal(undefined)
+      expect(button(wrapper, '确认此报价')).to.equal(undefined)
+      expect(button(wrapper, '手动续租')).to.equal(undefined)
+      expect(h.rent.error.value).to.equal('')
+    })
+  }
+
   it('shows first-fee breakdown from the quote and numeric expiry without charging on preview', async () => {
     const writes = []
     controller({ agentApi: {
