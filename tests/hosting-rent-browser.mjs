@@ -13,8 +13,9 @@ const root = fileURLToPath(new URL('..', import.meta.url))
 const evidence = process.env.HOSTING_RENT_BROWSER_EVIDENCE
 assert.ok(evidence?.startsWith('/'), 'absolute disk evidence directory required')
 await mkdir(evidence, { recursive: true })
-const fixture = `import { hostingQuote, hostingReceipt, hostingLookup } from '/tests/hosting-rent-fixtures.js';
+const fixture = `import { hostingQuote, hostingReceipt, hostingLookup, activeHostingLookup } from '/tests/hosting-rent-fixtures.js';
 window.requests=[];window.rejectStale=false;
+window.rentSnapshot=new URLSearchParams(location.search).has('lifecycle')?activeHostingLookup({lease:{amountWen:'500',periodSeconds:'2592000',paidThrough:Date.now()+2592000000}}):null;
 const amount={currency:'WEN',amountMinor:'3500'};
 export const economyApi={get:async path=>path==='/capabilities'?{economyPreviewEnabled:true,skillMarketplaceEnabled:true,principalScopeSha256:'a'.repeat(64)}:{currency:'WEN',available:amount,held:{currency:'WEN',amountMinor:'0'}}};
 export const agentApi={create:async(path,body,options)=>{
@@ -22,10 +23,10 @@ window.requests.push({path,body,key:options.headers['Idempotency-Key']});
 if(path.endsWith('/quotes'))return hostingQuote({amountWen:'650',recurringAmountWen:'500',initialSkillCount:'3',initialSkillAmountWen:'150',periodSeconds:'2592000',expiresAt:Date.now()+300000});
 if(window.rejectStale){const e=new Error('HOSTING_RENT_QUOTE_STALE');e.code='HOSTING_RENT_QUOTE_STALE';e.status=409;throw e;}
 return hostingReceipt({amountWen:'650',periodSeconds:'2592000',occurredAt:Date.now()});
-},get:async()=>hostingLookup({lease:{amountWen:'650',periodSeconds:'2592000'}})};`
+},get:async()=>window.rentSnapshot||hostingLookup({lease:{amountWen:'650',periodSeconds:'2592000'}})};`
 const page = `<meta name="viewport" content="width=device-width,initial-scale=1"><div id="app"></div><script type="module">
 import {createApp,h} from 'vue';import Panel from '/src/components/juyiting/HostingRentPanel.vue';import {hostingPersona} from '/tests/hosting-rent-fixtures.js';
-sessionStorage.clear();window.panelClosed=false;const persona=hostingPersona();createApp({render:()=>h(Panel,{persona,resolvePersona:()=>persona,onClose:()=>{window.panelClosed=true}})}).mount('#app');</script>`
+sessionStorage.clear();window.panelClosed=false;const persona=hostingPersona(new URLSearchParams(location.search).has('lifecycle')?{bound:true,boundToMe:true,agentId:'agt_server_proposal'}:{});createApp({render:()=>h(Panel,{persona,resolvePersona:()=>persona,onClose:()=>{window.panelClosed=true}})}).mount('#app');</script>`
 const server = await createServer({ root, configFile: false, cacheDir: `${evidence}/vite-cache`,
   define: { 'import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED': JSON.stringify('true') },
   plugins: [{ name: 'hosting-http-fixtures', enforce: 'pre',
@@ -87,6 +88,28 @@ try {
     assert.equal(binds[1].body.expectedAmountWen, '650'); assert.equal(binds[1].body.expectedPeriodSeconds, '2592000')
     assert.ok((await evaluate(cdp, 'document.body.innerText')).includes('租金已预留'))
     result.checks.push(`${name}:breakdown, numeric expiry, fit, preview/cancel no bind, stale rejection/no automatic retry, explicit requote/reserve`)
+  }
+  for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844], ['narrow', 320, 740]]) {
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width < 760 })
+    await cdp.send('Page.navigate', { url: `http://127.0.0.1:${address.port}/rent-check?lifecycle` })
+    await waitForExpression(cdp, `document.body.innerText.includes('租约已生效')`)
+    for (const [status, version, title] of [['LOCKED', '4', '欠费锁定，等待自动续费'], ['ACTIVE', '5', '租约已生效'], ['FINISHING', '6', '正在解除收尾，暂不可重新邀请']]) {
+      await evaluate(cdp, `window.rentSnapshot={...window.rentSnapshot,admission:${JSON.stringify(status === 'ACTIVE' ? 'ALLOWED' : status)},lease:{...window.rentSnapshot.lease,status:${JSON.stringify(status)},version:${JSON.stringify(version)}}`)
+      await click('重查租约与余额')
+      await waitForExpression(cdp, `document.body.innerText.includes(${JSON.stringify(title)})`)
+      assert.equal(await evaluate(cdp, `document.querySelector('[role="alert"]')===null`), true)
+      assert.equal(await evaluate(cdp, 'window.requests.length'), 0, `${name}:${status}:refresh never charges`)
+      assert.ok((await evaluate(cdp, 'document.body.innerText')).includes('tx-capture'))
+      if (status !== 'ACTIVE') assert.equal(await evaluate(cdp, `[...document.querySelectorAll('button')].some(b=>/查看安顿报价|手动续租|免费重整/.test(b.textContent))`), false)
+      assert.equal(await evaluate(cdp, `(()=>{const p=document.querySelector('.hosting-rent-panel');return p.scrollWidth<=p.clientWidth+1&&document.documentElement.scrollWidth<=innerWidth})()`), true)
+      await evaluate(cdp, `document.querySelector('.hosting-lease').scrollIntoView()`)
+      const image = Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })).data, 'base64')
+      await writeFile(`${evidence}/${name}-${status.toLowerCase()}.png`, image)
+      result.screenshots[`${name}-${status}`] = hash(image)
+      result.checks.push(`${name}:${status}:authoritative refresh, capture retained, no write, actions and fit`)
+    }
+    await click('关闭')
+    assert.equal(await evaluate(cdp, 'window.panelClosed'), true)
   }
   assert.deepEqual(result.exceptions, [])
   result.status = 'PASS'
