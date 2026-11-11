@@ -438,19 +438,19 @@ describe('hosting rent frozen HTTP integration', () => {
     expect(posts(invalid)).to.have.length(0)
   })
 
-  it('keeps local/default bind rent-free, and refuses legacy server bind before making a request', async () => {
+  it('refuses all legacy free bind modes before making a request', async () => {
     const requests = []
     const data = useHallData({ agentApi: {
       post: async (url, body, options) => { requests.push({ url, body }); options.onSuccess(({ mode: 'local', agentId: 'local-agent' })) },
       get: async (_url, _params, options) => options.onSuccess?.([]),
       search: async (_url, _params, options) => options.onSuccess?.({ items: [], pageNum: 1, pageSize: 100, total: "0" })
     }, selectedAgent: ref(null), selectedTask: ref(null), log: { warn: () => {} }, normalizeStatus: value => value, taskAgentMatchScore: () => 0 })
-    expect((await data.bindPersona(hostingPersona())).mode).to.equal('local')
-    expect((await data.bindPersona(hostingPersona(), 'local')).mode).to.equal('local')
-    let rejected = false
-    try { await data.bindPersona(hostingPersona(), 'server') } catch { rejected = true }
-    expect(rejected).to.equal(true)
-    expect(requests.map(item => item.body)).to.deep.equal([{ mode: 'local' }, { mode: 'local' }])
+    for (const mode of [undefined, 'local', 'server']) {
+      let rejected = false
+      try { await data.bindPersona(hostingPersona(), mode) } catch { rejected = true }
+      expect(rejected).to.equal(true)
+    }
+    expect(requests).to.have.length(0)
   })
 
   it('keeps rent integration outside the accepted R4 funded-bounty action section', () => {
@@ -458,7 +458,8 @@ describe('hosting rent frozen HTTP integration', () => {
     const panel = readFileSync(new URL('../src/components/juyiting/PersonaCatalogPanel.vue', import.meta.url), 'utf8')
     expect(hall).to.include('@hosting-changed="refreshHall({ silent: true })"')
     expect(panel).to.include('<HostingRentPanel')
-    expect(panel).to.include("if (mode === 'server')")
+    expect(panel).to.include('hostingRequestedMode.value = mode')
+    expect(panel).not.to.include("emit('bind-persona', persona, mode)")
   })
 })
 
@@ -531,5 +532,18 @@ describe('rent lifecycle authoritative snapshots', () => {
     const refunded = hostingLookup({ lease: { status: 'REFUNDED', version: '4' }, admission: 'INITIAL_REQUIRED' })
     expect(lookupNotOlder(restored, refunded)).to.equal(false)
     expect(lookupNotOlder(hostingLookup({ lease: { version: '7' } }), active)).to.equal(false)
+  })
+})
+
+
+describe('self-hosted pricing request routing', () => {
+  it('uses the frozen quote and lease plans, while retaining old managed replay semantics', async () => {
+    const { hostingRequest } = await import('../src/composables/juyiting/hostingRentContract.js')
+    const quote = hostingQuote({ planId: 'agent-self-hosted', amountWen: '50', recurringAmountWen: '50' })
+    expect(hostingRequest({ kind: 'INITIAL', quote }, 'linchong')[1].mode).to.equal('local')
+    const lease = activeHostingLookup({ lease: { planId: 'agent-self-hosted' } }).lease
+    expect(hostingRequest({ kind: 'REPROVISION', agentId: lease.agentId, lease }, 'linchong')[1].mode).to.equal('local')
+    const historical = activeHostingLookup().lease
+    expect(hostingRequest({ kind: 'REPROVISION', agentId: historical.agentId, lease: historical }, 'linchong')[1].mode).to.equal('server')
   })
 })

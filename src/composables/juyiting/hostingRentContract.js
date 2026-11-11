@@ -6,6 +6,9 @@ export const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]
 const optional = (value, validate) => value == null || validate(value)
 const oneOf = (value, values) => values.includes(value)
 
+// Before self-hosted leases existed, persisted reprovision operations were always server mode.
+// Preserve their original request on replay; new leases carry their immutable planId.
+export const hostingMode = planId => planId === 'agent-self-hosted' ? 'local' : 'server'
 export const hostingPayload = result => result
 const timestamp = value => Number.isSafeInteger(value) && value >= 0
 
@@ -54,11 +57,11 @@ export const hostingRequest = (op, personaCode) => {
   const leaseId = encodeURIComponent(op.lease?.leaseId || '')
   if (op.kind === 'INITIAL_QUOTE') return [`/personas/${persona}/hosting-rent/quotes`, { purpose: 'INITIAL', ...(op.agentId ? { agentId: op.agentId } : {}) }]
   if (op.kind === 'RENEWAL_QUOTE') return [`/hosting-leases/${leaseId}/renewal-quotes`, { agentId: op.agentId, expectedLeaseVersion: op.lease.version }]
-  if (op.kind === 'REPROVISION') return [`/personas/${persona}/bind`, { mode: 'server', hostingAction: 'REPROVISION', agentId: op.agentId, leaseId: op.lease.leaseId, expectedLeaseVersion: op.lease.version }]
+  if (op.kind === 'REPROVISION') return [`/personas/${persona}/bind`, { mode: hostingMode(op.lease.planId), hostingAction: 'REPROVISION', agentId: op.agentId, leaseId: op.lease.leaseId, expectedLeaseVersion: op.lease.version }]
   const quote = op.quote
   const terms = { agentId: quote.agentId, quoteId: quote.quoteId, expectedPlanVersion: quote.planVersion,
     expectedAmountWen: quote.amountWen, expectedPeriodSeconds: quote.periodSeconds }
-  return op.kind === 'INITIAL' ? [`/personas/${persona}/bind`, { mode: 'server', hostingAction: 'INITIAL', ...terms }] :
+  return op.kind === 'INITIAL' ? [`/personas/${persona}/bind`, { mode: hostingMode(quote.planId), hostingAction: 'INITIAL', ...terms }] :
     [`/hosting-leases/${leaseId}/renewals`, { ...terms, expectedLeaseVersion: op.lease.version }]
 }
 

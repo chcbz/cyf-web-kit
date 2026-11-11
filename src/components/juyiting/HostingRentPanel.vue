@@ -45,6 +45,8 @@
 
     <section v-if="quote" class="hosting-quote" aria-label="租金报价确认">
       <h4>{{ quote.purpose === 'INITIAL' ? '初次安顿报价' : '手动续租报价' }}</h4>
+      <p>报价部署方式：{{ quoteMode === 'local' ? '自行部署' : '平台托管' }}（按已登记主机确定）</p>
+      <p v-if="modeMismatch" role="alert">实际部署方式与所选接应方式不一致，不能确认此报价；请核对主机登记或重新选择。</p>
       <p><strong>本次合计：{{ money(quote.amountWen) }} / {{ period(quote.periodSeconds) }}</strong></p>
       <p>正常租费：{{ money(quote.recurringAmountWen) }} / {{ period(quote.periodSeconds) }}</p>
       <p v-if="quote.purpose === 'INITIAL'">已有技能：{{ quote.initialSkillCount }}种（含停用未卸载技能），首次费用 {{ money(quote.initialSkillAmountWen) }}；后续每期 {{ money(quote.recurringAmountWen) }}。</p>
@@ -53,7 +55,7 @@
       <p>初租从服务可用时起算；续租从当前时间或原到期时间中较晚者起算。</p>
       <p v-if="rent.quoteExpired.value" role="alert">报价已过期，请取消后重新预览；不会自动换价付款。</p>
       <p v-else-if="rent.wallet.value && !rent.canConfirm.value" role="status">余额不足或当前租约/选择待核对，暂不可付款。</p>
-      <button type="button" :disabled="!rent.canConfirm.value" @click="acceptedAction(rent.confirmQuote)">确认此报价并{{ quote.purpose === 'INITIAL' ? '预留租金' : '手动续租付款' }}</button>
+      <button type="button" :disabled="!rent.canConfirm.value || modeMismatch" @click="acceptedAction(rent.confirmQuote)">确认此报价并{{ quote.purpose === 'INITIAL' ? '预留租金' : '手动续租付款' }}</button>
       <button type="button" :disabled="rent.busy.value || !!rent.state.value.operation" @click="rent.cancelQuote">取消报价，不付款</button>
     </section>
 
@@ -75,13 +77,15 @@ import { useHostingRent } from '../../composables/juyiting/useHostingRent.js'
 import { loadEconomyPreviewCapability } from '../../utils/economyPreviewCapability.js'
 import { formatWen, isCanonicalDecimalString, isEconomyPreviewBuildEnabled } from '../../utils/wenAmount.js'
 
-const props = defineProps({ persona: { type: Object, required: true }, resolvePersona: { type: Function, required: true } })
+const props = defineProps({ persona: { type: Object, required: true }, resolvePersona: { type: Function, required: true }, requestedMode: { type: String, default: null } })
 const emit = defineEmits(['close', 'hosting-changed', 'hosting-confirmed'])
 const apiStore = useApiStore()
 const rent = useHostingRent({ agentApi, economyApi, loadCapability: loadEconomyPreviewCapability,
   enabled: isEconomyPreviewBuildEnabled(import.meta.env.VITE_ECONOMY_PREVIEW_ENABLED),
   resolvePersona: persona => props.resolvePersona(persona), getAuthorizationGeneration: () => apiStore.authorizationGeneration })
 const quote = computed(() => rent.state.value.quote)
+const quoteMode = computed(() => quote.value?.planId === 'agent-self-hosted' ? 'local' : 'server')
+const modeMismatch = computed(() => quote.value?.purpose === 'INITIAL' && props.requestedMode && props.requestedMode !== quoteMode.value)
 const lookup = computed(() => rent.state.value.lookup)
 const receipt = computed(() => rent.state.value.accepted?.receipt)
 const receiptTitle = computed(() => receipt.value?.operation === 'REPROVISION' ? '免费重整已受理，等待就绪' :

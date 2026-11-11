@@ -25,8 +25,8 @@ const controller = (overrides = {}) => {
   makeRent = () => rent
   return { rent, requests }
 }
-const show = async (persona = hostingPersona()) => {
-  const wrapper = mount(HostingRentPanel, { props: { persona, resolvePersona: () => persona } })
+const show = async (persona = hostingPersona(), extraProps = {}) => {
+  const wrapper = mount(HostingRentPanel, { props: { persona, resolvePersona: () => persona, ...extraProps } })
   wrappers.push(wrapper)
   await flushPromises()
   return wrapper
@@ -174,5 +174,21 @@ describe('hosting rent actual quote/lease UI', () => {
     expect(wrapper.text()).not.to.include('预留流水')
     expect(h.requests).to.have.length(0)
   })
+
+  for (const selected of ['local', 'server']) {
+    it(`shows authoritative self-host price and blocks mismatched ${selected} selection`, async () => {
+      controller({ agentApi: {
+        create: async () => ok(hostingQuote({ planId: 'agent-self-hosted', amountWen: '200', recurringAmountWen: '50',
+          initialSkillCount: '3', initialSkillAmountWen: '150', periodSeconds: '2592000' })),
+        get: async () => ok(hostingLookup())
+      } })
+      const wrapper = await show(hostingPersona(), { requestedMode: selected })
+      expect(wrapper.text()).to.include('报价部署方式：自行部署')
+      expect(wrapper.text()).to.include('本次合计：200文 / 30 天')
+      expect(wrapper.text()).to.include('正常租费：50文 / 30 天')
+      expect(button(wrapper, '确认此报价').element.disabled).to.equal(selected !== 'local')
+      expect(wrapper.text().includes('不能确认此报价')).to.equal(selected !== 'local')
+    })
+  }
 
 })

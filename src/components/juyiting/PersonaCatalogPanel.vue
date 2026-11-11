@@ -55,6 +55,7 @@
     <HostingRentPanel
       v-if="hostingPersona"
       :persona="hostingPersona"
+      :requested-mode="hostingRequestedMode"
       :resolve-persona="resolveHostingPersona"
       @close="hostingPersonaCode = null"
       @hosting-changed="$emit('hosting-changed')"
@@ -153,6 +154,7 @@ const props = defineProps({
 const emit = defineEmits(['bind-persona', 'request-unbind-persona', 'clear-setup-result', 'hosting-changed', 'hosting-confirmed'])
 const activePersonaCode = ref(null)
 const hostingPersonaCode = ref(null)
+const hostingRequestedMode = ref(null)
 const hostingPersona = computed(() => props.personas.find(persona => persona.personaCode === hostingPersonaCode.value) || null)
 const resolveHostingPersona = persona => props.personas.find(item => item.personaCode === persona.personaCode) || null
 const boundToMeCount = computed(() => props.personas.filter(persona => persona.boundToMe).length)
@@ -289,12 +291,8 @@ const handleHostingConfirmed = receipt => {
 
 const selectAccess = (persona, mode) => {
   activePersonaCode.value = null
-  if (mode === 'server') {
-    hostingPersonaCode.value = persona.personaCode
-    return
-  }
-  hostingPersonaCode.value = null
-  emit('bind-persona', persona, mode)
+  hostingRequestedMode.value = mode
+  hostingPersonaCode.value = persona.personaCode
 }
 
 const stateText = (persona) => {
