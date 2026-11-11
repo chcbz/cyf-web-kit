@@ -16,6 +16,7 @@ await mkdir(evidence, { recursive: true })
 const fixture = `import { hostingQuote, hostingReceipt, hostingLookup, activeHostingLookup } from '/tests/hosting-rent-fixtures.js';
 window.requests=[];window.rejectStale=false;window.selfHosted=new URLSearchParams(location.search).has('selfhost');
 window.rentSnapshot=new URLSearchParams(location.search).has('lifecycle')?activeHostingLookup({lease:{amountWen:'500',periodSeconds:'2592000',paidThrough:Date.now()+2592000000}}):null;
+if(new URLSearchParams(location.search).has('transition'))window.rentSnapshot=activeHostingLookup({lease:{settlementKind:'TRANSITION',amountWen:new URLSearchParams(location.search).get('transition'),periodSeconds:'2592000',paidThrough:Date.now()+2592000000},intent:{reserveTransactionId:null,captureTransactionId:null,refundTransactionId:null,serviceReadyAt:null}});
 const amount={currency:'WEN',amountMinor:'3500'};
 export const economyApi={get:async path=>path==='/capabilities'?{economyPreviewEnabled:true,skillMarketplaceEnabled:true,principalScopeSha256:'a'.repeat(64)}:{currency:'WEN',available:amount,held:{currency:'WEN',amountMinor:'0'}}};
 export const agentApi={create:async(path,body,options)=>{
@@ -135,9 +136,8 @@ try {
   for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844], ['narrow', 320, 740]]) {
     await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width < 760 })
     for (const amount of ['50', '500']) {
-      await cdp.send('Page.navigate', { url: `http://127.0.0.1:${address.port}/rent-check?lifecycle` })
-      await waitForExpression(cdp, `document.body.innerText.includes('租约已生效')`)
-      await evaluate(cdp, `window.rentSnapshot={...window.rentSnapshot,lease:{...window.rentSnapshot.lease,settlementKind:'TRANSITION',amountWen:'${amount}'},intent:{...window.rentSnapshot.intent,reserveTransactionId:null,captureTransactionId:null,refundTransactionId:null,serviceReadyAt:null}}`)
+      await cdp.send('Page.navigate', { url: `http://127.0.0.1:${address.port}/rent-check?lifecycle&transition=${amount}` })
+      await waitForExpression(cdp, `document.body.innerText.includes('存量接入租约')`)
       await click('重查租约与余额')
       await waitForExpression(cdp, `document.body.innerText.includes('存量接入租约')`)
       const text = await evaluate(cdp, 'document.body.innerText')
