@@ -163,6 +163,16 @@ describe('hosting rent actual quote/lease UI', () => {
     expect(wrapper.text()).to.include('金额 0文')
     expect(wrapper.text()).to.include('不会续租或重置到期日')
   })
+  it('shows explicit free cutover origin and future normal rent without fake payment', async () => {
+    const value = activeHostingLookup({ lease: { settlementKind: 'TRANSITION', amountWen: '50' },
+      intent: { reserveTransactionId: null, captureTransactionId: null, refundTransactionId: null, serviceReadyAt: null } })
+    controller({ agentApi: { get: async () => ok(value), create: async () => { throw Error('unexpected payment') } } })
+    const wrapper = await show(hostingPersona({ bound: true, boundToMe: true, agentId: 'agt_server_proposal' }))
+    expect(wrapper.text()).to.include('赠送30天过渡期')
+    expect(wrapper.text()).to.include('不补收历史租金和已有技能费')
+    expect(wrapper.text()).to.not.include('预留流水')
+  })
+
   it('shows retained rights rather than a zero-payment receipt and creates no new payment', async () => {
     const value = activeHostingLookup({ lease: { settlementKind: 'RETAINED', amountWen: '0' },
       intent: { reserveTransactionId: null, captureTransactionId: null, refundTransactionId: null } })

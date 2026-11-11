@@ -28,11 +28,12 @@ export const validLease = (lease, agentId, personaCode) => text(lease?.leaseId) 
 export const validLookup = (value, agentId, personaCode) => {
   if (typeof value?.managed !== 'boolean') return false
   if (!value.managed) return value.admission === 'NOT_MANAGED' && value.lease == null && value.intent == null && value.reprovision == null
+  if (value.lease?.settlementKind === 'TRANSITION' && (value.intent?.status !== 'ACTIVE' || value.intent?.serviceReadyAt != null)) return false
   if (!validLease(value.lease, agentId, personaCode) || !oneOf(value.admission, ['PENDING', 'ALLOWED', 'RENEWAL_REQUIRED', 'INITIAL_REQUIRED', 'LOCKED', 'FINISHING'])) return false
   const intent = value.intent
   if (intent != null && !(text(intent.intentId) && positive(intent.version) &&
     oneOf(intent.status, ['FUNDS_RESERVED', 'PROVISIONING_UNKNOWN', 'SERVICE_READY', 'FAILED_NO_EFFECT', 'ACTIVE', 'REFUNDED']) &&
-    (value.lease.settlementKind === 'RETAINED'
+    (['RETAINED', 'TRANSITION'].includes(value.lease.settlementKind)
       ? intent.reserveTransactionId == null && intent.captureTransactionId == null && intent.refundTransactionId == null
       : text(intent.reserveTransactionId)) && optional(intent.serviceReadyAt, timestamp) &&
     optional(intent.captureTransactionId, text) && optional(intent.refundTransactionId, text))) return false

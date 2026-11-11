@@ -24,6 +24,7 @@
       <template v-else>
         <h4>{{ leaseTitle }}</h4>
         <p v-if="lookup.lease.settlementKind === 'RETAINED'">原结算记录已归档；保留身份及原租期，本次不扣费。续租按新报价以文支付。</p>
+        <p v-else-if="lookup.lease.settlementKind === 'TRANSITION'">存量接入时赠送30天过渡期，不补收历史租金和已有技能费；之后按 {{ money(lookup.lease.amountWen) }} / {{ period(lookup.lease.periodSeconds) }} 自动续费。</p>
         <p v-else>租约金额 {{ money(lookup.lease.amountWen) }} / {{ period(lookup.lease.periodSeconds) }}</p>
         <p>起租 {{ timestamp(lookup.lease.paidFrom) }}；到期 {{ timestamp(lookup.lease.paidThrough) }}</p>
         <p v-if="lookup.lease.status === 'LOCKED'">余额足够时自动扣费解锁，新租期从成功扣费时开始；暂不可接新事项、发起密议或变更技能，已有事项可继续完成。</p>
@@ -96,7 +97,8 @@ const leaseTitle = computed(() => {
   if (lookup.value?.lease?.status === 'FINISHING') return '正在解除收尾，暂不可重新邀请'
   if (lookup.value?.lease?.status !== 'ACTIVE') return '安顿待确认 / 待就绪，不重复付款'
   if (lookup.value.admission === 'RENEWAL_REQUIRED' || BigInt(lookup.value.lease.paidThrough) <= BigInt(rent.clock.value)) return '租期已到，请核对余额与续费状态'
-  return lookup.value.lease.settlementKind === 'RETAINED' ? '保留的托管权益' : '租约已生效'
+  return lookup.value.lease.settlementKind === 'RETAINED' ? '保留的托管权益' :
+    lookup.value.lease.settlementKind === 'TRANSITION' ? '存量接入租约' : '租约已生效'
 })
 const money = value => isCanonicalDecimalString(value) ? formatWen(value) : '—'
 const period = value => {

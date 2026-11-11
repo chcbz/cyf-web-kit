@@ -547,3 +547,18 @@ describe('self-hosted pricing request routing', () => {
     expect(hostingRequest({ kind: 'REPROVISION', agentId: historical.agentId, lease: historical }, 'linchong')[1].mode).to.equal('server')
   })
 })
+
+
+describe('nonfinancial cutover lease facts', () => {
+  it('accepts a transition with normal future rent and no invented payment or readiness', () => {
+    const value = activeHostingLookup()
+    value.lease.settlementKind = 'TRANSITION'
+    Object.assign(value.intent, { reserveTransactionId: null, captureTransactionId: null, refundTransactionId: null, serviceReadyAt: null })
+    expect(validLookup(value, value.lease.agentId, value.lease.personaCode)).to.equal(true)
+    value.intent.captureTransactionId = 'fake-capture'
+    expect(validLookup(value, value.lease.agentId, value.lease.personaCode)).to.equal(false)
+    value.intent.captureTransactionId = null
+    value.intent.serviceReadyAt = 1234
+    expect(validLookup(value, value.lease.agentId, value.lease.personaCode)).to.equal(false)
+  })
+})
