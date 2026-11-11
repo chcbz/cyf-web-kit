@@ -132,6 +132,27 @@ try {
       result.checks.push(`${name}:selfhost:${selection}:authoritative price, mismatch guard, exact paid request and fit`)
     }
   }
+  for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844], ['narrow', 320, 740]]) {
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width < 760 })
+    for (const amount of ['50', '500']) {
+      await cdp.send('Page.navigate', { url: `http://127.0.0.1:${address.port}/rent-check?lifecycle` })
+      await waitForExpression(cdp, `document.body.innerText.includes('租约已生效')`)
+      await evaluate(cdp, `window.rentSnapshot={...window.rentSnapshot,lease:{...window.rentSnapshot.lease,settlementKind:'TRANSITION',amountWen:'${amount}'},intent:{...window.rentSnapshot.intent,reserveTransactionId:null,captureTransactionId:null,refundTransactionId:null,serviceReadyAt:null}}`)
+      await click('重查租约与余额')
+      await waitForExpression(cdp, `document.body.innerText.includes('存量接入租约')`)
+      const text = await evaluate(cdp, 'document.body.innerText')
+      assert.ok(text.includes('赠送30天过渡期') && text.includes(`之后按 ${amount}文 / 30 天 自动续费`))
+      assert.equal(/预留流水|收租流水|原单退款流水|租金已预留/.test(text), false)
+      assert.equal(await evaluate(cdp, 'window.requests.length'), 0)
+      assert.equal(await evaluate(cdp, `document.querySelector('[role="alert"]')===null`), true)
+      assert.equal(await evaluate(cdp, `(()=>{const p=document.querySelector('.hosting-rent-panel');return p.scrollWidth<=p.clientWidth+1&&document.documentElement.scrollWidth<=innerWidth})()`), true)
+      await evaluate(cdp, `document.querySelector('.hosting-lease').scrollIntoView()`)
+      const image = Buffer.from((await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })).data, 'base64')
+      await writeFile(`${evidence}/${name}-transition-${amount}.png`, image)
+      result.screenshots[`${name}-transition-${amount}`] = hash(image)
+      result.checks.push(`${name}:transition:${amount}:normal future rent, no invented payment, read-only refresh and fit`)
+    }
+  }
   assert.deepEqual(result.exceptions, [])
   result.status = 'PASS'
 } catch (error) {
