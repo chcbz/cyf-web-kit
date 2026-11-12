@@ -3,7 +3,7 @@
 // Standalone, offline prototype only. No production runtime, API, Provider, or account access.
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const labels={results:'正式成果',public:'厅前公议',library:'典籍阁',messages:'消息',catalog:'招贤令',map:'厅中实景',help:'使用帮助',file:'资料详情',reader:'典籍阅读',account:'个人中心入口',home:'办事',tasks:'事项',create:'提出需求',agents:'好汉名册',detail:'事项详情',chat:'事项议事',private:'密议',workspace:'资料',mine:'我的'};
+const labels={login:'登录预览',results:'正式成果',public:'厅前公议',library:'典籍阁',messages:'消息',catalog:'招贤令',map:'厅中实景',help:'使用帮助',file:'资料详情',reader:'典籍阅读',account:'个人中心入口',home:'办事',tasks:'事项',create:'提出需求',agents:'好汉名册',detail:'事项详情',chat:'事项议事',private:'密议',workspace:'资料',mine:'我的'};
 const catalog=[
  {id:'ref-pdf',name:'观察活动手册.pdf',type:'pdf',url:'assets/observation-guide.pdf',pages:3,parts:['Observe from a safe distance. Record the time and location.','Prepare a notebook, water and a simple observation checklist.','Summarize observations. Review the full batch before accepting.'],note:'PDF · 3页离线示例'},
  {id:'ref-bird',name:'小鸟图片.svg',type:'image',url:'assets/bird-v1.svg',note:'图片 · 示意插画'},
@@ -59,12 +59,13 @@ function common(){
  $$('form').forEach(f=>f.addEventListener('submit',onSubmit));
 }
 function render(){
+ if(page==='login'){renderLoginPreview();return;}
  if(page!=='agents'){agentMobileDetail=false;agentProfileRead={id:null,loading:false,refreshed:false,generation:agentProfileRead.generation+1};}
  if(page==='chat'&&awaitingAssignment()){page='detail';history.replaceState(null,'','#detail');}
  view=innerWidth<=900?'mobile':'desktop';const snapshotPage=['private','public'].includes(page)?'chat':(['library','messages','catalog','map','help','file','reader','account','results'].includes(page)?'mine':page);const snap=window.BASELINE_SNAPSHOTS[view+'-'+snapshotPage]||window.BASELINE_SNAPSHOTS[view+'-home'];
  document.body.innerHTML=snap.html.replaceAll('../bird.svg','assets/bird-v1.svg').replaceAll('./juyiting-portraits/','shared/juyiting-portraits/').replaceAll('./static/','shared/static/');
  document.body.className=snap.bodyClass;document.documentElement.className=snap.htmlClass;document.title=labels[page]+' · 当前源码界面基准（离线示例）';syncViewport();common();
- if(page==='home'||page==='tasks')renderInteractiveList();if(page==='create')renderCreate();if(page==='agents')renderAgents();if(page==='detail'||page==='chat')renderDetail();if(['chat','private','public'].includes(page))renderChat();if(page==='workspace')renderWorkspace();renderSupplement();if(page==='agents')syncAgentLayout();persist();
+ if(page==='home'||page==='tasks')renderInteractiveList();if(page==='create')renderCreate();if(page==='agents')renderAgents();if(page==='detail'||page==='chat')renderDetail();if(['chat','private','public'].includes(page))renderChat();if(page==='workspace')renderWorkspace();renderSupplement();if(page==='agents')syncAgentLayout();renderCommissionProgress();persist();
 }
 function go(next){if(!labels[next])return;if(next==='chat'&&awaitingAssignment())next='detail';state.returnPages||={};if(next!==page&&!['home','tasks','workspace','mine'].includes(next)&&!(next==='detail'&&['chat','results'].includes(page)))state.returnPages[next]=page;if(next===page){render();return;}page=next;history.pushState(null,'','#'+page);render();}
 function renderCreate(){renderDraftPage();}
@@ -84,7 +85,7 @@ function renderAgents(){
  const detail=$('.detail-card',panel);if(!detail)return;
  detail.classList.add('mmd','mmd-agent-detail');
  const selected=state.selectedAgent,row=selected?$('.agent-row[data-agent="'+selected.id+'"]',panel):null;
- if(!selected||!row){detail.innerHTML='<div class="all-empty"><h3>点一位厅中好汉</h3><p>查看技能、本领与动静。</p></div>';return;}
+ if(!selected||!row){renderCommissionRoster();detail.innerHTML='<div class="all-empty"><h3>点一位厅中好汉</h3><p>查看技能、本领与动静。</p></div>';return;}
  selected.name=$('strong',row)?.textContent?.trim()||selected.name;
  if(agentProfileRead.id!==selected.id)agentProfileRead={id:selected.id,loading:false,refreshed:false,generation:agentProfileRead.generation+1};
  const mode=agentSkillExample(selected.name),loading=agentProfileRead.loading;
@@ -107,7 +108,7 @@ function renderAgents(){
  detail.prepend(scroll);
  actions?.setAttribute('aria-label','当前好汉操作');
  $('.agent-detail-actions button',detail)?.classList.add('mmd-primary');
- scoped(detail,'data-v-b5581454');syncAgentLayout();
+ scoped(detail,'data-v-b5581454');syncAgentLayout();renderCommissionRoster();
 }
 function syncAgentLayout(){
  const panel=$('.agent-panel');if(!panel||page!=='agents')return;
@@ -162,7 +163,7 @@ function renderChat(){
  $$('.composer-context,.composer-meta,.hall-voice-controls',panel).forEach(e=>e.remove());input.rows=2;input.style.height='';
  $('.composer-execute')?.remove();const send=$('.composer-send');send.innerHTML='发送';send.ariaLabel='发送';send.title='发送';send.disabled=ctx.pending||!!(ctx.task?.complete||ctx.task?.cancelled)||(!ctx.chatDraft.trim()&&!ctx.chatFiles.length)||(!ctx.agent&&page!=='public');
  const form=$('.composer-submit'),body=$('.composer-body');$$('.composer-more',panel).forEach(e=>e.remove());
- const extra=document.createElement('div');extra.className='mmd mmd-composer-extra';extra.innerHTML=`${ctx.quote?`<div class="mmd-quote">引用：${esc(asset(ctx.quote)?.name)} ${button('取消引用','unquote')}</div>`:''}${files(ctx.chatFiles,'chat')}`;if(ctx.quote||ctx.chatFiles.length)body.before(extra);
+ const extra=document.createElement('div');extra.className='mmd mmd-composer-extra';extra.innerHTML=`${ctx.quote?`<div class="mmd-quote">引用：${esc(asset(ctx.quote)?.name)} ${button('取消引用','unquote')}</div>`:''}${files(ctx.chatFiles,'chat')}`;if(ctx.quote||ctx.chatFiles.length)$('.composer-input-area',panel).prepend(extra);
  const more=document.createElement('button');more.type='button';more.className='composer-more';more.dataset.action='composer-more';more.textContent='＋';more.ariaLabel='添加资料、语音输入与设置';more.title='添加资料、语音输入与设置';more.disabled=!!(ctx.task?.complete||ctx.task?.cancelled);$('.composer-actions').prepend(more);
  syncCurrentComposer(panel);
  renderMediaBasis();
@@ -181,7 +182,6 @@ function renderChat(){
    // A new conversation may not contain the submitted batch's historical messages.
    const missing=state.delivery.filter(id=>!$$('[data-result]',messages).some(e=>e.dataset.result===id));
    if(missing.length)messages.insertAdjacentHTML('beforeend','<div class="mmd submitted-delivery" aria-label="本轮已提交成果">'+missing.map(id=>result(asset(id))).join('')+'</div>');
-   $('.toolbar-actions',panel)?.insertAdjacentHTML('beforeend','<div class="result-batch-actions" role="group" aria-label="本批 '+state.delivery.length+' 项成果验收">'+button(uiIcon('acceptance'),'complete-acceptance-review','class="icon-button acceptance-icon" title="查看并验收" aria-label="查看并验收"')+'</div>');
   }else if(composer)composer.insertAdjacentHTML('beforebegin',acceptanceSummary());if(acceptanceLocked()){input.disabled=true;send.disabled=true;$$('.voice-start,.composer-more,.composer-attach',panel).forEach(e=>e.disabled=true);}}
  panel.classList.toggle('discussion-task',page==='chat');
  panel.classList.toggle('discussion-readonly',!!(ctx.task?.complete||ctx.task?.cancelled||ctx.task?.archived));
@@ -191,9 +191,9 @@ function renderChat(){
  const scrollEnd=()=>{if(messages.isConnected)messages.scrollTop=messages.scrollHeight;};requestAnimationFrame(scrollEnd);$$('img',messages).forEach(img=>img.addEventListener('load',scrollEnd,{once:true}));
 }
 function renderWorkspace(){const list=$('.treasure-file-list');if(!list)return;const all=[...catalog,...state.localFiles,...state.saved.map(asset)].filter((a,i,arr)=>arr.findIndex(x=>x.id===a.id)===i),filter=state.workspaceFilter||'全部';const items=all.filter(a=>filter==='回收站'?state.fileMeta[a.id]?.recycled:!state.fileMeta[a.id]?.recycled&&(filter==='全部'||filter==='资料'&&!state.saved.includes(a.id)||filter==='成果'&&state.saved.includes(a.id)));
- list.innerHTML=items.filter(a=>!state.workspaceQuery||a.name.toLowerCase().includes(state.workspaceQuery.toLowerCase())).map(a=>`<div class="treasure-file-row" data-file-id="${a.id}"><div><strong>${esc(a.name)}</strong><p>${esc(a.note||a.type)} · 本地演示版本</p></div>${button('查看','complete-file',`data-id="${a.id}"`)}</div>`).join('')||'<p class="mmd" role="status">此分类暂无资料。</p>';scoped(list,'data-v-a1bd66a6');const tabs=$('.treasure-tabs');if(tabs)tabs.innerHTML=['全部','资料','成果','回收站'].map(label=>button(label,'complete-workspace-filter',`data-filter="${label}" aria-pressed="${filter===label}"`)).join('');}
+ list.innerHTML=items.filter(a=>!state.workspaceQuery||a.name.toLowerCase().includes(state.workspaceQuery.toLowerCase())).map(a=>`<div class="treasure-file-row" data-file-id="${a.id}"><div><strong>${esc(a.name)}</strong><p>${esc(a.note||a.type)} · 本地演示版本</p></div>${button('查看','complete-file',`data-id="${a.id}" class="treasure-file-open" aria-label="查看资料：${esc(a.name)}"`)}</div>`).join('')||'<p class="mmd" role="status">此分类暂无资料。</p>';scoped(list,'data-v-a1bd66a6');const tabs=$('.treasure-tabs');if(tabs)tabs.innerHTML=['全部','资料','成果','回收站'].map(label=>button(label,'complete-workspace-filter',`data-filter="${label}" aria-pressed="${filter===label}"`)).join('');}
 function submitRequest(){startUnifiedConversation();}
-function assign(){if(!state.selectedAgent||!state.task||state.agent||(state.task.complete||state.task.cancelled))return;state.task.notStarted=false;state.agent={...state.selectedAgent};state.messages=[{role:'USER',text:state.task.description,files:[...state.task.files]}];state.returnPages||={};state.returnPages.chat='detail';go('chat');reply(state.task.description||'请确认这些资料的用途。',true,state);}
+function assign(){if(awaitingAssignment()){state.task.assignmentCandidate=state.selectedAgent?.id;commissionConfirm();return;}if(!state.selectedAgent||!state.task||state.agent||(state.task.complete||state.task.cancelled))return;state.task.notStarted=false;state.agent={...state.selectedAgent};state.messages=[{role:'USER',text:state.task.description,files:[...state.task.files]}];state.returnPages||={};state.returnPages.chat='detail';go('chat');reply(state.task.description||'请确认这些资料的用途。',true,state);}
 function output(type,text,revision,ctx=conversation()){const id='result-'+(++serial);const a={id,type,name:'',text,note:'第 '+revision+' 稿'};if(type==='image'){a.name=`小鸟-第${revision}稿.svg`;a.url=revision===1?'assets/bird-v1.svg':'assets/bird-v2.svg';}else if(type==='audio'){a.name=`音频-第${revision}稿.wav`;a.url='assets/sample.wav';}else if(type==='document'){a.name=`活动方案-第${revision}稿.md`;a.url='assets/plan.md';a.text='# 自然观察活动方案\n\n目标：认识身边的鸟类，记录观察结果。\n\n1. 介绍观察方法。\n2. 分组观察并记录。\n3. 分享发现，整理成果。\n\n保持距离，不打扰动物。';}else a.name=`文字成果-第${revision}稿.txt`;ctx.outputs.push(a);return id;}
 function reply(text,first=false,ctx=conversation()){
  const replyEpoch=beginReplyControl(ctx);ctx.pending=true;ctx.pendingReason='reply';if(conversation()===ctx&&(['chat','private','public'].includes(page)))renderChat();persist();const task=ctx.task;
@@ -300,6 +300,11 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('dialog[open]'))
 for(const event of ['input','change','click'])document.addEventListener(event,()=>queueMicrotask(persist));
 window.addEventListener('pagehide',persist);
 seedBaseline();
+// Explicit demo deep-link only; never identifies a production Agent.
+if(page==='agents'){
+ const previewAgent=commissionAgents.find(a=>a.id===new URLSearchParams(location.search).get('previewAgent'));
+ if(previewAgent){state.selectedAgent={id:previewAgent.id,name:previewAgent.name};agentMobileDetail=innerWidth<=720;}
+}
 render();
 for(const ctx of [state,state.publicChat,...Object.values(state.privateChats)])if(ctx.pending&&ctx.replyStop&&['submitting','unknown'].includes(ctx.replyStop.stage)){ctx.replyStop.stage='unknown';ctx.replyStop.text='停止结果尚未确认，请核对原请求；不会重复提交。（离线示例）';persist();if(['chat','private','public'].includes(page))renderChat();}else if(ctx.pending&&['reply','unified-reply'].includes(ctx.pendingReason)){ctx.pending=false;ctx.error='示例：刷新时回复状态待核对，不自动重发。';if(ctx.task?.unified)ctx.task.phase='需核对';persist();if(['chat','private','public'].includes(page))renderChat();}
 if(state.operation?.stage==='pending')setTimeout(resolveOperation,350);

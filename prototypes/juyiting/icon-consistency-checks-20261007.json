@@ -1,0 +1,897 @@
+{
+  "date": "2026-10-07",
+  "revision": "uniform-chat-icons-20261007",
+  "status": "PASS",
+  "method": "Owned Chromium actual icon/button boxes, native clicks and offline layouts",
+  "checks": [
+    {
+      "name": "7 equal icons and hit areas 1440-chat",
+      "pass": true
+    },
+    {
+      "name": "native icon clicks retain draft 1440",
+      "pass": true
+    },
+    {
+      "name": "7 equal icons and hit areas 1440-private",
+      "pass": true
+    },
+    {
+      "name": "7 equal icons and hit areas 1440-public",
+      "pass": true
+    },
+    {
+      "name": "7 equal icons and hit areas 390-chat",
+      "pass": true
+    },
+    {
+      "name": "native icon clicks retain draft 390",
+      "pass": true
+    },
+    {
+      "name": "7 equal icons and hit areas 390-private",
+      "pass": true
+    },
+    {
+      "name": "7 equal icons and hit areas 390-public",
+      "pass": true
+    },
+    {
+      "name": "7 equal icons and hit areas 320-chat",
+      "pass": true
+    },
+    {
+      "name": "native icon clicks retain draft 320",
+      "pass": true
+    },
+    {
+      "name": "7 equal icons and hit areas 320-private",
+      "pass": true
+    },
+    {
+      "name": "7 equal icons and hit areas 320-public",
+      "pass": true
+    },
+    {
+      "name": "7 equal icons and hit areas state-waiting",
+      "pass": true
+    },
+    {
+      "name": "disabled controls retained waiting",
+      "pass": true
+    },
+    {
+      "name": "7 equal icons and hit areas state-completed",
+      "pass": true
+    },
+    {
+      "name": "disabled controls retained completed",
+      "pass": true
+    }
+  ],
+  "layouts": [
+    {
+      "name": "1440-chat",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "1440-private",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "1440-public",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "390-chat",
+      "width": 390,
+      "scroll": 390,
+      "badImages": []
+    },
+    {
+      "name": "390-private",
+      "width": 390,
+      "scroll": 390,
+      "badImages": []
+    },
+    {
+      "name": "390-public",
+      "width": 390,
+      "scroll": 390,
+      "badImages": []
+    },
+    {
+      "name": "320-chat",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    },
+    {
+      "name": "320-private",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    },
+    {
+      "name": "320-public",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    },
+    {
+      "name": "state-waiting",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    },
+    {
+      "name": "state-completed",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    }
+  ],
+  "iconLayouts": [
+    {
+      "name": "1440-chat",
+      "metrics": [
+        {
+          "label": "重取回话",
+          "title": "重取回话",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "话头记录",
+          "title": "话头记录",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "另起话头",
+          "title": "另起话头",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "更多操作",
+          "title": "更多操作",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "添加资料",
+          "title": "添加资料",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "开始录音",
+          "title": "语音输入",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "发送",
+          "title": "发送",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        }
+      ]
+    },
+    {
+      "name": "1440-private",
+      "metrics": [
+        {
+          "label": "重取回话",
+          "title": "重取回话",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "话头记录",
+          "title": "话头记录",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "另起话头",
+          "title": "另起话头",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "更多操作",
+          "title": "更多操作",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "添加资料",
+          "title": "添加资料",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "开始录音",
+          "title": "语音输入",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "发送",
+          "title": "发送",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        }
+      ]
+    },
+    {
+      "name": "1440-public",
+      "metrics": [
+        {
+          "label": "重取回话",
+          "title": "重取回话",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "话头记录",
+          "title": "话头记录",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "另起话头",
+          "title": "另起话头",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "更多操作",
+          "title": "更多操作",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "添加资料",
+          "title": "添加资料",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "开始录音",
+          "title": "语音输入",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "发送",
+          "title": "发送",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        }
+      ]
+    },
+    {
+      "name": "390-chat",
+      "metrics": [
+        {
+          "label": "重取回话",
+          "title": "重取回话",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "话头记录",
+          "title": "话头记录",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "另起话头",
+          "title": "另起话头",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "更多操作",
+          "title": "更多操作",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "添加资料",
+          "title": "添加资料",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "开始录音",
+          "title": "语音输入",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "发送",
+          "title": "发送",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        }
+      ]
+    },
+    {
+      "name": "390-private",
+      "metrics": [
+        {
+          "label": "重取回话",
+          "title": "重取回话",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "话头记录",
+          "title": "话头记录",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "另起话头",
+          "title": "另起话头",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "更多操作",
+          "title": "更多操作",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "添加资料",
+          "title": "添加资料",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "开始录音",
+          "title": "语音输入",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "发送",
+          "title": "发送",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        }
+      ]
+    },
+    {
+      "name": "390-public",
+      "metrics": [
+        {
+          "label": "重取回话",
+          "title": "重取回话",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "话头记录",
+          "title": "话头记录",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "另起话头",
+          "title": "另起话头",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "更多操作",
+          "title": "更多操作",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "添加资料",
+          "title": "添加资料",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "开始录音",
+          "title": "语音输入",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "发送",
+          "title": "发送",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        }
+      ]
+    },
+    {
+      "name": "320-chat",
+      "metrics": [
+        {
+          "label": "重取回话",
+          "title": "重取回话",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "话头记录",
+          "title": "话头记录",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "另起话头",
+          "title": "另起话头",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "更多操作",
+          "title": "更多操作",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "添加资料",
+          "title": "添加资料",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "开始录音",
+          "title": "语音输入",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "发送",
+          "title": "发送",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        }
+      ]
+    },
+    {
+      "name": "320-private",
+      "metrics": [
+        {
+          "label": "重取回话",
+          "title": "重取回话",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "话头记录",
+          "title": "话头记录",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "另起话头",
+          "title": "另起话头",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "更多操作",
+          "title": "更多操作",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "添加资料",
+          "title": "添加资料",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "开始录音",
+          "title": "语音输入",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "发送",
+          "title": "发送",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        }
+      ]
+    },
+    {
+      "name": "320-public",
+      "metrics": [
+        {
+          "label": "重取回话",
+          "title": "重取回话",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "话头记录",
+          "title": "话头记录",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "另起话头",
+          "title": "另起话头",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "更多操作",
+          "title": "更多操作",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "添加资料",
+          "title": "添加资料",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "开始录音",
+          "title": "语音输入",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "发送",
+          "title": "发送",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        }
+      ]
+    },
+    {
+      "name": "state-waiting",
+      "metrics": [
+        {
+          "label": "重取回话",
+          "title": "重取回话",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "话头记录",
+          "title": "话头记录",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "另起话头",
+          "title": "另起话头",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "更多操作",
+          "title": "更多操作",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "添加资料",
+          "title": "添加资料",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "开始录音",
+          "title": "语音输入",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "发送",
+          "title": "发送",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        }
+      ]
+    },
+    {
+      "name": "state-completed",
+      "metrics": [
+        {
+          "label": "重取回话",
+          "title": "重取回话",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "话头记录",
+          "title": "话头记录",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "另起话头",
+          "title": "另起话头",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "更多操作",
+          "title": "更多操作",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "添加资料",
+          "title": "添加资料",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "开始录音",
+          "title": "语音输入",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        },
+        {
+          "label": "发送",
+          "title": "发送",
+          "width": 38,
+          "height": 38,
+          "iconWidth": 20,
+          "iconHeight": 20,
+          "stroke": "1.8px"
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "externalRequests": [],
+  "sourceHashes": {
+    "interaction-completion.js": "d78f864a865e0cfa64f317fcdd51beac77042a1cb57b17d0741ff101843a9c79",
+    "interaction-completion.css": "9ca3e23e1f5ba7e138f2ec1bc421ded07c358785b6cb0ce625925e126cfab80d"
+  },
+  "productAcceptance": false
+}

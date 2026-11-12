@@ -1,0 +1,357 @@
+{
+  "checkedOn": "2026-10-07",
+  "method": "JSDOM local document/interaction checks, not visual acceptance",
+  "status": "PASS",
+  "count": 72,
+  "results": [
+    {
+      "page": "home",
+      "width": 320,
+      "pass": true
+    },
+    {
+      "page": "tasks",
+      "width": 320,
+      "pass": true
+    },
+    {
+      "page": "create",
+      "width": 320,
+      "pass": true
+    },
+    {
+      "page": "agents",
+      "width": 320,
+      "pass": true
+    },
+    {
+      "page": "detail",
+      "width": 320,
+      "pass": true
+    },
+    {
+      "page": "chat",
+      "width": 320,
+      "pass": true
+    },
+    {
+      "page": "private",
+      "width": 320,
+      "pass": true
+    },
+    {
+      "page": "public",
+      "width": 320,
+      "pass": true
+    },
+    {
+      "page": "workspace",
+      "width": 320,
+      "pass": true
+    },
+    {
+      "page": "mine",
+      "width": 320,
+      "pass": true
+    },
+    {
+      "page": "library",
+      "width": 320,
+      "pass": true
+    },
+    {
+      "page": "messages",
+      "width": 320,
+      "pass": true
+    },
+    {
+      "page": "catalog",
+      "width": 320,
+      "pass": true
+    },
+    {
+      "page": "map",
+      "width": 320,
+      "pass": true
+    },
+    {
+      "page": "file",
+      "width": 320,
+      "pass": true
+    },
+    {
+      "page": "reader",
+      "width": 320,
+      "pass": true
+    },
+    {
+      "page": "help",
+      "width": 320,
+      "pass": true
+    },
+    {
+      "page": "account",
+      "width": 320,
+      "pass": true
+    },
+    {
+      "page": "home",
+      "width": 390,
+      "pass": true
+    },
+    {
+      "page": "tasks",
+      "width": 390,
+      "pass": true
+    },
+    {
+      "page": "create",
+      "width": 390,
+      "pass": true
+    },
+    {
+      "page": "agents",
+      "width": 390,
+      "pass": true
+    },
+    {
+      "page": "detail",
+      "width": 390,
+      "pass": true
+    },
+    {
+      "page": "chat",
+      "width": 390,
+      "pass": true
+    },
+    {
+      "page": "private",
+      "width": 390,
+      "pass": true
+    },
+    {
+      "page": "public",
+      "width": 390,
+      "pass": true
+    },
+    {
+      "page": "workspace",
+      "width": 390,
+      "pass": true
+    },
+    {
+      "page": "mine",
+      "width": 390,
+      "pass": true
+    },
+    {
+      "page": "library",
+      "width": 390,
+      "pass": true
+    },
+    {
+      "page": "messages",
+      "width": 390,
+      "pass": true
+    },
+    {
+      "page": "catalog",
+      "width": 390,
+      "pass": true
+    },
+    {
+      "page": "map",
+      "width": 390,
+      "pass": true
+    },
+    {
+      "page": "file",
+      "width": 390,
+      "pass": true
+    },
+    {
+      "page": "reader",
+      "width": 390,
+      "pass": true
+    },
+    {
+      "page": "help",
+      "width": 390,
+      "pass": true
+    },
+    {
+      "page": "account",
+      "width": 390,
+      "pass": true
+    },
+    {
+      "page": "home",
+      "width": 1440,
+      "pass": true
+    },
+    {
+      "page": "tasks",
+      "width": 1440,
+      "pass": true
+    },
+    {
+      "page": "create",
+      "width": 1440,
+      "pass": true
+    },
+    {
+      "page": "agents",
+      "width": 1440,
+      "pass": true
+    },
+    {
+      "page": "detail",
+      "width": 1440,
+      "pass": true
+    },
+    {
+      "page": "chat",
+      "width": 1440,
+      "pass": true
+    },
+    {
+      "page": "private",
+      "width": 1440,
+      "pass": true
+    },
+    {
+      "page": "public",
+      "width": 1440,
+      "pass": true
+    },
+    {
+      "page": "workspace",
+      "width": 1440,
+      "pass": true
+    },
+    {
+      "page": "mine",
+      "width": 1440,
+      "pass": true
+    },
+    {
+      "page": "library",
+      "width": 1440,
+      "pass": true
+    },
+    {
+      "page": "messages",
+      "width": 1440,
+      "pass": true
+    },
+    {
+      "page": "catalog",
+      "width": 1440,
+      "pass": true
+    },
+    {
+      "page": "map",
+      "width": 1440,
+      "pass": true
+    },
+    {
+      "page": "file",
+      "width": 1440,
+      "pass": true
+    },
+    {
+      "page": "reader",
+      "width": 1440,
+      "pass": true
+    },
+    {
+      "page": "help",
+      "width": 1440,
+      "pass": true
+    },
+    {
+      "page": "account",
+      "width": 1440,
+      "pass": true
+    },
+    {
+      "scenario": "ready",
+      "pass": true
+    },
+    {
+      "scenario": "empty",
+      "pass": true
+    },
+    {
+      "scenario": "waiting",
+      "pass": true
+    },
+    {
+      "scenario": "streaming",
+      "pass": true
+    },
+    {
+      "scenario": "error",
+      "pass": true
+    },
+    {
+      "scenario": "recording",
+      "pass": true
+    },
+    {
+      "scenario": "voice-review",
+      "pass": true
+    },
+    {
+      "scenario": "results",
+      "pass": true
+    },
+    {
+      "scenario": "completed",
+      "pass": true
+    },
+    {
+      "scenario": "create-failure",
+      "pass": true
+    },
+    {
+      "scenario": "create-unknown",
+      "pass": true
+    },
+    {
+      "scenario": "reply-failure",
+      "pass": true
+    },
+    {
+      "scenario": "accept-unknown",
+      "pass": true
+    },
+    {
+      "scenario": "accept-failure",
+      "pass": true
+    },
+    {
+      "scenario": "independent-roots",
+      "pass": true
+    },
+    {
+      "interaction": "optimized settings/materials/history/voice",
+      "pass": true
+    },
+    {
+      "interaction": "single acceptance and read-only state",
+      "pass": true
+    },
+    {
+      "index": "18 pages, 15 states, links resolve",
+      "pass": true
+    }
+  ],
+  "sourceHashes": {
+    "prototype.js": "eaddf7bb5cae368da970449a848c220ff718a1f9c52c18ff67a91e4fc066a6bc",
+    "baseline-ui.js": "5ce65852e5dd2ac483b57eefd3e4be724e422f023b00031fabb8587cf6cc6258",
+    "interaction-completion.js": "d78f864a865e0cfa64f317fcdd51beac77042a1cb57b17d0741ff101843a9c79",
+    "interaction-completion.css": "9ca3e23e1f5ba7e138f2ec1bc421ded07c358785b6cb0ce625925e126cfab80d"
+  },
+  "productAcceptance": false
+}

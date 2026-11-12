@@ -44,7 +44,7 @@ syncCurrentComposer=function(panel){optimizedComposer(panel);const ctx=conversat
  form.insertAdjacentHTML('beforeend',`<div class="composer-meta"><span data-draft-count>${ctx.chatDraft.length}/1200</span><span>${ctx.pending?'等待回复…':page==='public'?'公共议事':page==='private'?'只与当前好汉交流':'只与当前承办交流'}</span></div>`);
  if(page==='chat'){
   $('.composer-context',panel)?.remove();
-  const count=$('[data-draft-count]',panel);if(count)actions.insertBefore(count,$('.composer-inline-voice',actions));
+  const count=$('[data-draft-count]',panel);if(count)count.remove();
   $('.composer-meta',panel)?.remove();
  }
  $('.composer-textarea',panel).maxLength=1200;
@@ -52,6 +52,7 @@ syncCurrentComposer=function(panel){optimizedComposer(panel);const ctx=conversat
  $$('.toolbar-actions button',panel).forEach(b=>{const terminal=!!(ctx.task?.complete||ctx.task?.cancelled);b.hidden=(page==='chat'&&b.getAttribute('aria-label')==='新对话')||(terminal&&['新对话','查看并验收'].includes(b.getAttribute('aria-label')));b.disabled=!!(ctx.pending||ctx.historyDeletingId||$('.inline-voice-status',panel));});
  if(page==='chat'){const status=$('.context-summary em',panel);if(status)status.textContent=ctx.task?.complete?'事项已完成':ctx.task?.cancelled?'事项已取消':ctx.task?.phase==='待验收'?'待验收':'进行中';}
  if(['waiting','streaming'].includes(state.baselineScenario)&&!ctx.pending){$$('.is-pending',panel).forEach(e=>e.remove());}
+ renderComposerMaterialActions(panel,locked);
  const menu=$('.composer-more',panel);menu?.setAttribute('aria-expanded','false');
  // Preserve actions and state, while the compact CSS positions toolbar right and voice before send.
  $('[aria-label="议事记录"]',panel)?.setAttribute('aria-expanded',String(!!ctx.historyOpen));
@@ -60,7 +61,7 @@ syncCurrentComposer=function(panel){optimizedComposer(panel);const ctx=conversat
  if(ctx.historyOpen)renderConversationHistory();
 };
 const completionMore=showMore;
-showMore=function(){completionMore();$('.composer-more-panel .composer-add-materials')?.remove();const more=$('.composer-more');if(more)more.setAttribute('aria-expanded',String(!!$('.composer-more-panel')));};
+showMore=function(){closeDiscussionTools($('.composer-more'));completionMore();$('.composer-more-panel .composer-add-materials')?.remove();const more=$('.composer-more');if(more)more.setAttribute('aria-expanded',String(!!$('.composer-more-panel')));};
 const optimizedSupplement=renderSupplement;
 renderSupplement=function(){optimizedSupplement();document.title=labels[page]+' · 界面优化基准（离线交互）';const note=$('.baseline-provenance');if(note)note.textContent='四阶段办事 · 2026-10-17 · 离线示例';
  $$('.workbench-account-action,.workbench-sidebar-account').forEach(e=>{e.disabled=false;e.dataset.prototypePage='account';});
@@ -166,7 +167,7 @@ function applyTaskFilters(){
  const rows=listedMatters(),query=(state.taskSearch||'').trim().toLowerCase();let visible=0;
  for(const card of $$('.task-card')){
   const row=rows.find(r=>r.key===card.dataset.matterKey),ctx=row?.ctx;
-  const match=!!ctx&&matchesMatterFilter(ctx,state.taskFilter)&&(!state.taskAbility||(ctx.task.requiredAbilities||[]).includes(state.taskAbility))&&(!query||[ctx.task.id,ctx.task.title,ctx.task.description].join(' ').toLowerCase().includes(query));
+  const match=!!ctx&&matchesMatterFilter(ctx,state.taskFilter)&&(!state.taskAgent||String(ctx.agent?.id??'')===state.taskAgent)&&(!query||[ctx.task.id,ctx.task.title,ctx.task.description].join(' ').toLowerCase().includes(query));
   card.hidden=!match;card.style.display=match?'':'none';if(match)visible++;
  }
  const empty=$('.baseline-empty');if(empty){empty.hidden=visible>0;empty.innerHTML=rows.length?'没有符合筛选条件的事项。'+button('清除筛选','complete-task-clear'):'暂无事项，点击右上方“提出需求”开始。';}
@@ -202,13 +203,19 @@ function renderInteractiveList(){
  }
  const tabs=$('.task-status-tabs');
  const statuses=[...visibleMatterStatuses,'异常/历史'];
+ if(state.taskFilter==='待确认承办')state.taskFilter='待承办'; // Preserve an existing saved status filter after the label change.
  if(['待开工（已点将）','筹划中','议事中','办理中','需处理','受阻','待澄清'].includes(state.taskFilter))state.taskFilter='进行中';
  if(['已取消','已归档','失败'].includes(state.taskFilter))state.taskFilter='异常/历史';
  if(state.taskFilter&&!statuses.includes(state.taskFilter))state.taskFilter='';
  if(tabs){tabs.setAttribute('aria-label','事项状态');tabs.innerHTML=statuses.map(name=>button(`${name} <span>${rows.filter(r=>matchesMatterFilter(r.ctx,name)).length}</span>`,'complete-production-status',`data-status="${name}" aria-pressed="${state.taskFilter===name}" class="${state.taskFilter===name?'active':''} ${name==='异常/历史'?'task-status-secondary':''}"`)).join('');}
  if(tabs){const old=$('.task-secondary-filters');if(old)old.remove();if(state.taskFilter==='异常/历史'){tabs.insertAdjacentHTML('afterend',`<div class="task-secondary-filters" aria-label="异常与历史分类"><span>分类</span>${button('待核对','complete-secondary-status',`data-kind="unknown" aria-pressed="${state.secondaryMatterFilter==='unknown'}"`)}${button('历史','complete-secondary-status',`data-kind="history" aria-pressed="${state.secondaryMatterFilter!=='unknown'}"`)}</div>`);}}
  const search=$('.task-search input');if(search){search.value=state.taskSearch||'';search.dataset.completeTaskSearch='true';}
- const ability=$('.task-search select');if(ability){const values=[...new Set(rows.flatMap(r=>r.ctx.task.requiredAbilities||[]))];if(state.taskAbility&&!values.includes(state.taskAbility))values.push(state.taskAbility);ability.innerHTML='<option value="">不拘本领</option>'+values.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');ability.value=state.taskAbility||'';ability.dataset.completeTaskAbility='true';}
+ const agentFilter=$('.task-search select');if(agentFilter){
+  const agents=new Map();for(const {ctx} of rows){if(ctx.agent?.id!=null)agents.set(String(ctx.agent.id),ctx.agent.name||String(ctx.agent.id));}
+  if(state.taskAgent&&!agents.has(state.taskAgent))state.taskAgent='';
+  agentFilter.innerHTML='<option value="">全部承接 Agent</option>'+[...agents].map(([id,name])=>`<option value="${esc(id)}">${esc(name)}</option>`).join('');
+  agentFilter.value=state.taskAgent||'';agentFilter.dataset.completeTaskAgent='true';agentFilter.setAttribute('aria-label','按承接 Agent 筛选');
+ }
 
  applyTaskFilters();
 }
@@ -236,6 +243,16 @@ function beginAcceptance(){
 }
 function operationDialog(){const op=state.operation;if(!op)return;finalDraft=[...op.outputs];dialog('验收进度',`<p role="status">${op.stage==='pending'?'正在核对原验收操作…':op.stage==='failed'?'验收未完成。原操作和成果已保留。':'验收状态未知。不重新提交验收。'}</p><small>原操作 ${esc(op.id)} · 冻结 ${op.outputs.length} 项成果</small><div class="mmd-attachments">${deliveryList()}</div>`,button('返回详情','complete-operation-detail')+button('查询原操作状态','complete-operation-status'));}
 function resolveOperation(){const op=state.operation;if(!op||state.task?.complete)return;if(state.simulation.accept==='ok'){op.stage='completed';state.final=[...op.outputs];state.task.complete=true;persist();const d=$('dialog[open]');if(d?.getAttribute('aria-label')==='验收进度'){d.close();if(page==='chat')renderChat();else go('detail');feedback('示例验收完成。');}else render();return;}op.stage=state.simulation.accept==='failed'?'failed':'unknown';if(page==='detail')renderDetail();if(page==='results')renderFormalResults();persist();const d=$('dialog[open]');if(d?.getAttribute('aria-label')==='验收进度'){d.close();operationDialog();}}
+function composerMaterialIcon(kind){const paths={camera:'M4 7h4l2-3h4l2 3h4v13H4ZM16 13a4 4 0 1 1-8 0 4 4 0 0 1 8 0',album:'M4 3h16v18H4ZM4 17l5-6 4 4 3-3 4 5M8 7h.01',files:'M8 3h7l5 5v13H4V3h4M14 3v6h6M8 14h8M8 17h6'};return `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[kind]}"></path></svg>`;}
+function renderComposerMaterialActions(panel,locked){
+ if(!panel)return;
+ const ctx=conversation();$('.composer-material-actions',panel)?.remove();$('.composer-import-status',panel)?.remove();
+ const attach=$('.composer-attach',panel),open=innerWidth<=720&&!!ctx.materialActionsOpen;
+ attach?.setAttribute('aria-expanded',String(open));attach?.setAttribute('aria-controls','composer-material-actions');
+ if(open){$('.composer-body',panel).insertAdjacentHTML('afterend',`<section id="composer-material-actions" class="composer-material-actions" aria-label="添加资料方式"><label ${locked||ctx.materialImportPending?'aria-disabled="true"':''}>${composerMaterialIcon('camera')}<span>拍照</span><input type="file" accept="image/*" capture="environment" data-composer-images="camera" aria-label="拍照" ${locked||ctx.materialImportPending?'disabled':''}></label><label ${locked||ctx.materialImportPending?'aria-disabled="true"':''}>${composerMaterialIcon('album')}<span>相册</span><input type="file" accept="image/*" multiple data-composer-images="album" aria-label="从相册选择" ${locked||ctx.materialImportPending?'disabled':''}></label>${button(composerMaterialIcon('files')+'<span>资料</span>','complete-material-library',locked||ctx.materialImportPending?'disabled':'')}</section>`);}
+ if(ctx.materialImportStatus)$('.composer-body',panel).insertAdjacentHTML('afterend',`<p class="composer-import-status" role="status">${esc(ctx.materialImportStatus)}</p>`);
+ if(ctx.materialImportPending){attach.disabled=true;$('.composer-send',panel).disabled=true;}
+}
 async function readPrototypeFiles(selected){
  const added=[];
  for(const f of selected){
@@ -246,11 +263,28 @@ async function readPrototypeFiles(selected){
  }
  return added;
 }
+async function importComposerImages(input){
+ const selected=[...input.files];if(!selected.length)return;
+ const ctx=conversation(),topic=ctx.topicId,currentPage=page;
+ if(ctx.pending||ctx.materialImportPending||ctx.task?.complete||ctx.task?.cancelled)return;
+ ctx.materialImportPending=true;ctx.materialImportStatus='正在保存到个人资料空间（本地原型）…';renderComposerMaterialActions($('.chat-panel'),true);
+ try{
+  const added=await readPrototypeFiles(selected);
+  // Save byte-backed files first, then reference only the unchanged original draft.
+  state.localFiles.push(...added);
+  const active=conversation()===ctx&&page===currentPage&&ctx.topicId===topic;
+  if(active){ctx.chatFiles=[...new Set([...ctx.chatFiles,...added.map(a=>a.id)])];ctx.materialImportStatus='已加入个人资料空间与当前输入框（仅本地原型）';}
+  if(!persist()){state.localFiles=state.localFiles.filter(a=>!added.includes(a));if(active)ctx.chatFiles=ctx.chatFiles.filter(id=>!added.some(a=>a.id===id));throw new Error('storage');}
+ }catch{ctx.materialImportStatus='保存失败，原有草稿和资料保留，请重新选择。';}
+ finally{ctx.materialImportPending=false;persist();if(conversation()===ctx&&page===currentPage&&ctx.topicId===topic)renderChat();}
+}
+document.addEventListener('change',event=>{if(event.target.matches('[data-composer-images]'))importComposerImages(event.target);});
+window.addEventListener('resize',()=>{if(!$('.material-picker-dialog[open]')&&$('.chat-panel'))renderComposerMaterialActions($('.chat-panel'),conversation().pending||!!(conversation().task?.complete||conversation().task?.cancelled));});
 async function addLocalFiles(selected){
  const files=[...selected],d=$('.material-picker-dialog'),current=picker;
  if(!files.length||!d||current.uploading)return;
- const input=$('[data-local-files]',d),status=$('[data-picker-upload-status]',d);
- current.uploading=true;input.disabled=true;current.uploadStatus='正在读取资料…';status.hidden=false;status.textContent=current.uploadStatus;
+ const inputs=$$('[data-local-files]',d),status=$('[data-picker-upload-status]',d);
+ current.uploading=true;inputs.forEach(input=>{input.disabled=true;});current.uploadStatus='正在读取资料…';status.hidden=false;status.textContent=current.uploadStatus;
  try{
   const added=await readPrototypeFiles(files);
   if(!d.isConnected||picker!==current)return;
@@ -258,7 +292,7 @@ async function addLocalFiles(selected){
   current.selected=added[0].id;current.preview=false;current.previewDismissed=false;
   current.uploadStatus='';persist();
  }catch{current.uploadStatus='读取失败，原有选择保留，请重试。';}
- finally{current.uploading=false;input.disabled=false;input.value='';if(d.isConnected&&picker===current)renderMaterialPicker();}
+ finally{current.uploading=false;inputs.forEach(input=>{input.disabled=false;input.value='';});if(d.isConnected&&picker===current)renderMaterialPicker();}
 }
 function renderFileDetail(){
  const root=$('.baseline-page'),a=asset(state.fileId||'ref-brief');if(!root||!a)return;const meta=state.fileMeta[a.id]||{};
@@ -298,6 +332,26 @@ function historySnapshot(ctx){
 function historyRows(ctx){
  const rows=[...(ctx.histories||[])];if(hasCurrentTopic(ctx)){const current=historySnapshot(ctx);return [current,...rows.filter(h=>h.id!==current.id)].sort((a,b)=>(Date.parse(b.updateTime)||0)-(Date.parse(a.updateTime)||0));}return rows;
 }
+// BUSINESS-NORMAL-20261027: reuse the existing per-topic snapshots, not a parallel history store.
+function startConversationTopic(ctx) {
+ if(page==='chat'||ctx.pending||ctx.historyDeletingId||ctx.task?.complete||ctx.task?.cancelled)return false;
+ ctx.histories=ctx.histories||[];
+ if(hasCurrentTopic(ctx)){const saved=historySnapshot(ctx);ctx.histories=ctx.histories.filter(h=>h.id!==saved.id);ctx.histories.push(saved);}
+ Object.assign(ctx,{topicId:'demo-topic-'+(++serial),topicTitle:'',topicUpdatedAt:new Date().toISOString(),
+  messages:[],outputs:[],delivery:[],chatDraft:'',chatFiles:[],quote:null,pending:false,historyOpen:false});
+ return true;
+}
+function selectConversationTopic(ctx,id) {
+ if(ctx.pending||ctx.historyDeletingId)return false;
+ const selected=ctx.histories?.find(h=>h.id===id);if(!selected)return false;
+ const active=hasCurrentTopic(ctx)?historySnapshot(ctx):null;
+ ctx.histories=ctx.histories.filter(h=>h.id!==id&&h.id!==active?.id);if(active)ctx.histories.push(active);
+ Object.assign(ctx,{topicId:selected.id,topicTitle:selected.title,topicUpdatedAt:selected.updateTime||null,
+  messages:structuredClone(selected.messages),outputs:structuredClone(selected.outputs),delivery:[...selected.delivery],
+  chatDraft:selected.chatDraft,chatFiles:[...selected.chatFiles],quote:selected.quote,historyOpen:false});
+ return true;
+}
+// End topic transition helpers.
 function renderConversationHistory(){
  const panel=$('.chat-panel'),ctx=conversation();if(!panel)return;$('.baseline-history')?.remove();
  const toggle=$('[data-action=complete-history]',panel);toggle?.setAttribute('aria-expanded',String(!!ctx.historyOpen));toggle?.setAttribute('aria-controls','prototype-topic-history');
@@ -357,13 +411,14 @@ document.addEventListener('click',event=>{
  if(action==='complete-secondary-status'){state.secondaryMatterFilter=t.dataset.kind;render();persist();return;}
  if(action==='complete-production-status'){state.taskFilter=state.taskFilter===t.dataset.status?'':t.dataset.status;render();return;}
  if(action==='complete-task-refresh'){render();feedback('已重读同一份离线事项，没有创建或修改。');return;}
- if(action==='complete-materials'){$('.composer-more-panel')?.remove();$('.composer-more')?.setAttribute('aria-expanded','false');openMaterials('chat');}
+ if(action==='complete-material-library'){ctx.materialActionsOpen=false;renderComposerMaterialActions($('.chat-panel'),ctx.pending||!!(ctx.task?.complete||ctx.task?.cancelled));persist();openMaterials('chat');return;}
+ if(action==='complete-materials'){$('.composer-more-panel')?.remove();$('.composer-more')?.setAttribute('aria-expanded','false');if(innerWidth<=720){ctx.materialActionsOpen=!ctx.materialActionsOpen;renderComposerMaterialActions($('.chat-panel'),ctx.pending||!!(ctx.task?.complete||ctx.task?.cancelled));}else openMaterials('chat');}
  if(action==='complete-go'){if(['detail','chat','results'].includes(t.dataset.page)&&!state.task){feedback('请先提出需求；或从页面与状态索引打开脱敏示例。');return;}if(t.dataset.page==='private'&&!state.privateAgentId){state.selectedAgent=state.selectedAgent||{id:'0',name:'宋江'};openPrivate();return;}go(t.dataset.page);}
  if(action==='complete-entries')openEntries();
  if(action==='complete-index')location.href='pages.html';
  if(action==='complete-overview-tab'){state.overviewTab=Number(t.dataset.tab);render();}
  if(action==='complete-task-group'){state.taskGroup=t.dataset.group;state.taskFilter='';render();}
- if(action==='complete-task-clear'){state.taskGroup='全部';state.taskFilter='';state.taskSearch='';state.taskAbility='';render();}
+ if(action==='complete-task-clear'){state.taskGroup='全部';state.taskFilter='';state.taskSearch='';state.taskAgent='';render();}
  if(action==='complete-workspace-filter'){state.workspaceFilter=t.dataset.filter;render();}
  if(action==='complete-create-status'){state.simulation.create='ok';t.closest('dialog').close();feedback('示例核对：未受理。原草稿保留，可显式提交。');}
  if(action==='complete-reply-status'){if(unifiedTask()){state.task.phase='待你补充';}state.simulation.reply='ok';ctx.error=null;ctx.pending=false;state.baselineScenario='ready';renderChat();feedback('示例核对：未受理；核对草稿后显式发送，不自动重发。');}
@@ -427,7 +482,7 @@ function renderCancellation(){
  $('.ordinary-cancellation',card)?.remove();
  if(state.task?.cancelled){card.insertAdjacentHTML('beforeend','<p role="status">事项已取消；历史指派与成果保留，不再继续办理。</p>');renderTerminalTextHistory(card);return;}
  if(!canCancelDemo()&&state.cancellation?.status!=='unknown')return;
- card.insertAdjacentHTML('beforeend',`<section class="ordinary-cancellation" aria-label="普通事项取消"><p>仅取消无资金事实、未实际开始的普通事项；已点将未开工也可申请，最终以服务端核验为准。历史指派与成果保留。</p>${button(state.cancellation?.status==='unknown'?'核对原取消结果':'取消未开工事项','complete-cancel','class="ordinary-cancel-action"')}${state.cancellation?.status==='unknown'?'<p role="status">结果尚未确认；只核对原事项，不重复提交取消。</p>':''}</section>`);
+ card.insertAdjacentHTML('beforeend',`<section class="ordinary-cancellation" aria-label="普通事项取消"><p>仅可取消未产生费用、尚未开始办理的事项。取消后保留历史记录和成果。</p>${button(state.cancellation?.status==='unknown'?'核对原取消结果':'取消未开工事项','complete-cancel','class="ordinary-cancel-action"')}${state.cancellation?.status==='unknown'?'<p role="status">结果尚未确认；只核对原事项，不重复提交取消。</p>':''}</section>`);
 }
 function renderFormalResults(){
  const root=supplementalRoot()||$('.formal-results-page');if(!root)return;
@@ -485,11 +540,11 @@ function handleSyncedAction(action,t){
 }
 
 // One continuous conversation. Local demo only, never API/Provider authority.
-const demoAgents=[['wuyong','吴用'],['0','宋江'],['1','公孙胜']];
-function demoDraftFields(){return {title:state.title,instruction:state.draft,inputs:[...state.draftFiles],agentId:state.draftAgent||'wuyong'};}
+const demoAgents=commissionAgents.map(a=>[a.id,a.name]);
+function demoDraftFields(){return {title:state.title,instruction:state.draft,inputs:[...state.draftFiles],agentId:state.draftAgent||commissionEligible()[0]?.id};}
 function demoDraftSaved(){return !!state.savedPrivateDraft&&JSON.stringify(state.savedPrivateDraft.fields)===JSON.stringify(demoDraftFields());}
 function saveDemoDraft(){state.savedPrivateDraft={fields:demoDraftFields(),revision:(state.savedPrivateDraft?.revision||0)+1};persist();renderDraftPage();}
-function demoAgentSelect(){return `<select aria-label="承办好汉" data-draft-agent>${demoAgents.map(([id,name])=>`<option value="${id}" ${(state.draftAgent||'wuyong')===id?'selected':''}>${name}</option>`).join('')}</select>`;}
+function demoAgentSelect(){return `<select aria-label="承办好汉" data-draft-agent>${demoAgents.map(([id,name])=>`<option value="${id}" ${(state.draftAgent||commissionEligible()[0]?.id)===id?'selected':''}>${name}</option>`).join('')}</select>`;}
 function unifiedTask(){return !!state.task?.unified;}
 function awaitingAssignment(){return !!state.task&&!state.agent&&!state.task.complete&&!state.task.cancelled;}
 function ensureUnifiedTask(){
@@ -500,15 +555,14 @@ function ensureUnifiedTask(){
  taskRecommendation();
 }
 function recommendTaskAgent(text){
- // Offline capability fixtures, not a live routing service.
- if(/画|图片|插画|设计/.test(text))return {id:'1',reason:'这项需求涉及创意与图像表达，推荐公孙胜。'};
- if(/协调|分工|统筹/.test(text))return {id:'0',reason:'这项需求涉及统筹协调，推荐宋江。'};
- return {id:'wuyong',reason:'这项需求适合先梳理目标、整理内容，推荐吴用。'};
+ const eligible=commissionEligible();
+ const a=eligible.find(a=>a.match&&new RegExp(a.match).test(text))||eligible[0];
+ return {id:a?.id,reason:'能力仅用于推荐，亦可手动选择其他候选。'};
 }
 function taskRecommendation(){
  const task=state.task;
- task.assignmentRecommendation||=recommendTaskAgent(task.description||task.title||'');
- if(!demoAgents.some(([id])=>id===task.assignmentCandidate))task.assignmentCandidate=task.assignmentRecommendation.id;
+ task.assignmentRecommendation=recommendTaskAgent(task.description||task.title||'');
+ if(!commissionEligible().some(a=>a.id===task.assignmentCandidate))task.assignmentCandidate=task.assignmentRecommendation.id;
  return task.assignmentRecommendation;
 }
 function assignmentSection(){
@@ -593,6 +647,7 @@ function sendUnifiedMessage(text,inputs=[],quote=null){
   feedback('执行工具尚未就绪，本次未受理。内容已保留，请稍后手动发送。');return;
  }
  if(!unifiedTask()||!state.agent||state.pending||acceptanceLocked()||state.task.complete||state.task.cancelled||(!text.trim()&&!inputs.length))return;
+ if(state.task.commissionWaiting){state.messages.push({role:'USER',text,files:[...inputs]});state.task.files=[...new Set([...state.task.files,...inputs])];state.chatDraft='';state.chatFiles=[];state.quote=null;persist();renderChat();renderCommissionProgress();return;}
  if(state.simulation.reply==='failed'){
   state.chatDraft=text;state.chatFiles=[...inputs];state.quote=quote;state.error='尚不能确认本条消息是否受理（模拟）。内容已保留，请先核对，不要重复发送。';state.task.phase='需核对';renderChat();persist();return;
  }
@@ -645,6 +700,7 @@ function matterDetailPresentation(){
  if(phase==='失败')return {label,tone:'warning',hint:'本次处理未成功，原需求和资料保留。进入议事查看原因，不自动重试。',action:'查看失败原因'};
  if(state.error||phase==='需核对')return {label,tone:'warning',hint:'尚不能确认上次处理结果。回原议事核对，草稿保留，不自动重发。',action:'回议事核对'};
  if(!state.agent)return {label,tone:'warning',hint:'事项已保存，尚未安排承办、未开始处理。确认后进入同一事项的议事。',action:'确认承办，进入议事'};
+ if(t.commissionWaiting)return {label,tone:'warning',hint:'已委派，等待调度与运行；尚未调用模型。',action:'进入原议事'};
  if(state.pending||['正在处理','办理中'].includes(phase))return {label,tone:'running',hint:'正在处理，进入原议事查看进展；不要重复提交需求。',action:'查看办理进展'};
  if(phase==='待你补充')return {label,tone:'warning',hint:'承办好汉需要补充信息，请在原议事中直接回复。',action:'补充信息，继续议事'};
  if(acceptanceReady())return {label,tone:'success',hint:'本轮固定成果已提交。查看并验收后完成事项；不满意可在原议事继续修改。',action:'继续议事'};
@@ -717,10 +773,10 @@ function refreshAllPageSurfaces(){
  document.body.dataset.uiRevision='all-pages-20261016';document.body.dataset.currentPage=page;
  const navFamily={home:'overview',tasks:'tasks',create:'tasks',detail:'tasks',chat:'tasks',results:'tasks',workspace:'treasure',file:'treasure',mine:'mine',agents:'mine',catalog:'mine',library:'mine',reader:'mine',messages:'mine',help:'mine',account:'mine',private:'mine',public:'overview',map:'overview'};
  $$('[data-workbench-tab]').forEach(e=>{e.toggleAttribute('aria-current',e.dataset.workbenchTab===navFamily[page]);if(e.hasAttribute('aria-current'))e.setAttribute('aria-current','page');});
- $$('.workbench-account-action,.workbench-sidebar-account').forEach(e=>{e.disabled=page!=='home';if(page==='home')e.dataset.prototypePage='account';else delete e.dataset.prototypePage;e.title=page==='home'?'个人中心：原型仅说明入口，设置页待核验':'请返回首页后进入个人中心';});
+ $$('.workbench-account-action,.workbench-sidebar-account').forEach(e=>{e.disabled=!['home','tasks','workspace','mine'].includes(page);if(!e.disabled)e.dataset.prototypePage='account';else delete e.dataset.prototypePage;e.title='个人中心';});
  const root=$('.baseline-page');
  if(page==='mine'){
-  const mine=$('.hall-mine-page');if(mine){mine.querySelectorAll('.baseline-extra').forEach(e=>e.remove());const grid=$('.mine-grid',mine);if(grid){const entries=[['agents','好汉名册','查看好汉本领与在线状态','account-circle-outline'],['library','典籍阁','阅读典籍、案卷与个人进度','notebook'],['messages','消息','查看需要你处理的事项','bell-outline'],['map','厅中实景','进入梁山场景与地图','map-marker-outline'],['account','个人中心','返回首页后进入个人中心','account-circle-outline']];grid.innerHTML=entries.map(([to,title,desc,icon])=>`<button type="button" data-action="complete-go" data-page="${to}" ${to==='account'?'disabled aria-disabled="true"':''}><i class="var-icon var-icon--set var-icon-${icon}" aria-hidden="true"></i><span><strong>${title}</strong><small>${desc}</small></span></button>`).join('');}scoped(mine,'data-v-2ccfdada');mine.insertAdjacentHTML('beforeend',`<footer class="all-mine-links">${button('使用帮助','complete-go','data-page="help"')}${button('全部页面索引','complete-index')}</footer>`);}
+  const mine=$('.hall-mine-page');if(mine){mine.querySelectorAll('.baseline-extra').forEach(e=>e.remove());const grid=$('.mine-grid',mine);if(grid){const entries=[['agents','好汉名册','查看好汉本领与在线状态','account-circle-outline'],['library','典籍阁','阅读典籍、案卷与个人进度','notebook'],['messages','消息','查看需要你处理的事项','bell-outline'],['map','厅中实景','进入梁山场景与地图','map-marker-outline'],['account','个人中心','钱袋、资料与账号安全','account-circle-outline']];grid.innerHTML=entries.map(([to,title,desc,icon])=>`<button type="button" data-action="complete-go" data-page="${to}" ><i class="var-icon var-icon--set var-icon-${icon}" aria-hidden="true"></i><span><strong>${title}</strong><small>${desc}</small></span></button>`).join('');}scoped(mine,'data-v-2ccfdada');mine.insertAdjacentHTML('beforeend',`<footer class="all-mine-links">${button('使用帮助','complete-go','data-page="help"')}${button('全部页面索引','complete-index')}</footer>`);}
  }
  if(page==='help'&&root){
   // Guidance keeps navigation as a visible, non-interactive reference.
@@ -743,7 +799,12 @@ function handleAllPageAction(action,t){
  if(action==='complete-edit-requirement'){openMatterRequirementEditor(t.dataset.field);return true;}
  if(action==='complete-save-requirement'){saveMatterRequirementEditor(t);return true;}
  if(action==='complete-file-version-submit'){saveFileVersion(t);return true;}
- if(action==='complete-pdf-page'){const a=asset(t.dataset.id),n=Number(t.dataset.page);if(!a||n<1||n>a.pages)return true;state.pdfPages||={};state.pdfPages[a.id]=n;const root=t.closest('.pdf-document'),wrapper=document.createElement('div');wrapper.innerHTML=pdfPreview(a);const region=wrapper.firstElementChild;root.replaceWith(region);const next=[...region.querySelectorAll('button')].find(e=>e.textContent===t.textContent&&!e.disabled)||region.querySelector('button:not(:disabled)');next?.focus();persist();return true;}
+ if(action==='complete-pdf-page'){const a=asset(t.dataset.id),n=Number(t.dataset.page);if(!a||n<1||n>a.pages)return true;state.pdfPages||={};state.pdfPages[a.id]=n;const root=t.closest('.pdf-document'),wrapper=document.createElement('div');wrapper.innerHTML=pdfPreview(a);const region=wrapper.firstElementChild;
+  // Redrawing reserves page geometry: hiding the page must not remove its scrollbar.
+  root.setAttribute('aria-busy','true');root.style.position='relative';const oldPage=root.querySelector('.pdf-text-page');if(oldPage)oldPage.style.visibility='hidden';root.insertAdjacentHTML('afterbegin','<p role="status" style="position:absolute;top:0;left:0;margin:0">正在读取 PDF…</p>');
+  requestAnimationFrame(()=>{if(!root.isConnected)return;root.replaceWith(region);const next=[...region.querySelectorAll('button')].find(e=>e.textContent===t.textContent&&!e.disabled)||region.querySelector('button:not(:disabled)');next?.focus();});persist();return true;}
+ if(action==='complete-account-signout'){dialog('账号安全操作', '<p>此处为离线样式示例，不执行真实退出。生产版沿用现有会话退出与确认流程。</p>',button('返回个人中心','close-dialog'));return true;}
+ if(action==='complete-wallet'){dialog('钱袋 · 文',`<p>可用 <strong>3499文</strong> · 已预占 <strong>0文</strong></p><p>预占中的文暂不能用于其他事项；验收扣除，取消退回。</p><h3>收支记录</h3><p>内测赠送 +3500文 · 事项扣款 −1文（离线示例）</p><p>首次加载：正在核对钱袋…；无记录：暂无收支记录；读取失败：显示错误并提供重试，不显示假余额。</p><p>钱袋为个人中心常规入口，不放在开发预览下；生产数据及开放状态以服务端为准。</p>`,button('返回个人中心','close-dialog'));return true;}
  if(action==='complete-catalog-profile'){dialog(t.dataset.name+' · 本领示例',`<p>${esc(t.dataset.ability)}</p><p>离线布局示例，不表示当前账号已拥有、安装或授权此Agent。</p>`,button('返回名册','close-dialog'));return true;}
 
  if(action==='complete-workspace-stale-demo'){dialog('确认信息已过期','<p>文件或关联情况已变化，请查看更新后的信息再确认。</p><p>旧确认已失效；本次没有回收文件。</p>',button('返回文件管理','close-dialog'));return true;}
@@ -772,7 +833,7 @@ function handleAllPageAction(action,t){
 document.addEventListener('change',e=>{if(e.target.matches('[data-library-source]')){state.librarySource=e.target.value;persist();}if(e.target.matches('[data-workspace-upload]')){const f=e.target.files?.[0];$('[data-action=complete-upload-confirm]').disabled=!f;$('[data-upload-status]').textContent=f?f.name:'尚未选择文件';}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('dialog[open]')&&!['chat','private'].includes(page)){const back=$('.production-page-header [data-action=complete-page-back]');if(back){e.preventDefault();back.click();}}});
 
-document.addEventListener('change',e=>{if(e.target.matches('[data-complete-task-ability]')){state.taskAbility=e.target.value;applyTaskFilters();persist();}});
+document.addEventListener('change',e=>{if(e.target.matches('[data-complete-task-agent]')){state.taskAgent=e.target.value;applyTaskFilters();persist();}});
 document.addEventListener('keydown',e=>{if(['Enter',' '].includes(e.key)&&e.target.matches('.task-card[data-matter-key]')){e.preventDefault();openListedMatter(e.target.dataset.matterKey);}});
 
 document.addEventListener('change',e=>{if(e.target.matches('[data-workspace-version]')){const id=state.fileId||'ref-brief',meta=state.fileMeta[id]||(state.fileMeta[id]={});meta.demoVersion=e.target.value;render();}});

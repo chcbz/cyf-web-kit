@@ -1,0 +1,145 @@
+/* Action shape follows meaning. Explicit save/install/accept labels remain intact. */
+body[data-ui-revision] .mmd button.semantic-action {
+ display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:44px;
+ padding:6px 8px; border:1px solid transparent; border-radius:7px;
+ background:transparent; color:var(--hall-brand,#923f30); box-shadow:none;
+ font:inherit; font-size:13px; line-height:1.5; white-space:nowrap; cursor:pointer;
+}
+body[data-ui-revision] .mmd button.semantic-action svg { flex:none; width:16px; height:16px; }
+body[data-ui-revision] .mmd button.semantic-action:hover:not(:disabled) { background:var(--hall-surface-brand,#f6eee8); border-color:transparent; color:var(--hall-brand-hover,#793326); }
+body[data-ui-revision] .mmd button.semantic-action:focus-visible { outline:2px solid var(--hall-brand,#923f30); outline-offset:3px; background:var(--hall-surface-brand,#f6eee8); }
+body[data-ui-revision] .mmd button.semantic-action:disabled { opacity:.55; cursor:default; }
+.commission-detail-setting { gap:12px; }
+.commission-detail-setting>span:first-child { flex:1; min-width:0; font-weight:400; line-height:1.65; }
+.commission-switch-group { display:inline-flex; align-items:center; gap:8px; flex-shrink:0; }
+.commission-switch-status { color:var(--hall-text-muted,#68716b); font-size:12px; white-space:nowrap; }
+body[data-ui-revision] .mmd .commission-detail-setting button.commission-switch {
+ display:inline-flex; justify-content:center; align-items:center; flex-shrink:0;
+ box-sizing:border-box; width:52px; height:44px; min-height:44px; min-width:52px;
+ margin:0; padding:0; background:transparent; border:0; border-radius:8px; box-shadow:none; cursor:pointer;
+}
+body[data-ui-revision] .mmd .commission-detail-setting button.commission-switch:hover { background:transparent; }
+.commission-switch .commission-switch-track { display:block; position:relative; width:44px; height:26px; box-sizing:border-box; border:1px solid #929a91; border-radius:99px; background:#a8afa5; transition:background .16s; }
+.commission-switch .commission-switch-thumb { position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#fffefa; box-shadow:0 1px 3px #242e2b30; transition:transform .16s; }
+.commission-switch[aria-checked="true"] .commission-switch-track { background:#923f30; border-color:#923f30; }
+.commission-switch[aria-checked="true"] .commission-switch-thumb { transform:translateX(18px); }
+body[data-ui-revision] .mmd .commission-detail-setting button.commission-switch:focus-visible { outline:2px solid #923f30; outline-offset:2px; }
+body[data-ui-revision] .mmd .commission-detail-setting button.commission-switch:disabled { opacity:.65; cursor:default; }
+.commission-switch[aria-busy="true"] .commission-switch-thumb::after { content:""; position:absolute; inset:4px; border:1px solid #ccd2c5; border-top-color:#923f30; border-radius:50%; animation:commission-saving .8s linear infinite; }
+.commission-setting-result { display:flex; align-items:center; flex-wrap:wrap; gap:4px 8px; color:#68716b; font-size:12px; line-height:1.65; }
+.commission-setting-result:empty { display:none; }
+.commission-setting-result.is-error { color:#a13f35; }
+.commission-readonly { text-align:right; max-width:45%; line-height:1.6; }
+@keyframes commission-saving { to { transform:rotate(360deg); } }
+@media(max-width:360px) { .commission-detail-setting { gap:8px; } .commission-switch-group { gap:4px; } }
+@media(prefers-reduced-motion:reduce) { .commission-switch-track,.commission-switch-thumb { transition:none; } .commission-switch[aria-busy="true"] .commission-switch-thumb::after { animation:none; } }
+
+/* Whole-prototype semantic controls. Native state/events and primary hierarchy remain intact. */
+body[data-ui-revision] button.semantic-control { display:inline-flex; align-items:center; justify-content:center; gap:6px; font:inherit; font-size:13px; line-height:1.5; min-height:44px; box-sizing:border-box; }
+body[data-ui-revision] button.semantic-control>svg { width:16px; height:16px; flex:none; vertical-align:middle; }
+body[data-ui-revision] button.semantic-control:focus-visible { outline:2px solid var(--hall-brand,#923f30); outline-offset:3px; }
+body[data-ui-revision] button.semantic-control:is(.semantic-light,.semantic-link,.semantic-back) { border:1px solid transparent; background:transparent; color:var(--hall-brand,#923f30); border-radius:7px; box-shadow:none; padding:6px 8px; }
+body[data-ui-revision] button.semantic-control:is(.semantic-light,.semantic-link,.semantic-back):hover:not(:disabled) { color:var(--hall-brand-hover,#793326); background:var(--hall-surface-brand,#f6eee8); border-color:transparent; }
+body[data-ui-revision] button.semantic-control.semantic-link { white-space:nowrap; flex-shrink:0; }
+body[data-ui-revision] button.semantic-control.semantic-back { color:var(--hall-text-muted,#68716b); }
+body[data-ui-revision] button.semantic-control.semantic-tool { min-width:44px; width:44px; height:44px; padding:0; border:1px solid transparent; border-radius:8px; background:transparent; color:var(--hall-text-muted,#68716b); box-shadow:none; flex-shrink:0; }
+body[data-ui-revision] button.semantic-control.semantic-tool:hover:not(:disabled) { background:var(--hall-surface-subtle,#f3f3ed); color:var(--hall-text,#242e2b); }
+body[data-ui-revision] button.semantic-control.semantic-filter { min-height:44px; border:1px solid transparent; border-radius:99px; padding:7px 12px; background:transparent; color:var(--hall-text-muted,#68716b); box-shadow:none; white-space:nowrap; flex-shrink:0; }
+body[data-ui-revision] button.semantic-control.semantic-filter:is([aria-pressed="true"],[aria-selected="true"],.active) { color:var(--hall-brand,#923f30); background:var(--hall-surface-brand,#f6eee8); border-color:#e5cfc6; font-weight:600; }
+body[data-ui-revision] button.semantic-control.semantic-filter:hover:not(:disabled) { background:var(--hall-surface-subtle,#f3f3ed); }
+body[data-ui-revision] button.semantic-control.semantic-filter:is([aria-pressed="true"],[aria-selected="true"])::before { content:""; width:5px; height:5px; border-radius:50%; background:currentColor; flex:none; }
+body[data-ui-revision] button.semantic-control.semantic-danger { color:var(--hall-danger,#a13f35); border:1px solid transparent; background:transparent; border-radius:7px; padding:6px 10px; }
+body[data-ui-revision] button.semantic-control.semantic-danger:hover:not(:disabled) { background:#f9eeea; }
+body[data-ui-revision] button.semantic-control.semantic-commit { gap:7px; }
+body[data-ui-revision] button.semantic-control.semantic-commit:is(.primary,.mmd-primary,.treasure-primary,.complete-button,.note-save) { color:#fffefa; background:#923f30; border-color:#923f30; }
+body[data-ui-revision] button.semantic-control.semantic-commit:is(.primary,.mmd-primary,.treasure-primary,.complete-button,.note-save):hover:not(:disabled) { background:#793326; color:#fffefa; }
+body[data-ui-revision] button.semantic-control.semantic-card { display:flex; justify-content:flex-start; gap:12px; text-align:left; min-width:0; }
+body[data-ui-revision] button.semantic-control.semantic-card>svg { width:22px; height:22px; color:#923f30; }
+body[data-ui-revision] button.semantic-control.semantic-card>span { min-width:0; }
+body[data-ui-revision] button.semantic-control.semantic-menu { display:flex; justify-content:flex-start; gap:10px; min-width:0; width:100%; padding:10px 12px; border:0; border-radius:8px; background:transparent; color:#242e2b; }
+body[data-ui-revision] button.semantic-control.semantic-menu:hover:not(:disabled) { background:#f6eee8; color:#923f30; }
+body[data-ui-revision] button.semantic-control.semantic-scene { gap:7px; }
+body[data-ui-revision] button.semantic-control:disabled { cursor:default; opacity:.55; }
+body[data-ui-revision] .semantic-filter-group { gap:6px; }
+body[data-ui-revision] .overview-item>.semantic-link { align-self:center; }
+body[data-ui-revision] .all-mine-links { display:flex; gap:8px; flex-wrap:wrap; }
+body[data-ui-revision] .all-account-options button.semantic-card { flex-wrap:wrap; min-height:60px; }
+body[data-ui-revision] .all-account-options button.semantic-card small { flex-basis:100%; }
+body[data-ui-revision] .all-account-options button.semantic-card svg { color:#68716b; }
+body[data-ui-revision] summary.semantic-disclosure { min-height:44px; box-sizing:border-box; cursor:pointer; }
+body[data-ui-revision] summary.semantic-disclosure:focus-visible { outline:2px solid #923f30; outline-offset:3px; border-radius:5px; }
+body[data-ui-revision] .semantic-setting { display:flex; align-items:center; gap:12px; min-height:44px; cursor:pointer; }
+body[data-ui-revision] input.semantic-switch-input { appearance:none; -webkit-appearance:none; display:inline-block; flex:none; width:44px; height:26px; min-height:26px; margin:0; padding:0; box-sizing:border-box; position:relative; border:1px solid #929a91; border-radius:99px; background:#a8afa5; vertical-align:middle; cursor:pointer; transition:background .16s; }
+body[data-ui-revision] input.semantic-switch-input::before { content:""; position:absolute; width:18px; height:18px; top:3px; left:3px; border-radius:50%; background:#fffefa; box-shadow:0 1px 3px #242e2b30; transition:transform .16s; }
+body[data-ui-revision] input.semantic-switch-input:checked { background:#923f30; border-color:#923f30; }
+body[data-ui-revision] input.semantic-switch-input:checked::before { transform:translateX(18px); }
+body[data-ui-revision] input.semantic-switch-input:focus-visible { outline:2px solid #923f30; outline-offset:4px; }
+body[data-ui-revision] input.semantic-switch-input:disabled { opacity:.55; cursor:default; }
+@media(max-width:720px) {
+ body[data-ui-revision] button.semantic-control.semantic-light { white-space:normal; }
+ body[data-ui-revision] .reader-footer { gap:4px 8px; flex-wrap:wrap; }
+ body[data-ui-revision] .reader-footer button.semantic-control { padding:6px; }
+ body[data-ui-revision] .all-scene-tools button.semantic-control.semantic-scene { gap:4px; }
+}
+@media(prefers-reduced-motion:reduce) { body[data-ui-revision] input.semantic-switch-input,body[data-ui-revision] input.semantic-switch-input::before { transition:none; } }
+/* Explicit scoped resets beat snapshot/component square-button declarations. */
+body[data-ui-revision] button.semantic-control:is(.semantic-light,.semantic-link,.semantic-back) { border-color:transparent!important; background:transparent!important; box-shadow:none!important; }
+body[data-ui-revision] button.semantic-control:is(.semantic-light,.semantic-link) { color:var(--hall-brand,#923f30)!important; }
+body[data-ui-revision] button.semantic-control:is(.semantic-light,.semantic-link,.semantic-back):hover:not(:disabled) { background:var(--hall-surface-brand,#f6eee8)!important; }
+body[data-ui-revision] button.semantic-control.semantic-nav>svg { width:20px; height:20px; }
+body[data-ui-revision] .workbench-mobile-nav button.semantic-control.semantic-nav { color:var(--hall-text-muted,#68716b); }
+body[data-ui-revision] .workbench-mobile-nav button.semantic-control.semantic-nav[aria-current="page"] { color:var(--hall-brand,#923f30); }
+
+/* Snapshot status bars have component-specific resets; semantic pills override only their appearance. */
+body[data-ui-revision] button.semantic-control.semantic-filter { border-radius:99px!important; border-color:transparent!important; background:transparent!important; color:var(--hall-text-muted,#68716b)!important; box-shadow:none!important; }
+body[data-ui-revision] button.semantic-control.semantic-filter:hover:not(:disabled) { background:var(--hall-surface-subtle,#f3f3ed)!important; }
+body[data-ui-revision] button.semantic-control.semantic-filter:is([aria-pressed="true"],[aria-selected="true"],.active) { background:var(--hall-surface-brand,#f6eee8)!important; color:var(--hall-brand,#923f30)!important; border-color:#e5cfc6!important; }
+
+/* Familiar actions are icon-only, not tiny text buttons. Labels remain available to AT/tooltips. */
+body[data-ui-revision] button.semantic-control.semantic-icon-only {
+ position:relative; flex:none; width:44px!important; min-width:44px!important; height:44px!important;
+ min-height:44px!important; padding:0!important; gap:0!important; border-radius:8px; white-space:nowrap;
+}
+body[data-ui-revision] button.semantic-icon-only>.semantic-control-label {
+ position:absolute!important; width:1px!important; height:1px!important; padding:0!important; margin:-1px!important;
+ overflow:hidden!important; clip:rect(0,0,0,0)!important; clip-path:inset(50%)!important; white-space:nowrap!important; border:0!important;
+}
+body[data-ui-revision] button.semantic-control.semantic-icon-only>svg { width:20px; height:20px; }
+
+/* Text and a generic direction chevron are alternatives, not redundant companions. */
+body[data-ui-revision] button.semantic-control.semantic-text-only { gap:0; }
+body[data-ui-revision] .overview-item>button.semantic-control.semantic-row-link { align-self:center; margin-left:auto; }
+
+/* Standalone action areas need a button surface, not a floating line of text.
+   Breadcrumbs, heading links and in-row chevrons deliberately stay lightweight. */
+body[data-ui-revision] :is(.panel-toolbar,.matter-primary-actions,.treasure-actions,.dialog-actions)>button.semantic-control.semantic-link.semantic-text-only {
+ padding:8px 16px; border:1px solid #e5cfc6; border-color:#e5cfc6!important; border-radius:7px;
+ background:var(--hall-surface-brand,#f6eee8)!important; color:var(--hall-brand,#923f30)!important;
+}
+body[data-ui-revision] :is(.panel-toolbar,.matter-primary-actions,.treasure-actions,.dialog-actions)>button.semantic-control.semantic-link.semantic-text-only:hover:not(:disabled) {
+ background:#eee1d9!important; border-color:#d5b8aa!important; color:var(--hall-brand-hover,#793326)!important;
+}
+/* Navigation-based primary actions keep the same hierarchy as submit buttons. */
+body[data-ui-revision] button.semantic-control.semantic-link.semantic-text-only:is(.primary,.mmd-primary,.treasure-primary,.complete-button) {
+ background:var(--hall-brand,#923f30)!important; color:var(--hall-surface,#fffefa)!important; border-color:var(--hall-brand,#923f30)!important;
+}
+body[data-ui-revision] button.semantic-control.semantic-link.semantic-text-only:is(.primary,.mmd-primary,.treasure-primary,.complete-button):hover:not(:disabled) {
+ background:var(--hall-brand-hover,#793326)!important; color:var(--hall-surface,#fffefa)!important; border-color:var(--hall-brand-hover,#793326)!important;
+}
+/* Version select shrinks beside its download tool instead of taking a whole row. */
+body[data-ui-revision] .all-file-detail .treasure-version-tools {
+ display:flex; align-items:center; flex-wrap:nowrap; gap:8px; min-width:0;
+}
+body[data-ui-revision] .all-file-detail .treasure-version-tools label {
+ display:flex; align-items:center; flex:1 1 0; width:auto; min-width:0; margin:0; gap:10px;
+}
+body[data-ui-revision] .all-file-detail .treasure-version-tools select {
+ flex:1 1 0; width:0; min-width:0; max-width:100%;
+}
+
+body[data-ui-revision] .all-file-detail .treasure-version-tools>button { align-self:center; }
+
+/* Keep the setting control group at the right edge even under the full page cascade. */
+.commission-detail-setting>.commission-switch-group { margin-left:auto; }
+body[data-ui-revision] .material-picker-dialog .material-upload-button { width:44px; min-width:44px; height:44px; min-height:44px; padding:0; }
+.material-upload-button>svg { flex:none; width:20px; height:20px; }

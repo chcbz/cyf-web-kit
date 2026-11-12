@@ -1,0 +1,556 @@
+{
+  "baseline_id": "juyiting-ui-baseline-20261006",
+  "saved_on": "2026-10-06",
+  "timezone": "Asia/Shanghai",
+  "scope": "documentation-only; current source candidate, not a latest-live-site attestation",
+  "web_commit": "fe6d4d542079bdf07f5b5fcf2ff96e7f217be33e",
+  "web_tree": "a8e42ded0fbec8a26d6e4aa9f719473cc165e524",
+  "discussion_ui_commit": "446cfbe96aa6fa11759d93682ed0d3247d214d77",
+  "product_dom_capture": "2026-10-04",
+  "product_dom_source": "shared/baseline-source.json",
+  "prototype_engine_origin": "juyiting-multimedia-deliberation/prototypes/adjusted (2026-10-04), copied and updated without altering history",
+  "source_records": [
+    {
+      "path": "src/components/world/JuyiHall.vue",
+      "sha256": "69badc8071495badf61c6f3f4dcfe73bc1eb0658d80c740dfec83302e749246d"
+    },
+    {
+      "path": "src/components/juyiting/BountyDiscussionPanel.vue",
+      "sha256": "235d9fb4d944e9a1e56bd1574e73371e63721d9295333188e5061f5dbc34fe30"
+    },
+    {
+      "path": "src/components/juyiting/PrivateDiscussionPanel.vue",
+      "sha256": "2b6181e3f094dfd8ec290b71bd0fa3d3f32e1516ccf8edd5b29bac77f7b2e5dc"
+    },
+    {
+      "path": "src/components/juyiting/PublicDiscussionPanel.vue",
+      "sha256": "64dbb04c65de8091432c8ecae6bdef035f5f53acede977c8299b2875c13d8be4"
+    },
+    {
+      "path": "src/components/juyiting/ChatPanel.vue",
+      "sha256": "49691d48ed683969696c49189699eda2f215a5954fc6f4bc87e6ba2902dfac09"
+    },
+    {
+      "path": "src/components/juyiting/HallChatComposer.vue",
+      "sha256": "ca4443a8d7ebba17b490b8dbca254dd779078cad98992a493c7a60bd33ec2b4c"
+    },
+    {
+      "path": "src/components/juyiting/HallVoiceControls.vue",
+      "sha256": "57bf5a5df80face559e3eead604f2e4b9b2b52d05e1ed86dfbdc6af1a080ec41"
+    },
+    {
+      "path": "src/components/juyiting/HallMinePage.vue",
+      "sha256": "0c5417c0355c07e12f554a9eec820d38aacc0dd330da10e0e4b34ce0f6b30f2f"
+    },
+    {
+      "path": "src/components/juyiting/HallOverview.vue",
+      "sha256": "2c3ece40035aec5385f68daea2fe009e72bcfa88eb38fb6b5c2f8b3b634ba450"
+    },
+    {
+      "path": "src/components/juyiting/AgentPanel.vue",
+      "sha256": "d98b22e54da2a2fa4d64d862b4e395b4957df6348ee8e5a8fe10f64336b0002c"
+    },
+    {
+      "path": "src/components/juyiting/LibraryPanel.vue",
+      "sha256": "a886eb895a3d8f99e24917690348afbb062b0439c19456579a8379ba7c3f2249"
+    },
+    {
+      "path": "src/components/juyiting/PersonaCatalogPanel.vue",
+      "sha256": "96dc9ad67cbdbda133a6882019a6b86afa412637ed84a2197155848f3b5a7134"
+    },
+    {
+      "path": "src/components/juyiting/HallConversationHistory.vue",
+      "sha256": "f2225b8be208ae44c39f7302e3a5c081af8f8d1c03b31aeace465fa9cbe9fbfe"
+    }
+  ],
+  "fidelity": "shell/core pages: historical sanitized DOM plus source-aligned chat delta; supplemental pages: source-informed structural fixtures, not pixel-verified captures",
+  "production_run_for_this_doc": null,
+  "browser_visual_acceptance": "Owned Chromium local prototype layout/screenshots, 1440/390/320; not live site or real device",
+  "business_network": "CSP connect-src none; no business API calls",
+  "prototype_proposals": [
+    {
+      "date": "2026-10-06",
+      "scope": "home overview view tabs only",
+      "change": "Replace red underline with light-tinted rounded selected state; preserve interactions and keyboard focus",
+      "implementation": "prototype/baseline-ui.css only; product source unchanged",
+      "status": "prototype-only proposal, not deployed"
+    },
+    {
+      "date": "2026-10-06",
+      "scope": "overview/library/case/treasure view tabs; not action buttons",
+      "change": "Shared tinted capsule CSS, scoped to four existing view-switch groups",
+      "implementation_commit": "c897faca9c6246185b38d72ed1898ecebc307ad5",
+      "status": "implemented on remote develop; cloud verification tracked separately; not deployed"
+    },
+    {
+      "date": "2026-10-07",
+      "scope": "chat/private/public toolbar and single composer",
+      "change": "Right-aligned compact topic icons; direct attachment after plus; icon-only mic before send; remove duplicate material menu entry",
+      "status": "offline prototype proposal only; no Web/API change or deployment"
+    },
+    {
+      "date": "2026-10-07",
+      "scope": "chat/private/public action icons",
+      "change": "20px SVG, 1.8px stroke, 38px hit area for all seven controls; plus rendered as SVG",
+      "status": "offline prototype only; no Web/API source or deployment"
+    }
+  ],
+  "interaction_revision": "style-audit-20261016",
+  "canonical_entry": "prototype/index.html",
+  "page_index": "prototype/pages.html",
+  "interaction_guide": "interaction-guide-20261007.md",
+  "interaction_scope": "Offline target interactions only; R01 remains not implemented; no source build/deployment",
+  "historical_source_manifest": "checks-history/baseline-source-before-completion-20261007.json",
+  "interaction_verification": {
+    "chromium_report": "icon-consistency-checks-20261007.json",
+    "document_report": "prototype-checks.json",
+    "checks": 16,
+    "layouts": 11,
+    "document_checks": 72,
+    "source_hashes": {
+      "interaction-completion.js": "d78f864a865e0cfa64f317fcdd51beac77042a1cb57b17d0741ff101843a9c79",
+      "interaction-completion.css": "9ca3e23e1f5ba7e138f2ec1bc421ded07c358785b6cb0ce625925e126cfab80d"
+    },
+    "previous_full_browser_report": "browser-checks-20261007.json",
+    "previous_full_browser_revision": "compact-chat-20261007",
+    "product_accepted": false
+  },
+  "ui_sync": {
+    "checked_on": "2026-10-13",
+    "web_commit": "cb730681570688e0051b5cd79737a3c004817881",
+    "web_tree": "6e4620d9c55600f4f4376c4964c839d8cccdc9d0",
+    "scope": "Cancellation spacing/confirmation/unknown, terminal history reload actions, dedicated formal results without panel workspace link, Runtime v1 onboarding; agent actions checked as already aligned; the old inline requirement form replaced with the standalone HallDraftEditor layout. Not a whole-site pixel snapshot or live attestation. Standalone requirement page now uses the HallDraftEditor form and local private-draft save/confirmation, not the old inline task-board form. Task toolbar now matches the compact search/ability/44px refresh row without inline create controls.",
+    "source_records": [
+      {
+        "path": "src/components/juyiting/BountyPanel.vue",
+        "sha256": "3271e4f6635bd2caa795b19c66fc485b58b3ef158dd3210eab6f0da1571736b2"
+      },
+      {
+        "path": "src/components/world/JuyiHall.vue",
+        "sha256": "e8f4f383a353c97477c9830ce1671a5cd1929cb9e8aa1ab85c2d844e05dbeb07"
+      },
+      {
+        "path": "src/components/juyiting/PersonaCatalogPanel.vue",
+        "sha256": "bc318fb83facf1f281b6d817289c63e43ce9a69439a3e6f9f050564873b02204"
+      },
+      {
+        "path": "src/components/juyiting/AgentPanel.vue",
+        "sha256": "ae0c35461c121cb230a88d37a72b77c490c74498f3cbc9afe0c8f7f71b2f49c7"
+      },
+      {
+        "path": "src/composables/juyiting/useHallOrdinaryCancellation.js",
+        "sha256": "e5a98f1ed03d87808b9587097891249719828c66a8818f6e6f9c877bdcbe99db"
+      },
+      {
+        "path": "src/components/juyiting/HallDraftEditor.vue",
+        "sha256": "d999650d8ce8c4db09e9f9698de0ebaaa0934d999fe6ae847bd62be0cb6d93ea"
+      }
+    ],
+    "evidence": "../evidence/ui-sync-20261013",
+    "historical_base": "The original 2026-10-06 fields above remain unchanged for the unrefreshed shell/assets."
+  },
+  "ui_simplification": {
+    "date": "2026-10-13",
+    "type": "offline design proposal, not product-source synchronization",
+    "base": "ui_sync plus prior uncommitted prototype",
+    "root_commit": "77bd860c3660763911dc79bce7a3278420a5e2b2",
+    "scope": [
+      "home information hierarchy",
+      "task status grouping and intersected search",
+      "detail state-based primary action"
+    ],
+    "evidence": "../evidence/ui-simplify-20261013",
+    "productCodeChanged": false,
+    "deployed": false
+  },
+  "ui_feedback": {
+    "date": "2026-10-13",
+    "root_commit": "5db58c2d17dfbab868f6e550f84d6a4ed8c48203",
+    "root_tree": "bc506df22f3a3b3b785181c98252309e68bc99a3",
+    "scope": [
+      "P02 persistent page create entry",
+      "P02 full-row search and secondary filters",
+      "P09 hover/focus-visible visual states"
+    ],
+    "evidence": "../evidence/ui-feedback-20261013/",
+    "productCodeChanged": false,
+    "deployed": false
+  },
+  "conversation_candidate_20261016": {
+    "scope": "Existing offline prototype only; one continuous conversation, supersedes two-start proposal",
+    "rootCommit": "e05498ed8f8d67d791ad8d269ae5bbc00b3592e6",
+    "rootTree": "3e7418605fef2d518aa9b04643c9936dd9a06abc",
+    "dirtyBaselinePreserved": true,
+    "productImplemented": false,
+    "deployed": false,
+    "evidence": "../evidence/conversation-continuity-20261016/",
+    "sourceHashes": {
+      "prototype.js": "245eb4590994e4e8d4737f4f8c920bc5e24ae40f2c86c21e7de76f3e38fe1411",
+      "interaction-completion.js": "5bebd13c6c995978b012218f1b7e092310f8214fbf83efd0892f6054eafe354b",
+      "interaction-completion.css": "612426c2b037067086e9777c840a9e66774598b7710839716b893c6fb08314d4"
+    }
+  },
+  "agent_recommendation_candidate_20261016": {
+    "scope": "Existing offline prototype: recommend after Start, confirm or choose another before creating matter",
+    "rootCommit": "e05498ed8f8d67d791ad8d269ae5bbc00b3592e6",
+    "productImplemented": false,
+    "deployed": false,
+    "evidence": "../evidence/agent-recommendation-20261016/",
+    "sourceHashes": {
+      "prototype.js": "245eb4590994e4e8d4737f4f8c920bc5e24ae40f2c86c21e7de76f3e38fe1411",
+      "interaction-completion.js": "fcfa2e7d8f36fa844798bbdf548f9f2b838d2c81e8d033db5d5eeea12e97ea3d",
+      "interaction-completion.css": "612426c2b037067086e9777c840a9e66774598b7710839716b893c6fb08314d4"
+    }
+  },
+  "production_refresh_20261016": {
+    "scope": "Existing prototype, production public CSS mapped to historical sanitized DOM; screenshot/source-aligned hierarchy",
+    "observedAt": "2026-10-16T04:53:08.195722Z",
+    "publicAssets": "../evidence/production-refresh-20261016/public-assets.json",
+    "scopeMapping": "../evidence/production-refresh-20261016/css-scope-map.json",
+    "localWebCommit": "421f628c245b83466cafb70510ff69188180bdee",
+    "authenticatedLiveDomVerified": false,
+    "blocker": "Fresh owned browser redirected to login at 1440 and 390",
+    "sourceHashes": {
+      "index.html": "c3439145965464f66f55ec124ad5e02a999f8755bbac802c246eaa9e0c6dc6d7",
+      "prototype.js": "ddc7fb0757e2ae42e239e828f0c1f72d8ce1086c0e52a77a637dd246f3e0b416",
+      "interaction-completion.js": "e8815b9cac1ad6ac65360a2292c87e60fc6baf671cc17eaad6ae2d9c101a164c",
+      "interaction-completion.css": "9ac60d684563cd3d30590b48377fac0ded0612d6088236dc3570377679355b95",
+      "production-ui.css": "5771a0c4c9aa3c445420fc49f7ea25f34c0c063e8b6dce7e5e07db2c18441b60"
+    },
+    "productImplemented": false,
+    "deployed": false,
+    "status": "historical unauthenticated candidate; superseded by authenticated_refresh_20261016"
+  },
+  "authenticated_refresh_20261016": {
+    "scope": "Authenticated read-only production page inspection; existing offline prototype updated, not product execution or full release attestation",
+    "date": "2026-10-16",
+    "pages": [
+      "home",
+      "tasks",
+      "existing unassigned detail",
+      "create",
+      "workspace",
+      "mine",
+      "agents"
+    ],
+    "liveWidths": [
+      1440,
+      390
+    ],
+    "prototypeWidths": [
+      1440,
+      390,
+      320
+    ],
+    "evidence": "../evidence/authenticated-refresh-20261016/",
+    "authenticatedLiveDomVerified": true,
+    "intentionalDeltas": [
+      "simplified request form",
+      "recommend and confirm after Start",
+      "continuous conversation results/clarification/revisions",
+      "sanitized local fixture and illustrative filters"
+    ],
+    "notVerified": [
+      "production model execution",
+      "production conversation send",
+      "all secondary pages",
+      "deployment chain"
+    ],
+    "sourceHashes": {
+      "index.html": "c3439145965464f66f55ec124ad5e02a999f8755bbac802c246eaa9e0c6dc6d7",
+      "prototype.js": "0bb08d3dfc407abfc26720e00ccf0dd2039a6085ce055430aad5a1f245c0583d",
+      "interaction-completion.js": "cb500ed0f2958ec2aee9b1c034f95766c65c518866a39b38cef3f62bfdbe6707",
+      "interaction-completion.css": "868dd1a1f64a463854622afca53173f859793ae369dcf3b598cfc916b2bd852a",
+      "production-ui.css": "5771a0c4c9aa3c445420fc49f7ea25f34c0c063e8b6dce7e5e07db2c18441b60"
+    },
+    "productImplemented": false,
+    "deployed": false
+  },
+  "current_candidate": "style_audit_20261016",
+  "all_pages_refresh_20261016": {
+    "checked_on": "2026-10-16",
+    "scope": "Existing offline prototype, all 19 pages, desktop/mobile; no production writes/build/deployment",
+    "entry": "index.html?revision=all-pages-20261016#home",
+    "page_index": "pages.html",
+    "viewports": [
+      1440,
+      390,
+      320
+    ],
+    "evidence": "../evidence/all-pages-refresh-20261016/final/",
+    "coverage_matrix": "../coverage.md",
+    "production_asset_readback": "../evidence/all-pages-refresh-20261016/production-loaded-assets.json",
+    "live_boundary": "Chat/private/public/results were not inspected live this round; account entry unavailable; roster live error state. See coverage matrix.",
+    "web_observed_commit": "2c8d6703eead623f555029341101cb688b9d448a",
+    "web_observed_tree": "d436146d65e07a7af842b3e83271143e775b0390",
+    "source_records": [
+      {
+        "path": "web/src/components/world/JuyiHall.vue",
+        "sha256": "2078a6f16c3a1b4345d603b236dca9fe01d41d744da6be8e945a57d4e6450143"
+      },
+      {
+        "path": "web/src/components/juyiting/LibraryPanel.vue",
+        "sha256": "7b93bee2819903d794836222b1c6b9878bdc9b594571520d9d84638037402070"
+      },
+      {
+        "path": "web/src/components/juyiting/archive/ArchiveReader.vue",
+        "sha256": "2ff5da6b308537c7957e8818b44965d3fa2e516cc51878690eb44dec81decfb7"
+      },
+      {
+        "path": "web/src/components/juyiting/HallMinePage.vue",
+        "sha256": "0c5417c0355c07e12f554a9eec820d38aacc0dd330da10e0e4b34ce0f6b30f2f"
+      },
+      {
+        "path": "web/src/components/juyiting/PersonaCatalogPanel.vue",
+        "sha256": "3c8a0cb4cae651a483cef7b5147c92da916e9e88f9183bf77cf8066d406889aa"
+      },
+      {
+        "path": "web/src/components/juyiting/AgentPanel.vue",
+        "sha256": "ae0c35461c121cb230a88d37a72b77c490c74498f3cbc9afe0c8f7f71b2f49c7"
+      },
+      {
+        "path": "web/src/components/workspace/PersonalWorkspace.vue",
+        "sha256": "721a4d2c7b3a9a36105cccdbb90b2b6551c7cf4fe29dfbbb60ef97a8e38ade77"
+      },
+      {
+        "path": "web/src/components/juyiting/HallOnboarding.vue",
+        "sha256": "5fa89fb63a8cfac7be03e51e404718a0b7cf5cfc7e64dd0512b9696534f7d045"
+      },
+      {
+        "path": "web/src/components/juyiting/ArtifactOutcomePanel.vue",
+        "sha256": "80252f937567ea94ce5d409965e17b9c08c2c6afdfe7ab78b9fa4e85b723353c"
+      },
+      {
+        "path": "web/src/components/juyiting/HallMaterialPicker.vue",
+        "sha256": "71a8bc8b1b13bf09351b7046ac7ccdd78ffa06b6c4b5685c995a54ce087f9667"
+      },
+      {
+        "path": "web/src/components/juyiting/HallConversationHistory.vue",
+        "sha256": "f2225b8be208ae44c39f7302e3a5c081af8f8d1c03b31aeace465fa9cbe9fbfe"
+      },
+      {
+        "path": "web/src/components/juyiting/HallVoiceControls.vue",
+        "sha256": "df36529759a255225e1f8260b7fa18fe97776a6f2b8f6aa704ab42e649043f80"
+      },
+      {
+        "path": "web/src/components/juyiting/HallDraftEditor.vue",
+        "sha256": "be5abd8875773ba4f527a9555ebeabe7d4c066737f4880b55c7f5eb6c328ec36"
+      },
+      {
+        "path": "web/src/components/juyiting/ChatPanel.vue",
+        "sha256": "2ef2d9335dfc96a9b951f021a346a78b2fe6cf0a988a3613df2601598d9bb7a0"
+      },
+      {
+        "path": "web/src/components/juyiting/TaskWorkspacePanel.vue",
+        "sha256": "546a92518de8093d2a58d9c0e8685bf091f8dca423dfa5c84fa137f6fe63b30e"
+      }
+    ],
+    "source_is_deployment_attestation": false,
+    "production_mutations": false,
+    "verification": {
+      "document": {
+        "report": "prototype-checks.json",
+        "status": "PASS",
+        "checks": 93,
+        "layouts": 0,
+        "source_hashes_verified": 11
+      },
+      "pages": {
+        "report": "pages/browser-checks.json",
+        "status": "PASS",
+        "checks": 3,
+        "layouts": 57,
+        "source_hashes_verified": 13
+      },
+      "allpages": {
+        "report": "allpages/browser-checks.json",
+        "status": "PASS",
+        "checks": 13,
+        "layouts": 19,
+        "source_hashes_verified": 13
+      },
+      "unified": {
+        "report": "unified/browser-checks.json",
+        "status": "PASS",
+        "checks": 12,
+        "layouts": 27,
+        "source_hashes_verified": 13
+      },
+      "recent": {
+        "report": "recent/browser-checks.json",
+        "status": "PASS",
+        "checks": 12,
+        "layouts": 66,
+        "source_hashes_verified": 13
+      },
+      "authenticated": {
+        "report": "authenticated/browser-checks.json",
+        "status": "PASS",
+        "checks": 3,
+        "layouts": 12,
+        "source_hashes_verified": 13
+      }
+    },
+    "source_verification": "../evidence/all-pages-refresh-20261016/final/source-verification.json"
+  },
+  "tasks_content_correction_20261016": {
+    "date": "2026-10-16",
+    "entry": "index.html?revision=tasks-content-20261016#tasks",
+    "evidence": "../evidence/tasks-content-20261016/",
+    "root_cause": "Fresh home/task routes had no task fixture; list removed other snapshot cards and hid the only card. Old page-layout checks did not assert meaningful list content.",
+    "scope": "Three explicitly offline task examples, real ID/title/ability/status filters, per-matter details/results/back, retain local user-created matters and drafts without resetting session",
+    "full_production_alignment": false,
+    "live_unverified": [
+      "chat",
+      "private",
+      "public",
+      "results",
+      "account settings"
+    ],
+    "source_reference": {
+      "path": "web/src/components/juyiting/BountyPanel.vue",
+      "sha256": "3271e4f6635bd2caa795b19c66fc485b58b3ef158dd3210eab6f0da1571736b2",
+      "observed_web_commit": "2c8d6703eead623f555029341101cb688b9d448a",
+      "deployed_commit_verified": false
+    },
+    "verification": {
+      "document": {
+        "path": "prototype-checks.json",
+        "status": "PASS",
+        "checks": 93,
+        "layouts": 0
+      },
+      "tasks-content": {
+        "path": "tasks-content/browser-checks.json",
+        "status": "PASS",
+        "checks": 6,
+        "layouts": 6
+      },
+      "unified": {
+        "path": "unified/browser-checks.json",
+        "status": "PASS",
+        "checks": 12,
+        "layouts": 27
+      },
+      "recent": {
+        "path": "recent/browser-checks.json",
+        "status": "PASS",
+        "checks": 12,
+        "layouts": 66
+      }
+    },
+    "production_changes": false
+  },
+  "voice_inline_20261016": {
+    "scope": "Recording/review inside existing composer, desktop/mobile, offline only",
+    "entry": "index.html?revision=voice-inline-20261016#private",
+    "evidence": "../evidence/voice-inline-20261016/final/",
+    "verification": {
+      "document": {
+        "report": "prototype-checks.json",
+        "status": "PASS",
+        "checks": 93,
+        "layouts": 0
+      },
+      "voice-inline": {
+        "report": "voice-inline/browser-checks.json",
+        "status": "PASS",
+        "checks": 10,
+        "layouts": 18
+      }
+    },
+    "production_changes": false,
+    "real_microphone": false
+  },
+  "history_refresh_20261016": {
+    "entry": "index.html?revision=history-refresh-20261016#chat",
+    "evidence": "../evidence/history-refresh-20261016/",
+    "public_readback": "../evidence/history-refresh-20261016/public-readback.json",
+    "authenticated_history_dom_verified": false,
+    "source_records": [
+      {
+        "path": "web/src/components/juyiting/HallConversationHistory.vue",
+        "sha256": "f2225b8be208ae44c39f7302e3a5c081af8f8d1c03b31aeace465fa9cbe9fbfe"
+      },
+      {
+        "path": "web/src/components/juyiting/ChatPanel.vue",
+        "sha256": "2ef2d9335dfc96a9b951f021a346a78b2fe6cf0a988a3613df2601598d9bb7a0"
+      },
+      {
+        "path": "web/src/composables/juyiting/useHallConversation.js",
+        "sha256": "ad92af165602a7d9b8ca8ceb5bb530d9ae540f80f9946aca47ae18145ffe3eed"
+      }
+    ],
+    "verification": {
+      "document": {
+        "report": "prototype-checks.json",
+        "status": "PASS",
+        "checks": 93,
+        "layouts": 0
+      },
+      "history-refresh": {
+        "report": "history-refresh/browser-checks.json",
+        "status": "PASS",
+        "checks": 12,
+        "layouts": 9
+      },
+      "voice-inline": {
+        "report": "voice-inline/browser-checks.json",
+        "status": "PASS",
+        "checks": 10,
+        "layouts": 18
+      }
+    },
+    "production_changes": false
+  },
+  "workspaceEssentialRepair": {
+    "checkedAt": "2026-10-16T16:45:00+08:00",
+    "webBusinessCommit": "b3cb681edbc4bc0856fba7bba9cfb5bb46c6432e",
+    "webPresentationCommit": "4deb7ab702f90c7e2eabdd8929b786713349e171",
+    "scope": "file-detail lazy history pagination, exact version selection, partial preview and committed detail-retry states; offline only",
+    "evidence": "/home/isp/wsps/cyf/docs/implementation/evidence/workspace-management-audit-20261016/essential-repair/prototype",
+    "full19PageRevalidation": false
+  },
+  "style_audit_20261016": {
+    "date": "2026-10-16",
+    "web_source_commit": "1e779e9798c2d93098cb27a9c9916dcc6eeed505",
+    "audit": "../style-audit-20261016.md",
+    "evidence": "../evidence/style-audit-20261016/",
+    "scope": "19 prototype pages; authenticated read-only production inspection; partial live-state coverage, not full parity",
+    "production_deployed": false
+  },
+  "workspace_remaining_repair_20261016": {
+    "checked_on": "2026-10-16",
+    "web_commit": "3a6b2ba7398459cc8e82e0360e201f451d946edc",
+    "scope": [
+      "three exact usage counts and recycle preservation disclosure",
+      "expired confirmation returns to explicit reconfirmation",
+      "in-page original-write retry disclosure"
+    ],
+    "prototype_file": "interaction-completion.js",
+    "status": "offline interaction reference; matching implementation released as Web 1.16.3 / Flow4403172 Run218; other baseline scope unchanged",
+    "release_evidence": "docs/implementation/evidence/workspace-management-audit-20261016/release-remaining-20261016/release-summary.json"
+  },
+  "agent_skill_display_20261017": {
+    "status": "OFFLINE_PROTOTYPE_PENDING_USER_REVIEW",
+    "entry": "index.html#agents",
+    "root_head": "22ff0391cc58a7356550e24c5b11d63dbbeecdd9",
+    "input": "existing dirty prototype, before copies and hashes preserved in evidence/agent-skill-display-20261017/before",
+    "files": [
+      "prototype.js",
+      "interaction-completion.css"
+    ],
+    "production_changed": false,
+    "note": "Existing full prototype only; not standalone chat visualization. Roles and stars are not abilities."
+  },
+  "agent_roster_layout_20261017": {
+    "status": "OFFLINE_PROTOTYPE_PENDING_REVIEW",
+    "entry": "index.html#agents",
+    "root_head": "22ff0391cc58a7356550e24c5b11d63dbbeecdd9",
+    "source_scope": "existing dirty prototype; before copies retained",
+    "mobile": "list to detail, return to list, docked actions, safe area",
+    "desktop": "43/57 split and independent content scrolling",
+    "production_changed": false,
+    "evidence": "../evidence/agent-roster-layout-20261017/final"
+  }
+}

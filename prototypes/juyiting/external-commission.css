@@ -1,0 +1,16 @@
+.commission-assignment .recommendation-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}.commission-assignment .recommendation-options button{min-width:0;width:100%;text-align:left;}.commission-assignment .recommendation-options small{display:block;white-space:normal;}.commission-assignment .recommendation-options button>span:nth-child(2){min-width:0;flex:1;}.commission-confirm{max-height:60vh;overflow:auto;}.commission-progress{flex-shrink:0;}.commission-tabs button:focus-visible{outline:2px solid var(--work-brand,#b44839);outline-offset:3px;}
+/* The setting is an inline detail row, not a separate card or roster panel. */
+.agent-detail-scroll .commission-profile{margin:0;padding:4px 0 12px;border:0;border-radius:0;background:none;}
+.commission-detail-setting{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.commission-detail-setting>span:first-child{font-size:14px;font-weight:600;}
+.commission-detail-setting button{padding:6px 12px;min-height:44px;border:1px solid var(--work-line,#d4dcd5);border-radius:18px;background:var(--work-paper,#fffefb);cursor:pointer;}
+.commission-detail-setting button[aria-checked=true]{background:var(--work-brand,#b44839);border-color:var(--work-brand,#b44839);color:white;}
+.commission-detail-setting button:focus-visible{outline:2px solid var(--work-brand,#b44839);outline-offset:3px;}
+.commission-readonly{font-size:12px;color:var(--work-muted,#718078);}
+.commission-progress{padding:16px;border:1px solid var(--work-line,#e1e5df);border-radius:12px;background:var(--work-paper,#fffefb);color:var(--work-ink,#34423c);margin:10px 0;min-width:0;}
+.commission-progress p,.commission-assignment p,.commission-confirm p{font-size:13px;line-height:1.65;margin:8px 0;overflow-wrap:anywhere;}
+.commission-assignment small,.commission-note{color:var(--work-muted,#718078);font-size:12px;}
+.commission-tabs{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0;}
+.commission-tabs button,.commission-progress button{padding:8px 14px;min-height:44px;border:1px solid var(--work-line,#d4dcd5);border-radius:8px;background:var(--work-paper,#fffefb);cursor:pointer;}
+.commission-tabs button[aria-pressed=true]{background:var(--work-brand,#b44839);border-color:var(--work-brand,#b44839);color:white;}
+@media(max-width:720px){.commission-assignment .recommendation-options{grid-template-columns:1fr;}.commission-progress{padding:10px;margin:6px 10px;}}

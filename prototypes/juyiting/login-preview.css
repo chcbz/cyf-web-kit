@@ -1,0 +1,35 @@
+/* Standalone auth shell; no application toolbar, side menu, or PWA banner. */
+html.login-preview-html, body.login-preview-body { margin:0; width:100%; min-height:100%; background:#f5f4f0; color:#242e2b; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+.login-scene { box-sizing:border-box; min-height:100vh; min-height:100svh; display:grid; grid-template-rows:auto 1fr auto; padding:32px 48px 24px; background:radial-gradient(ellipse at 50% 40%,#fffefa 0%,#f5f4f0 66%); }
+.login-brand { display:flex; align-items:center; gap:12px; font-size:17px; font-weight:600; }
+.login-brand-mark { display:grid; place-items:center; width:36px; height:36px; border-radius:10px; background:#923f30; color:#fffefa; font-family:serif; font-size:23px; font-weight:500; }
+.login-brand>span:last-child { display:flex; align-items:center; gap:14px; }
+.login-brand small { font-size:13px; font-weight:400; color:#68716b; }
+.login-brand-divider { width:1px; height:14px; background:#ccd2c5; }
+.login-main { display:grid; place-items:center; padding:48px 0 64px; }
+.login-status { text-align:center; width:min(100%,440px); }
+.login-emblem { width:88px; height:88px; margin:0 auto 28px; position:relative; display:grid; place-items:center; color:#923f30; background:#f6eee8; border-radius:50%; }
+.login-emblem>svg { width:32px; height:32px; stroke-width:1.5; }
+.login-orbit { position:absolute; inset:-9px; border:1px solid #e3e5dc; border-top:2px solid #923f30; border-radius:50%; animation:login-orbit 1.8s linear infinite; }
+.login-eyebrow { color:#875e50; font-size:12px; letter-spacing:2px; margin:0 0 12px; }
+.login-status h1 { margin:0; font-size:28px; font-weight:600; letter-spacing:.5px; line-height:1.5; }
+.login-status #login-description { margin:14px 0 0; color:#68716b; font-size:14px; line-height:1.8; text-wrap:balance; }
+.login-patience { font-size:12px; color:#68716b; margin:32px 0 0; }
+.login-actions { display:flex; justify-content:center; flex-wrap:wrap; gap:12px; margin-top:28px; }
+.login-scene button { display:inline-flex; align-items:center; justify-content:center; box-sizing:border-box; min-height:44px; padding:10px 20px; border-radius:8px; font:inherit; font-size:14px; cursor:pointer; }
+.login-scene .login-primary { color:#fffefa; border:1px solid #923f30; background:#923f30; }
+.login-scene .login-primary:hover { background:#793326; }
+.login-scene .login-secondary { color:#242e2b; border:1px solid #ccd2c5; background:transparent; }
+.login-scene :is(button,select,summary):focus-visible { outline:2px solid #923f30; outline-offset:3px; }
+.login-footer { display:flex; align-items:center; justify-content:space-between; gap:16px; color:#68716b; font-size:12px; }
+.login-demo-controls { position:relative; }
+.login-demo-controls summary { min-height:44px; display:flex; align-items:center; cursor:pointer; text-decoration:underline; text-underline-offset:4px; }
+.login-demo-controls>div { position:absolute; z-index:2; bottom:100%; right:0; width:238px; box-sizing:border-box; padding:16px; border:1px solid #e3e5dc; background:#fffefa; border-radius:10px; box-shadow:0 8px 28px #242e2b12; }
+.login-demo-controls label { display:block; margin-bottom:8px; color:#242e2b; }
+.login-demo-controls select { width:100%; min-height:44px; border:1px solid #ccd2c5; border-radius:7px; background:#fffefa; color:#242e2b; padding:8px; font:inherit; }
+.login-demo-controls p { line-height:1.7; margin:12px 0 8px; }
+.login-demo-controls button { padding:4px 0; border:0; background:none; color:#923f30; font-size:12px; }
+@keyframes login-orbit { to { transform:rotate(360deg); } }
+@media(max-width:600px) { .login-scene { padding:24px 24px max(16px,env(safe-area-inset-bottom)); } .login-main { padding:60px 0 64px; } .login-status h1 { font-size:24px; } .login-footer { flex-direction:column; gap:0; } .login-emblem { width:76px; height:76px; } .login-demo-controls>div { right:50%; transform:translateX(50%); } }
+@media(max-height:500px) { .login-main { padding:32px 0; } .login-emblem { width:56px; height:56px; margin-bottom:20px; } }
+@media(prefers-reduced-motion:reduce) { .login-orbit { animation:none; } }

@@ -1,0 +1,654 @@
+{
+  "date": "2026-10-07",
+  "method": "Owned Chromium native clicks, screenshots and local offline resources",
+  "status": "PASS",
+  "checks": [
+    {
+      "name": "18 pages rendered with local resources at 1440px",
+      "pass": true
+    },
+    {
+      "name": "18 pages rendered with local resources at 390px",
+      "pass": true
+    },
+    {
+      "name": "18 pages rendered with local resources at 320px",
+      "pass": true
+    },
+    {
+      "name": "latest optimized scenario empty",
+      "pass": true
+    },
+    {
+      "name": "latest optimized scenario waiting",
+      "pass": true
+    },
+    {
+      "name": "latest optimized scenario streaming",
+      "pass": true
+    },
+    {
+      "name": "latest optimized scenario error",
+      "pass": true
+    },
+    {
+      "name": "latest optimized scenario recording",
+      "pass": true
+    },
+    {
+      "name": "latest optimized scenario voice-review",
+      "pass": true
+    },
+    {
+      "name": "latest optimized scenario results",
+      "pass": true
+    },
+    {
+      "name": "latest optimized scenario completed",
+      "pass": true
+    },
+    {
+      "name": "recording fixture cancellation unlocks text",
+      "pass": true
+    },
+    {
+      "name": "pending refresh retains original messages, no resend",
+      "pass": true
+    },
+    {
+      "name": "attachment-only create, cancel-safe material selection and same-context clarification",
+      "pass": true
+    },
+    {
+      "name": "exact task return, one acceptance, immediate overview and refresh read-only recovery",
+      "pass": true
+    },
+    {
+      "name": "create-failure preserves draft and never automatically creates",
+      "pass": true
+    },
+    {
+      "name": "create-unknown preserves draft and never automatically creates",
+      "pass": true
+    },
+    {
+      "name": "accept-unknown same frozen operation on refresh and query",
+      "pass": true
+    },
+    {
+      "name": "accept-failure same frozen operation on refresh and query",
+      "pass": true
+    },
+    {
+      "name": "send ambiguity retains text and files; query does not resend",
+      "pass": true
+    },
+    {
+      "name": "independent root recovery remains explicitly not implemented",
+      "pass": true
+    },
+    {
+      "name": "private per-Agent and public histories/drafts isolated from formal matter",
+      "pass": true
+    },
+    {
+      "name": "latest inline voice, cancel/append/no auto-send and actual draft-only voice setting",
+      "pass": true
+    },
+    {
+      "name": "new topic cancel/snapshot/restore; history deletion never deletes matter",
+      "pass": true
+    },
+    {
+      "name": "rename persists, per-file recycle cancel/restore and file-to-draft reference",
+      "pass": true
+    },
+    {
+      "name": "library search empty/result/reference; reader chapter/bookmark/notes persist",
+      "pass": true
+    },
+    {
+      "name": "all 18 page entries and real capsule view selected state",
+      "pass": true
+    },
+    {
+      "name": "actual example-byte downloads, native audio, optional save/reuse and quoted revision",
+      "pass": true
+    },
+    {
+      "name": "native local file selection does not prematurely confirm on cancellation",
+      "pass": true
+    },
+    {
+      "name": "recovery branch layouts at 390",
+      "pass": true
+    },
+    {
+      "name": "recovery branch layouts at 320",
+      "pass": true
+    }
+  ],
+  "layouts": [
+    {
+      "name": "1440-home",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "1440-tasks",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "1440-create",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "1440-agents",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "1440-detail",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "1440-chat",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "1440-private",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "1440-public",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "1440-workspace",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "1440-mine",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "1440-file",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "1440-library",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "1440-reader",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "1440-messages",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "1440-catalog",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "1440-map",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "1440-help",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "1440-account",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "390-home",
+      "width": 390,
+      "scroll": 390,
+      "badImages": []
+    },
+    {
+      "name": "390-tasks",
+      "width": 390,
+      "scroll": 390,
+      "badImages": []
+    },
+    {
+      "name": "390-create",
+      "width": 390,
+      "scroll": 390,
+      "badImages": []
+    },
+    {
+      "name": "390-agents",
+      "width": 390,
+      "scroll": 390,
+      "badImages": []
+    },
+    {
+      "name": "390-detail",
+      "width": 390,
+      "scroll": 390,
+      "badImages": []
+    },
+    {
+      "name": "390-chat",
+      "width": 390,
+      "scroll": 390,
+      "badImages": []
+    },
+    {
+      "name": "390-private",
+      "width": 390,
+      "scroll": 390,
+      "badImages": []
+    },
+    {
+      "name": "390-public",
+      "width": 390,
+      "scroll": 390,
+      "badImages": []
+    },
+    {
+      "name": "390-workspace",
+      "width": 390,
+      "scroll": 390,
+      "badImages": []
+    },
+    {
+      "name": "390-mine",
+      "width": 390,
+      "scroll": 390,
+      "badImages": []
+    },
+    {
+      "name": "390-file",
+      "width": 390,
+      "scroll": 390,
+      "badImages": []
+    },
+    {
+      "name": "390-library",
+      "width": 390,
+      "scroll": 390,
+      "badImages": []
+    },
+    {
+      "name": "390-reader",
+      "width": 390,
+      "scroll": 390,
+      "badImages": []
+    },
+    {
+      "name": "390-messages",
+      "width": 390,
+      "scroll": 390,
+      "badImages": []
+    },
+    {
+      "name": "390-catalog",
+      "width": 390,
+      "scroll": 390,
+      "badImages": []
+    },
+    {
+      "name": "390-map",
+      "width": 390,
+      "scroll": 390,
+      "badImages": []
+    },
+    {
+      "name": "390-help",
+      "width": 390,
+      "scroll": 390,
+      "badImages": []
+    },
+    {
+      "name": "390-account",
+      "width": 390,
+      "scroll": 390,
+      "badImages": []
+    },
+    {
+      "name": "320-home",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    },
+    {
+      "name": "320-tasks",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    },
+    {
+      "name": "320-create",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    },
+    {
+      "name": "320-agents",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    },
+    {
+      "name": "320-detail",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    },
+    {
+      "name": "320-chat",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    },
+    {
+      "name": "320-private",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    },
+    {
+      "name": "320-public",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    },
+    {
+      "name": "320-workspace",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    },
+    {
+      "name": "320-mine",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    },
+    {
+      "name": "320-file",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    },
+    {
+      "name": "320-library",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    },
+    {
+      "name": "320-reader",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    },
+    {
+      "name": "320-messages",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    },
+    {
+      "name": "320-catalog",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    },
+    {
+      "name": "320-map",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    },
+    {
+      "name": "320-help",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    },
+    {
+      "name": "320-account",
+      "width": 320,
+      "scroll": 320,
+      "badImages": []
+    },
+    {
+      "name": "scenario-empty",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "scenario-waiting",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "scenario-streaming",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "scenario-error",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "scenario-recording",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "scenario-voice-review",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "scenario-results",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "scenario-completed",
+      "width": 1440,
+      "scroll": 1440,
+      "badImages": []
+    },
+    {
+      "name": "390-create-unknown",
+      "width": 390,
+      "scroll": 390,
+      "dialog": {
+        "x": 17,
+        "y": 343.40625,
+        "width": 356,
+        "height": 157.171875,
+        "top": 343.40625,
+        "right": 373,
+        "bottom": 500.578125,
+        "left": 17
+      },
+      "badImages": []
+    },
+    {
+      "name": "390-accept-unknown",
+      "width": 390,
+      "scroll": 390,
+      "dialog": {
+        "x": 17,
+        "y": 293.828125,
+        "width": 356,
+        "height": 256.34375,
+        "top": 293.828125,
+        "right": 373,
+        "bottom": 550.171875,
+        "left": 17
+      },
+      "badImages": []
+    },
+    {
+      "name": "390-accept-failure",
+      "width": 390,
+      "scroll": 390,
+      "dialog": {
+        "x": 17,
+        "y": 293.828125,
+        "width": 356,
+        "height": 256.34375,
+        "top": 293.828125,
+        "right": 373,
+        "bottom": 550.171875,
+        "left": 17
+      },
+      "badImages": []
+    },
+    {
+      "name": "390-independent-roots",
+      "width": 390,
+      "scroll": 390,
+      "dialog": {
+        "x": 17,
+        "y": 305.828125,
+        "width": 356,
+        "height": 232.34375,
+        "top": 305.828125,
+        "right": 373,
+        "bottom": 538.171875,
+        "left": 17
+      },
+      "badImages": []
+    },
+    {
+      "name": "320-create-unknown",
+      "width": 320,
+      "scroll": 320,
+      "dialog": {
+        "x": 17,
+        "y": 332.21875,
+        "width": 286,
+        "height": 179.5625,
+        "top": 332.21875,
+        "right": 303,
+        "bottom": 511.78125,
+        "left": 17
+      },
+      "badImages": []
+    },
+    {
+      "name": "320-accept-unknown",
+      "width": 320,
+      "scroll": 320,
+      "dialog": {
+        "x": 17,
+        "y": 293.828125,
+        "width": 286,
+        "height": 256.34375,
+        "top": 293.828125,
+        "right": 303,
+        "bottom": 550.171875,
+        "left": 17
+      },
+      "badImages": []
+    },
+    {
+      "name": "320-accept-failure",
+      "width": 320,
+      "scroll": 320,
+      "dialog": {
+        "x": 17,
+        "y": 293.828125,
+        "width": 286,
+        "height": 256.34375,
+        "top": 293.828125,
+        "right": 303,
+        "bottom": 550.171875,
+        "left": 17
+      },
+      "badImages": []
+    },
+    {
+      "name": "320-independent-roots",
+      "width": 320,
+      "scroll": 320,
+      "dialog": {
+        "x": 17,
+        "y": 305.828125,
+        "width": 286,
+        "height": 232.34375,
+        "top": 305.828125,
+        "right": 303,
+        "bottom": 538.171875,
+        "left": 17
+      },
+      "badImages": []
+    }
+  ],
+  "errors": [],
+  "externalRequests": [],
+  "sourceHashes": {
+    "index.html": "22a79693d0f007655918bddfb6483a69995a1f2e3b7148238469c8f144deddde",
+    "prototype.js": "eaddf7bb5cae368da970449a848c220ff718a1f9c52c18ff67a91e4fc066a6bc",
+    "baseline-ui.js": "5ce65852e5dd2ac483b57eefd3e4be724e422f023b00031fabb8587cf6cc6258",
+    "interaction-completion.js": "a7c09e729e745e4f8fedd5c54673827d7b324626545e82aa827e22296942608e",
+    "interaction-completion.css": "2c2d6c41b0ea4d688ea5664d258ea4dea557fb45c2dc16c967f5577087d727ef",
+    "hall-view-tabs.css": "221f6f9b41938a6e5c87dbd0fa6a9fc95df8640b4a36d4b18d194fe59b312d66",
+    "source-ui.css": "3fc2ee30f449f8f8cb5f057c8cff82ec3fdac592ab0bd807b625fc594ef9fd41"
+  },
+  "browser": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/133.0.6943.141",
+    "revision": "@2a5d6da0d6165d7b107502095a937fe7704fcef6",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/133.0.0.0 Safari/537.36",
+    "jsVersion": "13.3.415.23"
+  },
+  "productAcceptance": false,
+  "applicationBuilds": 0,
+  "deployments": 0
+}

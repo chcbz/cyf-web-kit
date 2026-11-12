@@ -1,0 +1,38 @@
+{
+  "status": "PASS",
+  "checks": [
+    {
+      "name": "page index 18 pages / 15 states and HTTP-resolvable links at 1440",
+      "pass": true
+    },
+    {
+      "name": "page index 18 pages / 15 states and HTTP-resolvable links at 390",
+      "pass": true
+    },
+    {
+      "name": "actual computed capsule selected CSS",
+      "pass": true
+    }
+  ],
+  "layouts": [
+    {
+      "name": "page-index-1440",
+      "width": 1440,
+      "scroll": 1425,
+      "badImages": []
+    },
+    {
+      "name": "page-index-390",
+      "width": 390,
+      "scroll": 390,
+      "badImages": []
+    }
+  ],
+  "capsule": {
+    "radius": "8px",
+    "background": "rgb(247, 234, 230)",
+    "border": "0px"
+  },
+  "errors": [],
+  "productAcceptance": false
+}
